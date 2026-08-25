@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -13,6 +14,7 @@ func (ir *InputReader) InsertChar(char string) {
 	// Mark line as edited and disconnect from history
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 
 	insertAt := ir.cursorPos
 	before := ir.line[:ir.cursorPos]
@@ -26,7 +28,10 @@ func (ir *InputReader) InsertChar(char string) {
 	// firing from a background event subscriber can't slide in mid-write
 	// and displace the cursor — that's the path that makes typed chars
 	// look "dropped" between turns.
-	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 {
+	//
+	// Slash-command input always takes the full Refresh path so the live
+	// autocomplete dropdown can update alongside the input line.
+	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 && !strings.HasPrefix(ir.line, "/") {
 		LockOutput()
 		fmt.Printf("%s", char)
 		UnlockOutput()
@@ -56,6 +61,7 @@ func (ir *InputReader) Backspace() {
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
+		ir.resetCompletionCycle()
 
 		deletePos := ir.cursorPos - 1
 		before := ir.line[:deletePos]
@@ -79,6 +85,7 @@ func (ir *InputReader) Delete() {
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
+		ir.resetCompletionCycle()
 
 		before := ir.line[:ir.cursorPos]
 		after := ir.line[ir.cursorPos+1:]
@@ -123,6 +130,7 @@ func (ir *InputReader) deleteRange(start, end int) {
 	ir.expandPasteAtCursor()
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
+	ir.resetCompletionCycle()
 	removed := end - start
 	ir.line = ir.line[:start] + ir.line[end:]
 	if ir.cursorPos > start {

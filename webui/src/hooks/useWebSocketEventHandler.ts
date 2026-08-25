@@ -13,24 +13,30 @@ import type {
   FileChangedData,
   ErrorData,
   MetricsUpdateData,
+  ContextManagementDiagnosticData,
   WorkspaceChangedData,
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
+  EditApprovalRequestData,
+  ShellApprovalRequestData,
   DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { getWebUIClientId } from '../services/clientSession';
+import { notifyIfHidden } from '../services/desktopNotify';
 import { getServerErrorCode } from '../services/errorCodes';
+import { LSPClientService } from '../services/lspClientService';
+import { switchChatSession } from '../services/chatSessions';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
-import { notifyIfHidden } from '../services/desktopNotify';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
+import { parseSecurityAnalysis } from '../utils/parseSecurityAnalysis';
 import {
   createLogEntry,
   type EventHandlerContext,
@@ -40,9 +46,25 @@ import {
   shouldSuppressAgentMessageInChat,
 } from './webSocketEventHelpers';
 
+/**
+ * Returns the index of the last message that is a valid append target for
+ * primary-agent content (a non-subagent assistant message). Inline
+ * subagent-run messages (isSubagentRun) render their content inside the
+ * subagent's collapsible block — appending primary output into them makes
+ * it look like the subagent produced it. Returns -1 when no such message
+ * exists (caller should create a new primary assistant message).
+ */
+const lastPrimaryAssistantIndex = (messages: Message[]): number => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.type === 'assistant' && !m.isSubagentRun) return i;
+  }
+  return -1;
+};
+
 // Handle connection_status event
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
-  const { event, setState, connectionTimeoutRef, lastConnectionStateRef } = ctx;
+  const { event, setState, connectionTimeoutRef, lastConnectionStateRef, activeRequestsRef } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as ConnectionStatusData;
   if (data.client_id && String(data.client_id) !== getWebUIClientId()) return;
@@ -59,20 +81,31 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
       : 'disconnected';
 
   if (newConnectionState !== lastConnectionStateRef.current) {
+    // Update the ref immediately so subsequent events see the correct
+    // connection state without waiting for the debounce timer.
+    lastConnectionStateRef.current = newConnectionState;
+
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
-    connectionTimeoutRef.current = setTimeout(() => {
-      lastConnectionStateRef.current = newConnectionState;
-      setState((prev) => ({
-        sessionId: incomingSessionId || prev.sessionId,
-        isConnected: newConnectionState,
-        stats: {
-          ...prev.stats,
-          connection_phase: phase,
-          transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
-        },
-        logs: appendCappedLog(prev.logs, logEntry),
-      }));
-    }, 300);
+
+    // On disconnect, reset the active request counter immediately — any
+    // in-flight turn's completion event will never arrive over a dead
+    // socket. On reconnect, the backend replay (handleReconnect) will
+    // set it correctly if the turn is still running server-side.
+    if (!newConnectionState) {
+      activeRequestsRef.current = 0;
+    }
+
+    setState((prev) => ({
+      sessionId: incomingSessionId || prev.sessionId,
+      isConnected: newConnectionState,
+      isProcessing: newConnectionState ? prev.isProcessing : false,
+      stats: {
+        ...prev.stats,
+        connection_phase: phase,
+        transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
+      },
+      logs: appendCappedLog(prev.logs, logEntry),
+    }));
   }
   debugLog('[link] Connection status updated:', newConnectionState);
 };
@@ -110,8 +143,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
     // added it optimistically (e.g. for concurrent queries). Only add if the
     // last message is not already a user message with the same content.
     const lastMsg = prev.messages[prev.messages.length - 1];
-    const alreadyPresent =
-      lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
+    const alreadyPresent = lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
 
     return {
       isProcessing: true,
@@ -161,10 +193,27 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
   const chunkContent = String(data.chunk || '');
   const chunkType = String(data.content_type || 'assistant_text');
 
+  // Subagent stream_chunk events are decorated with subagent_depth > 0.
+  // Without this guard, the subagent's LLM output gets appended to the
+  // primary agent's last assistant message — the subagent's prose shows
+  // up mixed into the main chat response. Subagent output is surfaced
+  // through the SubagentActivityFeed and the run_subagent tool result.
+  const streamRaw = event.data as Record<string, unknown> | undefined;
+  const streamDepth = Number(streamRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(streamDepth) && streamDepth > 0) {
+    return;
+  }
+
   setState((prev) => {
     const newMessages = [...prev.messages];
     const lastMessage = newMessages[newMessages.length - 1];
-    if (lastMessage && lastMessage.type === 'assistant') {
+    // An inline subagent-run message (isSubagentRun) is never a valid
+    // append target for primary-agent chunks: its content is rendered inside
+    // the subagent's collapsible block, so any chunk landed there makes
+    // primary output look like it came from the subagent. Create a fresh
+    // primary assistant message instead.
+    const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
+    if (canAppendToLast) {
       if (chunkType === 'reasoning') {
         newMessages[newMessages.length - 1] = {
           ...lastMessage,
@@ -236,6 +285,7 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       const lastMsg = nextMessages[nextMessages.length - 1] as Message;
       if (
         lastMsg.type === 'assistant' &&
+        !lastMsg.isSubagentRun &&
         lastMsg.reasoning?.trim() &&
         lastMsg.content?.trim() &&
         lastMsg.content === lastMsg.reasoning
@@ -244,15 +294,16 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       }
     }
 
-    // SP-053-perTurnCost: annotate last assistant message with per-turn cost
-    if (!wasClearCommand && (tokensUsed != null || cost != null) && nextMessages.length > 0) {
-      const lastIdx = nextMessages.length - 1;
-      const lastMsg = nextMessages[lastIdx] as Message;
-      if (lastMsg.type === 'assistant') {
-        const annotated: Message = { ...lastMsg };
+    // SP-053-perTurnCost: annotate the turn's primary assistant message with
+    // per-turn cost. Never an inline subagent-run message — the cost belongs
+    // to the primary turn, not the delegated run.
+    if (!wasClearCommand && (tokensUsed != null || cost != null)) {
+      const idx = lastPrimaryAssistantIndex(nextMessages);
+      if (idx >= 0) {
+        const annotated: Message = { ...nextMessages[idx] };
         if (tokensUsed != null) annotated.tokensUsed = tokensUsed;
         if (cost != null) annotated.cost = cost;
-        nextMessages = [...nextMessages.slice(0, -1), annotated];
+        nextMessages = [...nextMessages.slice(0, idx), annotated, ...nextMessages.slice(idx + 1)];
       }
     }
 
@@ -298,18 +349,47 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
   const depth = Number((event.data as Record<string, unknown>)?.subagent_depth ?? 0);
 
   setState((prev) => {
-    const messagesWithNewline = prev.messages.map((msg, idx) => {
-      if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
-        return { ...msg, content: msg.content + '\n' };
-      }
-      return msg;
-    });
+    // When a tool starts, insert a marker into the assistant message content
+    // so parseMessageSegments can interleave the tool badge at the correct
+    // position in the text flow. Without this, all tool badges pile up at the
+    // end of the message because there's no positional information linking
+    // them to where in the text the tool was called.
+    //
+    // Never mark a subagent-run message: its content renders inside the
+    // subagent's collapsible block, so a primary-agent tool badge inserted
+    // there looks like the subagent's tool call. When the last message is a
+    // subagent run, attach the marker to a fresh primary assistant message
+    // instead (mirrors the start-of-turn case where streaming will append
+    // into it).
+    const lastMsg = prev.messages[prev.messages.length - 1];
+    let messagesWithToolMarker: Message[];
+    if (lastMsg && lastMsg.type === 'assistant' && lastMsg.isSubagentRun) {
+      messagesWithToolMarker = [
+        ...prev.messages,
+        {
+          id: generateMessageId(),
+          type: 'assistant',
+          content: '\n[executing tool [' + toolName + ']]\n',
+          timestamp: new Date(),
+        },
+      ];
+    } else {
+      messagesWithToolMarker = prev.messages.map((msg, idx) => {
+        if (idx === prev.messages.length - 1 && msg.type === 'assistant') {
+          const trimmed = msg.content.replace(/\n+$/, '');
+          return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
+        }
+        return msg;
+      });
+    }
 
     const existingIdx = prev.toolExecutions.findIndex((t) => (getToolCallId(t.details) || t.id) === toolCallID);
     const addToolRefToMessage = (messages: Message[], toolId: string) => {
       for (let i = messages.length - 1; i >= 0; i -= 1) {
         const msg = messages[i];
-        if (msg.type !== 'assistant') continue;
+        // Skip subagent-run messages — the badge would render inside the
+        // subagent's collapsible block.
+        if (msg.type !== 'assistant' || msg.isSubagentRun) continue;
         const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
         if (!toolRefs.some((ref) => ref.toolId === toolId)) {
           toolRefs.push({ toolId, toolName, label: displayName, parallel: subagentType === 'parallel' || undefined });
@@ -333,7 +413,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
         subagentType: updated[existingIdx].subagentType || subagentType,
         depth: updated[existingIdx].depth ?? (depth > 0 ? depth : undefined),
       };
-      const messages = [...messagesWithNewline];
+      const messages = [...messagesWithToolMarker];
       addToolRefToMessage(messages, updated[existingIdx].id);
       return { messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
     }
@@ -349,12 +429,9 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       persona,
       subagentType,
       depth: depth > 0 ? depth : undefined,
-      // Tag with the current turn so ToolsTab can group historical
-      // tools by turn and ChatView's filteredToolExecutions can show
-      // only the current turn in the live timeline bar above the input.
       queryId: prev.queryCount,
     };
-    const messages = [...messagesWithNewline];
+    const messages = [...messagesWithToolMarker];
     addToolRefToMessage(messages, newTool.id);
     return { messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });
@@ -449,9 +526,7 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
     taskCount: typeof data.task_count === 'number' ? data.task_count : undefined,
     failures: typeof data.failures === 'number' ? data.failures : undefined,
     status:
-      typeof data.status === 'string'
-        ? (data.status as 'queued' | 'started' | 'completed' | 'cancelled')
-        : undefined,
+      typeof data.status === 'string' ? (data.status as 'queued' | 'started' | 'completed' | 'cancelled') : undefined,
     reason: typeof data.reason === 'string' ? data.reason : undefined,
     tokensUsed: typeof data.tokens_used === 'number' ? data.tokens_used : undefined,
     elapsedMs: typeof data.elapsed_ms === 'number' ? data.elapsed_ms : undefined,
@@ -459,12 +534,95 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
 
   if (!activity.message) {
     setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
-  } else {
-    setState((prev) => ({
-      subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-      logs: appendCappedLog(prev.logs, logEntry),
-    }));
+    return;
   }
+
+  // Inline subagent rendering: instead of (or in addition to) the footer
+  // activity feed, render subagent output as collapsible sections inline
+  // in the chat message flow — similar to reasoning blocks. The subagent
+  // message ID is derived from the toolCallId so spawn/output/complete
+  // events all target the same message row. Output lines accumulate in
+  // the `reasoning` field (rendered as a Collapsible by MessageItem).
+  const subagentMsgId = `subagent-${activity.toolCallId || activity.persona || activity.id}`;
+
+  setState((prev) => {
+    const newSubagentActivities = [...prev.subagentActivities, activity].slice(-500);
+
+    if (activity.phase === 'spawn') {
+      // Spawn: create a new assistant-type message for the subagent run.
+      // If one already exists (e.g. re-spawn after reconnect), don't
+      // duplicate — just log.
+      const existing = prev.messages.find((m) => m.id === subagentMsgId);
+      if (existing) {
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMsg: Message = {
+        id: subagentMsgId,
+        type: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: new Date(),
+        persona: activity.persona,
+        subagentDepth: 1,
+        isSubagentRun: true,
+        subagentRunComplete: false,
+        subagentPersona: activity.persona,
+      };
+      return {
+        messages: [...prev.messages, newMsg],
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
+    }
+
+    if (activity.phase === 'output') {
+      // Output: append the message text to the matching subagent message's
+      // reasoning field (which renders as collapsible content).
+      const msgIdx = prev.messages.findIndex((m) => m.id === subagentMsgId);
+      if (msgIdx < 0) {
+        // No matching message yet (e.g. output arrived before spawn, or
+        // was evicted by trimMessages). Still track the activity for the
+        // Subagents tab.
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMessages = [...prev.messages];
+      const existingReasoning = newMessages[msgIdx].reasoning || '';
+      newMessages[msgIdx] = {
+        ...newMessages[msgIdx],
+        reasoning: existingReasoning + activity.message + '\n',
+      };
+      return {
+        messages: newMessages,
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
+    }
+
+    if (activity.phase === 'complete') {
+      // Complete: mark the subagent message as done. Optionally append
+      // the completion message (e.g. "Done. Modified 2 files.") to the
+      // reasoning content so it's visible in the collapsible.
+      const msgIdx = prev.messages.findIndex((m) => m.id === subagentMsgId);
+      if (msgIdx < 0) {
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMessages = [...prev.messages];
+      const existingReasoning = newMessages[msgIdx].reasoning || '';
+      newMessages[msgIdx] = {
+        ...newMessages[msgIdx],
+        subagentRunComplete: true,
+        reasoning: existingReasoning + activity.message + '\n',
+      };
+      return {
+        messages: newMessages,
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
+    }
+
+    // step or unknown phase — just track the activity
+    return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+  });
 };
 
 // Handle agent_message event
@@ -472,6 +630,17 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as AgentMessageData;
+
+  // Subagent agent_message events (tool logs, warnings, etc.) should not
+  // be appended to the primary chat's assistant message — they belong in
+  // the SubagentActivityFeed. Only log them.
+  const msgRaw = event.data as Record<string, unknown> | undefined;
+  const msgDepth = Number(msgRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(msgDepth) && msgDepth > 0) {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    return;
+  }
+
   let category = String(data.category || 'info');
   const message = String(data.message || '');
   const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
@@ -507,10 +676,10 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
     logEntry.level = category === 'error' ? 'error' : 'warning';
     setState((prev) => {
       const newMessages = [...prev.messages];
-      const lastMessage = newMessages[newMessages.length - 1];
-      if (lastMessage && lastMessage.type === 'assistant') {
+      const idx = lastPrimaryAssistantIndex(newMessages);
+      if (idx >= 0) {
         const prefixedMsg = category === 'error' ? `\n\nWarning: ${cleanedMsg}` : `\n\nNote: ${cleanedMsg}`;
-        newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + prefixedMsg };
+        newMessages[idx] = { ...newMessages[idx], content: (newMessages[idx].content || '') + prefixedMsg };
       }
       return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
@@ -519,11 +688,11 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
     logEntry.level = 'info';
     setState((prev) => {
       const newMessages = [...prev.messages];
-      const lastMessage = newMessages[newMessages.length - 1];
-      if (lastMessage && lastMessage.type === 'assistant') {
-        newMessages[newMessages.length - 1] = {
-          ...lastMessage,
-          content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`,
+      const idx = lastPrimaryAssistantIndex(newMessages);
+      if (idx >= 0) {
+        newMessages[idx] = {
+          ...newMessages[idx],
+          content: (newMessages[idx].content || '') + `\n\nInfo: ${cleanedMsg}`,
         };
       }
       return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
@@ -672,13 +841,63 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
 };
 
 // Handle workspace_changed event
+//
+// When the workspace root changes (e.g. switching to a git worktree via the
+// Worktrees panel), we refresh workspace-dependent UI in place instead of
+// doing a hard page reload.  A reload destroys all in-memory React state
+// (chat messages, open files, terminal sessions) and in service mode the
+// per-client server context is re-initialised from ws.workspaceRoot — which,
+// combined with the old unconditional reload, caused the "lands in home
+// directory" bug.
+//
+// The in-place refresh does three things:
+//   1. Tears down cached LSP clients (their WebSocket URLs are keyed by the
+//      old workspace root).
+//   2. Clears recentFiles / recentLogs caches in React state so stale data
+//      from the previous workspace doesn't linger.
+//   3. Dispatches a `sprout:workspace-changed` DOM event so other components
+//      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
+//      from the server's new workspace root.
 const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
-  const { event } = ctx;
+  const { event, setState } = ctx;
   const data = (event.data ?? {}) as WorkspaceChangedData;
   debugLog('[workspace] Workspace changed:', data);
-  if (!data.client_id || String(data.client_id) === getWebUIClientId()) {
-    window.location.reload();
+
+  // Only react to events targeting this client (or broadcasts without a
+  // client_id).
+  if (data.client_id && String(data.client_id) !== getWebUIClientId()) {
+    return;
   }
+
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+
+  // Tear down cached LSP clients whose connections reference the old workspace.
+  try {
+    LSPClientService.getInstance().cleanup();
+  } catch (err) {
+    debugLog('[workspace] LSP cleanup failed:', err);
+  }
+
+  // Clear workspace-derived caches so they re-fetch from the new root.
+  setState((prev) => ({
+    recentFiles: [],
+    recentLogs: [],
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+
+  // Notify other components to refresh their workspace-dependent data.
+  const workspaceRoot = (data as Record<string, unknown>).workspace_root;
+  const daemonRoot = (data as Record<string, unknown>).daemon_root;
+  window.dispatchEvent(
+    new CustomEvent('sprout:workspace-changed', {
+      detail: {
+        workspaceRoot: typeof workspaceRoot === 'string' ? workspaceRoot : '',
+        daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
+      },
+    }),
+  );
 };
 
 // Handle security_approval_request event
@@ -698,6 +917,19 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
       command: data.command != null ? String(data.command) : undefined,
       riskType: data.risk_type != null ? String(data.risk_type) : undefined,
       target: data.target != null ? String(data.target) : undefined,
+      // SP-058: the server sends allow_options="true" in extras for
+      // shell_command. Without it the dialog falls back to the legacy
+      // Allow / Block pair and the Elevate / Always-approve actions are
+      // unreachable. fs fields (kind/folder/path) drive the
+      // filesystem-tier dialog (backend extras["kind"] etc.).
+      allowOptions: data.allow_options === 'true',
+      fsKind: data.kind === 'fs_external' || data.kind === 'fs_sensitive' ? data.kind : undefined,
+      fsFolder: data.folder != null ? String(data.folder) : undefined,
+      fsPath: data.path != null ? String(data.path) : data.target != null ? String(data.target) : undefined,
+      // SP-124-2: LLM-derived analysis attached by the backend. Parse on
+      // receive so the dialog can render the summary / recommendation
+      // panel above the command.
+      securityAnalysis: parseSecurityAnalysis(event.data),
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
@@ -733,6 +965,10 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   logEntry.level = 'info';
   const data = (event.data ?? {}) as AskUserRequestData;
   if (data.status === 'responded') return;
+  if (data.status === 'cancelled') {
+    setState((prev) => ({ askUserRequest: null }));
+    return;
+  }
   if (!data.question) return;
   setState((prev) => ({
     askUserRequest: {
@@ -748,6 +984,84 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
     logs: appendCappedLog(prev.logs, logEntry),
   }));
   debugLog('[ask_user] Question:', data.question, 'options:', data.options?.length ?? 0);
+};
+
+// Handle edit_approval_request event (SP-072-3)
+const handleEditApprovalRequest = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as EditApprovalRequestData;
+  if (data.status === 'responded') return;
+  if (!data.request_id || !data.file_path) return;
+
+  const hunks = Array.isArray(data.hunks)
+    ? data.hunks.map((h) => ({
+        id: String(h.id || ''),
+        oldStart: Number(h.old_start ?? 0),
+        oldLines: Number(h.old_lines ?? 0),
+        newStart: Number(h.new_start ?? 0),
+        newLines: Number(h.new_lines ?? 0),
+        lines: Array.isArray(h.lines)
+          ? h.lines.map((l) => ({
+              type: (l.type === 'add' || l.type === 'remove' ? l.type : 'context') as 'context' | 'add' | 'remove',
+              content: String(l.content || ''),
+            }))
+          : [],
+        addCount: Number(h.add_count ?? 0),
+        delCount: Number(h.del_count ?? 0),
+      }))
+    : [];
+
+  setState((prev) => ({
+    editApprovalRequest: {
+      requestId: String(data.request_id),
+      filePath: String(data.file_path),
+      unifiedDiff: data.unified_diff != null ? String(data.unified_diff) : undefined,
+      hunks,
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[edit_approval] Request:', data.file_path, 'hunks:', hunks.length);
+};
+
+// Handle shell_approval_request event (SP-093-3)
+const handleShellApprovalRequest = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as ShellApprovalRequestData;
+  if (!data.request_id || !data.command) return;
+
+  const parts = Array.isArray(data.parts)
+    ? (data.parts as Array<Partial<ShellApprovalRequestData['parts'][number]>>).map((p) => ({
+        id: String(p?.id || ''),
+        text: String(p?.text || ''),
+        kind: String(p?.kind || ''),
+        semantic: String(p?.semantic || ''),
+        risk: String(p?.risk || ''),
+      }))
+    : [];
+
+  // SP-124-2: parse the JSON-encoded security_analysis field if present.
+  // Silent fall-through on malformed JSON per the SP-124 "analyzer is
+  // non-blocking" contract.
+  const securityAnalysis = parseSecurityAnalysis(data);
+
+  setState((prev) => ({
+    shellApprovalRequest: {
+      requestId: String(data.request_id),
+      command: String(data.command),
+      parts,
+      unifiedView: data.unified_view != null ? String(data.unified_view) : '',
+      riskLevel: String(data.risk_level || 'High'),
+      securityAnalysis,
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[shell_approval] Request:', data.command, 'parts:', parts.length);
 };
 
 /**
@@ -767,6 +1081,30 @@ const handleDriftDetected = (ctx: EventHandlerContext): void => {
   setState((prev) => ({
     driftNotification: { similarity, threshold, sessionId, options },
   }));
+};
+
+/**
+ * Handles context_management_diagnostic events: per-iteration telemetry
+ * from the agent's context-management layer (cache hit rate, reserved
+ * budget slices, iteration counter). The backend emits one of these per
+ * OnIteration callback so SP-066's substitution/rollup behavior can be
+ * observed live. We keep it out of the chat transcript and out of the
+ * Logs pane — the structured Stats card is the right home — but still
+ * log it at debug level so engineers can inspect from the console when
+ * investigating context pressure.
+ */
+const handleContextManagementDiagnostic = (ctx: EventHandlerContext): void => {
+  const { event } = ctx;
+  const data = (event.data ?? {}) as ContextManagementDiagnosticData;
+  debugLog('[context_diag]', {
+    iteration: data.iteration,
+    currentTokens: data.current_tokens,
+    maxTokens: data.max_tokens,
+    cacheHitRate: data.cache_hit_rate,
+    cachedTokens: data.cached_tokens,
+    promptTokens: data.prompt_tokens,
+    cacheWriteTokens: data.cache_write_tokens,
+  });
 };
 
 // Handle input_required event (SP-070-4: desktop notification)
@@ -803,6 +1141,118 @@ const handleChatRunRestored = (ctx: EventHandlerContext): void => {
   if (chatId && activeChatIdRef.current && chatId !== activeChatIdRef.current) return;
   debugLog('[reattach] gap on reconnect — reloading chat', chatId);
   window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId } }));
+};
+
+// Handle session_terminated event.
+// The Go backend publishes this when a chat session crashes (panic recovery)
+// or is force-closed. Without this handler the frontend keeps the "running"
+// spinner / active-query state indefinitely since no query_completed or
+// error event will ever follow — the session is dead. This handler resets
+// the active request counter and surfaces an error banner so the user knows
+// what happened and can send a new query.
+const handleSessionTerminated = (ctx: EventHandlerContext): void => {
+  const { event, setState, activeRequestsRef } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'error';
+  // The in-flight turn will never complete — the session is dead.
+  if (activeRequestsRef.current > 0) activeRequestsRef.current = 0;
+  const data = (event.data ?? {}) as { session_id?: string; status?: string; code?: string; message?: string };
+  setState((prev) => ({
+    isProcessing: false,
+    lastError: data.message || 'Session terminated',
+    queryProgress: null,
+    // Mark in-flight tool executions as errored so they don't persist as
+    // phantom "running" badges into the next query. Mirrors handleReconnect.
+    toolExecutions: prev.toolExecutions.map((t) => {
+      if (t.status === 'started' || t.status === 'running') {
+        return { ...t, status: 'error' as const, endTime: new Date(), result: 'Session terminated' };
+      }
+      return t;
+    }),
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[session] Session terminated:', data.code, data.message);
+};
+
+// Handle delegate_clarification_requested event (log-only; full UI is a follow-up).
+const handleDelegateClarificationRequested = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'tool';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[delegate] Clarification requested:', data);
+};
+
+// Handle delegate_clarification_responded event (log-only; full UI is a follow-up).
+const handleDelegateClarificationResponded = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'tool';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[delegate] Clarification responded:', data);
+};
+
+// Handle workspace_patch event (log-only; full VFS integration is a follow-up).
+// Redact file contents from the log entry — workspace_patch carries the full
+// written `content`, which may include secrets/PII and should not persist in
+// React state. Only path/action/seq are safe to log.
+const handleWorkspacePatch = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const raw = (event.data ?? {}) as { path?: unknown; action?: unknown; seq?: unknown; content?: unknown };
+  const logEntry = createLogEntry({
+    ...event,
+    data: { path: String(raw.path ?? ''), action: String(raw.action ?? ''), seq: raw.seq },
+  });
+  logEntry.category = 'file';
+  logEntry.level = 'info';
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[workspace] Patch:', String(raw.path ?? ''));
+};
+
+// Handle recall_diagnostic event (log-only; structured diagnostics UI is a follow-up).
+const handleRecallDiagnostic = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  debugLog('[recall] Diagnostic:', data);
+};
+
+// Handle session_displaced event — another browser tab/connection has taken
+// over this session. The WebSocket service already neutralized the old
+// connection and stopped reconnecting (websocket.ts:326). Here we surface
+// the takeover to the user so they understand why the UI went silent —
+// without this, the user sees stale state with no spinner, no error, and
+// no indication that their connection was stolen.
+const handleSessionDisplaced = (ctx: EventHandlerContext): void => {
+  const { event, setState, activeRequestsRef } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  // Reset processing state — the displaced session can't receive
+  // query_completed, so the spinner would hang forever.
+  if (activeRequestsRef.current > 0) activeRequestsRef.current = 0;
+  setState((prev) => ({
+    isProcessing: false,
+    queryProgress: null,
+    lastError: String(data.message || 'This session was taken over by another tab or window.'),
+    toolExecutions: prev.toolExecutions.map((t) => {
+      if (t.status === 'started' || t.status === 'running') {
+        return { ...t, status: 'error' as const, endTime: new Date(), result: 'Session displaced' };
+      }
+      return t;
+    }),
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[session] Displaced by another connection:', data.message);
 };
 
 // ── Hook Interface ───────────────────────────────────────────────────────
@@ -871,6 +1321,26 @@ export function useWebSocketEventHandler({
         activeChatIdRef.current &&
         String(eventData.chat_id) !== activeChatIdRef.current
       ) {
+        // Queue the event for the non-active chat instead of dropping it.
+        // When the user switches back, the backend fetch provides authoritative
+        // state. But if that fetch fails or hasn't caught up, the pendingEvents
+        // signal that the cache is stale. Pending events also prevent the
+        // stale-cache heuristic (Fix 3) from preferring shorter local state.
+        const eventChatId = String(eventData.chat_id);
+        setState((prev) => {
+          const existingCache = prev.perChatCache[eventChatId];
+          if (!existingCache) return {};
+          const pendingEvents = existingCache.pendingEvents ?? [];
+          return {
+            perChatCache: {
+              ...prev.perChatCache,
+              [eventChatId]: {
+                ...existingCache,
+                pendingEvents: [...pendingEvents, event].slice(-200),
+              },
+            },
+          };
+        });
         return;
       }
 
@@ -924,12 +1394,30 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
+        case 'edit_approval_request':
+          return handleEditApprovalRequest(ctx);
+        case 'shell_approval_request':
+          return handleShellApprovalRequest(ctx);
         case 'input_required':
           return handleInputRequired(ctx);
         case 'drift_detected':
           return handleDriftDetected(ctx);
+        case 'context_management_diagnostic':
+          return handleContextManagementDiagnostic(ctx);
         case 'chat_run_restored':
           return handleChatRunRestored(ctx);
+        case 'session_terminated':
+          return handleSessionTerminated(ctx);
+        case 'delegate_clarification_requested':
+          return handleDelegateClarificationRequested(ctx);
+        case 'delegate_clarification_responded':
+          return handleDelegateClarificationResponded(ctx);
+        case 'workspace_patch':
+          return handleWorkspacePatch(ctx);
+        case 'recall_diagnostic':
+          return handleRecallDiagnostic(ctx);
+        case 'session_displaced':
+          return handleSessionDisplaced(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';
@@ -952,12 +1440,24 @@ export function useWebSocketEventHandler({
 
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
+    setState((prev) => ({ ...prev, lastError: null }));
     apiService
       .getStats()
       .then((stats: unknown) => {
         const statsRecord = stats as Record<string, unknown>;
         const backendProcessing = statsRecord.is_processing === true;
         activeRequestsRef.current = backendProcessing ? 1 : 0;
+
+        const wasProcessing = (() => {
+          // Read the current isProcessing before setState overwrites it.
+          let processing = false;
+          setState((prev) => {
+            processing = prev.isProcessing;
+            return prev;
+          });
+          return processing;
+        })();
+
         setState((prev) => {
           const nextToolExecutions = backendProcessing
             ? prev.toolExecutions
@@ -981,9 +1481,49 @@ export function useWebSocketEventHandler({
             stats: { ...prev.stats, ...statsRecord, connection_phase: 'reconnected' },
           };
         });
+
+        // If a query was processing when we disconnected but the backend
+        // says it's done now, the query_completed event was lost during
+        // the disconnect. Reload messages for the active chat to recover
+        // the assistant's response.
+        if (wasProcessing && !backendProcessing) {
+          const chatId = activeChatIdRef.current;
+          if (chatId) {
+            debugLog('[reconnect] query completed during disconnect — reloading messages for', chatId);
+            switchChatSession(chatId)
+              .then((response) => {
+                // Bail if user switched chats while we were loading.
+                if (activeChatIdRef.current !== chatId) return;
+                const backendMessages: Message[] = (response.chat_session.messages ?? [])
+                  .filter((m) => m.role === 'user' || m.role === 'assistant')
+                  .map((m, i) => ({
+                    id: `chat-${chatId}-${i}`,
+                    type: m.role as 'user' | 'assistant',
+                    content: typeof m.content === 'string' ? m.content : '',
+                    timestamp: new Date(),
+                    ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+                  }));
+                setState((prev) => {
+                  // Backend is authoritative when it has caught up or the
+                  // query is no longer active. The old length-only heuristic
+                  // preferred shorter local state when streaming hadn't
+                  // persisted yet, losing the assistant's response.
+                  const useBackendMessages = backendMessages.length >= prev.messages.length || !backendProcessing;
+                  return useBackendMessages ? { messages: trimMessages(backendMessages) } : {};
+                });
+              })
+              .catch((err) => {
+                debugLog('[reconnect] failed to reload messages:', err);
+              });
+          }
+        }
       })
       .catch((error: unknown) => {
         debugLog('[reconnect] failed to sync backend state:', error);
+        // Defensive: the up-front clear above already covers the no-flash
+        // case, but re-clear here so any error path that re-sets lastError
+        // (or a stale closure) still ends with a clean banner.
+        setState((prev) => ({ ...prev, lastError: null }));
       });
   }, [apiService, activeRequestsRef, setState]);
 

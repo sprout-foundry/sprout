@@ -9,12 +9,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
-// GetActivePersona returns the currently active persona ID.
 func (a *Agent) GetActivePersona() string {
 	return normalizeAgentPersonaID(a.state.GetActivePersona())
 }
 
-// ClearActivePersona removes any active persona override and restores the base system prompt.
 func (a *Agent) ClearActivePersona() {
 	a.state.SetActivePersona("")
 	if strings.TrimSpace(a.baseSystemPrompt) != "" {
@@ -22,68 +20,61 @@ func (a *Agent) ClearActivePersona() {
 	}
 }
 
-// ApplyPersona activates a configured persona and applies provider/model/system-prompt overrides.
 func (a *Agent) ApplyPersona(personaID string) error {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return fmt.Errorf("agent configuration manager is not available for persona %q", personaID)
+		return agenterrors.NewConfig(fmt.Sprintf("agent configuration manager is not available for persona %q", personaID), nil)
 	}
 
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return fmt.Errorf("agent configuration is not available for persona %q", personaID)
+		return agenterrors.NewConfig(fmt.Sprintf("agent configuration is not available for persona %q", personaID), nil)
 	}
 
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {
 		available := a.GetAvailablePersonaIDs()
 		if len(available) == 0 {
-			return fmt.Errorf("persona not found or disabled: %s (no enabled personas configured)", personaID)
+			return agenterrors.NewNotFound(fmt.Sprintf("persona %s (no enabled personas configured)", personaID))
 		}
-		return fmt.Errorf("persona not found or disabled: %s (available personas: %s)", personaID, strings.Join(available, ", "))
+		return agenterrors.NewNotFound(fmt.Sprintf("persona %s (available personas: %s)", personaID, strings.Join(available, ", ")))
 	}
-	// Canonicalize the persona ID: an alias (e.g. legacy "repo_orchestrator")
-	// resolves to its primary ID (e.g. "orchestrator") via GetSubagentType, and
-	// we store the canonical form so downstream checks key off one name.
 	if canonical := normalizeAgentPersonaID(persona.ID); canonical != "" {
 		personaID = canonical
 	}
 
-	// Composition rules:
-	// 1) Start from current provider/model.
-	// 2) If persona provider is set, switch provider first (model falls back for that provider).
-	// 3) If persona model is set, apply model on the effective provider.
+	if personaID == personas.IDComputerUser {
+		if err := a.checkComputerUseActivation(); err != nil {
+			return err
+		}
+	}
+
 	if strings.TrimSpace(persona.Provider) != "" {
 		providerType, err := a.configManager.MapStringToClientType(strings.TrimSpace(persona.Provider))
 		if err != nil {
-			return fmt.Errorf("invalid persona provider %q: %w", persona.Provider, err)
+			return agenterrors.NewConfig(fmt.Sprintf("invalid persona provider %q", persona.Provider), err)
 		}
 		if providerType != a.getClientType() {
 			if err := a.SetProvider(providerType); err != nil {
-				return fmt.Errorf("failed switching to persona provider %q: %w", persona.Provider, err)
+				return agenterrors.NewConfig(fmt.Sprintf("failed switching to persona provider %q", persona.Provider), err)
 			}
 		}
 	}
 
 	if model := strings.TrimSpace(persona.Model); model != "" {
 		if err := a.SetModel(model); err != nil {
-			return fmt.Errorf("failed setting persona model %q: %w", model, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed setting persona model %q", model), err)
 		}
 	}
 
-	// Persona prompt overrides only this session's active prompt.
-	// system_prompt_text: completely replaces the current prompt.
-	// system_prompt_append: appends to the current prompt (useful for adding
-	// persona-specific rules on top of the base orchestrator prompt).
 	if promptText := strings.TrimSpace(persona.SystemPromptText); promptText != "" {
 		a.SetSystemPrompt(promptText)
 	} else if promptPath := strings.TrimSpace(persona.SystemPrompt); promptPath != "" {
 		if err := a.SetSystemPromptFromFile(promptPath); err != nil {
-			return fmt.Errorf("failed loading persona system prompt %q: %w", promptPath, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed loading persona system prompt %q", promptPath), err)
 		}
 	}
 
-	// Append supplement after the base/file/text prompt is set.
 	if appendText := strings.TrimSpace(persona.SystemPromptAppend); appendText != "" {
 		current := a.GetSystemPrompt()
 		if strings.TrimSpace(current) != "" {
@@ -93,9 +84,6 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		}
 	}
 
-	// SP-050: the orchestrator persona always gets the git-policy append.
-	// The policy text documents the commit tool preference, staging rules,
-	// and which shell-side git ops are blocked.
 	if personaID == personas.IDOrchestrator {
 		if policy := strings.TrimSpace(orchestratorGitPolicyAppend); policy != "" {
 			current := a.GetSystemPrompt()
@@ -109,16 +97,20 @@ func (a *Agent) ApplyPersona(personaID string) error {
 
 	a.state.SetActivePersona(personaID)
 
-	// When the primary agent (depth 0) sets its persona, record it as the root persona.
-	// Subagents inherit this through rootPersonaID propagation.
+	if personaID == personas.IDComputerUser {
+		SetActiveComputerUseAgent(a)
+
+		a.PublishAgentMessage("warning", "⚠  COMPUTER USE ACTIVE — The agent can now control your mouse, keyboard, and screen. Watch the screen. Stop the agent (Ctrl+C) if it does something unexpected. Per-session opt-in, panic key, and destructive-app blocking are NOT yet implemented.", nil)
+	} else {
+		if prev := a.state.GetActivePersona(); prev == personas.IDComputerUser || personaID != personas.IDComputerUser {
+			SetActiveComputerUseAgent(nil)
+		}
+	}
+
 	if a.subagentDepth == 0 {
 		a.rootPersonaID = personaID
 	}
 
-	// SP-051: keep the depth/persona event-metadata in sync with the active
-	// persona so every event the agent publishes is tagged. Subagents get
-	// theirs at creation in subagent_runner.createSubagent; this covers the
-	// primary agent and any later persona switches mid-session.
 	a.MergeEventMetadata(map[string]interface{}{
 		"subagent_depth": a.subagentDepth,
 		"active_persona": personaID,
@@ -159,8 +151,6 @@ func normalizeAgentPersonaID(raw string) string {
 	return normalized
 }
 
-// GetAvailablePersonaIDs returns all configured persona IDs,
-// filtering out LocalOnly personas when running in cloud mode.
 func (a *Agent) GetAvailablePersonaIDs() []string {
 	if a.configManager == nil {
 		return nil
@@ -192,7 +182,6 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 	return personaIDs
 }
 
-// GetPersonaProviderModel returns effective provider/model for display.
 func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error) {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
@@ -204,35 +193,47 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 	}
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {
-		return "", "", fmt.Errorf("persona not found or disabled: %s", personaID)
+		return "", "", agenterrors.NewNotFound(fmt.Sprintf("persona %s", personaID))
 	}
 
-	provider := strings.TrimSpace(string(a.getClientType()))
+	// Resolve provider: persona → config.SubagentProvider → parent runtime provider.
+	provider := strings.TrimSpace(persona.Provider)
 	if provider == "" {
-		provider = strings.TrimSpace(a.GetProvider())
+		provider = strings.TrimSpace(config.SubagentProvider)
 	}
-	if strings.TrimSpace(persona.Provider) != "" {
-		provider = strings.TrimSpace(persona.Provider)
+	if provider == "" {
+		provider = a.parentRuntimeProvider()
 	}
 
-	model := a.GetModel()
-	if strings.TrimSpace(persona.Provider) != "" && strings.TrimSpace(persona.Model) == "" {
+	// Resolve model: persona → config.SubagentModel → provider default → current model.
+	model := strings.TrimSpace(persona.Model)
+	if model == "" {
+		model = strings.TrimSpace(config.SubagentModel)
+	}
+	if model == "" {
 		if providerType, err := a.configManager.MapStringToClientType(provider); err == nil {
 			model = a.configManager.GetModelForProvider(providerType)
 		}
 	}
-	if strings.TrimSpace(persona.Model) != "" {
-		model = strings.TrimSpace(persona.Model)
+	if model == "" {
+		model = a.GetModel()
 	}
 
 	return provider, model, nil
 }
 
-// GetAvailableToolNames returns the effective tool names available to the active session.
+// parentRuntimeProvider returns the parent agent's effective provider key.
+func (a *Agent) parentRuntimeProvider() string {
+	if p := strings.TrimSpace(string(a.getClientType())); p != "" {
+		return p
+	}
+	return strings.TrimSpace(a.GetProvider())
+}
+
 func (a *Agent) GetAvailableToolNames() []string {
 	tools := a.getOptimizedToolDefinitions(nil)
 	if len(tools) == 0 {
-		tools = BuildToolDefinitions()
+		tools = BuildToolDefinitionsForAgent(a)
 	}
 
 	names := make([]string, 0, len(tools))
@@ -252,13 +253,6 @@ func (a *Agent) GetAvailableToolNames() []string {
 	return names
 }
 
-// isGitWriteAllowed returns true if the active persona is permitted to perform
-// git write operations (commit, stage, push) via shell_command or the commit
-// tool. The gate is the persona's CapabilityGitWrite capability — personas that
-// declare it (orchestrator, coordinator) are allowed; all others are not.
-//
-// The ChangeTracker provides the recovery safety net for git operations, so no
-// additional config toggle is needed.
 func (a *Agent) isGitWriteAllowed() bool {
 	personaID := a.GetActivePersona()
 	if personaID == "" {
@@ -275,13 +269,6 @@ func (a *Agent) isGitWriteAllowed() bool {
 	return persona.HasCapability(personas.CapabilityGitWrite)
 }
 
-// canSpawnNonDelegatable reports whether the active persona is permitted to
-// spawn the given target persona ID, even if the target carries
-// Delegatable=false. The check reads the active persona's
-// CanSpawnNonDelegatable list — declarative replacement for the previous
-// hasEASpawnAuthority special case. The coordinator declares ["orchestrator"]
-// so the canonical coordinator→orchestrator→specialist chain works without
-// special-case Go code.
 func (a *Agent) canSpawnNonDelegatable(target string) bool {
 	cfg := a.GetConfig()
 	if cfg == nil {
@@ -299,4 +286,3 @@ func (a *Agent) canSpawnNonDelegatable(target string) bool {
 	}
 	return false
 }
-

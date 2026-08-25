@@ -103,13 +103,13 @@ func TestInitOPFSReplicaFunc_MultipleFiles(t *testing.T) {
 
 	manifest := []manifestEntry{
 		{
-			Path:     "src/a.go",
-			Size:     100,
+			Path:                  "src/a.go",
+			Size:                  100,
 			WorkspaceFileMetadata: agent.WorkspaceFileMetadata{BrowserSeq: 1},
 		},
 		{
-			Path:     "src/b.go",
-			Size:     200,
+			Path:                  "src/b.go",
+			Size:                  200,
 			WorkspaceFileMetadata: agent.WorkspaceFileMetadata{BrowserSeq: 2},
 		},
 	}
@@ -297,7 +297,7 @@ func TestSyncOPFSReplicaUpsert_WithContentBase64(t *testing.T) {
 		Op:            "upsert",
 		Path:          "src/hello.go",
 		ContentBase64: contentB64,
-		Metadata: &agent.WorkspaceFileMetadata{BrowserSeq: 1},
+		Metadata:      &agent.WorkspaceFileMetadata{BrowserSeq: 1},
 	}
 	data, _ := json.Marshal(patch)
 	args := []js.Value{js.ValueOf(string(data))}
@@ -376,7 +376,7 @@ func TestSyncOPFSReplicaUpsert_UpdatesExisting(t *testing.T) {
 		Op:            "upsert",
 		Path:          "src/existing.go",
 		ContentBase64: contentB64,
-		Metadata: &agent.WorkspaceFileMetadata{BrowserSeq: 5},
+		Metadata:      &agent.WorkspaceFileMetadata{BrowserSeq: 5},
 	}
 	data, _ := json.Marshal(patch)
 	args := []js.Value{js.ValueOf(string(data))}
@@ -405,8 +405,8 @@ func TestSyncOPFSReplicaUpsert_MetadataOnly(t *testing.T) {
 	opfsReplicaMu.Unlock()
 
 	patch := patchEvent{
-		Op:     "upsert",
-		Path:   "src/metaOnly.go",
+		Op:       "upsert",
+		Path:     "src/metaOnly.go",
 		Metadata: &agent.WorkspaceFileMetadata{BrowserSeq: 7},
 		// No ContentBase64
 	}
@@ -462,7 +462,7 @@ func TestSyncOPFSReplicaFunc_EmptyPatch(t *testing.T) {
 }
 
 func TestSyncOPFSReplicaFunc_InvalidJSON(t *testing.T) {
-	args := []js.Value{js.ValueOf("{bad json" )}
+	args := []js.Value{js.ValueOf("{bad json")}
 	result := syncOPFSReplicaFunc(js.Null(), args)
 	resMap := expectMap(t, result, "sync result")
 	expectError(t, resMap, "invalid patch JSON")
@@ -641,11 +641,11 @@ func TestStoreReplicaMetadata_FullUpdate(t *testing.T) {
 	opfsReplicaMu.Unlock()
 
 	metaData := agent.WorkspaceFileMetadata{
-		BrowserSeq:        10,
-		ContainerSeq:      20,
-		LastSyncedBrowser: 9,
+		BrowserSeq:          10,
+		ContainerSeq:        20,
+		LastSyncedBrowser:   9,
 		LastSyncedContainer: 19,
-		ModifiedAt:        time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		ModifiedAt:          time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
 	metaJSON, _ := json.Marshal(metaData)
 

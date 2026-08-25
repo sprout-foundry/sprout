@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 
 interface AuthContextType {
   token: string | null;
@@ -27,9 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = token !== null && token !== '';
 
   return (
-    <AuthContext.Provider value={{ token, setToken, clearToken, isAuthenticated }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ token, setToken, clearToken, isAuthenticated }}>{children}</AuthContext.Provider>
   );
 }
 

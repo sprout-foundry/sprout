@@ -65,7 +65,12 @@
   border-radius: 3px;
   color: var(--cm-panel-button-fg, var(--cm-fg, #000));
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   user-select: none;
 }
 
@@ -105,7 +110,12 @@
   border-radius: 3px;
   color: var(--cm-panel-button-fg, var(--cm-fg, #000));
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   user-select: none;
 }
 

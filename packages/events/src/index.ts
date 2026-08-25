@@ -23,10 +23,16 @@ export type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
+  EditApprovalRequestData,
+  EditHunk,
+  EditHunkLine,
+  ShellApprovalPartData,
+  ShellApprovalRequestData,
   TerminalSessionReadyData,
   TerminalOutputData,
   TerminalPtyExitData,
   DriftDetectedData,
+  ContextManagementDiagnosticData,
 } from './types';
 export { EventsContextProvider, useEvents } from './context';
 export type { EventsContextProviderProps } from './context';

@@ -14,40 +14,11 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// shellBulkThreshold is the per-command mutation count that flips the
-// recorder into rollup mode. Below this, every change records
-// individually so small refactors and one-off edits keep fine-grained
-// entries. Above it, the recorder assumes the command was a build /
-// install / clone / unzip and collapses each top-level workspace
-// directory's worth of churn into a single "bulk" row.
-//
-// SP-061-1 v2: the trigger is now per-COMMAND volume only. The
-// previous design also required a per-directory floor as the primary
-// gate, which missed real-world bulk operations whose output fanned
-// out across many small directories:
-//
-//   - `git clone repo .` → ~5k files spread across hundreds of dirs,
-//     none individually heavy → no rollup, the changes panel drowned
-//   - `unzip flat-archive.zip` → similar fanout
-//   - `pip install --target env/` → output buried in
-//     `env/lib/python3.x/site-packages/...` with few files per leaf
-//
-// Static skip dirs (`node_modules`, `.venv`, `vendor`, …) still get
-// pruned by the walker before they ever reach this code path, so the
-// common composer / pip-into-.venv / npm cases are already silent.
-// This threshold is a long-stop for everything else.
+// shellBulkThreshold is the per-command mutation count that triggers bulk
+// rollup. Below it, every change records individually.
 var shellBulkThreshold = 200
 
-// shellBulkBucketMin is a SECONDARY filter applied only within bulk
-// mode: buckets with fewer than this many items emit per-file even
-// though the overall command was bulk. Without this, a single source
-// edit made adjacent to a build command (`make && touch src/lib.go`)
-// would render as a useless "src/ — 1 file" rollup row and lose the
-// per-file view/revert affordances. The number is intentionally low —
-// the primary gate is shellBulkThreshold; this is just protection
-// for the handful of meaningful edits that ride along with a heavy
-// command. It is NOT the v1 per-dir gate and does not need to be
-// high enough to discriminate between fan-out shapes.
+// shellBulkBucketMin exempts light buckets from rollup within bulk mode.
 var shellBulkBucketMin = 10
 
 // pendingShellMutation is the intermediate shape used by
@@ -61,24 +32,10 @@ type pendingShellMutation struct {
 	op     string // "create" | "edit" | "delete"
 }
 
-// RecordShellMutations diffs a pair of snapshots (taken before/after a
+// RecordShellMutations diffs a pair of snapshots (before/after a
 // shell_command invocation) and appends TrackedFileChange entries for
-// every file that materially changed. The before-snapshot supplies the
-// OriginalCode field so a user can recover untracked-by-git files the
-// agent accidentally deleted or mangled.
-//
-// Dedup: if the path was already recorded this turn via TrackFileWrite
-// / TrackFileEdit (the direct tool hooks), the existing entry is kept
-// and we don't double-record from the shell diff. The direct entry is
-// richer (original_code captured at the source) so it wins.
-//
-// SP-061-1: when a single shell command churns more than
-// shellBulkThreshold paths AND some top-level workspace directory
-// owns at least shellBulkPerDirMin of them, that directory is rolled
-// up into a single "bulk" entry and added to autoSkipDirs so future
-// walks skip it entirely. The rollup carries BulkCount so the UI can
-// render "dist/ — 1,247 files (build output)" instead of stacking
-// thousands of individual rows.
+// every file that materially changed. Deduplicates against direct-tool
+// hooks. Above shellBulkThreshold, collapses into bulk rollup.
 func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSnapshotEntry, toolCall string) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -157,32 +114,13 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 }
 
 // emitWithBulkRollup is the rollup path taken when a single shell
-// command exceeded shellBulkThreshold. Strategy:
-//
-//   1. Bucket the pending mutations by their TOP-LEVEL workspace
-//      directory. Root-level files (no enclosing dir) form a special
-//      bucket of their own.
-//   2. Root-level files always emit per-file — there is no useful
-//      directory label for them ("workspace root" reads as everything)
-//      and they're overwhelmingly config / lockfile / README edits
-//      that the user wants to see.
-//   3. Each non-root bucket collapses into ONE rollup row labeled by
-//      the deepest workspace-relative path ALL items in the bucket
-//      share. So `repo/foo.js + repo/bar/baz.js` → `repo/`; if every
-//      item sits under `env/lib/python3.x/site-packages/...` the
-//      label sharpens to that deepest shared prefix.
-//   4. The top-level dir for each bucket joins autoSkipDirs so the
-//      next shell command's walk doesn't re-traverse it.
-//
-// Honest cross-directory refactors above the threshold (e.g. a
-// 250-file rename touching 25 top-level dirs) collapse into 25 rollup
-// rows — still terse, still recognizable. The model's primary edit
-// tools (write_file, edit_file) bypass this code path entirely, so the
-// rollup never absorbs intentional per-file work.
+// command exceeded shellBulkThreshold. Buckets mutations by top-level
+// workspace directory. Root-level files and light buckets emit per-file;
+// heavy buckets collapse into a single rollup row.
 func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, toolCall string) {
 	workspaceRoot := ""
 	if ct.agent != nil {
-		workspaceRoot = ct.agent.workspaceRoot
+		workspaceRoot = ct.agent.GetWorkspaceRoot()
 	}
 	absWorkspace := workspaceRoot
 	if workspaceRoot != "" {
@@ -215,18 +153,7 @@ func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, tool
 
 	for _, key := range bucketOrder {
 		b := buckets[key]
-		// Root-level files: always per-file. There's no honest
-		// directory label and these are typically meaningful
-		// config / lockfile / README edits the user wants to see.
-		//
-		// Light buckets (below shellBulkBucketMin): also per-file.
-		// These are the handful of source edits riding along with a
-		// heavy build/install command. Rolling them up would replace
-		// "src/lib.go was modified" with "src/ — 1 file" and lose the
-		// view/revert affordance for an edit the user almost certainly
-		// cares about. The PRIMARY rollup gate (shellBulkThreshold)
-		// already fired at the COMMAND level above; this secondary
-		// filter just exempts the light buckets from collapse.
+		// Root-level files and light buckets emit per-file.
 		if b.topDir == "" || len(b.items) < shellBulkBucketMin {
 			for _, p := range b.items {
 				ct.appendShellMutation(p.path, p.before, p.after, p.op, toolCall)

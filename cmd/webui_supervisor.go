@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/automate"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
@@ -30,6 +32,11 @@ type webUIHostRecord struct {
 type desiredWebUIHostRecord struct {
 	PID       int       `json:"pid"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// StartedAt is the wall-clock time the desired host process was
+	// created. Used with processStartedBefore to guard against PID reuse:
+	// if the original host died and the OS recycled the PID, the new
+	// process will have a later start time.
+	StartedAt time.Time `json:"started_at,omitempty"`
 }
 
 type webUISupervisor struct {
@@ -41,6 +48,11 @@ type webUISupervisor struct {
 	mu               sync.Mutex
 	attachedAnnounce bool
 	startAnnounce    bool
+	// attached is true once this supervisor has determined another healthy
+	// process owns the Web UI host role (and consequently shut down its own
+	// server). The startup loop in agent_modes.go checks this to avoid
+	// timing out when attach-to-existing is the correct outcome.
+	attached bool
 }
 
 func newWebUISupervisor(ws *webui.ReactWebServer, port int, announceStart func(port int), announceAttach func(port int)) *webUISupervisor {
@@ -55,6 +67,16 @@ func newWebUISupervisor(ws *webui.ReactWebServer, port int, announceStart func(p
 		startAnnounce:    false,
 		attachedAnnounce: false,
 	}
+}
+
+// HasAttached reports whether the supervisor has determined that another
+// healthy process owns the Web UI host role. Callers that are waiting for
+// a local web server to start should break out of their wait loop when
+// this returns true — there is no local server coming.
+func (s *webUISupervisor) HasAttached() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attached
 }
 
 func (s *webUISupervisor) Run(ctx context.Context) {
@@ -82,7 +104,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	desired := loadDesiredWebUIHostPID()
 
 	// If a specific PID is selected and still alive, enforce it as leader.
-	if desired > 0 && isProcessAlive(desired) {
+	if desired > 0 && pidalive.IsAlive(desired) {
 		if desired != pid {
 			if s.webServer.IsRunning() {
 				if shutdownErr := s.webServer.Shutdown(); shutdownErr != nil {
@@ -90,6 +112,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 				}
 			}
 			s.mu.Lock()
+			s.attached = true
 			if !s.attachedAnnounce && s.announceAttach != nil {
 				s.attachedAnnounce = true
 				s.announceAttach(s.port)
@@ -111,6 +134,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 			}
 		}
 		s.mu.Lock()
+		s.attached = true
 		if !s.attachedAnnounce && s.announceAttach != nil {
 			s.attachedAnnounce = true
 			s.announceAttach(record.Port)
@@ -137,7 +161,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	if err := saveWebUIHostRecord(webUIHostRecord{
 		PID:       pid,
 		Port:      s.port,
-		StartedAt: now,
+		StartedAt: recordProcessStartTime(pid),
 		UpdatedAt: now,
 	}); err != nil {
 		log.Printf("[debug] failed to save WebUI host record: %v", err)
@@ -205,6 +229,18 @@ func loadDesiredWebUIHostPID() int {
 	if record.PID <= 0 {
 		return 0
 	}
+	// Staleness guard: the desired-host record is refreshed every heartbeat
+	// (hostHeartbeatInterval). If it's older than hostStaleAfter the host
+	// likely died without cleaning up — don't trust the PID.
+	if time.Since(record.UpdatedAt) > hostStaleAfter {
+		return 0
+	}
+	// PID-reuse guard: verify the process at this PID is the same one that
+	// was recorded. If the host died and the OS recycled the PID, refuse to
+	// treat the unrelated process as the desired host.
+	if !automate.VerifyProcessStartedBefore(record.PID, record.StartedAt) {
+		return 0
+	}
 	return record.PID
 }
 
@@ -215,6 +251,7 @@ func saveDesiredWebUIHostPID(pid int) error {
 	record := desiredWebUIHostRecord{
 		PID:       pid,
 		UpdatedAt: time.Now(),
+		StartedAt: recordProcessStartTime(pid),
 	}
 	encoded, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
@@ -241,9 +278,14 @@ func isHostRecordAlive(record webUIHostRecord) bool {
 	if time.Since(record.UpdatedAt) > hostStaleAfter {
 		return false
 	}
-	return isProcessAlive(record.PID)
-}
-
-func isProcessAlive(pid int) bool {
-	return isPIDAlive(pid)
+	if !pidalive.IsAlive(record.PID) {
+		return false
+	}
+	// PID-reuse guard: if StartedAt is recorded, verify the process at this
+	// PID is the same one that created the host record. Without this check,
+	// a recycled PID causes the supervisor to "attach" to an unrelated process.
+	if !record.StartedAt.IsZero() && !automate.VerifyProcessStartedBefore(record.PID, record.StartedAt) {
+		return false
+	}
+	return true
 }

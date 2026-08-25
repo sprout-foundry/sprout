@@ -260,3 +260,184 @@ func GetRecentFileLog(filePath string, limit int) (string, error) {
 	}
 	return strings.Join(lines, "\n"), nil
 }
+
+// IsFileContentCommitted reports whether the working-tree version of
+// filePath matches what is recorded at git HEAD — i.e. the file is
+// tracked by git AND has no uncommitted modifications. This is the
+// git-awareness primitive used by the revert/recover staleness guards
+// to refuse rolling back work that the user has intentionally
+// committed to version control.
+//
+// Semantics:
+//
+//   - Not a git repo (GetGitRootDir fails) → (false, nil): no git
+//     protection applies; callers fall back to the content-only check.
+//   - File not tracked by git (untracked, or HEAD:<path> unknown) →
+//     (false, nil): no git protection; content check applies.
+//   - File tracked and working tree matches HEAD → (true, nil):
+//     PROTECTED — the content is committed; reverting to an older
+//     snapshot would silently undo committed work.
+//   - File tracked but differs from HEAD (uncommitted modifications) →
+//     (false, nil): not protected; the content-only staleness check
+//     still decides.
+//
+// The check is performed in two steps:
+//
+//  1. `git ls-files --error-unmatch <relpath>` verifies the file is
+//     tracked by git. Untracked files exit non-zero.
+//  2. `git diff --quiet HEAD -- <relpath>` confirms the working-tree
+//     copy is identical to HEAD. Both are read-only commands, so
+//     SafeGitCmd is invoked with dir="" (matching the existing
+//     GetGitStatus / GetUncommittedChanges pattern), which is not
+//     blocked by the test-mode mutating-command guard.
+//
+// Step 1 is critical: `git diff --quiet HEAD -- <path>` alone returns
+// exit 0 for UNTRACKED files because `git diff` does not include
+// untracked files in its comparison. Without the tracked-file gate,
+// a freshly-created (but never `git add`ed) file would be incorrectly
+// reported as committed-clean, breaking the staleness guard.
+//
+// Any unexpected git error is returned as (false, err) so callers can
+// fall back to the conservative content-only behavior rather than
+// blocking legitimate reverts.
+func IsFileContentCommitted(filePath string) (bool, error) {
+	// Establish we are inside a git repository. GetGitRootDir uses the
+	// process CWD; the staleness guards are always invoked with paths
+	// resolved relative to the workspace root, so this is the right
+	// scope. A non-repo is not an error — it just means no git
+	// protection applies.
+	if _, err := GetGitRootDir(); err != nil {
+		return false, nil
+	}
+
+	// Resolve the path relative to the repo root so the commands target
+	// the correct tracked entry. GetFileGitPath handles symlink
+	// resolution on both the file and the git root.
+	relPath, err := GetFileGitPath(filePath)
+	if err != nil {
+		return false, nil
+	}
+
+	// Step 1: verify the file is tracked by git. Without this gate,
+	// the diff below would exit 0 for untracked files (git diff does
+	// not compare against untracked files), incorrectly reporting them
+	// as committed-clean. `git ls-files --error-unmatch` exits
+	// non-zero for paths not known to git.
+	trackedCmd := SafeGitCmd("", "ls-files", "--error-unmatch", relPath)
+	if err := trackedCmd.Run(); err != nil {
+		// File is not tracked by git → not committed / not protected.
+		return false, nil
+	}
+
+	// Step 2: the file is tracked. Check whether the working-tree copy
+	// matches HEAD. `git diff --quiet HEAD -- <path>` exits 0 when the
+	// working-tree file is identical to HEAD (no uncommitted changes),
+	// and non-zero otherwise (uncommitted modifications present).
+	cmd := SafeGitCmd("", "diff", "--quiet", "--no-ext-diff", "HEAD", "--", relPath)
+	if err := cmd.Run(); err != nil {
+		// exit code != 0: the file differs from HEAD (uncommitted
+		// modifications). Not committed-clean → not protected.
+		return false, nil
+	}
+	// exit code 0: tracked AND working tree matches HEAD → PROTECTED.
+	return true, nil
+}
+
+// CommittedFilePaths returns a set of absolute filesystem paths for
+// files that are tracked by git AND whose working-tree content is
+// identical to HEAD (committed-clean). This is the batch equivalent of
+// IsFileContentCommitted: instead of two subprocess calls per file, it
+// runs just two commands total (git ls-files + git diff --name-only HEAD)
+// and builds the full set in one pass.
+//
+// All git commands are run with cmd.Dir=workDir so the function does
+// not depend on the process CWD — it resolves the repo containing
+// workDir regardless of where the agent process is running.
+//
+// Callers use this to identify working-tree deltas caused by git
+// operations (merge, checkout, reset, pull) that should NOT be recorded
+// as recoverable agent edits — a file whose post-operation content
+// matches HEAD was aligned to a committed state by git, not edited by
+// the agent, so there is nothing legitimate to "recover" back to.
+//
+// Returns (nil, nil) when workDir is not inside a git repository — no
+// git protection applies and callers should record all deltas.
+func CommittedFilePaths(workDir string) (map[string]bool, error) {
+	if workDir == "" {
+		return nil, nil
+	}
+
+	// Resolve the repo root containing workDir.
+	rootCmd := SafeGitCmd(workDir, "rev-parse", "--show-toplevel")
+	rootOut, err := rootCmd.Output()
+	if err != nil {
+		return nil, nil // not a git repo
+	}
+	root := strings.TrimSpace(string(rootOut))
+	if root == "" {
+		return nil, nil
+	}
+
+	// The workDir itself may be a symlink — the workspace walker records
+	// paths using the original (pre-symlink) workDir, while git resolves
+	// symlinks and reports the real path. We must build absolute paths
+	// in BOTH forms so the caller can match regardless of which form the
+	// walker used. This mirrors the symlink resolution strategy in
+	// GetFileGitPath and the agent's isOutsideWorkspace helper.
+	rootResolved := root
+	if evaled, e := filepath.EvalSymlinks(root); e == nil {
+		rootResolved = evaled
+	}
+
+	// Step 1: enumerate every tracked file (repo-relative paths,
+	// null-terminated for robustness against spaces / special chars).
+	trackedCmd := SafeGitCmd(workDir, "ls-files", "-z")
+	trackedOut, err := trackedCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files: %w", err)
+	}
+
+	// Step 2: enumerate files that differ from HEAD. `git diff
+	// --name-only` (without --quiet) exits 0 on success regardless of
+	// whether differences exist; the differing paths are in stdout.
+	diffCmd := SafeGitCmd(workDir, "diff", "--name-only", "-z", "--no-ext-diff", "HEAD")
+	diffOut, err := diffCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff --name-only HEAD: %w", err)
+	}
+
+	// Build the "differs from HEAD" set for O(1) lookup.
+	differs := make(map[string]bool)
+	for _, p := range strings.Split(string(diffOut), "\x00") {
+		if p != "" {
+			differs[p] = true
+		}
+	}
+
+	// Committed-clean = tracked AND NOT in the diff set. Resolve each
+	// repo-relative path to absolute filesystem paths in BOTH the raw
+	// git-root form and the symlink-resolved form, so callers using
+	// either representation of the workspace can match.
+	committed := make(map[string]bool)
+	for _, p := range strings.Split(string(trackedOut), "\x00") {
+		if p == "" {
+			continue
+		}
+		if differs[p] {
+			continue
+		}
+		committed[filepath.Join(root, p)] = true
+		if rootResolved != root {
+			committed[filepath.Join(rootResolved, p)] = true
+		}
+		// Also add paths using the original workDir as prefix, which may
+		// be a symlink that the workspace walker used un-resolved (e.g.,
+		// macOS /var → /private/var). Without this, the caller's pending
+		// change paths won't match the committed set.
+		absWork, _ := filepath.Abs(workDir)
+		if absWork != "" && absWork != root && absWork != rootResolved {
+			committed[filepath.Join(absWork, p)] = true
+		}
+	}
+	return committed, nil
+}

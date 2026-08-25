@@ -99,10 +99,9 @@ func TestDetermineProvider_ExplicitFlagInvalidProvider(t *testing.T) {
 }
 
 func TestDetermineProvider_EmptyFallback(t *testing.T) {
-	// Empty inputs always succeed — returns whatever provider is available
-	provider, err := DetermineProvider("", "")
-	assert.NoError(t, err)
-	assert.NotEmpty(t, provider)
+	// Empty inputs with no env var or configured provider — returns error
+	_, err := DetermineProvider("", "")
+	assert.Error(t, err)
 }
 
 func TestDetermineProvider_LastUsedOllama(t *testing.T) {
@@ -133,4 +132,3 @@ func TestClientType_Constants(t *testing.T) {
 	assert.Equal(t, ClientType("test"), TestClientType)
 	assert.Equal(t, ClientType("editor"), EditorClientType)
 }
-

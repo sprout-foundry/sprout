@@ -1,41 +1,7 @@
-// Shell-mutation tracking for ChangeTracker.
-//
-// The base ChangeTracker (change_tracking.go) only captures writes the
-// agent performs via the structured file tools (write_file, edit_file,
-// patch_structured_file, write_structured_file). Plenty of legitimate
-// agent actions mutate files outside those tools — `sed -i`, `mv`, `rm`,
-// `cp`, `tee`, `awk -i inplace`, build scripts, formatters, etc. — and
-// none of them currently appear in the manifest the subagent returns to
-// its primary.
-//
-// This file adds a "before/after" snapshot pass around every
-// shell_command invocation:
-//
-//  1. Before the shell runs, walk the workspace tree and capture file
-//     bytes for everything inside size/binary limits, skipping
-//     well-known bloat directories (.git, node_modules, dist, …).
-//     Works whether or not the workspace is a git repo — no git
-//     dependency, no reliance on git's tracked/untracked classification.
-//  2. Run the shell command.
-//  3. Walk again afterwards. Diff against the "before" map. Each
-//     deletion, modification, or creation that isn't already in the
-//     tracker becomes a new TrackedFileChange with the captured
-//     original content (when available — preserved so a user can
-//     recover an accidentally-deleted file from the session buffer,
-//     git-tracked or not).
-//
-// Size + binary filters keep this cheap and safe: 1 MiB ceiling per file
-// (so we don't buffer node_modules-style giants), plus a null-byte
-// sniff in the first 8 KiB so binaries aren't stored as text. A
-// per-snapshot total-bytes budget caps memory.
-//
-// This file is the primary entry point containing the main orchestration
-// methods. Supporting code is split across:
-//
-//   - change_tracking_snapshot.go — walk, file I/O, binary detection
-//   - change_tracking_mutations.go — mutation recording and bulk rollup
-//   - change_tracking_autoskip.go — adaptive auto-skip learning
-//   - change_tracking_shell_persist.go — cross-session persistence
+// Shell-mutation tracking: captures before/after snapshots around shell_command
+// invocations to detect file changes the structured tools miss (sed, mv, rm, etc.).
+// Supporting code: change_tracking_snapshot.go, change_tracking_mutations.go,
+// change_tracking_autoskip.go, change_tracking_shell_persist.go.
 package agent
 
 import (
@@ -43,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 const (
@@ -116,29 +84,9 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 }
 
 // TrackShellTurn diffs the workspace against the primed baseline,
-// appends every detected mutation to the change tracker (with dedup
-// against direct-hook entries that fired during the same window),
-// then rebases the baseline to the new state.
-//
-// If the cache hasn't been primed yet this call auto-primes — the
-// pre-shell state is captured but no changes are recorded the first
-// time (we have no baseline to compare against). To track the very
-// first shell command's mutations, call PrimeShellTracking once at
-// agent session start before the first shell_command runs.
-//
-// Honors the per-tracker shellWalkEnabled knob — when disabled the
-// call is a no-op so users with weird workspaces can keep direct-tool
-// tracking without paying the walker's cost.
-//
-// `destructive` should be set when the shell command can clobber active
-// changes (`git checkout .`, `git reset --hard`, …). It flips the walk
-// into the safer mode that bypasses autoSkipDirs and emits per-file
-// rather than rolling up — see shell_destructive.go for the classifier
-// and walkWorkspace for the behaviour switch.
-//
-// Concurrency: serialized via the tracker's internal mutex. Subagents
-// each have their own ChangeTracker so cross-subagent calls don't
-// interfere.
+// records mutations, and rebases the baseline to the new state.
+// Auto-primes if the cache hasn't been primed yet (no changes recorded first time).
+// `destructive` enables the safer mode that bypasses autoSkipDirs.
 func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bool) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -154,14 +102,10 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		absWorkDir = workDir
 	}
 
+	// Re-prime if the workDir changed since the cache was built.
+	// Diffing a cache built for one root against a walk of another
+	// would classify every file outside the old root as a "create".
 	if ct.shellCache == nil || ct.shellCacheRoot != absWorkDir {
-		// Either first call, or the shell `cd`'d into a different
-		// directory since the cache was built. Re-prime silently
-		// against the new workDir — diffing a cache built for one
-		// root against a walk of another would classify every file
-		// outside the old root as a "create" (the 14k-entry runaway
-		// session that motivated shellCacheRoot). Priming is always
-		// non-destructive even when the triggering command is.
 		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
@@ -171,16 +115,32 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		return
 	}
 
+	// git stash is uniquely dangerous: the stash pop's 3-way merge can
+	// silently revert files to a state the agent never wrote. Re-prime
+	// the cache instead of diffing against a stale pre-stash baseline.
+	if destructive && isGitStashOperation(toolCall) {
+		snap, _, _ := ct.walkWorkspace(workDir, nil, true)
+		if snap == nil {
+			snap = map[string]*shellSnapshotEntry{}
+		}
+		ct.shellCache = snap
+		ct.shellCacheRoot = absWorkDir
+		ct.logf("git stash operation detected (%s), re-primed shell cache (no diff against stale baseline)", toolCall)
+		return
+	}
+
 	newSnap, pending, truncated := ct.walkWorkspace(workDir, ct.shellCache, destructive)
 	if newSnap == nil {
 		return
 	}
 
-	// Surface truncation as a manifest entry on destructive walks. Non-
-	// destructive truncation already gets logged; for destructive ops we
-	// want it impossible to miss because partial coverage might hide
-	// reverts the user expected to be recoverable. Recorded as Operation
-	// "warning" so the UI can highlight it distinctly.
+	// Filter out deltas caused by git operations. When git brings committed
+	// content into the working tree, those aren't agent-authored edits.
+	// For non-destructive commands: suppressed. For destructive: preserved
+	// if before-content differed from after (uncommitted agent work).
+	pending = ct.filterGitSourcedDeltas(pending, workDir, destructive)
+
+	// Surface truncation as a manifest entry on destructive walks.
 	if truncated && destructive {
 		ct.appendChange(TrackedFileChange{
 			FilePath:  toolCall,
@@ -191,12 +151,8 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		})
 	}
 
-	// Destructive commands above the bulk threshold collapse into a
-	// single recoverable entry. Below the threshold we keep the per-file
-	// shape so small reverts stay easy to scan flat. Non-destructive
-	// commands always emit per-file — the build-rollup machinery is
-	// dormant in production today (RecordShellMutations isn't wired in
-	// from this path), so we don't touch their behaviour here.
+	// Destructive commands above the bulk threshold collapse into a single
+	// recoverable entry. Below the threshold we keep per-file shape.
 	if destructive && len(pending) >= shellDestructiveBulkThreshold {
 		ct.appendDestructiveBulkRollup(pending, toolCall)
 	} else {
@@ -212,15 +168,8 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 }
 
 // SyncShellCacheForPath refreshes the shell cache entry for one path
-// against its current on-disk state. Called by the direct file-write
-// hooks (TrackFileWrite, TrackFileEdit) so the cache reflects writes
-// the agent just performed via structured-file tools — without this,
-// the next TrackShellTurn walk would see the new content as a stat
-// mismatch against stale cache and record a duplicate "edit" entry
-// even though no shell command touched the file.
-//
-// Safe to call when the cache hasn't been primed yet (no-op) — there's
-// no baseline to keep in sync.
+// against its current on-disk state. Called by direct file-write hooks
+// so the cache reflects writes the agent just performed.
 func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -267,6 +216,44 @@ func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 	ct.shellCache[abs] = entry
 }
 
+// filterGitSourcedDeltas removes deltas whose post-operation content
+// matches git HEAD — i.e. deltas that a git operation produced by
+// aligning the working tree to committed content. These aren't
+// agent-authored edits; recording them would persist stale bytes.
+// Batched via git.CommittedFilePaths for O(1) per-delta lookup.
+// Non-repo workspaces skip filtering; path-only entries are kept.
+func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string, destructive bool) []pendingShellChange {
+	if len(pending) == 0 {
+		return pending
+	}
+	committed, err := git.CommittedFilePaths(workDir)
+	if err != nil || committed == nil {
+		return pending
+	}
+	kept := pending[:0] // reuse backing array
+	for _, p := range pending {
+		// A delta where the post-state (After) matches HEAD means git
+		// brought the file to a committed state. Deletes have After==nil
+		// so they can never match HEAD — keep them (a real deletion by
+		// `rm` should stay recoverable). Path-only entries (Skipped) are
+		// also kept — no content payload to protect against.
+		if p.After != nil && p.After.Content != nil && committed[p.Path] {
+			if destructive {
+				// For destructive commands, check whether the BEFORE content was different.
+				if p.Before != nil && p.Before.Content != nil && !shellContentsEqual(p.Before, p.After) {
+					ct.logf("preserving delta for %s (destructive git command changed content from uncommitted state)", p.Path)
+					kept = append(kept, p)
+					continue
+				}
+			}
+			ct.logf("suppressing git-sourced delta for %s (post-op content matches HEAD)", p.Path)
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return kept
+}
+
 // logf routes a debug-level shell-snapshot message through the agent's
 // logger when available, falling back to a stderr write otherwise.
 // Keeps the snapshot path silent on success and quietly informative
@@ -280,4 +267,80 @@ func (ct *ChangeTracker) logf(format string, args ...any) {
 	// agent is nil the tracker is in an unusual state (test path) and
 	// silent is fine.
 	_ = strings.TrimSpace(format)
+}
+
+// isGitStashOperation reports whether `command` contains a `git stash`
+// invocation (bare stash, push, pop, apply, drop, clear — but NOT
+// list/show which are read-only). Used by the ChangeTracker to detect
+// when a stash operation has potentially corrupted the working tree
+// via merge conflicts, so the cache can be re-primed instead of
+// diffed against a stale baseline.
+func isGitStashOperation(command string) bool {
+	for _, seg := range splitForGitRevertCheck(command) {
+		fields := strings.Fields(seg)
+		if len(fields) < 2 {
+			continue
+		}
+		gitIdx := -1
+		for i, f := range fields {
+			if f == "git" {
+				gitIdx = i
+				break
+			}
+		}
+		if gitIdx == -1 || gitIdx+1 >= len(fields) {
+			continue
+		}
+		subIdx := gitIdx + 1
+		for subIdx < len(fields) {
+			f := fields[subIdx]
+			if strings.HasPrefix(f, "-") {
+				if f == "-c" || f == "-C" {
+					subIdx += 2
+				} else {
+					subIdx++
+				}
+				continue
+			}
+			break
+		}
+		if subIdx >= len(fields) {
+			continue
+		}
+		sub := strings.TrimRight(fields[subIdx], ");\"'")
+		if sub != "stash" {
+			continue
+		}
+		// Check sub-subcommand: list/show are read-only, everything else
+		// (including bare stash) is a stash operation.
+		if subIdx+1 < len(fields) {
+			subSub := strings.TrimRight(fields[subIdx+1], ");\"'")
+			if subSub == "list" || subSub == "show" {
+				continue
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// splitForGitRevertCheck splits a command at &&, ||, ;, | boundaries.
+// Not quote-aware (same trade-off as splitShellSegments in
+// shell_destructive.go — false positive direction is safe here).
+func splitForGitRevertCheck(cmd string) []string {
+	replaced := cmd
+	for _, op := range []string{"&&", "||"} {
+		replaced = strings.ReplaceAll(replaced, op, "\x00")
+	}
+	for _, op := range []string{";", "|"} {
+		replaced = strings.ReplaceAll(replaced, op, "\x00")
+	}
+	parts := strings.Split(replaced, "\x00")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

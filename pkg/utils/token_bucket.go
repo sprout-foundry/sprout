@@ -85,7 +85,7 @@ func (tb *TokenBucket) Wait(ctx context.Context) error {
 	// No tokens available and no one waiting - we're the first to wait
 	// Calculate when the next token will be available
 	deficit := 1.0 - tb.tokens
-	waitTime := time.Duration(deficit/float64(tb.rate)*float64(time.Second))
+	waitTime := time.Duration(deficit / float64(tb.rate) * float64(time.Second))
 	tb.nextReservation = now.Add(waitTime)
 
 	// Claim our reservation slot

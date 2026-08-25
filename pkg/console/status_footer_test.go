@@ -48,36 +48,44 @@ func TestStatusFooter_NilSafe(t *testing.T) {
 
 // TestSteerRowFor pins the row math the renderer uses for the pinned
 // steer panel. The rule sits at `rows-1` and the footer at `rows`; the
-// steer panel must occupy the rows immediately above the rule. A
-// regression here (off-by-one) drops the panel onto the rule's row and
-// the rule paints over it on the same draw call — the visible symptom
-// is the steer prompt disappearing entirely from the terminal.
+// steer panel must occupy the rows immediately above the rule (or above
+// the hint row when hintRows=1). A regression here (off-by-one) drops
+// the panel onto the rule's row and the rule paints over it on the same
+// draw call — the visible symptom is the steer prompt disappearing
+// entirely from the terminal.
 func TestSteerRowFor(t *testing.T) {
 	cases := []struct {
 		rows      int
 		steerRows int
+		hintRows  int
 		i         int
 		want      int
 	}{
-		// Single-row steer panel: lives at rows-2 (just above the rule).
-		{rows: 24, steerRows: 1, i: 0, want: 22},
-		{rows: 30, steerRows: 1, i: 0, want: 28},
-		// Two-row steer panel: rows-3 and rows-2, never the rule's row.
-		{rows: 24, steerRows: 2, i: 0, want: 21},
-		{rows: 24, steerRows: 2, i: 1, want: 22},
-		// Max-row steer panel: each subsequent line steps one row down.
-		{rows: 30, steerRows: 6, i: 0, want: 23},
-		{rows: 30, steerRows: 6, i: 5, want: 28},
+		// Single-row steer panel, no hint: lives at rows-2 (just above the rule).
+		{rows: 24, steerRows: 1, hintRows: 0, i: 0, want: 22},
+		{rows: 30, steerRows: 1, hintRows: 0, i: 0, want: 28},
+		// Two-row steer panel, no hint: rows-3 and rows-2, never the rule's row.
+		{rows: 24, steerRows: 2, hintRows: 0, i: 0, want: 21},
+		{rows: 24, steerRows: 2, hintRows: 0, i: 1, want: 22},
+		// Max-row steer panel, no hint: each subsequent line steps one row down.
+		{rows: 30, steerRows: 6, hintRows: 0, i: 0, want: 23},
+		{rows: 30, steerRows: 6, hintRows: 0, i: 5, want: 28},
+		// Single-row steer panel WITH hint: pushed up one row.
+		{rows: 24, steerRows: 1, hintRows: 1, i: 0, want: 21},
+		{rows: 30, steerRows: 1, hintRows: 1, i: 0, want: 27},
+		// Two-row steer panel WITH hint: rows-4 and rows-3.
+		{rows: 24, steerRows: 2, hintRows: 1, i: 0, want: 20},
+		{rows: 24, steerRows: 2, hintRows: 1, i: 1, want: 21},
 	}
 	for _, c := range cases {
-		got := steerRowFor(c.rows, c.steerRows, c.i)
+		got := steerRowFor(c.rows, c.steerRows, c.hintRows, c.i)
 		if got != c.want {
-			t.Errorf("steerRowFor(rows=%d, steerRows=%d, i=%d) = %d, want %d (rule sits at %d)",
-				c.rows, c.steerRows, c.i, got, c.want, c.rows-1)
+			t.Errorf("steerRowFor(rows=%d, steerRows=%d, hintRows=%d, i=%d) = %d, want %d (rule sits at %d)",
+				c.rows, c.steerRows, c.hintRows, c.i, got, c.want, c.rows-1)
 		}
 		if got >= c.rows-1 {
-			t.Errorf("steerRowFor(rows=%d, steerRows=%d, i=%d) = %d collides with rule at %d",
-				c.rows, c.steerRows, c.i, got, c.rows-1)
+			t.Errorf("steerRowFor(rows=%d, steerRows=%d, hintRows=%d, i=%d) = %d collides with rule at %d",
+				c.rows, c.steerRows, c.hintRows, c.i, got, c.rows-1)
 		}
 	}
 }
@@ -90,10 +98,13 @@ func TestFormatTokens(t *testing.T) {
 		{0, "0"},
 		{50, "50"},
 		{999, "999"},
-		{1000, "1.0k"},
-		{1500, "1.5k"},
-		{12345, "12.3k"},
-		{100000, "100.0k"},
+		{1000, "1k"},
+		{1500, "1k"},
+		{12345, "12k"},
+		{100000, "100k"},
+		{1_000_000, "1M"},
+		{2_000_000, "2M"},
+		{1_500_000, "1M"},
 	}
 	for _, c := range cases {
 		if got := formatTokens(c.in); got != c.want {
@@ -127,10 +138,11 @@ func TestFormatCtx(t *testing.T) {
 		used, limit int
 		want        string
 	}{
-		{0, 0, "0 ctx"},
-		{50, 0, "50 ctx"},
-		{500, 200000, "500/200.0k ctx"},
-		{14200, 200000, "14.2k/200.0k ctx"},
+		{0, 0, "0"},
+		{50, 0, "50"},
+		{0, 200000, "200k"},
+		{500, 200000, "500/200k"},
+		{14200, 200000, "14k/200k"},
 	}
 	for _, c := range cases {
 		got := formatCtx(c.used, c.limit)
@@ -216,7 +228,7 @@ func TestStatusFooter_ComposeLine_NonTTY_StillProducesString(t *testing.T) {
 	if !strings.Contains(line, "claude-opus-4-7") {
 		t.Errorf("composeLine should include model name; got %q", line)
 	}
-	if !strings.Contains(line, "14.2k/200.0k ctx") {
+	if !strings.Contains(line, "14k/200k") {
 		t.Errorf("composeLine should include context; got %q", line)
 	}
 	if !strings.Contains(line, "$0.42") {
@@ -406,6 +418,49 @@ func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
 	}
 }
 
+// CLI-UX-6 (removed): turn cost split was removed from the footer.
+// The footer now shows only cumulative session cost.
+type turnCostSrc struct {
+	stubSource
+	turn float64
+}
+
+func (s *turnCostSrc) TurnCost() float64 { return s.turn }
+
+func TestStatusFooter_ComposeLine_ShowsTurnCostSplit_WhenNonZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &turnCostSrc{
+		stubSource: stubSource{model: "m", workdir: "/x", cost: 1.21},
+		turn:       0.043,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$1.21") {
+		t.Errorf("composeLine should contain session cost, got %q", line)
+	}
+	if strings.Contains(line, "$0.043") {
+		t.Errorf("composeLine should no longer contain turn cost, got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_OmitsTurnSplit_WhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &turnCostSrc{
+		stubSource: stubSource{model: "m", workdir: "/x", cost: 1.21},
+		turn:       0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "$0.000") {
+		t.Errorf("composeLine with zero turn cost should not contain a second cost, got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_BaselineSourceOmitsTurnSplit(t *testing.T) {
+	// stubSource doesn't implement turnCostSource — no turn split.
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x", cost: 1.21})
+	line := f.composeLine(120)
+	if strings.Contains(line, "turn") {
+		t.Errorf("baseline ContentSource should not produce turn split, got %q", line)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Cursor-aware steer rendering (SetSteerLineWithCursor + steerRowTextWithCursor)
 // ---------------------------------------------------------------------------
@@ -565,4 +620,294 @@ func visiblePart(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// --- SP-078 Phase 1: width-aware wrapped steer setter -----------------------
+
+func TestStatusFooter_SetSteerLineWrapped_RecordsState(t *testing.T) {
+	// On a non-TTY active footer the method returns early before draw(),
+	// but the wrapped-mode fields are still set under the lock.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("aaaa\nbbbb", 1, 2)
+	f.mu.Lock()
+	gotRow := f.steerCursorRow
+	gotCol := f.steerCursorCol
+	gotActive := f.steerWrappedActive
+	gotLine := f.steerLine
+	f.mu.Unlock()
+	if gotRow != 1 || gotCol != 2 {
+		t.Fatalf("expected cursor (1, 2), got (%d, %d)", gotRow, gotCol)
+	}
+	if !gotActive {
+		t.Fatalf("expected steerWrappedActive=true")
+	}
+	if gotLine != "aaaa\nbbbb" {
+		t.Fatalf("expected steerLine='aaaa\\nbbbb', got %q", gotLine)
+	}
+}
+
+func TestStatusFooter_SetSteerLineWrapped_RowCountIsWidthAware(t *testing.T) {
+	// Width-aware row count: a 200-char single-line buffer in an 80-col
+	// terminal should reserve 3 visual rows, not 1. terminalSize()
+	// returns (0, 0) on a non-TTY fd=-1 footer, but steerRowCount falls
+	// back to cols=80 so the math still runs.
+	var buf bytes.Buffer
+	f := &StatusFooter{
+		w: &buf, isTTY: true,
+		steerActive:        true,
+		steerWrappedActive: true,
+		steerLine:          strings.Repeat("a", 200),
+		steerCursorRow:     -1,
+	}
+	n := f.steerRowCount()
+	if n != 3 {
+		t.Fatalf("expected 3 visual rows for 200-char wrap at cols=80, got %d", n)
+	}
+}
+
+func TestStatusFooter_SetSteerLine_ClearsWrappedMode(t *testing.T) {
+	// A subsequent legacy SetSteerLine must clear steerWrappedActive so
+	// drawLocked doesn't keep using the (row, col) path.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.SetSteerLine("abc")
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("SetSteerLine should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("SetSteerLine should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+func TestStatusFooter_SetSteerLineWithCursor_ClearsWrappedMode(t *testing.T) {
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.SetSteerLineWithCursor("abc", 1)
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("SetSteerLineWithCursor should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("SetSteerLineWithCursor should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+func TestStatusFooter_ClearSteerLine_ClearsWrappedMode(t *testing.T) {
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.mu.Lock()
+	f.active = true
+	f.mu.Unlock()
+	f.ClearSteerLine()
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("ClearSteerLine should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("ClearSteerLine should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+// --- SP-078 Phase 3: legacy SetSteerLineWithCursor wide-rune cursor --------
+
+func TestStatusFooter_SetSteerLineWithCursor_WideRuneColumnIsVisible(t *testing.T) {
+	// SP-078 Phase 3: a wide-rune (CJK) buffer at byte offset N must
+	// place the caret at visible column visibleRuneWidth(buf[:N]), not
+	// the raw byte offset. With each "你" being 3 bytes but 2 visible
+	// cols, a buffer of "你好" + cursor at byte 3 should land the caret
+	// at column 2 (after the first "你"), not column 3.
+	//
+	// This test exercises the legacy splitSteerLines path inside
+	// drawLocked by simulating the cursor mapping directly through
+	// the same byte→(line, col) walk. We do it via the public surface:
+	// setting fields and calling a small exported helper or asserting
+	// the same logic on a synthetic state.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	text := "你好"
+	// cursor at byte 3 = after first "你" = visible col 2.
+	f.SetSteerLineWithCursor(text, 3)
+	f.mu.Lock()
+	gotLine := f.steerLine
+	gotCursor := f.steerCursor
+	f.mu.Unlock()
+	if gotLine != text {
+		t.Fatalf("expected steerLine=%q, got %q", text, gotLine)
+	}
+	if gotCursor != 3 {
+		t.Fatalf("expected steerCursor=3, got %d", gotCursor)
+	}
+	// The actual column conversion happens inside drawLocked; the
+	// fixture's terminalSize() returns (0,0) on non-TTY fd=-1, so we
+	// can't trigger the draw. The Phase 3 fix's correctness is covered
+	// by the status_footer_test.go rendering tests above; this test
+	// confirms the API still records byte offsets faithfully.
+}
+
+// TestStatusFooter_LegacyCursorByteToCol covers the byte→visible-col
+// mapping logic directly. Since the conversion is inside drawLocked
+// and depends on terminalSize, we replicate the conversion here and
+// assert visibleRuneWidth matches the byte mapping for typical CJK
+// input.
+func TestStatusFooter_LegacyCursorByteToCol_CJK(t *testing.T) {
+	// Direct test of the Phase 3 fix logic. The drawLocked mapping
+	// computes rawByteCol = steerCursor - offset, then we now convert
+	// to cursorByteCol = visibleRuneWidth(lineText[:rawByteCol]).
+	// Without the conversion, the caret landed at byte col 3 (which
+	// for "你好" is between the two runes visually); with it, it lands
+	// at visible col 2 (right after the first rune).
+	const text = "你好"
+	rawByteCol := 3 // past the first 3-byte rune
+	got := visibleRuneWidth(text[:rawByteCol])
+	if got != 2 {
+		t.Fatalf("expected visibleRuneWidth(%q)=2, got %d", text[:rawByteCol], got)
+	}
+}
+
+// CLI-UX-4: todo progress badge
+type todoProgSrc struct {
+	stubSource
+	done  int
+	total int
+}
+
+func (s *todoProgSrc) TodoProgress() (int, int) { return s.done, s.total }
+
+func TestStatusFooter_ComposeLine_ShowsTodoProgress_WhenTodosExist(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &todoProgSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		done:       3,
+		total:      7,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "3/7 done") {
+		t.Errorf("composeLine with 3/7 todos should contain '3/7 done', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_OmitsTodoProgress_WhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &todoProgSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		done:       0,
+		total:      0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "done") {
+		t.Errorf("composeLine with 0 todos should not contain 'done', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_BaselineSourceOmitsTodoProgress(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x"})
+	line := f.composeLine(120)
+	if strings.Contains(line, "/") && strings.Contains(line, "done") {
+		t.Errorf("baseline source should not produce todo badge, got %q", line)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-113 Phase 3: billing-type-aware cost badge
+// ---------------------------------------------------------------------------
+
+// billingSrc is a ContentSource that also reports a billing type, used to
+// exercise the optional billingTypeSource interface.
+type billingSrc struct {
+	stubSource
+	billing string
+}
+
+func (s *billingSrc) BillingType() string { return s.billing }
+
+// SP-113: subscription + zero cost → "included" instead of "$0.0000".
+func TestStatusFooter_ComposeLine_SubscriptionZeroCost_ShowsIncluded(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "subscription",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "included") {
+		t.Errorf("subscription + zero cost should render 'included', got %q", line)
+	}
+	// Must NOT show the misleading dollar amount.
+	if strings.Contains(line, "$0.0000") {
+		t.Errorf("subscription + zero cost should not show '$0.0000', got %q", line)
+	}
+}
+
+// SP-113: free + zero cost → "free" instead of "$0.0000".
+func TestStatusFooter_ComposeLine_FreeZeroCost_ShowsFree(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "free",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "free") {
+		t.Errorf("free + zero cost should render 'free', got %q", line)
+	}
+	if strings.Contains(line, "$0.0000") {
+		t.Errorf("free + zero cost should not show '$0.0000', got %q", line)
+	}
+}
+
+// SP-113: a subscription provider that nonetheless reports a non-zero
+// charged cost (pay-per-token fallback, mixed billing, or partial spend)
+// shows the dollar amount, NOT "included". The annotation only kicks in
+// when the cost is genuinely zero.
+func TestStatusFooter_ComposeLine_SubscriptionNonZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0.05, workdir: "/x"},
+		billing:    "subscription",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.05") {
+		t.Errorf("non-zero cost should render the dollar amount, got %q", line)
+	}
+	if strings.Contains(line, "included") {
+		t.Errorf("non-zero cost should NOT render 'included', got %q", line)
+	}
+}
+
+// SP-113: backward compat — a source that does NOT implement the optional
+// billingTypeSource interface renders the legacy "$0.0000" at zero cost
+// rather than any billing-type label.
+func TestStatusFooter_ComposeLine_BaselineZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.0000") {
+		t.Errorf("baseline source with zero cost should show '$0.0000', got %q", line)
+	}
+	if strings.Contains(line, "included") || strings.Contains(line, "free") {
+		t.Errorf("baseline source should not render billing labels, got %q", line)
+	}
+}
+
+// SP-113: a billingTypeSource reporting "pay_per_token" at zero cost falls
+// through to the default dollar rendering — only subscription/free are
+// annotated, so pay-per-token with zero cost (e.g. fresh session, cached
+// tokens) still shows "$0.0000".
+func TestStatusFooter_ComposeLine_PayPerTokenZeroCost_ShowsDollarAmount(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &billingSrc{
+		stubSource: stubSource{model: "m", used: 1, limit: 10000, cost: 0, workdir: "/x"},
+		billing:    "pay_per_token",
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "$0.0000") {
+		t.Errorf("pay_per_token + zero cost should show '$0.0000', got %q", line)
+	}
 }

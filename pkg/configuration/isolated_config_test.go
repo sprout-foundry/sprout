@@ -11,7 +11,6 @@ func TestBootstrapIsolatedConfig_ClonesProviderSettings(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 
 	// New behavior: HOME-based config uses .config/sprout
@@ -68,7 +67,6 @@ func TestBootstrapIsolatedConfig_NoOverwriteWhenConfigExists(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 
 	isolatedDir := filepath.Join(t.TempDir(), ".sprout")

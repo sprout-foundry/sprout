@@ -5,7 +5,7 @@ package webui
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
@@ -79,7 +79,7 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("WebSocket write panic recovered: %v", r)
+			webuiLogger.Error("WebSocket write panicked", slog.Any("panic", r))
 			sc.closed.Store(true)
 		}
 	}()
@@ -135,7 +135,7 @@ func (sc *SafeConn) writeDirectJSONLocked(v interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			if !wasClosed {
-				log.Printf("WebSocket writeDirectJSONLocked panicked: %v", r)
+				webuiLogger.Error("direct WebSocket JSON write panicked", slog.Any("panic", r))
 			}
 		}
 	}()
@@ -163,7 +163,7 @@ func (sc *SafeConn) Underlying() *websocket.Conn {
 // is logged server-side but not sent to the client to avoid leaking internal
 // state (stack traces, memory addresses, struct internals).
 func (sc *SafeConn) WritePanicError(sessionID, location string, r interface{}) {
-	log.Printf("WebSocket panic in %s (session %s): %v", location, sessionID, r)
+	webuiLogger.Error("WebSocket panicked", slog.String("location", location), slog.String("session_id", sessionID), slog.Any("panic", r))
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 	sc.closed.Store(true)

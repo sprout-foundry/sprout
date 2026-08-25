@@ -8,17 +8,26 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
 var startupChecksOnce sync.Once
 var isolatedConfig bool
 var debugPprofAddr string
+var whyFlag bool
+var colorBlindFlag bool
+var autoDetectedWorkspaceDir string // set when auto-detection finds a git repo
+
+// Training data collection flags (opt-in session recording).
+var trainFlag bool
+var trainEndpoint string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -39,6 +48,14 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 
 See "Available Commands" below for the full list.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// CLI-E: color-blind palette swap. CLI flag wins over env var;
+		// ApplyColorBlindFromEnv only sets true (never false) so the
+		// flag's explicit `false` isn't clobbered by a stale env.
+		if colorBlindFlag {
+			console.SetColorBlind(true)
+		} else {
+			console.ApplyColorBlindFromEnv()
+		}
 		if debugPprofAddr != "" {
 			go func() {
 				fmt.Fprintf(os.Stderr, "pprof: listening on http://%s/debug/pprof/\n", debugPprofAddr)
@@ -46,6 +63,29 @@ See "Available Commands" below for the full list.`,
 					fmt.Fprintf(os.Stderr, "pprof server: %v\n", err)
 				}
 			}()
+		}
+		// Auto-detect workspace config when running inside a git repo.
+		// Walk up from cwd looking for .git; if found, bootstrap .sprout/
+		// on first run and use isolated config. This makes --isolated-config
+		// the default for repo-backed directories.
+		//
+		// Only auto-detect when --isolated-config was not explicitly set
+		// (including --isolated-config=false) so users can opt out.
+		// Also skip for the system service daemon (SPROUT_SERVICE=1) —
+		// the daemon is a system-wide service, not workspace-scoped.
+		isolatedFlagExplicit := cmd.Flags().Changed("isolated-config")
+		isServiceDaemon := os.Getenv("SPROUT_SERVICE") == "1"
+		autoDetected := false
+		if !isolatedConfig && !isolatedFlagExplicit && !isServiceDaemon {
+			if cwd, err := os.Getwd(); err == nil {
+				if isolatedDir, found := detectGitRepo(cwd); found {
+					if err := configuration.BootstrapIsolatedConfig(isolatedDir); err == nil {
+						isolatedConfig = true
+						autoDetected = true
+						autoDetectedWorkspaceDir = isolatedDir // for layered config
+					}
+				}
+			}
 		}
 		if isolatedConfig {
 			cwd, err := os.Getwd()
@@ -57,7 +97,12 @@ See "Available Commands" below for the full list.`,
 				return fmt.Errorf("failed to set SPROUT_CONFIG for --isolated-config: %w", err)
 			}
 			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {
-				return fmt.Errorf("failed to bootstrap isolated config: %w", err)
+				if autoDetected {
+					fmt.Fprintf(os.Stderr, "Warning: auto-detected git repo but failed to bootstrap config: %v\n", err)
+					isolatedConfig = false
+				} else {
+					return fmt.Errorf("failed to bootstrap isolated config: %w", err)
+				}
 			}
 		}
 		// Initialize API keys and configuration
@@ -95,6 +140,10 @@ func Execute() error {
 
 // initializeSystem initializes configuration and API keys with first-run setup
 func initializeSystem() {
+	// Run SP-133 migration if a legacy ~/.sprout directory exists.
+	if configuration.NeedsMigration() {
+		_ = configuration.RunMigration()
+	}
 	// Check if we're in a CI environment or non-interactive mode
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 
@@ -114,11 +163,62 @@ func initializeSystem() {
 		// If initialization fails, print helpful error and exit
 		fmt.Fprintf(os.Stderr, "Failed to initialize sprout: %v\n", err)
 		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
-		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.config/sprout configuration.")
+		fmt.Fprintln(os.Stderr, "   Try `sprout keys set <provider>` to configure an API key, or open the Web UI onboarding.")
 		os.Exit(1)
 	}
 
+	// Apply training data collection config from CLI flags and env vars.
+	applyTrainingConfig()
+
 	runStartupChecks()
+}
+
+// applyTrainingConfig resolves training settings from CLI flags and env
+// vars, then persists them into the live config manager. The config values
+// are later read by the agent to wire the push callback.
+//
+// Precedence: CLI flag > env var > config.json value.
+func applyTrainingConfig() {
+	enabled := trainFlag
+	endpoint := trainEndpoint
+
+	// Env var fallbacks: SPROUT_TRAIN_ENABLED and SPROUT_TRAIN_ENDPOINT.
+	if !enabled {
+		if v := configuration.GetEnvSimple("TRAIN_ENABLED"); v == "1" || strings.EqualFold(v, "true") {
+			enabled = true
+		}
+	}
+	if endpoint == "" {
+		endpoint = configuration.GetEnvSimple("TRAIN_ENDPOINT")
+	}
+
+	// Only update config if something was explicitly set via flag or env.
+	if !enabled && endpoint == "" {
+		return
+	}
+
+	mgr, err := configuration.NewManager()
+	if err != nil {
+		return
+	}
+
+	finalEndpoint := endpoint
+	finalEnabled := enabled
+	_ = mgr.UpdateConfig(func(c *configuration.Config) error {
+		if finalEnabled {
+			c.Training.Enabled = true
+		}
+		if finalEndpoint != "" {
+			c.Training.Endpoint = finalEndpoint
+		}
+		return nil
+	})
+
+	// Print the warning message showing the effective endpoint.
+	cfg := mgr.GetConfig()
+	if cfg != nil && cfg.Training.Enabled {
+		fmt.Fprintf(os.Stderr, "[TRAINING] Session recording enabled. Conversations will be sent to: %s\n", cfg.Training.Endpoint)
+	}
 }
 
 func runStartupChecks() {
@@ -133,6 +233,34 @@ func runStartupChecks() {
 	})
 }
 
+const maxGitWalkDepth = 100
+
+// detectGitRepo walks up from cwd looking for a .git directory.
+// Returns the path to the .sprout directory and true if a git repo is found.
+// .git files (e.g. submodule references) are not considered directories and
+// will not trigger detection.
+// Skips detection in CI environments and enforces a depth limit to avoid
+// infinite loops on filesystem edge cases.
+func detectGitRepo(cwd string) (string, bool) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		return "", false
+	}
+	dir := cwd
+	for depth := 0; depth < maxGitWalkDepth; depth++ {
+		gitPath := filepath.Join(dir, ".git")
+		info, err := os.Stat(gitPath)
+		if err == nil && info.IsDir() {
+			return filepath.Join(dir, ".sprout"), true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir { // reached filesystem root
+			break
+		}
+		dir = parent
+	}
+	return "", false
+}
+
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -141,6 +269,10 @@ func init() {
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sprout/config.json)")
 	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
 	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
+	rootCmd.PersistentFlags().BoolVar(&whyFlag, "why", false, "Print detailed risk assessment on security errors")
+	rootCmd.PersistentFlags().BoolVar(&colorBlindFlag, "color-blind", false, "Swap the success/error/warning palette to a deuteranopia / protanopia-friendly scheme (also honors SPROUT_COLOR_BLIND=1)")
+	rootCmd.PersistentFlags().BoolVar(&trainFlag, "train", false, "Enable session recording for training data collection (OFF by default; also settable via SPROUT_TRAIN_ENABLED=true)")
+	rootCmd.PersistentFlags().StringVar(&trainEndpoint, "train-endpoint", "", "Training data collection endpoint URL (also settable via SPROUT_TRAIN_ENDPOINT)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -157,5 +289,6 @@ func init() {
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(automateCmd)
+	rootCmd.AddCommand(shellBgCmd)
 	rootCmd.AddCommand(prCmd)
 }

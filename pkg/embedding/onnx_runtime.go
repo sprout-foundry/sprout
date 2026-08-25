@@ -48,22 +48,7 @@ type ONNXRuntime struct {
 // counterpart returns false.
 func onnxRequiresModelFiles() bool { return true }
 
-// DefaultModelDir returns the default model directory path.
-// Priority: SPROUT_MODELS_DIR env > SPROUT_CONFIG/LEDIT_CONFIG env > ~/.config/sprout
-func DefaultModelDir() string {
-	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
-		return dir
-	}
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
-	}
-	if configDir == "" {
-		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".config", "sprout")
-	}
-	return filepath.Join(configDir, "models")
-}
+// DefaultModelDir lives in model_dir.go — one definition for every build.
 
 // NewONNXRuntime creates a new ONNX runtime with the default model directory.
 // The ONNX environment is initialized globally on first creation.
@@ -162,6 +147,11 @@ func (r *ONNXRuntime) removeStagedLibrary() {
 // platformLibName returns the conventional ONNX Runtime shared library
 // filename for the running platform. Returns "" for unsupported platforms;
 // the caller should fall back to letting yalue try its default.
+//
+// Android (Termux / NDK) is supported with a single filename regardless of
+// arch, because the Android AAR layout puts per-arch variants in
+// different directories (e.g. jni/arm64-v8a/libonnxruntime.so). The lib
+// name itself carries no _arm64 suffix on Android.
 func platformLibName() string {
 	switch runtime.GOOS {
 	case "linux":
@@ -169,6 +159,10 @@ func platformLibName() string {
 			return "onnxruntime_arm64.so"
 		}
 		return "onnxruntime.so"
+	case "android":
+		// Android NDK / Termux. The AAR or manually extracted .so uses
+		// the same name across arch (the arch is selected by directory).
+		return "libonnxruntime.so"
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
 			return "onnxruntime_arm64.dylib"
@@ -374,6 +368,10 @@ type SessionOption struct {
 	// InterOpNumThreads sets the number of threads for inter-op parallelism.
 	// 0 means use default.
 	InterOpNumThreads int
+	// CPUMemArena and MemPattern override the ORT allocator defaults. nil
+	// leaves the package default in place; see newSessionOptions.
+	CPUMemArena *bool
+	MemPattern  *bool
 }
 
 // newSessionOptions creates a SessionOptions with the given options applied.
@@ -382,20 +380,6 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 	so, err := onnxruntime.NewSessionOptions()
 	if err != nil {
 		return nil, fmt.Errorf("onnx: create session options: %w", err)
-	}
-
-	// Disable the CPU memory arena and memory pattern planner. Both trade RAM
-	// for speed; for sprout's embedding workload (single small batch per call,
-	// fixed shapes) the arena grows to hundreds of MB of unreturned slabs and
-	// the pattern cache rarely hits. Disabling them roughly halves the
-	// per-session resident footprint with negligible latency impact.
-	if err := so.SetCpuMemArena(false); err != nil {
-		so.Destroy()
-		return nil, fmt.Errorf("onnx: disable cpu mem arena: %w", err)
-	}
-	if err := so.SetMemPattern(false); err != nil {
-		so.Destroy()
-		return nil, fmt.Errorf("onnx: disable mem pattern: %w", err)
 	}
 
 	// Merge options (last wins).
@@ -407,6 +391,37 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 		if o.InterOpNumThreads != 0 {
 			option.InterOpNumThreads = o.InterOpNumThreads
 		}
+		if o.CPUMemArena != nil {
+			option.CPUMemArena = o.CPUMemArena
+		}
+		if o.MemPattern != nil {
+			option.MemPattern = o.MemPattern
+		}
+	}
+
+	// The CPU memory arena and memory pattern planner are OFF by default. Both
+	// trade RAM for speed; for sprout's embedding workload (single small batch
+	// per call, fixed shapes) the arena grows to hundreds of MB of unreturned
+	// slabs and the pattern cache rarely hits.
+	//
+	// "Negligible latency impact" is measured, not assumed: TestSessionTuningProbe
+	// on this repository's own code units shows 2.2 units/s both with and without
+	// the arena. Indexing is slow for an unrelated reason (see the probe), so do
+	// not re-enable these expecting a speedup — it buys memory back for nothing.
+	arena, memPattern := false, false
+	if option.CPUMemArena != nil {
+		arena = *option.CPUMemArena
+	}
+	if option.MemPattern != nil {
+		memPattern = *option.MemPattern
+	}
+	if err := so.SetCpuMemArena(arena); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: set cpu mem arena: %w", err)
+	}
+	if err := so.SetMemPattern(memPattern); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: set mem pattern: %w", err)
 	}
 
 	if option.IntraOpNumThreads > 0 {

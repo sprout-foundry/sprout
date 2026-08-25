@@ -6,6 +6,7 @@ interface AgentBehaviorSettingsTabProps {
   renderSelect: FieldRenderers['renderSelect'];
   renderToggle: FieldRenderers['renderToggle'];
   renderTextareaInput: FieldRenderers['renderTextareaInput'];
+  renderNumberInput?: FieldRenderers['renderNumberInput'];
 }
 
 const BUILT_IN_RISK_PROFILES = ['', 'readonly', 'cautious', 'default', 'permissive', 'unrestricted'];
@@ -19,28 +20,30 @@ export default function AgentBehaviorSettingsTab({
   renderSelect,
   renderToggle,
   renderTextareaInput,
+  renderNumberInput,
 }: AgentBehaviorSettingsTabProps) {
-  const customProfiles = settings && (settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles
-    ? Object.keys((settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles ?? {})
-        .filter((name) => !BUILT_IN_RISK_PROFILES.includes(name))
-        .sort()
-    : [];
+  const customProfiles =
+    settings && (settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles
+      ? Object.keys((settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles ?? {})
+          .filter((name) => !BUILT_IN_RISK_PROFILES.includes(name))
+          .sort()
+      : [];
   const riskProfileOptions = [...BUILT_IN_RISK_PROFILES, ...customProfiles];
 
   return (
     <div className="section">
       <h4>Behavior</h4>
       {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
+      {renderSelect(
+        'output_verbosity',
+        'Output verbosity',
+        ['', 'compact', 'default', 'verbose'],
+        'Controls how much narration the UI shows. compact hides inter-tool-call text; default shows tools and final answer; verbose shows everything.',
+      )}
       {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
       {renderToggle('skip_prompt', 'Skip confirmation prompt')}
       {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
       {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
-      {renderSelect(
-        'ea_mode',
-        'Executive Assistant mode',
-        ['', 'interactive', 'queue'],
-        'Controls how the EA persona starts. interactive = wait for prompts (default); queue = autonomous task processing. Empty inherits the default.',
-      )}
       {/*
         SP-058: risk profile selector. Empty string ("") means "use
         the built-in default", which lets the user clear an override
@@ -53,7 +56,7 @@ export default function AgentBehaviorSettingsTab({
         'risk_profile',
         'Risk profile',
         riskProfileOptions,
-        'Shell-command gating: readonly (blocks writes) → cautious (prompts) → default → permissive → unrestricted. Persona-defined rules (e.g. EA) still win. See docs/SECURITY.md#risk-profiles.',
+        'Shell-command gating: readonly (blocks writes) → cautious (prompts) → default → permissive → unrestricted. Persona-defined rules (e.g. coordinator) still win. See docs/SECURITY.md#risk-profiles.',
       )}
       {renderTextareaInput(
         'system_prompt_text',
@@ -62,6 +65,30 @@ export default function AgentBehaviorSettingsTab({
         12,
         'Applies to the main agent. Leave blank to use the built-in default prompt.',
       )}
+      <hr className="config-divider" />
+      <h4>Auto-Resume (SP-108)</h4>
+      <p className="config-help" style={{ marginBottom: '12px' }}>
+        When enabled, Sprout automatically processes background task completions without waiting for your next message.
+      </p>
+      {renderToggle('wakeup.enabled', 'Enable auto-resume', 'Off by default. Requires the daemon (sprout serve).')}
+      {renderNumberInput &&
+        renderNumberInput(
+          'wakeup.max_tokens_per_session',
+          'Max tokens per session',
+          0,
+          100000,
+          500,
+          'Hard cap. 0 = unlimited.',
+        )}
+      {renderNumberInput &&
+        renderNumberInput(
+          'wakeup.max_resumes_per_session',
+          'Max resumes per session',
+          0,
+          100,
+          1,
+          'Max auto-resumes before requiring manual input. 0 = unlimited.',
+        )}
     </div>
   );
 }

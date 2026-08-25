@@ -1,5 +1,5 @@
 import { Skeleton } from '@sprout/ui';
-import { Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key, X } from 'lucide-react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ApiService } from '../services/api';
@@ -283,8 +283,8 @@ function CredentialsSettingsTab(): JSX.Element {
         <span
           style={{
             ...baseStyle,
-            background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, var(--bg-elevated, #fff))',
-            color: 'var(--color-warning, #f59e0b)',
+            background: 'color-mix(in srgb, var(--accent-warning) 15%, var(--bg-elevated, #fff))',
+            color: 'var(--accent-warning)',
           }}
         >
           pool
@@ -298,8 +298,8 @@ function CredentialsSettingsTab(): JSX.Element {
           <span
             style={{
               ...baseStyle,
-              background: 'color-mix(in srgb, var(--color-success, #22c55e) 15%, var(--bg-elevated, #fff))',
-              color: 'var(--color-success, #22c55e)',
+              background: 'color-mix(in srgb, var(--accent-success) 15%, var(--bg-elevated, #fff))',
+              color: 'var(--accent-success)',
             }}
           >
             env
@@ -346,7 +346,7 @@ function CredentialsSettingsTab(): JSX.Element {
           width: '8px',
           height: '8px',
           borderRadius: '50%',
-          backgroundColor: isConfigured ? 'var(--color-success, #22c55e)' : 'var(--text-muted, #888)',
+          backgroundColor: isConfigured ? 'var(--accent-success)' : 'var(--text-muted, #888)',
           marginLeft: '8px',
           flexShrink: 0,
         }}
@@ -453,14 +453,12 @@ function CredentialsSettingsTab(): JSX.Element {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                      color: testResults[provider.provider].success
-                        ? 'var(--color-success, #22c55e)'
-                        : 'var(--color-error, #ef4444)',
+                      color: testResults[provider.provider].success ? 'var(--accent-success)' : 'var(--accent-error)',
                       maxWidth: '420px',
                       wordBreak: 'break-word',
                     }}
                   >
-                    {testResults[provider.provider].success ? '✓' : '✗'}
+                    {testResults[provider.provider].success ? <Check size={12} /> : <X size={12} />}
                     {testResults[provider.provider]?.success
                       ? `Connected — ${testResults[provider.provider].model_count ?? 0} models available`
                       : truncateError(testResults[provider.provider]?.error || 'Unknown error')}

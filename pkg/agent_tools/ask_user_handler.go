@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
+	"time"
 )
 
 type askUserHandler struct{}
@@ -15,14 +14,14 @@ func (h *askUserHandler) Name() string { return "ask_user" }
 func (h *askUserHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "ask_user",
-		Description: "Ask the user a question and wait for their response. Use this when you need clarification, a decision, or any input that cannot be determined from context alone.\n\n**Pass `options` whenever the answer is one of a small set of choices** (Yes/No, A/B/C, file paths to confirm). The UI renders them as buttons; the CLI renders a numbered list. The returned value is the option's `value` (falling back to `label`), so prefer machine-friendly `value` strings.\n\nSet `multi_select: true` for checkbox-style selection (response is comma-joined values). Set `default` to the option `value` (or freeform string) that should be pre-selected.",
+		Description: "Ask the user a question and wait for their response. Use options for small choice sets (renders as buttons in WebUI). Set multi_select for checkboxes.",
 		Required:    []string{"question"},
 		Parameters: []ParameterDef{
-			{Name: "question", Type: "string", Required: true, Description: "The question to ask the user. Markdown is supported in the WebUI; the CLI renders plain text."},
-			{Name: "header", Type: "string", Required: false, Description: "Short label (≤ 40 chars) shown above the question — useful for categorizing the prompt (e.g., \"Auth method\", \"Approach\", \"Confirm delete\")."},
-			{Name: "options", Type: "array", Required: false, Description: "Optional array of selectable choices. Each entry is {label, value?, description?}. When omitted the user types a freeform response."},
-			{Name: "multi_select", Type: "boolean", Required: false, Description: "When true, the user may pick multiple options. Response is a comma-joined list of selected values. Default false."},
-			{Name: "default", Type: "string", Required: false, Description: "Default response. Should match an option's `value` (or `label`) when `options` is set; otherwise it's used as the freeform default when the user submits empty input."},
+			{Name: "question", Type: "string", Required: true, Description: "Question to ask (supports Markdown)"},
+			{Name: "header", Type: "string", Required: false, Description: "Short label (≤40 chars) for categorizing the prompt"},
+			{Name: "options", Type: "array", Required: false, Description: "Selectable choices: {label, value?, description?}"},
+			{Name: "multi_select", Type: "boolean", Required: false, Description: "Allow multiple selections (default false)"},
+			{Name: "default", Type: "string", Required: false, Description: "Default response when user submits empty"},
 		},
 	}
 }
@@ -33,20 +32,6 @@ func (h *askUserHandler) Validate(args map[string]any) error {
 }
 
 func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
-
 	req, err := parseAskUserArgs(args)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("ask_user failed: %v", err), IsError: true}, nil
@@ -56,7 +41,7 @@ func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	if env.AskUser != nil {
 		response, err = env.AskUser.Ask(ctx, req)
 	} else {
-		response, err = AskUser(req)
+		response, err = AskUser(ctx, req)
 	}
 	if err != nil {
 		if errors.Is(err, ErrAskUserNoChannel) {
@@ -69,6 +54,18 @@ func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}
 	return ToolResult{Output: response}, nil
 }
+
+func (h *askUserHandler) Aliases() []string { return nil }
+
+// Timeout must match DefaultAskUserTimeout (the inner manager's deadline) so
+// the seed ToolRegistry's wrapper doesn't cancel the caller's context before
+// the inner manager's own timeout, which would silently drop the user's
+// in-progress answer while the prompt UI stays open.
+func (h *askUserHandler) Timeout() time.Duration { return DefaultAskUserTimeout }
+
+func (h *askUserHandler) MaxResultSize() int    { return 0 }
+func (h *askUserHandler) SafeForParallel() bool { return false }
+func (h *askUserHandler) Interactive() bool     { return true }
 
 // parseAskUserArgs lifts a raw JSON-decoded args map into an AskUserRequest.
 // Tolerant of LLM imperfection: accepts options as either []map or []string.

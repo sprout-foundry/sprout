@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -36,19 +39,19 @@ const (
 type MessageSource string
 
 const (
-	MessageSourceOriginal     MessageSource = "original"
+	MessageSourceOriginal      MessageSource = "original"
 	MessageSourceLLMCheckpoint MessageSource = "llm_checkpoint"
 )
 
 // MessageAnnotation is the per-message diagnostic view. Index aligns
 // 1:1 with TranscriptSnapshot.State.Messages.
 type MessageAnnotation struct {
-	Index          int           `json:"index"`
-	Role           string        `json:"role"`
-	Source         MessageSource `json:"source"`
-	ContentChars   int           `json:"content_chars"`
-	ToolCallCount  int           `json:"tool_call_count,omitempty"`
-	FirstLine      string        `json:"first_line,omitempty"`
+	Index         int           `json:"index"`
+	Role          string        `json:"role"`
+	Source        MessageSource `json:"source"`
+	ContentChars  int           `json:"content_chars"`
+	ToolCallCount int           `json:"tool_call_count,omitempty"`
+	FirstLine     string        `json:"first_line,omitempty"`
 }
 
 // CompactPreview captures the would-be result of running /compact right
@@ -88,8 +91,8 @@ const (
 	transcriptFileChangeSourcePrimary  = "primary"
 	transcriptFileChangeSourceSubagent = "subagent"
 
-	subagentFilesHeader      = "[subagent files modified]"
-	subagentFilesFooter      = "[/subagent files modified]"
+	subagentFilesHeader = "[subagent files modified]"
+	subagentFilesFooter = "[/subagent files modified]"
 )
 
 // TranscriptSnapshot is the file shape written by /transcript and by
@@ -134,6 +137,7 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 		PromptTokens:            a.state.GetPromptTokens(),
 		CompletionTokens:        a.state.GetCompletionTokens(),
 		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
+		ContinuationNudges:      a.state.GetContinuationNudges(),
 		CachedTokens:            a.state.GetCachedTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
 		LastUpdated:             time.Now(),
@@ -193,24 +197,24 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 func (a *Agent) CaptureTranscriptSnapshot(label string, includePreview bool) (string, error) {
 	snap := a.BuildTranscriptSnapshot(label, includePreview)
 	if snap == nil {
-		return "", fmt.Errorf("agent unavailable for transcript snapshot")
+		return "", agenterrors.NewTool("transcript", "agent unavailable for transcript snapshot", nil)
 	}
 	dir, err := transcriptSessionDir(snap.SessionID, snap.WorkingDirectory)
 	if err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create transcript dir: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to create transcript dir", err)
 	}
 	cleanLabel := sanitizeLabel(label)
 	filename := fmt.Sprintf("%s-%s.json", snap.Timestamp.Format("20060102T150405Z"), cleanLabel)
 	path := filepath.Join(dir, filename)
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal transcript snapshot: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to marshal transcript snapshot", err)
 	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
-		return "", fmt.Errorf("failed to write transcript snapshot: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to write transcript snapshot", err)
 	}
 	pruneTranscriptDir(dir, transcriptMaxAutoSnapshots, transcriptMaxManualSnapshots)
 	return path, nil
@@ -267,11 +271,11 @@ func pruneBucket(dir string, files []string, cap int) {
 func LoadTranscriptSnapshot(path string) (*TranscriptSnapshot, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read transcript snapshot %s: %w", path, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to read transcript snapshot %s", path), err)
 	}
 	var snap TranscriptSnapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
-		return nil, fmt.Errorf("failed to parse transcript snapshot %s: %w", path, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to parse transcript snapshot %s", path), err)
 	}
 	return &snap, nil
 }
@@ -288,7 +292,7 @@ func ListTranscriptSnapshots(sessionID, workingDir string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to read transcript dir %s: %w", dir, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to read transcript dir %s", dir), err)
 	}
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -774,9 +778,9 @@ func firstNonEmptyLine(s string) string {
 }
 
 func transcriptSessionDir(sessionID, workingDir string) (string, error) {
-	home, err := os.UserHomeDir()
+	stateDir, err := envutil.StateDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve home directory: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to resolve state directory", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
@@ -787,7 +791,7 @@ func transcriptSessionDir(sessionID, workingDir string) (string, error) {
 	if sid == "" {
 		sid = "unknown-session"
 	}
-	return filepath.Join(home, ".sprout", "transcripts", scope, sid), nil
+	return filepath.Join(stateDir, "transcripts", scope, sid), nil
 }
 
 func sanitizeLabel(label string) string {

@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // UnifiedProviderWrapper wraps any provider that implements ProviderInterface
@@ -66,7 +67,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 	duration := time.Since(startTime)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate response: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to generate response")
 	}
 
 	// Track TPS
@@ -88,6 +89,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
+			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 
@@ -139,6 +141,9 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
 			}
 		}
 	}
@@ -179,6 +184,30 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 	return w.provider.SupportsVision()
 }
 
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Delegates to the underlying provider if it
+// implements the method; otherwise falls back to SupportsVision().
+func (w *UnifiedProviderWrapper) SupportsConversationalVision() bool {
+	if typed, ok := w.provider.(interface{ SupportsConversationalVision() bool }); ok {
+		return typed.SupportsConversationalVision()
+	}
+	return w.provider.SupportsVision()
+}
+
+// VisionCapabilities returns the per-provider vision limits by delegating
+// to the wrapped provider. If the provider does not implement
+// VisionCapabilities() (e.g. legacy third-party providers), returns the
+// zero value; callers should run the result through
+// VisionCapabilitiesOrDefault() to fill in safe defaults. SP-103-D3 /
+// AUDIT-GAP-2.
+func (w *UnifiedProviderWrapper) VisionCapabilities() VisionCapabilities {
+	if typed, ok := w.provider.(interface {
+		VisionCapabilities() VisionCapabilities
+	}); ok {
+		return typed.VisionCapabilities()
+	}
+	return VisionCapabilities{}
+}
 func (w *UnifiedProviderWrapper) GetVisionModel() string {
 	// Delegate to the underlying provider if it supports vision model
 	if visionProvider, ok := w.provider.(interface{ GetVisionModel() string }); ok {
@@ -224,7 +253,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 	// Call provider vision method
 	response, err := w.provider.SendVisionRequest(ctx, typeMessages, typeTools, reasoning, disableThinking)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send vision request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to send vision request")
 	}
 
 	// Convert response back to API types (same as SendChatRequest)
@@ -241,6 +270,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
+			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 
@@ -290,6 +320,9 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 		// of treating it as a plain-text answer.
 		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
 			}
@@ -344,7 +377,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 	// Call provider's streaming method
 	response, err := w.provider.SendChatRequestStream(ctx, providerMessages, providerTools, reasoning, disableThinking, providerCallback)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send streaming request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to send streaming request")
 	}
 
 	// Convert response back to API types
@@ -362,6 +395,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 			Cost:             response.Usage.Cost,
 			CachedTokens:     response.Usage.CachedTokens,
 			CacheWriteTokens: response.Usage.CacheWriteTokens,
+			ImageTokens:      response.Usage.ImageTokens,
 		},
 	}
 
@@ -404,8 +438,12 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 
 		// Recover Mistral-family `[TOOL_CALLS]…` text-format tool calls that the
 		// provider didn't translate into structured tool_calls (streamed path).
+		// Also try LFM2's Pythonic `[func(args)]` format for Liquid AI models.
 		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
 			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			} else if recovered, rest, recoveredOK := RecoverLFM2ToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
 				apiResponse.Choices[i].Message.ToolCalls = recovered
 				apiResponse.Choices[i].Message.Content = rest
 			}

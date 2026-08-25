@@ -156,7 +156,13 @@ export async function updateSkills(fetchFn: typeof fetch, skills: SkillsResponse
 export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentTypesResponse> {
   const response = await fetchFn('/api/settings/subagent-types');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  // Strip the `test` mock-client sentinel from the catalog — see
+  // miscApi.stripTestProvider for the rationale.
+  if (Array.isArray(data.available_providers)) {
+    data.available_providers = data.available_providers.filter((p: { id?: string }) => p?.id !== 'test');
+  }
+  return data;
 }
 
 export async function getHotkeys(fetchFn: typeof fetch): Promise<HotkeyConfig> {
@@ -204,5 +210,75 @@ export async function applyHotkeyPreset(
     const text = await response.text();
     throw new Error(text || `HTTP error! status: ${response.status}`);
   }
+  return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// SP-086-4: Skill install / manage endpoints
+// ---------------------------------------------------------------------------
+
+export interface SkillInstallOptions {
+  ref?: string;
+  force?: boolean;
+}
+
+export async function listInstalledSkills(fetchFn: typeof fetch): Promise<
+  Array<{
+    id: string;
+    origin: { type: string; installed_at?: string };
+    installed_at?: string;
+    updated_at?: string;
+  }>
+> {
+  const response = await fetchFn('/api/skills');
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+export async function listSkillRegistry(
+  fetchFn: typeof fetch,
+): Promise<import('./types/settings').SkillRegistryEntry[]> {
+  const response = await fetchFn('/api/skills/registry');
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+export async function installSkill(
+  fetchFn: typeof fetch,
+  source: string,
+  opts?: SkillInstallOptions,
+): Promise<import('./types/settings').SkillInstallResult[]> {
+  const payload: Record<string, unknown> = { source };
+  if (opts?.ref) payload.ref = opts.ref;
+  if (opts?.force) payload.force = opts.force;
+  const response = await fetchFn('/api/skills/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+export async function updateSkill(
+  fetchFn: typeof fetch,
+  id: string,
+): Promise<import('./types/settings').SkillInstallResult[]> {
+  const response = await fetchFn('/api/skills/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+export async function removeSkill(fetchFn: typeof fetch, id: string): Promise<{ status: string; id: string }> {
+  const response = await fetchFn('/api/skills/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }

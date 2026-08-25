@@ -188,14 +188,14 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   void tick;
 
   const count = sessions.length;
-  const triggerTitle =
-    count > 0 ? `${count} background ${count === 1 ? 'task' : 'tasks'}` : 'Background tasks';
+  const triggerTitle = count > 0 ? `${count} background ${count === 1 ? 'task' : 'tasks'}` : 'Background tasks';
 
   return (
     <div className="background-tasks-dropdown">
       <button
         ref={triggerRef}
         className={`background-tasks-trigger${isOpen ? ' open' : ''}${count > 0 ? ' has-tasks' : ''}`}
+        data-testid="background-tasks-trigger"
         onClick={() => setIsOpen((prev) => !prev)}
         title={triggerTitle}
         aria-label={triggerTitle}
@@ -208,7 +208,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
       </button>
 
       {isOpen && (
-        <div ref={popoverRef} className="background-tasks-popover" role="menu">
+        <div ref={popoverRef} className="background-tasks-popover" role="menu" data-testid="background-tasks-popover">
           <div className="background-tasks-popover-header">
             <div className="background-tasks-popover-title">
               <span>Background Tasks</span>
@@ -255,7 +255,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
             {!error && count > 0 && (
               <div className="background-tasks-list">
                 {sessions.map((session) => (
-                  <div key={session.id} className="background-task-item">
+                  <div key={session.id} className="background-task-item" data-testid="background-task-item">
                     <div className="background-task-info">
                       <div className="background-task-header-row">
                         <span
@@ -281,6 +281,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                     <div className="background-task-actions">
                       <button
                         className="background-task-btn background-task-btn-attach"
+                        data-testid="background-task-attach"
                         onClick={() => attachSession(session.id, session.name)}
                         title="Attach to terminal"
                         type="button"
@@ -291,6 +292,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                       </button>
                       <button
                         className="background-task-btn background-task-btn-kill"
+                        data-testid="background-task-kill"
                         onClick={() => killSession(session.id)}
                         title="Kill task"
                         type="button"

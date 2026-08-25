@@ -166,6 +166,13 @@ func TestIsCriticalOperation(t *testing.T) {
 		"sudo rm -rf /",
 		"cd /tmp && rm -rf /",
 		":(){ :|:& };:", // classic fork bomb
+		// sudo-prefixed critical operations (SP-123 regression tests)
+		"sudo killall -9",
+		"sudo killall -KILL",
+		"sudo mkfs.ext4 /dev/sda1",
+		"sudo mkfs /dev/sdb",
+		"sudo dd if=/dev/zero of=/dev/sda",
+		"sudo chmod 000 /",
 	}
 	for _, c := range critical {
 		if !IsCriticalOperation(c) {
@@ -174,10 +181,10 @@ func TestIsCriticalOperation(t *testing.T) {
 	}
 
 	notCritical := []string{
-		"rm -rf foo",         // recursive but not root
-		"rm -rf /tmp/cache",  // /tmp is fine
-		"rm /etc/hosts",      // not recursive
-		"echo 'rm -rf /'",    // rm inside quoted arg
+		"rm -rf foo",        // recursive but not root
+		"rm -rf /tmp/cache", // /tmp is fine
+		"rm /etc/hosts",     // not recursive
+		"echo 'rm -rf /'",   // rm inside quoted arg
 		"echo hello",
 		"git push",
 		"ls /",
@@ -405,4 +412,63 @@ func keys(m map[string]AutoApproveRules) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestIsValidRiskProfileWithConfig_Builtin verifies that the five
+// baked-in names pass regardless of config context (nil config, empty
+// config, or a config that also carries user-defined entries).
+func TestIsValidRiskProfileWithConfig_Builtin(t *testing.T) {
+	builtins := []string{
+		"readonly", "cautious", "default", "permissive", "unrestricted",
+	}
+	cfg := &Config{RiskProfiles: map[string]AutoApproveRules{"custom": {DefaultRisk: RiskLevelLow}}}
+	for _, name := range builtins {
+		if !IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = false, want true", name)
+		}
+		if !IsValidRiskProfileWithConfig(name, &Config{}) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, empty config) = false, want true", name)
+		}
+		if !IsValidRiskProfileWithConfig(name, cfg) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, config with user entries) = false, want true", name)
+		}
+	}
+}
+
+// TestIsValidRiskProfileWithConfig_UserDefined verifies that a name
+// present in cfg.RiskProfiles is accepted, absent names are rejected,
+// and the built-in-only predicate remains unchanged.
+func TestIsValidRiskProfileWithConfig_UserDefined(t *testing.T) {
+	cfg := &Config{
+		RiskProfiles: map[string]AutoApproveRules{
+			"my_strict": {DefaultRisk: RiskLevelHigh},
+		},
+	}
+	if !IsValidRiskProfileWithConfig("my_strict", cfg) {
+		t.Error("user-defined profile in cfg.RiskProfiles should be accepted")
+	}
+	for _, name := range []string{"my_other", "sandbox", ""} {
+		if IsValidRiskProfileWithConfig(name, cfg) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, cfg) = true, want false", name)
+		}
+	}
+	// The built-in-only predicate is intentionally unchanged.
+	if IsValidRiskProfile("my_strict") {
+		t.Error("IsValidRiskProfile should still reject user-defined names")
+	}
+}
+
+// TestIsValidRiskProfileWithConfig_NilConfig verifies that nil config
+// only accepts the built-in names.
+func TestIsValidRiskProfileWithConfig_NilConfig(t *testing.T) {
+	for _, name := range []string{"readonly", "cautious", "default", "permissive", "unrestricted"} {
+		if !IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"my_strict", "custom", ""} {
+		if IsValidRiskProfileWithConfig(name, nil) {
+			t.Errorf("IsValidRiskProfileWithConfig(%q, nil) = true, want false", name)
+		}
+	}
 }

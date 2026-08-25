@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	modelsettings "github.com/sprout-foundry/sprout/pkg/model_settings"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -17,8 +18,13 @@ import (
 // buildChatRequest builds the request body for chat completion
 func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, stream bool) ([]byte, error) {
 	if err := p.ensureModel(); err != nil {
-		return nil, fmt.Errorf("ensure model: %w", err)
+		return nil, agenterrors.NewNetwork("ensure model", err)
 	}
+
+	// Snapshot the model name under lock after ensureModel() resolved it.
+	p.mu.RLock()
+	model := p.model
+	p.mu.RUnlock()
 
 	// Convert messages according to provider configuration
 	convertedMessages := p.convertMessages(messages, reasoning)
@@ -37,7 +43,8 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 			// Count leading assistant messages to strip (without tool_calls)
 			stripEnd := nonSystemStart
 			for stripEnd < len(convertedMessages) && convertedMessages[stripEnd]["role"] == "assistant" {
-				if tc, hasToolCalls := convertedMessages[stripEnd]["tool_calls"]; hasToolCalls && tc != nil {					break // Preserve assistant messages with tool_calls
+				if tc, hasToolCalls := convertedMessages[stripEnd]["tool_calls"]; hasToolCalls && tc != nil {
+					break // Preserve assistant messages with tool_calls
 				}
 				stripEnd++
 			}
@@ -54,7 +61,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	request := map[string]interface{}{
-		"model":    p.model,
+		"model":    model,
 		"messages": convertedMessages,
 		"stream":   stream,
 	}
@@ -63,13 +70,39 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	if p.config.Defaults.Temperature != nil {
 		request["temperature"] = *p.config.Defaults.Temperature
 	}
-	if p.config.Defaults.MaxTokens != nil && *p.config.Defaults.MaxTokens > 0 {
-		request["max_tokens"] = *p.config.Defaults.MaxTokens
+
+	// Apply output token budgeting against context limits.
+	contextLimit, _ := p.GetModelContextLimit()
+	completionLimit := p.getModelCompletionLimit()
+
+	p.maxTokensHintMu.RLock()
+	hint := p.maxTokensHint
+	p.maxTokensHintMu.RUnlock()
+
+	var budgetedMax int
+	if hint > 0 {
+		// Use the caller's pre-computed hint (from the token anchor) — it's
+		// more accurate than recomputing from the raw heuristic.
+		budgetedMax = hint
 	} else {
-		contextLimit, _ := p.GetModelContextLimit()
-		completionLimit := p.getModelCompletionLimit()
-		request["max_tokens"] = CalculateMaxTokensWithLimits(contextLimit, completionLimit, messages, tools)
+		budgetedMax = CalculateMaxTokensWithLimits(contextLimit, completionLimit, messages, tools)
 	}
+	if p.config.Defaults.MaxTokens != nil && *p.config.Defaults.MaxTokens > 0 {
+		if budgetedMax > *p.config.Defaults.MaxTokens {
+			budgetedMax = *p.config.Defaults.MaxTokens
+		}
+	}
+
+	// Apply a global 64K cap to max_tokens for safety across all providers.
+	// Most providers support up to 64K output tokens; capping here prevents
+	// errors from providers with stricter limits (e.g., ZAI's 131072 limit).
+	const maxRequestCompletionTokens = 64000
+	if budgetedMax > maxRequestCompletionTokens {
+		budgetedMax = maxRequestCompletionTokens
+	}
+
+	request["max_tokens"] = budgetedMax
+
 	if p.config.Defaults.TopP != nil {
 		request["top_p"] = *p.config.Defaults.TopP
 	}
@@ -82,9 +115,12 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	// Apply model-specific defaults and suppress unsupported fields.
-	applyModelSpecificSettings(p.model, request)
-	applyReasoningEffort(p.model, reasoning, request)
-	applyDisableThinking(p.model, disableThinking, request)
+	// instruct=true when thinking is disabled, so models with a distinct
+	// non-thinking recommendation (e.g. Qwen3.6, Qwen3.8) get the correct
+	// parameters.
+	applyModelSpecificSettings(model, request, disableThinking)
+	applyReasoningEffort(model, reasoning, request)
+	applyDisableThinking(model, disableThinking, request)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -242,24 +278,32 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 }
 
 func (p *GenericProvider) ensureModel() error {
-	if strings.TrimSpace(p.model) != "" {
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+	if strings.TrimSpace(currentModel) != "" {
 		return nil
 	}
 
 	models, err := p.ListModels(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to discover models for provider %s: %w", p.config.Name, err)
+		return agenterrors.NewNetwork(fmt.Sprintf("failed to discover models for provider %s", p.config.Name), err)
 	}
 	if len(models) == 0 || strings.TrimSpace(models[0].ID) == "" {
+		// NOTE: Kept as fmt.Errorf — test TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable
+		// asserts strings.Contains(err.Error(), "did not return any models") which would break
+		// with NewNotFound's auto-appended " not found" suffix
 		return fmt.Errorf("provider %s did not return any models", p.config.Name)
 	}
 
+	p.mu.Lock()
 	p.model = strings.TrimSpace(models[0].ID)
+	p.mu.Unlock()
 	return nil
 }
 
-func applyModelSpecificSettings(model string, request map[string]interface{}) {
-	settings := modelsettings.ResolveModelSettings(model)
+func applyModelSpecificSettings(model string, request map[string]interface{}, disableThinking bool) {
+	settings := modelsettings.ResolveModelSettingsForMode(model, disableThinking)
 	if !settings.Known {
 		return
 	}
@@ -288,7 +332,7 @@ func shouldRetryWithMaxCompletionTokens(errBody []byte) bool {
 func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(requestBody, &payload); err != nil {
-		return nil, false, fmt.Errorf("parse request body: %w", err)
+		return nil, false, agenterrors.NewValidation(fmt.Sprintf("parse request body: %v", err), nil)
 	}
 
 	maxTokens, hasMaxTokens := payload["max_tokens"]
@@ -304,7 +348,7 @@ func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, er
 
 	updated, err := json.Marshal(payload)
 	if err != nil {
-		return nil, false, fmt.Errorf("marshal updated request body: %w", err)
+		return nil, false, agenterrors.NewValidation(fmt.Sprintf("marshal updated request body: %v", err), nil)
 	}
 	return updated, true, nil
 }
@@ -314,11 +358,12 @@ func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, er
 // New callers should use buildHTTPRequestCtx so the user's Stop button
 // can abort in-flight LLM requests — see SP-034.
 func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.Request, error) {
-	return p.buildHTTPRequestCtx(context.Background(), body, streaming)
+	req, _, err := p.buildHTTPRequestCtx(context.Background(), body, streaming)
+	return req, err
 }
 
 // buildHTTPRequestCtx builds the HTTP request bound to ctx.
-func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, error) {
+func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, []byte, error) {
 	// For local instances like LM Studio, skip auth check entirely if it would fail
 	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
 
@@ -335,7 +380,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("get model context limit: %w", err)
+		return nil, body, agenterrors.NewNetwork("failed to build HTTP request", err)
 	}
 
 	// Check if authentication is needed
@@ -350,7 +395,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 		var authErr error
 		token, authErr = p.config.GetAuthToken()
 		if authErr != nil {
-			return nil, fmt.Errorf("authentication failed: %w", authErr)
+			return nil, body, agenterrors.Wrap(authErr, "authentication failed")
 		}
 	}
 
@@ -383,7 +428,5 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 		}
 	}
 
-	return req, nil
+	return req, body, nil
 }
-
-

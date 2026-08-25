@@ -21,6 +21,11 @@ func (c *RiskProfileCommand) Name() string {
 	return "risk-profile"
 }
 
+// SafeDuringSteer returns true - /risk-profile is config change, no turn interaction
+func (c *RiskProfileCommand) SafeDuringSteer() bool {
+	return true
+}
+
 func (c *RiskProfileCommand) Description() string {
 	return "Show or change the shell-command risk profile (readonly|cautious|default|permissive|unrestricted)"
 }
@@ -63,8 +68,15 @@ func (c *RiskProfileCommand) Execute(args []string, chatAgent *agent.Agent) erro
 		return c.show(chatAgent)
 	}
 
-	if !configuration.IsValidRiskProfile(first) {
-		return fmt.Errorf("unknown risk profile %q (valid: %s)", args[0], strings.Join(builtinProfileNames(), ", "))
+	if !configuration.IsValidRiskProfileWithConfig(first, chatAgent.GetConfig()) {
+		cfg := chatAgent.GetConfig()
+		valid := builtinProfileNames()
+		if cfg != nil {
+			for k := range cfg.RiskProfiles {
+				valid = append(valid, k)
+			}
+		}
+		return fmt.Errorf("unknown risk profile %q (valid: %s)", args[0], strings.Join(valid, ", "))
 	}
 
 	chatAgent.SetRiskProfileOverride(configuration.RiskProfile(first))
@@ -116,4 +128,50 @@ func builtinProfileNames() []string {
 		string(configuration.RiskProfilePermissive),
 		string(configuration.RiskProfileUnrestricted),
 	}
+}
+
+// Complete returns completions for the /risk-profile command.
+func (c *RiskProfileCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) > 1 {
+		return nil
+	}
+
+	// Subcommand words plus the built-in profile names (strictest → loosest).
+	candidates := []string{"clear", "list", "show"}
+	candidates = append(candidates, builtinProfileNames()...)
+
+	// User-defined profiles from config. Guarded: a nil agent or nil config
+	// (e.g. NewTestAgent) simply means no custom profiles. A user-defined
+	// name colliding with a subcommand word or built-in profile is skipped
+	// so the candidate list never contains duplicates.
+	if chatAgent != nil {
+		if cfg := chatAgent.GetConfig(); cfg != nil {
+			seen := make(map[string]struct{}, len(candidates))
+			for _, c := range candidates {
+				seen[c] = struct{}{}
+			}
+			for name := range cfg.RiskProfiles {
+				if _, dup := seen[name]; dup {
+					continue
+				}
+				candidates = append(candidates, name)
+			}
+		}
+	}
+
+	if len(args) == 0 {
+		return candidates
+	}
+	last := args[len(args)-1]
+	if last == "" {
+		return candidates
+	}
+
+	var matches []string
+	for _, cand := range candidates {
+		if strings.HasPrefix(strings.ToLower(cand), strings.ToLower(last)) {
+			matches = append(matches, cand)
+		}
+	}
+	return matches
 }

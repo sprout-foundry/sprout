@@ -1,0 +1,330 @@
+//go:build !js
+
+package tools
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+)
+
+// rrfK is the RRF damping constant (60, from the original RRF paper).
+const rrfK = 60.0
+
+// searchDefaultLimit caps merged results. Both inputs are already capped; this
+// bounds what reaches the model's context.
+const searchDefaultLimit = 20
+
+type searchHandler struct{}
+
+func (h *searchHandler) Name() string { return "search" }
+
+func (h *searchHandler) Definition() ToolDefinition {
+	return ToolDefinition{
+		Name: "search",
+		Description: "Find code in the workspace. Runs a literal regex search and, when the embedding index is available, a semantic search, then merges both rankings. " +
+			"Use a regex for exact matches ('func NewServer', 'SPROUT_[A-Z_]+') and plain language for conceptual questions ('where do we retry failed connections') — both work, and a conceptual query still returns literal matches if the index is not built yet.",
+		Required: []string{"query"},
+		Parameters: []ParameterDef{
+			{Name: "query", Type: "string", Description: "A regex pattern for exact matching, or a plain-language description of the behaviour you are looking for.", Required: true},
+			{Name: "directory", Type: "string", Description: "Directory to search (default: workspace root)"},
+			{Name: "file_glob", Type: "string", Description: "Restrict literal matching to files matching this glob (e.g. '*.go')"},
+			{Name: "case_sensitive", Type: "boolean", Description: "Case-sensitive literal matching (default: false)"},
+			{Name: "max_results", Type: "integer", Description: "Maximum merged results to return (default: 20)"},
+			{Name: "literal_only", Type: "boolean", Description: "Skip semantic search even when the index is available. Use when you need an exhaustive, exact answer — e.g. verifying every reference to a symbol is gone."},
+		},
+	}
+}
+
+func (h *searchHandler) Validate(args map[string]any) error {
+	return requireArgs(h.Name(), args, "query")
+}
+
+// searchCandidate is one result from either strategy, keyed for merging.
+type searchCandidate struct {
+	path         string
+	line         int
+	text         string
+	score        float64
+	fromParts    []string
+	similarity   float32
+	extraMatches int
+}
+
+func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	query, err := extractString(args, "query")
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	// Capture whether the user explicitly named a directory before
+	// resolveSearchDirectory normalises it to the workspace root.
+	rawDir, _ := extractString(args, "directory")
+
+	directory, err := resolveSearchDirectory(rawDir, env.WorkspaceRoot)
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	// Gate 1 precheck — only when the user explicitly named a non-default
+	// directory. An empty or "." directory resolves to the workspace root,
+	// which is already allowlisted; gating the default would prompt on every
+	// vanilla search.
+	if rawDir != "" && rawDir != "." {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "search", directory)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", directory), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", directory)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "search", directory, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+			}
+		}
+	}
+
+	limit, _ := extractInt(args, "max_results")
+	if limit <= 0 {
+		limit = searchDefaultLimit
+	}
+	literalOnly := getBoolArg(args, "literal_only")
+
+	// Literal pass: exact, fast, no index needed.
+	fileGlob, _ := extractString(args, "file_glob")
+	literalRes, literalErr := runLiteralSearch(ctx, literalSearchOpts{
+		Directory:     directory,
+		Pattern:       literalPatternFor(query),
+		FileGlob:      fileGlob,
+		CaseSensitive: getBoolArg(args, "case_sensitive"),
+		MaxFiles:      limit * 5, // room to backfill behind the semantic list
+		MaxPerFile:    3,
+	})
+	literalHits := literalRes.Hits
+
+	// Semantic pass: only when the index is ready.
+	var semanticHits []embedding.QueryResult
+	var semanticNote string
+	switch {
+	case literalOnly:
+		semanticNote = "literal-only (requested)"
+	case env.EmbeddingMgr == nil:
+		// Embeddings are off (the default). The literal pass already ran and
+		// its results are valid on their own, so the note stays terse — no
+		// mention of the missing index, which would read as a broken tool.
+		semanticNote = "literal-only"
+	default:
+		r := env.EmbeddingMgr.Readiness()
+		switch {
+		case r.CanAnswerQueries():
+			semanticHits, _ = env.EmbeddingMgr.QuerySimilar(ctx, query, limit*2,
+				env.EmbeddingMgr.SemanticSearchThreshold())
+			if r.Building {
+				semanticNote = fmt.Sprintf("semantic results partial — index still building (%d records)", r.Records)
+			}
+		case r.Building:
+			semanticNote = fmt.Sprintf("literal-only — embedding index still building (%d records)", r.Records)
+		default:
+			semanticNote = "literal-only — embedding index not built for this workspace"
+		}
+	}
+
+	merged := fuseSearchResults(literalHits, semanticHits, env.WorkspaceRoot, limit)
+
+	if len(merged) == 0 {
+		return ToolResult{Output: formatEmptySearch(query, directory, semanticNote, literalErr)}, nil
+	}
+	return ToolResult{Output: formatFusedSearch(query, merged, semanticNote)}, nil
+}
+
+// Merge results: semantic ranking leads, literal matches backfill. Shared files are promoted to semantic position.
+func fuseSearchResults(literal []literalHit, semantic []embedding.QueryResult, workspaceRoot string, limit int) []searchCandidate {
+	byPath := map[string]*searchCandidate{}
+	var ordered []*searchCandidate
+
+	for _, r := range semantic {
+		path := normalizeSearchPath(r.Record.File, workspaceRoot)
+		c, ok := byPath[path]
+		if !ok {
+			c = &searchCandidate{path: path, line: r.Record.StartLine, text: strings.TrimSpace(r.Record.Signature)}
+			byPath[path] = c
+			ordered = append(ordered, c)
+		}
+		if r.Similarity > c.similarity {
+			c.similarity = r.Similarity
+		}
+		c.fromParts = appendOnce(c.fromParts, "semantic")
+		if c.text == "" {
+			c.text = r.Record.Name
+		}
+	}
+
+	// Literal matches: annotate files semantic already found, append the rest.
+	var backfill []*searchCandidate
+	for _, h := range literal {
+		path := normalizeSearchPath(h.Path, workspaceRoot)
+		if c, ok := byPath[path]; ok {
+			before := len(c.fromParts)
+			c.fromParts = appendOnce(c.fromParts, "literal")
+			if len(c.fromParts) == before {
+				c.extraMatches++
+			}
+			continue
+		}
+		c := &searchCandidate{path: path, line: h.Line, text: strings.TrimSpace(h.Text)}
+		c.fromParts = append(c.fromParts, "literal")
+		byPath[path] = c
+		backfill = append(backfill, c)
+	}
+
+	out := make([]searchCandidate, 0, len(ordered)+len(backfill))
+	for _, c := range ordered {
+		out = append(out, *c)
+	}
+	for _, c := range backfill {
+		out = append(out, *c)
+	}
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// Convert prose queries to a regex of distinctive word stems; pass through patterns as-is.
+func literalPatternFor(query string) string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return q
+	}
+	if strings.ContainsAny(q, `\[](){}*+?|^$.`) {
+		return q
+	}
+	fields := strings.Fields(q)
+	if len(fields) <= 2 {
+		return q
+	}
+
+	var stems []string
+	seen := map[string]bool{}
+	for _, w := range fields {
+		w = strings.ToLower(strings.Trim(w, `"'.,:;!?`))
+		if len(w) < 5 || searchStopwords[w] {
+			continue
+		}
+		stem := w
+		if len(stem) > 6 {
+			stem = stem[:6]
+		}
+		if seen[stem] {
+			continue
+		}
+		seen[stem] = true
+		stems = append(stems, regexp.QuoteMeta(stem))
+		if len(stems) == 6 {
+			break
+		}
+	}
+	if len(stems) == 0 {
+		return q
+	}
+	return strings.Join(stems, "|")
+}
+
+// searchStopwords are words too common in prose to narrow a code search.
+var searchStopwords = map[string]bool{
+	"about": true, "after": true, "again": true, "against": true, "because": true,
+	"before": true, "being": true, "between": true, "cannot": true, "could": true,
+	"during": true, "every": true, "from": true, "given": true, "having": true,
+	"into": true, "might": true, "other": true, "over": true, "should": true,
+	"since": true, "some": true, "such": true, "than": true, "that": true,
+	"their": true, "them": true, "then": true, "there": true, "these": true,
+	"they": true, "this": true, "those": true, "through": true, "under": true,
+	"until": true, "using": true, "were": true, "what": true, "when": true,
+	"where": true, "which": true, "while": true, "with": true, "would": true,
+	"your": true, "does": true, "each": true, "only": true, "same": true,
+	"want": true, "will": true, "make": true, "made": true, "used": true,
+}
+
+func appendOnce(s []string, v string) []string {
+	for _, e := range s {
+		if e == v {
+			return s
+		}
+	}
+	return append(s, v)
+}
+
+func normalizeSearchPath(p, workspaceRoot string) string {
+	if workspaceRoot == "" {
+		return filepath.ToSlash(p)
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.ToSlash(p)
+	}
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return filepath.ToSlash(p)
+	}
+	if rel, err := filepath.Rel(absRoot, abs); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.ToSlash(p)
+}
+
+func formatFusedSearch(query string, results []searchCandidate, note string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d result(s) for %q", len(results), query))
+	if note != "" {
+		sb.WriteString(" — " + note)
+	}
+	sb.WriteString(":\n\n")
+	for _, r := range results {
+		sb.WriteString(fmt.Sprintf("%s:%d", r.path, r.line))
+		if len(r.fromParts) > 0 {
+			sb.WriteString(" [" + strings.Join(r.fromParts, "+") + "]")
+		}
+		if r.similarity > 0 {
+			sb.WriteString(fmt.Sprintf(" (%.2f)", r.similarity))
+		}
+		if r.extraMatches > 0 {
+			sb.WriteString(fmt.Sprintf(" +%d more in file", r.extraMatches))
+		}
+		sb.WriteString("\n")
+		if t := strings.TrimSpace(r.text); t != "" {
+			if len(t) > 200 {
+				t = t[:200] + "…"
+			}
+			sb.WriteString("    " + t + "\n")
+		}
+	}
+	return sb.String()
+}
+
+func formatEmptySearch(query, directory, note string, literalErr error) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("No results for %q in %s.\n", query, directory))
+	if literalErr != nil {
+		sb.WriteString(fmt.Sprintf("\nThe literal search could not complete: %v\n", literalErr))
+	}
+	// Clarify whether both strategies ran or only literal.
+	if note != "" {
+		sb.WriteString("\nThis run was " + note + ", so only exact text matches were considered.\n")
+	} else {
+		sb.WriteString("\nBoth literal and semantic search were applied.\n")
+	}
+	return sb.String()
+}
+
+func (h *searchHandler) Aliases() []string      { return nil }
+func (h *searchHandler) Timeout() time.Duration { return 60 * time.Second }
+func (h *searchHandler) MaxResultSize() int     { return 0 }
+func (h *searchHandler) SafeForParallel() bool  { return true }
+func (h *searchHandler) Interactive() bool      { return false }

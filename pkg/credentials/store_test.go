@@ -1,46 +1,46 @@
 package credentials
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 func TestGetConfigDir_CustomEnv(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetConfigDir()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != dir {
-		t.Fatalf("expected %q, got %q", dir, got)
+	expected := filepath.Join(dir, "credentials")
+	if got != expected {
+		t.Fatalf("expected %q, got %q", expected, got)
 	}
 }
 
 func TestGetConfigDir_XDGEnv(t *testing.T) {
 	xdgDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", xdgDir)
-	// Ensure LEDIT_CONFIG is not set
-	t.Setenv("LEDIT_CONFIG", "")
+	// Ensure SPROUT_CONFIG is not set
 	t.Setenv("SPROUT_CONFIG", "")
 
 	got, err := GetConfigDir()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(xdgDir, "sprout")
+	expected := filepath.Join(xdgDir, "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
 }
 
 func TestGetConfigDir_Default(t *testing.T) {
-	// Ensure neither LEDIT_CONFIG nor XDG_CONFIG_HOME are set
-	t.Setenv("LEDIT_CONFIG", "")
+	// Ensure neither SPROUT_CONFIG nor XDG_CONFIG_HOME are set
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -50,7 +50,7 @@ func TestGetConfigDir_Default(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -58,14 +58,13 @@ func TestGetConfigDir_Default(t *testing.T) {
 
 func TestGetAPIKeysPath(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetAPIKeysPath()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(dir, "api_keys.json")
+	expected := filepath.Join(dir, "credentials", "api_keys.json")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
@@ -73,7 +72,6 @@ func TestGetAPIKeysPath(t *testing.T) {
 
 func TestLoad_FileNotFound(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't create the file
 
@@ -91,10 +89,13 @@ func TestLoad_FileNotFound(t *testing.T) {
 
 func TestLoad_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("not-json{{{"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -112,10 +113,13 @@ func TestLoad_InvalidJSON(t *testing.T) {
 
 func TestLoad_NilStoreJSON(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("null"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -134,7 +138,6 @@ func TestLoad_NilStoreJSON(t *testing.T) {
 
 func TestSave_NilStore(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	if err := Save(nil); err != nil {
@@ -142,7 +145,7 @@ func TestSave_NilStore(t *testing.T) {
 	}
 
 	// Verify it wrote encrypted data (starts with age magic)
-	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -153,7 +156,6 @@ func TestSave_NilStore(t *testing.T) {
 
 func TestSave_ValidStore(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{"openai": "sk-test123", "anthropic": "sk-abc"}
@@ -162,7 +164,7 @@ func TestSave_ValidStore(t *testing.T) {
 	}
 
 	// Verify file is encrypted (not plaintext)
-	data, err := os.ReadFile(filepath.Join(dir, "api_keys.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
@@ -171,7 +173,7 @@ func TestSave_ValidStore(t *testing.T) {
 	}
 
 	// Verify file permissions (0600)
-	info, err := os.Stat(filepath.Join(dir, "api_keys.json"))
+	info, err := os.Stat(filepath.Join(dir, "credentials", "api_keys.json"))
 	if err != nil {
 		t.Fatalf("stat file: %v", err)
 	}
@@ -183,7 +185,6 @@ func TestSave_ValidStore(t *testing.T) {
 
 func TestSave_LoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{"provider-a": "key-a", "provider-b": "key-b"}
@@ -208,7 +209,6 @@ func TestSave_LoadRoundTrip(t *testing.T) {
 
 func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't set any env var or store anything
 
@@ -229,7 +229,6 @@ func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 
 func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Store an env var with surrounding whitespace
 	t.Setenv("TRIM_ME_KEY", "  trim-value  ")
@@ -251,7 +250,6 @@ func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 
 func TestResolvePrefersEnvironmentOverStoredKey(t *testing.T) {
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("TEST_PROVIDER_API_KEY", "env-key")
 
@@ -278,10 +276,9 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	configDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("SPROUT_CONFIG", configDir)
 	// Force file backend to avoid keyring state pollution
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 
 	store := Store{
 		"test-provider": "stored-key",
@@ -304,9 +301,8 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 
 // --- Additional coverage tests ---
 
-func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
-	// LEDIT_CONFIG is set to whitespace-only — should be treated as empty
-	t.Setenv("LEDIT_CONFIG", "   \t  ")
+func TestGetConfigDir_WhitespaceConfig(t *testing.T) {
+	// SPROUT_CONFIG is set to whitespace-only — should be treated as empty
 	t.Setenv("SPROUT_CONFIG", "   \t  ")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -316,14 +312,13 @@ func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
 }
 
 func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "   \t  ")
 
@@ -333,7 +328,7 @@ func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected %q (fallthrough to home), got %q", expected, got)
 	}
@@ -341,7 +336,7 @@ func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 
 func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	// Make home directory lookup fail by setting HOME to a very long invalid path
-	// that will cause os.MkdirAll to fail. Use a temp dir as LEDIT_CONFIG
+	// that will cause os.MkdirAll to fail. Use a temp dir as SPROUT_CONFIG
 	// with a non-existent sub-path that we make unwritable.
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "rodir")
@@ -352,8 +347,7 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	if err := os.Chmod(readOnlyDir, 0500); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
-	// Set LEDIT_CONFIG to a sub-directory of the read-only dir that doesn't exist
-	t.Setenv("LEDIT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
+	// Set SPROUT_CONFIG to a sub-directory of the read-only dir that doesn't exist
 	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -361,18 +355,21 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when GetConfigDir fails, got nil")
 	}
-	// The error is about failing to create the config directory
-	if !strings.Contains(err.Error(), "failed to create config directory") {
-		t.Fatalf("expected config dir creation error, got: %v", err)
+	// The error is about failing to create the config/credentials directory
+	if !strings.Contains(err.Error(), "failed to create directory") {
+		t.Fatalf("expected directory creation error, got: %v", err)
 	}
 }
 
 func TestLoad_ReadError(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir credentials: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte(`{"key":"val"}`), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -402,17 +399,13 @@ func TestSave_WriteError(t *testing.T) {
 		t.Fatalf("chmod: %v", err)
 	}
 
-	// Point LEDIT_CONFIG to the read-only directory itself (already exists)
-	t.Setenv("LEDIT_CONFIG", readOnlyDir)
+	// Point SPROUT_CONFIG to the read-only directory itself (already exists)
 	t.Setenv("SPROUT_CONFIG", readOnlyDir)
 
 	store := Store{"test": "value"}
 	err := Save(store)
-	// The directory exists and GetConfigDir succeeds. WriteFile may fail
-	// because the directory is read-only (0500).
-	// Error can be either from WriteFile (permission denied) or succeed if owner can write.
+	// The credentials subdirectory can't be created in the read-only dir.
 	if err != nil {
-		// Either permission denied from WriteFile or config dir error
 		t.Logf("Got expected write error: %v", err)
 	}
 	// If err is nil, the owner was able to write despite 0500 mode — acceptable on some systems.
@@ -422,10 +415,9 @@ func TestResolve_EnvVarSetButEmpty(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("EMPTY_KEY", "")
 
 	resolved, err := resolve("test-provider", "EMPTY_KEY")
@@ -445,10 +437,9 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("WS_KEY", "   \t  ")
 
 	resolved, err := resolve("test-provider", "WS_KEY")
@@ -466,10 +457,9 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 
 func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend() // Reset backend cache for this test
 	t.Setenv("WS_PROVIDER_KEY", "")
 
@@ -490,5 +480,345 @@ func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 	}
 	if resolved.Source != "stored" {
 		t.Fatalf("expected stored source, got %q", resolved.Source)
+	}
+}
+
+// TestGetConfigDir_HomeError covers the os.UserHomeDir() error path (line 33).
+// When SPROUT_CONFIG and XDG_CONFIG_HOME are both empty and HOME is unset,
+// os.UserHomeDir() returns an error.
+// On some platforms (Android/Termux) os.UserHomeDir still resolves a path
+// even without HOME, so we detect that and skip.
+func TestGetConfigDir_HomeError(t *testing.T) {
+	t.Setenv("HOME", "")
+
+	// Also clear SPROUT_CONFIG and XDG_CONFIG_HOME to force the home dir path
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	// Verify that os.UserHomeDir actually fails on this platform.
+	// On Android/Termux it may still resolve via user looked-up home.
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
+
+	_, err := GetConfigDir()
+	if err == nil {
+		t.Fatal("expected error when HOME is unset and UserHomeDir fails")
+	}
+}
+
+// TestLoad_GetAPIKeysPathError covers lines 55-57: Load() propagates the error
+// from GetAPIKeysPath() when GetConfigDir() fails.
+func TestLoad_GetAPIKeysPathError(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error from Load when GetAPIKeysPath fails")
+	}
+}
+
+// TestSave_GetAPIKeysPathError covers the error path where GetAPIKeysPath
+// fails during Save (GetConfigDir → MkdirAll error or HomeDir error).
+func TestSave_GetAPIKeysPathError(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	err := Save(Store{"test": "val"})
+	if err == nil {
+		t.Fatal("expected error from Save when GetAPIKeysPath fails")
+	}
+}
+
+// TestResolve_LoadError covers lines 103-105: Resolve returns an error when
+// Load() fails (no env var set, and Load cannot find/access the keys file).
+func TestResolve_LoadError(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
+	t.Setenv("HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
+
+	// No env var set, so Resolve falls through to Load()
+	_, err := resolve("some-provider", "")
+	if err == nil {
+		t.Fatal("expected error from Resolve when Load fails")
+	}
+}
+
+// TestResolve_LoadErrorWithEnvVarUnsetButNamed covers Resolve → Load error
+// when env var name is provided but the variable is not set.
+func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
+	ResetStorageBackend() // Reset backend cache for this test
+
+	t.Setenv("HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	// Explicitly unset the named env var so os.Getenv returns empty
+	t.Setenv("SOME_UNSET_VAR", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
+
+	_, err := resolve("some-provider", "SOME_UNSET_VAR")
+	if err == nil {
+		t.Fatal("expected error from Resolve when Load fails after empty env var check")
+	}
+}
+
+// TestSave_WriteFileError covers lines 84-86: os.WriteFile fails when
+// the target directory is read-only.
+func TestSave_WriteFileError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: root user can write to read-only directories")
+	}
+
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(readOnlyDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Point SPROUT_CONFIG to the directory.
+	// Pre-create the credentials dir so GetConfigDir's MkdirAll succeeds,
+	// then make it read-only for files.
+	t.Setenv("SPROUT_CONFIG", readOnlyDir)
+	configDir, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("GetConfigDir: %v", err)
+	}
+	// Remove write permission from the directory to prevent file creation
+	if err := os.Chmod(configDir, 0500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(configDir, 0700)
+
+	err = Save(Store{"test": "value"})
+	if err == nil {
+		t.Fatal("expected error from Save when WriteFile fails on read-only directory")
+	}
+}
+
+// TestSaveAndLoad_LargeStore verifies Save and Load work with hundreds of keys.
+func TestSaveAndLoad_LargeStore(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	store := make(Store, 500)
+	for i := 0; i < 500; i++ {
+		store[fmt.Sprintf("provider-%04d", i)] = fmt.Sprintf("api-key-value-%04d-secret", i)
+	}
+
+	if err := Save(store); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(loaded) != 500 {
+		t.Fatalf("expected 500 keys, got %d", len(loaded))
+	}
+	// Spot-check a few keys
+	for _, key := range []string{"provider-0000", "provider-0250", "provider-0499"} {
+		if loaded[key] != store[key] {
+			t.Fatalf("key %q: expected %q, got %q", key, store[key], loaded[key])
+		}
+	}
+}
+
+// TestResolve_SpecialCharProviderNames verifies Resolve handles special
+// characters in provider names and env var values.
+func TestResolve_SpecialCharProviderNames(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	store := Store{
+		"provider/with/slashes":     "key-slashes",
+		"provider.with.dots":        "key-dots",
+		"provider-with-dashes":      "key-dashes",
+		"provider_with_underscores": "key-underscores",
+		"UPPERCASE-PROVIDER":        "key-upper",
+		"provider with spaces":      "key-spaces",
+	}
+	if err := Save(store); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	for provider, expected := range store {
+		resolved, err := resolve(provider, "")
+		if err != nil {
+			t.Fatalf("resolve %q: %v", provider, err)
+		}
+		if resolved.Value != expected {
+			t.Fatalf("provider %q: expected %q, got %q", provider, expected, resolved.Value)
+		}
+		if resolved.Source != "stored" {
+			t.Fatalf("provider %q: expected source 'stored', got %q", provider, resolved.Source)
+		}
+	}
+}
+
+// TestResolve_EnvVarSpecialChars verifies env var values with special characters.
+func TestResolve_EnvVarSpecialChars(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	cases := []struct {
+		envVal string
+		desc   string
+	}{
+		{"sk-proj-abc123DEF456ghi789", "alphanumeric with dashes"},
+		{"key=with=equals", "equals signs"},
+		{"key\nwith\nnewlines", "newlines"},
+		{"key\twith\ttabs", "tabs"},
+		{"path/to/file:value", "colons and slashes"},
+		{"aGVsbG8gd29ybGQ=", "base64 value"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			envName := "SPECIAL_CHAR_KEY"
+			t.Setenv(envName, tc.envVal)
+
+			// With spaces around the value to test trimming
+			t.Setenv(envName, "  "+tc.envVal+"  ")
+
+			resolved, err := resolve("provider", envName)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resolved.Value != tc.envVal {
+				t.Fatalf("expected %q, got %q", tc.envVal, resolved.Value)
+			}
+			if resolved.Source != "environment" {
+				t.Fatalf("expected source 'environment', got %q", resolved.Source)
+			}
+		})
+	}
+}
+
+// TestConcurrentSaveLoad verifies Save and Load don't panic under concurrent use.
+// Note: concurrent writes to the same file will naturally produce interleaved data,
+// so Load errors during races are expected and acceptable. This test verifies
+// no panics or deadlocks occur.
+func TestConcurrentSaveLoad(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	// Pre-populate the store
+	initialStore := make(Store, 10)
+	for i := 0; i < 10; i++ {
+		initialStore[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("val-%d", i)
+	}
+	if err := Save(initialStore); err != nil {
+		t.Fatalf("initial save: %v", err)
+	}
+
+	var wg sync.WaitGroup
+
+	// Launch concurrent loaders that race with the save below.
+	// We avoid concurrent saves because Save holds an exclusive flock with a
+	// generous 15s timeout — multiple saves can serialize and cascade to
+	// 30s+ of lock waiting. A single save with multiple reads is sufficient
+	// to verify no panics or deadlocks under concurrent use.
+	const numLoaders = 5
+	for i := 0; i < numLoaders; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = Load() // may fail during concurrent write — acceptable
+		}()
+	}
+
+	// Concurrent save
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		store := make(Store, 2)
+		for j := 0; j < 2; j++ {
+			store[fmt.Sprintf("key-%d", j)] = fmt.Sprintf("val-%d", j)
+		}
+		_ = Save(store)
+	}()
+
+	wg.Wait()
+}
+
+// TestResolve_NilLikeEmptyProvider verifies Resolve with empty provider string.
+func TestResolve_NilLikeEmptyProvider(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	resolved, err := resolve("", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Provider != "" {
+		t.Fatalf("expected empty provider, got %q", resolved.Provider)
+	}
+	if resolved.Value != "" {
+		t.Fatalf("expected empty value, got %q", resolved.Value)
+	}
+	if resolved.Source != "" {
+		t.Fatalf("expected empty source, got %q", resolved.Source)
+	}
+}
+
+// TestLoad_GetAPIKeysPathErrorViaUnreadableConfigDir covers the Load error path
+// where the config directory's parent is not creatable.
+func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: root user bypasses permission checks")
+	}
+
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "ro")
+	if err := os.Mkdir(readOnlyDir, 0500); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "sub", "deep"))
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when GetConfigDir's MkdirAll fails in Load")
+	}
+}
+
+// TestResolve_EnvVarSetButProvidedNameNotInEnv covers the path where
+// an env var name is given but os.Getenv returns empty, falling through to Load.
+func TestResolve_EnvVarSetButProvidedNameNotInEnv(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", dir)
+
+	store := Store{"fallback-provider": "stored-value"}
+	if err := Save(store); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	// Intentionally don't set NONEXISTENT_ENV_VAR
+	resolved, err := resolve("fallback-provider", "NONEXISTENT_ENV_VAR")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Value != "stored-value" {
+		t.Fatalf("expected stored value, got %q", resolved.Value)
+	}
+	if resolved.Source != "stored" {
+		t.Fatalf("expected source 'stored', got %q", resolved.Source)
 	}
 }

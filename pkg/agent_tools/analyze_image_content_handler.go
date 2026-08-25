@@ -1,10 +1,11 @@
+//go:build !js
+
 package tools
 
 import (
 	"context"
 	"fmt"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
+	"time"
 )
 
 type analyzeImageContentHandler struct{}
@@ -14,12 +15,12 @@ func (h *analyzeImageContentHandler) Name() string { return "analyze_image_conte
 func (h *analyzeImageContentHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_image_content",
-		Description: "Analyze images/PDFs for text/code extraction or general insights. Supports local file paths and remote HTTP(S) URLs.",
-		Required: []string{"image_path"},
+		Description: "Analyze images/PDFs for text extraction (OCR), structured extraction, or general visual insights. Supports local paths and HTTP(S) URLs.",
+		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
-			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to an image or PDF to analyze (local path or HTTP(S) URL)"},
-			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt"},
-			{Name: "analysis_mode", Type: "string", Description: "Optional analysis mode override"},
+			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to image/PDF"},
+			{Name: "analysis_prompt", Type: "string", Description: "Custom vision prompt"},
+			{Name: "analysis_mode", Type: "string", Description: "Mode: 'ocr' for text extraction, 'general' for description"},
 		},
 	}
 }
@@ -30,24 +31,49 @@ func (h *analyzeImageContentHandler) Validate(args map[string]any) error {
 }
 
 func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": true,
-			})
-		}()
+	imagePath, err := extractString(args, "image_path")
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// TODO: Full implementation requires *Agent access for GetVisionProcessor()
-	// and vision model integration. This is a thin wrapper stub.
-	return ToolResult{
-		Output:  "analyze_image_content requires full *Agent refactoring for complete functionality. This handler cannot process images without access to the Agent's vision processor. Please use the legacy interface or complete the migration.",
-		IsError: true,
-	}, fmt.Errorf("analyze_image_content requires full *Agent refactoring")
+	// Gate 1 precheck — local filesystem paths only; http(s) URLs are
+	// fetched over the network and skip the path-tier classifier.
+	if !isHTTPURL(imagePath) {
+		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "analyze_image_content", imagePath)
+		if decision == "deny" {
+			return ToolResult{Output: fmt.Sprintf("read blocked: %s is not accessible from this session", imagePath), IsError: true},
+				fmt.Errorf("read blocked: %s is not accessible", imagePath)
+		}
+		if decision == "prompt" && env.FileAccessPrompter != nil {
+			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "analyze_image_content", imagePath, resolvedPath, "read"); approved {
+				ctx = ctx2
+			} else {
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", imagePath), IsError: true},
+					fmt.Errorf("read blocked: off-workspace access to %s was not approved", imagePath)
+			}
+		}
+	}
+
+	analysisPrompt := ""
+	if v, ok := args["analysis_prompt"].(string); ok {
+		analysisPrompt = v
+	}
+
+	analysisMode := ""
+	if v, ok := args["analysis_mode"].(string); ok {
+		analysisMode = v
+	}
+
+	result, err := AnalyzeImage(ctx, imagePath, analysisPrompt, analysisMode)
+	if err != nil {
+		return ToolResult{Output: result, IsError: true}, err
+	}
+
+	return ToolResult{Output: result}, nil
 }
+
+func (h *analyzeImageContentHandler) Aliases() []string      { return nil }
+func (h *analyzeImageContentHandler) Timeout() time.Duration { return 0 }
+func (h *analyzeImageContentHandler) MaxResultSize() int     { return 0 }
+func (h *analyzeImageContentHandler) SafeForParallel() bool  { return false }
+func (h *analyzeImageContentHandler) Interactive() bool      { return false }

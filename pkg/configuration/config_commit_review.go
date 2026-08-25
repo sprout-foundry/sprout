@@ -1,57 +1,17 @@
 package configuration
 
 import (
-	"fmt"
-	"strings"
 	"time"
 )
 
-// GetModelForProvider returns the configured model for a provider
+// GetModelForProvider returns the configured model for a provider.
+// Returns an empty string if no model is configured for the provider; callers
+// handle this by running model selection against the live provider API.
 func (c *Config) GetModelForProvider(provider string) string {
 	if model, exists := c.ProviderModels[provider]; exists && model != "" {
 		return model
 	}
-
-	// Return default from NewConfig if not set
-	defaults := NewConfig()
-	if defaultModel, exists := defaults.ProviderModels[provider]; exists {
-		return defaultModel
-	}
-
 	return ""
-}
-
-// NormalizeSelfReviewGateMode validates and normalizes self-review gate mode.
-func NormalizeSelfReviewGateMode(mode string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", SelfReviewGateModeOff:
-		return SelfReviewGateModeOff, true
-	case SelfReviewGateModeCode:
-		return SelfReviewGateModeCode, true
-	case SelfReviewGateModeAlways:
-		return SelfReviewGateModeAlways, true
-	default:
-		return "", false
-	}
-}
-
-// GetSelfReviewGateMode returns the effective self-review gate mode.
-func (c *Config) GetSelfReviewGateMode() string {
-	mode, ok := NormalizeSelfReviewGateMode(c.SelfReviewGateMode)
-	if !ok {
-		return SelfReviewGateModeOff
-	}
-	return mode
-}
-
-// SetSelfReviewGateMode sets the self-review gate mode.
-func (c *Config) SetSelfReviewGateMode(mode string) error {
-	normalized, ok := NormalizeSelfReviewGateMode(mode)
-	if !ok {
-		return fmt.Errorf("invalid self-review gate mode %q (allowed: off, code, always)", mode)
-	}
-	c.SelfReviewGateMode = normalized
-	return nil
 }
 
 // SetModelForProvider sets the model for a specific provider.
@@ -89,21 +49,11 @@ func (c *Config) GetCommitModel() string {
 	return c.GetModelForProvider(provider)
 }
 
-// GetCommitProvider returns the configured provider for commit message generation
-// If not explicitly set, falls back to the last used provider
+// GetCommitProvider returns the configured provider for commit message generation.
+// Returns an empty string if no explicit commit provider is set; callers
+// should surface this and offer interactive provider selection.
 func (c *Config) GetCommitProvider() string {
-	if c.CommitProvider != "" {
-		return c.CommitProvider
-	}
-	// Fall back to last used provider
-	if c.LastUsedProvider != "" {
-		return c.LastUsedProvider
-	}
-	// Fall back to first priority provider
-	if len(c.ProviderPriority) > 0 {
-		return c.ProviderPriority[0]
-	}
-	return "ollama-local" // Ultimate fallback
+	return c.CommitProvider
 }
 
 // SetCommitProvider sets the provider for commit message generation
@@ -116,21 +66,11 @@ func (c *Config) SetCommitModel(model string) {
 	c.CommitModel = model
 }
 
-// GetReviewProvider returns the configured provider for review commands
-// If not explicitly set, falls back to the last used provider
+// GetReviewProvider returns the configured provider for review commands.
+// Returns an empty string if no explicit review provider is set; callers
+// should surface this and offer interactive provider selection.
 func (c *Config) GetReviewProvider() string {
-	if c.ReviewProvider != "" {
-		return c.ReviewProvider
-	}
-	// Fall back to last used provider
-	if c.LastUsedProvider != "" {
-		return c.LastUsedProvider
-	}
-	// Fall back to first priority provider
-	if len(c.ProviderPriority) > 0 {
-		return c.ProviderPriority[0]
-	}
-	return "ollama-local" // Ultimate fallback
+	return c.ReviewProvider
 }
 
 // GetReviewModel returns the configured model for review commands
@@ -152,4 +92,32 @@ func (c *Config) SetReviewProvider(provider string) {
 // SetReviewModel sets the model for review commands
 func (c *Config) SetReviewModel(model string) {
 	c.ReviewModel = model
+}
+
+// GetCompletionProvider returns the configured provider for code completions.
+// Returns an empty string if no explicit completion provider is set; callers
+// should fall back to the main provider.
+func (c *Config) GetCompletionProvider() string {
+	return c.CompletionProvider
+}
+
+// GetCompletionModel returns the configured model for code completions.
+// If not explicitly set, falls back to the provider's default model.
+func (c *Config) GetCompletionModel() string {
+	if c.CompletionModel != "" {
+		return c.CompletionModel
+	}
+	// Use the provider for completions
+	provider := c.GetCompletionProvider()
+	return c.GetModelForProvider(provider)
+}
+
+// SetCompletionProvider sets the provider for code completions
+func (c *Config) SetCompletionProvider(provider string) {
+	c.CompletionProvider = provider
+}
+
+// SetCompletionModel sets the model for code completions
+func (c *Config) SetCompletionModel(model string) {
+	c.CompletionModel = model
 }

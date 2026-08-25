@@ -27,17 +27,17 @@ type RedactionResult struct {
 //  1. Environment value matching — literal secret values from env vars
 //  2. Pattern matching — regex-based detection of common credential formats
 type OutputRedactor struct {
-	envSecretValues  map[string]string // var name -> value (sensitive env vars only)
+	envSecretValues   map[string]string // var name -> value (sensitive env vars only)
 	envSecretSnippets map[string]string // value -> var name (reverse index for fast lookup)
-	envSecretLengths []secretLength    // sorted by value length descending (longest first)
+	envSecretLengths  []secretLength    // sorted by value length descending (longest first)
 }
 
 // secretLength pairs a secret value with its environment variable name,
 // used for ordering scans longest-first to avoid partial replacements.
 type secretLength struct {
-	value    string
-	varName  string
-	length   int
+	value   string
+	varName string
+	length  int
 }
 
 // NewOutputRedactor constructs an OutputRedactor by scanning os.Environ()
@@ -45,7 +45,7 @@ type secretLength struct {
 // credentials.IsSensitiveEnvName).
 func NewOutputRedactor() *OutputRedactor {
 	r := &OutputRedactor{
-		envSecretValues:  make(map[string]string),
+		envSecretValues:   make(map[string]string),
 		envSecretSnippets: make(map[string]string),
 	}
 

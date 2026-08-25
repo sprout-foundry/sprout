@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: dark;
+  --sprout-terminal-reserved-height: 42px;
+
+  /* Brand tokens (design system § "Color · brand") — surfaces that want
+   * the sprout *brand* color rather than an Atom-One accent should
+   * resolve through these. --brand-active-cyan is the canonical "active
+   * rail / underline" hue (sidebar nav, editor tab, etc.). */
+  --brand-teal: #14b8c8;
+  --brand-frost: #68e3ee;
+  --brand-active-cyan: #22d3ee;
+  --brand-navy: #10212d;
+
+  --bg-primary: #282c34;
+  --bg-secondary: #21252b;
+  --bg-tertiary: #2c313a;
+  --bg-elevated: #303742;
+  --bg-surface: #3a404b;
+
+  --border-subtle: rgba(171, 178, 191, 0.14);
+  --border-default: rgba(171, 178, 191, 0.22);
+  --border-strong: rgba(171, 178, 191, 0.34);
+  --border-focus: rgba(97, 175, 239, 0.75);
+
+  --text-primary: #abb2bf;
+  --text-secondary: #9aa3b2;
+  --text-tertiary: #7f8794;
+  --text-muted: #5c6370;
+  --text-accent: #e5c07b;
+
+  --accent-primary: #61afef;
+  --accent-secondary: #56b6c2;
+  --accent-success: #98c379;
+  --accent-warning: #e5c07b;
+  --accent-error: #e06c75;
+  --accent-cyan: #56b6c2;
+  --accent-primary-alpha: rgba(97, 175, 239, 0.2);
+  /* RGB triplet for callsites using rgba() with a CSS variable — used in
+   * Chat.css and ChatPanel.css for selection/focus halos. Must stay in
+   * sync with --accent-primary; without this every fallback resolves to
+   * indigo (99,102,241) and the brand color is wrong. */
+  --accent-primary-rgb: 97, 175, 239;
+  /* `--accent-foreground` aliases `--accent-primary` so components that
+   * want a "foreground accent" semantic (chat tab worktree badge,
+   * editor-tab icon on active) have a token to bind to. Without this
+   * the 3+ existing callsites resolved to hardcoded #58a6ff. */
+  --accent-foreground: var(--accent-primary);
+  /* Standard hover surface — used by chat tab bar, location switcher,
+   * update notification, context panel hover, etc. Without this alias
+   * every callsite fell back to hardcoded white-alpha and broke in the
+   * light theme. */
+  --bg-hover: var(--bg-elevated);
+  --accent-primary-bg-hover: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+
+  /* Semantic status-tinted backgrounds (status pills, inline alerts). Defined
+   * here so callsites can use `var(--bg-error)` etc. without falling back to
+   * hardcoded rgba — which previously broke theme switching. The 12% mix
+   * matches the design-system status-pill recipe. */
+  --bg-error: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  --bg-success: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  --bg-warning: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  --bg-info: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+
+  /* `--accent-info` is informational/neutral-but-emphasized — we map it to
+   * primary since that's our blue. */
+  --accent-info: var(--accent-primary);
+  /* `--accent-on-primary` is foreground text on a primary-color surface. */
+  --accent-on-primary: var(--accent-fg);
+  /* Code/inline-code background — slightly elevated above bg-secondary. */
+  --bg-code: var(--bg-elevated);
+  /* Input background — distinct from page bg so form fields read as fields. */
+  --bg-input: var(--bg-primary);
+
+  --color-success-bg: rgba(16, 185, 129, 0.1);
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-error-bg: rgba(244, 63, 94, 0.12);
+  --color-info-bg: rgba(14, 165, 233, 0.1);
+
+  /* Typography */
+  --font-sans: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  --editor-pane-inactive-overlay: rgba(0, 0, 0, 0.15);
+  --editor-pane-inactive-overlay-hover: rgba(0, 0, 0, 0.06);
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 28px;
+
+  /* Spacing */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-12: 24px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 2px 6px rgba(2, 6, 23, 0.32);
+  --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
+  --shadow-float: 0 20px 38px rgba(2, 6, 23, 0.52);
+
+  --gradient-subtle: none;
+  --gradient-elevated: none;
+
+  /* Editor-specific theme tokens */
+  --editor-pane-bg: #1e293b;
+  --editor-pane-bg-secondary: var(--inset-highlight-4);
+  --editor-pane-bg-secondary-hover: var(--inset-highlight-8);
+  --editor-pane-footer-bg: var(--inset-highlight-3);
+  --editor-pane-footer-fg: rgba(226, 232, 240, 0.65);
+  --editor-empty-fg: rgba(226, 232, 240, 0.5);
+  --editor-loading-bg: rgba(14, 165, 233, 0.18);
+  --editor-loading-fg: #d9f7ff;
+  --editor-error-bg: rgba(244, 63, 94, 0.16);
+  --editor-error-fg: #fecdd3;
+
+  /* Viewer checkerboard pattern colors */
+  --viewer-checker-light: #e0e0e0;
+  --viewer-checker-dark: #3a3a3a;
+
+  --toolbar-bg: #111b2f;
+  --toolbar-fg: #b8c7dc;
+  --toolbar-hover-bg: #1b2a45;
+  --toolbar-hover-fg: #ffffff;
+  --accent-bg: #06b6d4;
+  --accent-fg: #ffffff;
+  /* Dark text for legibility on warning/amber surfaces — white-on-yellow
+     fails contrast. Stays dark across themes since warning is amber-ish
+     in both. */
+  --accent-warning-fg: #1a1a2e;
+  --border-color: rgba(148, 163, 184, 0.25);
+  --input-bg: #0f1a2d;
+  --input-fg: #e2e8f0;
+  --accent-color: var(--accent-primary);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
+  --app-shell-bg: #282c34;
+  --app-main-bg: #282c34;
+  --sidebar-bg: #21252b;
+  --sidebar-header-bg: rgba(33, 37, 43, 0.95);
+  --sidebar-nav-btn-bg: #2c313a;
+  --sidebar-nav-btn-hover-bg: #353b45;
+  --sidebar-nav-btn-active-bg: #3a404b;
+  --sidebar-select-bg: #242932;
+  --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
+
+  /* Inset highlight tokens. Used in `box-shadow: inset 0 1px 0 ...` to
+   * add a subtle top-edge sheen to raised surfaces (buttons, tabs,
+   * cards). Dark-theme defaults are low-alpha white; light theme
+   * overrides to `transparent` so the highlight gracefully disappears
+   * instead of rendering as ugly white-on-white. */
+  --inset-highlight-3: rgba(255, 255, 255, 0.03);
+  --inset-highlight-4: rgba(255, 255, 255, 0.04);
+  --inset-highlight-5: rgba(255, 255, 255, 0.05);
+  --inset-highlight-6: rgba(255, 255, 255, 0.06);
+  --inset-highlight-8: rgba(255, 255, 255, 0.08);
+  --inset-highlight-10: rgba(255, 255, 255, 0.1);
+
+  /* Subagent nesting-depth colors. Surfaced via DEPTH_COLORS in
+   * SubagentTree.tsx so the tree's left-border, persona text, and
+   * SubagentActivityFeed accents can vary per nesting level. Token-
+   * driven so light theme can flip to a more legible progression. */
+  --subagent-depth-0: #818cf8;
+  --subagent-depth-1: #a78bfa;
+  --subagent-depth-2: #c084fc;
+  --subagent-depth-3: #e879f9;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Brand tokens — teal stays constant across themes per the design
+   * system. The "frost" leaf accent flips to sprout green in light mode
+   * so the logo reads on the lighter background. Active cyan stays
+   * cyan but pulls slightly darker for legibility. */
+  --brand-teal: #14b8c8;
+  --brand-frost: #1ba03d;
+  --brand-active-cyan: #0891b2;
+
+  --bg-primary: #f4f7fb;
+  --bg-secondary: #eef3f9;
+  --bg-tertiary: #e5edf7;
+  --bg-elevated: #dbe7f5;
+  --bg-surface: #cfdff1;
+
+  --border-subtle: rgba(71, 85, 105, 0.12);
+  --border-default: rgba(71, 85, 105, 0.22);
+  --border-strong: rgba(71, 85, 105, 0.34);
+  --border-focus: rgba(2, 132, 199, 0.58);
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #475569;
+  --text-muted: #64748b;
+  --text-accent: #b45309;
+
+  --accent-primary: #1d4ed8;
+  --accent-secondary: #0f766e;
+  --accent-success: #059669;
+  --accent-warning: #d97706;
+  --accent-error: #dc2626;
+  --accent-cyan: #0891b2;
+  --accent-primary-alpha: rgba(29, 78, 216, 0.16);
+  --accent-primary-rgb: 29, 78, 216;
+
+  --editor-pane-bg: #f8fbff;
+  --editor-pane-bg-secondary: rgba(0, 0, 0, 0.03);
+  --editor-pane-bg-secondary-hover: rgba(0, 0, 0, 0.06);
+  --editor-pane-footer-bg: rgba(15, 23, 42, 0.04);
+  --editor-pane-footer-fg: rgba(15, 23, 42, 0.65);
+  --editor-empty-fg: rgba(15, 23, 42, 0.52);
+  --editor-loading-bg: rgba(2, 132, 199, 0.15);
+  --editor-loading-fg: #0c4a6e;
+  --editor-error-bg: rgba(220, 38, 38, 0.12);
+  --editor-error-fg: #7f1d1d;
+
+  /* Viewer checkerboard pattern colors */
+  --viewer-checker-light: #e0e0e0;
+  --viewer-checker-dark: #c0c0c0;
+
+  --toolbar-bg: #e7eef8;
+  --toolbar-fg: #334155;
+  --toolbar-hover-bg: #d9e5f4;
+  --toolbar-hover-fg: #0f172a;
+  --accent-bg: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-warning-fg: #1a1a2e;
+  --border-color: rgba(71, 85, 105, 0.26);
+  --input-bg: #ffffff;
+  --accent-color: var(--accent-primary);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --input-fg: #0f172a;
+
+  --app-shell-bg: #f8fbff;
+  --app-main-bg: rgba(244, 247, 251, 0.96);
+  --sidebar-bg: #eaf1fa;
+  --sidebar-header-bg: rgba(226, 236, 248, 0.92);
+  --sidebar-nav-btn-bg: rgba(212, 225, 242, 0.92);
+  --sidebar-nav-btn-hover-bg: rgba(196, 214, 236, 0.94);
+  --sidebar-nav-btn-active-bg: #1d4ed8;
+  --sidebar-select-bg: rgba(255, 255, 255, 0.96);
+  --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
+
+  /* Inset highlights vanish on light theme — white-on-light reads as
+   * smudges. Tokens still exist; they just resolve to transparent so
+   * the box-shadow syntax in component CSS stays unchanged. */
+  --inset-highlight-3: transparent;
+  --inset-highlight-4: transparent;
+  --inset-highlight-5: transparent;
+  --inset-highlight-6: transparent;
+  --inset-highlight-8: transparent;
+  --inset-highlight-10: transparent;
+
+  /* Subagent depth colors — darker progression for legibility on light bg. */
+  --subagent-depth-0: #4f46e5;
+  --subagent-depth-1: #7c3aed;
+  --subagent-depth-2: #9333ea;
+  --subagent-depth-3: #c026d3;
+}

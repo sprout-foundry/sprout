@@ -3,7 +3,9 @@
 package webui
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -14,7 +16,7 @@ import (
 // remain user-extensible.
 func (ws *ReactWebServer) handleAPISettingsSubagentTypes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed (personas are catalog-fixed; PUT/DELETE removed)", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed (personas are catalog-fixed; PUT/DELETE removed)")
 		return
 	}
 	ws.handleAPISettingsSubagentTypesGet(w, r)
@@ -25,7 +27,11 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWrite
 	// when no config manager is available. See the matching comment on
 	// handleAPISettingsProvidersGet for the rationale.
 	cm := ws.resolveConfigManagerQuietly(r)
-	providers := ws.listProviders(ws.resolveClientID(r))
+	// Derive a context from the request so model discovery is cancelled
+	// if the client disconnects. Matches handleAPIProviders' timeout.
+	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer listCancel()
+	providers := ws.listProvidersCtx(listCtx, ws.resolveClientID(r))
 
 	if cm == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{

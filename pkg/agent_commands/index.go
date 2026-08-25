@@ -16,9 +16,26 @@ func (c *IndexCommand) Name() string {
 	return "index"
 }
 
+// SafeDuringSteer returns false - /index may interfere with agent embeddings
+func (c *IndexCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (c *IndexCommand) Description() string {
 	return "Toggle workspace indexing on/off for semantic search and duplicate detection"
+}
+
+// Usage returns the detailed help text shown by `/help index`.
+func (c *IndexCommand) Usage() string {
+	return strings.Join([]string{
+		"/index                Toggle workspace indexing on or off.",
+		"/index on|enable      Turn indexing on (builds in background).",
+		"/index off|disable    Turn indexing off (preserves existing data).",
+		"/index status         Show current indexing status and record count.",
+		"",
+		"Indexing powers semantic search (/search) and duplicate detection.",
+	}, "\n")
 }
 
 // Execute runs the index command
@@ -90,4 +107,25 @@ func (c *IndexCommand) showStatus(chatAgent *agent.Agent) error {
 		fmt.Println("       No index data.")
 	}
 	return nil
+}
+
+// Complete returns completions for the /index command.
+func (c *IndexCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	subcommands := []string{"disable", "enable", "off", "on", "status", "toggle"}
+	if len(args) == 0 {
+		return subcommands
+	}
+
+	prefix := args[len(args)-1]
+	if prefix == "" {
+		return subcommands
+	}
+
+	var matches []string
+	for _, sub := range subcommands {
+		if strings.HasPrefix(strings.ToLower(sub), strings.ToLower(prefix)) {
+			matches = append(matches, sub)
+		}
+	}
+	return matches
 }

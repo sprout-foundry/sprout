@@ -4,7 +4,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -247,109 +249,109 @@ func TestApplyHunks_RejectAll(t *testing.T) {
 func TestApplyHunks_PartialAccept(t *testing.T) {
 	// Space changes >6 lines apart so difflib produces separate hunks.
 	original := strings.Join([]string{
-		"package main",                        // 0
-		"",                                    // 1
-		"import \"fmt\"",                      // 2
-		"",                                    // 3
-		"const Version = \"1.0.0\"",           // 4  <-- change 1
-		"",                                    // 5
-		"type App struct {",                   // 6
-		"	Name string",                       // 7
-		"}",                                   // 8
-		"",                                    // 9
-		"func (a *App) Init() {",              // 10
-		"	fmt.Println(\"init\")",             // 11
-		"}",                                   // 12
-		"",                                    // 13
-		"func (a *App) Setup() {",             // 14
-		"	fmt.Println(\"setup\")",            // 15
-		"}",                                   // 16
-		"",                                    // 17
-		"func (a *App) Config() {",            // 18
-		"	fmt.Println(\"config\")",           // 19
-		"}",                                   // 20
-		"",                                    // 21
-		"func (a *App) Validate() {",          // 22
-		"	fmt.Println(\"validate\")",         // 23
-		"}",                                   // 24
-		"",                                    // 25
-		"func (a *App) New() *App {",          // 26  <-- change 2
-		"	return &App{}",                     // 27
-		"}",                                   // 28
-		"",                                    // 29
-		"func (a *App) Run() {",               // 30
-		"	fmt.Println(a.Name)",               // 31
-		"}",                                   // 32
-		"",                                    // 33
-		"func (a *App) Stop() {",              // 34
-		"	fmt.Println(\"stopped\")",          // 35
-		"}",                                   // 36
-		"",                                    // 37
-		"func (a *App) Cleanup() {",           // 38
-		"	fmt.Println(\"cleanup\")",          // 39
-		"}",                                   // 40
-		"",                                    // 41
-		"func (a *App) Shutdown() {",          // 42
-		"	fmt.Println(\"shutdown\")",         // 43
-		"}",                                   // 44
-		"",                                    // 45
-		"func main() {",                       // 46  <-- change 3
-		"	app := &App{}",                     // 47
-		"	app.Run()",                         // 48
-		"}",                                   // 49
+		"package main",               // 0
+		"",                           // 1
+		"import \"fmt\"",             // 2
+		"",                           // 3
+		"const Version = \"1.0.0\"",  // 4  <-- change 1
+		"",                           // 5
+		"type App struct {",          // 6
+		"	Name string",               // 7
+		"}",                          // 8
+		"",                           // 9
+		"func (a *App) Init() {",     // 10
+		"	fmt.Println(\"init\")",     // 11
+		"}",                          // 12
+		"",                           // 13
+		"func (a *App) Setup() {",    // 14
+		"	fmt.Println(\"setup\")",    // 15
+		"}",                          // 16
+		"",                           // 17
+		"func (a *App) Config() {",   // 18
+		"	fmt.Println(\"config\")",   // 19
+		"}",                          // 20
+		"",                           // 21
+		"func (a *App) Validate() {", // 22
+		"	fmt.Println(\"validate\")", // 23
+		"}",                          // 24
+		"",                           // 25
+		"func (a *App) New() *App {", // 26  <-- change 2
+		"	return &App{}",             // 27
+		"}",                          // 28
+		"",                           // 29
+		"func (a *App) Run() {",      // 30
+		"	fmt.Println(a.Name)",       // 31
+		"}",                          // 32
+		"",                           // 33
+		"func (a *App) Stop() {",     // 34
+		"	fmt.Println(\"stopped\")",  // 35
+		"}",                          // 36
+		"",                           // 37
+		"func (a *App) Cleanup() {",  // 38
+		"	fmt.Println(\"cleanup\")",  // 39
+		"}",                          // 40
+		"",                           // 41
+		"func (a *App) Shutdown() {", // 42
+		"	fmt.Println(\"shutdown\")", // 43
+		"}",                          // 44
+		"",                           // 45
+		"func main() {",              // 46  <-- change 3
+		"	app := &App{}",             // 47
+		"	app.Run()",                 // 48
+		"}",                          // 49
 	}, "\n")
 
 	proposed := strings.Join([]string{
-		"package main",                        // 0
-		"",                                    // 1
-		"import \"fmt\"",                      // 2
-		"",                                    // 3
-		"const Version = \"2.0.0\"",           // 4  <-- CHANGED
-		"",                                    // 5
-		"type App struct {",                   // 6
-		"	Name string",                       // 7
-		"}",                                   // 8
-		"",                                    // 9
-		"func (a *App) Init() {",              // 10
-		"	fmt.Println(\"init\")",             // 11
-		"}",                                   // 12
-		"",                                    // 13
-		"func (a *App) Setup() {",             // 14
-		"	fmt.Println(\"setup\")",            // 15
-		"}",                                   // 16
-		"",                                    // 17
-		"func (a *App) Config() {",            // 18
-		"	fmt.Println(\"config\")",           // 19
-		"}",                                   // 20
-		"",                                    // 21
-		"func (a *App) Validate() {",          // 22
-		"	fmt.Println(\"validate\")",         // 23
-		"}",                                   // 24
-		"",                                    // 25
-		"func (a *App) New() *App {",          // 26  <-- CHANGED
-		"	return &App{Name: \"default\"}",    // 27  <-- CHANGED
-		"}",                                   // 28
-		"",                                    // 29
-		"func (a *App) Run() {",               // 30
-		"	fmt.Println(a.Name)",               // 31
-		"}",                                   // 32
-		"",                                    // 33
-		"func (a *App) Stop() {",              // 34
-		"	fmt.Println(\"stopped\")",          // 35
-		"}",                                   // 36
-		"",                                    // 37
-		"func (a *App) Cleanup() {",           // 38
-		"	fmt.Println(\"cleanup\")",          // 39
-		"}",                                   // 40
-		"",                                    // 41
-		"func (a *App) Shutdown() {",          // 42
-		"	fmt.Println(\"shutdown\")",         // 43
-		"}",                                   // 44
-		"",                                    // 45
-		"func main() {",                       // 46  <-- CHANGED
-		"	app := &App{Name: \"main-app\"}",   // 47  <-- CHANGED
-		"	app.Run()",                         // 48
-		"}",                                   // 49
+		"package main",                     // 0
+		"",                                 // 1
+		"import \"fmt\"",                   // 2
+		"",                                 // 3
+		"const Version = \"2.0.0\"",        // 4  <-- CHANGED
+		"",                                 // 5
+		"type App struct {",                // 6
+		"	Name string",                     // 7
+		"}",                                // 8
+		"",                                 // 9
+		"func (a *App) Init() {",           // 10
+		"	fmt.Println(\"init\")",           // 11
+		"}",                                // 12
+		"",                                 // 13
+		"func (a *App) Setup() {",          // 14
+		"	fmt.Println(\"setup\")",          // 15
+		"}",                                // 16
+		"",                                 // 17
+		"func (a *App) Config() {",         // 18
+		"	fmt.Println(\"config\")",         // 19
+		"}",                                // 20
+		"",                                 // 21
+		"func (a *App) Validate() {",       // 22
+		"	fmt.Println(\"validate\")",       // 23
+		"}",                                // 24
+		"",                                 // 25
+		"func (a *App) New() *App {",       // 26  <-- CHANGED
+		"	return &App{Name: \"default\"}",  // 27  <-- CHANGED
+		"}",                                // 28
+		"",                                 // 29
+		"func (a *App) Run() {",            // 30
+		"	fmt.Println(a.Name)",             // 31
+		"}",                                // 32
+		"",                                 // 33
+		"func (a *App) Stop() {",           // 34
+		"	fmt.Println(\"stopped\")",        // 35
+		"}",                                // 36
+		"",                                 // 37
+		"func (a *App) Cleanup() {",        // 38
+		"	fmt.Println(\"cleanup\")",        // 39
+		"}",                                // 40
+		"",                                 // 41
+		"func (a *App) Shutdown() {",       // 42
+		"	fmt.Println(\"shutdown\")",       // 43
+		"}",                                // 44
+		"",                                 // 45
+		"func main() {",                    // 46  <-- CHANGED
+		"	app := &App{Name: \"main-app\"}", // 47  <-- CHANGED
+		"	app.Run()",                       // 48
+		"}",                                // 49
 	}, "\n")
 
 	hunks := SplitIntoHunks(original, proposed)
@@ -696,4 +698,351 @@ func getDiffLineContent(h Hunk, typ DiffLineType) []string {
 		}
 	}
 	return contents
+}
+
+// ---------------------------------------------------------------------------
+// TestEditApprovalBroker_* (SP-072-3)
+// ---------------------------------------------------------------------------
+
+// TestEditApprovalBroker_RegisterAndRespond verifies the basic
+// register → respond → cleanup lifecycle of the broker.
+func TestEditApprovalBroker_RegisterAndRespond(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	reqID := "edit_test_1"
+
+	ch := broker.register(reqID)
+	require.NotNil(t, ch)
+
+	decision := EditDecision{
+		Approved:      true,
+		AcceptedHunks: []string{"hunk-0"},
+	}
+
+	ok := broker.respond(reqID, decision)
+	assert.True(t, ok, "respond should succeed for a registered request")
+
+	received := <-ch
+	assert.Equal(t, decision.Approved, received.Approved)
+	assert.Equal(t, decision.AcceptedHunks, received.AcceptedHunks)
+
+	broker.cleanup(reqID)
+
+	// After cleanup, respond should fail.
+	ok = broker.respond(reqID, decision)
+	assert.False(t, ok, "respond should fail after cleanup")
+}
+
+// TestEditApprovalBroker_RespondUnknown verifies that responding to a
+// non-existent request returns false.
+func TestEditApprovalBroker_RespondUnknown(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	ok := broker.respond("nonexistent", EditDecision{})
+	assert.False(t, ok, "respond to unknown request should return false")
+}
+
+// TestEditApprovalBroker_DoubleRespond verifies that a second respond
+// to the same request fails (the channel is buffered with capacity 1).
+func TestEditApprovalBroker_DoubleRespond(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	reqID := "edit_test_double"
+
+	ch := broker.register(reqID)
+	defer broker.cleanup(reqID)
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0"}}
+
+	ok := broker.respond(reqID, decision)
+	assert.True(t, ok, "first respond should succeed")
+
+	ok = broker.respond(reqID, decision)
+	assert.False(t, ok, "second respond should fail (channel full)")
+
+	// Drain the channel to verify the first decision arrived.
+	received := <-ch
+	assert.True(t, received.Approved)
+}
+
+// TestRespondToEditApproval_UnblocksRequest verifies that calling
+// RespondToEditApproval on an agent unblocks a goroutine that registered
+// a pending request via the broker.
+func TestRespondToEditApproval_UnblocksRequest(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	reqID := "edit_unblock_test"
+	ch := editApprovalBroker.register(reqID)
+	defer editApprovalBroker.cleanup(reqID)
+
+	done := make(chan EditDecision, 1)
+	go func() {
+		decision := <-ch
+		done <- decision
+	}()
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0", "hunk-1"}}
+	ok := agent.RespondToEditApproval(reqID, decision)
+	assert.True(t, ok, "RespondToEditApproval should deliver to the broker")
+
+	select {
+	case received := <-done:
+		assert.True(t, received.Approved, "should receive approved decision")
+		assert.Equal(t, []string{"hunk-0", "hunk-1"}, received.AcceptedHunks)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for decision to be received")
+	}
+}
+
+// TestDeliverEditDecision_UnblocksRequest verifies that DeliverEditDecision
+// (the package-level, agent-free entry point used by the WASM JS bridge)
+// delivers a decision to a pending broker request.
+func TestDeliverEditDecision_UnblocksRequest(t *testing.T) {
+	reqID := "edit_deliver_test"
+	// This test is same-package and registers directly on the broker because
+	// the production registration path (requestWebUIEditApproval) is covered
+	// by existing RequestEditApproval tests.
+	ch := editApprovalBroker.register(reqID)
+	defer editApprovalBroker.cleanup(reqID)
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0"}}
+	ok := DeliverEditDecision(reqID, decision)
+	assert.True(t, ok, "DeliverEditDecision should deliver to a registered request")
+
+	select {
+	case received := <-ch:
+		assert.True(t, received.Approved)
+		assert.Equal(t, []string{"hunk-0"}, received.AcceptedHunks)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for decision to be received")
+	}
+}
+
+// TestDeliverEditDecision_UnknownRequest verifies that delivering a
+// decision for an unknown or already-cleaned-up request returns false.
+func TestDeliverEditDecision_UnknownRequest(t *testing.T) {
+	ok := DeliverEditDecision("edit_deliver_unknown", EditDecision{Approved: true})
+	assert.False(t, ok, "DeliverEditDecision should return false for unknown request")
+}
+
+// TestRequestEditApproval_TimeoutFallback verifies that when the
+// WebUI path times out (no response), the request falls through
+// gracefully. We test this by setting a very short timeout and
+// calling RequestEditApproval on a non-interactive agent (which
+// auto-approves without blocking on the WebUI path).
+func TestRequestEditApproval_NonInteractiveAutoApproves(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// newTestAgent sets SkipPrompt=true, so isNonInteractive() returns true.
+	original := "line1\nline2\nline3"
+	proposed := "line1\nMODIFIED\nline3"
+
+	proposal := EditProposal{
+		Path:     "test.txt",
+		Original: original,
+		Proposed: proposed,
+	}
+
+	applied, summary, err := agent.RequestEditApproval(context.Background(), proposal)
+	require.NoError(t, err)
+	assert.Equal(t, proposed, applied, "non-interactive should auto-approve and apply all hunks")
+	assert.Contains(t, summary, "applied")
+}
+
+// TestRequestEditApproval_RejectAllDecision verifies that a reject-all
+// decision returns the original content unchanged.
+func TestRequestEditApproval_RejectAllDecision(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	original := "line1\nline2\nline3"
+	proposed := "line1\nMODIFIED\nline3"
+	hunks := SplitIntoHunks(original, proposed)
+	require.NotEmpty(t, hunks)
+
+	applied, summary, err := agent.applyEditDecision(
+		EditProposal{Path: "test.txt", Original: original, Proposed: proposed, Hunks: hunks},
+		EditDecision{Approved: false, AcceptedHunks: nil},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, original, applied, "reject-all should return original content")
+	assert.Contains(t, summary, "rejected")
+}
+
+// TestRequestEditApproval_PartialDecision verifies that accepting
+// only some hunks produces content with only those changes.
+func TestRequestEditApproval_PartialDecision(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	original := strings.Join([]string{
+		"line-01", "line-02", "line-03", "line-04", "line-05",
+		"line-06", "line-07", "line-08", "line-09", "line-10",
+		"line-11", "line-12", "line-13", "line-14", "line-15",
+	}, "\n")
+	proposed := strings.Join([]string{
+		"line-01", "CHANGED-A", "line-03", "line-04", "line-05",
+		"line-06", "line-07", "line-08", "line-09", "line-10",
+		"line-11", "line-12", "line-13", "line-14", "CHANGED-B",
+	}, "\n")
+
+	hunks := SplitIntoHunks(original, proposed)
+	require.Len(t, hunks, 2, "should produce 2 hunks")
+
+	// Accept only hunk-0.
+	applied, summary, err := agent.applyEditDecision(
+		EditProposal{Path: "test.txt", Original: original, Proposed: proposed, Hunks: hunks},
+		EditDecision{Approved: true, AcceptedHunks: []string{hunks[0].ID}},
+	)
+	require.NoError(t, err)
+	assert.Contains(t, applied, "CHANGED-A", "accepted hunk change should be applied")
+	assert.NotContains(t, applied, "CHANGED-B", "rejected hunk change should NOT be applied")
+	assert.Contains(t, summary, "applied 1/2 hunks")
+}
+
+// TestHunkToPayload verifies the event payload serialization.
+func TestHunkToPayload(t *testing.T) {
+	hunk := Hunk{
+		ID:       "hunk-0",
+		OldStart: 5,
+		OldLines: 3,
+		NewStart: 5,
+		NewLines: 4,
+		Lines: []DiffLine{
+			{Type: DiffLineContext, Content: "context line"},
+			{Type: DiffLineAdd, Content: "added line"},
+			{Type: DiffLineRemove, Content: "removed line"},
+		},
+	}
+
+	payload := hunkToPayload(hunk)
+
+	assert.Equal(t, "hunk-0", payload["id"])
+	assert.Equal(t, 5, payload["old_start"])
+	assert.Equal(t, 3, payload["old_lines"])
+
+	lines, ok := payload["lines"].([]map[string]interface{})
+	require.True(t, ok, "lines should be a []map[string]interface{}")
+	require.Len(t, lines, 3)
+
+	assert.Equal(t, "context", lines[0]["type"])
+	assert.Equal(t, "add", lines[1]["type"])
+	assert.Equal(t, "remove", lines[2]["type"])
+
+	assert.Equal(t, 1, payload["add_count"])
+	assert.Equal(t, 1, payload["del_count"])
+}
+
+// TestCountLinesByType verifies the line counting helper.
+func TestCountLinesByType(t *testing.T) {
+	lines := []DiffLine{
+		{Type: DiffLineContext, Content: "a"},
+		{Type: DiffLineAdd, Content: "b"},
+		{Type: DiffLineAdd, Content: "c"},
+		{Type: DiffLineRemove, Content: "d"},
+	}
+
+	assert.Equal(t, 2, countLinesByType(lines, DiffLineAdd))
+	assert.Equal(t, 1, countLinesByType(lines, DiffLineRemove))
+	assert.Equal(t, 1, countLinesByType(lines, DiffLineContext))
+}
+
+// ---------------------------------------------------------------------------
+// TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves
+// ---------------------------------------------------------------------------
+
+// TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves verifies that when the
+// WebUI path is active (HasActiveWebUIClients returns true, event bus is wired)
+// but no decision arrives before the timeout, the agent auto-approves all hunks
+// (because there is no TTY for a CLI fallback) and returns without hanging.
+func TestRequestEditApproval_WebUITimeout_NoTTY_AutoApproves(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Wire the event bus exactly as the WASM agent does (see cmd/wasm/agent_funcs.go).
+	bus := events.NewEventBus()
+	agent.SetEventBus(bus)
+	agent.SetHasActiveWebUIClients(func() bool { return true })
+
+	// Pin the timeout short so the test doesn't take 30 minutes.
+	// editApprovalTimeout is a package-level var; SetEditApprovalTimeout doesn't
+	// return the old value, so save/restore manually.
+	oldTimeout := editApprovalTimeout
+	SetEditApprovalTimeout(50 * time.Millisecond)
+	t.Cleanup(func() { editApprovalTimeout = oldTimeout })
+
+	// Subscribe BEFORE calling so we catch the published event.
+	ch := bus.Subscribe("edit-approval-test")
+
+	// Run in a goroutine with a deadline to prove the call doesn't hang.
+	done := make(chan struct{})
+	var applied, summary string
+	var err error
+	go func() {
+		applied, summary, err = agent.RequestEditApproval(context.Background(), EditProposal{
+			Path:     "wasm_test.go",
+			Original: "a\nb\nc",
+			Proposed: "a\nB\nc",
+		})
+		close(done)
+	}()
+
+	// Wait for completion with a deadline to prove the call doesn't hang.
+	select {
+	case <-done:
+		// Good — returned without hanging.
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: RequestEditApproval did not return within 5s")
+	}
+
+	require.NoError(t, err, "should not error on timeout auto-approve")
+	assert.Equal(t, "a\nB\nc", applied, "should auto-approve all hunks and return proposed content")
+	assert.Contains(t, summary, "applied", "summary should indicate hunks were applied")
+
+	// Verify exactly one edit_approval_request event was published to the bus
+	// (proves the WebUI path was taken and the event payload has the right keys).
+	// Note: requestWebUIEditApproval also publishes an input_required event,
+	// so we filter by type.
+	eventCount := 0
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != events.EventTypeEditApprovalRequest {
+				continue
+			}
+			eventCount++
+			if eventCount == 1 {
+				assert.Equal(t, events.EventTypeEditApprovalRequest, ev.Type, "should publish edit_approval_request event")
+				data, ok := ev.Data.(map[string]interface{})
+				require.True(t, ok, "event data should be a map")
+
+				// Assert the four required payload keys are present (pins the Go-side
+				// wire field-name contract the WebUI handler reads).
+				assert.Contains(t, data, "request_id", "payload must contain request_id")
+				assert.Contains(t, data, "file_path", "payload must contain file_path")
+				assert.Contains(t, data, "unified_diff", "payload must contain unified_diff")
+				assert.Contains(t, data, "hunks", "payload must contain hunks")
+
+				// request_id must be a non-empty string.
+				reqID, ok := data["request_id"].(string)
+				require.True(t, ok, "request_id should be a string")
+				assert.NotEmpty(t, reqID, "request_id should not be empty")
+
+				assert.Equal(t, "wasm_test.go", data["file_path"], "event should carry the file path")
+			}
+		case <-time.After(500 * time.Millisecond):
+			// No more events — drain complete.
+			goto done
+		}
+	}
+done:
+	assert.Equal(t, 1, eventCount, "should have received exactly one edit_approval_request event")
+
+	// Unsubscribe the bus subscription.
+	bus.Unsubscribe("edit-approval-test")
 }

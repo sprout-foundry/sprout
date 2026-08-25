@@ -22,11 +22,11 @@ var (
 
 // PricingRow is a single model's per-million-token rates.
 type PricingRow struct {
-	Provider       string
-	Model          string
-	InputUsdPerM   float64
-	OutputUsdPerM  float64
-	HasPricing     bool
+	Provider      string
+	Model         string
+	InputUsdPerM  float64
+	OutputUsdPerM float64
+	HasPricing    bool
 }
 
 // lookupModelPricing returns the input/output USD-per-million-token rates for

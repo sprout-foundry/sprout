@@ -20,8 +20,9 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 | `reviewer` | Code review, security review, best-practices | Yes | Alias: `code_reviewer` |
 | `researcher` | Codebase analysis combined with external research | Yes | |
 | `web_scraper` | Web extraction and structured content collection | Yes | Aliases: `web-scraper`, `scraper` |
+| `computer_user` | Desktop automation with screenshots, mouse, and keyboard | No | Carries `computer_use` capability |
 
-Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`.
+Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`.
 
 > Strategic project planning lives in the `project-planning` **skill** (`pkg/skills/library/project-planning/SKILL.md`), not a persona. Activate it via `activate_skill project-planning` when starting or aligning a project.
 

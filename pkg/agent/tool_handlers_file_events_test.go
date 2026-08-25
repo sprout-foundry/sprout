@@ -169,7 +169,7 @@ func TestWriteStructuredFileYAMLEmitsFileChangedEvent(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "config.yaml")
 
 	data := map[string]interface{}{
-		"app": "sprout",
+		"app":  "sprout",
 		"port": 8080,
 	}
 
@@ -251,8 +251,8 @@ func TestPatchStructuredFileAsWriteEmitsFileChangedEvent(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "data.json")
 
 	data := map[string]interface{}{
-		"key":  "value",
-		"num":  42,
+		"key": "value",
+		"num": 42,
 	}
 
 	result, err := handlePatchStructuredFile(context.Background(), agent, map[string]interface{}{

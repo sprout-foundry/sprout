@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -63,6 +65,24 @@ func TestResolveBinaryPath(t *testing.T) {
 		path, err := ResolveBinaryPath("")
 		require.Error(t, err)
 		assert.Empty(t, path)
+	})
+
+	// npm global installs and version-manager shims are symlinks whose target is
+	// a package-internal script. Following the link hands exec that script
+	// instead of the launcher the user actually has on PATH.
+	t.Run("returns the PATH entry, not the symlink target", func(t *testing.T) {
+		dir := t.TempDir()
+		target := filepath.Join(dir, "real-server-cli.mjs")
+		require.NoError(t, os.WriteFile(target, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+
+		shim := filepath.Join(dir, "fake-language-server")
+		require.NoError(t, os.Symlink(target, shim))
+
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		path, err := ResolveBinaryPath("fake-language-server")
+		require.NoError(t, err)
+		assert.Equal(t, shim, path, "should hand back the shim, not its target")
 	})
 }
 
@@ -454,10 +474,10 @@ func TestDefaultLanguageServersFindLanguageServer(t *testing.T) {
 		// Go
 		"go": "go",
 		// TypeScript/JavaScript
-		"typescript":      "typescript",
-		"typescript-jsx":  "typescript",
-		"javascript":      "typescript",
-		"javascript-jsx":  "typescript",
+		"typescript":     "typescript",
+		"typescript-jsx": "typescript",
+		"javascript":     "typescript",
+		"javascript-jsx": "typescript",
 		// Python
 		"python": "python",
 		// Rust
@@ -502,31 +522,25 @@ func TestResolveBinaryPathSymlink(t *testing.T) {
 		t.Skip("Skipping symlink resolution test on Windows")
 	}
 
-	// Test symlink resolution with sh which is often a symlink
+	// `sh` is a symlink to dash on most Linux distros. The PATH entry is what
+	// gets handed to exec, so that is what must come back — resolving through
+	// the link would break shim-based installs (see ResolveBinaryPath).
 	path, err := ResolveBinaryPath("sh")
 	require.NoError(t, err)
 
-	// Verify we got an absolute path
 	assert.True(t, filepath.IsAbs(path), "path should be absolute")
 
-	// Try to read the symlink info
-	realPath, err := filepath.EvalSymlinks(path)
+	lookPath, err := exec.LookPath("sh")
 	require.NoError(t, err)
-
-	// The returned path should be the resolved path (no symlinks)
-	// This is what ResolveBinaryPath is supposed to do
-	assert.Equal(t, path, realPath, "path should already be resolved")
+	expected, err := filepath.Abs(lookPath)
+	require.NoError(t, err)
+	assert.Equal(t, expected, path, "should match the PATH entry verbatim")
 }
 
 // --- Coverage gap tests for discovery.go ---
 
-// TestResolveBinaryPathEvalSymlinkFallback tests the EvalSymlinks failure path.
-// This is difficult to trigger directly since filepath.EvalSymlinks rarely fails
-// on valid paths. We can't easily force this condition without modifying production code.
-// The path is: ResolveBinaryPath calls EvalSymlinks, if it fails, returns original path.
-func TestResolveBinaryPathEvalSymlinkFallbackImpossible(t *testing.T) {
-	t.Run("normal binary still returns resolved path", func(t *testing.T) {
-		// Verify normal operation - EvalSymlinks succeeds
+func TestResolveBinaryPathIsAbsolute(t *testing.T) {
+	t.Run("normal binary returns an absolute path", func(t *testing.T) {
 		path, err := ResolveBinaryPath("cat")
 		require.NoError(t, err)
 		assert.True(t, filepath.IsAbs(path))

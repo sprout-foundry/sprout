@@ -128,9 +128,9 @@ func TestIsUnderPrefix(t *testing.T) {
 		{"/a/b", "/a/b", true},
 		{"/a/b/c", "/a", true},
 		{"/a/b", "/a/b/c", false},
-		{"/ab", "/a", false},  // component boundary
-		{"/a", "/", true},     // everything is under root
-		{"/", "/", true},      // root itself
+		{"/ab", "/a", false}, // component boundary
+		{"/a", "/", true},    // everything is under root
+		{"/", "/", true},     // root itself
 		{"", "/a", false},
 		{"/a", "", false},
 	}

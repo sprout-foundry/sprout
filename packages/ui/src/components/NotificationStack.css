@@ -129,6 +129,37 @@
   box-shadow: 0 0 0 2px var(--border-default);
 }
 
+/* Action Button — inline CTA shown when a notification carries an
+ * action. Sits inside the content block, beneath the message, and
+ * inherits the type's accent color via the .notification-item wrapper. */
+.notification-action {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--accent-fg);
+  background: var(--accent-primary);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background 0.08s ease,
+    border-color 0.08s ease,
+    box-shadow 0.08s ease;
+}
+
+.notification-action:hover {
+  filter: brightness(1.08);
+}
+
+.notification-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 /* Animations */
 @keyframes notification-slide-in {
   from {

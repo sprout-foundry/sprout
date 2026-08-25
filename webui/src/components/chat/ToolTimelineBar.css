@@ -1,26 +1,22 @@
-/* SP-053-2a: Live tool timeline rendered above the chat input. Sits in
-   the chat-footer flow, just above the SubagentActivityFeed when both
-   are present. Compact, single-row layout so multiple tools fit in the
-   horizontal space without overflowing into the chat area. */
+/* Tool timeline: single-row horizontal strip above the chat input.
+   Always reserves fixed height so the input never shifts. */
 
 .tool-timeline-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   gap: 6px;
-  padding: 4px 8px;
+  height: 28px;
+  padding: 3px 0;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-secondary, #8b949e);
+  line-height: 1;
+  scrollbar-width: none;
 }
 
-/* During the hide-grace window the bar is mounted but has no children.
-   Collapse it to zero footprint so the user doesn't see an empty strip
-   between consecutive tool batches — the goal of the grace window is
-   to keep React state stable, not to leave a visible placeholder. */
-.tool-timeline-bar:empty {
-  padding: 0;
-  min-height: 0;
+.tool-timeline-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .tool-timeline-card {
@@ -28,24 +24,32 @@
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  border-radius: 4px;
-  background: var(--bg-elevated, var(--inset-highlight-4));
-  border: 1px solid var(--border-subtle, var(--inset-highlight-8));
-  max-width: 100%;
-  min-width: 0;
-  transition: opacity 0.4s ease, background 0.15s ease;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition:
+    opacity 0.6s ease,
+    transform 0.3s ease,
+    border-color 0.15s ease;
+}
+
+.tool-timeline-card--started,
+.tool-timeline-card--running {
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-elevated));
 }
 
 .tool-timeline-card--completed {
-  /* Completed cards fade gradually over their visible window via opacity
-     so they don't pop out abruptly. The ToolTimelineBar component
-     removes them from the DOM after FADE_MS. */
-  opacity: 0.7;
+  opacity: 0.5;
+  border-color: color-mix(in srgb, var(--accent-success) 30%, var(--border-subtle));
 }
 
 .tool-timeline-card--error {
-  background: color-mix(in srgb, var(--accent-error, #e06c75) 12%, var(--bg-elevated, transparent));
-  border-color: color-mix(in srgb, var(--accent-error, #e06c75) 35%, var(--border-subtle, transparent));
+  background: color-mix(in srgb, var(--accent-error) 12%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--accent-error) 35%, var(--border-subtle));
+  opacity: 0.7;
 }
 
 .tool-timeline-status {
@@ -76,9 +80,6 @@
   color: var(--accent-error, #e06c75);
 }
 
-/* Persona chip inside the timeline card — same design-system "status pill"
-   treatment as the status-bar and chat-bubble badges so all three persona
-   surfaces read coherent (color-mix bg derived from currentColor). */
 .tool-timeline-persona {
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -99,12 +100,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-  max-width: 280px;
+  max-width: 200px;
 }
 
 .tool-timeline-duration {
-  color: var(--text-tertiary, #6e7681);
+  color: var(--text-muted);
   margin-left: 2px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;

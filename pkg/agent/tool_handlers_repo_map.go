@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -15,6 +16,23 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	rootDir := "."
 	if v, ok := args["directory"].(string); ok && v != "" {
 		rootDir = v
+	}
+
+	depth := 3 // default: full symbols
+	if v, ok := args["depth"]; ok {
+		switch d := v.(type) {
+		case int:
+			depth = d
+		case int64:
+			depth = int(d)
+		case float64:
+			depth = int(d)
+		}
+	}
+
+	query := ""
+	if v, ok := args["query"].(string); ok {
+		query = v
 	}
 
 	// Resolve relative paths against the agent's workspace root.
@@ -27,7 +45,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	// Resolve to absolute path.
 	absRoot, err := filepath.Abs(rootDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve directory: %w", err)
+		return "", agenterrors.NewTool("repo_map", "resolve directory", err)
 	}
 
 	// Verify that the resolved directory is within the workspace root.
@@ -35,23 +53,23 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	if workspaceRoot == "" {
 		workspaceRoot, err = os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("get working directory: %w", err)
+			return "", agenterrors.NewTool("repo_map", "get working directory", err)
 		}
 	}
 	absWorkspace, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", agenterrors.NewTool("repo_map", "resolve workspace root", err)
 	}
 	// Allow exact match or a proper subdirectory (with separator).
 	if absRoot != absWorkspace && !strings.HasPrefix(absRoot, absWorkspace+string(filepath.Separator)) {
-		return "", fmt.Errorf("directory %q is outside workspace root", rootDir)
+		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside workspace root", rootDir), nil)
 	}
 
 	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)
 
-	result, err := tools.GenerateRepoMap(ctx, rootDir)
+	result, err := tools.GenerateRepoMap(ctx, rootDir, depth, query)
 	if err != nil {
-		return "", fmt.Errorf("generate repo map: %w", err)
+		return "", agenterrors.NewTool("repo_map", "generate repo map", err)
 	}
 
 	return result, nil

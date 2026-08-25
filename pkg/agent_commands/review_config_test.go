@@ -50,7 +50,8 @@ func TestReviewCommandUsesConfiguredProvider(t *testing.T) {
 	}
 }
 
-// TestReviewCommandFallsBackToLastUsedProvider tests fallback behavior
+// TestReviewCommandFallsBackToLastUsedProvider tests that GetReviewProvider
+// returns empty when only LastUsedProvider is set (no implicit fallback).
 func TestReviewCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -76,8 +77,8 @@ func TestReviewCommandFallsBackToLastUsedProvider(t *testing.T) {
 	}
 
 	config := cm.GetConfig()
-	if provider := config.GetReviewProvider(); provider != "zai" {
-		t.Errorf("GetReviewProvider() should fall back to LastUsedProvider, got %q", provider)
+	if provider := config.GetReviewProvider(); provider != "" {
+		t.Errorf("GetReviewProvider() should return empty when ReviewProvider is not set, got %q", provider)
 	}
 }
 
@@ -201,11 +202,11 @@ func TestCommitAndReviewConfigsIndependent(t *testing.T) {
 // TestReviewConfigWithMultipleProviders tests review config with different providers
 func TestReviewConfigWithMultipleProviders(t *testing.T) {
 	tests := []struct {
-		name          string
-		provider      string
-		model         string
-		lastUsed      string
-		expected      string
+		name     string
+		provider string
+		model    string
+		lastUsed string
+		expected string
 	}{
 		{
 			name:     "openai",

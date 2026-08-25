@@ -17,35 +17,14 @@ type SecurityManager interface {
 	GetUnsafeMode() bool
 	SetUnsafeShellMode(unsafe bool)
 	GetUnsafeShellMode() bool
-
-	// IsSecurityBypassApproved reports whether the user has approved
-	// any external filesystem access this session. After the SP-058
-	// follow-up this returns true iff at least one folder is on the
-	// session allowlist — used as a coarse "user has consented to
-	// external access" signal by subagent setup. Per-path decisions
-	// should call IsFolderSessionAllowed instead.
-	//
-	// Deprecated: use IsFolderSessionAllowed(absPath) for per-path
-	// checks. SetSecurityBypassApproved is gone — call
-	// AddSessionAllowedFolder with the specific folder instead.
 	IsSecurityBypassApproved() bool
-
-	// IsFolderSessionAllowed reports whether absPath sits under any
-	// folder the user has allowlisted for this session. Match is
-	// prefix-based (path-component aware) and case-sensitive on Unix.
 	IsFolderSessionAllowed(absPath string) bool
-
-	// AddSessionAllowedFolder records that the user picked "Allow
-	// this folder for the rest of the session" on the approval
-	// dialog. The folder is stored after Clean()-ing and dedup'd
-	// against the existing list.
+	IsFolderSessionWriteAllowed(absPath string) bool
 	AddSessionAllowedFolder(folder string)
-
-	// SnapshotSessionAllowedFolders returns a copy of the current
-	// allowlist. Used to propagate approvals into subagents (each
-	// subagent gets its own allowlist seeded from the parent's).
+	SetSessionAllowedFolderMode(folder, mode string)
 	SnapshotSessionAllowedFolders() []string
-
+	SnapshotSessionAllowedFolderModes() map[string]string
+	RemoveSessionAllowedFolder(folder string) error
 	IsConcernIgnored(filePath, concern string) bool
 	SetConcernIgnored(filePath, concern string)
 	GetOutputRedactor() *security.OutputRedactor
@@ -55,25 +34,20 @@ type SecurityManager interface {
 	HasActiveWebUIClients() bool
 }
 
-// AgentSecurityManager implements SecurityManager, holding all security-related state
-// previously managed directly by the Agent struct.
+// AgentSecurityManager implements SecurityManager, holding all security-related state.
 type AgentSecurityManager struct {
 	securityApprovalMgr     *security.ApprovalManager
 	askUserMgr              *agenttools.AskUserManager
 	unsafeMode              bool
 	unsafeShellMode         bool
 	securityBypassMu        sync.RWMutex
-	// sessionAllowedFolders holds absolute path prefixes the user
-	// approved via "Allow this folder for the rest of the session"
-	// on the filesystem approval dialog. Replaces the old global
-	// securityBypassApproved boolean — that flag was a real safety
-	// regression because approving one external path silently
-	// allowed every external path for the session.
 	sessionAllowedFolders   []string
+	sessionPathModes        map[string]string
 	ignoredSecurityConcerns map[string]map[string]bool
 	ignoredSecurityMu       sync.RWMutex
 	outputRedactor          *security.OutputRedactor
 	elevationGate           *security.ElevationGate
+	webuiClientsMu          sync.RWMutex
 	hasActiveWebUIClients   func() bool
 }
 
@@ -84,6 +58,7 @@ func NewAgentSecurityManager() *AgentSecurityManager {
 		outputRedactor:          security.NewOutputRedactor(),
 		ignoredSecurityConcerns: make(map[string]map[string]bool),
 		elevationGate:           security.NewElevationGate(nil),
+		sessionPathModes:        make(map[string]string),
 	}
 }
 
@@ -138,7 +113,6 @@ func (m *AgentSecurityManager) GetUnsafeShellMode() bool {
 func (m *AgentSecurityManager) IsSecurityBypassApproved() bool {
 	m.securityBypassMu.RLock()
 	defer m.securityBypassMu.RUnlock()
-	// Coarse signal: any folder approved this session counts.
 	return len(m.sessionAllowedFolders) > 0
 }
 
@@ -183,6 +157,89 @@ func (m *AgentSecurityManager) SnapshotSessionAllowedFolders() []string {
 	return out
 }
 
+// IsFolderSessionWriteAllowed reports whether absPath sits under an
+// allowlisted folder whose mode permits writes.
+func (m *AgentSecurityManager) IsFolderSessionWriteAllowed(absPath string) bool {
+	if absPath == "" {
+		return false
+	}
+	target := normalizePath(absPath)
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
+	for _, f := range m.sessionAllowedFolders {
+		if !isUnderPrefix(target, f) {
+			continue
+		}
+		mode := m.sessionPathModes[f]
+		if mode == "" || mode == "read_write" {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+// SetSessionAllowedFolderMode records the declared mode for an
+// already-allowlisted folder. Idempotent.
+func (m *AgentSecurityManager) SetSessionAllowedFolderMode(folder, mode string) {
+	normalized := normalizePath(folder)
+	if normalized == "" {
+		return
+	}
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	found := false
+	for _, f := range m.sessionAllowedFolders {
+		if f == normalized {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+	if mode == "" {
+		delete(m.sessionPathModes, normalized)
+		return
+	}
+	m.sessionPathModes[normalized] = mode
+}
+
+// SnapshotSessionAllowedFolderModes returns a copy of the folder-mode map.
+func (m *AgentSecurityManager) SnapshotSessionAllowedFolderModes() map[string]string {
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
+	out := make(map[string]string, len(m.sessionPathModes))
+	for k, v := range m.sessionPathModes {
+		out[k] = v
+	}
+	return out
+}
+
+// RemoveSessionAllowedFolder removes folder from the session allowlist.
+// Returns nil (not an error) when the folder was not present — this makes
+// the restore path idempotent regardless of whether the step actually
+// added anything. Also removes any mode entry for the folder from
+// sessionPathModes so a subsequent SetSessionAllowedFolderMode call
+// can't re-establish a mode for a folder that's no longer on the allowlist.
+func (m *AgentSecurityManager) RemoveSessionAllowedFolder(folder string) error {
+	if folder == "" {
+		return nil
+	}
+	normalized := normalizePath(folder)
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	newList := make([]string, 0, len(m.sessionAllowedFolders))
+	for _, f := range m.sessionAllowedFolders {
+		if f != normalized {
+			newList = append(newList, f)
+		}
+	}
+	m.sessionAllowedFolders = newList
+	delete(m.sessionPathModes, normalized)
+	return nil
+}
+
 func (m *AgentSecurityManager) IsConcernIgnored(filePath, concern string) bool {
 	m.ignoredSecurityMu.RLock()
 	defer m.ignoredSecurityMu.RUnlock()
@@ -214,12 +271,17 @@ func (m *AgentSecurityManager) SetElevationGate(gate *security.ElevationGate) {
 }
 
 func (m *AgentSecurityManager) SetHasActiveWebUIClients(fn func() bool) {
+	m.webuiClientsMu.Lock()
+	defer m.webuiClientsMu.Unlock()
 	m.hasActiveWebUIClients = fn
 }
 
 func (m *AgentSecurityManager) HasActiveWebUIClients() bool {
-	if m.hasActiveWebUIClients != nil {
-		return m.hasActiveWebUIClients()
+	m.webuiClientsMu.RLock()
+	fn := m.hasActiveWebUIClients
+	m.webuiClientsMu.RUnlock()
+	if fn != nil {
+		return fn()
 	}
 	return false
 }

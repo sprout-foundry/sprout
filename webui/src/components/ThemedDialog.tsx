@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
+import { AlertTriangle, Check, Info, X } from 'lucide-react';
 import './ThemedDialog.css';
 
 /* ── Type helpers ────────────────────────────────────────────── */
 
 type DialogType = 'info' | 'warning' | 'error' | 'success' | 'danger';
 
-const ICON_BY_TYPE: Record<DialogType, string> = {
-  info: 'ℹ',
-  warning: '⚠',
-  error: '✕',
-  success: '✓',
-  danger: '✕',
+const ICON_BY_TYPE: Record<DialogType, ReactNode> = {
+  info: <Info size={16} />,
+  warning: <AlertTriangle size={16} />,
+  error: <X size={16} />,
+  success: <Check size={16} />,
+  danger: <X size={16} />,
 };
 
 const DEFAULT_TITLE_BY_TYPE: Record<DialogType, string> = {

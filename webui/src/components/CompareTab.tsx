@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MergeViewWrapper } from './MergeViewWrapper';
 import './CompareTab.css';
 
@@ -20,6 +20,16 @@ function CompareTab({
   title = 'Compare',
 }: CompareTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
+  // Lift pane-B merge edits (reverts) into state so they survive mode
+  // toggles and re-renders instead of living only inside CodeMirror.
+  const [editedModified, setEditedModified] = useState<string | null>(null);
+
+  // Reset edits when the parent supplies different content (new compare).
+  useEffect(() => {
+    setEditedModified(null);
+  }, [modifiedContent]);
+
+  const effectiveModified = editedModified ?? modifiedContent;
 
   return (
     <div className="workspace-tab compare-tab">
@@ -46,11 +56,12 @@ function CompareTab({
       <div className="compare-tab-content">
         <MergeViewWrapper
           originalContent={originalContent}
-          modifiedContent={modifiedContent}
+          modifiedContent={effectiveModified}
           mode={viewMode}
           fileName={fileName}
           aLabel={aLabel}
           bLabel={bLabel}
+          onModifiedChange={setEditedModified}
         />
       </div>
     </div>

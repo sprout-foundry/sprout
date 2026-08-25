@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const (
@@ -173,20 +174,18 @@ func (cs *chatSession) getWorktreePath() string {
 func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID, userID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
-		// Use chat's worktree path if set, otherwise use provided workspaceRoot
 		agentWorkspace := cs.WorktreePath
 		if agentWorkspace == "" {
 			agentWorkspace = workspaceRoot
 		}
 		agentInst := cs.Agent
-		agentInst.SetWorkspaceRoot(agentWorkspace)
-		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		agentInst.SetEventMetadata(meta)
-		agentInst.EnableStreaming(func(string) {})
 		cs.mu.Unlock()
+		rearmWebUIAgent(agentInst, nil, agentSetupConfig{
+			WorkspaceRoot: agentWorkspace,
+			ClientID:      clientID,
+			ChatID:        cs.ID,
+			UserID:        userID,
+		})
 		return agentInst, nil
 	}
 	// Capture session-scoped provider/model before releasing the lock
@@ -194,6 +193,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	sessionModel := cs.Model
 	sessionWorktree := cs.WorktreePath
 	sessionHandoff := cs.HandoffContext
+	sessionSnapshot := append([]byte(nil), cs.AgentState...)
 	cs.mu.Unlock()
 
 	// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -212,22 +212,10 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	}
 
 	// Create agent outside the lock.
-	snapshot := append([]byte(nil), cs.AgentState...)
+	snapshot := sessionSnapshot
 	var created *agent.Agent
 	var createErr error
-	if workspaceChdir != nil {
-		if err := workspaceChdir(agentWorkspace, func() error {
-			created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-			return createErr
-		}); err != nil {
-			if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
-				return nil, err
-			}
-			return nil, fmt.Errorf("create chat agent in workspace: %w", err)
-		}
-	} else {
-		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-	}
+	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, agentWorkspace, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr
@@ -235,16 +223,13 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		return nil, fmt.Errorf("create chat agent: %w", createErr)
 	}
 
-	if eventBus != nil {
-		created.SetEventBus(eventBus)
-	}
-	created.SetWorkspaceRoot(agentWorkspace)
-	meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-	if userID != "" {
-		meta["user_id"] = userID
-	}
-	created.SetEventMetadata(meta)
-	created.EnableStreaming(func(string) {})
+	setupWebUIAgent(created, agentSetupConfig{
+		EventBus:      eventBus,
+		WorkspaceRoot: agentWorkspace,
+		ClientID:      clientID,
+		ChatID:        cs.ID,
+		UserID:        userID,
+	})
 
 	// Inject handoff context into system prompt if present (one-time injection)
 	if sessionHandoff != "" {
@@ -258,24 +243,35 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to import state: %v", err)
+			slog.Default().Warn("failed to import chat session state", slog.Any("err", err))
 		}
 	}
 
 	// Apply session-scoped provider/model if set on the session.
 	// This provides per-session provider/model scoping without affecting
 	// other sessions or the global config.
+	//
+	// Provider/model ordering is deliberate: we only apply the session
+	// model AFTER the provider switch succeeds. If SetProvider fails
+	// (provider not available, factory couldn't build a client, etc.)
+	// the agent retains its previous/default provider — and a model
+	// name that belonged to the failed provider would either error out
+	// on SetModel or, worse, silently shadow an unrelated model's name
+	// on a different provider (e.g. "gpt-4o" leaking onto Ollama).
+	providerApplied := sessionProvider == ""
 	if sessionProvider != "" {
 		providerType, err := created.GetConfigManager().MapStringToClientType(sessionProvider)
 		if err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: invalid session provider %q: %v", sessionProvider, err)
+			slog.Default().Warn("invalid chat session provider", slog.String("provider", sessionProvider), slog.Any("err", err))
 		} else if err := created.SetProvider(providerType); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session provider %q: %v", sessionProvider, err)
+			slog.Default().Warn("failed to set chat session provider", slog.String("provider", sessionProvider), slog.Any("err", err))
+		} else {
+			providerApplied = true
 		}
 	}
-	if sessionModel != "" {
+	if providerApplied && sessionModel != "" {
 		if err := created.SetModel(sessionModel); err != nil {
-			log.Printf("chatSession.getOrCreateAgent: warning: failed to set session model %q: %v", sessionModel, err)
+			slog.Default().Warn("failed to set chat session model", slog.String("model", sessionModel), slog.Any("err", err))
 		}
 	}
 
@@ -293,7 +289,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 				_, err := applyPartialSettings(cfg, sessionOverrides)
 				return err
 			}); err != nil {
-				log.Printf("chatSession.getOrCreateAgent: warning: failed to apply session config overrides: %v", err)
+				slog.Default().Warn("failed to apply chat session config overrides", slog.Any("err", err))
 			}
 		}
 	}
@@ -305,20 +301,24 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		cs.Agent = created
 		cs.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
 	} else {
-		// Another goroutine beat us — discard ours and return theirs.
+		// Lost the creation race. Shut our agent down rather than dropping the
+		// reference — it already spawned an embedding-index build and MCP
+		// servers, which would otherwise outlive the daemon's knowledge of it.
+		orphan := created
 		created = cs.Agent
-		// Use chat's worktree path if set, otherwise use provided workspaceRoot
+		utils.SafeGo(slog.Default(), "agent-shutdown", func() {
+			orphan.Shutdown()
+		}, slog.String("reason", "chat_agent_creation_race"))
 		agentWorkspace := cs.WorktreePath
 		if agentWorkspace == "" {
 			agentWorkspace = workspaceRoot
 		}
-		created.SetWorkspaceRoot(agentWorkspace)
-		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
-		if userID != "" {
-			meta["user_id"] = userID
-		}
-		created.SetEventMetadata(meta)
-		created.EnableStreaming(func(string) {})
+		rearmWebUIAgent(created, nil, agentSetupConfig{
+			WorkspaceRoot: agentWorkspace,
+			ClientID:      clientID,
+			ChatID:        cs.ID,
+			UserID:        userID,
+		})
 	}
 	return created, nil
 }
@@ -356,6 +356,16 @@ func (cc *webClientContext) getChatSession(chatID string) *chatSession {
 	return cc.ChatSessions[chatID]
 }
 
+// markChatCreated clears the deleted-chat tombstone for chatID. Call after
+// inserting a (re)created chat session into ChatSessions so it becomes
+// queryable again.
+func (cc *webClientContext) markChatCreated(chatID string) {
+	if cc.DeletedChats == nil {
+		cc.DeletedChats = map[string]struct{}{}
+	}
+	delete(cc.DeletedChats, chatID)
+}
+
 // getOrCreateChatSession returns the chat session with the given ID, creating
 // one if necessary. The auto-generated name follows the "Chat N" pattern.
 func (cc *webClientContext) getOrCreateChatSession(chatID string) *chatSession {
@@ -375,6 +385,7 @@ func (cc *webClientContext) getOrCreateChatSession(chatID string) *chatSession {
 	}
 	cs := newChatSession(chatID, name)
 	cc.ChatSessions[chatID] = cs
+	cc.markChatCreated(chatID)
 	return cs
 }
 
@@ -567,6 +578,12 @@ func (cc *webClientContext) getActiveChatID() string {
 
 // hasActiveQueryForChat checks whether the specified chat has a query running.
 // If chatID is empty, checks the active (default) chat.
+//
+// A chat that is absent from ChatSessions BUT in DeletedChats is treated as
+// having an active query — the delete handler removed it from the map and may
+// still be recomputing the top-level ActiveQuery flag. Without the tombstone,
+// a query arriving in that window would fall through to the (now false)
+// top-level flag and start a query on a chat that was just deleted.
 func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	if cc.ChatSessions == nil {
 		return cc.ActiveQuery
@@ -576,6 +593,9 @@ func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	}
 	cs, ok := cc.ChatSessions[chatID]
 	if !ok {
+		if _, deleted := cc.DeletedChats[chatID]; deleted {
+			return true // deleted chat — reject queries
+		}
 		return cc.ActiveQuery
 	}
 	cs.mu.Lock()
@@ -635,7 +655,7 @@ func (cc *webClientContext) setChatSessionWorktree(chatID, worktreePath string) 
 	if !ok {
 		return fmt.Errorf("chat session not found")
 	}
-	
+
 	cs.setWorktreePath(worktreePath)
 	return nil
 }
@@ -781,7 +801,31 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 	if len(cs.AgentState) > 0 {
 		var state agent.AgentState
 		if err := json.Unmarshal(cs.AgentState, &state); err == nil {
-			summary["messages"] = state.Messages
+			// Build enriched messages with per-message timestamps.
+			// The core.Message type (seed dependency) doesn't carry a
+			// timestamp field, so we build a parallel array here so the
+			// frontend can display accurate per-message times.
+			timestamps := state.MessageTimestamps
+			rawMsgs := state.Messages
+			enriched := make([]map[string]interface{}, 0, len(rawMsgs))
+			for i, msg := range rawMsgs {
+				content := msg.Content
+				if msg.Role == "user" {
+					content = agent.StripUserMessageTimestamp(content)
+				}
+				m := map[string]interface{}{
+					"role":    msg.Role,
+					"content": content,
+				}
+				if msg.ReasoningContent != "" {
+					m["reasoning_content"] = msg.ReasoningContent
+				}
+				if i < len(timestamps) {
+					m["timestamp"] = timestamps[i].Format(time.RFC3339)
+				}
+				enriched = append(enriched, m)
+			}
+			summary["messages"] = enriched
 			summary["total_tokens"] = state.TotalTokens
 			summary["total_cost"] = state.TotalCost
 			summary["session_id"] = state.SessionID

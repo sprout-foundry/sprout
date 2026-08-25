@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"encoding/json"
 	"net/http"
@@ -12,6 +11,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
 type instanceInfoDTO struct {
@@ -95,20 +98,19 @@ type sshLaunchStatusDTO struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	// ProxyBase, ProxyURL, and LocalPort are non-empty/non-zero when the launch
 	// has completed successfully (in_progress=false, last_error="").
-	ProxyBase  string    `json:"proxy_base,omitempty"`
-	ProxyURL   string    `json:"proxy_url,omitempty"`
-	LocalPort  int       `json:"local_port,omitempty"`
+	ProxyBase string `json:"proxy_base,omitempty"`
+	ProxyURL  string `json:"proxy_url,omitempty"`
+	LocalPort int    `json:"local_port,omitempty"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
-	instancesPath := filepath.Join(getSproutConfigDir(), "instances.json")
-	hostPath := filepath.Join(getSproutConfigDir(), "webui_host.json")
-	desiredPath := filepath.Join(getSproutConfigDir(), "webui_desired_host.json")
+	instancesPath := filepath.Join(getSproutStateDir(), "instances.json")
+	hostPath := filepath.Join(getSproutStateDir(), "webui_host.json")
+	desiredPath := filepath.Join(getSproutStateDir(), "webui_desired_host.json")
 
 	instancesMap := map[string]rawInstanceInfo{}
 	if data, err := os.ReadFile(instancesPath); err == nil && len(data) > 0 {
@@ -131,7 +133,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 	instances := make([]instanceInfoDTO, 0, len(instancesMap))
 	staleCutoff := time.Now().Add(-12 * time.Second)
 	for _, instance := range instancesMap {
-		if instance.PID <= 0 || instance.LastPing.Before(staleCutoff) || !isPIDAlive(instance.PID) {
+		if instance.PID <= 0 || instance.LastPing.Before(staleCutoff) || !pidalive.IsAlive(instance.PID) {
 			continue
 		}
 		instances = append(instances, instanceInfoDTO{
@@ -151,8 +153,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 		return instances[i].StartTime.After(instances[j].StartTime)
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"instances":        instances,
 		"current_pid":      os.Getpid(),
 		"active_host_pid":  hostRecord.PID,
@@ -162,8 +163,7 @@ func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -171,56 +171,54 @@ func (ws *ReactWebServer) handleAPIInstanceSelect(w http.ResponseWriter, r *http
 		PID int `json:"pid"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	if req.PID <= 0 {
-		http.Error(w, "pid is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "pid_required", "pid is required")
 		return
 	}
-	if !isPIDAlive(req.PID) {
-		http.Error(w, "selected instance is not alive", http.StatusBadRequest)
+	if !pidalive.IsAlive(req.PID) {
+		writeJSONErr(w, http.StatusBadRequest, "selected_instance_not_alive", "selected instance is not alive")
 		return
 	}
 
-	if err := os.MkdirAll(getSproutConfigDir(), 0755); err != nil {
-		http.Error(w, "Failed to prepare config dir", http.StatusInternalServerError)
+	if err := os.MkdirAll(getSproutStateDir(), 0755); err != nil {
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_prepare_config_dir", "Failed to prepare config dir")
 		return
 	}
 
 	desired := desiredHostRecordDTO{PID: req.PID, UpdatedAt: time.Now()}
 	data, err := json.MarshalIndent(desired, "", "  ")
 	if err != nil {
-		http.Error(w, "Failed to encode selection", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_encode_selection", "Failed to encode selection")
 		return
 	}
 
-	tmp := filepath.Join(getSproutConfigDir(), "webui_desired_host.json.tmp")
+	tmp := filepath.Join(getSproutStateDir(), "webui_desired_host.json.tmp")
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		http.Error(w, "Failed to write selection", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_write_selection", "Failed to write selection")
 		return
 	}
-	if err := os.Rename(tmp, filepath.Join(getSproutConfigDir(), "webui_desired_host.json")); err != nil {
-		http.Error(w, "Failed to apply selection", http.StatusInternalServerError)
+	if err := os.Rename(tmp, filepath.Join(getSproutStateDir(), "webui_desired_host.json")); err != nil {
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_apply_selection", "Failed to apply selection")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "instance selection updated",
 		"pid":     req.PID,
 	})
 }
 
 func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		http.Error(w, "Failed to determine home directory", http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "failed_to_determine_home_directory", "Failed to determine home directory")
 		return
 	}
 
@@ -238,8 +236,7 @@ func (ws *ReactWebServer) handleAPISSHHosts(w http.ResponseWriter, r *http.Reque
 		return hosts[i].Alias < hosts[j].Alias
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"hosts": hosts,
 	})
 }
@@ -273,13 +270,11 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 
 	// Fire-and-forget: the launch runs in the background.  The caller polls
 	// /api/instances/ssh-launch-status for progress and the final proxy URL.
-	go func() {
+	utils.SafeGo(ws.log(), "fire-and-forget SSH launch", func() {
 		_, _ = ws.launchSSHWorkspace(req)
-	}()
+	})
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"message":     "ssh workspace launch started",
 		"session_key": sessionKey,
 	})
@@ -309,8 +304,7 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sshLaunchStatusDTO{
+	writeJSON(w, http.StatusOK, sshLaunchStatusDTO{
 		Key:        status.Key,
 		Step:       status.Step,
 		Status:     status.Status,
@@ -343,8 +337,7 @@ func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "ssh directory entries loaded",
 		"path":      resolvedPath,
 		"home_path": homePath,
@@ -353,32 +346,27 @@ func (ws *ReactWebServer) handleAPISSHBrowse(w http.ResponseWriter, r *http.Requ
 }
 
 func writeSSHJSONError(w http.ResponseWriter, status int, payload sshLaunchErrorDTO) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	writeJSON(w, status, payload)
 }
 
 func (ws *ReactWebServer) handleAPISSHSessions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
 	sessions, err := ws.listSSHSessions()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONErr(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions": sessions,
 	})
 }
 
 func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -386,22 +374,21 @@ func (ws *ReactWebServer) handleAPISSHSessionDelete(w http.ResponseWriter, r *ht
 		Key string `json:"key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 	req.Key = strings.TrimSpace(req.Key)
 	if req.Key == "" {
-		http.Error(w, "key is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "key_required", "key is required")
 		return
 	}
 
 	if err := ws.closeSSHSession(req.Key); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "ssh session closed",
 		"key":     req.Key,
 	})
@@ -506,16 +493,12 @@ func parseSSHConfigFile(filePath string, hostsMap map[string]*sshHostEntryDTO, v
 	}
 }
 
-func getSproutConfigDir() string {
-	if dir := strings.TrimSpace(envutil.GetEnvSimple("CONFIG")); dir != "" {
+func getSproutStateDir() string {
+	// Resolve config dir for instances.json — this is state data, not config.
+	// Use StateDir so it follows the $SPROUT_STATE_DIR → XDG → HOME chain.
+	if dir, err := envutil.StateDir(); err == nil {
 		return dir
 	}
-	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
-		return filepath.Join(xdg, "sprout")
-	}
-	homeDir := strings.TrimSpace(os.Getenv("HOME"))
-	if homeDir == "" {
-		return "/data/data/com.termux/files/home/.sprout"
-	}
-	return filepath.Join(homeDir, ".sprout")
+	// Fallback: Termux home
+	return filepath.Join("/data/data/com.termux/files/home", ".local", "state", "sprout")
 }

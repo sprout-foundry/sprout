@@ -9,16 +9,12 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// SP-066 Phase 3: semantic recall of historical conversation summaries.
-//
+// Semantic recall of historical conversation summaries.
 // On user-turn ingest, embed the user message, query the conversation store
-// for top-K similar past summaries (per-turn or rollup), and inject any
-// that aren't already in the current substitution window as a "recalled
-// context" block on the next prompt. The store is permanent memory; this
-// surface lets a long-running session re-reference work the user has long
-// since rolled past.
+// for top-K similar past summaries, and inject them as "recalled context" on the next prompt.
 
 // Tunable defaults for the recall pipeline. Conservative values to start;
 // tune from the recall_diagnostic telemetry once we see real sessions.
@@ -62,7 +58,7 @@ type RecalledItem struct {
 // telemetry event surfaces. Lives alongside the items so callers can ship
 // both in one publish.
 type recallRetrievalDiagnostic struct {
-	EmbedDurationMS     float64
+	EmbedDurationMS      float64
 	CandidatesConsidered int
 	Injected             int
 	InjectedChars        int
@@ -77,12 +73,16 @@ type recallRetrievalDiagnostic struct {
 // presentCheckpointIDs is the set of checkpoint IDs already present in the
 // active substitution window. Matches in this set are skipped — the model
 // will already see them via the normal substitute-on-every-prompt-build pass.
+//
+// limit overrides semanticRecallTopK for the returned slice length; the raw
+// retrieval count uses limit*4 for recency re-ranking headroom.
 func retrieveSemanticRecall(
 	ctx context.Context,
 	mgr *embedding.EmbeddingManager,
 	sessionID string,
 	query string,
 	presentCheckpointIDs map[string]struct{},
+	limit int,
 	now time.Time,
 ) ([]RecalledItem, recallRetrievalDiagnostic, error) {
 	var diag recallRetrievalDiagnostic
@@ -96,29 +96,29 @@ func retrieveSemanticRecall(
 
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		return nil, diag, fmt.Errorf("get conversation store: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "get conversation store", err)
 	}
 	provider := store.Provider()
 	if provider == nil {
-		return nil, diag, fmt.Errorf("conversation store provider is nil")
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "conversation store provider is nil", nil)
 	}
 
 	embedStart := time.Now()
 	vec, err := provider.Embed(ctx, q)
 	diag.EmbedDurationMS = float64(time.Since(embedStart).Microseconds()) / 1000.0
 	if err != nil {
-		return nil, diag, fmt.Errorf("embed query: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "embed query", err)
 	}
 	if len(vec) == 0 {
 		return nil, diag, nil
 	}
 
 	// Pull more than topK so we have headroom to re-rank by recency before
-	// applying the final cut. 4× topK is a balance between work and the
+	// applying the final cut. 4× limit is a balance between work and the
 	// chance that the best-by-recency item is outside the cosine top-K.
-	rawResults, err := store.Query(vec, semanticRecallTopK*4, semanticRecallSimilarityThreshold)
+	rawResults, err := store.Query(vec, limit*4, semanticRecallSimilarityThreshold)
 	if err != nil {
-		return nil, diag, fmt.Errorf("query store: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "query store", err)
 	}
 	diag.CandidatesConsidered = len(rawResults)
 
@@ -152,22 +152,17 @@ func retrieveSemanticRecall(
 	sort.SliceStable(candidates, func(i, j int) bool {
 		return candidates[i].Score > candidates[j].Score
 	})
-	if len(candidates) > semanticRecallTopK {
-		candidates = candidates[:semanticRecallTopK]
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
 	}
 
 	diag.TopScores = topScores
 	return candidates, diag, nil
 }
 
-// recalledItemFromRecord converts a store QueryResult into a RecalledItem,
-// applying the recency decay. Returns ok=false when the record's metadata
-// is missing the fields recall needs (covers schema drift gracefully —
-// older per-turn embeddings written before SP-066 won't have a
-// checkpoint_id and just won't be eligible).
+// recalledItemFromRecord converts a store QueryResult into a RecalledItem, applying the recency decay.
 func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, now time.Time, decayRate float64) (RecalledItem, bool) {
-	// Filter to the active session's records. Cross-session recall is
-	// explicitly out of scope per SP-066's "Out of Scope" section.
+	// Filter to the active session's records. Cross-session recall is out of scope.
 	if expectedSessionID != "" {
 		if sid, _ := r.Record.Metadata["sessionId"].(string); sid != "" && sid != expectedSessionID {
 			return RecalledItem{}, false
@@ -190,8 +185,7 @@ func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, n
 		Score:      score,
 	}
 
-	// Pull metadata fields if present. Both per-turn and rollup records
-	// expose checkpoint_id; legacy per-turn records (pre-SP-066) may not.
+	// Pull metadata fields if present. Both per-turn and rollup records expose checkpoint_id; legacy records may not.
 	if v, ok := r.Record.Metadata["checkpoint_id"].(string); ok {
 		item.CheckpointID = v
 	}
@@ -227,9 +221,15 @@ func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, n
 // FormatSemanticRecall renders the recall items as a markdown block to
 // inject into the system supplement. Returns "" when there's nothing
 // to inject so the caller can short-circuit.
-func FormatSemanticRecall(items []RecalledItem) string {
+//
+// maxChars caps the total output size. Use semanticRecallMaxInjectedChars
+// (8000) for the default ceiling, or a model-aware value for per-model tuning.
+func FormatSemanticRecall(items []RecalledItem, maxChars int) string {
 	if len(items) == 0 {
 		return ""
+	}
+	if maxChars <= 0 {
+		maxChars = semanticRecallMaxInjectedChars
 	}
 
 	var b strings.Builder
@@ -239,7 +239,7 @@ func FormatSemanticRecall(items []RecalledItem) string {
 	total := 0
 	for _, item := range items {
 		block := formatRecalledBlock(item)
-		if total+len(block) > semanticRecallMaxInjectedChars {
+		if total+len(block) > maxChars {
 			break
 		}
 		b.WriteString(block)
@@ -265,17 +265,20 @@ func formatRecalledBlock(item RecalledItem) string {
 	return b.String()
 }
 
-// InjectSemanticRecall runs recall over the current user query and appends
-// the formatted block (if any) to the pending system supplement.
-// Mirrors InjectProactiveContext — same shape, graceful degradation on
-// every failure mode (no embedding manager, no store, embed failure, etc).
-func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
+// Recall runs the semantic-recall pipeline over the conversation store.
+// Returns (nil, nil) when the agent or its embedding manager is missing,
+// the query is blank, or limit <= 0. Used by InjectSemanticRecall and
+// the future /recall CLI and webui /api/recall endpoints.
+func (a *Agent) Recall(ctx context.Context, query string, limit int) ([]RecalledItem, error) {
 	if a == nil {
-		return
+		return nil, nil
+	}
+	if limit <= 0 {
+		return nil, nil
 	}
 	mgr := a.GetEmbeddingManager()
 	if mgr == nil {
-		return
+		return nil, nil
 	}
 
 	sessionID := ""
@@ -285,21 +288,65 @@ func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 
 	presentIDs := a.presentCheckpointIDs()
 
-	now := time.Now().UTC()
-	items, diag, err := retrieveSemanticRecall(ctx, mgr, sessionID, query, presentIDs, now)
+	items, _, err := retrieveSemanticRecall(ctx, mgr, sessionID, query, presentIDs, limit, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// InjectSemanticRecall runs recall over the current user query and appends
+// the formatted block (if any) to the pending system supplement.
+// Mirrors InjectProactiveContext — same shape, graceful degradation on
+// every failure mode (no embedding manager, no store, embed failure, etc).
+//
+// For callers that already have the items, use InjectSemanticRecallWithItems
+// instead to avoid a redundant Recall() call (see InstrumentedRecall).
+func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
+	if a == nil {
+		return
+	}
+	items, err := a.Recall(ctx, query, semanticRecallTopK)
 	if err != nil {
 		a.Logger().Debug("[semantic-recall] retrieval failed: %v\n", err)
 		return
 	}
+	a.InjectSemanticRecallWithItems(ctx, query, items)
+}
 
-	formatted := FormatSemanticRecall(items)
-	diag.Injected = len(items)
-	diag.InjectedChars = len(formatted)
-	a.PublishRecallDiagnostic(diag)
+// InjectSemanticRecallWithItems is like InjectSemanticRecall but accepts
+// pre-retrieved items instead of calling Recall internally. This avoids
+// duplicate recall work when the caller (e.g. InstrumentedRecall) already
+// retrieved the items for its own metrics.
+func (a *Agent) InjectSemanticRecallWithItems(ctx context.Context, query string, items []RecalledItem) {
+	if a == nil {
+		return
+	}
+	if len(items) == 0 {
+		return
+	}
 
+	// Compute a model-aware char budget: 2% of context window, converted
+	// from tokens to chars (~4 chars/token), floored at 2000, ceiling at
+	// semanticRecallMaxInjectedChars (8000).
+	maxChars := computeRecallMaxChars(a.GetMaxContextTokens())
+
+	formatted := FormatSemanticRecall(items, maxChars)
 	if formatted == "" {
 		return
 	}
+
+	// Publish telemetry (the diagnostic is best-effort — we re-summarize
+	// here so the existing PublishRecallDiagnostic signature stays stable).
+	//
+	// TODO: Recall discards the retrieval-time diag from retrieveSemanticRecall,
+	// so we lose EmbedDurationMS, CandidatesConsidered, and TopScores.
+	// Re-introduce them when the instrumentation follow-up lands.
+	diag := recallRetrievalDiagnostic{
+		Injected:      len(items),
+		InjectedChars: len(formatted),
+	}
+	a.PublishRecallDiagnostic(diag)
 
 	// Prepend any existing supplement (proactive context, previous-session
 	// continuity) so all sections are preserved in chronological-of-injection
@@ -313,6 +360,24 @@ func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 	a.setPendingSystemSupplement(combined)
 
 	debugLogf("[semantic-recall] injected %d items (%d chars)", len(items), len(formatted))
+}
+
+// computeRecallMaxChars returns a model-aware character budget for semantic
+// recall injection. It targets 2% of the model's context window, converted
+// from tokens to chars (~4 chars/token), with a floor of 2000 and a ceiling
+// of semanticRecallMaxInjectedChars (8000).
+func computeRecallMaxChars(maxTokens int) int {
+	if maxTokens <= 0 {
+		return semanticRecallMaxInjectedChars
+	}
+	chars := int(float64(maxTokens) * 0.02 * 4)
+	if chars < 2000 {
+		chars = 2000
+	}
+	if chars > semanticRecallMaxInjectedChars {
+		chars = semanticRecallMaxInjectedChars
+	}
+	return chars
 }
 
 // presentCheckpointIDs returns the set of checkpoint IDs currently in the

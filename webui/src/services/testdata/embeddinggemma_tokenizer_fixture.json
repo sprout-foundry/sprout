@@ -3,118 +3,32 @@
     {
       "name": "hello_world",
       "input": "hello world",
-      "ids": [
-        23391,
-        1902
-      ],
-      "tokens": [
-        "hello",
-        "▁world"
-      ]
+      "ids": [23391, 1902],
+      "tokens": ["hello", "▁world"]
     },
     {
       "name": "Hello_punct",
       "input": "Hello, world!",
-      "ids": [
-        9259,
-        236764,
-        1902,
-        236888
-      ],
-      "tokens": [
-        "Hello",
-        ",",
-        "▁world",
-        "!"
-      ]
+      "ids": [9259, 236764, 1902, 236888],
+      "tokens": ["Hello", ",", "▁world", "!"]
     },
     {
       "name": "fox_sentence",
       "input": "The quick brown fox jumps over the lazy dog.",
-      "ids": [
-        818,
-        3823,
-        8864,
-        37423,
-        38167,
-        1024,
-        506,
-        31770,
-        4799,
-        236761
-      ],
-      "tokens": [
-        "The",
-        "▁quick",
-        "▁brown",
-        "▁fox",
-        "▁jumps",
-        "▁over",
-        "▁the",
-        "▁lazy",
-        "▁dog",
-        "."
-      ]
+      "ids": [818, 3823, 8864, 37423, 38167, 1024, 506, 31770, 4799, 236761],
+      "tokens": ["The", "▁quick", "▁brown", "▁fox", "▁jumps", "▁over", "▁the", "▁lazy", "▁dog", "."]
     },
     {
       "name": "go_func",
       "input": "func cosineSim(a, b []float32) float32",
-      "ids": [
-        6823,
-        56329,
-        9028,
-        236769,
-        236746,
-        236764,
-        518,
-        2977,
-        8344,
-        236800,
-        236778,
-        236768,
-        6803,
-        236800,
-        236778
-      ],
-      "tokens": [
-        "func",
-        "▁cosine",
-        "Sim",
-        "(",
-        "a",
-        ",",
-        "▁b",
-        "▁[]",
-        "float",
-        "3",
-        "2",
-        ")",
-        "▁float",
-        "3",
-        "2"
-      ]
+      "ids": [6823, 56329, 9028, 236769, 236746, 236764, 518, 2977, 8344, 236800, 236778, 236768, 6803, 236800, 236778],
+      "tokens": ["func", "▁cosine", "Sim", "(", "a", ",", "▁b", "▁[]", "float", "3", "2", ")", "▁float", "3", "2"]
     },
     {
       "name": "sha_query",
       "input": "compute SHA-256 hash",
-      "ids": [
-        41973,
-        38180,
-        236772,
-        236778,
-        236810,
-        236825,
-        15424
-      ],
-      "tokens": [
-        "compute",
-        "▁SHA",
-        "-",
-        "2",
-        "5",
-        "6",
-        "▁hash"
-      ]
+      "ids": [41973, 38180, 236772, 236778, 236810, 236825, 15424],
+      "tokens": ["compute", "▁SHA", "-", "2", "5", "6", "▁hash"]
     },
     {
       "name": "empty",
@@ -125,146 +39,50 @@
     {
       "name": "single_a",
       "input": "a",
-      "ids": [
-        236746
-      ],
-      "tokens": [
-        "a"
-      ]
+      "ids": [236746],
+      "tokens": ["a"]
     },
     {
       "name": "single_space",
       "input": " ",
-      "ids": [
-        236743
-      ],
-      "tokens": [
-        "▁"
-      ]
+      "ids": [236743],
+      "tokens": ["▁"]
     },
     {
       "name": "multi_spaces",
       "input": "  multiple   spaces  ",
-      "ids": [
-        138,
-        43819,
-        139,
-        35220,
-        138
-      ],
-      "tokens": [
-        "▁▁",
-        "multiple",
-        "▁▁▁",
-        "spaces",
-        "▁▁"
-      ]
+      "ids": [138, 43819, 139, 35220, 138],
+      "tokens": ["▁▁", "multiple", "▁▁▁", "spaces", "▁▁"]
     },
     {
       "name": "tab",
       "input": "tab\there",
-      "ids": [
-        4823,
-        255968,
-        8472
-      ],
-      "tokens": [
-        "tab",
-        "\t",
-        "here"
-      ]
+      "ids": [4823, 255968, 8472],
+      "tokens": ["tab", "\t", "here"]
     },
     {
       "name": "unicode",
       "input": "unicode: café résumé naïve",
-      "ids": [
-        70926,
-        236787,
-        33443,
-        118515,
-        120362
-      ],
-      "tokens": [
-        "unicode",
-        ":",
-        "▁café",
-        "▁résumé",
-        "▁naïve"
-      ]
+      "ids": [70926, 236787, 33443, 118515, 120362],
+      "tokens": ["unicode", ":", "▁café", "▁résumé", "▁naïve"]
     },
     {
       "name": "emoji",
       "input": "emoji: 🚀 and code",
-      "ids": [
-        67906,
-        236787,
-        236743,
-        242015,
-        532,
-        3393
-      ],
-      "tokens": [
-        "emoji",
-        ":",
-        "▁",
-        "🚀",
-        "▁and",
-        "▁code"
-      ]
+      "ids": [67906, 236787, 236743, 242015, 532, 3393],
+      "tokens": ["emoji", ":", "▁", "🚀", "▁and", "▁code"]
     },
     {
       "name": "symbols",
       "input": "Token boundaries: foo_bar, foo-bar, foo.bar",
-      "ids": [
-        7211,
-        18998,
-        236787,
-        46293,
-        236779,
-        2230,
-        236764,
-        46293,
-        236772,
-        2230,
-        236764,
-        46293,
-        236761,
-        2230
-      ],
-      "tokens": [
-        "Token",
-        "▁boundaries",
-        ":",
-        "▁foo",
-        "_",
-        "bar",
-        ",",
-        "▁foo",
-        "-",
-        "bar",
-        ",",
-        "▁foo",
-        ".",
-        "bar"
-      ]
+      "ids": [7211, 18998, 236787, 46293, 236779, 2230, 236764, 46293, 236772, 2230, 236764, 46293, 236761, 2230],
+      "tokens": ["Token", "▁boundaries", ":", "▁foo", "_", "bar", ",", "▁foo", "-", "bar", ",", "▁foo", ".", "bar"]
     },
     {
       "name": "newline",
       "input": "line one\nline two",
-      "ids": [
-        1257,
-        886,
-        107,
-        1257,
-        1156
-      ],
-      "tokens": [
-        "line",
-        "▁one",
-        "\n",
-        "line",
-        "▁two"
-      ]
+      "ids": [1257, 886, 107, 1257, 1156],
+      "tokens": ["line", "▁one", "\n", "line", "▁two"]
     }
   ],
   "special": {

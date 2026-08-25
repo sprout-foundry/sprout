@@ -81,9 +81,9 @@
 
 /* Dark mode adjustments */
 [data-theme='dark'] .resize-handle:hover {
-  background-color: rgba(99, 102, 241, 0.3);
+  background-color: var(--accent-primary-alpha);
 }
 
 [data-theme='dark'] .resize-handle.resizing {
-  background-color: rgba(99, 102, 241, 0.5);
+  background-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
 }

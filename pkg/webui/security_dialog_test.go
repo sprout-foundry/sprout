@@ -104,7 +104,7 @@ func TestSecurityApprovalEvent_DeliveredViaEventBus(t *testing.T) {
 	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	ch := eb.Subscribe("security_approval_test")
 	defer eb.Unsubscribe("security_approval_test")
@@ -145,7 +145,7 @@ func TestSecurityPromptEvent_DeliveredViaEventBus(t *testing.T) {
 	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	ch := eb.Subscribe("security_prompt_test")
 	defer eb.Unsubscribe("security_prompt_test")
@@ -187,7 +187,7 @@ func TestSecurityApprovalRoundTrip(t *testing.T) {
 	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	ch := eb.Subscribe("roundtrip_test")
 	defer eb.Unsubscribe("roundtrip_test")

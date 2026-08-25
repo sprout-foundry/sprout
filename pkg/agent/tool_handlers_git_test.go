@@ -76,7 +76,7 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"git switch main", false},
 		{"git restore file.txt", false},
 		{"git restore --staged file.txt", false},
-		{"git reset HEAD~1", false},                  // mixed reset
+		{"git reset HEAD~1", false}, // mixed reset
 		{"git reset --soft HEAD~1", false},
 		{"git -C /path/to/repo reset --soft HEAD~1", false},
 		{"git clean -fd", false},
@@ -156,8 +156,10 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 		rewrite bool
 	}{
 		// rebase — any form rewrites commit history.
+		// Exception: `--abort` is a recovery op, not a history rewrite.
 		{"git rebase main", true},
-		{"git rebase --abort", true},
+		{"git rebase --abort", false},
+		{"git rebase --abort --no-verify", true}, // --abort with other flags is still a rewrite
 		{"git rebase -i HEAD~5", true},
 		{"git -C /repo rebase main", true},
 
@@ -178,9 +180,9 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 		{"git branch -d old-feature", true},
 		{"git branch -D feature", true},
 		{"git branch --delete feature", true},
-		{"git branch feature", false},   // create
-		{"git branch -a", false},        // list
-		{"git branch --list", false},    // list
+		{"git branch feature", false}, // create
+		{"git branch -a", false},      // list
+		{"git branch --list", false},  // list
 
 		// tag delete.
 		{"git tag -d v1.0", true},
@@ -217,9 +219,67 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 	}
 }
 
+func TestIsGitRebaseCommand(t *testing.T) {
+	// isGitRebaseCommand separates the AGENTS.md "never rebase" rule from
+	// the looser "git history-rewrite" gate. The ONLY rebase invocation
+	// that returns false is pure `git rebase --abort` (recovery from a
+	// prior session's interrupted rebase). Every other form returns true,
+	// including `git pull --rebase`/`-r` and `--abort` mixed with other
+	// arguments.
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// Standard rebase forms — all banned.
+		{"bare rebase", "git rebase", true},
+		{"rebase main", "git rebase main", true},
+		{"interactive", "git rebase -i HEAD~5", true},
+		{"rebase --onto", "git rebase --onto base head", true},
+		{"rebase with -C", "git -C /repo rebase main", true},
+		{"rebase --continue", "git rebase --continue", true},
+		{"rebase --skip", "git rebase --skip", true},
+
+		// --abort cases. Only the PURE form is permitted.
+		{"pure --abort", "git rebase --abort", false},
+		{"--abort with positional", "git rebase main --abort", true},        // positional means real rebase target, abort-with-target is invalid git anyway
+		{"--abort with HEAD positional", "git rebase HEAD --abort", true},   // HEAD + --abort is nonsensical; treat as banned
+		{"--abort with extra flag", "git rebase --abort --no-verify", true}, // mixing --abort with another flag = rewrite attempt
+
+		// git pull --rebase — subcommand is pull, but AGENTS.md bans this too.
+		{"pull --rebase", "git pull --rebase origin main", true},
+		{"pull -r short form", "git pull -r origin main", true},
+		{"pull --rebase-preserve", "git pull --rebase-preserve", true},
+		{"plain git pull (allowed)", "git pull origin main", false},
+		{"pull without --rebase flag (allowed)", "git pull --no-rebase origin main", false},
+
+		// Quoted content should not trigger false positive.
+		{"quoted mention of rebase", `echo "git rebase main"`, false},
+		{"quoted mention of pull --rebase", `echo "git pull --rebase"`, false},
+
+		// Compound commands.
+		{"rebase in chain", "cd /repo && git rebase main && echo done", true},
+		{"pull --rebase in chain", "cd /repo && git pull --rebase", true},
+
+		// Non-rebase commands.
+		{"plain git pull (not a rebase)", "git pull origin main", false},
+		{"git status", "git status", false},
+		{"git commit", "git commit -m 'x'", false},
+		{"git merge (not a rebase)", "git merge feature", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitRebaseCommand(tc.command); got != tc.want {
+				t.Errorf("isGitRebaseCommand(%q) = %v, want %v", tc.command, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsGitCommitSubcommand(t *testing.T) {
 	tests := []struct {
-		command   string
+		command  string
 		isCommit bool
 	}{
 		{"git commit -m 'x'", true},
@@ -248,7 +308,6 @@ func TestIsGitCommitSubcommand(t *testing.T) {
 		}
 	}
 }
-
 
 func TestExtractGitCommitArgs(t *testing.T) {
 	tests := []struct {
@@ -301,11 +360,11 @@ func TestShellSplit(t *testing.T) {
 		{`"hello world"`, []string{"hello world"}},
 		{`"nested 'quotes' inside"`, []string{"nested 'quotes' inside"}},
 		{`mix"ed"quotes`, []string{"mixedquotes"}},
-		{`""`, []string{""}},           // empty quotes → empty token
-		{`''`, []string{""}},           // empty single quotes → empty token
-		{"hello", []string{"hello"}},    // single word
-		{"a\nb", []string{"a", "b"}},    // newline as delimiter
-		{"a\tb", []string{"a", "b"}},    // tab as delimiter
+		{`""`, []string{""}},         // empty quotes → empty token
+		{`''`, []string{""}},         // empty single quotes → empty token
+		{"hello", []string{"hello"}}, // single word
+		{"a\nb", []string{"a", "b"}}, // newline as delimiter
+		{"a\tb", []string{"a", "b"}}, // tab as delimiter
 	}
 
 	for _, tc := range tests {
@@ -320,7 +379,6 @@ func TestShellSplit(t *testing.T) {
 		}
 	}
 }
-
 
 func TestExtractGitSubcommand(t *testing.T) {
 	t.Parallel()
@@ -344,6 +402,55 @@ func TestExtractGitSubcommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := extractGitSubcommand(tc.input); got != tc.want {
 				t.Errorf("extractGitSubcommand(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsGitStashCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// Blocked (destructive stash operations)
+		{"bare git stash", "git stash", true},
+		{"git stash push", "git stash push", true},
+		{"git stash push -m msg", "git stash push -m 'wip'", true},
+		{"git stash pop", "git stash pop", true},
+		{"git stash apply", "git stash apply", true},
+		{"git stash apply stash@{0}", "git stash apply stash@{0}", true},
+		{"git stash drop", "git stash drop", true},
+		{"git stash clear", "git stash clear", true},
+		{"compound stash + build", "cd /repo && git stash && go build ./...", true},
+		{"stash with -c flag", "git -c core.safecrlf=false stash", true},
+		{"stash with -C flag", "git -C /path stash pop", true},
+
+		// Allowed (read-only)
+		{"stash list", "git stash list", false},
+		{"stash show", "git stash show", false},
+		{"stash show -p", "git stash show -p", false},
+		{"stash list with flags", "git stash list --oneline", false},
+
+		// Non-stash commands
+		{"git status", "git status", false},
+		{"git log", "git log", false},
+		{"git add", "git add file.go", false},
+		{"git commit", "git commit -m 'msg'", false},
+		{"non-git command", "ls -la", false},
+		{"empty string", "", false},
+		{"git checkout (gated elsewhere)", "git checkout main", false},
+		{"git restore (gated elsewhere)", "git restore file.go", false},
+
+		// Edge: quoted content shouldn't trigger false positive
+		{"stash mentioned in quotes", `echo "git stash is dangerous"`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isGitStashCommand(tt.command)
+			if got != tt.want {
+				t.Errorf("isGitStashCommand(%q) = %v, want %v", tt.command, got, tt.want)
 			}
 		})
 	}

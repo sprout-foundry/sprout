@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -60,12 +59,6 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 				// Build final output with status
 				finalOutput := buildShellOutputWithStatus(output, command, exitCode, nil)
 
-				// Print truncated preview unless in tests/CI
-				truncatedOutput := truncateOutput(output, 8)
-				if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
-					fmt.Printf("%s\n", truncatedOutput)
-				}
-
 				return finalOutput, nil
 			}
 		}
@@ -73,43 +66,6 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 
 	// NOTE: Security validation is handled by the static classifier in security_classifier.go, invoked at the tool registry level
 	return runShellCommand(ctx, command, streamOutput)
-}
-
-func shouldPrintCapturedShellPreview() bool {
-	if os.Getenv("CI") != "" {
-		return false
-	}
-
-	executable := filepath.Base(os.Args[0])
-	if strings.HasSuffix(executable, ".test") {
-		return false
-	}
-
-	return true
-}
-
-// truncateOutput limits output to a specified number of lines
-func truncateOutput(output string, maxLines int) string {
-	if output == "" {
-		return ""
-	}
-
-	// Edge case: if maxLines is 0 or negative, return empty string
-	if maxLines <= 0 {
-		return ""
-	}
-
-	lines := strings.Split(output, "\n")
-
-	if len(lines) <= maxLines {
-		// Output is short enough, return as-is
-		return strings.TrimSpace(output)
-	}
-
-	// Truncate to maxLines and add truncation indicator
-	visibleLines := lines[:maxLines]
-	truncated := strings.Join(visibleLines, "\n")
-	return fmt.Sprintf("%s\n... (truncated, %d more lines)", strings.TrimSpace(truncated), len(lines)-maxLines)
 }
 
 // buildShellOutputWithStatus enhances shell output with status information
@@ -195,7 +151,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 		return string(resultBytes), nil
 	}
 
-	return "", fmt.Errorf("background mode requires WebUI terminal manager or BackgroundProcessManager")
+	return "", fmt.Errorf("background command requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 }
 
 // maxBackgroundWaitSeconds caps the wait_seconds parameter on
@@ -204,6 +160,12 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 // short enough that the user can interrupt or redirect the agent without
 // being parked indefinitely.
 const maxBackgroundWaitSeconds = 600
+
+// maxWakeupTimeoutSeconds caps the wakeup_timeout parameter on background
+// shell sessions. Same value as maxBackgroundWaitSeconds: long enough to be
+// a useful "check back later" deadline for multi-hour workflows, short enough
+// that a typo'd value can't park the agent or overflow time.Duration.
+const maxWakeupTimeoutSeconds = 600
 
 // backgroundWaitTick is the internal polling interval used while waiting for
 // a background session to exit. It only touches in-process state (session
@@ -279,7 +241,7 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 			return string(resultBytes), status == "exited", nil
 		}
 
-		return "", false, fmt.Errorf("background output retrieval requires WebUI terminal manager or BackgroundProcessManager")
+		return "", false, fmt.Errorf("background output retrieval requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 	}
 
 	if waitSeconds <= 0 {

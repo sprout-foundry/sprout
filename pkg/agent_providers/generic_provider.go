@@ -4,15 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/logging"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
@@ -24,178 +26,36 @@ type GenericProvider struct {
 	streamingClient *http.Client
 	debug           bool
 	model           string
-	models          []api.ModelInfo
-	modelsCached    bool
+
+	// mu guards models/modelsCached written by the background warmModelsCache goroutine.
+	mu           sync.RWMutex
+	models       []api.ModelInfo
+	modelsCached bool
+
+	// warmPending prevents goroutine accumulation from rapid warmModelsCache calls.
+	warmPending atomic.Bool
+
+	// detectedBackend caches the auto-detected backend type (guarded by mu).
+	detectedBackend BackendType
+	backendDetected bool
+
+	// maxTokensHint overrides the max_tokens computation in buildChatRequest when > 0.
+	maxTokensHint   int
+	maxTokensHintMu sync.RWMutex
 }
 
-const maxProviderErrorBodyPreview = 240
-
-func formatProviderHTTPError(statusCode int, headers http.Header, body []byte) error {
-	message := summarizeProviderHTTPError(statusCode, headers, body)
-	if message == "" {
-		// Include response headers when body is empty — providers like ZAI
-		// sometimes return error info only in headers (e.g. X-Error-Code).
-		hdr := formatResponseHeaders(headers)
-		if hdr != "" {
-			return fmt.Errorf("HTTP %d (empty body, headers: %s)", statusCode, hdr)
-		}
-		return fmt.Errorf("HTTP %d", statusCode)
-	}
-	return fmt.Errorf("HTTP %d: %s", statusCode, message)
-}
-
-func formatResponseHeaders(headers http.Header) string {
-	// Collect known error headers first
-	var parts []string
-	for _, key := range []string{
-		"Content-Type", "X-Error-Code", "X-Error-Message",
-		"X-Request-Id", "X-Trace-Id", "Error-Code",
-		"X-Status", "Retry-After",
-	} {
-		if v := headers.Get(key); v != "" {
-			parts = append(parts, fmt.Sprintf("%s=%s", key, v))
-		}
-	}
-	// If no known error headers found, include all headers for diagnosis
-	if len(parts) == 0 {
-		for key, vals := range headers {
-			for _, v := range vals {
-				parts = append(parts, fmt.Sprintf("%s=%s", key, v))
-			}
-		}
-	}
-	return strings.Join(parts, ", ")
-}
-
-func summarizeProviderHTTPError(statusCode int, headers http.Header, body []byte) string {
-	trimmed := strings.TrimSpace(string(body))
-	if trimmed == "" {
-		return ""
-	}
-
-	if jsonMsg := extractProviderJSONErrorMessage(body); jsonMsg != "" {
-		return limitProviderErrorText(jsonMsg)
-	}
-
-	if looksLikeProviderHTMLErrorPage(headers, trimmed) {
-		return summarizeProviderHTMLErrorPage(statusCode, trimmed)
-	}
-
-	return limitProviderErrorText(trimmed)
-}
-
-func extractProviderJSONErrorMessage(body []byte) string {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(extractProviderJSONErrorField(payload))
-}
-
-func extractProviderJSONErrorField(value interface{}) string {
-	switch typed := value.(type) {
-	case string:
-		return typed
-	case map[string]interface{}:
-		for _, key := range []string{"error", "message", "detail", "details", "title", "reason"} {
-			if msg := extractProviderJSONErrorField(typed[key]); msg != "" {
-				return msg
-			}
-		}
-	case []interface{}:
-		for _, item := range typed {
-			if msg := extractProviderJSONErrorField(item); msg != "" {
-				return msg
-			}
-		}
-	}
-	return ""
-}
-
-func looksLikeProviderHTMLErrorPage(headers http.Header, body string) bool {
-	contentType := strings.ToLower(headers.Get("Content-Type"))
-	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/xhtml") {
-		return true
-	}
-
-	lowerBody := strings.ToLower(strings.TrimSpace(body))
-	return strings.HasPrefix(lowerBody, "<!doctype html") ||
-		strings.HasPrefix(lowerBody, "<html") ||
-		strings.Contains(lowerBody, "<title>")
-}
-
-func summarizeProviderHTMLErrorPage(statusCode int, body string) string {
-	lowerBody := strings.ToLower(body)
-	if strings.Contains(lowerBody, "cloudflare") {
-		switch {
-		case statusCode == 524 || strings.Contains(lowerBody, "error code 524"):
-			return "upstream timeout (Cloudflare 524 HTML error page)"
-		case statusCode >= 520 && statusCode <= 527:
-			return fmt.Sprintf("gateway error (Cloudflare %d HTML error page)", statusCode)
-		default:
-			return "gateway error (Cloudflare HTML error page)"
-		}
-	}
-
-	if title := extractProviderHTMLTitle(body); title != "" {
-		return fmt.Sprintf("%s (HTML error page)", limitProviderErrorText(title))
-	}
-
-	if statusCode == http.StatusGatewayTimeout {
-		return "upstream timeout (HTML error page)"
-	}
-
-	return "received HTML error page from provider"
-}
-
-func extractProviderHTMLTitle(body string) string {
-	lowerBody := strings.ToLower(body)
-	start := strings.Index(lowerBody, "<title>")
-	if start == -1 {
-		return ""
-	}
-	start += len("<title>")
-	end := strings.Index(lowerBody[start:], "</title>")
-	if end == -1 {
-		return ""
-	}
-	title := html.UnescapeString(body[start : start+end])
-	return strings.TrimSpace(strings.Join(strings.Fields(title), " "))
-}
-
-func limitProviderErrorText(text string) string {
-	text = strings.TrimSpace(strings.Join(strings.Fields(text), " "))
-	if text == "" {
-		return ""
-	}
-	if len(text) <= maxProviderErrorBodyPreview {
-		return text
-	}
-	return text[:maxProviderErrorBodyPreview-3] + "..."
-}
-
-func modelInfoHasVisionTag(modelInfo *ModelInfo) bool {
-	if modelInfo == nil {
-		return false
-	}
-	for _, tag := range modelInfo.Tags {
-		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
-			return true
-		}
-	}
-	return false
-}
+// HTTP error formatting helpers are in generic_provider_http_errors.go.
 
 // NewGenericProvider creates a new generic provider from configuration
 func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("invalid provider config: %v", err), nil)
 	}
 
 	timeout := config.GetTimeout()
 	streamingTimeout := config.GetStreamingTimeout()
 
-	return &GenericProvider{
+	p := &GenericProvider{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -205,85 +65,134 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 		},
 		debug: false,
 		model: config.Defaults.Model,
-	}, nil
+	}
+	// Warm the models cache in the background (skip for local endpoints).
+	if p.model != "" && p.config.Endpoint != "" &&
+		!strings.Contains(p.config.Endpoint, "127.0.0.1") &&
+		!strings.Contains(p.config.Endpoint, "localhost") {
+		p.warmModelsCache()
+	}
+	return p, nil
+}
+
+// warmModelsCache fetches /models in the background to populate the cache.
+func (p *GenericProvider) warmModelsCache() {
+	p.mu.RLock()
+	cached := p.modelsCached
+	p.mu.RUnlock()
+	if cached {
+		return
+	}
+	// Deduplicate: prevent goroutine accumulation under rapid SetModel calls.
+	if !p.warmPending.CompareAndSwap(false, true) {
+		return // Another warm-up is already in flight
+	}
+	go func() {
+		defer p.warmPending.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = p.ListModels(ctx)
+	}()
 }
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	// Snapshot model under lock to prevent races with SetModel.
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build chat request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to build chat request")
 	}
 
-	req, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
+	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
 		// Log request on build error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "build_http_request", err)
-		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "build_http_request", err)
+		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
-	resp, err := p.httpClient.Do(req)
+	// Read httpClient under lock, then release before the network call.
+	p.mu.RLock()
+	client := p.httpClient
+	p.mu.RUnlock()
+
+	resp, err := client.Do(req)
 	if err != nil {
-		// Log request on HTTP error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "http_request_failed", err)
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		// For local providers, attempt to auto-start the server and retry once.
+		if recovered := p.tryLocalServerRecovery(); recovered {
+			req2, _, err2 := p.buildHTTPRequestCtx(ctx, requestBody, false)
+			if err2 == nil {
+				p.mu.RLock()
+				c2 := p.httpClient
+				p.mu.RUnlock()
+				if resp2, err3 := c2.Do(req2); err3 == nil {
+					resp = resp2
+					err = nil
+				}
+			}
+		}
+		if err != nil {
+			// Log request on HTTP error
+			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "http_request_failed", err)
+			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		// Compatibility fallback for OpenAI-compatible backends that require
-		// max_completion_tokens instead of max_tokens for certain models.
-		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, false, body)
+		// Retry with max_completion_tokens for backends that require it
+		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, false, body)
 		if retried {
 			requestBody = retryBody
 			if retryErr != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
 					"retry_max_completion_tokens_build", retryErr)
-				return nil, fmt.Errorf("failed retry with max_completion_tokens: %w", retryErr)
+				return nil, agenterrors.NewNetwork("failed retry with max_completion_tokens", retryErr)
 			}
 			defer retryResp.Body.Close()
 			if retryResp.StatusCode != http.StatusOK {
 				retryErrBody, _ := io.ReadAll(retryResp.Body)
 				formattedErr := formatProviderHTTPError(retryResp.StatusCode, retryResp.Header, retryErrBody)
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
 					fmt.Sprintf("api_error_%d", retryResp.StatusCode), formattedErr)
 				return nil, formattedErr
 			}
 
 			retryResponse, err := decodeChatResponseWithCost(retryResp.Body)
 			if err != nil {
-				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
-				return nil, fmt.Errorf("failed to decode response: %w", err)
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)
+				return nil, agenterrors.NewNetwork("failed to decode response", err)
 			}
 			return retryResponse, nil
 		}
 
 		// Log request on API error
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
 		return nil, formattedErr
 	}
 	defer resp.Body.Close()
 
+	// Decode response (skip logging on success to avoid leaking payloads)
 	response, err := decodeChatResponseWithCost(resp.Body)
 	if err != nil {
 		// Log request on decode error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)
+		return nil, agenterrors.NewNetwork("failed to decode response", err)
 	}
 
 	// Success - don't log the request
 	return response, nil
 }
 
-// decodeChatResponseWithCost decodes a chat-completion body into the typed
-// ChatResponse, then — when no cost arrived via the canonical typed fields —
-// probes the raw JSON for a cost reported under a differently-named property
-// (see api.CostFromJSON). This keeps cost capture working across providers
-// that report cost under non-standard property names.
+// decodeChatResponseWithCost decodes a chat response, then probes raw JSON for cost
+// when the canonical typed fields don't include one (see api.CostFromJSON).
 func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
@@ -298,6 +207,22 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 			response.Usage.EstimatedCost = cost
 		}
 	}
+	// Extract image tokens from provider-specific fields
+	if response.Usage.ImageTokens == 0 {
+		var raw struct {
+			Usage struct {
+				ImageTokens int `json:"image_tokens"`
+				InputImages int `json:"input_images"`
+			} `json:"usage"`
+		}
+		if json.Unmarshal(body, &raw) == nil {
+			if raw.Usage.ImageTokens > 0 {
+				response.Usage.ImageTokens = raw.Usage.ImageTokens
+			} else if raw.Usage.InputImages > 0 {
+				response.Usage.ImageTokens = raw.Usage.InputImages
+			}
+		}
+	}
 	return &response, nil
 }
 
@@ -306,7 +231,7 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 // CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
 	if err := p.ensureModel(); err != nil {
-		return fmt.Errorf("check connection: failed to ensure model: %w", err)
+		return agenterrors.NewNetwork("check connection: failed to ensure model", err)
 	}
 
 	// Send a minimal test request to verify the model works
@@ -319,7 +244,7 @@ func (p *GenericProvider) CheckConnection() error {
 
 	_, err := p.SendChatRequest(context.Background(), testMessages, nil, "", false)
 	if err != nil {
-		return fmt.Errorf("check connection: test request failed: %w", err)
+		return agenterrors.NewNetwork("check connection: test request failed", err)
 	}
 	return nil
 }
@@ -331,7 +256,18 @@ func (p *GenericProvider) SetDebug(debug bool) {
 
 // SetModel sets the current model
 func (p *GenericProvider) SetModel(model string) error {
+	p.mu.Lock()
 	p.model = model
+	hadCache := p.modelsCached
+	p.modelsCached = false
+	p.mu.Unlock()
+	p.maxTokensHintMu.Lock()
+	p.maxTokensHint = 0
+	p.maxTokensHintMu.Unlock()
+	// Re-fire the background warm-up so GetModelContextLimit picks up the new model's context_length.
+	if hadCache {
+		p.warmModelsCache()
+	}
 	return nil
 }
 
@@ -340,7 +276,9 @@ func (p *GenericProvider) SetHTTPClient(c *http.Client) {
 	if c == nil {
 		return
 	}
+	p.mu.Lock()
 	p.httpClient = c
+	p.mu.Unlock()
 }
 
 // SetStreamingClient sets the HTTP client used for streaming requests.
@@ -348,12 +286,12 @@ func (p *GenericProvider) SetStreamingClient(c *http.Client) {
 	if c == nil {
 		return
 	}
+	p.mu.Lock()
 	p.streamingClient = c
+	p.mu.Unlock()
 }
 
-// RefreshAPIKey re-resolves the provider's API key from the credential store,
-// updating the cached key in p.config.Auth.Key. This is called after a rate-limit
-// rotation advances the key pool counter, so subsequent requests use the new key.
+// RefreshAPIKey re-resolves the API key from the credential store for subsequent requests.
 func (p *GenericProvider) RefreshAPIKey() error {
 	if p.config == nil {
 		return nil
@@ -364,7 +302,7 @@ func (p *GenericProvider) RefreshAPIKey() error {
 
 	resolved, err := credentials.ResolveProvider(p.config.Name)
 	if err != nil {
-		return fmt.Errorf("failed to re-resolve API key for %q: %w", p.config.Name, err)
+		return agenterrors.NewNetwork(fmt.Sprintf("failed to re-resolve API key for %q", p.config.Name), err)
 	}
 
 	p.config.Auth.Key = resolved.Value
@@ -373,6 +311,8 @@ func (p *GenericProvider) RefreshAPIKey() error {
 
 // GetModel returns the current model
 func (p *GenericProvider) GetModel() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.model
 }
 
@@ -381,84 +321,137 @@ func (p *GenericProvider) GetProvider() string {
 	return p.config.Name
 }
 
-// GetHTTPClient returns the current HTTP client used for non-streaming requests.
-// Useful for WASM environments that need to verify client injection.
+// GetEndpoint returns the API endpoint from the provider config.
+func (p *GenericProvider) GetEndpoint() string {
+	return p.config.Endpoint
+}
+
+// GetHTTPClient returns the HTTP client for non-streaming requests (useful for WASM verification).
 func (p *GenericProvider) GetHTTPClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.httpClient
 }
 
-// GetStreamingClient returns the current HTTP client used for streaming requests.
-// Useful for WASM environments that need to verify client injection.
+// GetStreamingClient returns the HTTP client for streaming requests (useful for WASM verification).
 func (p *GenericProvider) GetStreamingClient() *http.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.streamingClient
 }
 
 // GetModelContextLimit returns the context limit for the current model
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
-	// 1. If ListModels() has been called and cached a context length for this
-	//    model, use it — it came from the provider's own API.
+	// 1. Check the cached model list from ListModels()
+	p.mu.RLock()
+	modelName := p.model
 	if p.modelsCached {
 		for _, model := range p.models {
-			if model.ID == p.model && model.ContextLength > 0 {
+			if model.ID == modelName && model.ContextLength > 0 {
+				p.mu.RUnlock()
 				return model.ContextLength, nil
 			}
 		}
 	}
+	p.mu.RUnlock()
 
-	// 2. Consult the published model registry (canonical per-provider files at
-	//    sprout-foundry.github.io). These carry the exact context window that
-	//    the refresh workflow fetched from the provider's API, which is more
-	//    accurate than the static config defaults below. Best-effort: a fetch
-	//    failure or cache miss silently falls through to the config.
-	if p.model != "" {
+	// 2. Consult the published model registry (best-effort; falls through on failure)
+	if modelName != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
 		defer cancel()
 		if rawModels, err := modelregistry.FetchModels(ctx, p.config.Name); err == nil {
 			for _, rm := range rawModels {
-				if rm.ID == p.model && rm.ContextLength > 0 {
+				if rm.ID == modelName && rm.ContextLength > 0 {
 					return rm.ContextLength, nil
 				}
 			}
 		}
 	}
 
-	// 3. Fall back to the static config (model_overrides → pattern_overrides
-	//    → default_context_limit → conservative 32k).
-	return p.config.GetContextLimit(p.model), nil
+	// 3. Fall back to the static config (model_overrides → pattern_overrides → model_info → default)
+	return p.config.GetContextLimit(modelName), nil
 }
 
-// modelregistryFetchTimeout bounds the registry lookup in
-// GetModelContextLimit so a slow network can't stall the agent loop.
+// modelregistryFetchTimeout bounds the registry lookup in GetModelContextLimit to prevent stalling the agent loop.
 const modelregistryFetchTimeout = 2 * time.Second
 
-// ListModels returns available models
-// Priority:
-// 1. Fetch from provider API models endpoint (primary source of truth)
-// 2. Enrich endpoint data with config (context_length, tags, name)
-// 3. Fall back to config model_info if endpoint fails
-// 4. Final fallback: return just current model
+// ListModels returns available models, dispatching to a backend-specific fetcher (openai, vllm, llamacpp, or auto).
+// Results are cached; subsequent calls return the cached list without re-fetching.
 func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
 	if p.modelsCached && len(p.models) > 0 {
-		return p.models, nil
+		models := p.models
+		p.mu.RUnlock()
+		return models, nil
+	}
+	p.mu.RUnlock()
+
+	backend := p.effectiveBackend()
+	if backend == BackendAuto {
+		backend = p.detectAndCacheBackend(ctx)
 	}
 
+	switch backend {
+	case BackendVLLM:
+		return p.listModelsVLLM(ctx)
+	case BackendLlamaCPP:
+		return p.listModelsLlamaCPP(ctx)
+	default:
+		return p.listModelsOpenAI(ctx)
+	}
+}
+
+// effectiveBackend returns the backend type for model discovery (explicit config or auto-detected and cached).
+func (p *GenericProvider) effectiveBackend() BackendType {
+	if b := p.config.BackendResolved(); b != BackendAuto {
+		return b
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.backendDetected {
+		return p.detectedBackend
+	}
+	return BackendAuto
+}
+
+// detectAndCacheBackend probes the endpoint once, caches the result, and
+// returns the detected BackendType.
+func (p *GenericProvider) detectAndCacheBackend(ctx context.Context) BackendType {
+	p.mu.RLock()
+	if p.backendDetected {
+		detected := p.detectedBackend
+		p.mu.RUnlock()
+		return detected
+	}
+	client := p.httpClient
+	endpoint := p.config.Endpoint
+	p.mu.RUnlock()
+
+	detected := detectBackend(ctx, client, endpoint)
+
+	p.mu.Lock()
+	p.detectedBackend = detected
+	p.backendDetected = true
+	p.mu.Unlock()
+
+	return detected
+}
+
+// listModelsOpenAI fetches models from the standard OpenAI-compatible /models endpoint.
+func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo, error) {
 	var models []api.ModelInfo
 
-	// Try to fetch models from provider API (OpenAI-compatible endpoint)
 	modelsEndpoint := strings.TrimSuffix(p.config.Endpoint, "/chat/completions") + "/models"
 	req, err := http.NewRequestWithContext(ctx, "GET", modelsEndpoint, nil)
 	if err != nil {
-		// Endpoint construction failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 
 	token, err := p.config.GetAuthToken()
 	if err != nil {
-		// For local instances like LM Studio, skip auth if no token is configured
 		if strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost") {
 			// No auth needed for local instances
 		} else {
-			// Auth failed and not local, skip to fallback
 			return p.fallbackToConfigOrCurrent()
 		}
 	} else {
@@ -466,20 +459,21 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Add custom headers
 	for key, value := range p.config.Headers {
 		req.Header.Set(key, value)
 	}
 
-	resp, err := p.httpClient.Do(req)
+	p.mu.RLock()
+	client := p.httpClient
+	p.mu.RUnlock()
+
+	resp, err := client.Do(req)
 	if err != nil {
-		// Request failed, skip to fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Models endpoint not available or failed, use fallback
 		return p.fallbackToConfigOrCurrent()
 	}
 
@@ -490,6 +484,7 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			Created       int64  `json:"created"`
 			OwnedBy       string `json:"owned_by"`
 			ContextLength int    `json:"context_length,omitempty"`
+			MaxModelLen   int    `json:"max_model_len,omitempty"`
 			Pricing       *struct {
 				Prompt     string `json:"prompt,omitempty"`
 				Completion string `json:"completion,omitempty"`
@@ -498,10 +493,9 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&modelsResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode models response: %w", err)
+		return nil, agenterrors.NewNetwork("failed to decode models response", err)
 	}
 
-	// Build model list from endpoint data, enriched with config
 	models = make([]api.ModelInfo, 0, len(modelsResponse.Data))
 	for _, model := range modelsResponse.Data {
 		modelInfo := api.ModelInfo{
@@ -510,12 +504,12 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			Provider: p.config.Name,
 		}
 
-		// Use context_length from endpoint if available
 		if model.ContextLength > 0 {
 			modelInfo.ContextLength = model.ContextLength
+		} else if model.MaxModelLen > 0 {
+			modelInfo.ContextLength = model.MaxModelLen
 		}
 
-		// Enrich with pricing info if available from endpoint
 		if model.Pricing != nil {
 			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
 				modelInfo.InputCost = promptCost
@@ -525,26 +519,19 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 			}
 		}
 
-		// Enrich with config model_info data (context_length, tags, name, description)
 		if configModelInfo := p.config.GetModelInfo(model.ID); configModelInfo != nil {
-			// Only override if endpoint didn't provide context_length
-			if modelInfo.ContextLength <= 0 && configModelInfo.ContextLength > 0 {
-				modelInfo.ContextLength = configModelInfo.ContextLength
-			}
-			// Override name/description from config
 			if configModelInfo.Name != "" {
 				modelInfo.Name = configModelInfo.Name
 			}
 			if configModelInfo.Description != "" {
 				modelInfo.Description = configModelInfo.Description
 			}
-			// Add tags from config
 			if len(configModelInfo.Tags) > 0 {
 				modelInfo.Tags = configModelInfo.Tags
 			}
 		}
 
-		// If still no context_length, use config fallback
+		// Use GetContextLimit for the full priority chain (model_overrides → pattern_overrides → model_info → default)
 		if modelInfo.ContextLength <= 0 {
 			modelInfo.ContextLength = p.config.GetContextLimit(model.ID)
 		}
@@ -552,14 +539,141 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 		models = append(models, modelInfo)
 	}
 
-	// If we got no models from endpoint, use fallback
 	if len(models) == 0 {
 		return p.fallbackToConfigOrCurrent()
 	}
 
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// listModelsVLLM fetches models from /models and enriches context length from vLLM's /get_model_info.
+func (p *GenericProvider) listModelsVLLM(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
+	endpoint := p.config.Endpoint
+	client := p.httpClient
+	currentModel := p.model
+	p.mu.RUnlock()
+
+	token, _ := p.config.GetAuthToken()
+
+	// Fetch context limit from vLLM-specific endpoint
+	vllmCtx, hasVLLMCtx := fetchVLLMContextLimit(ctx, client, endpoint, token)
+
+	// Fetch model list from OpenAI-compat /models
+	rawModels, hasModels := fetchRawModelList(ctx, client, endpoint, token)
+
+	if !hasVLLMCtx && !hasModels {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	var models []api.ModelInfo
+
+	if hasModels {
+		models = make([]api.ModelInfo, 0, len(rawModels))
+		for _, raw := range rawModels {
+			mi := api.ModelInfo{
+				ID:       raw.ID,
+				Name:     raw.ID,
+				Provider: p.config.Name,
+			}
+			// Prefer vLLM's get_model_info, then endpoint fields, then config
+			if hasVLLMCtx {
+				mi.ContextLength = vllmCtx
+			} else if ctxLen := parseContextLengthFromRaw(raw); ctxLen > 0 {
+				mi.ContextLength = ctxLen
+			} else {
+				mi.ContextLength = p.config.GetContextLimit(raw.ID)
+			}
+			models = append(models, mi)
+		}
+	} else if currentModel != "" {
+		ctxLen := vllmCtx
+		if ctxLen == 0 {
+			ctxLen = p.config.GetContextLimit(currentModel)
+		}
+		models = []api.ModelInfo{{
+			ID:            currentModel,
+			Name:          currentModel,
+			Provider:      p.config.Name,
+			ContextLength: ctxLen,
+		}}
+	}
+
+	if len(models) == 0 {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// listModelsLlamaCPP fetches models from /models and enriches context length from llama.cpp's /props.
+func (p *GenericProvider) listModelsLlamaCPP(ctx context.Context) ([]api.ModelInfo, error) {
+	p.mu.RLock()
+	endpoint := p.config.Endpoint
+	client := p.httpClient
+	currentModel := p.model
+	p.mu.RUnlock()
+
+	token, _ := p.config.GetAuthToken()
+
+	// Fetch context limit from llama.cpp-specific endpoint
+	llamaCtx, hasLlamaCtx := fetchLlamaCPPContextLimit(ctx, client, endpoint, token)
+
+	// Fetch model list from OpenAI-compat /models
+	rawModels, hasModels := fetchRawModelList(ctx, client, endpoint, token)
+
+	if !hasLlamaCtx && !hasModels {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	var models []api.ModelInfo
+
+	if hasModels {
+		models = make([]api.ModelInfo, 0, len(rawModels))
+		for _, raw := range rawModels {
+			mi := api.ModelInfo{
+				ID:       raw.ID,
+				Name:     raw.ID,
+				Provider: p.config.Name,
+			}
+			if hasLlamaCtx {
+				mi.ContextLength = llamaCtx
+			} else if ctxLen := parseContextLengthFromRaw(raw); ctxLen > 0 {
+				mi.ContextLength = ctxLen
+			} else {
+				mi.ContextLength = p.config.GetContextLimit(raw.ID)
+			}
+			models = append(models, mi)
+		}
+	} else if currentModel != "" {
+		ctxLen := llamaCtx
+		if ctxLen == 0 {
+			ctxLen = p.config.GetContextLimit(currentModel)
+		}
+		models = []api.ModelInfo{{
+			ID:            currentModel,
+			Name:          currentModel,
+			Provider:      p.config.Name,
+			ContextLength: ctxLen,
+		}}
+	}
+
+	if len(models) == 0 {
+		return p.fallbackToConfigOrCurrent()
+	}
+
+	p.setCachedModels(models)
+	return models, nil
+}
+
+// setCachedModels stores the fetched model list and marks the cache warm.
+func (p *GenericProvider) setCachedModels(models []api.ModelInfo) {
+	p.mu.Lock()
 	p.models = models
 	p.modelsCached = true
-	return p.models, nil
+	p.mu.Unlock()
 }
 
 // fallbackToConfigOrCurrent returns config model_info or current model as fallback
@@ -577,9 +691,8 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 				Tags:          mi.Tags,
 			}
 		}
-		p.models = models
-		p.modelsCached = true
-		return p.models, nil
+		p.setCachedModels(models)
+		return models, nil
 	}
 
 	// Next try to use available_models list (legacy)
@@ -607,25 +720,62 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 			}
 			models[i] = modelInfo
 		}
-		p.models = models
-		p.modelsCached = true
-		return p.models, nil
+		p.setCachedModels(models)
+		return models, nil
 	}
 
-	// Final fallback: return just the current model
-	p.models = []api.ModelInfo{{
-		ID:            p.model,
-		Name:          p.model,
+	// Final fallback: return just the current model.
+	p.mu.RLock()
+	currentModel := p.model
+	p.mu.RUnlock()
+	models := []api.ModelInfo{{
+		ID:            currentModel,
+		Name:          currentModel,
 		Provider:      p.config.Name,
-		ContextLength: p.config.GetContextLimit(p.model),
+		ContextLength: p.config.GetContextLimit(currentModel),
 	}}
-	p.modelsCached = true
-	return p.models, nil
+	p.setCachedModels(models)
+	return models, nil
 }
 
 // SupportsVision is defined in generic_provider_vision.go
 
-// TPS tracking methods - simplified for now
+// VisionCapabilities returns per-provider vision limits (nil config returns safe defaults).
+func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
+	if p.config == nil {
+		return api.VisionCapabilitiesDefault()
+	}
+	switch p.config.Name {
+	case "anthropic":
+		return api.VisionCapabilities{
+			MaxImageBytes:     5_000_000,
+			MaxImageCount:     20,
+			MaxImageDimension: 1568,
+		}
+	case "openai":
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     10,
+			MaxImageDimension: 2048,
+			DetailTiers:       []string{"low", "high", "auto"},
+		}
+	case "gemini":
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     10,
+			MaxImageDimension: 3072,
+		}
+	default:
+		return api.VisionCapabilities{
+			MaxImageBytes:     20_000_000,
+			MaxImageCount:     500,
+			MaxImageDimension: 2048,
+			DetailTiers:       []string{"low", "high", "auto"},
+		}
+	}
+}
+
+// TPS tracking methods (no-op placeholders)
 func (p *GenericProvider) GetLastTPS() float64 {
 	return 0.0
 }
@@ -639,10 +789,28 @@ func (p *GenericProvider) GetTPSStats() map[string]float64 {
 }
 
 func (p *GenericProvider) ResetTPSStats() {
-	// No-op for now
+}
+
+// MaxTokensHinter lets callers pass a pre-computed max_tokens to the provider.
+type MaxTokensHinter interface {
+	SetMaxTokensHint(tokens int)
+}
+
+// SetMaxTokensHint sets a pre-computed max_tokens override (0 to clear).
+func (p *GenericProvider) SetMaxTokensHint(tokens int) {
+	p.maxTokensHintMu.Lock()
+	p.maxTokensHint = tokens
+	p.maxTokensHintMu.Unlock()
 }
 
 // --- Functions split into separate files ---
+//
+// generic_provider_http_errors.go:
+//   maxProviderErrorBodyPreview, formatProviderHTTPError, formatResponseHeaders,
+//   summarizeProviderHTTPError, extractProviderJSONErrorMessage,
+//   extractProviderJSONErrorField, looksLikeProviderHTMLErrorPage,
+//   summarizeProviderHTMLErrorPage, extractProviderHTMLTitle,
+//   limitProviderErrorText, modelInfoHasVisionTag
 //
 // generic_provider_request.go:
 //   buildChatRequest, applyReasoningEffort, applyDisableThinking,

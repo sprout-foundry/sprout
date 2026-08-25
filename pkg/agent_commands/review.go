@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -21,11 +22,31 @@ import (
 // It provides the same functionality as the 'sprout review' CLI command
 // but accessible through the interactive agent console
 
-type ReviewCommand struct{}
+type ReviewCommand struct {
+	ctx context.Context // cancellation context for LLM calls
+}
+
+// SetContext sets the cancellation context for review LLM calls.
+func (c *ReviewCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+// getContext returns the stored context or context.Background() as fallback.
+func (c *ReviewCommand) getContext() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *ReviewCommand) Name() string {
 	return "review"
+}
+
+// SafeDuringSteer returns false - /review reads file state, may conflict
+func (c *ReviewCommand) SafeDuringSteer() bool {
+	return false
 }
 
 // Description returns the command description
@@ -33,18 +54,49 @@ func (c *ReviewCommand) Description() string {
 	return "Perform AI-powered code review on staged Git changes"
 }
 
+// Usage returns the detailed help text shown by `/help review`.
+func (c *ReviewCommand) Usage() string {
+	return strings.Join([]string{
+		"/review   Perform AI-powered code review on staged Git changes.",
+		"",
+		"Uses the configured review provider/model. The review output is",
+		"added to conversation history so you can discuss it with the agent.",
+		"Use /review-deep for an evidence-focused deep pass.",
+		"Alias: /r",
+	}, "\n")
+}
+
 // Execute runs the code review command
 func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return runReviewCommand("review", false, args, chatAgent)
+	return runReviewCommand("review", false, args, chatAgent, c.getContext())
 }
 
 // ReviewDeepCommand implements the /review-deep slash command
 // This command performs a deeper evidence-focused review on staged Git changes
-type ReviewDeepCommand struct{}
+type ReviewDeepCommand struct {
+	ctx context.Context // cancellation context
+}
+
+// SetContext sets the cancellation context for review LLM calls.
+func (c *ReviewDeepCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+func (c *ReviewDeepCommand) getContext() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *ReviewDeepCommand) Name() string {
 	return "review-deep"
+}
+
+// SafeDuringSteer returns false - /review-deep reads file state, may conflict
+func (c *ReviewDeepCommand) SafeDuringSteer() bool {
+	return false
 }
 
 // Description returns the command description
@@ -52,12 +104,22 @@ func (c *ReviewDeepCommand) Description() string {
 	return "Perform deep evidence-based code review on staged Git changes"
 }
 
-// Execute runs the deep code review command
-func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return runReviewCommand("review-deep", true, args, chatAgent)
+// Usage returns the detailed help text shown by `/help review-deep`.
+func (c *ReviewDeepCommand) Usage() string {
+	return strings.Join([]string{
+		"/review-deep   Deep evidence-based code review on staged Git changes.",
+		"",
+		"Runs an agentic review that cross-references source code for each",
+		"finding. More thorough (and slower) than /review.",
+	}, "\n")
 }
 
-func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent) error {
+// Execute runs the deep code review command
+func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	return runReviewCommand("review-deep", true, args, chatAgent, c.getContext())
+}
+
+func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent, goCtx context.Context) error {
 	// Set git working directory from agent workspace root
 	if chatAgent != nil {
 		SetGitDir(chatAgent.GetWorkspaceRoot())
@@ -176,6 +238,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		Config:           cfg,
 		Logger:           logger,
 		AgentClient:      agentClient,
+		GoCtx:            goCtx, // cancellation context
 		ProjectType:      detectProjectType(),
 		CommitMessage:    extractStagedChangesSummary(),
 		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),
@@ -294,4 +357,22 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	fmt.Print("\r\n" + strings.Repeat("═", 50) + "\r\n")
 
 	return nil
+}
+
+// Complete returns file path completions for /review arguments.
+func (c *ReviewCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := "."
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	return PathCompleter(prefix)
+}
+
+// Complete returns file path completions for /review-deep arguments.
+func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := "."
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	return PathCompleter(prefix)
 }

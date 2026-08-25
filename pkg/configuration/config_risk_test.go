@@ -59,10 +59,12 @@ func TestDefaultAutoApproveRules_ContainsExpectedCategories(t *testing.T) {
 		}
 	}
 
-	// High-risk never ops
+	// High-risk never ops — only genuinely destructive operations.
+	// git_checkout / git_switch / git_restore are NOT here: they're
+	// ChangeTracker-recoverable working-tree ops (Medium via DefaultRisk).
 	expectedHigh := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 	for _, op := range expectedHigh {
 		found := false
 		for _, h := range rules.HighRiskNever {
@@ -83,9 +85,9 @@ func TestDefaultAutoApproveRules_ContainsExpectedCategories(t *testing.T) {
 
 func TestSubagentTypeGetAutoApproveRules_WithRules(t *testing.T) {
 	rules := AutoApproveRules{
-		LowRiskOps:     []string{"custom_op"},
-		MediumRiskOps:  []string{"another_op"},
-		HighRiskNever:  []string{"bad_op"},
+		LowRiskOps:    []string{"custom_op"},
+		MediumRiskOps: []string{"another_op"},
+		HighRiskNever: []string{"bad_op"},
 	}
 	st := SubagentType{
 		ID:               "custom",
@@ -102,9 +104,9 @@ func TestSubagentTypeGetAutoApproveRules_WithRules(t *testing.T) {
 
 func TestSubagentTypeGetAutoApproveRules_WithoutRules(t *testing.T) {
 	st := SubagentType{
-		ID:        "default_persona",
-		Name:      "Default",
-		Enabled:   true,
+		ID:      "default_persona",
+		Name:    "Default",
+		Enabled: true,
 	}
 	st.AutoApproveRules = nil
 
@@ -121,9 +123,9 @@ func TestSubagentTypeGetAutoApproveRules_WithoutRules(t *testing.T) {
 
 func TestContainsForceFlag_ExactFlags(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"--force flag", "some --force command", true},
 		{"-f standalone flag", "git commit -f -m msg", true},
@@ -132,14 +134,14 @@ func TestContainsForceFlag_ExactFlags(t *testing.T) {
 		{"no force flag", "git status", false},
 		{"empty string", "", false},
 		{"-f for non-force command python3", "python3 -f script.py", false},
-		{"tar -f is not force", "tar -xzf archive.tar.gz", false},  // tar's -f specifies filename, not force; tar not in force-capable list
-		{"grep -f is not force", "grep -f patterns.txt file", false}, // grep's -f means "read patterns from file"; grep not in force-capable list
-		{"git -f between git and subcommand", "git -f commit", false}, // -f between git and subcommand is malformed; not a valid git flag position
+		{"tar -f is not force", "tar -xzf archive.tar.gz", false},          // tar's -f specifies filename, not force; tar not in force-capable list
+		{"grep -f is not force", "grep -f patterns.txt file", false},       // grep's -f means "read patterns from file"; grep not in force-capable list
+		{"git -f between git and subcommand", "git -f commit", false},      // -f between git and subcommand is malformed; not a valid git flag position
 		{"rsync --force is always force", "rsync --force src/ dst/", true}, // --force is always treated as force regardless of command
-		{"cp -rf combined flag", "cp -rf /a /b", true}, // cp's -rf is combined flag with f; cp is in force-capable list
-		{"mv -f force overwrite", "mv -f old new", true}, // mv's -f is force overwrite; mv is in force-capable list
-		{"docker rm -f", "docker rm -f container", true}, // docker's -f is force remove; docker is in force-capable list
-		{"docker rm --force", "docker rm --force container", true}, // --force is always treated as force
+		{"cp -rf combined flag", "cp -rf /a /b", true},                     // cp's -rf is combined flag with f; cp is in force-capable list
+		{"mv -f force overwrite", "mv -f old new", true},                   // mv's -f is force overwrite; mv is in force-capable list
+		{"docker rm -f", "docker rm -f container", true},                   // docker's -f is force remove; docker is in force-capable list
+		{"docker rm --force", "docker rm --force container", true},         // --force is always treated as force
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -153,9 +155,9 @@ func TestContainsForceFlag_ExactFlags(t *testing.T) {
 
 func TestContainsForceFlag_CombinedShortFlags(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"-rf combined", "rm -rf /tmp", true},
 		{"-fr combined", "rm -fr /tmp", true},
@@ -180,9 +182,9 @@ func TestContainsForceFlag_CombinedShortFlags(t *testing.T) {
 
 func TestCategorizeCommand_GitSubcommands(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"git status", "git status", "git_status"},
 		{"git log", "git log", "git_log"},
@@ -222,9 +224,9 @@ func TestCategorizeCommand_GitSubcommands(t *testing.T) {
 
 func TestCategorizeCommand_NonGitCommands(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"rm command", "rm file.txt", "rm_command"},
 		{"docker command", "docker ps", "docker"},
@@ -265,9 +267,9 @@ func TestCategorizeCommand_NonGitCommands(t *testing.T) {
 
 func TestMatchesRiskPattern_ForceFlag(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"with --force", "cmd --force arg", true},
 		{"without --force", "cmd arg", false},
@@ -284,9 +286,9 @@ func TestMatchesRiskPattern_ForceFlag(t *testing.T) {
 
 func TestMatchesRiskPattern_RmRecursive(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"rm -r", "rm -r dir/", true},
 		{"rm -rf", "rm -rf /tmp/*", true},
@@ -321,9 +323,9 @@ func TestMatchesRiskPattern_RmRecursive(t *testing.T) {
 
 func TestMatchesRiskPattern_GitResetHard(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git reset --hard", "git reset --hard HEAD~1", true},
 		{"git reset without --hard", "git reset HEAD~1", false},
@@ -341,9 +343,9 @@ func TestMatchesRiskPattern_GitResetHard(t *testing.T) {
 
 func TestMatchesRiskPattern_GitClean(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git clean", "git clean -fd", true},
 		{"no clean", "git status", false},
@@ -360,9 +362,9 @@ func TestMatchesRiskPattern_GitClean(t *testing.T) {
 
 func TestMatchesRiskPattern_GitPushForce(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git push --force", "git push --force origin main", true},
 		{"git push -f", "git push -f origin main", true},
@@ -381,9 +383,9 @@ func TestMatchesRiskPattern_GitPushForce(t *testing.T) {
 
 func TestMatchesRiskPattern_DockerPrune(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"docker prune", "docker system prune", true},
 		{"docker without prune", "docker ps", false},
@@ -411,10 +413,10 @@ func TestMatchesRiskPattern_UnknownPattern(t *testing.T) {
 
 func TestFirstFieldAfter(t *testing.T) {
 	tests := []struct {
-		name    string
-		s       string
-		prefix  string
-		want    string
+		name   string
+		s      string
+		prefix string
+		want   string
 	}{
 		{"simple", "git status --short", "git", "status"},
 		{"no match", "hello world", "git", "hello"},
@@ -558,9 +560,9 @@ func TestSubagentTypeEvaluateOperationRisk_ForceFlagEscalation(t *testing.T) {
 
 func TestSubagentTypeEvaluateOperationRisk_NoAutoApproveRules(t *testing.T) {
 	st := SubagentType{
-		ID:              "default_persona",
-		Name:            "Default",
-		Enabled:         true,
+		ID:      "default_persona",
+		Name:    "Default",
+		Enabled: true,
 	}
 	// No AutoApproveRules set — should use defaults
 	got := st.EvaluateOperationRisk("git status")
@@ -579,9 +581,9 @@ func TestSubagentTypeEvaluateOperationRisk_CaseInsensitive(t *testing.T) {
 	st := evalRiskHelper()
 
 	tests := []struct {
-		name    string
-		cmd     string
-		want    RiskLevel
+		name string
+		cmd  string
+		want RiskLevel
 	}{
 		{"mixed case rm", "RM -rf /tmp", RiskLevelHigh},
 		{"mixed case git", "GIT STATUS", RiskLevelLow},
@@ -600,9 +602,9 @@ func TestSubagentTypeEvaluateOperationRisk_CaseInsensitive(t *testing.T) {
 func TestSubagentTypeEvaluateOperationRisk_CustomRules(t *testing.T) {
 	// Create custom rules where everything is low risk
 	customRules := &AutoApproveRules{
-		LowRiskOps:     []string{"shell_command", "write_file", "git_commit", "git_push"},
-		MediumRiskOps:  []string{},
-		HighRiskNever:  []string{"dangerous_op"},
+		LowRiskOps:    []string{"shell_command", "write_file", "git_commit", "git_push"},
+		MediumRiskOps: []string{},
+		HighRiskNever: []string{"dangerous_op"},
 	}
 	st := SubagentType{
 		ID:               "custom_persona",
@@ -628,9 +630,9 @@ func TestSubagentTypeEvaluateOperationRisk_CustomRules(t *testing.T) {
 func TestSubagentTypeEvaluateOperationRisk_CustomHighRiskPattern(t *testing.T) {
 	// Create rules with a custom high-risk pattern
 	customRules := &AutoApproveRules{
-		LowRiskOps:     []string{"read_file"},
-		MediumRiskOps:  []string{"write_file"},
-		HighRiskNever:  []string{"dangerous_op", "force_flag", "rm_recursive"},
+		LowRiskOps:    []string{"read_file"},
+		MediumRiskOps: []string{"write_file"},
+		HighRiskNever: []string{"dangerous_op", "force_flag", "rm_recursive"},
 	}
 	st := SubagentType{
 		ID:               "custom_persona",
@@ -692,9 +694,9 @@ func TestRiskLevelConstants(t *testing.T) {
 func TestCategorizeCommand_CaseVariations(t *testing.T) {
 	// categorizeCommand expects pre-lowercased input (caller lowercases first)
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"lowercase git", "git status", "git_status"},
 		{"lowercase git commit", "git commit -m msg", "git_commit"},
@@ -717,9 +719,9 @@ func TestCategorizeCommand_CaseVariations(t *testing.T) {
 
 func TestContainsForceFlag_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"diff is not -f", "diff file1 file2", false},
 		{"diff contains f but not flag", "diff -u file1 file2", false},
@@ -820,10 +822,11 @@ func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 		}
 	}
 
-	// Verify high_risk_never ops
+	// Verify high_risk_never ops — only genuinely destructive operations.
+	// git_checkout / git_switch / git_restore are ChangeTracker-recoverable.
 	expectedHighRisk := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 	if len(rules.HighRiskNever) != len(expectedHighRisk) {
 		t.Errorf("high_risk_never: expected %d items, got %d: %v", len(expectedHighRisk), len(rules.HighRiskNever), rules.HighRiskNever)
 	}
@@ -938,9 +941,9 @@ func TestNewConfig_EA_AutoApproveRules_EvaluateOperationRisk(t *testing.T) {
 		{"git clean is high risk", "git clean -fd", RiskLevelHigh},
 		{"rm -rf is high risk", "rm -rf /tmp/test", RiskLevelHigh},
 		{"git push --force is high risk", "git push --force", RiskLevelHigh},
-		{"git checkout is high risk", "git checkout main", RiskLevelHigh},
-		{"git switch is high risk", "git switch main", RiskLevelHigh},
-		{"git restore is high risk", "git restore file.txt", RiskLevelHigh},
+		{"git checkout is medium risk", "git checkout main", RiskLevelMedium},
+		{"git switch is medium risk", "git switch main", RiskLevelMedium},
+		{"git restore is medium risk", "git restore file.txt", RiskLevelMedium},
 		{"docker prune is high risk", "docker system prune", RiskLevelHigh},
 	}
 
@@ -1068,7 +1071,7 @@ func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
 		"subagent_spawn", "cross_directory"}
 	wantedHigh := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 
 	var failed bool
 
@@ -1215,4 +1218,177 @@ func TestContainsForceFlag_Property(t *testing.T) {
 	if err != nil {
 		t.Fatalf("property test error: %v", err)
 	}
+}
+
+// TestInvokesGitSubcommand_TimeoutWrapper is a regression test for the
+// bug where `invokesGitSubcommand` had a broken guard condition that
+// caused it to match "git checkout" even when "git" was an argument to
+// another command like `timeout`. The original command that triggered
+// the crash was:
+//
+//	cd /home/alanp/dev/inicion/OfferSpotter/platform &&
+//	timeout 110 git checkout -b fix/415-sidebar-super-admin-request-flood
+//
+// This was classified as High risk because the `git_checkout` pattern
+// matched (it was in HighRiskNever for the Default profile at the time),
+// and the security rejection corrupted the REPL's stdin state.
+func TestInvokesGitSubcommand_TimeoutWrapper(t *testing.T) {
+	// Direct pattern-matching tests: "git" inside a `timeout` wrapper
+	// is NOT a command invocation.
+	t.Run("pattern_timeout_wrapper_does_not_match", func(t *testing.T) {
+		cmd := "timeout 110 git checkout -b fix/415"
+		fields := strings.Fields(cmd)
+		if matchesRiskPattern(strings.ToLower(cmd), "git_checkout") {
+			t.Errorf("matchesRiskPattern matched git_checkout for %q — git is an argument to timeout, not a command", cmd)
+		}
+		// Also verify the helper directly
+		if invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned true for %q — git at index 2 follows '110', not a chain operator", cmd)
+		}
+	})
+
+	// Full risk evaluation: timeout-wrapped git checkout should be
+	// Medium (shell_command falls through to DefaultRisk), NOT High.
+	t.Run("evaluate_timeout_wrapper_is_medium", func(t *testing.T) {
+		st := evalRiskHelper()
+		cmd := "timeout 110 git checkout -b fix/415"
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelMedium {
+			t.Errorf("EvaluateOperationRisk(%q) = %q, want %q (git wrapped in timeout should not match git_checkout HighRiskNever)", cmd, got, RiskLevelMedium)
+		}
+	})
+
+	// cd && timeout wrapper — the exact command from the bug report.
+	t.Run("evaluate_cd_and_timeout_wrapper_is_medium", func(t *testing.T) {
+		st := evalRiskHelper()
+		cmd := "cd /repo && timeout 110 git checkout -b fix/415 2>&1; echo \"exit=$?\""
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelMedium {
+			t.Errorf("EvaluateOperationRisk(%q) = %q, want %q", cmd, got, RiskLevelMedium)
+		}
+	})
+
+	// Positive: git checkout after a chain operator DOES match.
+	t.Run("git_after_chain_operator_matches", func(t *testing.T) {
+		cmd := "cd /repo && git checkout main"
+		// This should be Medium now (not High — git_checkout removed
+		// from HighRiskNever). But the pattern matching itself should
+		// still detect it so the Cautious profile can gate it.
+		fields := strings.Fields(cmd)
+		if !invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned false for %q — git follows &&, should match", cmd)
+		}
+	})
+
+	// Positive: bare git checkout (index 0) matches.
+	t.Run("bare_git_checkout_matches", func(t *testing.T) {
+		fields := strings.Fields("git checkout main")
+		if !invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned false for bare 'git checkout main'")
+		}
+	})
+
+	// git checkout is now Medium under Default profile (ChangeTracker-
+	// recoverable working-tree op, per AGENTS.md).
+	t.Run("git_checkout_is_medium_under_default", func(t *testing.T) {
+		st := evalRiskHelper()
+		for _, cmd := range []string{
+			"git checkout main",
+			"git checkout -b fix/415",
+			"git switch feature",
+			"git restore file.go",
+		} {
+			got := st.EvaluateOperationRisk(cmd)
+			if got != RiskLevelMedium {
+				t.Errorf("EvaluateOperationRisk(%q) = %q, want %q (working-tree op, ChangeTracker-recoverable)", cmd, got, RiskLevelMedium)
+			}
+		}
+	})
+
+	// git checkout is still High under the Cautious profile.
+	t.Run("git_checkout_is_high_under_cautious", func(t *testing.T) {
+		rules := AutoApproveRulesForProfile(RiskProfileCautious)
+		st := SubagentType{ID: "t", Name: "T", AutoApproveRules: &rules}
+		got := st.EvaluateOperationRisk("git checkout main")
+		if got != RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk('git checkout main') under Cautious = %q, want %q", got, RiskLevelHigh)
+		}
+	})
+}
+
+// TestEvaluateOperationRisk_HeredocContentNotScanned is a regression test
+// for the bug where heredoc bodies (and quoted strings) were scanned by
+// the risk pattern matcher as if they were commands. The original crash
+// was triggered by a heredoc writing a Go file whose source code mentioned
+// "git checkout" — the persona cascade matched git_checkout inside the
+// heredoc DATA content, classified the command as High, and the resulting
+// security prompt timed out after 30 minutes and corrupted the REPL.
+func TestEvaluateOperationRisk_HeredocContentNotScanned(t *testing.T) {
+	st := evalRiskHelper()
+
+	// The exact crash command: a heredoc whose body contains a Go
+	// source file that references "git checkout" in a string literal.
+	t.Run("heredoc_with_git_checkout_in_body", func(t *testing.T) {
+		cmd := "cat > /tmp/test.go << 'EOF'\n" +
+			"package main\n" +
+			"cmd := `cd /repo && timeout 110 git checkout -b fix/415`\n" +
+			"EOF\n" +
+			"go run /tmp/test.go"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh || got == RiskLevelCritical {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA content as %q — heredoc bodies must not be scanned as commands", got)
+		}
+	})
+
+	// Heredoc body containing a dangerous command as DATA should not trigger.
+	t.Run("heredoc_with_rm_rf_in_body", func(t *testing.T) {
+		cmd := "cat > script.sh << 'EOF'\n" +
+			"# Example: rm -rf /\n" +
+			"echo do not run this\n" +
+			"EOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelCritical {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA as Critical — heredoc bodies must not be scanned")
+		}
+	})
+
+	// Heredoc body containing && git checkout — even with a chain operator
+	// inside the heredoc, it should NOT match because it's DATA not a command.
+	t.Run("heredoc_with_chain_op_and_git_in_body", func(t *testing.T) {
+		cmd := "cat > test.sh << 'EOF'\n" +
+			"cd /repo && git checkout main\n" +
+			"EOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA as High — chain operators inside heredoc bodies must not trigger pattern matches")
+		}
+	})
+
+	// Quoted string containing "git checkout" should not trigger.
+	t.Run("quoted_string_with_git_checkout", func(t *testing.T) {
+		cmd := `echo "run git checkout main to switch branches"`
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk classified quoted DATA as High: %q → %q", cmd, got)
+		}
+	})
+
+	// Actual command after heredoc should still be evaluated correctly.
+	t.Run("real_command_after_heredoc", func(t *testing.T) {
+		cmd := "cat > /tmp/x << 'EOF'\nsome data\nEOF\ngit push --force"
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk should detect real --force after heredoc: got %q, want %q", got, RiskLevelHigh)
+		}
+	})
+
+	// Bare heredoc with no dangerous content — `cat` is categorized as
+	// read-only, so it's Low risk (not Medium).
+	t.Run("plain_heredoc", func(t *testing.T) {
+		cmd := "cat > /tmp/test.go << 'EOF'\npackage main\nfunc main() {}\nEOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh || got == RiskLevelCritical {
+			t.Errorf("plain heredoc should not be High/Critical: got %q", got)
+		}
+	})
 }

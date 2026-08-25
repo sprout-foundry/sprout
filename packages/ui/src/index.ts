@@ -104,8 +104,14 @@ export { default as MenuBar } from './components/MenuBar';
 export { default as Sidebar } from './components/Sidebar';
 export { default as CommandPalette } from './components/CommandPalette';
 export { default as Editor } from './components/Editor';
-export { Skeleton, SkeletonText } from './components/Skeleton';
+export { default as Skeleton, SkeletonText } from './components/Skeleton';
 export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
+
+// ── Collapsible (SP-101-Phase 3, AUDIT-GAP-1) ──────────────────
+export { default as Collapsible } from './components/Collapsible';
+export type { CollapsibleProps } from './components/Collapsible';
+
+export { default as CodeBlock } from './components/CodeBlock';
 
 // ── Dialogs ───────────────────────────────────────────────────────────
 export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './components/ThemedDialog';
@@ -128,4 +134,22 @@ export {
   loadCommandHistory,
   persistCommandHistory
 } from './components/command_input_history';
+export type { CommandCompletionApi, CommandCompletionResponse, CommandCompletion } from './utils/command_completion';
+export {
+  createHttpCommandCompletionApi,
+  argumentCandidatesFromResponse,
+  replaceLastWord,
+  createDebouncer,
+  ARGUMENT_COMPLETION_DEBOUNCE_MS,
+} from './utils/command_completion';
 export { FONT_SIZE_DEFAULT } from './components/terminalConstants';
+
+// ── Plugin API types ──────────────────────────────────────────────────
+export type {
+  PluginView,
+  PluginViewProps,
+  PluginPanel,
+  PluginSettingsTab,
+  SproutPlugin,
+  PluginRegistration,
+} from './types/plugin';

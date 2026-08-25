@@ -47,19 +47,25 @@
 
 /* ── Force CodeMirror merge view to fill full width ── */
 
-/* The .cm-editor itself must fill its parent */
+/* The .cm-editor must fill its parent horizontally, but NOT vertically.
+   @codemirror/merge's design makes .cm-mergeView the vertical scroll
+   container: each pane's editor keeps its natural (content) height so the
+   scroller can measure the full document. Forcing height:100% on
+   .cm-editor/.cm-scroller here makes the percentage resolve against an
+   indefinite flex-stretched parent, so the editor grows to content height
+   while .cm-mergeViewEditor (overflow:hidden) clips it — leaving content
+   invisible and unscrollable. */
 .merge-view-container .cm-editor {
   width: 100%;
-  height: 100%;
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 13px;
 }
 
-/* .cm-scroller is the scrollable viewport — must fill editor */
+/* .cm-scroller is the horizontal viewport. Vertical scrolling is handled
+   by .cm-mergeView; the base theme already gives the scroller overflow-x
+   handling, so only pin the width here. */
 .merge-view-container .cm-editor .cm-scroller {
   width: 100%;
-  height: 100%;
-  overflow: auto;
 }
 
 /* .cm-content is position:absolute inside .cm-scroller.
@@ -74,18 +80,20 @@
   min-width: 100%;
 }
 
+/* The merge view itself is the vertical scroll container. The base theme
+   already applies overflow-y:auto here; keep height pinned to the wrapper
+   and let the editors keep their natural height inside it. */
 .merge-view-container .cm-mergeView {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
 }
 
-.merge-view-container .cm-mergeView .cm-merge-view {
-  height: 100%;
+.merge-view-container .cm-mergeView .cm-mergeViewEditors {
+  width: 100%;
 }
 
-.merge-view-container .cm-mergeView .cm-editor {
-  flex: 1;
+.merge-view-container .cm-mergeView .cm-mergeViewEditor {
+  flex: 1 1 0;
   min-width: 0;
   width: 100%;
 }
@@ -96,12 +104,17 @@
 }
 
 /* Side-by-side specific styles */
-.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-view {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditors {
+  display: flex;
+  align-items: stretch;
 }
 
-.merge-view-wrapper.side-by-side .merge-view-container .cm-merge-view .cm-editor:first-child {
+.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditor {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditor:first-child {
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -135,7 +148,12 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
 }
 
 .merge-view-controls button:hover {

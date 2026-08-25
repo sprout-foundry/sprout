@@ -54,6 +54,10 @@ export interface MergeViewWrapperProps {
   aLabel?: string;
   /** Label for side B (modified) - side-by-side mode */
   bLabel?: string;
+  /** Called when the user saves (Cmd+S) in an editable side-by-side pane */
+  onSave?: (content: string) => void;
+  /** Called whenever the editable pane B content changes (typing or revert) */
+  onModifiedChange?: (content: string) => void;
 }
 
 /**
@@ -84,6 +88,8 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   sideBySideNavigation = true,
   aLabel = 'Original',
   bLabel = 'Modified',
+  onSave,
+  onModifiedChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
@@ -92,6 +98,10 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const sideBySideCreatedRef = useRef(false);
   // Track the last prop content we synced, so we don't overwrite user edits
   const lastSyncedContentRef = useRef<{ original: string; modified: string }>({ original: '', modified: '' });
+  // Keep the latest onModifiedChange in a ref so the pane-B update listener
+  // (created once per MergeView mount) never causes the view to be recreated.
+  const onModifiedChangeRef = useRef(onModifiedChange);
+  onModifiedChangeRef.current = onModifiedChange;
   const [hunkInfo, setHunkInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { theme } = useTheme();
@@ -122,14 +132,42 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   );
 
   // Build extensions for the editable pane B in side-by-side mode.
-  // Includes history for Ctrl+Z / Ctrl+Shift+Z support and revert keybindings.
+  // Includes history for Ctrl+Z / Ctrl+Shift+Z support, revert keybindings,
+  // and Cmd+S / Ctrl+S save.
   const buildEditableExtensions = useCallback(() => {
     const extensions = buildBaseExtensions(true);
     // Add history so reverts can be undone/redone
     extensions.push(history());
     extensions.push(keymap.of(historyKeymap));
+    // Add save keybinding
+    if (onSave) {
+      extensions.push(
+        keymap.of([
+          {
+            key: 'Mod-s',
+            run: (view) => {
+              onSave(view.state.doc.toString());
+              return true;
+            },
+          },
+        ]),
+      );
+    }
+    // Report pane-B content changes (reverts, typing) up to the parent so
+    // edits survive re-renders / view toggles instead of living only inside
+    // the CodeMirror instance. Also mark the content as "synced" so the
+    // prop-sync effect below never clobbers an in-flight user edit when the
+    // parent echoes the same content back.
+    extensions.push(
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged) return;
+        const content = update.state.doc.toString();
+        lastSyncedContentRef.current = { ...lastSyncedContentRef.current, modified: content };
+        onModifiedChangeRef.current?.(content);
+      }),
+    );
     return extensions;
-  }, [buildBaseExtensions]);
+  }, [buildBaseExtensions, onSave]);
 
   // Build unified mode extensions (closure captures originalContent)
   const buildUnifiedExtensions = useCallback(() => {
@@ -365,6 +403,20 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     // Add history for undo/redo support
     extensions.push(history());
     extensions.push(keymap.of(historyKeymap));
+    // Add save keybinding
+    if (onSave) {
+      extensions.push(
+        keymap.of([
+          {
+            key: 'Mod-s',
+            run: (view) => {
+              onSave(view.state.doc.toString());
+              return true;
+            },
+          },
+        ]),
+      );
+    }
 
     const state = EditorState.create({
       doc: modifiedContent,

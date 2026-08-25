@@ -87,19 +87,19 @@ func createVenv(systemPython, venvDir string) error {
 }
 
 func ensurePDFPythonDependencies(venvPython string) error {
-	checkCmd := exec.Command(venvPython, "-c", "import pypdf; from PIL import Image; import pypdfium2")
+	checkCmd := exec.Command(venvPython, "-c", "from PIL import Image; import pypdfium2")
 	if err := checkCmd.Run(); err == nil {
 		return nil
 	}
 
 	installCmd := exec.Command(
-		venvPython, "-m", "pip", "install", "--disable-pip-version-check", "pypdf", "Pillow", "pypdfium2",
+		venvPython, "-m", "pip", "install", "--disable-pip-version-check", "Pillow", "pypdfium2",
 	)
 	if _, err := installCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("install PDF Python dependencies: %w", err)
 	}
 
-	recheckCmd := exec.Command(venvPython, "-c", "import pypdf; from PIL import Image; import pypdfium2")
+	recheckCmd := exec.Command(venvPython, "-c", "from PIL import Image; import pypdfium2")
 	if _, err := recheckCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("validate PDF Python dependencies: %w", err)
 	}

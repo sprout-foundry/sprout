@@ -1,20 +1,4 @@
 // Security circuit breaker + audit logging for the live seed tool path.
-//
-// This file wires two previously-dormant features into the live pre-execute
-// hook (newPreExecuteHook in seed_tool_registry.go):
-//
-//  1. A security-specific circuit breaker that escalates the caution message
-//     when the LLM retries the exact same blocked operation. It lives in the
-//     existing CircuitBreakerState.Actions map under a "sec:" key namespace
-//     so it cannot collide with the (dormant) general circuit breaker.
-//
-//  2. Audit logging of unified-gate security decisions (blocked / prompted /
-//     approved / loop_detected) through the Agent-owned AuditLogger. This
-//     complements the package-level auditLogger already invoked from
-//     ClassifyToolCall in pkg/agent_tools.
-//
-// All helpers are nil-safe on the agent / state / logger so bare *Agent
-// values in unit tests don't panic.
 package agent
 
 import (
@@ -27,27 +11,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// securityBlockThreshold is the consecutive-identical-block count below
-// which the caution stays a standard retry-warning. One retry (count 1→2)
-// is forgivable; when the count exceeds this threshold (count > 2, i.e. a
-// third identical attempt), the caution escalates to a hard "STOP RETRYING"
-// signal (SECURITY_CAUTION_LOOP_DETECTED).
+// securityBlockThreshold is the consecutive-identical-block count before escalation.
 const securityBlockThreshold = 2
 
-// generateSecurityBlockKey builds a deterministic key for a tool+args combo,
-// namespaced under "sec:" so it never collides with the general circuit
-// breaker (which uses "toolName:argsJSON"). Mirrors generateActionKey in
-// tool_executor_circuit_breaker.go.
+// generateSecurityBlockKey builds a deterministic key for a tool+args combo, namespaced under "sec:".
 func generateSecurityBlockKey(toolName string, args map[string]interface{}) string {
 	argsJSON, _ := json.Marshal(args)
 	return fmt.Sprintf("sec:%s:%s", toolName, string(argsJSON))
 }
 
-// recordSecurityBlock increments the consecutive-block counter for a tool+args
-// combo and returns the new count. When the agent or circuit-breaker state is
-// unavailable (e.g. bare *Agent in unit tests), it returns 0 — the caller
-// treats 0 as "no tracking" and skips loop escalation. Thread-safe via
-// CircuitBreakerState.mu.
+// recordSecurityBlock increments the consecutive-block counter and returns the new count.
+// Returns 0 when state is unavailable. Thread-safe via CircuitBreakerState.mu.
 func (a *Agent) recordSecurityBlock(toolName string, args map[string]interface{}) int {
 	if a == nil || a.state == nil {
 		return 0
@@ -73,18 +47,14 @@ func (a *Agent) recordSecurityBlock(toolName string, args map[string]interface{}
 	action.Count++
 	action.LastUsed = getCurrentTime()
 
-	// Clean up stale entries (both sec: and general) to prevent unbounded
-	// map growth in long sessions. The 5-minute TTL matches the existing
-	// cleanupOldCircuitBreakerEntriesLocked pattern. Runs under the lock
-	// we already hold. Only sweep every Nth insert to amortize cost.
+	// Clean up stale entries every Nth insert to amortize cost.
 	if action.Count == 1 || len(cb.Actions) > 64 {
 		a.cleanupStaleSecurityEntriesLocked(cb)
 	}
 	return action.Count
 }
 
-// cleanupStaleSecurityEntriesLocked removes entries (any namespace) older
-// than 5 minutes. Caller MUST hold cb.mu.
+// cleanupStaleSecurityEntriesLocked removes entries older than 5 minutes. Caller MUST hold cb.mu.
 func (a *Agent) cleanupStaleSecurityEntriesLocked(cb *CircuitBreakerState) {
 	currentTime := getCurrentTime()
 	fiveMinutesAgo := currentTime - 300
@@ -95,10 +65,7 @@ func (a *Agent) cleanupStaleSecurityEntriesLocked(cb *CircuitBreakerState) {
 	}
 }
 
-// clearSecurityBlock resets the consecutive-block counter for a tool+args
-// combo. Called on the success path so the counter only tracks *consecutive*
-// failures — a successful call (even with different args) resets the tracking
-// for that exact combo. No-op when state is unavailable.
+// clearSecurityBlock resets the consecutive-block counter for a tool+args combo.
 func (a *Agent) clearSecurityBlock(toolName string, args map[string]interface{}) {
 	if a == nil || a.state == nil {
 		return
@@ -114,9 +81,7 @@ func (a *Agent) clearSecurityBlock(toolName string, args map[string]interface{})
 	delete(cb.Actions, key)
 }
 
-// getSecurityBlockCount returns the current consecutive-block count for a
-// tool+args combo without mutating it. Returns 0 when untracked or state is
-// unavailable. Thread-safe read via CircuitBreakerState.mu.
+// getSecurityBlockCount returns the current consecutive-block count without mutating it.
 func (a *Agent) getSecurityBlockCount(toolName string, args map[string]interface{}) int {
 	if a == nil || a.state == nil {
 		return 0
@@ -139,8 +104,7 @@ func (a *Agent) getSecurityBlockCount(toolName string, args map[string]interface
 // Audit logging helpers (Task 2)
 // ---------------------------------------------------------------------------
 
-// GetAuditLogger returns the agent-owned security audit logger, or nil when
-// none is configured. Nil-safe: callers should nil-check before use.
+// GetAuditLogger returns the agent-owned security audit logger, or nil.
 func (a *Agent) GetAuditLogger() *tools.AuditLogger {
 	if a == nil {
 		return nil
@@ -149,9 +113,7 @@ func (a *Agent) GetAuditLogger() *tools.AuditLogger {
 }
 
 // SetAuditLogger attaches a security audit logger to this agent. Also sets
-// the package-level logger in pkg/agent_tools (via tools.SetAuditLogger) so
-// that ClassifyToolCall entries are written through the same file. Pass nil
-// to disable audit logging.
+// the package-level logger in pkg/agent_tools. Pass nil to disable.
 func (a *Agent) SetAuditLogger(l *tools.AuditLogger) {
 	if a == nil {
 		return
@@ -160,12 +122,8 @@ func (a *Agent) SetAuditLogger(l *tools.AuditLogger) {
 	tools.SetAuditLogger(l)
 }
 
-// logSecurityDecision writes a structured audit entry for a unified-gate
-// security decision. action is one of "blocked", "approved", "prompted",
-// "loop_detected". The args map may contain secrets, so only the tool name
-// is recorded — never the raw args — matching the safety stance of the
-// existing AuditEntry.Args field. Nil-safe: skips silently when no logger
-// is configured.
+// logSecurityDecision writes a structured audit entry for a unified-gate security decision.
+// Args are deliberately omitted to avoid secret leakage. Nil-safe: skips when no logger.
 func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, assessment RiskAssessment, action string) {
 	if a == nil {
 		return
@@ -180,6 +138,11 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		category = string(assessment.Sources[0])
 	}
 
+	pathTier := ""
+	if assessment.PathTier != PathTierUnknown {
+		pathTier = assessment.PathTier.String()
+	}
+
 	sessionID := ""
 	workspace := ""
 	if a.state != nil {
@@ -189,15 +152,9 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		workspace = ws
 	}
 
-	// Deliberately omit AuditEntry.Args — args may contain secrets (e.g.
-	// shell commands with embedded tokens). The tool name + risk level +
-	// reasoning are sufficient for an audit trail without a leakage risk.
-	// Sanitize the reasoning too — it frequently contains command text that
-	// may embed tokens (e.g. curl -H 'Authorization: Bearer sk-...').
 	entry := tools.AuditEntry{
 		Timestamp: time.Now(),
 		Tool:      tool,
-		// Args intentionally blank — see comment above.
 		RiskLevel: string(assessment.Level),
 		Category:  category,
 		Action:    action,
@@ -205,21 +162,22 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 		Source:    "unified-gate",
 		SessionID: sessionID,
 		Workspace: workspace,
+		PathTier:  pathTier,
+		FileMode:  assessment.FileMode,
 	}
-	_ = logger.LogEntry(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_ = logger.LogJSON(data)
 }
 
-// sanitizeForAudit redacts likely-secret substrings from a reasoning string
-// before it is persisted to the audit log. It reuses sanitizeToolFailureMessage
-// (strips base64/data-URIs, truncates) and additionally collapses long runs
-// that look like API keys. This is defense-in-depth — the primary secret
-// surface (args) is already omitted.
+// sanitizeForAudit redacts likely-secret substrings before persisting to the audit log.
 func sanitizeForAudit(s string) string {
 	return sanitizeToolFailureMessage(s)
 }
 
-// riskCategoryFromAssessment derives a human-readable risk-level string from
-// a RiskAssessment for the audit trail. Falls back to "unknown".
+// riskCategoryFromAssessment derives a human-readable risk-level string for the audit trail.
 func riskCategoryFromAssessment(assessment RiskAssessment) string {
 	if assessment.Level != "" {
 		return string(assessment.Level)
@@ -227,24 +185,7 @@ func riskCategoryFromAssessment(assessment RiskAssessment) string {
 	return string(configuration.RiskLevelLow)
 }
 
-// ---------------------------------------------------------------------------
-// Tier-aware caution suffixes (Task 4)
-//
-// Every SECURITY_CAUTION_REQUIRED block used to get the same generic guidance.
-// But a hard block (critical) is never approvable, while a CAUTION block just
-// needs interactive approval. Parsing the tier from the error message prefix
-// (Option B from the task spec) avoids signature changes while still giving
-// the LLM tier-appropriate guidance.
-// ---------------------------------------------------------------------------
-
-// tierFromMessage inspects the security error message and returns the
-// appropriate guidance suffix. It recognises four prefixes that the unified
-// gate / approval flow already emit:
-//
-//   - "hard block"      → critical/unconditional (no profile can approve)
-//   - "confirmation required" → medium/intent (needs interactive approval)
-//   - "rejected"        → user-decline (do not retry)
-//   - default           → generic guidance
+// tierFromMessage inspects the security error message and returns the appropriate guidance suffix.
 func tierFromMessage(msg string) string {
 	lc := strings.ToLower(msg)
 	switch {

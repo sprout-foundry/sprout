@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FileCode } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import './FindAllReferencesOverlay.css';
 
@@ -291,7 +291,7 @@ const FindAllReferencesOverlayImpl = ({
       </div>
     </div>
   );
-}
+};
 
 export const FindAllReferencesOverlay = React.memo(FindAllReferencesOverlayImpl, areFindAllReferencesPropsEqual);
 

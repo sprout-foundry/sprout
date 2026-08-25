@@ -8,14 +8,7 @@ import (
 	"strings"
 )
 
-// BootstrapIsolatedConfig initializes an isolated config directory by cloning
-// the user's main config on first use.
-//
-// Behavior:
-// - Creates configDir if missing.
-// - If configDir/config.json already exists, does nothing.
-// - Otherwise clones default config from the main config location (if present).
-// - Removes command-history fields from the cloned config.
+// BootstrapIsolatedConfig initializes an isolated config directory by cloning the user's main config.
 func BootstrapIsolatedConfig(configDir string) error {
 	targetDir := strings.TrimSpace(configDir)
 	if targetDir == "" {
@@ -24,6 +17,8 @@ func BootstrapIsolatedConfig(configDir string) error {
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return fmt.Errorf("failed to create isolated config directory %q: %w", targetDir, err)
 	}
+	// Tighten permissions on an already-existing directory.
+	_ = os.Chmod(targetDir, 0700)
 
 	targetConfigPath := filepath.Join(targetDir, ConfigFileName)
 	if _, err := os.Stat(targetConfigPath); err == nil {
@@ -59,6 +54,12 @@ func BootstrapIsolatedConfig(configDir string) error {
 		if err := os.WriteFile(targetConfigPath, out, 0600); err != nil {
 			return fmt.Errorf("failed to write isolated config file %q: %w", targetConfigPath, err)
 		}
+	}
+
+	// Ship a .gitignore covering personal overrides and state directories.
+	gitignorePath := filepath.Join(targetDir, ".gitignore")
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		_ = os.WriteFile(gitignorePath, []byte(workspaceGitignoreContent), 0644)
 	}
 
 	return nil

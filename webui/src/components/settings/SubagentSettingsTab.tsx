@@ -34,7 +34,7 @@ export default function SubagentSettingsTab({
     .sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="section">
+    <div className="section" data-testid="settings-subagent-tab">
       <h4>Default Subagent</h4>
 
       <div className="config-item">
@@ -127,9 +127,7 @@ export default function SubagentSettingsTab({
                 <span className="persona-mapping-value">
                   {personaProvider ? personaProvider : <em>default provider</em>}
                 </span>
-                <span className="persona-mapping-value">
-                  {personaModel ? personaModel : <em>default model</em>}
-                </span>
+                <span className="persona-mapping-value">{personaModel ? personaModel : <em>default model</em>}</span>
               </div>
             );
           })}

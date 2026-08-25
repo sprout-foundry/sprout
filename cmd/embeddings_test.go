@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // setupEmbeddingTestEnv creates a temp config dir with an embedding index dir,
@@ -69,7 +72,7 @@ func TestEmbeddingsClear_DefaultAll(t *testing.T) {
 	// Default is "all" — should clear everything
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -103,7 +106,7 @@ func TestEmbeddingsClear_TypeCode(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -138,7 +141,7 @@ func TestEmbeddingsClear_TypeConversationTurn(t *testing.T) {
 
 	embeddingsClearType = "conversation_turn"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -173,7 +176,7 @@ func TestEmbeddingsClear_TypeMemory(t *testing.T) {
 
 	embeddingsClearType = "memory"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -230,7 +233,7 @@ func TestEmbeddingsClear_NoIndexDir(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -254,7 +257,7 @@ func TestEmbeddingsClear_EmptyIndexDir(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -281,7 +284,7 @@ func TestEmbeddingsClear_TypeCode_NoONNXFiles(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -308,7 +311,7 @@ func TestEmbeddingsClear_FullCodeFiles(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -337,7 +340,7 @@ func TestEmbeddingsClear_FullConversationFiles(t *testing.T) {
 
 	embeddingsClearType = "conversation_turn"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -369,7 +372,7 @@ func TestEmbeddingsClear_All_Mixed(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -391,9 +394,19 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	// No config.json — should fall back to $SPROUT_CONFIG/embeddings
+	// SP-133: with no config.json the index resolves to the DATA root, not the
+	// config root — the index is regenerable data. Bind the data root so this
+	// asserts the same location the embedding manager writes to.
+	t.Setenv("SPROUT_DATA_DIR", filepath.Join(tmpDir, "data"))
 
-	indexDir := filepath.Join(tmpDir, "embeddings")
+	// The index is scoped per workspace under the data root, and the CLI's
+	// workspace is its working directory. Resolve through the same helper the
+	// command uses rather than hardcoding the layout.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	indexDir := embedding.DefaultIndexDir(cwd)
 	if err := os.MkdirAll(indexDir, 0755); err != nil {
 		t.Fatalf("failed to create index dir: %v", err)
 	}
@@ -403,7 +416,7 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -432,7 +445,7 @@ func TestEmbeddingsClear_DryRun_All(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -463,7 +476,7 @@ func TestEmbeddingsClear_DryRun_Code(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -490,7 +503,7 @@ func TestEmbeddingsClear_DryRun_NoFiles(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -545,7 +558,7 @@ func TestEmbeddingsClear_YesSkipsConfirm(t *testing.T) {
 	// --yes should skip the confirmation prompt entirely
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -577,7 +590,7 @@ func TestEmbeddingsClear_DryRun_NoConfirm(t *testing.T) {
 	embeddingsClearDryRun = true
 	embeddingsClearYes = false
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)

@@ -6,13 +6,21 @@
  * - Document change handling (updates buffer content, tracks modified state, triggers diagnostics)
  * - Integration with cursor updates and scroll sync
  *
+ * Content state (`localContent`) is debounced via rAF: while typing rapidly,
+ * React state is updated at most once per frame instead of once per keystroke.
+ * This prevents EditorPane and all child hooks (symbol extraction, live
+ * preview, etc.) from re-rendering on every character. CodeMirror already has
+ * the latest content — the debounced state is for consumers that need a
+ * near-current snapshot.
+ *
  * @see EditorPane.tsx for the original implementation this hook extracts
  */
 
 import type { ViewUpdate } from '@codemirror/view';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import type { DiagnosticTrigger } from './useEditorDiagnostics';
+import type { CMViewAPI } from './useCMView';
 
 export interface UseEditorUpdateParams {
   /** Ref to the current buffer — avoids stale closures in the update listener */
@@ -21,8 +29,10 @@ export interface UseEditorUpdateParams {
   localContent: string;
   /** Setter for localContent — used when document changes in the editor */
   setLocalContent: React.Dispatch<React.SetStateAction<string>>;
-  /** Ref from useEditorFileIO — tracks whether an external update is in flight */
-  isExternalUpdateRef: React.MutableRefObject<boolean>;
+  /** CodeMirror view API ref — populated by EditorPane after `useCMView`
+   *  returns. Reading `cmViewApiRef.current?.isExternalUpdate()` is safe at
+   *  any time; before the API is mounted, it returns `false`. */
+  cmViewApiRef: React.MutableRefObject<CMViewAPI | null>;
   /** Ref from useEditorDiagnostics — triggers diagnostics fetch on content change */
   fetchDiagnosticsRef: React.MutableRefObject<(filePath: string, content: string, trigger?: DiagnosticTrigger) => void>;
   /** From useEditorCursor — handles cursor position updates */
@@ -33,6 +43,12 @@ export interface UseEditorUpdateParams {
   updateBufferContent: (id: string, content: string) => void;
   /** From EditorManagerContext — tracks whether buffer has unsaved changes */
   setBufferModified: (id: string, modified: boolean) => void;
+  /** From useEditorFileIO — true while a disk read is in flight. Keystrokes
+   *  that land between a buffer switch and the new buffer's content dispatch
+   *  are ignored: the view still shows the previous buffer, so attributing
+   *  them would write into the wrong buffer (the load dispatch would clobber
+   *  them anyway). */
+  isLoadingRef: React.MutableRefObject<boolean>;
 }
 
 export interface UseEditorUpdateReturn {
@@ -60,16 +76,54 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     bufferRef,
     localContent,
     setLocalContent,
-    isExternalUpdateRef,
+    cmViewApiRef,
     fetchDiagnosticsRef,
     handleCursorUpdate,
     handleScrollUpdate,
     updateBufferContent,
     setBufferModified,
+    isLoadingRef,
   } = params;
 
   const localContentRef = useRef<string>(localContent);
   localContentRef.current = localContent;
+
+  // rAF-coalesced state update: rapid typing dispatches a content change
+  // on every keystroke, but React state only needs to update at most once
+  // per frame. Without this, every keystroke triggers a full EditorPane
+  // re-render (symbol extraction, markdown preview, footer, etc.).
+  const pendingContentRef = useRef<string | null>(null);
+  const contentRafRef = useRef<number | null>(null);
+  const contentScheduledRef = useRef(false);
+
+  const debouncedSetLocalContent = useCallback(
+    (content: string) => {
+      pendingContentRef.current = content;
+      if (!contentScheduledRef.current) {
+        contentScheduledRef.current = true;
+        contentRafRef.current = requestAnimationFrame(() => {
+          contentScheduledRef.current = false;
+          contentRafRef.current = null;
+          const next = pendingContentRef.current;
+          if (next !== null) {
+            pendingContentRef.current = null;
+            localContentRef.current = next;
+            setLocalContent(next);
+          }
+        });
+      }
+    },
+    [setLocalContent],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (contentRafRef.current !== null) {
+        cancelAnimationFrame(contentRafRef.current);
+        contentRafRef.current = null;
+      }
+    };
+  }, []);
 
   const onUpdate = useCallback(
     (update: ViewUpdate) => {
@@ -77,12 +131,18 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
       handleCursorUpdate(update);
 
       // Handle document content changes
-      if (update.docChanged && !isExternalUpdateRef.current) {
+      if (update.docChanged && !cmViewApiRef.current?.isExternalUpdate()) {
+        // While a disk load is in flight the view still shows the previous
+        // buffer — attribute nothing to the new buffer yet.
+        if (isLoadingRef.current) {
+          return;
+        }
+
         const newContent = update.state.doc.toString();
 
         // Only update state when content actually changed (prevents unnecessary re-renders)
         if (newContent !== localContentRef.current) {
-          setLocalContent(newContent);
+          debouncedSetLocalContent(newContent);
         }
 
         // Update buffer in global state
@@ -107,12 +167,13 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     [
       bufferRef,
       fetchDiagnosticsRef,
-      setLocalContent,
-      isExternalUpdateRef,
+      debouncedSetLocalContent,
+      cmViewApiRef,
       handleCursorUpdate,
       handleScrollUpdate,
       updateBufferContent,
       setBufferModified,
+      isLoadingRef,
     ],
   );
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { AlertTriangle, Check, Star } from 'lucide-react';
 import { ApiService } from '../services/api';
 import type { ProviderModel } from '../services/api/types';
 import { debugLog } from '../utils/log';
@@ -55,11 +56,10 @@ function ModelSelectionModal({
   // Copy + intent vary by why the modal opened.
   const isWarning = reason !== 'switch';
   const title = isWarning ? 'Model Not Available' : 'Choose a model';
-  const icon = isWarning ? '⚠' : '✱';
   const description = isWarning ? (
     <>
-      The configured model is not available for provider <strong>{provider}</strong>. Please select a different model
-      to continue.
+      The configured model is not available for provider <strong>{provider}</strong>. Please select a different model to
+      continue.
     </>
   ) : (
     <>
@@ -141,6 +141,7 @@ function ModelSelectionModal({
       role="dialog"
       aria-modal="true"
       aria-label={isWarning ? 'Model selection required' : 'Choose a model'}
+      data-testid="model-picker"
     >
       <div
         className={`model-selection-card${isWarning ? '' : ' model-selection-card--switch'}`}
@@ -153,7 +154,7 @@ function ModelSelectionModal({
 
         {/* Header */}
         <div className="model-selection-header">
-          <span className="model-selection-icon">{icon}</span>
+          <span className="model-selection-icon">{isWarning ? <AlertTriangle size={16} /> : <Star size={16} />}</span>
           <h2 className="model-selection-title">{title}</h2>
         </div>
 
@@ -192,51 +193,56 @@ function ModelSelectionModal({
                       const warnings = model.warnings ?? [];
                       const recommendedRole = recommended.includes('primary') ? 'primary' : recommended[0];
                       return (
-                  <li key={model.id}>
-                    <button
-                      type="button"
-                      className={`model-selection-item ${
-                        selectedModel === model.id ? 'model-selection-item--selected' : ''
-                      }`}
-                      onClick={() => setSelectedModel(model.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSelect();
-                        }
-                      }}
-                      aria-selected={selectedModel === model.id}
-                      role="option"
-                    >
-                      <span className="model-selection-item-text">{model.id}</span>
-                      {recommendedRole && (
-                        <span
-                          className="model-selection-badge model-selection-badge--recommended"
-                          title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
-                        >
-                          ★ {recommendedRole}
-                        </span>
-                      )}
-                      {!recommendedRole && eligible.length > 0 && (
-                        <span
-                          className="model-selection-badge model-selection-badge--eligible"
-                          title={`Eligible for ${eligible.join(', ')} (not yet probe-verified)`}
-                        >
-                          eligible
-                        </span>
-                      )}
-                      {warnings.length > 0 && (
-                        <span
-                          className="model-selection-badge model-selection-badge--warning"
-                          title={warnings.join('; ')}
-                          aria-label={`Warning: ${warnings.join('; ')}`}
-                        >
-                          ⚠
-                        </span>
-                      )}
-                      {selectedModel === model.id && <span className="model-selection-item-check">✓</span>}
-                    </button>
-                  </li>
+                        <li key={model.id}>
+                          <button
+                            type="button"
+                            className={`model-selection-item ${
+                              selectedModel === model.id ? 'model-selection-item--selected' : ''
+                            }`}
+                            onClick={() => setSelectedModel(model.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSelect();
+                              }
+                            }}
+                            aria-selected={selectedModel === model.id}
+                            role="option"
+                            data-testid="model-picker-option"
+                          >
+                            <span className="model-selection-item-text">{model.id}</span>
+                            {recommendedRole && (
+                              <span
+                                className="model-selection-badge model-selection-badge--recommended"
+                                title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
+                              >
+                                <Star size={10} fill="currentColor" /> {recommendedRole}
+                              </span>
+                            )}
+                            {!recommendedRole && eligible.length > 0 && (
+                              <span
+                                className="model-selection-badge model-selection-badge--eligible"
+                                title={`Eligible for ${eligible.join(', ')} (not yet probe-verified)`}
+                              >
+                                eligible
+                              </span>
+                            )}
+                            {warnings.length > 0 && (
+                              <span
+                                className="model-selection-badge model-selection-badge--warning"
+                                title={warnings.join('; ')}
+                                aria-label={`Warning: ${warnings.join('; ')}`}
+                              >
+                                <AlertTriangle size={10} />
+                              </span>
+                            )}
+                            {selectedModel === model.id && (
+                              <span className="model-selection-item-check" data-testid="model-picker-current">
+                                <Check size={12} />
+                              </span>
+                            )}
+                          </button>
+                        </li>
                       );
                     })}
                   </ul>

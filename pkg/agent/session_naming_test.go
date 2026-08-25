@@ -26,6 +26,13 @@ func TestGenerateSessionName(t *testing.T) {
 			expectedName: "Refactor the persistence.go file to improve session naming",
 		},
 		{
+			name: "timestamp is stripped from name",
+			messages: []api.Message{
+				{Role: "user", Content: "<current-time>2026-07-22T12:37:28-05:00</current-time>\n\nRefactor the persistence.go file to improve session naming"},
+			},
+			expectedName: "Refactor the persistence.go file to improve session naming",
+		},
+		{
 			name: "custom session name override",
 			messages: []api.Message{
 				{Role: "system", Content: "[SESSION_NAME:]Custom Session Name"},

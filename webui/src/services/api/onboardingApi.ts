@@ -7,7 +7,12 @@ import type { OnboardingStatusResponse, CompleteOnboardingRequest, CompleteOnboa
 export async function getOnboardingStatus(fetchFn: typeof fetch): Promise<OnboardingStatusResponse> {
   const response = await fetchFn('/api/onboarding/status');
   if (!response.ok) throw new Error('Failed to fetch onboarding status');
-  return response.json();
+  const data = await response.json();
+  // Strip the `test` mock-client sentinel — see miscApi.stripTestProvider.
+  if (Array.isArray(data.providers)) {
+    data.providers = data.providers.filter((p: { id?: string }) => p?.id !== 'test');
+  }
+  return data;
 }
 
 export async function completeOnboarding(

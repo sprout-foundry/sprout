@@ -105,38 +105,45 @@ function makeMockSelection(empty: boolean, from: number, to: number): Selection 
 
 // kindEmoji tests
 describe('kindEmoji', () => {
-  it('returns box emoji for organizeImports', () => {
-    expect(kindEmoji('organizeImports')).toBe('📦');
+  it('returns box SVG for organizeImports', () => {
+    expect(kindEmoji('organizeImports')).toContain('<svg');
+    expect(kindEmoji('organizeImports')).toContain('viewBox="0 0 24 24"');
   });
-  it('returns box emoji for import', () => {
-    expect(kindEmoji('import')).toBe('📦');
+  it('returns box SVG for import', () => {
+    expect(kindEmoji('import')).toContain('<svg');
   });
-  it('returns wrench emoji for quickfix', () => {
-    expect(kindEmoji('quickfix')).toBe('🔧');
+  it('returns wrench SVG for quickfix', () => {
+    expect(kindEmoji('quickfix')).toContain('<svg');
   });
-  it('returns wrench emoji for fix', () => {
-    expect(kindEmoji('fix')).toBe('🔧');
+  it('returns wrench SVG for fix', () => {
+    expect(kindEmoji('fix')).toContain('<svg');
   });
-  it('returns trash emoji for remove', () => {
-    expect(kindEmoji('remove')).toBe('🗑️');
+  it('returns trash SVG for remove', () => {
+    expect(kindEmoji('remove')).toContain('<svg');
   });
-  it('returns trash emoji for delete', () => {
-    expect(kindEmoji('delete')).toBe('🗑️');
+  it('returns trash SVG for delete', () => {
+    expect(kindEmoji('delete')).toContain('<svg');
   });
-  it('returns recycle emoji for refactor', () => {
-    expect(kindEmoji('refactor')).toBe('♻️');
+  it('returns recycle SVG for refactor', () => {
+    expect(kindEmoji('refactor')).toContain('<svg');
   });
-  it('returns recycle emoji for sort', () => {
-    expect(kindEmoji('sort')).toBe('♻️');
+  it('returns recycle SVG for sort', () => {
+    expect(kindEmoji('sort')).toContain('<svg');
   });
-  it('returns broom emoji for source', () => {
-    expect(kindEmoji('source')).toBe('🧹');
+  it('returns broom SVG for source', () => {
+    expect(kindEmoji('source')).toContain('<svg');
   });
-  it('returns lightning for unknown kind', () => {
-    expect(kindEmoji('other')).toBe('⚡');
+  it('returns lightning SVG for unknown kind', () => {
+    expect(kindEmoji('other')).toContain('<svg');
   });
-  it('returns lightning for empty string', () => {
-    expect(kindEmoji('')).toBe('⚡');
+  it('returns lightning SVG for empty string', () => {
+    expect(kindEmoji('')).toContain('<svg');
+  });
+  it('returns distinct SVGs for different kinds', () => {
+    const kinds = ['organizeImports', 'quickfix', 'remove', 'refactor', 'source', 'other'];
+    const svgs = kinds.map((k) => kindEmoji(k));
+    // Each kind maps to a distinct icon (unique set).
+    expect(new Set(svgs).size).toBe(kinds.length);
   });
 });
 

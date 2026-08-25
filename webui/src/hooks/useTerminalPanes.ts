@@ -1,9 +1,9 @@
+import type { TerminalSession, AttachableSession } from '@sprout/ui';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import type { TerminalSession, AttachableSession } from '@sprout/ui';
 import type { TerminalPaneHandle } from '../components/TerminalPane';
-import { notificationBus } from '../services/notificationBus';
 import { clientFetch } from '../services/clientSession';
+import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 
 /* ------------------------------------------------------------------ */
@@ -58,9 +58,10 @@ export interface UseTerminalPanesReturn {
   handleSessionActivity: (paneId: string, sessionId: string) => void;
   handlePaneExit: (paneId: string, sessionId: string) => void;
   handleAttachAgentSession: (sessionId: string, name: string) => Promise<void>;
-  toggleSplit: (direction: 'horizontal' | 'vertical') => void;
-  addPaneInDirection: () => void;
-  canAddPane: boolean;
+  /** Always adds a pane in the given direction (never un-splits). */
+  addSplitPane: (direction: 'horizontal' | 'vertical') => void;
+  /** Whether a split button in the given direction can add a pane right now. */
+  canAddPaneForDirection: (direction: 'horizontal' | 'vertical') => boolean;
 
   /* Activity tracking */
   activitySessionIds: Set<string>;
@@ -182,14 +183,6 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     return panesRef.current.find((p) => p.id === focusedPaneId) ?? null;
   }, [focusedPaneId]);
 
-  const clearActivePane = useCallback(() => {
-    const pane = getFocusedPane();
-    if (pane) {
-      const handle = paneHandles.current.get(pane.activeSessionId);
-      handle?.clear();
-    }
-  }, [getFocusedPane]);
-
   // Clear the active pane's terminal content
   const handleClearActivePane = useCallback(() => {
     const pane = getFocusedPane();
@@ -291,9 +284,7 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
 
       const remaining = pane.sessions.filter((s) => s.id !== sessionId);
       const newActive =
-        pane.activeSessionId === sessionId
-          ? nextActiveAfterClose(pane.sessions, sessionId)
-          : pane.activeSessionId;
+        pane.activeSessionId === sessionId ? nextActiveAfterClose(pane.sessions, sessionId) : pane.activeSessionId;
 
       updatePane(paneId, (p) => ({
         ...p,
@@ -330,20 +321,17 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     [updatePane],
   );
 
-  const handleSessionActivity = useCallback(
-    (paneId: string, sessionId: string) => {
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-      if (pane.activeSessionId === sessionId) return;
-      setActivitySessionIds((prev) => {
-        if (prev.has(sessionId)) return prev;
-        const next = new Set(prev);
-        next.add(sessionId);
-        return next;
-      });
-    },
-    [],
-  );
+  const handleSessionActivity = useCallback((paneId: string, sessionId: string) => {
+    const pane = panesRef.current.find((p) => p.id === paneId);
+    if (!pane) return;
+    if (pane.activeSessionId === sessionId) return;
+    setActivitySessionIds((prev) => {
+      if (prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.add(sessionId);
+      return next;
+    });
+  }, []);
 
   const clearActivityForSession = useCallback((sessionId: string) => {
     setActivitySessionIds((prev) => {
@@ -486,64 +474,46 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     const w = rect?.width ?? 0;
     const h = rect?.height ?? 0;
     if (w === 0 && h === 0) return MAX_PANES_HARD_CAP;
-    const limit = direction === 'vertical'
-      ? Math.floor(w / MIN_PANE_WIDTH_PX)
-      : Math.floor(h / MIN_PANE_HEIGHT_PX);
+    const limit = direction === 'vertical' ? Math.floor(w / MIN_PANE_WIDTH_PX) : Math.floor(h / MIN_PANE_HEIGHT_PX);
     return Math.min(MAX_PANES_HARD_CAP, Math.max(2, limit));
   }, []);
 
-  const toggleSplit = useCallback(
+  /**
+   * Always-add split action (editor convention). Clicking a split button
+   * adds a new pane — it never toggles/un-splits. Closing a pane is done
+   * via the per-pane close button (which calls `removePane`).
+   *
+   *   - No split active → create a pane, set direction.
+   *   - Split in the SAME direction → add another pane (respecting the max).
+   *   - Split in a DIFFERENT direction → flip the layout direction, keep
+   *     the existing panes (do NOT add a new one).
+   */
+  const addSplitPane = useCallback(
     (direction: 'horizontal' | 'vertical') => {
       const currentDir = splitDirectionRef.current;
-      const paneCount = panesRef.current.length;
 
-      if (currentDir === direction) {
-        if (paneCount === 2) {
-          const dropped = panesRef.current[1];
-          dropped.sessions.forEach((s) => {
-            const handle = paneHandles.current.get(s.id);
-            handle?.cleanup?.();
-            paneHandles.current.delete(s.id);
-            sessionShellsRef.current.delete(s.id);
-            sessionReattachIdsRef.current.delete(s.id);
-          });
-          setPanes((prev) => prev.slice(0, 1));
-          setFocusedPaneId(panesRef.current[0].id);
-          setSplitSizes([100]);
-          splitDirectionRef.current = 'none';
-          setSplitDirection('none');
-        }
-        return;
-      }
-
-      if (currentDir !== 'none') {
-        setSplitSizes(evenSplit(paneCount));
+      // Direction switch: keep existing panes, just change the axis.
+      if (currentDir !== 'none' && currentDir !== direction) {
         splitDirectionRef.current = direction;
         setSplitDirection(direction);
+        setSplitSizes(evenSplit(panesRef.current.length));
         return;
       }
 
+      // Same direction (or first split): respect the pane cap.
+      const max = computeMaxPanes(direction);
+      if (panesRef.current.length >= max) return;
+
       const newPane = createPane();
+      const nextCount = panesRef.current.length + 1;
       setPanes((prev) => [...prev, newPane]);
       setFocusedPaneId(newPane.id);
-      setSplitSizes(evenSplit(2));
+      setSplitSizes(evenSplit(nextCount));
       splitDirectionRef.current = direction;
       setSplitDirection(direction);
     },
-    [createPane],
+    [computeMaxPanes, createPane],
   );
-
-  const addPaneInDirection = useCallback(() => {
-    const dir = splitDirectionRef.current;
-    if (dir === 'none') return;
-    const max = computeMaxPanes(dir);
-    if (panesRef.current.length >= max) return;
-    const newPane = createPane();
-    const nextCount = panesRef.current.length + 1;
-    setPanes((prev) => [...prev, newPane]);
-    setFocusedPaneId(newPane.id);
-    setSplitSizes(evenSplit(nextCount));
-  }, [computeMaxPanes, createPane]);
 
   /* ---- Split divider drag ---- */
   const handleSplitDividerDragStart = useCallback(
@@ -625,8 +595,23 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
 
   /* ---- Computed ---- */
   const isSplitActive = splitDirection !== 'none';
-  const maxPanesForCurrentSplit = isSplitActive ? computeMaxPanes(splitDirection) : 1;
-  const canAddPane = isSplitActive && panes.length < maxPanesForCurrentSplit;
+
+  /**
+   * Whether a split button in `direction` can add a pane right now.
+   *
+   * - If a split in a *different* direction is active, switching direction
+   *   is always allowed (it just flips the axis without adding a pane), so
+   *   return true.
+   * - Otherwise the direction matches (or there's no split yet): allow
+   *   adding as long as we haven't hit the pane cap for that direction.
+   */
+  const canAddPaneForDirection = useCallback(
+    (direction: 'horizontal' | 'vertical'): boolean => {
+      if (isSplitActive && splitDirection !== direction) return true;
+      return panes.length < computeMaxPanes(direction);
+    },
+    [computeMaxPanes, isSplitActive, panes.length, splitDirection],
+  );
 
   /* ---- Listen for sprout:terminal-attach-session ---- */
   useEffect(() => {
@@ -666,9 +651,9 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
       const detail = (e as CustomEvent<{ action: string }>).detail;
       if (!detail?.action) return;
       if (detail.action === 'split_horizontal') {
-        toggleSplit('horizontal');
+        addSplitPane('horizontal');
       } else if (detail.action === 'split_vertical') {
-        toggleSplit('vertical');
+        addSplitPane('vertical');
       } else if (detail.action === 'clear') {
         handleClearActivePane();
       } else if (detail.action === 'kill') {
@@ -680,7 +665,7 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     };
     window.addEventListener('sprout:terminal-action', handler as EventListener);
     return () => window.removeEventListener('sprout:terminal-action', handler as EventListener);
-  }, [closeSessionInPane, getFocusedPane, handleClearActivePane, toggleSplit]);
+  }, [addSplitPane, closeSessionInPane, getFocusedPane, handleClearActivePane]);
 
   /* ---- Cleanup on unmount ---- */
   useEffect(() => {
@@ -729,9 +714,8 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     handleSessionActivity,
     handlePaneExit,
     handleAttachAgentSession,
-    toggleSplit,
-    addPaneInDirection,
-    canAddPane,
+    addSplitPane,
+    canAddPaneForDirection,
 
     /* Activity tracking */
     activitySessionIds,

@@ -15,10 +15,10 @@
  * - Custom renderLocalToggle prop is respected
  */
 
-import { act, createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -269,10 +269,7 @@ describe('test button', () => {
     const btn = screen.getByRole('button', { name: /send test notification/i });
     await userEvent.click(btn);
 
-    expect(mockNotify).toHaveBeenCalledWith(
-      'Sprout',
-      'Test notification — desktop notifications are working!',
-    );
+    expect(mockNotify).toHaveBeenCalledWith('Sprout', 'Test notification — desktop notifications are working!');
   });
 
   it('shows blocked status when clicked with denied permission', async () => {
@@ -288,8 +285,8 @@ describe('test button', () => {
 
     expect(mockNotify).not.toHaveBeenCalled();
     await waitFor(() => {
-      // Check the button text changed to show blocked (not the status label)
-      expect(screen.getByText(/✗ Blocked/)).toBeInTheDocument();
+      // The button label changes to "Blocked" (not the status label/helper message)
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
     });
   });
 
@@ -308,10 +305,7 @@ describe('test button', () => {
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(mockNotify).toHaveBeenCalledWith(
-        'Sprout',
-        'Test notification — desktop notifications are working!',
-      );
+      expect(mockNotify).toHaveBeenCalledWith('Sprout', 'Test notification — desktop notifications are working!');
     });
   });
 
@@ -330,8 +324,8 @@ describe('test button', () => {
     expect(mockNotify).not.toHaveBeenCalled();
 
     await waitFor(() => {
-      // Check the button text changed to show blocked (not the status label)
-      expect(screen.getByText(/✗ Blocked/)).toBeInTheDocument();
+      // The button label changes to "Blocked" (not the status label/helper message)
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
     });
   });
 });
@@ -353,8 +347,8 @@ describe('test status feedback', () => {
     await userEvent.click(btn);
 
     await waitFor(() => {
-      // Check the button text changed (not the helper message)
-      expect(screen.getByText(/✓ Sent!/)).toBeInTheDocument();
+      // The button label changes to "Sent" (not the helper message)
+      expect(screen.getByText('Sent')).toBeInTheDocument();
     });
   });
 
@@ -418,8 +412,8 @@ describe('test status feedback', () => {
     });
 
     await waitFor(() => {
-      // Check the button text changed to "✓ Sent!" (specific to avoid ambiguity)
-      expect(screen.getByText('✓ Sent!')).toBeInTheDocument();
+      // The button label changes to "Sent" (specific to avoid ambiguity)
+      expect(screen.getByText('Sent')).toBeInTheDocument();
     });
   });
 });

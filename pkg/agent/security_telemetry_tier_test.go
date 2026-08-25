@@ -231,9 +231,9 @@ func TestRiskCategoryFromAssessment(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
-		assessment  RiskAssessment
-		wantLevel   string
+		name       string
+		assessment RiskAssessment
+		wantLevel  string
 	}{
 		{"critical", RiskAssessment{Level: configuration.RiskLevelCritical}, "critical"},
 		{"high", RiskAssessment{Level: configuration.RiskLevelHigh}, "high"},
@@ -262,9 +262,9 @@ func TestSecurityTelemetry_JSONFieldNames(t *testing.T) {
 
 	// Simulate what cmd/agent_result.go does: build a map from getters.
 	metrics := map[string]int64{
-		"security_cautions_issued":        a.GetSecurityCautionsIssued(),
-		"security_retries_after_caution":  a.GetSecurityRetriesAfterCaution(),
-		"security_loops_detected":         a.GetSecurityLoopsDetected(),
+		"security_cautions_issued":       a.GetSecurityCautionsIssued(),
+		"security_retries_after_caution": a.GetSecurityRetriesAfterCaution(),
+		"security_loops_detected":        a.GetSecurityLoopsDetected(),
 	}
 
 	data, err := json.Marshal(metrics)

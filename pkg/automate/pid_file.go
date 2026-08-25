@@ -18,6 +18,13 @@ type AutomateSessionInfo struct {
 	OutputFilePath string    `json:"output_file_path,omitempty"`
 	BudgetUSD      *float64  `json:"budget_usd,omitempty"`
 	Kind           string    `json:"kind"` // always "automate"
+	// EndedAt, ExitCode, and Status are set when the session's process
+	// exits (FinalizeSessionFile). Empty Status means the session was
+	// written by a pre-finalization build and never finalized — PID
+	// liveness is the fallback for those legacy records.
+	EndedAt  *time.Time `json:"ended_at,omitempty"`
+	ExitCode *int       `json:"exit_code,omitempty"`
+	Status   string     `json:"status,omitempty"`
 }
 
 // GetAutomateSessionDir returns the .sprout/automate/ directory path.
@@ -32,8 +39,12 @@ func GetAutomateSessionDir(baseDir string) (string, error) {
 }
 
 // WriteSessionFile writes a session info JSON to .sprout/automate/<sessionID>.json.
-// Creates the directory if needed.
+// Creates the directory if needed. A record with empty Status is normalized
+// to "running" so consumers never see a third state.
 func WriteSessionFile(sproutDir string, sessionID string, info *AutomateSessionInfo) error {
+	if info != nil && info.Status == "" && info.EndedAt == nil {
+		info.Status = "running"
+	}
 	dir := filepath.Join(sproutDir, "automate")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create automate session directory: %w", err)
@@ -105,10 +116,40 @@ func ListSessionFiles(sproutDir string) ([]AutomateSessionInfo, error) {
 	return results, nil
 }
 
-// SweepStaleSessions removes session files whose tracked process is no longer alive.
-// It returns the number of removed entries. Errors from listing or reading the
-// session directory are returned; errors from individual file removals are
-// silently ignored to avoid failing the sweep for one bad entry.
+// sessionRetention is how long a dead session's record is kept after the
+// process exited (or, for legacy records without an end time, after it
+// started). Records persist so `sprout automate status --all` can show what
+// ran and how it ended — deleting on death made post-mortems impossible
+// (the OOM-killed workflow of 2026-08-19 left no trace for exactly this reason).
+const sessionRetention = 7 * 24 * time.Hour
+
+// FinalizeSessionFile records the process outcome on an existing session
+// record: EndedAt, ExitCode, and a Status of "success" (exit 0) or "error".
+// The PID is zeroed so IsProcessAlive never matches a recycled PID later.
+func FinalizeSessionFile(sproutDir string, sessionID string, exitCode int) error {
+	info, err := ReadSessionFile(sproutDir, sessionID)
+	if err != nil {
+		return fmt.Errorf("finalize session %s: %w", sessionID, err)
+	}
+	now := time.Now()
+	code := exitCode
+	info.EndedAt = &now
+	info.ExitCode = &code
+	info.PID = 0
+	if exitCode == 0 {
+		info.Status = "success"
+	} else {
+		info.Status = "error"
+	}
+	return WriteSessionFile(sproutDir, sessionID, info)
+}
+
+// SweepStaleSessions removes session files for dead sessions whose retention
+// window has passed: finalized records older than sessionRetention after
+// EndedAt, legacy unfinalized records older than sessionRetention after
+// StartedAt. Live or recently-ended records are kept. Returns the number of
+// removed entries. Errors from listing or reading the session directory are
+// returned; errors from individual file removals are silently ignored.
 func SweepStaleSessions(sproutDir string) (int, error) {
 	dir := filepath.Join(sproutDir, "automate")
 	entries, err := os.ReadDir(dir)
@@ -136,11 +177,23 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 		if err != nil {
 			continue // skip unreadable files
 		}
-		if IsProcessAlive(info.PID) {
-			continue // process is alive, keep it
+		if info.EndedAt != nil {
+			if time.Since(*info.EndedAt) < sessionRetention {
+				continue
+			}
+		} else if info.Status == "running" && IsProcessAlive(info.PID) {
+			continue
+		} else if time.Since(info.StartedAt) < sessionRetention {
+			continue
 		}
 		if err := RemoveSessionFile(sproutDir, sessionID); err != nil {
 			continue // log but don't fail
+		}
+		// Also remove the session's detach log, if any — session records
+		// and their logs share the retention window; sweeping one without
+		// the other leaks disk under .sprout/automate/logs/.
+		if info.OutputFilePath != "" {
+			_ = os.Remove(info.OutputFilePath)
 		}
 		removed++
 	}

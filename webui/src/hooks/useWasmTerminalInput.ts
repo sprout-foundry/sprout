@@ -35,6 +35,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   const wasmActiveRef = useRef(false);
   const [wasmLoading, setWasmLoading] = useState(false);
   const [wasmError, setWasmError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const wasmLineRef = useRef('');
   const wasmCursorRef = useRef(0);
   const wasmHistoryRef = useRef<string[]>([]);
@@ -504,9 +505,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   // ── WASM shell lifecycle ──────────────────────────────────────────
 
   useEffect(() => {
-    if (!isActive) return;
+    debugLog('[TerminalPane] WASM effect fired, isActive=' + isActive + ' isConnected=' + isConnected);
+    if (!isActive) {
+      debugLog('[TerminalPane] WASM effect: not active, skipping');
+      return;
+    }
 
     if (isConnected) {
+      debugLog('[TerminalPane] WASM effect: isConnected=true, using PTY not WASM');
       const term = xtermRef.current;
       if (wasmActiveRef.current && term) {
         debugLog('[TerminalPane] Backend connected — switching to remote PTY');
@@ -533,7 +539,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
 
     const activateWasm = async () => {
       const term = xtermRef.current;
-      if (!term) return;
+      if (!term) {
+        // xterm hasn't been mounted yet — increment retry counter to
+        // trigger a re-render/retry. Stops after 30 retries (~15s).
+        if (!cancelled && retryCount < 30) {
+          setTimeout(() => setRetryCount((c) => c + 1), 300);
+        }
+        return;
+      }
 
       if (!wasmShellRef.current && !wasmInitializedRef.current) {
         setWasmLoading(true);
@@ -586,7 +599,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     return () => {
       cancelled = true;
     };
-  }, [isActive, isConnected, wasmLoading, xtermRef, writeWasmPrompt]);
+    // NOTE: wasmLoading is intentionally excluded from deps. It is an
+    // internal progress indicator set within the async activateWasm().
+    // If included, setWasmLoading(true) triggers a re-render that fires
+    // the cleanup (cancelled=true) before initWasmShell() resolves,
+    // leaving the terminal stuck on "Initializing browser shell..."
+    // forever.  isActive/isConnected are the real external triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, isConnected, xtermRef, writeWasmPrompt, retryCount]);
 
   return {
     wasmActive,

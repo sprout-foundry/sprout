@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,9 +36,8 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 
 	// Clear all provider API key environment variables so tests don't
 	// inherit credentials from the developer's shell.
@@ -64,7 +64,7 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.SetWorkspaceRoot(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -798,4 +798,91 @@ func TestOnboardingComplete_EmptyModel_PersistsDefaultOnAgentFailure(t *testing.
 	}
 }
 
+// TestProbeRecommendedModel verifies the registry probe lookup used by
+// applyOnboardingPresentation. With a registry serving probe-bearing models,
+// it picks the strongest one (primary > subagent). Without probe data, it
+// returns "" so callers fall back to the curated/prefix-match path.
+func TestProbeRecommendedModel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration-style test; skip in -short")
+	}
 
+	// Stand up a fake registry that returns probe-bearing models for one
+	// provider and a 404 for everything else.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "zai.json") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"schema_version": 2,
+				"provider": "zai",
+				"generated_at": "2026-06-25T00:00:00Z",
+				"models": [
+					{"id": "glm-4.5-air", "context_window": 128000, "eligible_roles": ["primary","subagent"], "recommended_roles": ["subagent"]},
+					{"id": "glm-5",       "context_window": 200000, "eligible_roles": ["primary","subagent"], "recommended_roles": ["primary","subagent"]},
+					{"id": "glm-4.6",     "context_window": 128000, "eligible_roles": ["primary","subagent"], "recommended_roles": ["primary"]}
+				]
+			}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	// Configure the registry to point at our fake server.
+	modelregistry.SetBaseURL(srv.URL)
+	modelregistry.ClearCache()
+	t.Cleanup(func() {
+		modelregistry.SetBaseURL("")
+		modelregistry.ClearCache()
+	})
+
+	t.Run("picks primary when both primary and subagent available", func(t *testing.T) {
+		got := probeRecommendedModel("zai")
+		// glm-5 is the first model with "primary" in RecommendedRoles.
+		if got != "glm-5" {
+			t.Errorf("probeRecommendedModel(zai) = %q, want %q", got, "glm-5")
+		}
+	})
+
+	t.Run("returns empty when provider not in registry", func(t *testing.T) {
+		got := probeRecommendedModel("nonexistent-provider")
+		if got != "" {
+			t.Errorf("probeRecommendedModel(nonexistent) = %q, want \"\"", got)
+		}
+	})
+}
+
+// TestProbeRecommendedModel_NoProbeData verifies the empty-input fallback:
+// when the registry returns models without RecommendedRoles, the function
+// returns "" so the curated/prefix-match path takes over.
+func TestProbeRecommendedModel_NoProbeData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration-style test; skip in -short")
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"schema_version": 2,
+			"provider": "deepinfra",
+			"generated_at": "2026-06-25T00:00:00Z",
+			"models": [
+				{"id": "deepseek-ai/DeepSeek-V3", "context_window": 64000, "eligible_roles": ["subagent"]},
+				{"id": "meta-llama/Llama-4-Maverick", "context_window": 128000, "eligible_roles": ["primary","subagent"]}
+			]
+		}`))
+	}))
+	defer srv.Close()
+
+	modelregistry.SetBaseURL(srv.URL)
+	modelregistry.ClearCache()
+	t.Cleanup(func() {
+		modelregistry.SetBaseURL("")
+		modelregistry.ClearCache()
+	})
+
+	got := probeRecommendedModel("deepinfra")
+	if got != "" {
+		t.Errorf("expected empty when no RecommendedRoles in registry, got %q", got)
+	}
+}

@@ -62,12 +62,7 @@ vi.mock('../services/lspClientService', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
-import {
-  isLSPClientConnected,
-  getClientForLanguageSync,
-  buildLSPPluginExtensions,
-  lspSyncOnDocChange,
-} from './lspExtensions';
+import { isLSPClientConnected, getClientForLanguageSync, buildLSPPluginExtensions } from './lspExtensions';
 
 // ── isLSPClientConnected tests ────────────────────────────────────────
 
@@ -157,29 +152,5 @@ describe('buildLSPPluginExtensions', () => {
     );
     expect(mockPlugin).toHaveBeenCalledWith('', 'go');
     expect(result).toEqual([[]]);
-  });
-});
-
-// ── lspSyncOnDocChange tests ──────────────────────────────────────────
-
-describe('lspSyncOnDocChange', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty array when LSP is not supported', () => {
-    mockIsSupported.mockReturnValue(false);
-    const result = lspSyncOnDocChange('python');
-    expect(result).toEqual([]);
-    expect(mockIsSupported).toHaveBeenCalledWith('python');
-  });
-
-  it('returns extensions when LSP is supported', () => {
-    mockIsSupported.mockReturnValue(true);
-    const result = lspSyncOnDocChange('go');
-    expect(result).toBeDefined();
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-    expect(mockIsSupported).toHaveBeenCalledWith('go');
   });
 });

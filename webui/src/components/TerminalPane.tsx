@@ -14,6 +14,8 @@ import { useTerminalSession } from '../hooks/useTerminalSession';
 import { useTerminalXTerm } from '../hooks/useTerminalXTerm';
 import { useWasmTerminalInput } from '../hooks/useWasmTerminalInput';
 import type { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { reprInput } from '../services/terminalWebSocket';
+import { debugLog } from '../utils/log';
 import ReverseSearchOverlay from './ReverseSearchOverlay';
 import TerminalContextMenu from './TerminalContextMenu';
 import TerminalSearchBar from './TerminalSearchBar';
@@ -141,6 +143,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     const onData = useCallback(
       (data: string) => {
+        debugLog(
+          `[TerminalPane] onData: data=${reprInput(data)}, isExited=${isExitedRef.current}, wasm=${wasmActiveRef.current}`,
+        );
         if (isExitedRef.current) return;
         if (wasmActiveRef.current) {
           handleWasmInput(data);
@@ -268,6 +273,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Reset isExited when the pane connects (new session or reconnection)
     useEffect(() => {
       if (paneConnected) {
+        debugLog('[TerminalPane] paneConnected=true, resetting isExited');
         setIsExited(false);
       }
     }, [paneConnected]);
@@ -336,7 +342,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Render
     // ═══════════════════════════════════════════════════════════════════
     return (
-      <div className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`} ref={paneWrapperRef} role="application" aria-label="Terminal">
+      <div
+        className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`}
+        ref={paneWrapperRef}
+        role="application"
+        aria-label="Terminal"
+      >
         <TerminalSearchBar
           ref={searchBarRef}
           visible={searchVisible}
@@ -352,11 +363,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           <div ref={xtermContainerRef} className="terminal-xterm" />
           {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
         </div>
-        {isExited && (
-          <div className="terminal-status-inline terminal-status-inline--exited">
-            Session ended.
-          </div>
-        )}
+        {isExited && <div className="terminal-status-inline terminal-status-inline--exited">Session ended.</div>}
         {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />

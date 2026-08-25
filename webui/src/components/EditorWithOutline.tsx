@@ -60,9 +60,12 @@ function EditorWithOutline({
     window.localStorage.setItem('sprout.outline-panel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
 
-  // Handle panel resize (use incremental delta, not cumulative totalDelta)
+  // Handle panel resize. The outline panel is right-anchored with the
+  // resize handle on its LEFT edge — dragging the handle leftward must
+  // grow the panel. ResizeHandle reports `deltaPixels = clientX - startX`
+  // (positive when moving right), so we subtract to invert the sign.
   const handleResize = useCallback((deltaPixels: number) => {
-    setPanelWidth((prev) => Math.max(180, Math.min(500, prev + deltaPixels)));
+    setPanelWidth((prev) => Math.max(180, Math.min(500, prev - deltaPixels)));
   }, []);
 
   // Handle toggle collapse

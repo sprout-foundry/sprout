@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { supportsWorkspaceSwitching } from '../../config/mode';
 import { clientFetch } from '../../services/clientSession';
 import { normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
@@ -263,14 +264,15 @@ export function useWorkspaceSuggestions({
     };
   }, [totalWorkspaceRows, isOpen, closePopover]);
 
-  // sprout:open-workspace-switcher event
+  // sprout:open-workspace-switcher event — disabled in cloud mode
   useEffect(() => {
+    if (!supportsWorkspaceSwitching) return;
     const handler = () => {
       openPopover();
     };
     window.addEventListener('sprout:open-workspace-switcher', handler);
     return () => window.removeEventListener('sprout:open-workspace-switcher', handler);
-  }, [openPopover]);
+  }, [openPopover, supportsWorkspaceSwitching]);
 
   // Click outside
   useEffect(() => {

@@ -6,9 +6,11 @@ func (ir *InputReader) handleMouseEvent(data string) {
 		return
 	}
 
-	// Parse the mouse event
+	// Parse the mouse event. ParseMouseEvent can return a nil event
+	// with a nil error when the internal SGR/X10 parser fails to extract
+	// fields — guard against nil before dereferencing.
 	mouseEvent, err := ParseMouseEvent(data)
-	if err != nil {
+	if err != nil || mouseEvent == nil {
 		return
 	}
 

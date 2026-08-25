@@ -7,10 +7,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// snapshotInterrupt returns the current interruptCtx and interruptCancel under
-// lock. Callers should operate on the returned snapshot rather than touching
-// the fields directly, so concurrent ClearInterrupt /
-// resetInterruptForNewQuery don't race with reads.
+// snapshotInterrupt returns the current interruptCtx and interruptCancel under lock. Callers operate on the snapshot to avoid races.
 func (a *Agent) snapshotInterrupt() (context.Context, context.CancelFunc) {
 	a.interruptMu.Lock()
 	defer a.interruptMu.Unlock()
@@ -19,6 +16,7 @@ func (a *Agent) snapshotInterrupt() (context.Context, context.CancelFunc) {
 
 // TriggerInterrupt manually triggers an interrupt for testing purposes
 func (a *Agent) TriggerInterrupt() {
+	a.DisableWakeup()
 	_, cancel := a.snapshotInterrupt()
 	if cancel != nil {
 		cancel()
@@ -40,7 +38,7 @@ func (a *Agent) CheckForInterrupt() bool {
 	}
 }
 
-// HandleInterrupt processes an interrupt request.
+// HandleInterrupt processes an interrupt request. Deterministic: any interrupt stops the current task immediately.
 func (a *Agent) HandleInterrupt() string {
 	if !a.CheckForInterrupt() {
 		return ""
@@ -57,18 +55,15 @@ func (a *Agent) HandleInterrupt() string {
 		a.state.SetPauseState(pauseState)
 	}
 
-	// Set pause state
 	pauseState.IsPaused = true
 	pauseState.PausedAt = time.Now()
 
-	// Store current messages for context restoration
 	messages := a.state.GetMessages()
 	pauseState.MessagesBefore = make([]api.Message, len(messages))
 	copy(pauseState.MessagesBefore, messages)
 	a.state.SetPauseState(pauseState)
 
-	// Interrupt handling is deterministic:
-	// any interrupt request stops the current task immediately without prompting.
+	// Interrupt stops the current task immediately without prompting.
 	if a.IsSubagent() {
 		a.Logger().Debug("Subagent interrupt detected, stopping task\n")
 	}
@@ -79,26 +74,26 @@ func (a *Agent) HandleInterrupt() string {
 	return "STOP"
 }
 
-// ClearInterrupt resets the interrupt state
+// ClearInterrupt resets the interrupt state. Cancels the previous ctx outside the lock to allow callbacks to re-enter.
 func (a *Agent) ClearInterrupt() {
-	newCtx, newCancel := context.WithCancel(context.Background())
+	base := a.parentInterruptCtx
+	if base == nil {
+		base = context.Background()
+	}
+	newCtx, newCancel := context.WithCancel(base)
 	a.interruptMu.Lock()
 	oldCancel := a.interruptCancel
 	a.interruptCtx = newCtx
 	a.interruptCancel = newCancel
 	a.interruptMu.Unlock()
-	// Cancel the previous ctx outside the lock so any callbacks invoked from
-	// the cancellation can re-enter the agent without deadlocking on interruptMu.
+	// Cancel the previous ctx outside the lock so callbacks can re-enter without deadlocking on interruptMu.
 	if oldCancel != nil {
 		oldCancel()
 	}
 }
 
-// resetInterruptForNewQuery ensures the interruptCtx is fresh at the start
-// of a new ProcessQuery. If the previous query was stopped via TriggerInterrupt,
-// the cancelled ctx would otherwise persist and instantly abort the next
-// HTTP request (now that SP-034-1e wires interruptCtx into the request body).
-// Idempotent — if the ctx is already non-cancelled, this is essentially a no-op.
+// resetInterruptForNewQuery ensures the interruptCtx is fresh at the start of a new ProcessQuery.
+// For subagents, derives from parentInterruptCtx so cancelling the parent still propagates.
 func (a *Agent) resetInterruptForNewQuery() {
 	a.interruptMu.Lock()
 	if a.interruptCtx != nil {
@@ -111,7 +106,11 @@ func (a *Agent) resetInterruptForNewQuery() {
 			return
 		}
 	}
-	newCtx, newCancel := context.WithCancel(context.Background())
+	base := a.parentInterruptCtx
+	if base == nil {
+		base = context.Background()
+	}
+	newCtx, newCancel := context.WithCancel(base)
 	a.interruptCtx = newCtx
 	a.interruptCancel = newCancel
 	a.interruptMu.Unlock()

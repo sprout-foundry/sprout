@@ -4,13 +4,17 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -40,10 +44,21 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// as the session grows. Reverse order (prints first, then footer)
 	// leaves the cursor inside already-printed content at row N-2, and
 	// the input prompt then renders on top of it.
-	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	footerSource := &agentFooterSource{agent: chatAgent}
+	footer := console.NewStatusFooter(os.Stderr, footerSource)
 	console.RegisterGlobalStatusFooter(footer)
 	footer.Start()
 	defer footer.Stop()
+
+	// CLI-UX-12: register Alt+T (footer tooltip toggle) and Alt+V
+	// (output verbosity toggle) in the global keymap so power users
+	// can switch verbosity live without /settings + restart. The
+	// verbosity toggle reads cfg.OutputVerbosity on each press; the
+	// terminal subscriber's isVerbose()/isCompact() helpers pick up
+	// the change on the next tool event (live-read). Idempotent — the
+	// registry uses sync.Once, so multiple mode-bootstrap calls
+	// (interactive + queue) only register once.
+	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
 
 	// Compact startup chrome: a single greeting line with the active
 	// provider/model so the first impression is "who am I talking to"
@@ -55,6 +70,25 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	console.GlyphInfo.Printf("sprout · %s · %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
+
+	// SP-130: warn when the interactive session is running from the home
+	// directory. The agent's workspace root is home, so every path under ~
+	// is PathTierWorkspace (no approval prompts). This is the CLI analog of
+	// the webui home-workspace gate — a warning, not a hard block, since
+	// the user explicitly started sprout from ~.
+	if cwd := chatAgent.GetWorkspaceRoot(); cwd != "" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			if abs, err := filepath.Abs(cwd); err == nil {
+				if evaled, err := filepath.EvalSymlinks(abs); err == nil {
+					if homeEvaled, err := filepath.EvalSymlinks(home); err == nil && evaled == homeEvaled {
+						console.GlyphWarning.Printf(
+							"Running in your home directory (%s) — the agent has access to all files under ~. Consider cd-ing into a project first.",
+							home)
+					}
+				}
+			}
+		}
+	}
 
 	// SP-048-5a: surface recent sessions (last 7d) with inline numeric
 	// selection. Up/down arrows stay reserved for command history; a
@@ -82,7 +116,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-5d: prompt includes the current model so users always know
 	// what they're talking to. Falls back to "sprout> " when the model
 	// name is empty (e.g. provider failed to resolve at startup).
-	inputReader := console.NewInputReader(buildPromptPrefix(chatAgent.GetModel()))
+	inputReader := console.NewInputReader(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
@@ -95,33 +129,35 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		inputReader.SetInitialContent(dismissKey)
 	}
 
-	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
-	// per call so newly-installed MCP commands (which can be added mid-
-	// session) are reflected in completion.
-	inputReader.SetCompleter(func(line string, cursorPos int) []string {
-		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
-			return nil
-		}
-		// Don't complete once the user has moved past the command name.
-		if strings.ContainsAny(line, " \t") {
-			return nil
-		}
-		prefix := strings.ToLower(line[1:])
-		registry := agent_commands.NewCommandRegistry()
-		var matches []string
-		for _, name := range registry.CompletionCandidates() {
-			if strings.HasPrefix(strings.ToLower(name), prefix) {
-				matches = append(matches, "/"+name)
-			}
-		}
-		return matches
-	})
+	// SP-048-2a: slash command tab completion. The registry is cached
+	// per-session (see slashCommandCache); argument completions are
+	// TTL-cached to avoid network/config reads on every keystroke.
+	completer := buildSlashCommandCompleter(chatAgent, false)
+	inputReader.SetCompleter(completer)
+	inputReader.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent, false))
 
-// SP-055: steer coordinator owns the pinned steer-input panel for
+	// SP-078 Phase 4: the idle REPL dropdown renders above the prompt
+	// line as a pinned block in the status footer's reserved rows
+	// (steer-panel style), instead of the fragile below-line overlay.
+	inputReader.SetStatusFooter(footer)
+
+	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
 	// footer references; StartTurn / EndTurn drive the per-iteration
 	// lifecycle below.
 	steerCoord := NewSteerCoordinator(chatAgent, footer)
+
+	// SP-078 Phase 2: same slash-command completer on the steer panel
+	// so Ctrl-] cycles slash commands mid-turn (Tab is reserved for
+	// STEER ↔ QUEUE mode toggle on the steer panel).
+	steerCoord.SetCompleter(buildSlashCommandCompleter(chatAgent, true))
+
+	// SP-078 Phase 3: structured completer on the steer panel renders
+	// a live dropdown above the input line while the user types a
+	// "/" command (matches the InputReader's affordance). Tab accepts
+	// the highlighted candidate; Up/Down navigate while the dropdown
+	// is visible; Esc dismisses.
+	steerCoord.SetRichCompleter(buildRichSlashCommandCompleter(chatAgent, true))
 
 	// Capture a ground-truth termios snapshot of stdin in its default
 	// cooked state (the terminal is fully cooked at this point — no
@@ -140,7 +176,16 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// cost/context after each tool. Runs until ctx is cancelled.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	resetSpawnTracking := cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+
+	// SP-108: Start a wakeup poller for CLI mode. This mirrors the WebUI
+	// poller (pkg/webui/wakeup_poller.go), checking for pending background-
+	// task completion notifications every 3s and auto-resuming the agent
+	// so it can act on them. Without this, background tasks launched via
+	// shell_command(background=true) complete silently in CLI mode — the
+	// notification is queued but nothing drains it until the user types
+	// another message.
+	go startCLIWakeupPoller(subCtx, chatAgent, indicator, 3*time.Second)
 
 	// Tracks the time of the last Ctrl+C at the idle prompt so a
 	// second press within 2s exits the REPL (standard convention:
@@ -148,64 +193,74 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	var lastInterruptAt time.Time
 
 	// pending holds carry-over text between turns: unsent steer text
-	// (→ SetInitialContent) and deferred queue messages (→ prepend to
-	// next query). Drained once per turn via DrainPendingInput.
+	// (→ SetInitialContent). Drained once per turn via DrainPendingInput.
 	var pending PendingInput
+
+	// autoQueued holds deferred queue messages that auto-submit as their
+	// own turns without waiting for user input. Drained at the top of
+	// each loop iteration; refilled from DrainPendingInput at turn end.
+	var autoQueued []string
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			// SP-048-5d follow-up: refresh the prompt prefix each loop so
-			// it tracks model changes (e.g. an LLM-driven /model switch
-			// from inside a previous turn, or interactive provider/model
-			// selection during recovery).
-			inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+			var query string
+			var rawQuery string
 
-			query, err := inputReader.ReadLine()
+			// Check for auto-queued messages before blocking on ReadLine.
+			if len(autoQueued) > 0 {
+				query = autoQueued[0]
+				autoQueued = autoQueued[1:]
+				fmt.Fprintln(os.Stderr)
+				console.GlyphPaused.Fprintf(os.Stderr, "auto-run queued: %s", query)
+				rawQuery = ""
+			} else {
+				// SP-048-5d follow-up: refresh the prompt prefix each loop so
+				// it tracks model changes (e.g. an LLM-driven /model switch
+				// from inside a previous turn, or interactive provider/model
+				// selection during recovery).
+				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
-			if err != nil {
-				if err.Error() == "interrupted" {
-					// Standard REPL convention (psql, redis-cli, node):
-					// first Ctrl+C at an empty prompt clears the line and
-					// shows a brief hint; a second Ctrl+C within a short
-					// window exits. The input reader has already cleared
-					// and re-rendered the prompt line; we just track the
-					// timing to detect the double-press.
-					now := time.Now()
-					if now.Sub(lastInterruptAt) < 2*time.Second {
-						fmt.Println()
-						console.GlyphInfo.Printf("Goodbye!")
-						printContinuationHint(chatAgent)
+				var err error
+				query, err = inputReader.ReadLine()
+
+				if err != nil {
+					if err.Error() == "interrupted" {
+						// Standard REPL convention (psql, redis-cli, node):
+						// first Ctrl+C at an empty prompt clears the line and
+						// shows a brief hint; a second Ctrl+C within a short
+						// window exits. The input reader has already cleared
+						// and re-rendered the prompt line; we just track the
+						// timing to detect the double-press.
+						now := time.Now()
+						if now.Sub(lastInterruptAt) < 2*time.Second {
+							fmt.Println()
+							console.GlyphInfo.Printf("Goodbye!")
+							printContinuationHint(chatAgent)
+							return nil
+						}
+						lastInterruptAt = now
+						fmt.Println("(press Ctrl+C again to exit)")
+						continue
+					}
+					// EOF and context cancellation are graceful exits, not
+					// errors. When the web server shuts down or the context
+					// is cancelled, ReadLine returns io.EOF — treating it as
+					// an error prints "✗ failed to run agent: EOF" on exit,
+					// which looks like a crash.
+					if err == io.EOF || errors.Is(err, context.Canceled) || errors.Is(err, io.ErrClosedPipe) {
 						return nil
 					}
-					lastInterruptAt = now
-					fmt.Println("(press Ctrl+C again to exit)")
-					continue
+					return fmt.Errorf("failed to read input: %w", err)
 				}
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			// A successful read resets the double-Ctrl+C window so the
-			// next interrupt cycle starts fresh.
-			lastInterruptAt = time.Time{}
+				// A successful read resets the double-Ctrl+C window so the
+				// next interrupt cycle starts fresh.
+				lastInterruptAt = time.Time{}
 
-			query = strings.TrimSpace(query)
-			rawQuery := query // user's typed text, before deferred-message prepend
-
-			// Prepend deferred queue messages (drained at the end of the
-			// previous turn via DrainPendingInput). The queued prefix is
-			// stored on the steer coordinator so the REPL loop has a
-			// single source of truth for carry-over text.
-			if pending.QueuedPrefix != "" {
-				if query == "" {
-					query = pending.QueuedPrefix
-				} else {
-					query = pending.QueuedPrefix + "\n" + query
-				}
-				pending.QueuedPrefix = "" // consumed
-				// Refresh the footer so the "⏸ N queued" badge clears.
-				footer.Refresh()
+				query = strings.TrimSpace(query)
+				rawQuery = query
 			}
 			if query == "" {
 				continue
@@ -238,13 +293,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// friends. Slash commands also skip the per-turn cost summary
 			// since they don't consume LLM tokens.
 			registry := agent_commands.NewCommandRegistry()
+			chatAgent.SetSlashCommands(registry)
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				}
 				// `/model` and friends may have changed the active model;
 				// rebuild the prompt prefix so the next prompt reflects it.
-				inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 				footer.Refresh()
 				continue
 			}
@@ -252,10 +308,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Add to agent history — only genuine LLM-bound prompts
 			// are persisted. `?`, exit/quit, and slash commands are
 			// intentionally excluded so they don't pollute ↑/Ctrl-R.
-			// We persist rawQuery (the user's typed text) rather than
-			// the composite `query`, so recalling a deferred-message
-			// turn via ↑ doesn't replay the "Queued from prior turn:"
-			// template — only the user's actual input.
+			// Auto-submitted queued turns have rawQuery="" so they are
+			// also excluded — only the user's actual typed input is
+			// persisted.
 			if rawQuery != "" {
 				chatAgent.AddToHistory(rawQuery)
 				inputReader.SetHistory(chatAgent.GetHistory())
@@ -267,10 +322,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnStart := time.Now()
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
-			turnCostStart := chatAgent.GetTotalCost()
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
-			resetTurnFirstToken()
+			cliui.ResetTurnFirstToken()
 
 			// SP-051-2c: clear per-turn spawn dedupe so the next batch of
 			// subagents announces fresh "↳ persona spawned" lines instead of
@@ -283,27 +337,29 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
 			// summary line, which acts as the closing separator.
 			fmt.Println()
-			printAssistantHeader(chatAgent.GetModel())
+			cliui.PrintAssistantHeader(chatAgent.GetModel())
 
 			// Per-turn assistant renderer: indents prose with "  " as it
 			// streams, and at turn-end optionally re-renders the final
 			// prose segment with markdown formatting (cursor-clear +
 			// reprint). Wire OnExternalWrite into the OutputRouter so
 			// tool-log lines break the current prose segment cleanly.
-			turnRenderer := console.NewAssistantTurnRenderer(
-				GetTerminalWidth(),
-				console.NewMarkdownFormatter(true, true),
-			)
-			currentTurnRenderer.Store(turnRenderer)
+			turnRenderer := beginTurn(chatAgent)
 			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
-				// SP-061: route reasoning chunks to the renderer's
-				// dedicated sink so they collapse into a single
-				// "▽ Thinking · N kB" header rather than streaming
-				// raw monologue. Only takes effect when
-				// SetReasoningTerminalEnabled(true) — by default the
-				// CLI still suppresses reasoning entirely.
-				router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
+				// SP-056: When reasoning mode is "fold", route reasoning chunks to
+				// the fold instead of the turn renderer's collapsed header.
+				if fold := currentReasoningFold; fold != nil {
+					fold.Start()
+					router.SetReasoningCallback(fold.Chunk)
+				} else {
+					// SP-061: route reasoning chunks to the renderer's
+					// dedicated sink so they collapse into a single
+					// "▽ Thinking · N kB" header rather than streaming
+					// raw monologue. Only takes effect when
+					// SetReasoningTerminalEnabled(true) — by default the
+					// CLI still suppresses reasoning entirely.
+					router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
+				}
 			}
 
 			// SP-048-1b: Try fast paths BEFORE starting the "Thinking"
@@ -315,13 +371,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 			} else if executed {
 				fastPathExecuted = true
-			} else {
-				// Zsh detection didn't trigger, try LLM-based detection
-				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-				} else if executed {
-					fastPathExecuted = true
-				}
 			}
 
 			// Only start the spinner (and the full agent turn) when no fast
@@ -352,12 +401,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Drain all pending carry-over text (unsent steer buffer +
 			// deferred queue messages) in a single call. Unsent text
 			// becomes initial content for the next prompt; queued
-			// messages become a prefix that prepends to the next
-			// submitted query.
-			pending := steerCoord.DrainPendingInput()
+			// messages are appended to autoQueued for auto-submit.
+			pending = steerCoord.DrainPendingInput()
 			if pending.InitialContent != "" {
 				inputReader.SetInitialContent(pending.InitialContent)
 			}
+			autoQueued = append(autoQueued, pending.QueuedMessages...)
+			// Refresh the footer so the "⏸ N queued" badge clears.
+			footer.Refresh()
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()
@@ -367,23 +418,22 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// external-write hook BEFORE FinalizeAtTurnEnd so the
 			// re-render's own writes don't loop back through it.
 			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(nil)
-				// Drop the reasoning sink too so it doesn't fire into a
-				// stale renderer on the next turn (each turn builds a
-				// new renderer above).
-				router.SetReasoningCallback(nil)
+				// SP-056: Resolve any active fold at turn end (catches the case
+				// where reasoning ended but no assistant text arrived).
+				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+					fold.Resolve()
+				}
 			}
-			turnRenderer.FinalizeAtTurnEnd()
-			currentTurnRenderer.Store(nil)
+			endTurn(chatAgent, turnRenderer)
 			// SP-070-2: notify the user when a long turn completes
-			notifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
+			cliui.NotifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).
-			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
+			cliui.PrintPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
 		}
 	}
 }
@@ -391,13 +441,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // agentFooterSource adapts *agent.Agent to the console.ContentSource
 // interface, exposing model / context tokens / cost / cwd to the status
 // footer renderer.
-type agentFooterSource struct{ agent *agent.Agent }
+type agentFooterSource struct {
+	agent *agent.Agent
+}
 
 func (s *agentFooterSource) Model() string {
 	if s == nil || s.agent == nil {
 		return ""
 	}
-	return s.agent.GetModel()
+	return cliui.ShortModelName(s.agent.GetModel())
 }
 
 func (s *agentFooterSource) ContextTokens() (used, limit int) {
@@ -412,6 +464,34 @@ func (s *agentFooterSource) TotalCost() float64 {
 		return 0
 	}
 	return s.agent.GetTotalCost()
+}
+
+// BillingType returns the current provider's billing model so the footer
+// can annotate subscription/free usage instead of showing "$0.0000".
+// Satisfies the optional billingTypeSource interface in pkg/console.
+// SP-113 Phase 3.
+func (s *agentFooterSource) BillingType() string {
+	if s == nil || s.agent == nil {
+		return ""
+	}
+	return s.agent.ResolveBillingType()
+}
+
+// TodoProgress returns (completed, total) from the agent's todo list.
+// Satisfies the optional todoProgressSource interface so the footer can
+// render a "3/7 done" badge during multi-step turns. CLI-UX-4.
+func (s *agentFooterSource) TodoProgress() (done, total int) {
+	if s == nil || s.agent == nil {
+		return 0, 0
+	}
+	todos := s.agent.GetTodoManager().Read()
+	for _, t := range todos {
+		total++
+		if t.Status == "completed" {
+			done++
+		}
+	}
+	return done, total
 }
 
 func (s *agentFooterSource) WorkingDir() string {

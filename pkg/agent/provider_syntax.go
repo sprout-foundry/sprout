@@ -313,6 +313,12 @@ func (a *Agent) consumePendingSystemSupplement() string {
 }
 
 func (a *Agent) normalizeConversationForCurrentModelSyntax(fromProvider, fromModel string) {
+	// No-op when the user re-selected the same provider+model pair. Avoids
+	// refreshing context on every picker re-confirm and prevents mutation
+	// of the conversation history for a non-existent switch.
+	if fromProvider == a.GetProvider() && fromModel == a.GetModel() {
+		return
+	}
 	if a == nil || len(a.state.GetMessages()) == 0 || !a.isStrictToolCallSyntaxModel() {
 		return
 	}

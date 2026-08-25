@@ -1,32 +1,14 @@
 package configuration
 
 import (
-	"bytes"
-	"io"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
-// captureStdout captures output written to stdout during function execution
-func captureStdout(fn func()) string {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	fn()
-
-	// Restore stdout
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
-}
-
 func TestShowWelcomeMessage(t *testing.T) {
-	output := captureStdout(ShowWelcomeMessage)
+	output := testutil.CaptureStdout(t, ShowWelcomeMessage)
 
 	// Verify daemon command is mentioned
 	if !strings.Contains(output, "sprout agent -d") {
@@ -72,9 +54,9 @@ func TestShowWelcomeMessage(t *testing.T) {
 
 func TestShowNextSteps_NormalProvider(t *testing.T) {
 	provider := "openrouter"
-	configDir := "/tmp/ledit-config"
+	configDir := "/tmp/sprout-config"
 
-	output := captureStdout(func() {
+	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)
 	})
 
@@ -97,9 +79,9 @@ func TestShowNextSteps_NormalProvider(t *testing.T) {
 
 func TestShowNextSteps_EditorOnly(t *testing.T) {
 	provider := "editor"
-	configDir := "/tmp/ledit-config"
+	configDir := "/tmp/sprout-config"
 
-	output := captureStdout(func() {
+	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)
 	})
 

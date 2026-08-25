@@ -72,11 +72,11 @@ func ViewHistory(limit int, fileFilter string, since *time.Time, showContent boo
 	}
 
 	metadata := map[string]interface{}{
-		"limit":         limit,
-		"file_filter":   fileFilter,
-		"show_content":  showContent,
-		"entry_count":   len(changes),
-		"revision_ids":  revisionIDs,
+		"limit":        limit,
+		"file_filter":  fileFilter,
+		"show_content": showContent,
+		"entry_count":  len(changes),
+		"revision_ids": revisionIDs,
 	}
 	if since != nil {
 		metadata["since"] = since.Format(time.RFC3339)
@@ -136,6 +136,28 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 			return RollbackResult{}, fmt.Errorf("no active change found for file '%s' in revision '%s'", filePath, revisionID)
 		}
 
+		// Staleness guard: skip if the file was modified after this snapshot,
+		// OR if the file's content has been committed to git (the work is now
+		// version-controlled and reverting would undo it).
+		//
+		// IsRevertSafe layers the content-identity check (disk != NewCode →
+		// stale) with git-awareness (disk == NewCode but matches HEAD →
+		// committed, refuse). Outside a git repo or for untracked files, the
+		// content check alone decides.
+		if !history.IsRevertSafeWithOriginal(targetChange.Filename, targetChange.NewCode, targetChange.OriginalCode) {
+			history.AuditRevertSkip("RollbackChanges", targetChange.Filename, "stale or committed")
+			return RollbackResult{
+				Output: fmt.Sprintf("Skipped rollback of '%s': file was modified after the snapshot (content differs from recorded state) or the content is now committed to git. The file may have been committed or edited intentionally.", filePath),
+				Metadata: map[string]interface{}{
+					"action":      "stale_skip",
+					"revision_id": revisionID,
+					"file_path":   filePath,
+				},
+				Success: true,
+			}, nil
+		}
+
+		history.AuditRevertWrite("RollbackChanges", targetChange.Filename, "OriginalCode")
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {
 			return RollbackResult{}, fmt.Errorf("restore file content: %w", err)
 		}
@@ -310,12 +332,12 @@ func listAvailableRevisions() (RollbackResult, error) {
 	groups := groupChangesByRevision(active)
 
 	opts := formatRevisionOpts{
-		ShowContent:  false,
-		ShowStatus:   false,
+		ShowContent:      false,
+		ShowStatus:       false,
 		ShowInstructions: false,
-		TimeFormat:   time.RFC3339,
-		TitlePrefix:  "**Revision ID:** ",
-		FilesLabel:   "**Files changed:** ",
+		TimeFormat:       time.RFC3339,
+		TitlePrefix:      "**Revision ID:** ",
+		FilesLabel:       "**Files changed:** ",
 	}
 
 	var builder strings.Builder

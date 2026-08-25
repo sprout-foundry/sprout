@@ -1057,7 +1057,7 @@ func TestMCPClient_InitializeMessageStructure(t *testing.T) {
 			"prompts":   map[string]interface{}{},
 		},
 		"clientInfo": map[string]interface{}{
-			"name":    "ledit",
+			"name":    "sprout",
 			"version": "1.0.0",
 		},
 	}
@@ -1101,7 +1101,7 @@ func TestMCPClient_InitializeMessageStructure(t *testing.T) {
 
 	clientName, ok := clientInfo["name"].(string)
 	assert.True(t, ok, "client name should be a string")
-	assert.Equal(t, "ledit", clientName)
+	assert.Equal(t, "sprout", clientName)
 }
 
 // ---------------------------------------------------------------------------

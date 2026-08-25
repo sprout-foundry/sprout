@@ -1,0 +1,512 @@
+// Scripted request handling and assertions
+
+package agent
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+)
+
+// buildChatResponse constructs an api.ChatResponse from the given parameters.
+func (c *ScriptedClient) buildChatResponse(
+	idPrefix string,
+	model string,
+	content string,
+	finishReason string,
+	reasoningContent string,
+	images []api.ImageData,
+	toolCalls []api.ToolCall,
+	usage ScriptedTokenUsage,
+) *api.ChatResponse {
+	return &api.ChatResponse{
+		ID:      idPrefix + fmt.Sprintf("%d", c.GetIndex()),
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   model,
+		Choices: []api.Choice{{
+			Index: 0,
+			Message: api.Message{
+				Role:             "assistant",
+				Content:          content,
+				ReasoningContent: reasoningContent,
+				Images:           images,
+				ToolCalls:        toolCalls,
+			},
+			FinishReason: finishReason,
+		}},
+		Usage: api.ChatUsage{
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			EstimatedCost:    usage.EstimatedCost,
+			Cost:             usage.Cost,
+			CachedTokens:     usage.PromptTokensDetails.CachedTokens,
+			CacheWriteTokens: usage.PromptTokensDetails.CacheWriteTokens,
+		},
+	}
+}
+
+// SendChatRequest sends a chat request and returns a scripted response
+func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	c.mu.Lock()
+
+	msgCopy := append([]api.Message(nil), messages...)
+	c.sentRequests = append(c.sentRequests, msgCopy)
+
+	if c.rateLimitExceeded {
+		c.mu.Unlock()
+		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+	}
+
+	var resp *ScriptedResponse
+	if c.responses != nil && c.index < len(c.responses) {
+		resp = c.responses[c.index]
+	}
+
+	if resp != nil && resp.RateLimitAfter > 0 {
+		c.rateLimitThreshold = resp.RateLimitAfter
+	}
+	if c.rateLimitThreshold > 0 {
+		c.rateLimitCounter++
+		if c.rateLimitCounter >= c.rateLimitThreshold {
+			c.rateLimitExceeded = true
+			c.mu.Unlock()
+			c.debugLog("Rate limit triggered after %d responses", c.rateLimitCounter)
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+		}
+	}
+
+	var content string
+	var toolCalls []api.ToolCall
+	var finishReason string
+	var reasoningContent string
+	var images []api.ImageData
+
+	if resp != nil {
+		content = resp.Content
+		toolCalls = resp.ToolCalls
+		finishReason = resp.FinishReason
+		reasoningContent = resp.ReasoningContent
+		images = resp.Images
+	}
+
+	c.mu.Unlock()
+
+	if resp != nil && resp.Error != nil {
+		c.debugLog("Returning injected error: %v", resp.Error)
+		c.advanceIndex(resp)
+		return nil, resp.Error
+	}
+
+	if resp != nil && resp.Delay > 0 {
+		c.debugLog("Applying delay of %v", resp.Delay)
+		select {
+		case <-time.After(resp.Delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-c.ctx.Done():
+			return nil, c.ctx.Err()
+		}
+	}
+
+	response := c.buildChatResponse(
+		"scripted-response-",
+		c.GetModel(),
+		content,
+		finishReason,
+		reasoningContent,
+		images,
+		toolCalls,
+		resolveUsage(resp),
+	)
+
+	c.advanceIndex(resp)
+
+	c.debugLog("Consumed response at index %d", c.GetIndex()-1)
+
+	return response, nil
+}
+
+// SendChatRequestStream sends a streaming chat request with full simulation support
+func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	c.mu.Lock()
+
+	msgCopy := append([]api.Message(nil), messages...)
+	c.sentRequests = append(c.sentRequests, msgCopy)
+
+	if c.rateLimitExceeded {
+		c.mu.Unlock()
+		c.debugLog("Rate limit exceeded after %d attempts", c.rateLimitCounter)
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+	}
+
+	var resp *ScriptedResponse
+	if c.responses != nil && c.index < len(c.responses) {
+		resp = c.responses[c.index]
+	}
+
+	if resp != nil && resp.RateLimitAfter > 0 {
+		c.rateLimitThreshold = resp.RateLimitAfter
+	}
+	if c.rateLimitThreshold > 0 {
+		c.rateLimitCounter++
+		if c.rateLimitCounter >= c.rateLimitThreshold {
+			c.rateLimitExceeded = true
+			c.mu.Unlock()
+			c.debugLog("Rate limit triggered after %d responses", c.rateLimitCounter)
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+		}
+	}
+
+	var content string
+	var finishReason string
+	var reasoningContent string
+	var images []api.ImageData
+	var toolCalls []api.ToolCall
+
+	if resp != nil {
+		content = resp.Content
+		finishReason = resp.FinishReason
+		reasoningContent = resp.ReasoningContent
+		images = resp.Images
+		toolCalls = resp.ToolCalls
+	} else {
+		content = "Test response from mock provider"
+		finishReason = "stop"
+	}
+
+	c.mu.Unlock()
+
+	if resp != nil && resp.Error != nil {
+		c.debugLog("Returning injected error: %v", resp.Error)
+		c.advanceIndex(resp)
+		return nil, resp.Error
+	}
+
+	if resp != nil && resp.Delay > 0 {
+		c.debugLog("Applying delay of %v", resp.Delay)
+		select {
+		case <-time.After(resp.Delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-c.ctx.Done():
+			return nil, c.ctx.Err()
+		}
+	}
+
+	// Handle streaming configuration
+	if resp != nil && resp.StreamConfig != nil {
+		streamConfig := resp.StreamConfig
+
+		if len(streamConfig.Chunks) == 0 {
+			c.advanceIndex(resp)
+			return nil, errors.New("ScriptedResponse.StreamConfig.Chunks must not be empty")
+		}
+		if streamConfig.ChunkErrors != nil && len(streamConfig.ChunkErrors) > len(streamConfig.Chunks) {
+			c.advanceIndex(resp)
+			return nil, errors.New("ScriptedResponse.StreamConfig.ChunkErrors length exceeds number of chunks")
+		}
+
+		totalTokens := 0
+		startTime := time.Now()
+
+		for i, chunk := range streamConfig.Chunks {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-c.ctx.Done():
+				return nil, c.ctx.Err()
+			default:
+			}
+
+			callback(chunk, "assistant_text")
+
+			if i < len(streamConfig.ChunkErrors) && streamConfig.ChunkErrors[i] != nil {
+				c.debugLog("Chunk %d error: %v", i, streamConfig.ChunkErrors[i])
+				c.advanceIndex(resp)
+				return nil, streamConfig.ChunkErrors[i]
+			}
+
+			if streamConfig.ErrorAfterChunks > 0 && i >= streamConfig.ErrorAfterChunks-1 {
+				c.debugLog("Error after %d chunks", streamConfig.ErrorAfterChunks)
+				c.advanceIndex(resp)
+				if streamConfig.StreamError != nil {
+					return nil, streamConfig.StreamError
+				}
+				return nil, agenterrors.NewAgent("scripted_playback", fmt.Sprintf("simulated stream error after %d chunks", streamConfig.ErrorAfterChunks), nil)
+			}
+
+			if streamConfig.ChunkDelay > 0 && i < len(streamConfig.Chunks)-1 {
+				select {
+				case <-time.After(streamConfig.ChunkDelay):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-c.ctx.Done():
+					return nil, c.ctx.Err()
+				}
+			}
+
+			if streamConfig.ChunkDelay > 0 && streamConfig.TokensPerChunk > 0 {
+				chunkTPS := float64(streamConfig.TokensPerChunk) / streamConfig.ChunkDelay.Seconds()
+				c.mu.Lock()
+				c.lastTPS = chunkTPS
+				c.averageTPS = (c.averageTPS + chunkTPS) / 2
+				c.mu.Unlock()
+			}
+
+			totalTokens += streamConfig.TokensPerChunk
+
+			c.debugLog("Streamed chunk %d (%d tokens, %.2f TPS)", i+1, streamConfig.TokensPerChunk, c.lastTPS)
+		}
+
+		finishReason = streamConfig.FinishReason
+
+		if streamConfig.ChunkDelay > 0 && len(streamConfig.Chunks) > 0 {
+			totalTime := time.Since(startTime)
+			if totalTime > 0 {
+				finalTPS := float64(totalTokens) / totalTime.Seconds()
+				c.mu.Lock()
+				c.lastTPS = finalTPS
+				c.mu.Unlock()
+			}
+		}
+	} else {
+		callback(content, "assistant_text")
+	}
+
+	response := c.buildChatResponse(
+		"scripted-response-",
+		c.GetModel(),
+		content,
+		finishReason,
+		reasoningContent,
+		images,
+		toolCalls,
+		resolveUsage(resp),
+	)
+
+	c.advanceIndex(resp)
+
+	c.debugLog("Consumed streaming response at index %d", c.GetIndex()-1)
+
+	return response, nil
+}
+
+// SendVisionRequest sends a vision-enabled chat request
+func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	if !c.supportsVision {
+		return nil, errors.New("vision requests not supported in ScriptedClient")
+	}
+
+	c.mu.Lock()
+
+	msgCopy := append([]api.Message(nil), messages...)
+	c.sentRequests = append(c.sentRequests, msgCopy)
+
+	// Find vision-only responses
+	var resp *ScriptedResponse
+	var foundIndex int = -1
+
+	if c.responses != nil {
+		for i := c.index; i < len(c.responses); i++ {
+			if c.responses[i].VisionOnly {
+				resp = c.responses[i]
+				foundIndex = i
+				break
+			}
+		}
+	}
+
+	if c.rateLimitExceeded {
+		c.mu.Unlock()
+		c.debugLog("Vision rate limit exceeded after %d attempts", c.rateLimitCounter)
+		return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+	}
+
+	if resp != nil && resp.RateLimitAfter > 0 {
+		c.rateLimitThreshold = resp.RateLimitAfter
+	}
+	if resp != nil && c.rateLimitThreshold > 0 {
+		c.rateLimitCounter++
+		if c.rateLimitCounter >= c.rateLimitThreshold {
+			c.rateLimitExceeded = true
+			c.mu.Unlock()
+			c.debugLog("Vision rate limit triggered after %d responses", c.rateLimitCounter)
+			return nil, &RateLimitExceededError{Attempts: c.rateLimitCounter, LastError: errors.New("rate limit exceeded")}
+		}
+	}
+
+	if foundIndex >= 0 {
+		c.index = foundIndex + 1
+	}
+
+	var content string
+	var finishReason string
+	var reasoningContent string
+	var images []api.ImageData
+	var toolCalls []api.ToolCall
+	var errorToReturn error
+	var delay time.Duration
+
+	if resp != nil {
+		content = resp.Content
+		finishReason = resp.FinishReason
+		reasoningContent = resp.ReasoningContent
+		images = resp.Images
+		toolCalls = resp.ToolCalls
+		errorToReturn = resp.Error
+		delay = resp.Delay
+	}
+
+	c.mu.Unlock()
+
+	if errorToReturn != nil {
+		c.debugLog("Vision request returning injected error: %v", errorToReturn)
+		return nil, errorToReturn
+	}
+
+	if delay > 0 {
+		c.debugLog("Vision request applying delay of %v", delay)
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-c.ctx.Done():
+			return nil, c.ctx.Err()
+		}
+	}
+
+	response := c.buildChatResponse(
+		"vision-response-",
+		c.visionModel,
+		content,
+		finishReason,
+		reasoningContent,
+		images,
+		toolCalls,
+		resolveUsage(resp),
+	)
+
+	c.mu.Lock()
+	if resp != nil {
+		c.responseHistory = append(c.responseHistory, resp)
+	}
+	c.mu.Unlock()
+
+	c.debugLog("Vision request consumed response at index %d", c.GetIndex()-1)
+
+	return response, nil
+}
+
+// CheckConnection always returns nil for test client
+func (c *ScriptedClient) CheckConnection() error {
+	return nil
+}
+
+// SetDebug enables debug mode
+func (c *ScriptedClient) SetDebug(debug bool) {
+	c.debug.Store(debug)
+}
+
+// SetModel sets the model name
+func (c *ScriptedClient) SetModel(model string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.TestClient.SetModel(model)
+}
+
+// GetModel returns the current model
+func (c *ScriptedClient) GetModel() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.TestClient.GetModel()
+}
+
+// GetProvider returns the provider name
+func (c *ScriptedClient) GetProvider() string {
+	return "test"
+}
+
+// GetModelContextLimit returns the context limit. Defaults to 128K (realistic agentic window).
+func (c *ScriptedClient) GetModelContextLimit() (int, error) {
+	return 128_000, nil
+}
+
+// ListModels returns available models
+func (c *ScriptedClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	model := c.TestClient.GetModel()
+	if model == "" {
+		return nil, errors.New("no model configured")
+	}
+
+	models := []api.ModelInfo{
+		{Name: model, ContextLength: 4096},
+	}
+
+	if c.supportsVision && c.visionModel != "" {
+		models = append(models, api.ModelInfo{Name: c.visionModel, ContextLength: 8192})
+	}
+
+	return models, nil
+}
+
+// SupportsVision returns whether vision is supported
+func (c *ScriptedClient) SupportsVision() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.supportsVision
+}
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (c *ScriptedClient) SupportsConversationalVision() bool {
+	return false
+}
+
+// GetVisionModel returns the vision model name
+func (c *ScriptedClient) GetVisionModel() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.visionModel
+}
+
+// GetLastTPS returns the last tokens per second
+func (c *ScriptedClient) GetLastTPS() float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastTPS
+}
+
+// GetAverageTPS returns the average tokens per second
+func (c *ScriptedClient) GetAverageTPS() float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.averageTPS
+}
+
+// GetTPSStats returns TPS statistics
+func (c *ScriptedClient) GetTPSStats() map[string]float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return map[string]float64{
+		"last":    c.lastTPS,
+		"average": c.averageTPS,
+	}
+}
+
+// ResetTPSStats resets TPS statistics
+func (c *ScriptedClient) ResetTPSStats() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastTPS = 100.0
+	c.averageTPS = 100.0
+}

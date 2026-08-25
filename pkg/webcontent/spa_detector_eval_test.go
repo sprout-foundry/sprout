@@ -216,7 +216,7 @@ func TestNeedsRendering_NonScriptTagMatching_IsFalse(t *testing.T) {
 
 // EVAL-18: <script with no closing > tag (malformed) — must not infinite loop.
 func TestNeedsRendering_MalformedScript_NoInfiniteLoop(t *testing.T) {
-	html := `<html><body><div id="root"><p>text</p></div><script src="broken`  // no closing >
+	html := `<html><body><div id="root"><p>text</p></div><script src="broken` // no closing >
 	done := make(chan bool, 1)
 	go func() {
 		NeedsRendering(html)

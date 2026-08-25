@@ -86,7 +86,7 @@ func (v *ScopeValidator) ValidateScope(ctx context.Context, diff string, spec *C
 					},
 				},
 				Summary:     "Scope validation unavailable due to rate limiting",
-				Suggestions: []string{"Retry self-review after rate limits reset", "Reduce diff size before retrying"},
+				Suggestions: []string{"Retry scope validation after rate limits reset", "Reduce diff size before retrying"},
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to validate scope: %w", err)

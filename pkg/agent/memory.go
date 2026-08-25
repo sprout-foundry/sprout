@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 const memoryDirName = "memories"
@@ -57,7 +57,7 @@ func LoadAllMemories() ([]MemoryInfo, error) {
 		if os.IsNotExist(err) {
 			return []MemoryInfo{}, nil
 		}
-		return nil, fmt.Errorf("failed to read memories directory: %w", err)
+		return nil, agenterrors.NewTool("memory", "failed to read memories directory", err)
 	}
 
 	var memories []MemoryInfo
@@ -104,7 +104,7 @@ func LoadMemoryContent(name string) (string, error) {
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read memory file %q: %w", name, err)
+		return "", agenterrors.Wrapf(err, "failed to read memory file %q", name)
 	}
 
 	return string(content), nil
@@ -127,7 +127,7 @@ func SaveMemory(name string, content string) error {
 	// Write the file
 	err := os.WriteFile(filePath, []byte(content), 0600)
 	if err != nil {
-		return fmt.Errorf("failed to write memory file %q: %w", sanitized, err)
+		return agenterrors.Wrapf(err, "failed to write memory file %q", sanitized)
 	}
 
 	return nil
@@ -175,13 +175,13 @@ func DeleteMemory(name string) error {
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("memory file %q does not exist", name)
+		return agenterrors.NewNotFound(fmt.Sprintf("memory file %q does not exist", name))
 	}
 
 	// Delete the file
 	err := os.Remove(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to delete memory file %q: %w", name, err)
+		return agenterrors.Wrapf(err, "failed to delete memory file %q", name)
 	}
 
 	return nil
@@ -192,7 +192,7 @@ func DeleteMemory(name string) error {
 func ListMemories() ([]MemoryInfo, error) {
 	memories, err := LoadAllMemories()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load memories: %w", err)
+		return nil, agenterrors.NewTool("memory", "failed to load memories", err)
 	}
 
 	// Extract first line (title) for each memory

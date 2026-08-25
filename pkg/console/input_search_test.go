@@ -1,10 +1,10 @@
 package console
 
 import (
-	"io"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -16,18 +16,6 @@ func newSearchIR(history []string) *InputReader {
 	}
 	ir.SetHistory(history)
 	return ir
-}
-
-// captureStdoutSearch runs fn while capturing os.Stdout and returns the output.
-func captureStdoutSearch(fn func()) string {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
-	fn()
-	w.Close()
-	out, _ := io.ReadAll(r)
-	return string(out)
 }
 
 // ─── searchHistory ───────────────────────────────────────────────────────────
@@ -788,7 +776,7 @@ func TestRenderSearchPrompt_WithMatch(t *testing.T) {
 	ir.searchQuery = "cmd"
 	ir.searchResult = "cmd1"
 
-	output := captureStdoutSearch(func() {
+	output := testutil.CaptureStdoutPanicking(func() {
 		ir.renderSearchPrompt()
 	})
 
@@ -810,7 +798,7 @@ func TestRenderSearchPrompt_NoMatch(t *testing.T) {
 	ir.searchQuery = "nomatch"
 	ir.searchResult = ""
 
-	output := captureStdoutSearch(func() {
+	output := testutil.CaptureStdoutPanicking(func() {
 		ir.renderSearchPrompt()
 	})
 
@@ -828,7 +816,7 @@ func TestRenderSearchPrompt_EmptyQuery(t *testing.T) {
 	ir.enterSearchMode()
 	// searchQuery is empty, searchResult is "cmd1"
 
-	output := captureStdoutSearch(func() {
+	output := testutil.CaptureStdoutPanicking(func() {
 		ir.renderSearchPrompt()
 	})
 
@@ -842,7 +830,7 @@ func TestRenderSearchPrompt_ClearsLine(t *testing.T) {
 	ir := newSearchIR(nil)
 	ir.searchQuery = "test"
 
-	output := captureStdoutSearch(func() {
+	output := testutil.CaptureStdoutPanicking(func() {
 		ir.renderSearchPrompt()
 	})
 

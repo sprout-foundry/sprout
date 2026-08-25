@@ -17,9 +17,25 @@ func (i *InitCommand) Name() string {
 	return "init"
 }
 
+// SafeDuringSteer returns false - /init is project init, state-changing
+func (i *InitCommand) SafeDuringSteer() bool {
+	return false
+}
+
 // Description returns the command description
 func (i *InitCommand) Description() string {
 	return "Generate or improve AGENTS.md with intelligent codebase analysis"
+}
+
+// Usage returns the detailed help text shown by `/help init`.
+func (i *InitCommand) Usage() string {
+	return strings.Join([]string{
+		"/init   Generate or improve AGENTS.md via LLM codebase analysis.",
+		"",
+		"The agent explores the project structure and writes a concise AGENTS.md",
+		"with build/test commands, architecture overview, and conventions.",
+		"If AGENTS.md already exists, it suggests improvements.",
+	}, "\n")
 }
 
 // Execute runs the init command using the LLM to analyze the codebase

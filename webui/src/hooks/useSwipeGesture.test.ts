@@ -17,7 +17,6 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
-
 import { useSwipeGesture } from './useSwipeGesture';
 
 // ---------------------------------------------------------------------------

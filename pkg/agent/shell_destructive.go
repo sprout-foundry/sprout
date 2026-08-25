@@ -170,18 +170,22 @@ subcmd:
 		return false
 
 	case "stash":
-		// `stash pop`, `stash apply`, `stash drop`, `stash clear` all
-		// risk clobbering active state. `stash push` (and bare `stash`)
-		// SAVE state — not destructive. `stash list`/`show` are read-
-		// only (handled by shellLooksReadOnly).
+		// All `git stash` operations that aren't read-only (list/show)
+		// are destructive to the working tree:
+		// - bare `git stash` / `stash push`: saves and REVERTS the working tree to HEAD
+		// - `stash pop`/`apply`: restores via 3-way merge that can silently revert files
+		// - `stash drop`/`clear`: discards saved state
+		// `stash list`/`show` are read-only (handled by shellLooksReadOnly),
+		// but if we reach here they still count as destructive for cache purposes
+		// (conservative: err toward re-priming).
 		if len(rest) == 0 {
-			return false // bare `git stash` == `stash push`
+			return true // bare `git stash` == `stash push` — reverts working tree
 		}
 		switch rest[0] {
-		case "pop", "apply", "drop", "clear":
-			return true
+		case "list", "show":
+			return false
 		}
-		return false
+		return true
 
 	case "clean":
 		// `git clean` is always destructive when paired with -f/--force

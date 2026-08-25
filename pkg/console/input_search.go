@@ -34,6 +34,7 @@ func (ir *InputReader) exitSearchMode(accept bool) {
 		ir.cursorPos = len(ir.searchResult)
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
+		ir.resetCompletionCycle()
 	} else {
 		ir.line = ir.preSearchLine
 		ir.cursorPos = ir.preSearchCursorPos

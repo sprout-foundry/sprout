@@ -22,7 +22,7 @@ func TestCaptureWebText_WritesFileAndLog(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", "captures")
 	dir := filepath.Join(workDir, "captures")
 
 	a := &Agent{}
@@ -63,7 +63,7 @@ func TestCaptureVisionAsset_SkipsLargeLocalFile(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", "captures")
 	dir := filepath.Join(workDir, "captures")
 
 	large := filepath.Join(t.TempDir(), "large.pdf")
@@ -101,7 +101,7 @@ func TestCaptureVisionAsset_SkipsLargeLocalFile(t *testing.T) {
 func TestResourceDirectory_UsesConfigFallbackAndIsRelativeToWorkingDir(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 	workDir := filepath.Join(t.TempDir(), "wd")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -156,7 +156,7 @@ func TestResourceDirectory_NormalizesAbsoluteEnvToRelativeWorkingDir(t *testing.
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
 	abs := filepath.Join(string(filepath.Separator), "tmp", "captures")
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", abs)
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", abs)
 
 	a := &Agent{}
 	got := a.resourceDirectory()
@@ -182,7 +182,7 @@ func TestCaptureVisionInputAndOutput_LogsTruncationAndFullOutputPath(t *testing.
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalWD) })
 
-	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+	t.Setenv("SPROUT_RESOURCE_DIRECTORY", "captures")
 	dir := filepath.Join(workDir, "captures")
 
 	fullOutputRel := "./captures/full_ocr.txt"

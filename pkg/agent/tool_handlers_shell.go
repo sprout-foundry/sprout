@@ -1,15 +1,6 @@
 // Package agent provides the shell command handler with a unified security model.
-//
-// When UnifiedRiskResolver is ON (the default, set by config_migration.go),
-// a single ResolveToolRisk assessment gates every shell command. The unified
-// gate (unifiedSecurityGate in tool_security.go) runs once per tool call —
-// no Gate 1/Gate 2 bridge or suppression plumbing is needed.
-//
-// When the flag is OFF (legacy fallback), the older dual-gate model applies:
-// Gate 1 (ClassifyToolCall static classifier) + Gate 2 (EvaluateOperationRisk
-// persona cascade). Note that the legacy path may double-prompt because the
-// suppression bridge was removed in SP-068 Phase 3; the unified resolver is
-// the recommended and default path.
+// When UnifiedRiskResolver is ON (the default), a single ResolveToolRisk assessment
+// gates every shell command. When OFF, the older dual-gate model applies.
 package agent
 
 import (
@@ -111,7 +102,22 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
-	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
+	// Enrich context with workspace root, effective cwd, and session folders
+	// BEFORE any dispatch: every execution path below (unified, legacy,
+	// background) shells out through runShellCommand, which resolves cmd.Dir
+	// from this context and falls back to os.Getwd() when it is missing —
+	// the daemon's start directory in daemon mode, or the package source dir
+	// inside a real repo during tests.
+	workspaceRoot := a.GetWorkspaceRoot()
+	effectiveCwd := a.effectiveCwd()
+	sessionFolders := a.SnapshotSessionAllowedFolders()
+	ctx = filesystem.WithAgentContext(
+		filesystem.WithWorkspaceRoot(ctx, workspaceRoot),
+		effectiveCwd,
+		sessionFolders,
+	)
+
+	// When UnifiedRiskResolver is enabled, return the single
 	// ResolveToolRisk assessment instead of the individual gates below.
 	if cfg := a.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
 		return a.handleShellCommandUnified(ctx, command, background)
@@ -119,7 +125,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 
 	// Shadow-mode logging: compare old dual-gate decision vs new unified
 	// assessment when the flag is off so we can validate parity before
-	// flipping the flag (SP-068 Phase 2).
+	// flipping the flag.
 	if a.debug {
 		secResult := tools.ClassifyToolCall("shell_command", map[string]interface{}{"command": command})
 		unified := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
@@ -144,7 +150,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	}
 
 	// — Legacy dual-gate path (flag OFF) —
-	// Risk cascade for personas / risk profiles (SP-058).
+	// Risk cascade for personas / risk profiles.
 	// Resolution:
 	//   Critical → ALWAYS reject (rm -rf root, fork bomb). No persona,
 	//              profile, or interactive prompt can override this.
@@ -153,6 +159,11 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	//              else: reject (non-interactive can't ask).
 	//   Medium   → allow; persona system prompt guides reasoning.
 	//   Low      → allow.
+	//
+	// historyRewriteAlreadyApproved tracks whether the High-tier prompt
+	// below already approved this command, so the git history-rewrite
+	// gate doesn't re-prompt for the same operation.
+	historyRewriteAlreadyApproved := false
 	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
 			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
@@ -163,14 +174,30 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 				fmt.Sprintf("high-risk operation rejected by persona risk cascade: %s (command: '%s')", risk, command), nil,
 			)
 		}
+		historyRewriteAlreadyApproved = true
 	}
 
-	// Block git commands that lose commit history unless the workspace
-	// has opted into the more-permissive `AllowGitHistoryRewrite` mode.
-	if isGitHistoryRewriteCommand(command) {
+	// Prompt for git commands that can lose commit history (recoverable
+	// via reflog). AllowGitHistoryRewrite=true skips the prompt entirely.
+	// If the persona cascade above already prompted and approved (e.g.
+	// git reset --hard is HighRiskNever → High), skip the re-prompt.
+	if isGitHistoryRewriteCommand(command) && !historyRewriteAlreadyApproved {
 		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
-			return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and is blocked by default. Use the git tool for explicit user approval, or set allow_git_history_rewrite=true in config to opt in (command: '%s')", extractGitSubcommand(command), command), nil)
+			if !a.highRiskApprovedForCommand(ctx, command) {
+				return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and was not approved (command: '%s')", extractGitSubcommand(command), command), nil)
+			}
 		}
+	}
+
+	// Block git stash operations. `git stash` saves the working tree and
+	// reverts it to HEAD; `git stash pop`/`apply` restores via a 3-way
+	// merge that can silently revert files when conflicts arise (the
+	// exact bug that caused normalizeGitArgs, staleness guards, and the
+	// read.go context refactor to disappear from the working tree).
+	// stash list/show are read-only and allowed via shellLooksReadOnly.
+	if isGitStashCommand(command) {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("git stash operations are blocked via shell_command — stash pop/apply can silently revert files via merge conflicts. Use 'git stash' manually in your terminal if needed (command: '%s')", command), nil)
 	}
 
 	// Block git write operations unless the active persona has CapabilityGitWrite.
@@ -183,10 +210,10 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 			// of whether the agent used shell_command or the commit tool.
 			if isGitCommitSubcommand(command) {
 				a.PrintLine("")
-				a.PrintLine("[redirect] Redirecting git commit to 'commit' tool for proper message generation")
+				a.PrintLine("Redirecting git commit to 'commit' tool for proper message generation")
 				a.PrintLine(fmt.Sprintf("  Original command: %s", command))
 				if strings.Contains(command, "--amend") {
-					a.PrintLine("  [warning] --amend flag detected but commit tool does not support amending; creating a new commit")
+					a.PrintLine("  --amend flag detected but commit tool does not support amending; creating a new commit")
 				}
 				a.PrintLine("")
 				message := extractGitCommitArgs(command)
@@ -247,17 +274,26 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	if argsStr != "" {
 		pseudoCmd += " " + argsStr
 	}
-	if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelHigh {
+	// Resolution mirrors the shell_command risk gate (see comment block
+	// above this function):
+	//   Critical → ALWAYS reject. No persona, profile, or interactive
+	//              prompt can override this.
+	//   High     → reject unless the user (or a subagent inheriting root
+	//              authority) approves via highRiskApprovedForCommand.
+	//              The hard-reject that used to live here meant an
+	//              approved `git checkout` was still blocked — the
+	//              approval prompt below (approvalPrompter) was never
+	//              reached because this check returned early.
+	if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
-			fmt.Sprintf("high-risk git operation rejected by persona risk cascade: %s (command: '%s')", risk, pseudoCmd), nil,
+			fmt.Sprintf("critical git operation blocked (cannot be approved by any profile or persona): '%s'", pseudoCmd), nil,
 		)
-	}
-
-	// Enrich context with workspace root so executeGitCommand runs in the
-	// correct directory. The seed execution path passes a bare context
-	// without workspace metadata, so we inject it from the agent's config.
-	if wsRoot := a.effectiveCwd(); wsRoot != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, wsRoot)
+	} else if risk == configuration.RiskLevelHigh {
+		if !a.highRiskApprovedForCommand(ctx, pseudoCmd) {
+			return "", agenterrors.NewSecurityError(
+				fmt.Sprintf("high-risk git operation rejected by persona risk cascade: %s (command: '%s')", risk, pseudoCmd), nil,
+			)
+		}
 	}
 
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
@@ -516,7 +552,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 }
 
 // handleShellCommandUnified is the single-risk-assessment path for shell
-// commands when the UnifiedRiskResolver flag is ON (SP-068 Phase 2).
+// commands when the UnifiedRiskResolver flag is ON.
 // It folds all security gates into one RiskAssessment via ResolveToolRisk
 // and acts on the result.
 func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, background bool) (string, error) {
@@ -542,7 +578,7 @@ func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, b
 	// highRiskApprovedForCommand check before this handler was invoked.
 	// Re-checking here is redundant — Gate 1's approval is authoritative for
 	// the unified path. Proceed directly to execution for all non-Critical
-	// levels (High/Medium/Low). SP-068 Phase 3 removed the redundant Gate 2.
+	// levels (High/Medium/Low). The redundant Gate 2 was removed.
 	if background {
 		return a.executeShellCommandBackground(ctx, command)
 	}

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Run spawns an in-process subagent and waits for completion
@@ -87,7 +89,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				defer wg.Done()
 				results[idx] = &SubagentResult{
 					ID:             t.ID,
-					Error:          fmt.Errorf("fleet token budget exceeded"),
+					Error:          agenterrors.NewValidation("fleet token budget exceeded", nil),
 					BudgetExceeded: true,
 				}
 				return
@@ -110,10 +112,12 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.WorkingDir != "" {
 				taskOpts.WorkingDir = t.WorkingDir
 			}
+			// Note: tokens are already debited per-LLM-call by the subagent via
+			// SetFleetBudget → tracker.Add() in trackFleetBudgetForResponse.
+			// Do NOT add result.TokensUsed again here — that would double-count.
 			result := r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts, &cumulativeTokens, int64(opts.FleetTokenBudget))
 			results[idx] = result
 			if result != nil {
-				cumulativeTokens.Add(int64(result.TokensUsed))
 				if result.Cancelled {
 					r.metricActive.Add(-1)
 					r.metricCancelled.Add(1)
@@ -164,7 +168,7 @@ func (r *SubagentRunner) GetActiveSubagents() []*runningSubagent {
 // CancelSubagent cancels a specific running subagent by ID.
 // Cancels both the run context (truncates pending work) and the subagent
 // agent's interrupt signal (preempts the in-flight ProcessQuery loop,
-// which doesn't observe runCtx — see SP-059 Phase 1a).
+// which doesn't observe runCtx).
 func (r *SubagentRunner) CancelSubagent(id string) bool {
 	if val, ok := r.active.Load(id); ok {
 		if sub, ok := val.(*runningSubagent); ok {
@@ -189,18 +193,34 @@ func (r *SubagentRunner) CancelAll() {
 	})
 }
 
-// InjectInputIntoActive delivers a steering message to the deepest
-// (most-recently-started) running subagent. Returns the target ID when
-// delivery succeeds, or empty string when no subagent is currently active
-// — the caller falls back to the primary's input channel in that case.
+// InjectInputIntoActive delivers a steering message to the PRIMARY agent
+// first. Only if the primary's channel is full or unavailable does it
+// fall back to the deepest (most-recently-started) running subagent.
 //
-// "Deepest" wins so that nested-subagent setups route to the one the
-// user is most likely watching activity from in the Subagents tab.
-// Selection ties broken by start time (latest wins).
+// The primary agent is what reads user steer messages and decides whether
+// to abort subagents, redirect them, or fold the steer into its own plan.
+// Routing to the subagent bypasses this decision loop — the parent never
+// sees "yes, commit and push" until the subagent finishes, by which point
+// the subagent may have already taken destructive action.
+//
+// Returns the target ID ("primary" or subagent ID) when delivery
+// succeeds, or ("", false) when no target is available.
 func (r *SubagentRunner) InjectInputIntoActive(input string) (string, bool) {
 	if r == nil || input == "" {
 		return "", false
 	}
+
+	// Primary agent first. StageSteerInput keeps the message retractable
+	// (RetractLatestSteer) until a conversation-loop boundary hands it to
+	// seed; a cap rejection falls through to the subagent fallback.
+	if r.parentAgent != nil {
+		if err := r.parentAgent.InjectInputContext(input); err == nil {
+			return "primary", true
+		}
+		// Primary staging full or unavailable; fall through to subagent.
+	}
+
+	// Deepest-subagent routing as fallback.
 	var best *runningSubagent
 	r.active.Range(func(_, value interface{}) bool {
 		sub, ok := value.(*runningSubagent)

@@ -27,6 +27,7 @@ func newHistoryTestAgent(t *testing.T, workDir string) *Agent {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	t.Setenv("SPROUT_CONFIG", filepath.Join(homeDir, ".config", "sprout"))
 	withWorkingDir(t, workDir)
 
 	manager, err := configuration.NewManagerSilent()

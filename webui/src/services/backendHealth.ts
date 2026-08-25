@@ -6,6 +6,7 @@
  */
 
 import { debugLog } from '../utils/log';
+import { isCloud } from '../config/mode';
 import { getAdapter } from './apiAdapter';
 import { clientFetch } from './clientSession';
 
@@ -20,10 +21,14 @@ let callbacks: Array<(isReachable: boolean) => void> = [];
 /* Perform a single health check against the backend */
 async function checkBackendHealth(): Promise<boolean> {
   try {
-    /* Use adapter's fetch if installed, otherwise use clientFetch */
-    const adapter = getAdapter();
-    const fetchFn = adapter
-      ? (input: RequestInfo | URL, init?: RequestInit) => adapter.fetch(input, init)
+    /* In cloud mode, use a plain fetch (the adapter handles routing).
+       In local mode, use clientFetch (handles proxy base + credentials). */
+    const fetchFn = isCloud
+      ? (input: RequestInfo | URL, init?: RequestInit) => {
+          const adapter = getAdapter();
+          if (adapter) return adapter.fetch(input, init);
+          return fetch(input, init);
+        }
       : clientFetch;
     const response = await fetchFn(HEALTH_ENDPOINT);
 

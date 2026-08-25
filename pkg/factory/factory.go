@@ -12,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/providerregistry"
 )
 
@@ -80,17 +81,31 @@ func (t *TestClient) GetProvider() string {
 }
 
 func (t *TestClient) GetModelContextLimit() (int, error) {
-	return 4096, nil
+	return 128_000, nil
 }
 
 func (t *TestClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return []api.ModelInfo{
-		{Name: "test-model", ContextLength: 4096},
+		{Name: "test-model", ContextLength: 128_000},
 	}, nil
 }
 
 func (t *TestClient) SupportsVision() bool {
 	return false
+}
+
+// SupportsConversationalVision returns false; the test client never
+// participates in inline multimodal turns.
+func (t *TestClient) SupportsConversationalVision() bool {
+	return false
+}
+
+// VisionCapabilities returns the test client's vision limits — the safe
+// defaults. TestClient never participates in real vision requests, but
+// the method is required to satisfy api.ClientInterface.
+// SP-103-D3 / AUDIT-GAP-2.
+func (t *TestClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
 }
 
 func (t *TestClient) GetVisionModel() string {
@@ -269,20 +284,45 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 	}
 
 	if len(customProviders) == 0 {
-		return nil, fmt.Errorf("no custom providers configured")
+		return nil, fmt.Errorf("provider %q is not registered as a custom provider. Run 'sprout custom add %s' (or '/custom add %s' in chat) to register it, or switch to one of the providers shown in '/provider list'", providerName, providerName, providerName)
 	}
 
 	customProvider, exists := customProviders[providerName]
 	if !exists {
-		return nil, fmt.Errorf("custom provider not found: %s", providerName)
+		return nil, fmt.Errorf("custom provider %q is not registered. Run 'sprout custom add %s' (or '/custom add %s' in chat) to register it, or set %q in /provider list to a provider you have configured", providerName, providerName, providerName, providerName)
 	}
 
 	genericConfig, err := customProvider.ToProviderConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build provider config: %w", err)
 	}
-	if resolved, resolveErr := credentials.ResolveProvider(providerName); resolveErr == nil && strings.TrimSpace(resolved.Value) != "" {
-		genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
+	// Only enforce credentials when the provider actually requires them.
+	// customProvider.RequiresAPIKey=true (or EnvVar set) signals a key is
+	// needed; otherwise (e.g. local mocks in tests, self-hosted Ollama on
+	// localhost) auth is optional and we should pass through.
+	needsCred := customProvider.RequiresAPIKey || customProvider.EnvVar != ""
+	if needsCred {
+		resolved, resolveErr := credentials.ResolveProvider(providerName)
+		hasStoredCred := resolveErr == nil && strings.TrimSpace(resolved.Value) != ""
+		hasEnvVar := customProvider.EnvVar != "" && strings.TrimSpace(os.Getenv(customProvider.EnvVar)) != ""
+		if !hasStoredCred && !hasEnvVar {
+			// Three options: export env var, set credential via /keys,
+			// or run /custom add (which detects this case and offers to
+			// store the key directly).
+			var envHint string
+			switch {
+			case customProvider.EnvVar != "":
+				envHint = fmt.Sprintf(" Set %s, run '/keys set %s <api_key>', or run '/custom add %s' to be guided through it.",
+					customProvider.EnvVar, providerName, providerName)
+			default:
+				envHint = fmt.Sprintf(" Run '/keys set %s <api_key>' or '/custom add %s' to configure credentials.",
+					providerName, providerName)
+			}
+			return nil, fmt.Errorf("custom provider %q is registered but has no credentials configured.%s", providerName, envHint)
+		}
+		if hasStoredCred {
+			genericConfig.Auth.Key = strings.TrimSpace(resolved.Value)
+		}
 	}
 
 	client, err := providers.NewGenericProvider(genericConfig)
@@ -300,50 +340,27 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 // CreateProviderClient is a factory function that creates providers
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
 	switch clientType {
-	case api.OpenAIClientType:
-		return CreateGenericProvider("openai", model)
-	case api.ChutesClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("chutes", model)
-	case api.ZAIClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("zai", model)
-	case api.ZAICodingClientType:
-		// GLM Coding Plan uses a dedicated endpoint
-		return CreateGenericProvider("zai-coding", model)
-	case api.DeepInfraClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("deepinfra", model)
-	case api.DeepSeekClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("deepseek", model)
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
-	case api.OllamaCloudClientType:
-		return CreateGenericProvider("ollama-cloud", model)
-	case api.OpenRouterClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("openrouter", model)
-	case api.CerebrasClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("cerebras", model)
-	case api.LMStudioClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("lmstudio", model)
-	case api.MistralClientType:
-		// Use the new generic provider system
-		return CreateGenericProvider("mistral", model)
-	case api.MinimaxClientType:
-		return CreateGenericProvider("minimax", model)
+	case api.SproutLocalClientType:
+		p := localmodel.GetLocalProvider()
+		if model != "" {
+			// Best-effort: a persisted choice that's since gone stale (model
+			// deleted from disk, machine's RAM no longer fits it) shouldn't
+			// block agent creation — just fall back to RAM auto-selection,
+			// same as if no choice had ever been recorded.
+			if err := p.SetModel(model); err != nil && os.Getenv("SPROUT_LOCAL_DEBUG") == "1" {
+				log.Printf("factory: persisted local model %q unavailable (%v), falling back to auto-selection", model, err)
+			}
+		}
+		return p, nil
 	case api.TestClientType:
-		// Return test/mock client for CI environments
 		testClient := &TestClient{model: model}
 		if model != "" {
 			testClient.SetModel(model)
 		}
 		return testClient, nil
 	default:
-		// For custom providers, try to use the generic provider system
 		return CreateGenericProvider(string(clientType), model)
 	}
 }

@@ -534,8 +534,8 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Real sprout backend integration test
-// Runs only when LEDIT_INTEGRATION_SSH_TEST=1 is set in the environment.
-// The test expects a local sprout process to be running on LEDIT_WEBUI_PORT
+// Runs only when SPROUT_INTEGRATION_SSH_TEST=1 is set in the environment.
+// The test expects a local sprout process to be running on SPROUT_WEBUI_PORT
 // (defaults to 56000) that has at least one SSH session attached.
 // It verifies:
 //   1. /ssh/{key}/ returns 200 with SPROUT_PROXY_BASE injected.
@@ -544,17 +544,17 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestSSHProxyRealBackendIntegration(t *testing.T) {
-	if os.Getenv("LEDIT_INTEGRATION_SSH_TEST") != "1" {
-		t.Skip("set LEDIT_INTEGRATION_SSH_TEST=1 to run this integration test")
+	if os.Getenv("SPROUT_INTEGRATION_SSH_TEST") != "1" {
+		t.Skip("set SPROUT_INTEGRATION_SSH_TEST=1 to run this integration test")
 	}
 
-	localPort := os.Getenv("LEDIT_WEBUI_PORT")
+	localPort := os.Getenv("SPROUT_WEBUI_PORT")
 	if localPort == "" {
 		localPort = "56000"
 	}
-	sshSessionRaw := os.Getenv("LEDIT_SSH_SESSION_KEY")
+	sshSessionRaw := os.Getenv("SPROUT_SSH_SESSION_KEY")
 	if sshSessionRaw == "" {
-		t.Fatal("LEDIT_SSH_SESSION_KEY must be set for the integration test")
+		t.Fatal("SPROUT_SSH_SESSION_KEY must be set for the integration test")
 	}
 
 	r := strings.NewReplacer(":", "%3A", "$", "%24")
@@ -564,8 +564,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("index_has_proxy_base", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/")
-	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		if err != nil {
+			t.Fatalf("GET /: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -579,8 +579,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("health_proxied", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/health")
-	if err != nil {
-		t.Fatalf("GET /health: %v", err)
+		if err != nil {
+			t.Fatalf("GET /health: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -598,8 +598,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("workspace_api_proxied", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/api/workspace")
-	if err != nil {
-		t.Fatalf("GET /api/workspace: %v", err)
+		if err != nil {
+			t.Fatalf("GET /api/workspace: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -618,8 +618,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 	t.Run("websocket_proxied", func(t *testing.T) {
 		wsURL := fmt.Sprintf("ws://127.0.0.1:%s/ssh/%s/ws", localPort, r.Replace(sshSessionRaw))
 		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("WS dial to %s: %v", wsURL, err)
+		if err != nil {
+			t.Fatalf("WS dial to %s: %v", wsURL, err)
 		}
 		defer conn.Close()
 

@@ -18,8 +18,7 @@ import (
 // handleAPICreateFile handles API requests for creating new files
 func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -29,9 +28,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid request body: %v", err),
 			"code":  "invalid_request_body",
 		})
@@ -45,9 +42,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	} else if req.Directory != "" {
 		targetPath = req.Directory
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Either path or directory must be specified",
 			"code":  "missing_path_or_directory",
 		})
@@ -57,9 +52,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	// Canonicalize and validate the path
 	canonicalPath, err := canonicalizePath(targetPath, workspaceRoot, true)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid path: %v", err),
 			"code":  "invalid_path",
 		})
@@ -67,9 +60,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	}
 
 	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Path outside workspace",
 			"code":  "path_outside_workspace",
 		})
@@ -78,9 +69,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 
 	// Check if path already exists
 	if _, err := os.Stat(canonicalPath); err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error": "Path already exists",
 			"code":  "path_already_exists",
 		})
@@ -91,9 +80,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	if strings.HasSuffix(canonicalPath, "/") || req.Directory != "" {
 		// Create directory
 		if err := os.MkdirAll(canonicalPath, 0755); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"error": fmt.Sprintf("Failed to create directory: %v", err),
 				"code":  "failed_to_create_directory",
 			})
@@ -103,9 +90,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		// Create file
 		parentDir := filepath.Dir(canonicalPath)
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"error": fmt.Sprintf("Failed to create parent directory: %v", err),
 				"code":  "failed_to_create_parent_directory",
 			})
@@ -114,9 +99,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 
 		file, err := os.Create(canonicalPath)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"error": fmt.Sprintf("Failed to create file: %v", err),
 				"code":  "failed_to_create_file",
 			})
@@ -127,23 +110,17 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "created", ""))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"path":    canonicalPath,
 	})
 }
 
-// handleAPIDeleteItem handles API requests for deleting files or directories
+// handleAPIDeleteItem handles API requests for deleting files or directories.
+// Accepts both POST (browser fetch default) and DELETE.
 func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodDelete {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Method not allowed",
-			"code":  "method_not_allowed",
-		})
+	if !requireMethods(w, r, http.MethodPost, http.MethodDelete) {
 		return
 	}
 
@@ -152,9 +129,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid request body: %v", err),
 			"code":  "invalid_request_body",
 		})
@@ -162,9 +137,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if req.Path == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Path must be specified",
 			"code":  "missing_path",
 		})
@@ -174,9 +147,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	// Canonicalize and validate the path
 	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid path: %v", err),
 			"code":  "invalid_path",
 		})
@@ -184,9 +155,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Path outside workspace",
 			"code":  "path_outside_workspace",
 		})
@@ -195,9 +164,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 
 	// Delete the file or directory
 	if err := os.RemoveAll(canonicalPath); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"error": fmt.Sprintf("Failed to delete: %v", err),
 			"code":  "failed_to_delete",
 		})
@@ -206,8 +173,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "deleted", ""))
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
 		"path":    canonicalPath,
 	})
@@ -216,13 +182,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 // handleAPIRenameItem handles API requests for renaming files or directories.
 func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodPost {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Method not allowed",
-			"code":  "method_not_allowed",
-		})
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
@@ -232,9 +192,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid request body: %v", err),
 			"code":  "invalid_request_body",
 		})
@@ -242,9 +200,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if req.OldPath == "" || req.NewPath == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Old and new paths must be specified",
 			"code":  "missing_paths",
 		})
@@ -253,9 +209,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 
 	oldCanonicalPath, err := canonicalizePath(req.OldPath, workspaceRoot, false)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid source path: %v", err),
 			"code":  "invalid_old_path",
 		})
@@ -264,9 +218,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 
 	newCanonicalPath, err := canonicalizePath(req.NewPath, workspaceRoot, true)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid target path: %v", err),
 			"code":  "invalid_new_path",
 		})
@@ -277,9 +229,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	newExternal := !isWithinWorkspace(newCanonicalPath, workspaceRoot)
 	if (oldExternal && !ws.allowExternalAccessForRequest(r, oldCanonicalPath)) ||
 		(newExternal && !ws.allowExternalAccessForRequest(r, newCanonicalPath)) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Path outside workspace",
 			"code":  "path_outside_workspace",
 		})
@@ -287,9 +237,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if _, err := os.Stat(oldCanonicalPath); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{
 			"error": fmt.Sprintf("Source path does not exist: %v", err),
 			"code":  "source_not_found",
 		})
@@ -297,9 +245,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if _, err := os.Stat(newCanonicalPath); err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error": "Target path already exists",
 			"code":  "target_already_exists",
 		})
@@ -307,9 +253,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := os.MkdirAll(filepath.Dir(newCanonicalPath), 0755); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"error": fmt.Sprintf("Failed to create target parent directory: %v", err),
 			"code":  "failed_to_create_parent_directory",
 		})
@@ -317,9 +261,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := os.Rename(oldCanonicalPath, newCanonicalPath); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"error": fmt.Sprintf("Failed to rename: %v", err),
 			"code":  "failed_to_rename",
 		})
@@ -329,8 +271,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(oldCanonicalPath, "deleted", ""))
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(newCanonicalPath, "created", ""))
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":  "success",
 		"old_path": oldCanonicalPath,
 		"new_path": newCanonicalPath,
@@ -339,17 +280,14 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 
 // handleAPIGetPrettierConfig handles API requests for Prettier config discovery.
 func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
 	// Get workspace root for this request
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if workspaceRoot == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "No workspace configured",
 			"code":  "no_workspace",
 		})
@@ -447,6 +385,5 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(mergedConfig)
+	writeJSON(w, http.StatusOK, mergedConfig)
 }

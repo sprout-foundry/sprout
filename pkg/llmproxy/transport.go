@@ -123,10 +123,11 @@ func GetCorsProxy() string {
 }
 
 // RoundTrip implements http.RoundTripper. Rewrites the URL when:
-//   1. corsProxy is set (highest precedence) — routes ALL HTTP/HTTPS
-//      requests through the CORS proxy with URL-encoded original URL
-//   2. platformEndpoint is set AND the host matches a known provider —
-//      routes through the sprout platform proxy
+//  1. corsProxy is set (highest precedence) — routes ALL HTTP/HTTPS
+//     requests through the CORS proxy with URL-encoded original URL
+//  2. platformEndpoint is set AND the host matches a known provider —
+//     routes through the sprout platform proxy
+//
 // Otherwise delegates straight to the base transport.
 func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Check corsProxy FIRST (highest precedence).

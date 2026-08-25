@@ -26,9 +26,45 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
+// Track every EditorView constructed in this suite so we can assert that
+// settings-callback re-renders do not destroy the view (the cursor-drop bug).
+const { editorViewConstructorSpy, editorViewDestroySpy } = vi.hoisted(() => ({
+  editorViewConstructorSpy: vi.fn(),
+  editorViewDestroySpy: vi.fn(),
+}));
+
+vi.mock('@codemirror/view', async () => {
+  const actual = await vi.importActual<typeof import('@codemirror/view')>('@codemirror/view');
+  const instances: any[] = [];
+
+  class TrackingEditorView extends actual.EditorView {
+    constructor(options: any) {
+      super(options);
+      editorViewConstructorSpy(this);
+      instances.push(this);
+    }
+
+    destroy() {
+      editorViewDestroySpy(this);
+      return super.destroy();
+    }
+
+    static get instances() {
+      return instances;
+    }
+  }
+
+  return {
+    ...actual,
+    EditorView: TrackingEditorView,
+  };
+});
+
 // Static import — Vitest hoists vi.mock above all imports automatically
 import { debugLog } from '../utils/log';
+import { EditorView } from '@codemirror/view';
 import { useEditorCursor } from './useEditorCursor';
+import { useCMView, type CMViewAPI, type CMViewSettings, type OpenWorkspaceBufferFn } from './useCMView';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,6 +134,14 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+  // Make rAF synchronous so the throttled cursor/content updates flush
+  // within act() blocks. The production hook uses rAF to coalesce rapid
+  // updates; tests need the flush to be immediate.
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    cb(performance.now());
+    return 0;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
 });
 
 afterEach(() => {
@@ -105,6 +149,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -127,7 +172,14 @@ function renderTestHook(
     },
   };
 
-  const isExternalUpdateRef = { current: false };
+  // Mock CodeMirror view API ref — the hook reads `cmViewApiRef.current?.isExternalUpdate()`.
+  // The default `isExternalUpdate: () => false` lets the cursor-update path run normally;
+  // tests that exercise the gate pass a different mock here.
+  const cmViewApiRef = {
+    current: {
+      isExternalUpdate: () => false,
+    },
+  };
 
   let hookReturn: any = null;
 
@@ -135,7 +187,7 @@ function renderTestHook(
     hookReturn = useEditorCursor({
       bufferRef,
       updateBufferCursor,
-      isExternalUpdateRef,
+      cmViewApiRef,
     });
     return null;
   }
@@ -161,6 +213,117 @@ describe('initial state', () => {
     const { getReturn } = renderTestHook();
 
     expect(getReturn().selectionInfo).toBeNull();
+  });
+
+  it('cursorPosition defaults to line 1, column 0 on mount', () => {
+    const { getReturn } = renderTestHook();
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: cursorPosition — live, reference-fresh state for the footer
+// ---------------------------------------------------------------------------
+//
+// Regression coverage: buffer.cursorPosition (in BufferManagerContext) is
+// mutated in place and intentionally does NOT change identity, so React
+// bails out of re-rendering consumers keyed on it. `cursorPosition` here is
+// the fix — a dedicated piece of state that gets a fresh object on every
+// real cursor move, independent of whether a buffer is attached.
+
+describe('cursorPosition — updates on every real cursor move', () => {
+  it('updates on a plain cursor move with no buffer content change', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 12, ranges: [{ from: 12, to: 12, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 12 });
+  });
+
+  it('produces a new object reference on each update (so React never bails out)', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 1, ranges: [{ from: 1, to: 1, empty: true }], docLines }),
+      );
+    });
+    const first = getReturn().cursorPosition;
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 2, ranges: [{ from: 2, to: 2, empty: true }], docLines }),
+      );
+    });
+    const second = getReturn().cursorPosition;
+
+    expect(first).not.toBe(second);
+    expect(second).toEqual({ line: 1, column: 2 });
+  });
+
+  it('updates even when bufferRef.current is null (not gated on a buffer)', () => {
+    const { getReturn, bufferRef, docLines } = renderTestHook();
+    bufferRef.current = null;
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 7, ranges: [{ from: 7, to: 7, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 7 });
+  });
+
+  it('does NOT update when selectionSet is false', () => {
+    const { getReturn, docLines } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ selectionSet: false, head: 9, ranges: [{ from: 9, to: 9, empty: true }], docLines }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+
+  it('does NOT update when lineAt throws', () => {
+    const { getReturn } = renderTestHook();
+
+    act(() => {
+      getReturn().handleCursorUpdate(
+        createMockUpdate({ head: 10, ranges: [{ from: 10, to: 10, empty: true }], throwOnLineAt: true }),
+      );
+    });
+
+    expect(getReturn().cursorPosition).toEqual({ line: 1, column: 0 });
+  });
+
+  it('does NOT update when the CM view reports an external update in flight', () => {
+    const updateBufferCursor = vi.fn();
+    const bufferRef = { current: { id: 'buf-1', file: { path: '/test/file.ts' } } };
+    const cmViewApiRef = { current: { isExternalUpdate: () => true } };
+
+    let hookReturn: any = null;
+    function HookWrapper() {
+      hookReturn = useEditorCursor({ bufferRef, updateBufferCursor, cmViewApiRef });
+      return null;
+    }
+
+    act(() => {
+      root.render(createElement(HookWrapper));
+    });
+
+    act(() => {
+      hookReturn.handleCursorUpdate(createMockUpdate({ head: 20, ranges: [{ from: 20, to: 20, empty: true }] }));
+    });
+
+    expect(hookReturn.cursorPosition).toEqual({ line: 1, column: 0 });
+    expect(updateBufferCursor).not.toHaveBeenCalled();
   });
 });
 
@@ -691,5 +854,223 @@ describe('handleCursorUpdate — lineAt call count', () => {
 
     // lineAt should be called exactly once (cached in lineObj)
     expect(update.state.doc.lineAt).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: end-to-end — EditorView identity survives settings-callback re-renders
+// ---------------------------------------------------------------------------
+//
+// This regression test is intentionally an integration test. `useEditorCursor`
+// does not own the EditorView; it reads the live selection through the
+// CodeMirror view it has no direct reference to. The only public seam that
+// observes the view lifecycle is `useCMView`, which exposes a stable API
+// the cursor hook can read. So the most direct way to assert "the cursor is
+// preserved" is to:
+//   1. Mount both hooks wired together (the same way EditorPane does).
+//   2. Set a cursor in the real EditorView.
+//   3. Re-render with a fresh arrow function for a "settings-callback" prop.
+//   4. Verify the EditorView wasn't destroyed and the cursor still resolves
+//      to its original position.
+
+function makeFakeCompartmentForIntegration() {
+  return {
+    of: vi.fn((ext: any) => ext),
+    reconfigure: vi.fn((ext: any) => ({ type: 'reconfigure', ext })),
+  };
+}
+
+function makeCompartmentsForIntegration() {
+  return {
+    hotkeys: makeFakeCompartmentForIntegration(),
+    lineWrapping: makeFakeCompartmentForIntegration(),
+    relativeLineNumbers: makeFakeCompartmentForIntegration(),
+    language: makeFakeCompartmentForIntegration(),
+    minimap: makeFakeCompartmentForIntegration(),
+    whitespaceRendering: makeFakeCompartmentForIntegration(),
+    emmet: makeFakeCompartmentForIntegration(),
+    autoCloseTag: makeFakeCompartmentForIntegration(),
+    fontSize: makeFakeCompartmentForIntegration(),
+    tabSize: makeFakeCompartmentForIntegration(),
+    lsp: makeFakeCompartmentForIntegration(),
+    inlayHints: makeFakeCompartmentForIntegration(),
+    signatureHelp: makeFakeCompartmentForIntegration(),
+    history: makeFakeCompartmentForIntegration(),
+  };
+}
+
+const baseSettingsForIntegration: CMViewSettings = {
+  wordWrapEnabled: false,
+  relativeLineNumbersEnabled: false,
+  minimapEnabled: false,
+  editorFontSize: 13,
+  editorTabSize: 4,
+  editorUsesTabs: false,
+  whitespaceRenderingMode: 'none',
+  inlayHintsEnabled: false,
+  signatureHelpEnabled: false,
+  aiCompletionsEnabled: false,
+};
+
+function renderCursorIntegrationHarness(opts: {
+  onSave: () => Promise<void>;
+  onOpenWorkspaceBuffer: OpenWorkspaceBufferFn;
+}) {
+  // The container is supplied by the shared beforeEach/afterEach block.
+  const editorRef: React.MutableRefObject<HTMLDivElement | null> = { current: container };
+  const bufferRef: React.MutableRefObject<any> = {
+    current: {
+      id: 'buf-1',
+      file: { path: '/test/file.ts', name: 'file.ts', ext: '.ts' },
+      content: 'hello\nworld\n',
+    },
+  };
+  const handleSaveRef: React.MutableRefObject<() => Promise<void>> = { current: opts.onSave };
+  const openWorkspaceBufferRef: React.MutableRefObject<OpenWorkspaceBufferFn> = {
+    current: opts.onOpenWorkspaceBuffer,
+  };
+  const onUpdateRef: React.MutableRefObject<(u: any) => void> = { current: () => {} };
+  const settingsRef: React.MutableRefObject<CMViewSettings | null> = {
+    current: { ...baseSettingsForIntegration },
+  };
+  const keymapsRef = {
+    current: {
+      customKeymap: [],
+      replacePanelKeymap: [],
+      zoomKeymap: [],
+      semanticKeymap: [],
+    },
+  };
+  const compartments = makeCompartmentsForIntegration();
+  const buildExtensions = vi.fn((extOpts: any) => [
+    EditorView.editable.of(true),
+    compartments.hotkeys.of([]),
+    ...(extOpts.extraKeymaps ?? []),
+  ]);
+  // useCMView's mount effect includes `themePack` in its dep array, so a fresh
+  // object literal on every render would tear down the view. The production
+  // EditorPane receives a stable themePack; we mimic that here.
+  const stableThemePack = { mode: 'light' as const, editorSyntaxStyle: 'default' as const };
+  const stableCustomHighlightStyle = null;
+
+  const updateBufferCursor = vi.fn();
+  const cmViewApiRef: React.MutableRefObject<CMViewAPI | null> = { current: null };
+
+  let cursorHookReturn: any = null;
+
+  function Harness({
+    settingsToggle,
+    openWorkspaceBuffer,
+  }: {
+    settingsToggle: number;
+    openWorkspaceBuffer: OpenWorkspaceBufferFn;
+  }) {
+    // The bug being guarded against: the parent's settings-callback identity
+    // changes on every render. EditorPane mirrors this through a ref so the
+    // CodeMirror mount never sees the unstable identity. We do the same here.
+    openWorkspaceBufferRef.current = openWorkspaceBuffer;
+    settingsRef.current = { ...baseSettingsForIntegration, editorFontSize: 13 + settingsToggle };
+
+    const cmViewApi = useCMView({
+      paneId: 'pane-1',
+      editorRef,
+      buffer: bufferRef.current,
+      bufferRef,
+      languageId: 'typescript',
+      handleSaveRef,
+      openWorkspaceBufferRef,
+      onUpdateRef,
+      settingsRef,
+      keymapsRef,
+      compartments,
+      buildExtensions,
+      themePack: stableThemePack,
+      customHighlightStyle: stableCustomHighlightStyle,
+    });
+    cmViewApiRef.current = cmViewApi;
+
+    const cursor = useEditorCursor({
+      bufferRef,
+      updateBufferCursor,
+      cmViewApiRef,
+    });
+    cursorHookReturn = cursor;
+    return null;
+  }
+
+  act(() => {
+    root.render(
+      createElement(Harness, {
+        settingsToggle: 0,
+        openWorkspaceBuffer: opts.onOpenWorkspaceBuffer,
+      }),
+    );
+  });
+
+  return {
+    editorRef,
+    bufferRef,
+    handleSaveRef,
+    openWorkspaceBufferRef,
+    settingsRef,
+    cmViewApiRef,
+    updateBufferCursor,
+    cursorHookReturn: () => cursorHookReturn,
+    buildExtensions,
+    compartments,
+    reRender: (settingsToggle: number, openWorkspaceBuffer: OpenWorkspaceBufferFn) => {
+      act(() => {
+        root.render(createElement(Harness, { settingsToggle, openWorkspaceBuffer }));
+      });
+    },
+  };
+}
+
+describe('useEditorCursor — EditorView identity across settings-callback re-renders', () => {
+  it('settings-callback re-renders preserve the EditorView instance and cursor', () => {
+    const openWorkspaceBufferV1 = vi.fn();
+    const openWorkspaceBufferV2 = vi.fn();
+    const openWorkspaceBufferV3 = vi.fn();
+    const onSave = vi.fn(async () => undefined);
+
+    editorViewConstructorSpy.mockClear();
+    editorViewDestroySpy.mockClear();
+
+    const harness = renderCursorIntegrationHarness({
+      onSave,
+      onOpenWorkspaceBuffer: openWorkspaceBufferV1,
+    });
+
+    const api = harness.cmViewApiRef.current!;
+    expect(api).not.toBeNull();
+    expect(api.view).not.toBeNull();
+    const viewAtMount = api.view;
+    expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
+
+    // Place a real cursor in the real EditorView. After this dispatch, the
+    // view's selection.main should report head === 6 (just past the "hello\n").
+    act(() => {
+      viewAtMount!.dispatch({ selection: { anchor: 6, head: 6 } });
+    });
+    expect(viewAtMount!.state.selection.main.head).toBe(6);
+
+    // Simulate a "settings toggle" re-render where the parent passes a fresh
+    // arrow function for openWorkspaceBuffer. The pre-fix code used
+    // `useRef(openWorkspaceBuffer)` which captured v1 forever; the fix
+    // reassigns .current every render.
+    harness.reRender(1, openWorkspaceBufferV2);
+    expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);
+    expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
+    expect(editorViewDestroySpy).not.toHaveBeenCalled();
+    // The cursor in the live view must still be where we put it.
+    expect(viewAtMount!.state.selection.main.head).toBe(6);
+
+    // Second re-render: another fresh identity. The hook must keep observing
+    // the original view and not tear it down.
+    harness.reRender(2, openWorkspaceBufferV3);
+    expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);
+    expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
+    expect(editorViewDestroySpy).not.toHaveBeenCalled();
+    expect(viewAtMount!.state.selection.main.head).toBe(6);
   });
 });

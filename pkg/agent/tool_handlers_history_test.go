@@ -85,10 +85,10 @@ func TestHandleViewHistoryValidSinceFormat(t *testing.T) {
 
 	ts := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
 	_, err := handleViewHistory(context.Background(), a, map[string]interface{}{
-		"limit":   5,
-		"since":   ts,
+		"limit":        5,
+		"since":        ts,
 		"show_content": true,
-		"file_filter": "src/",
+		"file_filter":  "src/",
 	})
 	if err == nil {
 		t.Log("handleViewHistory succeeded (external dependency available)")

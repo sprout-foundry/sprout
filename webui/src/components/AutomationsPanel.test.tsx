@@ -12,10 +12,48 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
+vi.mock('../services/websocket', () => {
+  const eventListeners: Array<(event: { type: string; data?: unknown }) => void> = [];
+  // Stable mocks shared across all getInstance() invocations so tests can
+  // assert call counts and recorded listeners consistently.
+  const sendEvent = vi.fn();
+  const onEvent = vi.fn((cb: (event: { type: string; data?: unknown }) => void) => {
+    eventListeners.push(cb);
+  });
+  const removeEvent = vi.fn((cb: (event: { type: string; data?: unknown }) => void) => {
+    const idx = eventListeners.indexOf(cb);
+    if (idx >= 0) eventListeners.splice(idx, 1);
+  });
+  const instance = { sendEvent, onEvent, removeEvent };
+  const mockModule = {
+    WebSocketService: {
+      getInstance: vi.fn(() => instance),
+    },
+    __getSendEvent: () => sendEvent,
+    __getEventListeners: () => eventListeners,
+  };
+  return mockModule;
+});
+
+vi.mock('../services/automateEvents', () => {
+  const handlers: Array<(eventType: string, payload: unknown) => void> = [];
+  return {
+    subscribeAutomate: vi.fn((handler: (eventType: string, payload: unknown) => void) => {
+      handlers.push(handler);
+      return () => {
+        const idx = handlers.indexOf(handler);
+        if (idx >= 0) handlers.splice(idx, 1);
+      };
+    }),
+    __getHandlers: () => handlers,
+  };
+});
+
 vi.mock('./AutomationsPanel.css', () => ({}));
 
 // Import AFTER mocking
 import { clientFetch } from '../services/clientSession';
+import { WebSocketService } from '../services/websocket';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +67,18 @@ function wfResp(list: { name: string; description: string; filename: string; fil
   return mr(true, { workflows: list });
 }
 
-function seResp(list: { session_id: string; workflow: string; pid: number; status: 'running' | 'exited' | 'stopped'; started_at: number; kind: string; output_file_path: string; budget_usd: number }[]) {
+function seResp(
+  list: {
+    session_id: string;
+    workflow: string;
+    pid: number;
+    status: 'running' | 'exited' | 'stopped';
+    started_at: number;
+    kind: string;
+    output_file_path: string;
+    budget_usd: number;
+  }[],
+) {
   return mr(true, { sessions: list });
 }
 
@@ -71,8 +120,24 @@ function stopBtn(id: string) {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('AutomationsPanel', () => {
-  beforeEach(() => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
+  beforeEach(async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
+    // Reset stable mocks so each test sees a clean slate. The stable-mock
+    // shape (introduced above so reconnect tests can read call counts
+    // consistently) means call state would otherwise leak across tests.
+    const ws = (await import('../services/websocket')) as unknown as {
+      __getSendEvent: () => ReturnType<typeof vi.fn>;
+      __getEventListeners: () => unknown[];
+    };
+    ws.__getSendEvent().mockClear();
+    ws.__getEventListeners().length = 0;
+    const ae = (await import('../services/automateEvents')) as unknown as {
+      __getHandlers: () => unknown[];
+    };
+    ae.__getHandlers().length = 0;
   });
 
   afterEach(() => {
@@ -134,18 +199,20 @@ describe('AutomationsPanel', () => {
   });
 
   it('shows workflow cards with name, description, and Run button', async () => {
-    mockFetchSequence(wfResp([
-      { name: 'my-test', description: 'Runs test suite', filename: 'my-test.json', file_path: '/a/my-test.json' },
-      { name: 'build-pkg', description: '', filename: 'build-pkg.json', file_path: '/a/build-pkg.json' },
-    ]));
+    mockFetchSequence(
+      wfResp([
+        { name: 'my-test', description: 'Runs test suite', filename: 'my-test.json', file_path: '/a/my-test.json' },
+        { name: 'build-pkg', description: '', filename: 'build-pkg.json', file_path: '/a/build-pkg.json' },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
       expect(screen.getByText('my-test')).toBeInTheDocument();
-      expect(screen.getByText('Runs test suite')).toBeInTheDocument();
-      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
-      expect(screen.getByText('build-pkg')).toBeInTheDocument();
-      expect(screen.getByLabelText('Run build-pkg')).toBeInTheDocument();
     });
+    expect(screen.getByText('Runs test suite')).toBeInTheDocument();
+    expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
+    expect(screen.getByText('build-pkg')).toBeInTheDocument();
+    expect(screen.getByLabelText('Run build-pkg')).toBeInTheDocument();
   });
 
   it('handles workflow fetch errors (500)', async () => {
@@ -186,32 +253,42 @@ describe('AutomationsPanel', () => {
   it('shows running session rows with truncated ID and workflow name', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'abc123-def456-ghi789',
-        workflow: 'my-test',
-        pid: 1,
-        status: 'running',
-        started_at: EPOCH_S - 65,
-        kind: 'workflow',
-        output_file_path: '/tmp/o.txt',
-        budget_usd: 5,
-      }]),
+      seResp([
+        {
+          session_id: 'abc123-def456-ghi789',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 65,
+          kind: 'workflow',
+          output_file_path: '/tmp/o.txt',
+          budget_usd: 5,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
     await waitFor(() => {
       expect(screen.getByText('abc123-def45…')).toBeInTheDocument();
-      expect(screen.getByText('my-test')).toBeInTheDocument();
     });
+    expect(screen.getByText('my-test')).toBeInTheDocument();
   });
 
   it('shows "No limit" when budget_usd is 0', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 's1', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 's1',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -223,10 +300,18 @@ describe('AutomationsPanel', () => {
   it('renders budget bar with spent/cap text', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 's1', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 10,
-      }]),
+      seResp([
+        {
+          session_id: 's1',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 10,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -267,26 +352,51 @@ describe('AutomationsPanel', () => {
     mockFetchSequence(
       wfResp([]),
       seResp([
-        { session_id: 'se', workflow: 'my-test', pid: 1, status: 'exited', started_at: EPOCH_S - 300, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 5 },
-        { session_id: 'ss', workflow: 'build-pkg', pid: 2, status: 'stopped', started_at: EPOCH_S - 600, kind: 'workflow', output_file_path: '/t/o2.txt', budget_usd: 0 },
+        {
+          session_id: 'se',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'exited',
+          started_at: EPOCH_S - 300,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 5,
+        },
+        {
+          session_id: 'ss',
+          workflow: 'build-pkg',
+          pid: 2,
+          status: 'stopped',
+          started_at: EPOCH_S - 600,
+          kind: 'workflow',
+          output_file_path: '/t/o2.txt',
+          budget_usd: 0,
+        },
       ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Recent' }));
     await waitFor(() => {
       expect(screen.getByText('Exited')).toBeInTheDocument();
-      expect(screen.getByText('Stopped')).toBeInTheDocument();
     });
+    expect(screen.getByText('Stopped')).toBeInTheDocument();
   });
 
   it('truncates long session IDs in recent tab', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'session-1234567890-abcdef',
-        workflow: 'my-test', pid: 1, status: 'exited',
-        started_at: EPOCH_S - 300, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'session-1234567890-abcdef',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'exited',
+          started_at: EPOCH_S - 300,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Recent' }));
@@ -301,8 +411,26 @@ describe('AutomationsPanel', () => {
     mockFetchSequence(
       wfResp([]),
       seResp([
-        { session_id: 's1', workflow: 'w1', pid: 1, status: 'running', started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/1.txt', budget_usd: 0 },
-        { session_id: 's2', workflow: 'w2', pid: 2, status: 'running', started_at: EPOCH_S - 5, kind: 'workflow', output_file_path: '/t/2.txt', budget_usd: 0 },
+        {
+          session_id: 's1',
+          workflow: 'w1',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/1.txt',
+          budget_usd: 0,
+        },
+        {
+          session_id: 's2',
+          workflow: 'w2',
+          pid: 2,
+          status: 'running',
+          started_at: EPOCH_S - 5,
+          kind: 'workflow',
+          output_file_path: '/t/2.txt',
+          budget_usd: 0,
+        },
       ]),
     );
     render(<AutomationsPanel />);
@@ -315,9 +443,16 @@ describe('AutomationsPanel', () => {
   // ── Run Modal ────────────────────────────────────────────────
 
   it('opens the run modal with workflow name and description', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Runs test suite', filename: 'my-test.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Runs test suite',
+          filename: 'my-test.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
       expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
@@ -332,49 +467,81 @@ describe('AutomationsPanel', () => {
   });
 
   it('shows budget and heartbeat inputs in the run modal', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Test', filename: 'my-test.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Test',
+          filename: 'my-test.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     expect(screen.getByLabelText(/Budget/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Heartbeat/)).toBeInTheDocument();
   });
 
   it('closes the run modal when clicking the close button', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Test', filename: 'my-test.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Test',
+          filename: 'my-test.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByLabelText('Close'));
     expect(screen.queryByText('Run Workflow')).not.toBeInTheDocument();
   });
 
   it('closes the run modal when clicking the overlay', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Test', filename: 'my-test.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Test',
+          filename: 'my-test.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('dialog').querySelector('.automations-modal-overlay')!);
     expect(screen.queryByText('Run Workflow')).not.toBeInTheDocument();
   });
 
   it('closes the run modal when clicking Cancel', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Test', filename: 'my-test.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Test',
+          filename: 'my-test.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByText('Cancel'));
     expect(screen.queryByText('Run Workflow')).not.toBeInTheDocument();
   });
@@ -385,15 +552,24 @@ describe('AutomationsPanel', () => {
     mockFetchSequence(
       wfResp([{ name: 'my-test', description: 'Test', filename: 'mt.json', file_path: '/a/mt.json' }]),
       runResp('sid', 'my-test'),
-      seResp([{
-        session_id: 'sid', workflow: 'my-test', pid: 1, status: 'running',
-        started_at: EPOCH_S, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 5,
-      }]),
+      seResp([
+        {
+          session_id: 'sid',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 5,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.change(screen.getByLabelText(/Budget/), { target: { value: '5.00' } });
     fireEvent.change(screen.getByLabelText(/Heartbeat/), { target: { value: '60' } });
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -401,12 +577,13 @@ describe('AutomationsPanel', () => {
     await waitFor(() => {
       const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
       expect(call).toBeDefined();
-      expect(call![1]?.method).toBe('POST');
-      const body = JSON.parse((call![1]!.body as string) || '{}');
-      expect(body.workflow).toBe('my-test');
-      expect(body.budget_usd).toBe(5);
-      expect(body.heartbeat).toBe(60);
     });
+    const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
+    expect(call![1]?.method).toBe('POST');
+    const body = JSON.parse((call![1]!.body as string) || '{}');
+    expect(body.workflow).toBe('my-test');
+    expect(body.budget_usd).toBe(5);
+    expect(body.heartbeat).toBe(60);
   });
 
   it('omits budget/heartbeat when fields are empty', async () => {
@@ -417,33 +594,44 @@ describe('AutomationsPanel', () => {
     );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
       const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
       expect(call).toBeDefined();
-      const body = JSON.parse((call![1]!.body as string) || '{}');
-      expect(body.workflow).toBe('my-test');
-      expect(body.budget_usd).toBeUndefined();
-      expect(body.heartbeat).toBeUndefined();
     });
+    const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
+    const body = JSON.parse((call![1]!.body as string) || '{}');
+    expect(body.workflow).toBe('my-test');
+    expect(body.budget_usd).toBeUndefined();
+    expect(body.heartbeat).toBeUndefined();
   });
 
   it('switches to Running tab after successful run', async () => {
     mockFetchSequence(
       wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
       runResp('sid', 'my-test'),
-      seResp([{
-        session_id: 'sid', workflow: 'my-test', pid: 1, status: 'running',
-        started_at: EPOCH_S, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'sid',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
@@ -452,14 +640,25 @@ describe('AutomationsPanel', () => {
   });
 
   it('does nothing when confirm returns false', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json',
-    }]));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false),
+    );
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: '',
+          filename: 'mt.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     expect(screen.getByText('Run Workflow')).toBeInTheDocument();
@@ -469,13 +668,14 @@ describe('AutomationsPanel', () => {
   it('shows error on Running tab when run fails and session fetch also fails', async () => {
     mockFetchSequence(
       wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
-      errResp(500),  // POST run fails
-      errResp(500),  // fetchSessions fails when switching to Running
+      errResp(500), // POST run fails
+      errResp(500), // fetchSessions fails when switching to Running
     );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
 
@@ -489,13 +689,20 @@ describe('AutomationsPanel', () => {
   it('calls stop API endpoint when Stop button is clicked', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'stop-session-01',
-        workflow: 'my-test', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 5,
-      }]),
-      mr(true, {}),    // stop response
-      seResp([]),      // re-fetch after stop
+      seResp([
+        {
+          session_id: 'stop-session-01',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 5,
+        },
+      ]),
+      mr(true, {}), // stop response
+      seResp([]), // re-fetch after stop
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -505,12 +712,11 @@ describe('AutomationsPanel', () => {
     fireEvent.click(stopBtn('stop-session-01'));
 
     await waitFor(() => {
-      const call = vi.mocked(clientFetch).mock.calls.find(
-        (c) => typeof c[0] === 'string' && c[0].includes('/stop')
-      );
+      const call = vi.mocked(clientFetch).mock.calls.find((c) => typeof c[0] === 'string' && c[0].includes('/stop'));
       expect(call).toBeDefined();
-      expect(call![1]?.method).toBe('POST');
     });
+    const call = vi.mocked(clientFetch).mock.calls.find((c) => typeof c[0] === 'string' && c[0].includes('/stop'));
+    expect(call![1]?.method).toBe('POST');
   });
 
   it('disables the Stop button while stopping', async () => {
@@ -518,11 +724,18 @@ describe('AutomationsPanel', () => {
 
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'stop-me',
-        workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'stop-me',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
 
     render(<AutomationsPanel />);
@@ -542,13 +755,24 @@ describe('AutomationsPanel', () => {
   });
 
   it('does nothing when stop confirm returns false', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false),
+    );
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'stop-me', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'stop-me',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -557,18 +781,26 @@ describe('AutomationsPanel', () => {
     });
     fireEvent.click(stopBtn('stop-me'));
 
-    expect(vi.mocked(clientFetch).mock.calls.filter(
-      (c) => typeof c[0] === 'string' && c[0].includes('/stop')
-    )).toHaveLength(0);
+    expect(
+      vi.mocked(clientFetch).mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/stop')),
+    ).toHaveLength(0);
   });
 
   it('shows error when stop fails', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'stop-me', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'stop-me',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
       errResp(503), // stop fails
     );
     render(<AutomationsPanel />);
@@ -589,10 +821,18 @@ describe('AutomationsPanel', () => {
     const onNavigate = vi.fn();
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'nav-session-1', workflow: 'my-test', pid: 1, status: 'exited',
-        started_at: EPOCH_S - 300, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'nav-session-1',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'exited',
+          started_at: EPOCH_S - 300,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel onNavigateToSession={onNavigate} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Recent' }));
@@ -606,10 +846,18 @@ describe('AutomationsPanel', () => {
   it('does not mark rows as clickable when onNavigateToSession is not provided', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'sess-1', workflow: 'my-test', pid: 1, status: 'exited',
-        started_at: EPOCH_S - 300, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'sess-1',
+          workflow: 'my-test',
+          pid: 1,
+          status: 'exited',
+          started_at: EPOCH_S - 300,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     const { container } = render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Recent' }));
@@ -625,10 +873,18 @@ describe('AutomationsPanel', () => {
   it('opens detail panel when clicking a running session row', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'detail-sess', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'detail-sess',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -649,10 +905,18 @@ describe('AutomationsPanel', () => {
 
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 's1', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 45, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 's1',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 45,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -667,10 +931,18 @@ describe('AutomationsPanel', () => {
 
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 's1', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 185, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 's1',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 185,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -685,10 +957,18 @@ describe('AutomationsPanel', () => {
 
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 's1', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 7320, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 's1',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 7320,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
@@ -697,40 +977,36 @@ describe('AutomationsPanel', () => {
     });
   });
 
-  // ── Polling Behavior (requires fake timers) ──────────────────
+  // ── Event-driven refetch (replaces polling) ──────────────────
 
-  it('polls sessions periodically when on the Running tab', async () => {
-    vi.useFakeTimers();
-
-    mockFetchSequence(
-      seResp([{
-        session_id: 'poll-test', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
-    );
-
+  it('sends subscribe message on mount', async () => {
+    const { __getSendEvent } = await import('../services/websocket');
+    mockFetchSequence(wfResp([]));
     render(<AutomationsPanel />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
 
     await waitFor(() => {
-      expect(screen.getByText('w')).toBeInTheDocument();
-    });
-
-    vi.advanceTimersByTime(3000); // past one polling interval
-
-    await waitFor(() => {
-      expect(vi.mocked(clientFetch).mock.calls.length).toBeGreaterThan(1);
+      expect(__getSendEvent()).toHaveBeenCalledWith({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
     });
   });
 
-  it('stops polling when switching away from Running tab', async () => {
-    vi.useFakeTimers();
-
+  it('refetches sessions when automate.session_started event arrives', async () => {
     mockFetchSequence(
-      seResp([{
-        session_id: 'poll-test', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      wfResp([]),
+      seResp([
+        {
+          session_id: 'event-test',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
 
     render(<AutomationsPanel />);
@@ -739,27 +1015,92 @@ describe('AutomationsPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('w')).toBeInTheDocument();
     });
-    const afterRunning = vi.mocked(clientFetch).mock.calls.length;
 
-    // Switch away — stops polling
-    fireEvent.click(screen.getByRole('tab', { name: 'Available' }));
-    vi.advanceTimersByTime(12000);
+    const callsBeforeEvent = vi.mocked(clientFetch).mock.calls.length;
+
+    // Simulate the session_started event
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.session_started', { session_id: 'new-session' });
+    }
+
+    await waitFor(() => {
+      expect(vi.mocked(clientFetch).mock.calls.length).toBeGreaterThan(callsBeforeEvent);
+    });
+  });
+
+  it('does not refetch sessions for session_started when on Available tab', async () => {
+    mockFetchSequence(wfResp([]));
+    render(<AutomationsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Available' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    const callsBeforeEvent = vi.mocked(clientFetch).mock.calls.length;
+
+    // Simulate the session_started event while on Available tab
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.session_started', { session_id: 'new-session' });
+    }
     await Promise.resolve();
 
-    // At most 1 extra call (Available tab fetches workflows once)
-    expect(vi.mocked(clientFetch).mock.calls.length - afterRunning).toBeLessThanOrEqual(1);
+    // No extra session fetch calls (only the initial workflow fetch)
+    expect(vi.mocked(clientFetch).mock.calls.length).toBe(callsBeforeEvent);
+  });
+
+  it('re-sends subscribe on connection_status connected event (cold-start + reconnect)', async () => {
+    const { __getSendEvent, __getEventListeners } = await import('../services/websocket');
+    mockFetchSequence(wfResp([]));
+    render(<AutomationsPanel />);
+
+    await waitFor(() => {
+      expect(__getSendEvent()).toHaveBeenCalledWith({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
+    });
+
+    const sendEventMock = __getSendEvent();
+    const callsBeforeReconnect = sendEventMock.mock.calls.length;
+
+    // Simulate a reconnect: the WebSocketService emits connection_status with
+    // connected: true. The panel must re-send subscribe to recover.
+    const listeners = __getEventListeners();
+    if (listeners.length > 0) {
+      listeners[0]({ type: 'connection_status', data: { connected: true } });
+    }
+
+    await waitFor(() => {
+      expect(sendEventMock.mock.calls.length).toBeGreaterThan(callsBeforeReconnect);
+    });
+
+    // Verify the most recent call was still a subscribe
+    const lastCall = sendEventMock.mock.calls[sendEventMock.mock.calls.length - 1];
+    expect(lastCall[0]).toEqual({ type: 'subscribe', data: { channel: 'automate' } });
   });
 
   // ── Accessibility ────────────────────────────────────────────
 
   it('renders the run modal with proper ARIA attributes', async () => {
-    mockFetchSequence(wfResp([{
-      name: 'my-test', description: 'Test', filename: 'mt.json', file_path: '/a/mt.json',
-    }]));
+    mockFetchSequence(
+      wfResp([
+        {
+          name: 'my-test',
+          description: 'Test',
+          filename: 'mt.json',
+          file_path: '/a/mt.json',
+        },
+      ]),
+    );
     render(<AutomationsPanel />);
     await waitFor(() => {
-      fireEvent.click(screen.getByLabelText('Run my-test'));
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAttribute('aria-labelledby', 'run-modal-title');
@@ -777,10 +1118,18 @@ describe('AutomationsPanel', () => {
   it('displays short session IDs without truncation', async () => {
     mockFetchSequence(
       wfResp([]),
-      seResp([{
-        session_id: 'short', workflow: 'w', pid: 1, status: 'running',
-        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
-      }]),
+      seResp([
+        {
+          session_id: 'short',
+          workflow: 'w',
+          pid: 1,
+          status: 'running',
+          started_at: EPOCH_S - 10,
+          kind: 'workflow',
+          output_file_path: '/t/o.txt',
+          budget_usd: 0,
+        },
+      ]),
     );
     render(<AutomationsPanel />);
     fireEvent.click(screen.getByRole('tab', { name: 'Running' }));

@@ -28,7 +28,7 @@ type checkModifiedResponse struct {
 
 func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -37,7 +37,7 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	var req checkModifiedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
@@ -95,6 +95,5 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(checkModifiedResponse{Modified: modified})
+	writeJSON(w, http.StatusOK, checkModifiedResponse{Modified: modified})
 }

@@ -1,30 +1,38 @@
 {
-  "name": "openai",
-  "endpoint": "https://api.openai.com/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "OPENAI_API_KEY"
+    "env_var": "OPENAI_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0.25,
+    "output_token_cost": 2
+  },
   "defaults": {
+    "max_tokens": -1,
     "model": "gpt-5-mini",
     "temperature": 0.7,
-    "max_tokens": -1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "display_name": "OpenAI",
+  "endpoint": "https://api.openai.com/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
+    "include_tool_call_id": true,
     "reasoning_content_field": "reasoning_content"
   },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]"
-  },
   "models": {
+    "available_models": [],
+    "completion_pattern_overrides": [
+      {
+        "context_limit": 128000,
+        "pattern": "gpt-5.*"
+      }
+    ],
     "default_context_limit": 200000,
     "default_max_completion_tokens": 128000,
+    "default_model": "gpt-5-mini",
     "max_completion_overrides": {
       "gpt-4o": 16384,
       "gpt-4o-mini": 16384,
@@ -32,38 +40,1355 @@
       "gpt-5-mini": 128000,
       "gpt-5-nano": 128000
     },
-    "completion_pattern_overrides": [
+    "model_info": [
       {
-        "pattern": "gpt-5.*",
-        "context_limit": 128000
+        "cached_input_cost": 0,
+        "context_length": 400000,
+        "description": "GPT-5 - Flagship model",
+        "id": "gpt-5",
+        "input_cost": 1.25,
+        "name": "GPT-5",
+        "output_cost": 10,
+        "tags": [
+          "reasoning",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 400000,
+        "description": "GPT-5 Mini - Smaller GPT-5 variant",
+        "id": "gpt-5-mini",
+        "input_cost": 0.25,
+        "name": "GPT-5 Mini",
+        "output_cost": 2,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 400000,
+        "description": "GPT-5 Nano - Smallest GPT-5 variant",
+        "id": "gpt-5-nano",
+        "input_cost": 0.05,
+        "name": "GPT-5 Nano",
+        "output_cost": 0.4,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 400000,
+        "description": "GPT-5 Pro - Premium GPT-5 variant",
+        "id": "gpt-5-pro",
+        "input_cost": 15,
+        "name": "GPT-5 Pro",
+        "output_cost": 120,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 128000,
+        "description": "GPT-4o - Omni model",
+        "id": "gpt-4o",
+        "input_cost": 2.5,
+        "name": "GPT-4o",
+        "output_cost": 10,
+        "tags": [
+          "vision",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 128000,
+        "description": "GPT-4o Mini - Smaller omni model",
+        "id": "gpt-4o-mini",
+        "input_cost": 0.15,
+        "name": "GPT-4o Mini",
+        "output_cost": 0.6,
+        "tags": [
+          "vision",
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "GPT-4.1 - Latest GPT-4 model",
+        "id": "gpt-4.1",
+        "input_cost": 2,
+        "name": "GPT-4.1",
+        "output_cost": 8,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "GPT-4.1 Mini - Smaller GPT-4.1",
+        "id": "gpt-4.1-mini",
+        "input_cost": 0.4,
+        "name": "GPT-4.1 Mini",
+        "output_cost": 1.6,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "GPT-4.1 Nano - Smallest GPT-4.1",
+        "id": "gpt-4.1-nano",
+        "input_cost": 0.1,
+        "name": "GPT-4.1 Nano",
+        "output_cost": 0.4,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "o3 - Reasoning model",
+        "id": "o3",
+        "input_cost": 2,
+        "name": "o3",
+        "output_cost": 8,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "o3 Mini - Smaller reasoning model",
+        "id": "o3-mini",
+        "input_cost": 1.1,
+        "name": "o3 Mini",
+        "output_cost": 4.4,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "o4 Mini - Latest reasoning model",
+        "id": "o4-mini",
+        "input_cost": 1.1,
+        "name": "o4 Mini",
+        "output_cost": 4.4,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 16385,
+        "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
+        "id": "gpt-3.5-turbo",
+        "input_cost": 0.5,
+        "name": "OpenAI: GPT-3.5 Turbo",
+        "output_cost": 1.5,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 4095,
+        "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
+        "id": "gpt-3.5-turbo-0613",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 16385,
+        "description": "This model offers four times the context length of gpt-3.5-turbo, allowing it to support approximately 20 pages of text in a single request at a higher cost. Training data: up...",
+        "id": "gpt-3.5-turbo-16k",
+        "input_cost": 3,
+        "name": "OpenAI: GPT-3.5 Turbo 16k",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 4095,
+        "description": "This model is a variant of GPT-3.5 Turbo tuned for instructional prompts and omitting chat-related optimizations. Training data: up to Sep 2021.",
+        "id": "gpt-3.5-turbo-instruct",
+        "input_cost": 1.5,
+        "name": "OpenAI: GPT-3.5 Turbo Instruct",
+        "output_cost": 2,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 8191,
+        "description": "OpenAI's flagship model, GPT-4 is a large-scale multimodal language model capable of solving difficult problems with greater accuracy than previous models due to its broader general knowledge and advanced reasoning...",
+        "id": "gpt-4",
+        "input_cost": 30,
+        "name": "OpenAI: GPT-4",
+        "output_cost": 60,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "The latest GPT-4 Turbo model with vision capabilities. Vision requests can now use JSON mode and function calling.\n\nTraining data: up to December 2023.",
+        "id": "gpt-4-turbo",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-4 Turbo",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "The preview GPT-4 model with improved instruction following, JSON mode, reproducible outputs, parallel function calling, and more. Training data: up to Dec 2023. **Note:** heavily rate limited by OpenAI while...",
+        "id": "gpt-4-turbo-preview",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-4 Turbo Preview",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of [GPT-4 Turbo](/models/openai/gpt-4-turbo) while being twice as...",
+        "id": "gpt-4o-2024-05-13",
+        "input_cost": 5,
+        "name": "OpenAI: GPT-4o (2024-05-13)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1.25,
+        "context_length": 128000,
+        "description": "The 2024-08-06 version of GPT-4o offers improved performance in structured outputs, with the ability to supply a JSON schema in the respone_format. Read more [here](https://openai.com/index/introducing-structured-outputs-in-the-api/). GPT-4o (\"o\" for \"omni\") is...",
+        "id": "gpt-4o-2024-08-06",
+        "input_cost": 2.5,
+        "name": "OpenAI: GPT-4o (2024-08-06)",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1.25,
+        "context_length": 128000,
+        "description": "The 2024-11-20 version of GPT-4o offers a leveled-up creative writing ability with more natural, engaging, and tailored writing to improve relevance \u0026 readability. It’s also better at working with uploaded...",
+        "id": "gpt-4o-2024-11-20",
+        "input_cost": 2.5,
+        "name": "OpenAI: GPT-4o (2024-11-20)",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 128000,
+        "description": "GPT-4o mini is OpenAI's newest model after [GPT-4 Omni](/models/openai/gpt-4o), supporting both text and image inputs with text outputs. As their most advanced small model, it is many multiples more affordable...",
+        "id": "gpt-4o-mini-2024-07-18",
+        "input_cost": 0.15,
+        "name": "OpenAI: GPT-4o-mini (2024-07-18)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1.25,
+        "context_length": 400000,
+        "description": "[GPT-5](https://openrouter.ai/openai/gpt-5) Image combines OpenAI's GPT-5 model with state-of-the-art image generation capabilities. It offers major improvements in reasoning, code quality, and user experience while incorporating GPT Image 1's superior instruction following,...",
+        "id": "gpt-5-image",
+        "input_cost": 10,
+        "name": "GPT-5 Image",
+        "output_cost": 10,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 400000,
+        "description": "GPT-5 Image Mini combines OpenAI's advanced language capabilities, powered by [GPT-5 Mini](https://openrouter.ai/openai/gpt-5-mini), with GPT Image 1 Mini for efficient image generation. This natively multimodal model features superior instruction following, text...",
+        "id": "gpt-5-image-mini",
+        "input_cost": 2.5,
+        "name": "GPT-5 Image Mini",
+        "output_cost": 2,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.125,
+        "context_length": 400000,
+        "description": "GPT-5.1 is the latest frontier-grade model in the GPT-5 series, offering stronger general-purpose reasoning, improved instruction adherence, and a more natural conversational style compared to GPT-5. It uses adaptive reasoning...",
+        "id": "gpt-5.1",
+        "input_cost": 1.25,
+        "name": "GPT-5.1",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.13,
+        "context_length": 400000,
+        "description": "GPT-5.1-Codex is a specialized version of GPT-5.1 optimized for software engineering and coding workflows. It is designed for both interactive development sessions and long, independent execution of complex engineering tasks....",
+        "id": "gpt-5.1-codex",
+        "input_cost": 1.25,
+        "name": "GPT-5.1 Codex",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.125,
+        "context_length": 400000,
+        "description": "GPT-5.1-Codex-Max is OpenAI’s latest agentic coding model, designed for long-running, high-context software development tasks. It is based on an updated version of the 5.1 reasoning stack and trained on agentic...",
+        "id": "gpt-5.1-codex-max",
+        "input_cost": 1.25,
+        "name": "GPT-5.1 Codex Max",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 400000,
+        "description": "GPT-5.1-Codex-Mini is a smaller and faster version of GPT-5.1-Codex",
+        "id": "gpt-5.1-codex-mini",
+        "input_cost": 0.25,
+        "name": "GPT-5.1 Codex Mini",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.175,
+        "context_length": 400000,
+        "description": "GPT-5.2 is the latest frontier-grade model in the GPT-5 series, offering stronger agentic and long context perfomance compared to GPT-5.1. It uses adaptive reasoning to allocate computation dynamically, responding quickly...",
+        "id": "gpt-5.2",
+        "input_cost": 1.75,
+        "name": "GPT-5.2",
+        "output_cost": 14,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.175,
+        "context_length": 128000,
+        "description": "GPT-5.2 Chat (AKA Instant) is the fast, lightweight member of the 5.2 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively “think” on...",
+        "id": "gpt-5.2-chat",
+        "input_cost": 1.75,
+        "name": "GPT-5.2 Chat",
+        "output_cost": 14,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.175,
+        "context_length": 400000,
+        "description": "GPT-5.2-Codex is an upgraded version of GPT-5.1-Codex optimized for software engineering and coding workflows. It is designed for both interactive development sessions and long, independent execution of complex engineering tasks....",
+        "id": "gpt-5.2-codex",
+        "input_cost": 1.75,
+        "name": "GPT-5.2 Codex",
+        "output_cost": 14,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5.2 Pro is OpenAI’s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
+        "id": "gpt-5.2-pro",
+        "input_cost": 21,
+        "name": "GPT-5.2 Pro",
+        "output_cost": 168,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.175,
+        "context_length": 128000,
+        "description": "GPT-5.3 Chat is an update to ChatGPT's most-used model that makes everyday conversations smoother, more useful, and more directly helpful. It delivers more accurate answers with better contextualization and significantly...",
+        "id": "gpt-5.3-chat",
+        "input_cost": 1.75,
+        "name": "GPT-5.3 Chat",
+        "output_cost": 14,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.175,
+        "context_length": 400000,
+        "description": "GPT-5.3-Codex is OpenAI’s most advanced agentic coding model, combining the frontier software engineering performance of GPT-5.2-Codex with the broader reasoning and professional knowledge capabilities of GPT-5.2. It achieves state-of-the-art results...",
+        "id": "gpt-5.3-codex",
+        "input_cost": 1.75,
+        "name": "GPT-5.3 Codex",
+        "output_cost": 14,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.4 is OpenAI’s latest frontier model, unifying the Codex and GPT lines into a single system. It features a 1M+ token context window (922K input, 128K output) with support for...",
+        "id": "gpt-5.4",
+        "input_cost": 2.5,
+        "name": "GPT-5.4",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 2,
+        "context_length": 272000,
+        "description": "[GPT-5.4](https://openrouter.ai/openai/gpt-5.4) Image 2 combines OpenAI's GPT-5.4 model with state-of-the-art image generation capabilities from GPT Image 2. It enables rich multimodal workflows, allowing users to seamlessly move between reasoning, coding, and...",
+        "id": "gpt-5.4-image-2",
+        "input_cost": 8,
+        "name": "GPT-5.4 Image 2",
+        "output_cost": 15,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 400000,
+        "description": "GPT-5.4 mini brings the core capabilities of GPT-5.4 to a faster, more efficient model optimized for high-throughput workloads. It supports text and image inputs with strong performance across reasoning, coding,...",
+        "id": "gpt-5.4-mini",
+        "input_cost": 0.75,
+        "name": "GPT-5.4 Mini",
+        "output_cost": 4.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 400000,
+        "description": "GPT-5.4 nano is the most lightweight and cost-efficient variant of the GPT-5.4 family, optimized for speed-critical and high-volume tasks. It supports text and image inputs and is designed for low-latency...",
+        "id": "gpt-5.4-nano",
+        "input_cost": 0.2,
+        "name": "GPT-5.4 Nano",
+        "output_cost": 1.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.4 Pro is OpenAI's most advanced model, building on GPT-5.4's unified architecture with enhanced reasoning capabilities for complex, high-stakes tasks. It features a 1M+ token context window (922K input, 128K...",
+        "id": "gpt-5.4-pro",
+        "input_cost": 30,
+        "name": "GPT-5.4 Pro",
+        "output_cost": 180,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-5.5 is OpenAI’s frontier model designed for complex professional workloads, building on GPT-5.4 with stronger reasoning, higher reliability, and improved token efficiency on hard tasks. It features a 1M+ token...",
+        "id": "gpt-5.5",
+        "input_cost": 5,
+        "name": "GPT-5.5",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.5 Pro is OpenAI’s high-capability model optimized for deep reasoning and accuracy on complex, high-stakes workloads. It features a 1M+ token context window (922K input, 128K output) with support for...",
+        "id": "gpt-5.5-pro",
+        "input_cost": 30,
+        "name": "GPT-5.5 Pro",
+        "output_cost": 180,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna is a fast, cost-efficient model in OpenAI's GPT-5.6 series. It is suited for high-volume, latency-sensitive tasks such as chat, classification, and lightweight agentic workflows, providing capable reasoning for...",
+        "id": "gpt-5.6-luna",
+        "input_cost": 0.2,
+        "name": "GPT-5.6 Luna",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna Pro is the same underlying model as [GPT-5.6 Luna](https://openrouter.ai/openai/gpt-5.6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-5.6-luna-pro",
+        "input_cost": 0.2,
+        "name": "GPT-5.6 Luna Pro",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol is the flagship model in OpenAI's GPT-5.6 series. It is suited for complex reasoning, coding, and agentic workflows, and is particularly strong at command-line and multi-step coding tasks...",
+        "id": "gpt-5.6-sol",
+        "input_cost": 5,
+        "name": "GPT-5.6 Sol",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol Pro is the same underlying model as [GPT-5.6 Sol](https://openrouter.ai/openai/gpt-5.6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-5.6-sol-pro",
+        "input_cost": 5,
+        "name": "GPT-5.6 Sol Pro",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra is a balanced model in OpenAI's GPT-5.6 series, positioned between the flagship Sol tier and the cost-efficient Luna tier. It is suited for everyday coding, reasoning, and agentic...",
+        "id": "gpt-5.6-terra",
+        "input_cost": 2,
+        "name": "GPT-5.6 Terra",
+        "output_cost": 12,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra Pro is the same underlying model as [GPT-5.6 Terra](https://openrouter.ai/openai/gpt-5.6-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-5.6-terra-pro",
+        "input_cost": 2,
+        "name": "GPT-5.6 Terra Pro",
+        "output_cost": 12,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "The gpt-audio model is OpenAI's first generally available audio model. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Audio is priced...",
+        "id": "gpt-audio",
+        "input_cost": 2.5,
+        "name": "GPT Audio",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "A cost-efficient version of GPT Audio. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Input is priced at $0.60 per million...",
+        "id": "gpt-audio-mini",
+        "input_cost": 0.6,
+        "name": "GPT Audio Mini",
+        "output_cost": 2.4,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 400000,
+        "description": "GPT Chat Latest points to OpenAI's stable API alias `chat-latest` that always resolves to the latest Instant chat model used in ChatGPT. As OpenAI rolls out new Instant model updates...",
+        "id": "gpt-chat-latest",
+        "input_cost": 5,
+        "name": "GPT Chat Latest",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
+        "id": "gpt-oss-120b",
+        "input_cost": 0.037,
+        "name": "OpenAI: gpt-oss-120b",
+        "output_cost": 0.17,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 131072,
+        "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for...",
+        "id": "gpt-oss-20b",
+        "input_cost": 0.03,
+        "name": "OpenAI: gpt-oss-20b",
+        "output_cost": 0.13,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for...",
+        "id": "gpt-oss-20b:free",
+        "input_cost": 0,
+        "name": "OpenAI: gpt-oss-20b (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 131072,
+        "description": "gpt-oss-safeguard-20b is a safety reasoning model from OpenAI built upon gpt-oss-20b. This open-weight, 21B-parameter Mixture-of-Experts (MoE) model offers lower latency for safety tasks like content classification, LLM filtering, and trust...",
+        "id": "gpt-oss-safeguard-20b",
+        "input_cost": 0.075,
+        "name": "OpenAI: gpt-oss-safeguard-20b",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 7.5,
+        "context_length": 200000,
+        "description": "The latest and strongest model family from OpenAI, o1 is designed to spend more time thinking before responding. The o1 model series is trained with large-scale reinforcement learning to reason...",
+        "id": "o1",
+        "input_cost": 15,
+        "name": "o1",
+        "output_cost": 60,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "The o1 series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o1-pro model uses more compute to think harder and provide...",
+        "id": "o1-pro",
+        "input_cost": 150,
+        "name": "o1 Pro",
+        "output_cost": 600,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.55,
+        "context_length": 200000,
+        "description": "OpenAI o3-mini-high is the same model as [o3-mini](/openai/o3-mini) with reasoning_effort set to high. o3-mini is a cost-efficient language model optimized for STEM reasoning tasks, particularly excelling in science, mathematics, and...",
+        "id": "o3-mini-high",
+        "input_cost": 1.1,
+        "name": "o3 Mini High",
+        "output_cost": 4.4,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "The o-series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o3-pro model uses more compute to think harder and provide consistently...",
+        "id": "o3-pro",
+        "input_cost": 20,
+        "name": "o3 Pro",
+        "output_cost": 80,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.275,
+        "context_length": 200000,
+        "description": "OpenAI o4-mini-high is the same model as [o4-mini](/openai/o4-mini) with reasoning_effort set to high. OpenAI o4-mini is a compact reasoning model in the o-series, optimized for fast, cost-efficient performance while retaining...",
+        "id": "o4-mini-high",
+        "input_cost": 1.1,
+        "name": "o4 Mini High",
+        "output_cost": 4.4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 16385,
+        "description": "GPT-3.5 Turbo via the Batch API at 50% of standard pricing.",
+        "id": "gpt-3.5-turbo:batch",
+        "input_cost": 0.25,
+        "name": "GPT-3.5 Turbo (batch)",
+        "output_cost": 0.75,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "GPT-4 Turbo via the Batch API at 50% of standard pricing.",
+        "id": "gpt-4-turbo:batch",
+        "input_cost": 5,
+        "name": "GPT-4 Turbo (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1047576,
+        "description": "GPT-4.1 Mini via the Batch API at 50% of standard pricing. Mid-sized model with a 1M-token context window.",
+        "id": "gpt-4.1-mini:batch",
+        "input_cost": 0.2,
+        "name": "GPT-4.1 Mini (batch)",
+        "output_cost": 0.8,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0125,
+        "context_length": 1047576,
+        "description": "GPT-4.1 Nano via the Batch API at 50% of standard pricing. Fastest, cheapest GPT-4.1 model.",
+        "id": "gpt-4.1-nano:batch",
+        "input_cost": 0.05,
+        "name": "GPT-4.1 Nano (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1047576,
+        "description": "GPT-4.1 via the Batch API at 50% of standard pricing. Flagship model optimized for software engineering and long-context reasoning.",
+        "id": "gpt-4.1:batch",
+        "input_cost": 1,
+        "name": "GPT-4.1 (batch)",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 128000,
+        "description": "GPT-4o mini via the Batch API at 50% of standard pricing.",
+        "id": "gpt-4o-mini:batch",
+        "input_cost": 0.075,
+        "name": "GPT-4o Mini (batch)",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.625,
+        "context_length": 128000,
+        "description": "GPT-4o via the Batch API at 50% of standard pricing. Multimodal flagship supporting text and image inputs.",
+        "id": "gpt-4o:batch",
+        "input_cost": 1.25,
+        "name": "GPT-4o (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5 Codex via the Batch API at 50% of standard pricing. Specialized for software engineering and coding workflows.",
+        "id": "gpt-5-codex:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5 Codex (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0125,
+        "context_length": 400000,
+        "description": "GPT-5 Mini via the Batch API at 50% of standard pricing. Compact GPT-5 variant for lighter-weight reasoning tasks.",
+        "id": "gpt-5-mini:batch",
+        "input_cost": 0.125,
+        "name": "GPT-5 Mini (batch)",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0025,
+        "context_length": 400000,
+        "description": "GPT-5 Nano via the Batch API at 50% of standard pricing. Smallest, fastest GPT-5 variant for ultra-low-latency workloads.",
+        "id": "gpt-5-nano:batch",
+        "input_cost": 0.025,
+        "name": "GPT-5 Nano (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5 Pro via the Batch API at 50% of standard pricing. Premium GPT-5 variant for complex reasoning tasks.",
+        "id": "gpt-5-pro:batch",
+        "input_cost": 7.5,
+        "name": "GPT-5 Pro (batch)",
+        "output_cost": 60,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5.1 via the Batch API at 50% of standard pricing. Frontier-grade general-purpose reasoning model.",
+        "id": "gpt-5.1:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5.1 (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 400000,
+        "description": "GPT-5.2 Pro via the Batch API at 50% of standard pricing. Advanced agentic coding and long-context performance.",
+        "id": "gpt-5.2-pro:batch",
+        "input_cost": 10.5,
+        "name": "GPT-5.2 Pro (batch)",
+        "output_cost": 84,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0875,
+        "context_length": 400000,
+        "description": "GPT-5.2 via the Batch API at 50% of standard pricing. Frontier model with stronger agentic and long-context performance.",
+        "id": "gpt-5.2:batch",
+        "input_cost": 0.875,
+        "name": "GPT-5.2 (batch)",
+        "output_cost": 7,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 400000,
+        "description": "GPT-5.4 mini via the Batch API at 50% of standard pricing. Efficient model for high-throughput workloads.",
+        "id": "gpt-5.4-mini:batch",
+        "input_cost": 0.375,
+        "name": "GPT-5.4 Mini (batch)",
+        "output_cost": 2.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 400000,
+        "description": "GPT-5.4 nano via the Batch API at 50% of standard pricing. Most lightweight GPT-5.4 variant.",
+        "id": "gpt-5.4-nano:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.4 Nano (batch)",
+        "output_cost": 0.625,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.4 Pro via the Batch API at 50% of standard pricing. Enhanced reasoning for complex, high-stakes tasks.",
+        "id": "gpt-5.4-pro:batch",
+        "input_cost": 15,
+        "name": "GPT-5.4 Pro (batch)",
+        "output_cost": 90,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.125,
+        "context_length": 1050000,
+        "description": "GPT-5.4 via the Batch API at 50% of standard pricing. Frontier model unifying the Codex and GPT lines.",
+        "id": "gpt-5.4:batch",
+        "input_cost": 1.25,
+        "name": "GPT-5.4 (batch)",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1050000,
+        "description": "GPT-5.5 Pro via the Batch API at 50% of standard pricing. High-capability model for deep reasoning and accuracy.",
+        "id": "gpt-5.5-pro:batch",
+        "input_cost": 15,
+        "name": "GPT-5.5 Pro (batch)",
+        "output_cost": 90,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.5 via the Batch API at 50% of standard pricing. Frontier model for complex professional workloads.",
+        "id": "gpt-5.5:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.5 (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna Pro via the Batch API at 50% of standard pricing. Cost-efficient model with pro reasoning mode.",
+        "id": "gpt-5.6-luna-pro:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.6 Luna Pro (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Luna via the Batch API at 50% of standard pricing. Fast, cost-efficient model for high-volume, latency-sensitive tasks.",
+        "id": "gpt-5.6-luna:batch",
+        "input_cost": 0.1,
+        "name": "GPT-5.6 Luna (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode.",
+        "id": "gpt-5.6-sol-pro:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.6 Sol Pro (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Sol via the Batch API at 50% of standard pricing. Flagship model for complex reasoning, coding, and agentic workflows.",
+        "id": "gpt-5.6-sol:batch",
+        "input_cost": 2.5,
+        "name": "GPT-5.6 Sol (batch)",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra Pro via the Batch API at 50% of standard pricing. Balanced model with pro reasoning mode.",
+        "id": "gpt-5.6-terra-pro:batch",
+        "input_cost": 1,
+        "name": "GPT-5.6 Terra Pro (batch)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-5.6 Terra via the Batch API at 50% of standard pricing. Balanced model between the Sol flagship and Luna cost-efficient tiers.",
+        "id": "gpt-5.6-terra:batch",
+        "input_cost": 1,
+        "name": "GPT-5.6 Terra (batch)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0625,
+        "context_length": 400000,
+        "description": "GPT-5 via the Batch API at 50% of standard pricing. Flagship model with major improvements in reasoning and code quality.",
+        "id": "gpt-5:batch",
+        "input_cost": 0.625,
+        "name": "GPT-5 (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o1 Pro via the Batch API at 50% of standard pricing. Premium reasoning model.",
+        "id": "o1-pro:batch",
+        "input_cost": 75,
+        "name": "o1 Pro (batch)",
+        "output_cost": 300,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 3.75,
+        "context_length": 200000,
+        "description": "o1 via the Batch API at 50% of standard pricing. Reasoning model for complex multi-step problems.",
+        "id": "o1:batch",
+        "input_cost": 7.5,
+        "name": "o1 (batch)",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.275,
+        "context_length": 200000,
+        "description": "o3-mini-high via the Batch API at 50% of standard pricing. High reasoning effort variant of o3-mini.",
+        "id": "o3-mini-high:batch",
+        "input_cost": 0.55,
+        "name": "o3 Mini High (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.275,
+        "context_length": 200000,
+        "description": "o3-mini via the Batch API at 50% of standard pricing. Fast, efficient reasoning model.",
+        "id": "o3-mini:batch",
+        "input_cost": 0.55,
+        "name": "o3 Mini (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "o3 Pro via the Batch API at 50% of standard pricing. Highest-capability o-series reasoning model.",
+        "id": "o3-pro:batch",
+        "input_cost": 10,
+        "name": "o3 Pro (batch)",
+        "output_cost": 40,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 200000,
+        "description": "o3 via the Batch API at 50% of standard pricing. Reasoning model strong in math, science, coding, and visual reasoning.",
+        "id": "o3:batch",
+        "input_cost": 1,
+        "name": "o3 (batch)",
+        "output_cost": 4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1375,
+        "context_length": 200000,
+        "description": "o4-mini-high via the Batch API at 50% of standard pricing. High reasoning effort variant of o4-mini.",
+        "id": "o4-mini-high:batch",
+        "input_cost": 0.55,
+        "name": "o4 Mini High (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1375,
+        "context_length": 200000,
+        "description": "o4 Mini via the Batch API at 50% of standard pricing. Compact reasoning model with multimodal and agentic capabilities.",
+        "id": "o4-mini:batch",
+        "input_cost": 0.55,
+        "name": "o4 Mini (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {
+      "gpt-4o": 128000,
+      "gpt-4o-mini": 128000,
       "gpt-5": 400000,
       "gpt-5-mini": 400000,
-      "gpt-5-nano": 400000,
-      "gpt-4o": 128000,
-      "gpt-4o-mini": 128000
+      "gpt-5-nano": 400000
     },
     "pattern_overrides": [
       {
-        "pattern": "gpt-5.*",
-        "context_limit": 400000
+        "context_limit": 400000,
+        "pattern": "gpt-5.*"
       },
       {
-        "pattern": "gpt-4o.*",
-        "context_limit": 128000
+        "context_limit": 128000,
+        "pattern": "gpt-4o.*"
       }
     ],
     "supports_vision": true,
-    "vision_model": "gpt-4o",
-    "default_model": "gpt-5-mini",
-    "available_models": []
+    "vision_model": "gpt-4o"
   },
+  "name": "openai",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 30000,
     "retryable_errors": [
       "rate_limit_exceeded",
@@ -71,10 +1396,9 @@
       "timeout"
     ]
   },
-  "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
-  },
-  "display_name": "OpenAI"
+  "streaming": {
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  }
 }

@@ -2,7 +2,7 @@
 
 You are an autonomous Coordinator agent processing a TODO.md list. Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
 
-**State model:** TODO.md is the persistent record. The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. Use the in-session `TodoWrite` tool for live UI progress visibility, NOT for persistence. Do not use `task_queue` — this workflow doesn't need it.
+**State model:** TODO.md is the persistent record. The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. Use the in-session `TodoWrite` tool for live UI progress visibility, NOT for persistence. (The legacy `task_queue` tool was removed in 2026-07-18; this workflow never needed it.)
 
 ## Workflow for Each `[ ]` Item
 

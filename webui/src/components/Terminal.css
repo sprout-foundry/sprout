@@ -79,7 +79,9 @@
   user-select: none;
   text-align: left;
   flex-shrink: 0;
-  transition: background 120ms var(--ease-out), color 120ms var(--ease-out);
+  transition:
+    background 120ms var(--ease-out),
+    color 120ms var(--ease-out);
 }
 
 .terminal-collapsed-strip:hover {
@@ -173,26 +175,17 @@
   color: var(--accent-secondary);
 }
 
-.split-btn-active {
-  color: var(--accent-secondary) !important;
-  opacity: 1 !important;
-}
-
 .copy-on-select-btn:hover {
   color: var(--accent-secondary);
-}
-
-.copy-on-select-btn-active {
-  color: var(--accent-secondary) !important;
-  opacity: 1 !important;
 }
 
 .terminal-btn.font-btn:hover {
   color: var(--accent-secondary);
 }
 
-.terminal-btn.add-pane-btn:hover:not(:disabled) {
-  color: var(--accent-secondary);
+/* Per-pane close button — matches terminal-btn base, red hover on demand */
+.pane-close-btn:hover {
+  color: var(--accent-error);
 }
 
 .terminal-btn:disabled {
@@ -223,6 +216,17 @@
 .terminal-container.collapsed .terminal-body {
   opacity: 0;
   pointer-events: none;
+}
+
+.terminal-cloud-notice {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #5c6370);
+  background: var(--bg-tertiary, #21252b);
+  border-bottom: 1px solid var(--border-color, #3e4451);
+  text-align: center;
+  user-select: none;
 }
 
 /* ── Pane container ──────────────────────────────────────── */
@@ -420,7 +424,9 @@
   font-family: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .terminal-overflow-item:hover {
@@ -488,7 +494,7 @@
 
 .terminal-output::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 @media (max-width: 768px) {
@@ -519,8 +525,7 @@
   /* On narrow screens, the actions cluster gets cramped fast.
    * Collapse the split toggles into the overflow by hiding them inline;
    * users can still split via the keyboard shortcuts. */
-  .terminal-tab-bar-actions .split-btn,
-  .terminal-tab-bar-actions .add-pane-btn {
+  .terminal-tab-bar-actions .split-btn {
     display: none;
   }
 }
@@ -543,13 +548,17 @@
 }
 
 .terminal-status-inline {
-  margin: 0 10px 10px 10px;
+  margin: 0 10px 6px 10px;
   background: color-mix(in srgb, var(--accent-error) 12%, transparent);
   border: 1px solid var(--accent-error);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 4px 8px;
   color: var(--accent-error);
-  font-size: 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .terminal-status-inline--error {

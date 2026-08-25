@@ -399,8 +399,8 @@ func TestBPM_SessionID_Format(t *testing.T) {
 	defer bpm.Close()
 
 	tests := []struct {
-		command  string
-		prefix   string
+		command string
+		prefix  string
 	}{
 		{"echo hello", "bg-echo-"},
 		{"ls -la", "bg-ls-"},
@@ -883,4 +883,97 @@ func TestGetProcessFound(t *testing.T) {
 	assert.NotZero(t, proc.StartedAt, "Process StartedAt should be set")
 	assert.NotZero(t, proc.LastPolled, "Process LastPolled should be set")
 	assert.NotEmpty(t, proc.OutputPath, "Process OutputPath should be set")
+}
+
+// =============================================================================
+// TestBPM_ProcessGroupDetached — Verify child process is in its own process
+// group, isolated from the parent so group-level signals for cleanup work
+// correctly and SIGHUP from terminal teardown doesn't reach it.
+// =============================================================================
+
+func TestBPM_ProcessGroupDetached(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Start a process that stays alive long enough to query its PGID
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Get the child PID
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the session")
+	childPID := proc.GetPID()
+	require.NotZero(t, childPID, "child PID should be set")
+
+	// We intentionally do NOT assert a different session ID (SID) here.
+	// Setsid(2) is blocked by seccomp on Go 1.24+ Linux, causing fork/exec
+	// to fail with EPERM. The child stays in the parent's session, which
+	// is safe because:
+	//   - SIGHUP from terminal teardown goes to the foreground process
+	//     group, not to the child's group
+	//   - stdin is redirected to /dev/null (cmd.Stdin = nil in Go 1.20+)
+	//   - stdout/stderr are piped to a file, not the terminal
+
+	// Child's PGID should be different from parent's PGID
+	parentPGID, err := syscall.Getpgid(os.Getpid())
+	require.NoError(t, err)
+
+	childPGID, err := syscall.Getpgid(childPID)
+	require.NoError(t, err, "should be able to query child PGID")
+
+	assert.NotEqual(t, parentPGID, childPGID,
+		"child should be in a different process group from parent")
+	assert.Equal(t, childPID, childPGID,
+		"child should be its own process group leader")
+
+	// Clean up
+	require.NoError(t, bpm.Stop(sessionID, 50*time.Millisecond))
+}
+
+// =============================================================================
+// TestBPM_ProcessSurvivesToolCallCompletion — Start a long-running process,
+// simulate a gap equivalent to a tool call returning and the LLM's next
+// response generation, then verify the process is still alive. This validates
+// that Setsid+Setpgid isolation keeps BPM processes alive without nohup.
+// =============================================================================
+
+func TestBPM_ProcessSurvivesToolCallCompletion(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Start a long-running process (30s is plenty for the test window)
+	sessionID, err := bpm.Start(context.Background(), "sleep 30", "")
+	require.NoError(t, err)
+
+	// Get the child PID
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the session")
+	childPID := proc.GetPID()
+	require.NotZero(t, childPID, "child PID should be set")
+
+	// Verify it's running immediately
+	_, status, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status)
+
+	// Simulate a gap: a tool call returning, the LLM generating the next
+	// response, and the agent processing it. In practice this takes 1-5s.
+	// 2s is sufficient to catch any timing-dependent session teardown.
+	time.Sleep(2 * time.Second)
+
+	// Verify the process is still alive by probing with signal 0
+	err = syscall.Kill(childPID, syscall.Signal(0))
+	assert.NoError(t, err, "process should still be alive after simulated tool call completion gap")
+
+	// Verify BPM still reports it as running
+	_, status, err = bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status, "process should still be reported as running by BPM")
+
+	// Clean up
+	require.NoError(t, bpm.Stop(sessionID, 50*time.Millisecond))
 }

@@ -4,6 +4,7 @@
 
 export interface SproutSettings {
   reasoning_effort: string;
+  output_verbosity: string;
   disable_thinking?: boolean;
   risk_profile?: string;
   system_prompt_text: string;
@@ -12,7 +13,6 @@ export interface SproutSettings {
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
   history_scope: string;
-  self_review_gate_mode: string;
   subagent_provider: string;
   subagent_model: string;
   subagent_max_depth?: number;
@@ -44,9 +44,24 @@ export interface SproutSettings {
     ort_library_path: string;
     model_dir: string;
     auto_index: boolean;
-    similarity_threshold: number;
     max_results: number;
     exclude_paths: string[];
+  };
+  /** Cap the effective context window (tokens). Limits how large a request's input can be,
+   *  reducing cost on models with very large native context windows. 0 or absent = no limit. */
+  max_context_tokens?: number | null;
+  /** Computer Use configuration (SP-063) — gates the computer_user persona's desktop-control tools. */
+  computer_use?: {
+    enabled: boolean;
+    max_actions_per_minute: number;
+    audit_log_dir: string;
+    workspace_allowlist: string[];
+  };
+  /** Wakeup / auto-resume configuration (SP-108). */
+  wakeup?: {
+    enabled: boolean;
+    max_tokens_per_session: number;
+    max_resumes_per_session: number;
   };
 }
 
@@ -105,6 +120,7 @@ export interface CustomProviderConfig {
   vision_model?: string;
   vision_fallback_provider?: string;
   vision_fallback_model?: string;
+  billing_type?: 'pay_per_token' | 'subscription' | 'free';
 }
 
 export interface CustomProvidersResponse {
@@ -123,6 +139,30 @@ export interface SkillConfig {
 
 export interface SkillsResponse {
   skills: Record<string, SkillConfig>;
+}
+
+// SP-086-4: Install/manage skills via the HTTP API.
+export interface SkillInstallResult {
+  skill_id: string;
+  install_dir: string;
+  origin: {
+    type: string;
+    url?: string;
+    path?: string;
+    registry_id?: string;
+    ref?: string;
+    commit_sha?: string;
+    installed_at: string;
+  };
+}
+
+export interface SkillRegistryEntry {
+  id: string;
+  name: string;
+  description: string;
+  git_url: string;
+  git_ref: string;
+  path_in_repo: string;
 }
 
 export interface SubagentTypeInfo {

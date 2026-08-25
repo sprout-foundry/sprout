@@ -829,21 +829,21 @@ func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "Standard data: prefix",
+			name:  "Standard data: prefix",
 			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
 			},
 		},
 		{
-			name: "Data: without space (some providers use this)",
+			name:  "Data: without space (some providers use this)",
 			input: "data:{\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
 			},
 		},
 		{
-			name: "Multiple SSE events",
+			name:  "Multiple SSE events",
 			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" World\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
@@ -851,13 +851,13 @@ func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
 			},
 		},
 		{
-			name: "Done message",
-			input: "data: [DONE]\n\n",
+			name:     "Done message",
+			input:    "data: [DONE]\n\n",
 			expected: nil, // [DONE] returns io.EOF, not a response
-			wantErr: true,
+			wantErr:  true,
 		},
 		{
-			name: "Empty line skipped",
+			name:  "Empty line skipped",
 			input: "\ndata: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
@@ -925,5 +925,324 @@ func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// -----------------------------------------------------------------------
+// Repetition detection tests
+// -----------------------------------------------------------------------
+
+func makeRepetitionChunk(content string) *StreamingChatResponse {
+	return &StreamingChatResponse{
+		ID: "rep-test",
+		Choices: []StreamingChoice{
+			{Index: 0, Delta: StreamingDelta{Content: content}},
+		},
+	}
+}
+
+func TestRepetitionDetector_RepeatedShortContent_Fails(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	for i := 0; i < 9; i++ {
+		err := b.ProcessChunk(makeRepetitionChunk("foo"))
+		if err != nil {
+			t.Fatalf("chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+	// 10th should also pass (threshold is 10)
+	err := b.ProcessChunk(makeRepetitionChunk("foo"))
+	if err != nil {
+		t.Fatalf("chunk 10: unexpected error (threshold is 10): %v", err)
+	}
+	// 11th should fail
+	err = b.ProcessChunk(makeRepetitionChunk("foo"))
+	if err == nil {
+		t.Fatal("chunk 11: expected repetition error, got nil")
+	}
+	if !strings.Contains(err.Error(), "repetition loop") {
+		t.Fatalf("expected 'repetition loop' in error, got: %v", err)
+	}
+}
+
+func TestRepetitionDetector_VaryingContent_NoError(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+	for i := 0; i < 20; i++ {
+		err := b.ProcessChunk(makeRepetitionChunk(fmt.Sprintf("word-%d", i)))
+		if err != nil {
+			t.Fatalf("chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+}
+
+func TestRepetitionDetector_ShortRepeatBelowThreshold_NoError(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+	for i := 0; i < 5; i++ {
+		err := b.ProcessChunk(makeRepetitionChunk("ok"))
+		if err != nil {
+			t.Fatalf("chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+	// Different content should clear the streak
+	err := b.ProcessChunk(makeRepetitionChunk("done"))
+	if err != nil {
+		t.Fatalf("different content: unexpected error: %v", err)
+	}
+}
+
+func TestRepetitionDetector_LongContentIgnored(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+	long := strings.Repeat("a", 50) // 50 chars > 30 char maxLen
+	for i := 0; i < 11; i++ {
+		err := b.ProcessChunk(makeRepetitionChunk(long))
+		if err != nil {
+			t.Fatalf("chunk %d: long content should not trigger repetition: %v", i+1, err)
+		}
+	}
+}
+
+func TestRepetitionDetector_PatternBreak_Resets(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	// Feed "foo" 9 times
+	for i := 0; i < 9; i++ {
+		if err := b.ProcessChunk(makeRepetitionChunk("foo")); err != nil {
+			t.Fatalf("first batch chunk %d: %v", i+1, err)
+		}
+	}
+	// Break with "bar"
+	if err := b.ProcessChunk(makeRepetitionChunk("bar")); err != nil {
+		t.Fatalf("break: %v", err)
+	}
+	// Feed "foo" 9 more times — streak should be at most 9, below threshold
+	for i := 0; i < 9; i++ {
+		if err := b.ProcessChunk(makeRepetitionChunk("foo")); err != nil {
+			t.Fatalf("second batch chunk %d: %v", i+1, err)
+		}
+	}
+}
+
+func TestRepetitionDetector_WhitespaceTrimmed(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	for i := 0; i < 10; i++ {
+		var content string
+		if i%2 == 0 {
+			content = " foo "
+		} else {
+			content = "foo"
+		}
+		if err := b.ProcessChunk(makeRepetitionChunk(content)); err != nil {
+			t.Fatalf("chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+	// 11th should trigger (all are "foo" after trimming)
+	err := b.ProcessChunk(makeRepetitionChunk("foo"))
+	if err == nil {
+		t.Fatal("expected repetition error, got nil")
+	}
+}
+
+func TestRepetitionDetector_WindowOverflow_OldestDropped(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	// Feed 25 different strings to fill + overflow the window
+	for i := 0; i < 25; i++ {
+		err := b.ProcessChunk(makeRepetitionChunk(fmt.Sprintf("distinct-%d", i)))
+		if err != nil {
+			t.Fatalf("warmup chunk %d: %v", i+1, err)
+		}
+	}
+	// Now the window has the last 20. Feed "zzz" 11 times — should trigger.
+	for i := 0; i < 10; i++ {
+		if err := b.ProcessChunk(makeRepetitionChunk("zzz")); err != nil {
+			t.Fatalf("repetition chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+	err := b.ProcessChunk(makeRepetitionChunk("zzz"))
+	if err == nil {
+		t.Fatal("11th 'zzz': expected repetition error, got nil")
+	}
+}
+
+func TestRepetitionDetector_ReasoningContentNotChecked(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	// Feed repeated content through reasoning — should NOT trigger
+	for i := 0; i < 15; i++ {
+		chunk := &StreamingChatResponse{
+			ID: "reasoning-test",
+			Choices: []StreamingChoice{
+				{Index: 0, Delta: StreamingDelta{ReasoningContent: "think"}},
+			},
+		}
+		if err := b.ProcessChunk(chunk); err != nil {
+			t.Fatalf("reasoning chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+	resp := b.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+}
+
+func TestRepetitionDetector_EmptyContentSkipped(t *testing.T) {
+	t.Parallel()
+	b := NewStreamingResponseBuilder(nil)
+
+	// Feed empty content 15 times — should never trigger
+	for i := 0; i < 15; i++ {
+		chunk := &StreamingChatResponse{
+			ID: "empty-test",
+			Choices: []StreamingChoice{
+				{Index: 0, Delta: StreamingDelta{Content: ""}},
+			},
+		}
+		if err := b.ProcessChunk(chunk); err != nil {
+			t.Fatalf("empty chunk %d: unexpected error: %v", i+1, err)
+		}
+	}
+}
+
+// TestProcessChunk_ImageTokensMapping verifies that ImageTokens from the streaming
+// chunk's usage are correctly mapped to the response's ChatUsage when ProcessChunk
+// processes a final chunk with usage data.
+func TestProcessChunk_ImageTokensMapping(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "img-test-123",
+		Model:   "vision-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "Here is an analysis of the image.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: &StreamingUsage{
+			PromptTokens:     50,
+			CompletionTokens: 30,
+			TotalTokens:      80,
+			ImageTokens:      42,
+			EstimatedCost:    0.0015,
+		},
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	if resp.Usage.ImageTokens != 42 {
+		t.Errorf("Expected ImageTokens=42, got %d", resp.Usage.ImageTokens)
+	}
+	if resp.Usage.PromptTokens != 50 {
+		t.Errorf("Expected PromptTokens=50, got %d", resp.Usage.PromptTokens)
+	}
+	if resp.Usage.CompletionTokens != 30 {
+		t.Errorf("Expected CompletionTokens=30, got %d", resp.Usage.CompletionTokens)
+	}
+	if resp.Usage.TotalTokens != 80 {
+		t.Errorf("Expected TotalTokens=80, got %d", resp.Usage.TotalTokens)
+	}
+}
+
+// TestProcessChunk_ImageTokensZero verifies that when ImageTokens is 0,
+// the response's ChatUsage still has ImageTokens=0.
+func TestProcessChunk_ImageTokensZero(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "no-img-123",
+		Model:   "text-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "No images in this response.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: &StreamingUsage{
+			PromptTokens:     10,
+			CompletionTokens: 20,
+			TotalTokens:      30,
+			ImageTokens:      0,
+		},
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	if resp.Usage.ImageTokens != 0 {
+		t.Errorf("Expected ImageTokens=0, got %d", resp.Usage.ImageTokens)
+	}
+}
+
+// TestProcessChunk_UsageNil verifies that when chunk.Usage is nil, we don't panic.
+func TestProcessChunk_UsageNil(t *testing.T) {
+	t.Parallel()
+	builder := NewStreamingResponseBuilder(nil)
+
+	chunk := &StreamingChatResponse{
+		ID:      "no-usage-123",
+		Model:   "test-model",
+		Created: 1234567890,
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					Role:    "assistant",
+					Content: "No usage data.",
+				},
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: nil,
+	}
+
+	err := builder.ProcessChunk(chunk)
+	if err != nil {
+		t.Fatalf("ProcessChunk returned error: %v", err)
+	}
+
+	resp := builder.GetResponse()
+	if resp == nil {
+		t.Fatal("GetResponse returned nil")
+	}
+
+	// Usage should be zero-value (not set because chunk.Usage was nil)
+	if resp.Usage.ImageTokens != 0 {
+		t.Errorf("Expected ImageTokens=0 (unset), got %d", resp.Usage.ImageTokens)
 	}
 }

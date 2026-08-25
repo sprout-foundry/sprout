@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"syscall/js"
 	"time"
 )
@@ -43,24 +41,10 @@ var errWASMNotSupported = errors.New("onnx: native ONNX runtime not available on
 // when this is false.
 func onnxRequiresModelFiles() bool { return false }
 
-// DefaultModelDir mirrors the non-wasm resolver: SPROUT_MODELS_DIR env var
-// takes precedence; otherwise we anchor under SPROUT_CONFIG or the user's
-// home directory. On WASM this points at the IndexedDB-backed MEMFS path
-// that cmd/wasm sets up.
-func DefaultModelDir() string {
-	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
-		return dir
-	}
-	configDir := os.Getenv("SPROUT_CONFIG")
-	if configDir == "" {
-		configDir = os.Getenv("LEDIT_CONFIG")
-	}
-	if configDir == "" {
-		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".config", "sprout")
-	}
-	return filepath.Join(configDir, "models")
-}
+// DefaultModelDir lives in model_dir.go — one definition for every build.
+// This file used to carry its own copy that anchored under SPROUT_CONFIG,
+// which --isolated-config points at <workspace>/.sprout; that is what gave
+// every workspace a private copy of the model weights.
 
 // ─── ONNXRuntime (no-op on WASM) ─────────────────────────────────
 //
@@ -74,9 +58,9 @@ type ONNXRuntime struct {
 	closed bool
 }
 
-func NewONNXRuntime() (*ONNXRuntime, error)              { return &ONNXRuntime{}, nil }
+func NewONNXRuntime() (*ONNXRuntime, error)                { return &ONNXRuntime{}, nil }
 func NewONNXRuntimeWithDir(_ string) (*ONNXRuntime, error) { return &ONNXRuntime{}, nil }
-func (r *ONNXRuntime) Ready() bool                       { return r != nil && !r.closed }
+func (r *ONNXRuntime) Ready() bool                         { return r != nil && !r.closed }
 func (r *ONNXRuntime) Close() error {
 	if r != nil {
 		r.closed = true
@@ -364,3 +348,143 @@ func jsValueToFloat32Slice(v js.Value, expectedDims int) ([]float32, error) {
 	}
 	return out, nil
 }
+
+// ─── JinaONNXEmbeddingProvider (JS bridge or stub) ──────────────
+
+// errJinaWASMNotSupported is returned when the WASM build cannot find the
+// Jina-side provider. The host page must install a provider on
+// `globalThis.__sproutJinaONNX` (see docs/WASM_API.md) before the embedding
+// manager constructs the Jina provider; without it, manager Init falls back
+// to whatever the caller does with a provider-creation error.
+var errJinaWASMNotSupported = errors.New("onnx: Jina Code v2 ONNX runtime not available on WASM; install a JS-side onnxruntime-web provider on globalThis.__sproutJinaONNX to enable Jina Code v2 embeddings")
+
+// JinaONNXEmbeddingProvider on WASM either bridges to the JS-side
+// onnxruntime-web provider installed on `globalThis.__sproutJinaONNX` or
+// returns errors for every operation. Construction picks the mode based on
+// whether the global is set — the same pattern as ONNXEmbeddingProvider and
+// its `__sproutONNX` global.
+//
+// Jina is symmetric: it does NOT use task prefixes (unlike EmbeddingGemma),
+// so EmbedWithPrefix / EmbedBatchWithPrefix delegate to Embed / EmbedBatch
+// and ignore the prefix entirely. The JS-side provider is responsible for
+// tokenization (byte-level BPE), mean pooling of last_hidden_state, and L2
+// normalization — the same math the native provider does in jina_provider.go.
+type JinaONNXEmbeddingProvider struct {
+	bridged    bool
+	jsProvider js.Value
+	dims       int
+	modelName  string
+	modelHash  string
+}
+
+// NewJinaONNXEmbeddingProvider on WASM detects the JS-side provider at
+// construction time. The runtime/model/tokenizer path arguments are ignored
+// because the JS-side handles model loading itself.
+func NewJinaONNXEmbeddingProvider(
+	_ context.Context,
+	_ *ONNXRuntime,
+	_, _ string,
+) (*JinaONNXEmbeddingProvider, error) {
+	jsProvider := js.Global().Get("__sproutJinaONNX")
+	if jsProvider.IsUndefined() || jsProvider.IsNull() {
+		return nil, errJinaWASMNotSupported
+	}
+	dims := 768
+	if dv := jsProvider.Get("dimensions"); dv.Type() == js.TypeNumber {
+		dims = dv.Int()
+	}
+	hash := "jina-browser-bridge"
+	if hv := jsProvider.Get("modelHash"); hv.Type() == js.TypeString {
+		hash = hv.String()
+	}
+	name := "jina-code-v2-wasm-bridge"
+	if nv := jsProvider.Get("modelName"); nv.Type() == js.TypeString {
+		name = nv.String()
+	}
+	return &JinaONNXEmbeddingProvider{
+		bridged:    true,
+		jsProvider: jsProvider,
+		dims:       dims,
+		modelName:  name,
+		modelHash:  hash,
+	}, nil
+}
+
+func (p *JinaONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	if p == nil || !p.bridged {
+		return nil, errJinaWASMNotSupported
+	}
+	promise := p.jsProvider.Call("embed", text)
+	result, err := awaitPromise(ctx, promise)
+	if err != nil {
+		return nil, fmt.Errorf("jina bridge: embed: %w", err)
+	}
+	return jsValueToFloat32Slice(result, p.dims)
+}
+
+func (p *JinaONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if p == nil || !p.bridged {
+		return nil, errJinaWASMNotSupported
+	}
+	// Build a JS string array. js.ValueOf([]interface{}) works but requires
+	// the slice be []interface{}, so coerce element-by-element.
+	jsTexts := make([]interface{}, len(texts))
+	for i, t := range texts {
+		jsTexts[i] = t
+	}
+	promise := p.jsProvider.Call("embedBatch", js.ValueOf(jsTexts))
+	result, err := awaitPromise(ctx, promise)
+	if err != nil {
+		return nil, fmt.Errorf("jina bridge: embedBatch: %w", err)
+	}
+	if result.Type() != js.TypeObject {
+		return nil, fmt.Errorf("jina bridge: embedBatch expected an array, got %s", result.Type())
+	}
+	n := result.Length()
+	out := make([][]float32, n)
+	for i := 0; i < n; i++ {
+		vec, err := jsValueToFloat32Slice(result.Index(i), p.dims)
+		if err != nil {
+			return nil, fmt.Errorf("jina bridge: embedBatch[%d]: %w", i, err)
+		}
+		out[i] = vec
+	}
+	return out, nil
+}
+
+// EmbedWithPrefix ignores the prefix — Jina is symmetric and does not use
+// task prefixes. The raw text is embedded identically to Embed.
+func (p *JinaONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text, prefix string) ([]float32, error) {
+	_ = prefix
+	return p.Embed(ctx, text)
+}
+
+// EmbedBatchWithPrefix ignores the prefix — Jina is symmetric and does not
+// use task prefixes.
+func (p *JinaONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
+	_ = prefix
+	return p.EmbedBatch(ctx, texts)
+}
+
+func (p *JinaONNXEmbeddingProvider) Dimensions() int {
+	if p == nil {
+		return 0
+	}
+	return p.dims
+}
+
+func (p *JinaONNXEmbeddingProvider) Name() string {
+	if p == nil || p.modelName == "" {
+		return "jina-code-v2-wasm-bridge"
+	}
+	return p.modelName
+}
+
+func (p *JinaONNXEmbeddingProvider) ModelHash() string {
+	if p == nil {
+		return ""
+	}
+	return p.modelHash
+}
+
+func (p *JinaONNXEmbeddingProvider) Close() error { return nil }

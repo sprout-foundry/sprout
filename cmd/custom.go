@@ -4,16 +4,20 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+	"golang.org/x/term"
 )
 
 var customModelCmd = &cobra.Command{
@@ -57,6 +61,13 @@ var customModelListCmd = &cobra.Command{
 }
 
 func runCustomModelAdd() error {
+	// The wizard prompts interactively for endpoint URL, API key env var,
+	// and preferred model. If stdin isn't a terminal, promptLine will block
+	// on EOF forever — fail fast with guidance instead.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("'sprout custom add' requires an interactive terminal. " + noninteractive.HelpHint)
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
@@ -73,82 +84,50 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("failed to prompt for provider name: %w", err)
 	}
 
-	existingProviders := cfg.CustomProviders
-	if _, exists := existingProviders[strings.ToLower(strings.TrimSpace(name))]; exists {
-		answer, err := promptLine(reader, "Provider exists. Replace it? "+console.FormatYesNoPromptStdout(false)+": ")
-		if err != nil {
-			return fmt.Errorf("failed to prompt for replace confirmation: %w", err)
-		}
-		if !isYes(answer) {
-			return nil
-		}
+	// Short-flow branch: if this name matches an already-registered provider
+	// (user's custom config or embedded factory), we skip URL/discovery
+	// and only offer to set credentials. This is the common case after
+	// a `/provider <name>` failure shows the user "Run 'sprout custom add'".
+	known, isKnown := configuration.LookupKnownProvider(name)
+	if isKnown {
+		return runCustomModelAddKnown(reader, known)
 	}
 
 	endpoint, err := promptLine(reader, "Base URL (e.g., https://example.com/v1): ")
 	if err != nil {
 		return fmt.Errorf("failed to prompt for endpoint URL: %w", err)
 	}
+	if err := configuration.ValidateCustomProviderEndpoint(endpoint); err != nil {
+		return fmt.Errorf("invalid endpoint URL: %w", err)
+	}
 
 	envVar, err := promptLine(reader, "API key env var (leave empty for no auth): ")
 	if err != nil {
 		return fmt.Errorf("failed to prompt for API key env var: %w", err)
 	}
+	envVar = strings.TrimSpace(envVar)
+
+	// If the user named an env var that's already set in the environment,
+	// tell them — no need to ask them to re-set the credential via
+	// `sprout keys set`.
+	if envVar != "" && strings.TrimSpace(os.Getenv(envVar)) != "" {
+		fmt.Printf("(env var %s is already set; discovery will use it)\n", envVar)
+	}
 
 	provider := configuration.CustomProviderConfig{
 		Name:           name,
 		Endpoint:       endpoint,
-		EnvVar:         strings.TrimSpace(envVar),
-		RequiresAPIKey: strings.TrimSpace(envVar) != "",
+		EnvVar:         envVar,
+		RequiresAPIKey: envVar != "",
 	}
 
-	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
-	if discoverErr != nil {
-		fmt.Println()
-		console.GlyphWarning.Printf("Model discovery failed: %v", discoverErr)
-		fmt.Println("The provider can still be saved, but model selection will rely on runtime discovery.")
-	} else {
-		fmt.Println()
-		console.GlyphSuccess.Printf("Discovered %d model(s)", len(models))
-		maxShow := len(models)
-		if maxShow > 10 {
-			maxShow = 10
+	if err := discoverAndPickModel(reader, &provider); err != nil {
+		if errors.Is(err, errCustomSetupCancelled) {
+			return nil
 		}
-		for i := 0; i < maxShow; i++ {
-			ctxInfo := ""
-			if models[i].ContextLength > 0 {
-				ctxInfo = fmt.Sprintf("  (%dK context)", models[i].ContextLength/1000)
-			}
-			fmt.Printf("  %d. %s%s\n", i+1, models[i].ID, ctxInfo)
-		}
-		if len(models) > maxShow {
-			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
-		}
-
-		for {
-			preferred, err := promptLine(reader, "Preferred default model (name or number, leave empty for first discovered): ")
-			if err != nil {
-				return fmt.Errorf("failed to prompt for preferred model: %w", err)
-			}
-			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
-			if err != nil {
-				fmt.Println()
-				console.GlyphWarning.Printf("%v", err)
-				continue
-			}
-			provider.ModelName = selectedModel
-			break
-		}
-
-		// Auto-populate per-model context sizes from discovery data
-		if provider.ModelContextSizes == nil {
-			provider.ModelContextSizes = make(map[string]int)
-		}
-		for _, m := range models {
-			if m.ContextLength > 0 {
-				provider.ModelContextSizes[m.ID] = m.ContextLength
-			}
-		}
+		return err
 	}
+	models := getModelListForVisionPicker(provider)
 
 	// Prompt for default context size.
 	// If discovery succeeded and the default model has a known context size,
@@ -179,29 +158,11 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("failed to prompt for vision support: %w", err)
 	}
 	if isYes(visionAnswer) {
-		provider.SupportsVision = true
-		for {
-			visionModelInput, err := promptLine(reader, "Vision model (name or number, leave empty to reuse default model): ")
-			if err != nil {
-				return fmt.Errorf("failed to prompt for vision model: %w", err)
+		if err := pickVisionModel(reader, &provider, models); err != nil {
+			if errors.Is(err, errCustomSetupCancelled) {
+				return nil
 			}
-			trimmed := strings.TrimSpace(visionModelInput)
-			if trimmed == "" {
-				provider.VisionModel = provider.ModelName
-				break
-			}
-			if len(models) > 0 {
-				selectedVisionModel, err := resolvePreferredCustomProviderModel(trimmed, models)
-				if err != nil {
-					fmt.Println()
-				console.GlyphWarning.Printf("%v", err)
-					continue
-				}
-				provider.VisionModel = selectedVisionModel
-				break
-			}
-			provider.VisionModel = trimmed
-			break
+			return err
 		}
 	}
 
@@ -247,6 +208,83 @@ func runCustomModelAdd() error {
 		fmt.Printf("  Vision model: %s\n", normalized.VisionModel)
 	}
 	fmt.Printf("  File: %s\n", path)
+
+	// If the user declared an API key env var, offer to set it now via
+	// the active credential backend. Skip the prompt when the env var is
+	// already set in the environment (no need to copy it into the store)
+	// or when the provider doesn't need auth.
+	promptForCredentialIfNeeded(reader, normalized.Name, normalized.EnvVar)
+
+	return nil
+}
+
+// runCustomModelAddKnown handles the "register credentials for an
+// already-known provider" short-flow. We skip URL/discovery entirely
+// because the provider's endpoint, default model, and auth env var are
+// already configured. This is the common follow-up after a `/provider
+// <name>` failure surfaces "Run 'sprout custom add <name>'".
+func runCustomModelAddKnown(reader *bufio.Reader, known configuration.KnownProviderInfo) error {
+	fmt.Println()
+	fmt.Printf("Provider %q is already configured (source: %s).\n", known.DisplayName, known.Source)
+	if known.Endpoint != "" {
+		fmt.Printf("  Endpoint: %s\n", secretdetect.RedactOpaque(known.Endpoint))
+	}
+	if known.DefaultModel != "" {
+		fmt.Printf("  Default model: %s\n", known.DefaultModel)
+	}
+	if known.ContextSize > 0 {
+		fmt.Printf("  Default context size: %d tokens\n", known.ContextSize)
+	}
+	if known.EnvVar != "" {
+		fmt.Printf("  API key env var: %s\n", known.EnvVar)
+	}
+	fmt.Println()
+
+	if known.RequiresAPIKey {
+		// Check current state so we can offer the right action.
+		envSet := known.EnvVar != "" && strings.TrimSpace(os.Getenv(known.EnvVar)) != ""
+		storedCred := hasStoredCredential(known.Name)
+		switch {
+		case envSet && storedCred:
+			console.GlyphSuccess.Print("API key already configured (env var + credential store).")
+			return nil
+		case envSet:
+			fmt.Println("(env var is set; credential store has no value for this provider)")
+		case storedCred:
+			console.GlyphSuccess.Print("A credential is already stored for this provider.")
+			fmt.Println("Re-run /keys set if you want to rotate it.")
+			return nil
+		default:
+			fmt.Println("No credentials are configured yet.")
+		}
+
+		answer, err := promptLine(reader, fmt.Sprintf("Set the API key for %s now? %s: ",
+			known.Name, console.FormatYesNoPromptStdout(true)))
+		if err != nil || !isYes(answer) {
+			fmt.Println()
+			fmt.Printf("Skipped. Run `/keys set %s <key>` (or `sprout keys set %s <key>`) later.\n",
+				known.Name, known.Name)
+			return nil
+		}
+
+		key, keyErr := promptLine(reader, fmt.Sprintf("API key (or set %s): ", known.EnvVar))
+		if keyErr != nil {
+			return fmt.Errorf("failed to read API key: %w", keyErr)
+		}
+		if strings.TrimSpace(key) == "" {
+			fmt.Println("Empty key — nothing stored.")
+			return nil
+		}
+		if storeErr := credentials.SetToActiveBackend(known.Name, strings.TrimSpace(key)); storeErr != nil {
+			return fmt.Errorf("failed to store credential: %w", storeErr)
+		}
+		console.GlyphSuccess.Printf("Stored credential for %s", known.Name)
+	} else {
+		fmt.Println("This provider does not require an API key.")
+	}
+
+	fmt.Println()
+	fmt.Printf("Try `/provider %s` to switch.\n", known.Name)
 	return nil
 }
 
@@ -366,87 +404,6 @@ func runCustomModelList() error {
 	}
 
 	return nil
-}
-
-func promptLine(reader *bufio.Reader, prompt string) (string, error) {
-	fmt.Print(prompt)
-	value, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	return strings.TrimSpace(value), nil
-}
-
-func isYes(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "y", "yes":
-		return true
-	default:
-		return false
-	}
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-func resolvePreferredCustomProviderModel(input string, models []configuration.ProviderDiscoveryModel) (string, error) {
-	trimmed := strings.TrimSpace(input)
-	if len(models) == 0 {
-		return trimmed, nil
-	}
-	if trimmed == "" {
-		return models[0].ID, nil
-	}
-
-	if selectedIndex, err := strconv.Atoi(trimmed); err == nil {
-		if selectedIndex < 1 || selectedIndex > len(models) {
-			return "", fmt.Errorf("model selection %d is out of range", selectedIndex)
-		}
-		return models[selectedIndex-1].ID, nil
-	}
-
-	for _, model := range models {
-		if strings.EqualFold(model.ID, trimmed) {
-			return model.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("model %q was not found in the discovered model list", trimmed)
-}
-
-func removeString(values []string, target string) []string {
-	filtered := values[:0]
-	for _, value := range values {
-		if value == target {
-			continue
-		}
-		filtered = append(filtered, value)
-	}
-	return filtered
-}
-
-func parseToolCallList(raw string) []string {
-	parts := strings.Split(strings.TrimSpace(raw), ",")
-	toolCalls := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, part := range parts {
-		toolName := strings.TrimSpace(part)
-		if toolName == "" {
-			continue
-		}
-		if _, exists := seen[toolName]; exists {
-			continue
-		}
-		seen[toolName] = struct{}{}
-		toolCalls = append(toolCalls, toolName)
-	}
-	return toolCalls
 }
 
 func init() {

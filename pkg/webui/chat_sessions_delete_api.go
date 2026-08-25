@@ -1,0 +1,364 @@
+//go:build !js
+
+// Package webui: chat session deletion (split from chat_sessions_api.go)
+package webui
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
+)
+
+// handleAPIChatSessionsDelete handles POST /api/chat-sessions/delete
+// Body: { "id": "chat-id" }
+func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if ws.rejectIfSharedMode(w) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var req struct {
+		ID             string `json:"id"`
+		RemoveWorktree bool   `json:"remove_worktree,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return
+	}
+
+	chatID := strings.TrimSpace(req.ID)
+	if chatID == "" {
+		writeJSONErr(w, http.StatusBadRequest, "chat_session_id_required", "Chat session ID is required")
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ensureDefaultChatSession()
+
+	if chatID == defaultChatID {
+		ws.mutex.Unlock()
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "Cannot delete the default chat session",
+			"code":  "cannot_delete_default",
+		})
+		return
+	}
+
+	if chatID == ctx.DefaultChatID {
+		ws.mutex.Unlock()
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "Cannot delete the currently active chat session. Switch to another chat first.",
+			"code":  "cannot_delete_active",
+		})
+		return
+	}
+
+	cs, exists := ctx.ChatSessions[chatID]
+	if !exists {
+		ws.mutex.Unlock()
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "Chat session not found",
+			"code":  "chat_session_not_found",
+			"id":    chatID,
+		})
+		return
+	}
+	// --- Atomic validation-and-delete region ---
+	//
+	// CRITICAL: ws.mutex is held from the initial lookup through the delete
+	// below. This prevents a concurrent handleAPIQuery from acquiring ws.mutex,
+	// seeing the chat as inactive, and starting a query on a chat that's being
+	// deleted.
+	//
+	// The cs.mu is only needed to read cs.ActiveQuery and cs.WorktreePath.
+	// Once we have those values, cs.mu can be released because ws.mutex
+	// prevents any concurrent setChatQueryActive from running (which is the
+	// only path that modifies cs.ActiveQuery).
+	//
+	// After confirming the chat is inactive, we set the top-level ActiveQuery
+	// flag to true BEFORE removing the chat from the map. This ensures that
+	// any concurrent query handler that subsequently acquires the lock sees
+	// hasActiveQueryForChat(chatID) == true (via the top-level fallback when
+	// the chat is absent from the map) and rejects. We reset the flag after
+	// releasing the lock so the window where ActiveQuery is spuriously true
+	// is bounded to the time between ws.mutex.Unlock() and the re-acquire.
+	cs.mu.Lock()
+	isActive := cs.ActiveQuery
+	worktreePath := cs.WorktreePath
+	deletedAgent := cs.Agent
+	cs.mu.Unlock()
+	if isActive {
+		ws.mutex.Unlock()
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "Cannot delete a chat session with an active query",
+			"code":  "chat_session_active_query",
+			"id":    chatID,
+		})
+		return
+	}
+
+	// Mark the chat as "being deleted" by setting the top-level ActiveQuery
+	// flag. This prevents a concurrent query handler from starting a query on
+	// this chat ID — hasActiveQueryForChat(chatID) falls back to
+	// ctx.ActiveQuery when the chat is absent from the map.
+	ctx.ActiveQuery = true
+	ctx.CurrentQuery = ""
+
+	workspaceRoot := ctx.WorkspaceRoot
+	// Tombstone the chat so a query arriving after the map removal (but
+	// before the ActiveQuery recompute below) cannot start on a deleted
+	// chat. Cleared when a new chat with this ID is created.
+	ctx.DeletedChats[chatID] = struct{}{}
+	delete(ctx.ChatSessions, chatID)
+	ws.mutex.Unlock()
+
+	// Reset the top-level ActiveQuery flag based on remaining chats.
+	// This must happen after releasing ws.mutex so that any concurrent query
+	// handler that runs during the window sees ActiveQuery == true and rejects.
+	ws.mutex.Lock()
+	ctx = ws.clientContexts[clientID]
+	if ctx != nil {
+		anyActive := false
+		for _, other := range ctx.ChatSessions {
+			other.mu.RLock()
+			if other.ActiveQuery {
+				anyActive = true
+				other.mu.RUnlock()
+				break
+			}
+			other.mu.RUnlock()
+		}
+		ctx.ActiveQuery = anyActive
+		if !anyActive {
+			ctx.CurrentQuery = ""
+		}
+	}
+	ws.mutex.Unlock()
+
+	// The deleted session's agent is unreachable from the server now, but its
+	// own goroutines keep it running until it is shut down explicitly.
+	// releaseAgents skips the shared-mode CLI agent, which the server does not
+	// own even when a chat session references it.
+	ws.releaseAgents("chat_session_deleted", deletedAgent)
+
+	ws.log().Info("deleted chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
+
+	// Safety check: verify no other chat session uses this worktree path
+	if req.RemoveWorktree && worktreePath != "" {
+		ws.mutex.RLock()
+		stillInUse := false
+		for _, other := range ctx.ChatSessions {
+			if other.getWorktreePath() == worktreePath {
+				stillInUse = true
+				break
+			}
+		}
+		ws.mutex.RUnlock()
+		if stillInUse {
+			worktreePath = "" // Clear to skip removal
+		}
+	}
+
+	// Optionally clean up the associated worktree
+	resp := map[string]interface{}{
+		"success":          true,
+		"message":          "Chat session deleted",
+		"id":               chatID,
+		"worktree_removed": false,
+		"worktree_error":   "",
+	}
+
+	if req.RemoveWorktree && worktreePath != "" {
+		absWorktree, absErr := filepath.Abs(worktreePath)
+		if absErr == nil {
+			absWorkspace, _ := filepath.Abs(workspaceRoot)
+			if absWorktree != absWorkspace {
+				removeCmd := ws.gitCommandForWorkspace(absWorkspace, "worktree", "remove", absWorktree)
+				removeOutput, removeErr := removeCmd.CombinedOutput()
+				if removeErr != nil {
+					ws.log().Error("failed to remove chat session worktree",
+						slog.String("worktree_path", absWorktree),
+						slog.Any("err", removeErr),
+						slog.String("output", string(removeOutput)))
+					resp["worktree_removed"] = false
+					resp["worktree_error"] = string(removeOutput)
+				} else {
+					ws.log().Info("removed chat session worktree", slog.String("worktree_path", absWorktree), slog.String("chat_id", chatID))
+					resp["worktree_removed"] = true
+				}
+			} else {
+				ws.log().Warn("skipping removal of current workspace", slog.String("worktree_path", absWorktree))
+				resp["worktree_error"] = "Cannot remove the current workspace"
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleAPIChatSessionsDeleteAll handles POST /api/chat-sessions/delete-all
+// Deletes all chat sessions except the default one, then sets the default session as active.
+func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if ws.rejectIfSharedMode(w) {
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ensureDefaultChatSession()
+
+	// Collect chat IDs to delete (non-default, non-active, non-active-query sessions)
+	chatIDsToDelete := make([]string, 0, len(ctx.ChatSessions))
+	for chatID, cs := range ctx.ChatSessions {
+		if chatID == defaultChatID {
+			continue // Never delete the default session
+		}
+		cs.mu.Lock()
+		isActive := cs.ActiveQuery
+		cs.mu.Unlock()
+		if isActive {
+			continue // Skip sessions with active queries
+		}
+		chatIDsToDelete = append(chatIDsToDelete, chatID)
+	}
+
+	// Delete all collected sessions, capturing their agents so they can be
+	// shut down after the lock is released — removing the map entry alone
+	// leaves each agent running its own background work indefinitely.
+	deletedCount := 0
+	var releasing []*agent.Agent
+	for _, chatID := range chatIDsToDelete {
+		if cs := ctx.ChatSessions[chatID]; cs != nil {
+			cs.mu.Lock()
+			if cs.Agent != nil {
+				releasing = append(releasing, cs.Agent)
+			}
+			cs.mu.Unlock()
+		}
+		delete(ctx.ChatSessions, chatID)
+		deletedCount++
+	}
+
+	// Set the default session as active
+	ctx.DefaultChatID = defaultChatID
+
+	// Update client-level agent reference to point to the default session's agent
+	defaultCS := ctx.ChatSessions[defaultChatID]
+	if defaultCS != nil {
+		defaultCS.mu.Lock()
+		if defaultCS.Agent != nil {
+			ctx.Agent = defaultCS.Agent
+		} else {
+			ctx.Agent = nil
+		}
+		// Sync the top-level agent state
+		snapshot := defaultCS.AgentState
+		if len(snapshot) == 0 {
+			snapshot = emptyAgentStateSnapshot()
+		}
+		currentSessionID := defaultCS.CurrentSessionID
+		wtPath := defaultCS.WorktreePath
+		defaultCS.mu.Unlock()
+
+		ctx.AgentState = append([]byte(nil), snapshot...)
+		ctx.CurrentSessionID = currentSessionID
+
+		// Switch workspace root to the default chat's worktree if it has one
+		if wtPath != "" {
+			ctx.WorkspaceRoot = wtPath
+			if clientID == defaultWebClientID {
+				ws.workspaceRoot = wtPath
+			}
+		}
+	}
+
+	ws.mutex.Unlock()
+
+	ws.releaseAgents("chat_sessions_deleted_all", releasing...)
+
+	ws.log().Info("deleted chat sessions and switched to default", slog.Int("deleted_count", deletedCount), slog.String("client_id", clientID), slog.String("default_chat_id", defaultChatID))
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":        "Chat sessions deleted",
+		"deleted_count":  deletedCount,
+		"active_chat_id": defaultChatID,
+	})
+}
+
+// syncAgentStateForClientWithChat is like syncAgentStateForClient but targets
+// a specific chat session's state instead of the client's top-level state.
+func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID string) error {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = defaultWebClientID
+	}
+	if chatID == "" {
+		chatID = defaultChatID
+	}
+
+	// Try to get the chat-specific agent first.
+	chatAgent, err := ws.getChatAgent(clientID, chatID)
+	if err == nil && chatAgent != nil {
+		// ExportState can be slow for large conversations (JSON marshal of
+		// the full message history). Do it OUTSIDE ws.mutex so other HTTP
+		// requests and WebSocket read goroutines aren't blocked.
+		snapshot, exportErr := chatAgent.ExportState()
+		if exportErr != nil {
+			return fmt.Errorf("export chat state: %w", exportErr)
+		}
+		ws.mutex.Lock()
+		defer ws.mutex.Unlock()
+		ctx := ws.getOrCreateClientContextLocked(clientID)
+		ctx.setChatSessionState(chatID, snapshot)
+		ctx.LastSeenAt = time.Now()
+		if clientID == defaultWebClientID {
+			ws.workspaceRoot = ctx.WorkspaceRoot
+		}
+		return nil
+	}
+
+	// Fallback to client-level agent (e.g. chat sessions not initialized).
+	agentInst, err := ws.getClientAgent(clientID)
+	if err != nil {
+		// If no provider is configured, that's expected — just return.
+		if errors.Is(err, ErrNoProviderConfigured) {
+			return nil
+		}
+		return fmt.Errorf("get client agent for chat state sync: %w", err)
+	}
+
+	// Same pattern: export outside the lock, store inside.
+	snapshot, err := agentInst.ExportState()
+	if err != nil {
+		return fmt.Errorf("export agent state for chat: %w", err)
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.setChatSessionState(chatID, snapshot)
+	ctx.LastSeenAt = time.Now()
+	if clientID == defaultWebClientID {
+		ws.workspaceRoot = ctx.WorkspaceRoot
+	}
+	return nil
+}

@@ -4,14 +4,18 @@
  * Prettier 3.x is ESM-only and triggers ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG
  * inside react-scripts (Jest). We mock Prettier to test all the surrounding logic
  * deterministically, which covers extension detection, size limits, error fallback, etc.
+ *
+ * The formatter imports from 'prettier/standalone' (the browser bundle used by Vite,
+ * which requires explicit `plugins`). The mock must target that module ID so the
+ * plugin-array assertions below exercise the real call shape.
  */
 
-vi.mock('prettier', () => ({
+vi.mock('prettier/standalone', () => ({
   format: vi.fn(),
   __esModule: true,
 }));
 
-import { format as _mockedFormat } from 'prettier';
+import { format as _mockedFormat } from 'prettier/standalone';
 import {
   formatCode,
   formatCodeWithConfigDiscovery,
@@ -180,14 +184,17 @@ describe('formatCode — Prettier options', () => {
   it('calls Prettier with babel parser for .js files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'app.js');
-    expect(mockedFormat).toHaveBeenCalledWith('input', {
-      parser: 'babel',
-      semi: true,
-      singleQuote: true,
-      tabWidth: 2,
-      trailingComma: 'all',
-      printWidth: 80,
-    });
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        semi: true,
+        singleQuote: true,
+        tabWidth: 2,
+        trailingComma: 'all',
+        printWidth: 80,
+      }),
+    );
   });
 
   it('calls Prettier with typescript parser for .ts files', async () => {
@@ -281,14 +288,52 @@ describe('formatCode — Prettier options', () => {
   it('always includes standard formatting options', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'file.ts');
-    expect(mockedFormat).toHaveBeenCalledWith('input', {
-      parser: 'typescript',
-      semi: true,
-      singleQuote: true,
-      tabWidth: 2,
-      trailingComma: 'all',
-      printWidth: 80,
-    });
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+        semi: true,
+        singleQuote: true,
+        tabWidth: 2,
+        trailingComma: 'all',
+        printWidth: 80,
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCode — standalone plugin loading (browser bundle requirement)
+// ---------------------------------------------------------------------------
+
+describe('formatCode — standalone plugins', () => {
+  it('passes the required Prettier plugins for the standalone bundle', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCode('{"a":1}', 'data.json');
+
+    const options = mockedFormat.mock.calls[0][1] as { plugins?: unknown[] };
+    expect(Array.isArray(options.plugins)).toBe(true);
+    // babel, estree, typescript, postcss, html, markdown, yaml, graphql
+    expect(options.plugins!.length).toBe(8);
+  });
+
+  it('includes plugins even when user config is provided', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    await formatCode('{"a":1}', 'data.json', undefined, { tabWidth: 4 });
+
+    const options = mockedFormat.mock.calls[0][1] as { plugins?: unknown[] };
+    expect(options.plugins!.length).toBe(8);
+    expect(options).toMatchObject({ tabWidth: 4 });
+  });
+
+  it('keeps user-provided plugins alongside the required ones', async () => {
+    mockedFormat.mockResolvedValue('formatted');
+    const userPlugin = { parsers: { custom: {} } };
+    await formatCode('{"a":1}', 'data.json', undefined, { plugins: [userPlugin] });
+
+    const options = mockedFormat.mock.calls[0][1] as { plugins?: unknown[] };
+    expect(options.plugins!.length).toBe(9);
+    expect(options.plugins).toContain(userPlugin);
   });
 });
 

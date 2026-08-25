@@ -24,10 +24,10 @@ import (
 // optional base64-encoded content so the replica is a fully self-contained
 // mirror of OPFS state.
 type replicaFileEntry struct {
-	Path     string                // file path (key in the map)
+	Path     string // file path (key in the map)
 	Metadata agent.WorkspaceFileMetadata
-	Size     int64                 // file size in bytes
-	Content  string                // base64-encoded content (optional)
+	Size     int64  // file size in bytes
+	Content  string // base64-encoded content (optional)
 }
 
 var (
@@ -69,8 +69,8 @@ func opfsReplicaJSFuncs() map[string]interface{} {
 		"getHydrateProgress":     js.FuncOf(getHydrateProgressFunc),
 
 		// SP-046 sync recovery (server-side failure recovery paths)
-		"initSyncRecovery":       js.FuncOf(initSyncRecoveryFunc),
-		"handleSyncReconcile":    js.FuncOf(handleSyncReconcileFunc),
+		"initSyncRecovery":        js.FuncOf(initSyncRecoveryFunc),
+		"handleSyncReconcile":     js.FuncOf(handleSyncReconcileFunc),
 		"recoverFromBrowserCrash": js.FuncOf(recoverFromBrowserCrashFunc),
 	}
 }
@@ -81,8 +81,8 @@ func opfsReplicaJSFuncs() map[string]interface{} {
 // The browser serialises the path alongside WorkspaceFileMetadata because
 // the struct itself carries no path.
 type manifestEntry struct {
-	Path     string `json:"path"`
-	Size     int64  `json:"size,omitempty"`
+	Path string `json:"path"`
+	Size int64  `json:"size,omitempty"`
 	agent.WorkspaceFileMetadata
 }
 
@@ -361,8 +361,8 @@ func processHydrateManifestFunc(_ js.Value, args []js.Value) interface{} {
 
 	return map[string]interface{}{
 		"ok":          true,
-		"total_files":  data.TotalFiles,
-		"total_size":   data.TotalSize,
+		"total_files": data.TotalFiles,
+		"total_size":  data.TotalSize,
 	}
 }
 
@@ -426,8 +426,8 @@ func processHydrateFileFunc(_ js.Value, args []js.Value) interface{} {
 	hydrateProgressMu.Unlock()
 
 	return map[string]interface{}{
-		"ok":          true,
-		"path":        data.Path,
+		"ok":           true,
+		"path":         data.Path,
 		"progress_pct": data.ProgressPct,
 	}
 }
@@ -466,7 +466,7 @@ func processHydrateCompleteFunc(_ js.Value, args []js.Value) interface{} {
 	opfsReplicaMu.Unlock()
 
 	return map[string]interface{}{
-		"ok":               true,
+		"ok":                true,
 		"files_transferred": data.FilesTransferred,
 		"total_bytes":       data.TotalBytes,
 		"duration_ms":       data.DurationMs,
@@ -488,13 +488,13 @@ func getHydrateProgressFunc(_ js.Value, args []js.Value) interface{} {
 	}
 
 	return map[string]interface{}{
-		"ok":               true,
-		"total_files":      hydrateProgress.TotalFiles,
-		"total_size":       hydrateProgress.TotalSize,
-		"files_received":   hydrateProgress.FilesReceived,
-		"bytes_received":   hydrateProgress.BytesReceived,
-		"progress_pct":     progressPct,
-		"completed":        hydrateProgress.Completed,
+		"ok":                true,
+		"total_files":       hydrateProgress.TotalFiles,
+		"total_size":        hydrateProgress.TotalSize,
+		"files_received":    hydrateProgress.FilesReceived,
+		"bytes_received":    hydrateProgress.BytesReceived,
+		"progress_pct":      progressPct,
+		"completed":         hydrateProgress.Completed,
 		"estimated_seconds": hydrateProgress.EstimatedSeconds,
 	}
 }

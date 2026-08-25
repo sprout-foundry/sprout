@@ -14,6 +14,7 @@ import { computeModifiedLines } from './unsavedLineHighlight';
 vi.mock('@codemirror/state', () => ({
   StateEffect: { define: vi.fn() },
   StateField: { define: vi.fn() },
+  Annotation: { define: vi.fn() },
 }));
 vi.mock('@codemirror/view', () => ({
   Decoration: {

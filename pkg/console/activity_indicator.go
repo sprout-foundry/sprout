@@ -36,6 +36,16 @@ type ActivityIndicator struct {
 	startedAt time.Time
 	stopCh    chan struct{}
 	doneCh    chan struct{}
+
+	// Static text mode (SP-056). When isStatic is true, the indicator row
+	// shows a fixed line instead of the animated spinner. SetStatic() switches
+	// into this mode; ClearStatic() returns to normal.
+	isStatic  bool
+	staticMsg string
+
+	// widthOverride forces a terminal width for testing (0 = auto-detect via
+	// term.GetSize on the underlying *os.File, falling back to 80).
+	widthOverride int
 }
 
 // NewActivityIndicator constructs an indicator that writes to w. If w is
@@ -69,9 +79,13 @@ func (a *ActivityIndicator) Start(msg string) {
 	msg = sanitizeLine(msg)
 	if a.active {
 		a.msg = msg
+		a.startedAt = time.Now()
 		a.mu.Unlock()
 		return
 	}
+	// Clear any lingering static text before starting the spinner.
+	a.isStatic = false
+	a.staticMsg = ""
 	a.active = true
 	a.msg = msg
 	a.startedAt = time.Now()
@@ -97,26 +111,72 @@ func (a *ActivityIndicator) Update(msg string) {
 }
 
 // Stop halts the ticker and erases the spinner line. Idempotent — safe to
-// call when the indicator is already stopped.
+// call when the indicator is already stopped. When the indicator is already
+// fully idle (no spinner, no static text), Stop is a true no-op and writes
+// nothing to the terminal, so redundant calls from hot loops (e.g. the
+// streaming callback calling Stop on every prose chunk) never clobber the
+// current row. Never blocks for more than 500ms — if the render goroutine
+// is stuck (e.g., outputMu held by a blocked write on a saturated PTY),
+// Stop returns without waiting for it, avoiding a cascade deadlock that
+// freezes the entire terminal.
 func (a *ActivityIndicator) Stop() {
 	if a == nil || !a.isTTY {
 		return
 	}
 	a.mu.Lock()
-	if !a.active {
+	hadStatic := a.isStatic
+	if a.isStatic {
+		a.isStatic = false
+		a.staticMsg = ""
+	}
+	stoppingActive := a.active
+	// When fully idle (no spinner running, no static text), there is
+	// nothing on the indicator row to erase. Emitting \r\033[K in this
+	// state would clear whatever NOW occupies the row — typically
+	// streaming assistant prose, since the streaming callback calls
+	// Stop() on every chunk. Returning early prevents the
+	// "word-by-word deleting" visual effect.
+	if !stoppingActive && !hadStatic {
 		a.mu.Unlock()
 		return
 	}
-	a.active = false
-	stopCh := a.stopCh
-	doneCh := a.doneCh
-	a.mu.Unlock()
+	if stoppingActive {
+		a.active = false
+		stopCh := a.stopCh
+		doneCh := a.doneCh
+		a.mu.Unlock()
 
-	close(stopCh)
-	<-doneCh
+		close(stopCh)
+
+		// Wait for the render goroutine to acknowledge stop, but with a timeout.
+		// The render goroutine may be stuck on LockOutput() if another goroutine
+		// is blocked holding outputMu during a stuck I/O write (PTY buffer full,
+		// NFS hang, etc.). Waiting forever here cascades into a full terminal
+		// freeze — the subscriber goroutine that called Stop is also the one
+		// processing ToolEnd events, so a frozen Stop means no more events are
+		// processed and every subsequent tool's spinner spins forever.
+		select {
+		case <-doneCh:
+		case <-time.After(500 * time.Millisecond):
+			// Render goroutine is stuck; proceed without it. It will exit on
+			// its own once LockOutput unblocks (or the process exits).
+		}
+	} else {
+		a.mu.Unlock()
+	}
 
 	// \r returns the cursor to column 0; \033[K clears to end-of-line.
-	fmt.Fprint(a.w, "\r\033[K")
+	// We only reach here when a spinner or static text was actually on
+	// the row. Use TryLockOutput to avoid re-entering the same deadlock
+	// that may have trapped the render goroutine.
+	if TryLockOutput() {
+		fmt.Fprint(a.w, "\r\033[K")
+		UnlockOutput()
+	} else {
+		// Best-effort clear without the lock — the worst case is a
+		// momentary visual glitch, which is far better than a deadlock.
+		fmt.Fprint(a.w, "\r\033[K")
+	}
 }
 
 // Replace atomically stops the spinner and prints line in its place,
@@ -169,17 +229,21 @@ func (a *ActivityIndicator) ReplaceLastN(line string, n int) {
 		n = 1
 	}
 	// Serialize the cursor-positioning writes so they can't interleave
-	// with a concurrent footer draw or InputReader render. The N row
-	// walks use \033[F (cursor up) + \033[K (clear line) which are only
-	// safe when no other chrome is writing to the terminal.
-	LockOutput()
+	// with a concurrent footer draw or InputReader render. Use TryLock
+	// to avoid the cascade deadlock (see render/Stop comments).
+	if !TryLockOutput() {
+		// Fallback: print without cursor manipulation. Less pretty but
+		// never deadlocks.
+		fmt.Fprintln(a.w, line)
+		return
+	}
+	defer UnlockOutput()
 	// \033[F moves cursor to start of previous line; \033[K clears from
 	// cursor to end of line. Repeat n times to walk up and erase.
 	for i := 0; i < n; i++ {
 		fmt.Fprint(a.w, "\033[F\033[K")
 	}
 	fmt.Fprintln(a.w, line)
-	UnlockOutput()
 }
 
 // Elapsed returns how long the current spinner has been running. Returns
@@ -206,10 +270,80 @@ func (a *ActivityIndicator) IsActive() bool {
 	return a.active
 }
 
+// IsTTY reports whether the indicator's writer is a TTY.
+func (a *ActivityIndicator) IsTTY() bool {
+	if a == nil {
+		return false
+	}
+	return a.isTTY
+}
+
+// SetStatic pins a non-animated line to the indicator row. It stops any
+// running spinner and replaces it with static text. The text updates in
+// place on subsequent calls until ClearStatic is used. No-op when not a TTY.
+func (a *ActivityIndicator) SetStatic(line string) {
+	if a == nil || !a.isTTY {
+		return
+	}
+	a.mu.Lock()
+	// Stop spinner goroutine if active (same pattern as Stop()).
+	if a.active {
+		a.active = false
+		stopCh := a.stopCh
+		doneCh := a.doneCh
+		a.mu.Unlock()
+		close(stopCh)
+		select {
+		case <-doneCh:
+		case <-time.After(500 * time.Millisecond):
+		}
+		a.mu.Lock()
+	}
+	a.isStatic = true
+	a.staticMsg = line
+	a.mu.Unlock()
+
+	// Render static line (same pattern as render, but no spinner/elapsed).
+	// Truncate to terminal width so a long static line doesn't wrap to a
+	// second physical row (same wrap bug as the spinner).
+	if TryLockOutput() {
+		width := a.terminalWidth()
+		fmt.Fprint(a.w, "\r\033[K"+truncateLinePreservingANSI(sanitizeLine(line), width))
+		UnlockOutput()
+	}
+}
+
+// ClearStatic removes the static text from the indicator row, clearing the line.
+// No-op when not a TTY or when no static text is set.
+func (a *ActivityIndicator) ClearStatic() {
+	if a == nil || !a.isTTY {
+		return
+	}
+	a.mu.Lock()
+	if !a.isStatic {
+		a.mu.Unlock()
+		return
+	}
+	a.isStatic = false
+	a.staticMsg = ""
+	a.mu.Unlock()
+
+	if TryLockOutput() {
+		fmt.Fprint(a.w, "\r\033[K")
+		UnlockOutput()
+	}
+}
+
 func (a *ActivityIndicator) run() {
+	// Capture channels at spawn time. If Stop times out and Start creates new
+	// channels before this goroutine exits, accessing a.stopCh/a.doneCh via
+	// the struct would race with the new goroutine and double-close doneCh.
+	stopCh := a.stopCh
+	doneCh := a.doneCh
+
 	ticker := time.NewTicker(spinnerCadence)
 	defer ticker.Stop()
-	defer close(a.doneCh)
+	defer close(doneCh)
 
 	// Render the first frame immediately so the user sees something within
 	// 0ms rather than waiting for the first tick.
@@ -218,7 +352,7 @@ func (a *ActivityIndicator) run() {
 
 	for {
 		select {
-		case <-a.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			a.render(frame)
@@ -237,13 +371,57 @@ func (a *ActivityIndicator) render(frame int) {
 	elapsed := time.Since(a.startedAt)
 	a.mu.Unlock()
 	// Serialize against InputReader render, status footer draw, and other
-	// console chrome. Without LockOutput the spinner's cursor-positioning
-	// sequences (\r\033[K) can interleave with a footer Refresh or a
-	// keystroke render, displacing the cursor — the "characters look
-	// dropped" bug. The lock is held only for the single Fprintf write.
-	LockOutput()
-	fmt.Fprintf(a.w, "\r\033[K%s %s (%.1fs)", spinnerFrames[frame], msg, elapsed.Seconds())
+	// console chrome. Use TryLock instead of blocking Lock to avoid the
+	// cascade deadlock: if another goroutine is holding outputMu during a
+	// blocked I/O write (PTY buffer full, NFS hang), blocking here would
+	// trap the render goroutine so Stop()'s doneCh never fires, which in
+	// turn freezes the event subscriber (which calls Stop from ToolEnd).
+	// Skipping a single frame is harmless; the spinner resumes next tick.
+	if !TryLockOutput() {
+		return
+	}
+	// Truncate msg so the full rendered line (spinner + space + msg + elapsed
+	// suffix) fits within one terminal row. Without this, a long message wraps
+	// to a second physical line; on the next tick \r only returns the cursor to
+	// column 0 of the BOTTOM (wrapped) line, leaving stale frames frozen above.
+	width := a.terminalWidth()
+	suffix := fmt.Sprintf(" (%.1fs)", elapsed.Seconds())
+	// Fixed overhead: spinner frame (1 col) + space (1 col).
+	const overhead = 2
+	// Progressive degradation so the rendered line never exceeds width:
+	//   width >= overhead + suffix + 1  → spinner + msg + elapsed
+	//   width >= overhead + 1           → spinner + msg (drop elapsed)
+	//   width >= 1                      → spinner only
+	// Each branch emits exactly one row so \r on the next tick clears it.
+	switch {
+	case width >= overhead+displayWidth(suffix)+1:
+		msgBudget := width - overhead - displayWidth(suffix)
+		msg = truncateLinePreservingANSI(msg, msgBudget)
+		fmt.Fprintf(a.w, "\r\033[K%s %s%s", spinnerFrames[frame], msg, suffix)
+	case width >= overhead+1:
+		msgBudget := width - overhead
+		msg = truncateLinePreservingANSI(msg, msgBudget)
+		fmt.Fprintf(a.w, "\r\033[K%s %s", spinnerFrames[frame], msg)
+	default:
+		fmt.Fprintf(a.w, "\r\033[K%s", spinnerFrames[frame])
+	}
 	UnlockOutput()
+}
+
+// terminalWidth returns the column count to budget the rendered line against.
+// It uses widthOverride when set (mainly for tests), otherwise queries the
+// underlying *os.File's fd via term.GetSize, falling back to 80 when the
+// writer isn't a *os.File or the size can't be determined.
+func (a *ActivityIndicator) terminalWidth() int {
+	if a.widthOverride > 0 {
+		return a.widthOverride
+	}
+	if f, ok := a.w.(*os.File); ok {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 80
 }
 
 // sanitizeLine strips newlines and carriage returns so the spinner always

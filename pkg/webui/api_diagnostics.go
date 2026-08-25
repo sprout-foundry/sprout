@@ -32,17 +32,17 @@ type frontendDiagnostic struct {
 
 // diagnosticsResponse is the JSON response for POST /api/diagnostics.
 type diagnosticsResponse struct {
-	Message      string               `json:"message"`
-	Path         string               `json:"path"`
-	Diagnostics  []frontendDiagnostic `json:"diagnostics"`
-	Version      string               `json:"version"`
+	Message     string               `json:"message"`
+	Path        string               `json:"path"`
+	Diagnostics []frontendDiagnostic `json:"diagnostics"`
+	Version     string               `json:"version"`
 }
 
 // handleAPIDiagnostics handles POST /api/diagnostics.
 // It validates Go source content and returns diagnostics for the frontend.
 func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -50,13 +50,13 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 
 	var req diagnosticsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
 	req.Path = strings.TrimSpace(req.Path)
 	if req.Path == "" {
-		http.Error(w, "File path is required", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "file_path_required", "File path is required")
 		return
 	}
 
@@ -64,11 +64,11 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	canonical, err := canonicalizePath(req.Path, workspaceRoot, true)
 	if err != nil {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
 	if !isWithinWorkspace(canonical, workspaceRoot) {
-		http.Error(w, "Path is outside workspace", http.StatusForbidden)
+		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
 		return
 	}
 	filePath := canonical
@@ -101,8 +101,7 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 
 // writeDiagnosticsResponse writes a diagnostics API response.
 func (ws *ReactWebServer) writeDiagnosticsResponse(w http.ResponseWriter, path string, diags []frontendDiagnostic) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(diagnosticsResponse{
+	writeJSON(w, http.StatusOK, diagnosticsResponse{
 		Message:     "ok",
 		Path:        path,
 		Diagnostics: diags,
@@ -126,13 +125,13 @@ func validationToFrontend(d validation.Diagnostic, content string) frontendDiagn
 
 // diagnosticToOffsets computes byte-offset from/to for a validation.Diagnostic.
 //
-//	- For syntax errors (source = "gofmt"), the error message typically contains
-//	  line/column info like "<standard input>:42:5: expected ...". We parse
-//	  the line and column, then convert to byte offsets.
-//	- For import issues where line and column are both 1, we set from=0,
-//	  to=len(content) to span the entire file (the import system doesn't
-//	  provide specific locations).
-//	- For diagnostics with valid line/column > 1, convert directly.
+//   - For syntax errors (source = "gofmt"), the error message typically contains
+//     line/column info like "<standard input>:42:5: expected ...". We parse
+//     the line and column, then convert to byte offsets.
+//   - For import issues where line and column are both 1, we set from=0,
+//     to=len(content) to span the entire file (the import system doesn't
+//     provide specific locations).
+//   - For diagnostics with valid line/column > 1, convert directly.
 func diagnosticToOffsets(d validation.Diagnostic, content string) (int, int) {
 	// Import issues: span the entire file.
 	if d.Line == 1 && d.Column == 1 && d.Source == "goimports" {

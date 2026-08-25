@@ -39,11 +39,10 @@ func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 		// Use a relaxed default config — auto-build off, since the host page
 		// drives indexing explicitly via buildSemanticIndex.
 		cfg := &configuration.EmbeddingIndexConfig{
-			Enabled:             true,
-			AutoIndex:           false,
-			SimilarityThreshold: 0.5,
-			MaxResults:          10,
+			MaxResults: 10,
 		}
+		cfg.SetEnabled(true)
+		cfg.SetAutoIndex(false)
 		embedMgr = embedding.NewEmbeddingManager(cfg, cwd)
 		// Eagerly Init so the JSONL store on MEMFS is created.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -111,7 +110,7 @@ func getSemanticStatusFunc(_ js.Value, _ []js.Value) interface{} {
 func searchSemanticFunc(_ js.Value, args []js.Value) interface{} {
 	query := argString(args, 0, "")
 	topK := argInt(args, 1, 5)
-	threshold := argFloat32(args, 2, 0.0)
+	threshold := argFloat32(args, 2, embedding.DefaultCodeModelSemanticSearchThreshold)
 	return asPromise(func(ctx context.Context) (interface{}, error) {
 		if query == "" {
 			return nil, fmt.Errorf("query is required")
@@ -231,7 +230,7 @@ func deleteMemoryFunc(_ js.Value, args []js.Value) interface{} {
 func searchMemoriesFunc(_ js.Value, args []js.Value) interface{} {
 	query := argString(args, 0, "")
 	topK := argInt(args, 1, 5)
-	threshold := argFloat32(args, 2, 0.5)
+	threshold := argFloat32(args, 2, embedding.DefaultConversationSearchThreshold)
 	return asPromise(func(ctx context.Context) (interface{}, error) {
 		if query == "" {
 			return nil, fmt.Errorf("query is required")

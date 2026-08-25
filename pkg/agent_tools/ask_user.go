@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+
+	"golang.org/x/term"
 )
 
 // AskUserOption is a single selectable choice in a structured ask_user
@@ -49,7 +52,7 @@ type AskUserManager struct {
 	timeout time.Duration
 }
 
-const DefaultAskUserTimeout = 10 * time.Minute
+const DefaultAskUserTimeout = 30 * time.Minute
 
 var (
 	globalAskUserManager   *AskUserManager
@@ -85,37 +88,7 @@ func NewAskUserManager() *AskUserManager {
 var (
 	nextAskReqID   int64
 	nextAskReqIDMu sync.Mutex
-
-	// askUserHistory is the process-wide history of ask_user responses,
-	// shared across all InputReader instances created for ask_user
-	// prompts so Ctrl-R / up-arrow recall works between calls.
-	askUserHistory   []string
-	askUserHistoryMu sync.Mutex
 )
-
-// globalAskUserHistory returns a copy of the shared ask_user history
-// for InputReader.SetHistory.
-func globalAskUserHistory() []string {
-	askUserHistoryMu.Lock()
-	defer askUserHistoryMu.Unlock()
-	out := make([]string, len(askUserHistory))
-	copy(out, askUserHistory)
-	return out
-}
-
-// appendGlobalAskUserHistory adds a response to the shared history,
-// capped at maxHistoryEntries (matching InputReader's cap).
-func appendGlobalAskUserHistory(answer string) {
-	askUserHistoryMu.Lock()
-	defer askUserHistoryMu.Unlock()
-	if len(askUserHistory) > 0 && askUserHistory[len(askUserHistory)-1] == answer {
-		return // skip consecutive duplicates
-	}
-	askUserHistory = append(askUserHistory, answer)
-	if over := len(askUserHistory) - 100; over > 0 {
-		askUserHistory = askUserHistory[over:]
-	}
-}
 
 func generateAskUserRequestID() string {
 	nextAskReqIDMu.Lock()
@@ -168,14 +141,17 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 	select {
 	case result, ok := <-responseCh:
 		if !ok {
+			eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 			return "", fmt.Errorf("response channel closed")
 		}
 		return result, nil
 	case <-timer.C:
 		log.Printf("Ask user request %s timed out after %v", requestID, timeout)
+		eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 		return "", fmt.Errorf("user did not respond within %v", timeout)
 	case <-ctx.Done():
 		log.Printf("Ask user request %s cancelled: %v", requestID, ctx.Err())
+		eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserCancelledEvent(requestID, clientID))
 		return "", fmt.Errorf("ask_user cancelled: %w", ctx.Err())
 	}
 }
@@ -211,26 +187,39 @@ func (m *AskUserManager) SetTimeout(d time.Duration) {
 	}
 }
 
-// stdinIsTTY reports whether os.Stdin appears to be a terminal we can
-// read from interactively. Returns false when stdin is closed, redirected,
-// or otherwise not a character device — in those cases AskUser would
-// hit EOF immediately and we'd rather surface ErrAskUserNoChannel.
+// stdinIsTTY reports whether os.Stdin is connected to an interactive
+// terminal. Uses the same ioctl-based check (golang.org/x/term.IsTerminal)
+// as the security approval prompt and the rest of the agent so the two
+// code paths never disagree about whether a TTY is available.
+//
+// Previously this used os.Stdin.Stat() + os.ModeCharDevice, which can
+// diverge from the ioctl result in certain daemon/pipe configurations —
+// causing the security dialog to render while ask_user claimed no input
+// channel existed.
 func stdinIsTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // AskUser prompts the user with a question and reads input from stdin.
 // Renders options as a numbered list when present and accepts either an
 // index, the option label, or the option value as the response.
 //
+// On a TTY with single-select options (MultiSelect == false), the
+// options are rendered as an arrow-key picker (console.SelectList)
+// with a trailing "Type your own answer…" item that falls through to
+// the legacy freeform input reader. Multi-select prompts and prompts
+// on a non-TTY stdin fall back to the numbered list + freeform text
+// path so the tool remains scriptable.
+//
+// The context governs cancellation: when ctx is cancelled (tool-execution
+// timeout, interrupt, etc.) the function returns ctx.Err() immediately
+// so the deferred terminal-state restoration hooks fire and the caller
+// gets a clean error instead of silently swallowing the timeout.
+//
 // Returns ErrAskUserNoChannel if stdin is not a TTY (background daemon,
 // closed stdin, piped) so callers can distinguish "no input channel"
 // from a transient I/O error.
-func AskUser(req AskUserRequest) (string, error) {
+func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	if strings.TrimSpace(req.Question) == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
@@ -242,55 +231,141 @@ func AskUser(req AskUserRequest) (string, error) {
 	clihooks.SuspendIndicator()
 	// SP-057 follow-up: pause the SteerInputReader so it releases stdin
 	// back to cooked mode. The ask_user tool fires mid-turn, so without
-	// this the InputReader would hit EOF immediately (the steer reader
-	// is consuming raw-mode stdin) and the tool would silently return
-	// an empty answer.
+	// this the bufio.Reader below would hit EOF immediately (the steer
+	// reader is consuming raw-mode stdin) and the tool would silently
+	// return an empty answer.
 	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
 	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
+
+	// TTY single-select path: use the arrow-key picker instead of the
+	// numbered list. We only branch here when the input channel is a
+	// real TTY AND we're not in multi-select mode (SelectList doesn't
+	// support multi-select, and the legacy "1,3" comma-list text input
+	// remains the canonical path for that case).
+	if len(req.Options) > 0 && !req.MultiSelect {
+		return runAskUserSelectList(ctx, req)
+	}
 
 	renderCLIPrompt(os.Stdout, req)
 
-	// Use the shared InputReader for full editing parity with the REPL
-	// prompt: arrow keys, bracketed paste (with image detection + smart-
-	// save), Ctrl-R search, Ctrl-X Ctrl-E editor, UTF-8 aware editing.
-	// InputReader.ReadLine handles non-TTY fallback internally.
-	prompt := "> "
-	if req.Default != "" {
-		prompt = fmt.Sprintf("> [default: %s] ", req.Default)
-	}
-	inputReader := console.NewInputReader(prompt)
-	inputReader.SetHistory(globalAskUserHistory())
+	reader := bufio.NewReader(os.Stdin)
 
-	answer, err := inputReader.ReadLine()
+	if len(req.Options) == 0 {
+		// Freeform mode: read until a blank line (double Enter) or EOF.
+		// This allows pasting multiline text — a single newline between
+		// pasted lines is preserved; the user submits by pressing Enter
+		// on an empty line.
+		answer, err := readFreeformInputCtx(ctx, reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return "", err
+			}
+			return "", fmt.Errorf("read user input: %w", err)
+		}
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+
+	// Option mode: single line is sufficient.
+	answer, err := readLineCtx(ctx, reader)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return "", ErrAskUserNoChannel
 		}
-		if err.Error() == "interrupted" {
-			return "", fmt.Errorf("user interrupted")
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
 		}
 		return "", fmt.Errorf("read user input: %w", err)
 	}
 	answer = strings.TrimSpace(answer)
 
-	if answer == "" && req.Default != "" {
-		return req.Default, nil
+	resolved, ok := resolveCLIOptionAnswer(answer, req)
+	if !ok {
+		return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
 	}
+	return resolved, nil
+}
 
-	if len(req.Options) > 0 {
-		resolved, ok := resolveCLIOptionAnswer(answer, req)
-		if !ok {
-			return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
+// readFreeformInput reads lines from the reader until a blank line is
+// encountered (the user pressed Enter on an empty line) or EOF is reached.
+// Consecutive newlines within pasted content are preserved — only a blank
+// line at the *end* terminates input. The returned string is trimmed of
+// trailing whitespace but internal newlines are kept intact.
+func readFreeformInput(reader *bufio.Reader) (string, error) {
+	var lines []string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// EOF counts as the terminator — return whatever we have.
+				trimmed := strings.TrimRight(line, "\n\r")
+				if trimmed != "" {
+					lines = append(lines, trimmed)
+				}
+				return strings.Join(lines, "\n"), nil
+			}
+			return "", err
 		}
-		answer = resolved
+		trimmed := strings.TrimRight(line, "\n\r")
+		if trimmed == "" && len(lines) > 0 {
+			// Blank line signals end of input (but only if we already
+			// have content — an immediate blank returns empty string).
+			return strings.Join(lines, "\n"), nil
+		}
+		lines = append(lines, trimmed)
 	}
+}
 
-	// Persist non-empty answers to the shared history.
-	if answer != "" {
-		appendGlobalAskUserHistory(answer)
+// readFreeformInputCtx is the context-aware variant of readFreeformInput.
+// It spawns a goroutine to perform the blocking stdin read and selects
+// on ctx.Done() so a tool-execution timeout or interrupt cancels the
+// read cleanly. The goroutine leaks on ctx cancellation (the blocked
+// syscall won't return until the user types something or stdin closes),
+// but this is acceptable: the agent process owns stdin and the next
+// reader will consume the stray input.
+func readFreeformInputCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
+	type result struct {
+		answer string
+		err    error
 	}
+	resultCh := make(chan result, 1)
+	go func() {
+		answer, err := readFreeformInput(reader)
+		resultCh <- result{answer, err}
+	}()
+	select {
+	case r := <-resultCh:
+		return r.answer, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
 
-	return answer, nil
+// readLineCtx reads a single line from reader, cancelling on ctx.Done().
+// Same goroutine-leak tradeoff as readFreeformInputCtx.
+func readLineCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
+	type result struct {
+		line string
+		err  error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		line, err := reader.ReadString('\n')
+		resultCh <- result{line, err}
+	}()
+	select {
+	case r := <-resultCh:
+		return r.line, r.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 }
 
 // renderCLIPrompt writes the question and (optionally) the numbered
@@ -327,9 +402,125 @@ func renderCLIPrompt(w io.Writer, req AskUserRequest) {
 		}
 	}
 	fmt.Fprintln(w, bar)
-	// The "> " prompt is rendered by InputReader.ReadLine — it handles
-	// cursor positioning and raw-mode display. Don't print it here or
-	// it would double-render.
+	if len(req.Options) == 0 {
+		if req.Default != "" {
+			fmt.Fprintf(w, "> [default: %s] (Enter blank line to submit)\n", req.Default)
+		} else {
+			fmt.Fprintln(w, "> (Enter blank line to submit)")
+		}
+	} else if req.Default != "" {
+		fmt.Fprintf(w, "> [default: %s] ", req.Default)
+	} else {
+		fmt.Fprint(w, "> ")
+	}
+}
+
+// renderCLIFraming writes the question chrome (divider / optional header /
+// question / closing divider) to w WITHOUT the option list. The TTY
+// single-select path uses this to print the question before launching
+// the arrow-key picker, which renders its own options pane.
+//
+// Kept visually consistent with renderCLIPrompt so users perceive the
+// two prompts as the same surface — only the input mechanism differs.
+func renderCLIFraming(w io.Writer, req AskUserRequest) {
+	const bar = "────────────────────────────────────────────────"
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, bar)
+	if h := strings.TrimSpace(req.Header); h != "" {
+		fmt.Fprintf(w, "  %s\n", h)
+		fmt.Fprintln(w, bar)
+	}
+	fmt.Fprintf(w, "  %s\n", req.Question)
+	fmt.Fprintln(w, bar)
+}
+
+// askUserCustomAnswerSentinel is the SelectItem.Value we attach to the
+// "Type your own answer…" item in the single-select picker. When the
+// user picks that item, we fall through to the legacy freeform input
+// path so the LLM's structured options don't trap the human into a
+// canned response. The value is intentionally a magic string (not a
+// valid label match) so a real option can never collide with it.
+const askUserCustomAnswerSentinel = "__custom__"
+
+// runAskUserSelectList drives the TTY single-select picker. It prints
+// the question framing, runs console.SelectList over the options, and
+// returns the selected option's Value on confirm. On Esc/Ctrl+C it
+// returns a "user cancelled selection" error matching the spirit of
+// the legacy prompt (Esc cancels; the default is not auto-applied).
+//
+// Free-text fallback: the picker gets a trailing "Type your own
+// answer…" item. Picking it falls through to the legacy bufio reader
+// so the user can still write arbitrary text — the LLM might have
+// given options but the human wants to answer differently.
+//
+// This path is only used when stdin is a TTY and MultiSelect is false;
+// callers (AskUser) gate on those conditions before invoking.
+func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, error) {
+	items := make([]console.SelectItem, 0, len(req.Options)+1)
+	for _, opt := range req.Options {
+		items = append(items, console.SelectItem{
+			Label:  opt.Label,
+			Detail: opt.Description,
+			Value:  optionValue(opt),
+		})
+	}
+	// Always offer a free-text escape hatch. The item isn't a real
+	// option, so we detect it via the sentinel value below and route
+	// the user to the legacy freeform input path.
+	items = append(items, console.SelectItem{
+		Label:  "Type your own answer…",
+		Detail: "write a custom response",
+		Value:  askUserCustomAnswerSentinel,
+	})
+
+	renderCLIFraming(os.Stdout, req)
+
+	sl := console.NewSelectList(console.SelectListOptions{
+		// Title is intentionally empty — renderCLIFraming already shows
+		// the question/header above the picker, and SelectList would just
+		// duplicate it.
+		Title:      "",
+		Items:      items,
+		Searchable: len(items) > 5,
+		PageSize:   10,
+	})
+
+	value, ok, err := sl.Run(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		// Esc / Ctrl+C: treat as cancellation. Note this differs from the
+		// legacy "Enter on empty → default" behavior — the picker has no
+		// notion of "submit blank", so Esc is the only way out without
+		// picking. Returning an error surfaces the cancel to the caller
+		// (the LLM), which is the right semantic.
+		return "", fmt.Errorf("user cancelled selection")
+	}
+
+	// Free-text fallback: drop into the legacy reader so the user can
+	// write whatever they want. The framing is already on screen; we
+	// just append a "> " prompt below the (now-cleared) picker rows.
+	if value == askUserCustomAnswerSentinel {
+		fmt.Fprint(os.Stdout, "> ")
+		reader := bufio.NewReader(os.Stdin)
+		answer, err := readFreeformInputCtx(ctx, reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return "", err
+			}
+			return "", fmt.Errorf("read user input: %w", err)
+		}
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+
+	return value, nil
 }
 
 func toEventRequest(req AskUserRequest) events.AskUserRequest {
@@ -444,5 +635,5 @@ func AskUserWithEventBus(ctx context.Context, req AskUserRequest, eventBus *even
 	}
 
 	// CLI mode: read from stdin
-	return AskUser(req)
+	return AskUser(ctx, req)
 }

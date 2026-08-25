@@ -31,12 +31,9 @@ package tools
 
 import (
 	"log"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // auditLogger is the package-level audit logger for security decisions.
@@ -48,75 +45,6 @@ var auditLogger atomic.Pointer[AuditLogger]
 // begin calling ClassifyToolCall.
 func SetAuditLogger(l *AuditLogger) {
 	auditLogger.Store(l)
-}
-
-// pipeToShellPattern matches pipe-to-shell patterns that can execute arbitrary code.
-// Matches: | followed by optional whitespace, optional path prefix (e.g., /bin/, /usr/bin/),
-// optional "env" wrapper, then shell/script interpreter name.
-// The shell name must be followed by whitespace, shell metacharacters (;, |, &), or end of string.
-// Examples matched: |bash, | bash, |  bash, | /bin/bash, | /usr/bin/env bash, |zsh, |bash -c 'cmd'
-// NOT matched: |sort, |shasum, |shfmt (shell name must be followed by a valid boundary)
-// standaloneSleepPattern matches `sleep N` and `sleep N{s,m,h,d}` where N is a
-// positive integer or decimal. The anchors prevent matching chained or
-// embedded forms — `cmd && sleep 5 && cmd2` will not match because the
-// caller checks for compound separators first.
-var standaloneSleepPattern = regexp.MustCompile(`^sleep\s+\d+(\.\d+)?[smhd]?$`)
-
-// standaloneWaitPattern matches `wait` and `wait <pid>` (a single numeric arg).
-// `wait` with no jobs to wait on returns immediately, so this is purely an
-// antipattern when issued as a tool call.
-var standaloneWaitPattern = regexp.MustCompile(`^wait(\s+\d+)?$`)
-
-// compoundCommandSeparators are the operators that signal a chained or
-// piped command. Their presence disqualifies a command from the standalone
-// classification, even if part of the command line is a bare sleep/wait.
-var compoundCommandSeparators = []string{"&&", "||", ";", "|", "\n"}
-
-// isStandaloneSleepOrWaitCommand reports whether cmd is exactly a bare
-// `sleep N[suffix]` or `wait [pid]` invocation with nothing else around it.
-//
-// Chained or scripted forms (`make && sleep 5`, `bash -c "sleep 60"`,
-// `for i in 1 2 3; do sleep $i; done`) are NOT matched — legitimate
-// scripting uses are preserved.
-func isStandaloneSleepOrWaitCommand(cmd string) bool {
-	for _, sep := range compoundCommandSeparators {
-		if strings.Contains(cmd, sep) {
-			return false
-		}
-	}
-	return standaloneSleepPattern.MatchString(cmd) || standaloneWaitPattern.MatchString(cmd)
-}
-
-var pipeToShellPattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?(?:bash|zsh|dash|fish|ksh|csh|tcsh|python[23]?|perl|ruby|node|sh)(?:\s|[;&|]|$)`)
-
-// pipeToModulePattern matches a pipe into an interpreter run in module
-// mode (python -m <module>). In that form stdin is consumed as DATA by
-// the named module rather than executed as code — e.g.
-// `curl … | python3 -m json.tool` pretty-prints JSON; it does not run
-// the downloaded bytes. RE2 has no negative lookahead, so isPipeToShell
-// subtracts these matches before deciding.
-var pipeToModulePattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?python[23]?\s+-m\s`)
-
-// isPipeToShell reports whether s pipes output into a shell/interpreter
-// that would EXECUTE the piped bytes as code. The python `-m <module>`
-// form is treated as data-consuming, not code execution, so a command
-// whose only interpreter pipe is a module run (e.g. json.tool) is not
-// flagged. Any other pipe-to-interpreter (| bash, bare | python, | sh)
-// still matches.
-func isPipeToShell(s string) bool {
-	lc := strings.ToLower(s)
-	if !pipeToShellPattern.MatchString(lc) {
-		return false
-	}
-	// Remove python -m module-mode pipes; if nothing code-executing
-	// remains, the command only fed data to a module → not RCE.
-	if pipeToModulePattern.MatchString(lc) {
-		stripped := pipeToModulePattern.ReplaceAllString(lc, " ")
-		if !pipeToShellPattern.MatchString(stripped) {
-			return false
-		}
-	}
-	return true
 }
 
 // SecurityRisk represents the risk level of a tool call
@@ -236,6 +164,8 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
 	case "fetch_url", "web_search":
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
+	case "browse_url":
+		result = classifyBrowseURL(args)
 	case "git":
 		result = classifyGitOperation(args)
 	case "run_automate":
@@ -292,7 +222,7 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 
 	cmdRaw, ok := args["command"].(string)
 	if !ok || cmdRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true, Category: RiskCategoryUnknown}
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "No shell command (check_background or stop_background operation)", Category: RiskCategoryReadOnly}
 	}
 
 	cmd := strings.TrimSpace(cmdRaw)
@@ -334,15 +264,23 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	isPrivilegedInstall := containsPrivilegedPackageInstall(cmd)
 	isCritical := isCriticalSystemOperation("shell_command", args)
 
-	// Only DANGEROUS commands trigger blocking/prompts.
-	// Exception: privileged package installation is CAUTION but still prompts.
-	shouldPrompt := maxRisk == SecurityDangerous || isPrivilegedInstall
+	// CAUTION and DANGEROUS commands prompt the user for approval.
+	// Only DANGEROUS commands additionally set ShouldBlock (so they can
+	// be blocked if no approval manager is available). IsHardBlock is
+	// set only by isCriticalSystemOperation above (rm -rf /, mkfs, etc.).
+	shouldPrompt := maxRisk >= SecurityCaution || isPrivilegedInstall
 
 	// Determine category based on risk level and command characteristics
 	var category RiskCategory
 	if isPrivilegedInstall {
 		category = RiskCategoryPrivileged
+	} else if isSudoCommand(cmd) {
+		category = RiskCategoryPrivileged
 	} else if maxRisk == SecurityDangerous {
+		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
+	} else if maxRisk == SecurityCaution {
+		// CAUTION commands that were downgraded from DANGEROUS still get
+		// meaningful categories (destructive, privileged, etc.)
 		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
 	} else if maxRisk == SecuritySafe {
 		category = RiskCategoryReadOnly
@@ -358,329 +296,3 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 		Category:     category,
 	}
 }
-
-// classifyChainedCommand splits and classifies chained commands
-func classifyChainedCommand(cmd string) []SecurityRisk {
-	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
-		return []SecurityRisk{risk}
-	}
-
-	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
-	// Strip quoted sections first to avoid false positives from | characters
-	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
-	// Use regex to handle any whitespace and multiple shell interpreters.
-	cmdLower := strings.ToLower(cmd)
-	stripped := stripQuotedSections(cmdLower)
-	if isPipeToShell(stripped) {
-		return []SecurityRisk{SecurityDangerous}
-	}
-
-	// Split on &&, ||, ;, | but respect quotes
-	var parts []string
-	current := &strings.Builder{}
-	inQuote := false
-	quoteChar := byte(0)
-
-	for i := 0; i < len(cmd); i++ {
-		c := cmd[i]
-
-		if !inQuote && (c == '\'' || c == '"') {
-			inQuote = true
-			quoteChar = c
-			current.WriteByte(c)
-			continue
-		}
-
-		if inQuote && c == quoteChar {
-			inQuote = false
-			quoteChar = 0
-			current.WriteByte(c)
-			continue
-		}
-
-		if !inQuote {
-			if c == '&' && i+1 < len(cmd) && cmd[i+1] == '&' {
-				if current.Len() > 0 {
-					parts = append(parts, strings.TrimSpace(current.String()))
-					current.Reset()
-				}
-				i++
-				continue
-			}
-			if c == '|' && i+1 < len(cmd) && cmd[i+1] == '|' {
-				if current.Len() > 0 {
-					parts = append(parts, strings.TrimSpace(current.String()))
-					current.Reset()
-				}
-				i++
-				continue
-			}
-			if c == ';' || c == '|' {
-				if current.Len() > 0 {
-					parts = append(parts, strings.TrimSpace(current.String()))
-					current.Reset()
-				}
-				continue
-			}
-		}
-		current.WriteByte(c)
-	}
-
-	if current.Len() > 0 {
-		parts = append(parts, strings.TrimSpace(current.String()))
-	}
-
-	var risks []SecurityRisk
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		risks = append(risks, classifySingleCommand(part))
-	}
-	return risks
-}
-
-// classifySingleCommand classifies a single command (no chaining)
-func classifySingleCommand(cmd string) SecurityRisk {
-	cmdLower := strings.ToLower(cmd)
-
-	if risk, ok := classifyReadOnlyForLoop(cmd); ok {
-		return risk
-	}
-
-	// Command substitution ($() or backticks) - cannot fully inspect inner commands
-	if strings.Contains(cmd, "$(") || strings.ContainsAny(cmd, "`") {
-		return SecurityCaution
-	}
-
-	// Heredoc syntax (<<) - cannot fully inspect heredoc content
-	if strings.Contains(cmd, "<<") {
-		return SecurityCaution
-	}
-
-	// Check for output redirection to system directories
-	if strings.Contains(cmd, "> /etc/") || strings.Contains(cmd, ">> /etc/") ||
-		strings.Contains(cmd, "> /usr/") || strings.Contains(cmd, ">> /usr/") ||
-		strings.Contains(cmd, "> /bin/") || strings.Contains(cmd, ">> /bin/") ||
-		strings.Contains(cmd, "> /sbin/") || strings.Contains(cmd, ">> /sbin/") ||
-		strings.Contains(cmd, "> /var/") || strings.Contains(cmd, ">> /var/") ||
-		strings.Contains(cmd, "> /opt/") || strings.Contains(cmd, ">> /opt/") ||
-		strings.Contains(cmd, "> /root/") || strings.Contains(cmd, ">> /root/") ||
-		strings.Contains(cmd, "> /boot/") || strings.Contains(cmd, ">> /boot/") {
-		return SecurityDangerous
-	}
-	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
-		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") &&
-		!strings.Contains(cmd, "> /dev/stdout") && !strings.Contains(cmd, ">> /dev/stdout") &&
-		!strings.Contains(cmd, "> /dev/stderr") && !strings.Contains(cmd, ">> /dev/stderr") {
-		return SecurityDangerous
-	}
-
-	// Check for path traversal in redirection targets (e.g., > /tmp/../etc/passwd)
-	if containsRedirection(cmd) && hasRedirectionTraversalToSystemDir(cmd) {
-		return SecurityDangerous
-	}
-
-	if isPrivilegedPackageInstall(cmdLower) {
-		return SecurityCaution
-	}
-
-	if isDangerousPattern(cmdLower) {
-		return SecurityDangerous
-	}
-
-	// Check caution patterns BEFORE safe patterns, so that specific
-	// caution-level commands (like "docker rm") override broad safe matches.
-	if isCautionPattern(cmdLower) {
-		return SecurityCaution
-	}
-
-	if isSafeShellCommand(cmdLower) {
-		return SecuritySafe
-	}
-
-	return SecurityCaution
-}
-
-func classifyReadOnlyForLoop(cmd string) (SecurityRisk, bool) {
-	trimmed := strings.TrimSpace(cmd)
-	lower := strings.ToLower(trimmed)
-	if !strings.HasPrefix(lower, "for ") || !strings.Contains(lower, " do ") || !strings.HasSuffix(lower, "done") {
-		return SecuritySafe, false
-	}
-
-	max := SecuritySafe
-
-	for _, sub := range extractCommandSubstitutions(trimmed) {
-		risk := maxRisk(classifyChainedCommand(sub))
-		if risk > max {
-			max = risk
-		}
-	}
-
-	doIndex := strings.Index(lower, " do ")
-	doneIndex := strings.LastIndex(lower, " done")
-	if doIndex == -1 || doneIndex == -1 || doneIndex <= doIndex+4 {
-		return SecurityCaution, true
-	}
-
-	body := strings.TrimSpace(trimmed[doIndex+4 : doneIndex])
-	if body == "" {
-		return SecurityCaution, true
-	}
-
-	bodyRisk := classifyReadOnlyLoopBody(body)
-	if bodyRisk > max {
-		max = bodyRisk
-	}
-
-	return max, true
-}
-
-func classifyReadOnlyLoopBody(body string) SecurityRisk {
-	parts := strings.Split(body, ";")
-	max := SecuritySafe
-
-	for _, raw := range parts {
-		part := strings.TrimSpace(raw)
-		if part == "" {
-			continue
-		}
-		for _, branch := range strings.Split(part, "&&") {
-			for _, option := range strings.Split(branch, "||") {
-				cmd := strings.TrimSpace(option)
-				if cmd == "" {
-					continue
-				}
-				risk := classifySingleCommand(cmd)
-				if risk > max {
-					max = risk
-				}
-			}
-		}
-	}
-
-	return max
-}
-
-// classifyWriteOperation classifies file write operations
-func classifyWriteOperation(args map[string]interface{}) SecurityResult {
-	pathRaw, ok := args["path"].(string)
-	if !ok || pathRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid path", ShouldPrompt: true, Category: RiskCategoryFileWrite}
-	}
-
-	path := pathRaw
-
-	// Check for critical system files and directories
-	for _, critical := range []string{
-		"/etc/shadow", "/etc/passwd", "/etc/sudoers", "/etc/ssh/sshd_config",
-		"/root/.ssh/authorized_keys", "/etc/hosts", "/etc/resolv.conf",
-		"/usr/", "/etc/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/lib/", "/lib64/",
-	} {
-		if path == critical || strings.HasPrefix(path, critical) {
-			// Allow macOS temp directories (/var/folders/...) and /tmp paths
-			if (strings.HasPrefix(path, "/var/folders/") || strings.HasPrefix(path, "/var/tmp/")) && strings.HasPrefix(critical, "/var/") {
-				continue
-			}
-			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Writing to critical system file or directory: " + path, ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true, RiskType: "system_integrity", Category: RiskCategoryDestructive}
-		}
-	}
-
-	if strings.HasPrefix(path, "/tmp/") || strings.HasPrefix(path, "/private/tmp/") || strings.HasPrefix(path, "/var/folders/") || strings.HasPrefix(path, "/private/var/folders/") || path == "/tmp" {
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Writing to temporary directory", Category: RiskCategoryFileWrite}
-	}
-
-	return SecurityResult{Risk: SecuritySafe, Reasoning: "Workspace file operation", Category: RiskCategoryFileWrite}
-}
-
-// hasToken splits s on whitespace and reports whether any resulting token
-// exactly equals token. This prevents substring false-positives (e.g.
-// "--hardlink" must NOT match "--hard").
-func hasToken(s string, token string) bool {
-	for _, t := range strings.Fields(s) {
-		if t == token {
-			return true
-		}
-	}
-	return false
-}
-
-// classifyGitOperation classifies git operations
-func classifyGitOperation(args map[string]interface{}) SecurityResult {
-	opRaw, ok := args["operation"].(string)
-	if !ok || opRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid git operation", ShouldPrompt: true, Category: RiskCategoryUnknown}
-	}
-
-	op := strings.ToLower(strings.TrimSpace(opRaw))
-
-	safeOps := []string{"commit", "add", "status", "log", "diff", "show", "branch", "remote", "stash", "tag", "revert", "fetch", "merge", "pull", "push"}
-	for _, safe := range safeOps {
-		if op == safe {
-			return SecurityResult{Risk: SecuritySafe, Reasoning: "Safe git operation: " + op, Category: RiskCategoryReadOnly}
-		}
-	}
-
-	// Flag-aware dangerous-reset detection: --hard, --keep, --merge are
-	// destructive because they discard working-tree / index state.
-	argsStr, _ := args["args"].(string)
-	if op == "reset" && (hasToken(argsStr, "--hard") || hasToken(argsStr, "--keep") || hasToken(argsStr, "--merge")) {
-		return SecurityResult{
-			Risk: SecurityDangerous, Reasoning: "Destructive git reset with flag: " + op,
-			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
-			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
-		}
-	}
-
-	// Flag-aware dangerous-rebase detection: --onto and -i can rewrite
-	// history across multiple branches.
-	if op == "rebase" && (hasToken(argsStr, "--onto") || hasToken(argsStr, "-i")) {
-		return SecurityResult{
-			Risk: SecurityDangerous, Reasoning: "Destructive git rebase with flag: " + op,
-			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
-			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
-		}
-	}
-
-	cautionOps := []string{"reset", "rebase", "cherry_pick", "am", "apply", "rm", "mv", "clean"}
-	for _, caution := range cautionOps {
-		if op == caution {
-			return SecurityResult{Risk: SecurityCaution, Reasoning: "Git operation may affect history: " + op, ShouldPrompt: true, Category: RiskCategoryFileWrite}
-		}
-	}
-
-	// Note: "clean" is intentionally only CAUTION-level here. Dangerous variants
-	// like "git clean -ff" and "git clean -fd" are caught by the shell-level
-	// security classifier (isDangerousPattern), which processes the full git
-	// command string including flags.
-	dangerousOps := []string{"branch_delete", "push --force", "push -f"}
-	for _, danger := range dangerousOps {
-		if op == danger || (strings.HasPrefix(op, "push") && strings.Contains(opRaw, "--force")) {
-			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Dangerous git operation that may force-push or delete: " + op, ShouldBlock: true, ShouldPrompt: true, Category: RiskCategoryDestructive}
-		}
-	}
-
-	return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown git operation: " + op, ShouldPrompt: true, Category: RiskCategoryUnknown}
-}
-
-// isCriticalSystemOperation reports whether a shell tool call is a
-// critical system operation that must always be hard-blocked. The
-// canonical pattern list lives in configuration.IsCriticalOperation so
-// the static classifier (this gate) and the persona risk cascade
-// (configuration.EvaluateOperationRisk) agree on what "critical" means —
-// see the unification note on IsCriticalOperation.
-func isCriticalSystemOperation(toolName string, args map[string]interface{}) bool {
-	if toolName != "shell_command" {
-		return false
-	}
-
-	cmdRaw, ok := args["command"].(string)
-	if !ok || cmdRaw == "" {
-		return false
-	}
-
-	return configuration.IsCriticalOperation(cmdRaw)
-}
-

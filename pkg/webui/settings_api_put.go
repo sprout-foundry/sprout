@@ -5,7 +5,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +14,6 @@ import (
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // ---------------------------------------------------------------------------
@@ -124,12 +123,12 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 			if newProvider != "" {
 				providerType, _ := cm.MapStringToClientType(newProvider)
 				if err := agentInst.SetProvider(providerType); err != nil {
-					log.Printf("webui: failed to set provider on live agent: %v", err)
+					ws.log().Warn("failed to set provider on live agent", slog.Any("err", err))
 				}
 			}
 			if newModel != "" {
 				if err := agentInst.SetModel(newModel); err != nil {
-					log.Printf("webui: failed to set model on live agent: %v", err)
+					ws.log().Warn("failed to set model on live agent", slog.Any("err", err))
 				}
 			}
 			// Sync overrides to the agent so they're persisted with session state
@@ -161,6 +160,13 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		return
 	}
 
+	// A runtime max_context_tokens change must re-resolve the effective cap
+	// on live agents immediately — otherwise reconcileContextCap's fast path
+	// keeps serving the stale resolution until the next provider/model switch.
+	if _, ok := incoming["max_context_tokens"]; ok {
+		ws.refreshContextCapOnLiveAgents()
+	}
+
 	if _, ok := incoming["system_prompt_text"]; ok {
 		cfg := cm.GetConfig()
 		providerForPrompt := ""
@@ -182,7 +188,7 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 	// Sync agent state after provider/model change
 	if newProvider != "" || newModel != "" {
 		if err := ws.syncAgentStateForClient(clientID); err != nil {
-			log.Printf("webui: failed to sync agent state after provider/model change: %v", err)
+			ws.log().Warn("failed to sync agent state after provider or model change", slog.Any("err", err))
 		}
 		// Publish provider state so the WebUI status bar reflects the new
 		// model/cost/ctx immediately. Without this the bar lags until the
@@ -239,24 +245,24 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 
 	// Check for unknown keys and collect warnings
 	knownSessionKeys := map[string]bool{
-		"provider":                       true,
-		"model":                          true,
-		"temperature":                    true,
-		"max_tokens":                     true,
-		"reasoning_effort":               true,
-		"system_prompt_text":             true,
-		"skip_prompt":                    true,
-		"web_search_enabled":             true,
-		"subagent_provider":              true,
-		"subagent_model":                 true,
-		"disable_thinking":               true,
-		"top_p":                          true,
-		"frequency_penalty":              true,
-		"presence_penalty":               true,
-		"stop_sequences":                 true,
-		"tool_choice":                    true,
-		"response_format":                true,
-		"stream":                         true,
+		"provider":           true,
+		"model":              true,
+		"temperature":        true,
+		"max_tokens":         true,
+		"reasoning_effort":   true,
+		"system_prompt_text": true,
+		"skip_prompt":        true,
+		"web_search_enabled": true,
+		"subagent_provider":  true,
+		"subagent_model":     true,
+		"disable_thinking":   true,
+		"top_p":              true,
+		"frequency_penalty":  true,
+		"presence_penalty":   true,
+		"stop_sequences":     true,
+		"tool_choice":        true,
+		"response_format":    true,
+		"stream":             true,
 	}
 
 	var unknownKeys []string
@@ -389,7 +395,21 @@ func (ws *ReactWebServer) handlePutWorkspaceSettings(w http.ResponseWriter, r *h
 		writeJSONError(w, http.StatusBadRequest, "No workspace configured")
 		return
 	}
-	ws.putConfigToFile(w, r, configuration.GetWorkspaceConfigPath(workspaceRoot))
+	// Write path, not the read path: a legacy config.json is read but never
+	// written back to.
+	//
+	// Empty means this workspace has no config layer — currently only $HOME,
+	// which deliberately has none (see configuration.WorkspaceConfigDir).
+	// Writing there would create ~/.sprout/workspace.json, which the next
+	// startup reads back as a per-workspace opt-in. Direct the caller at the
+	// global scope instead of silently writing nothing.
+	writePath := configuration.WorkspaceConfigWritePath(workspaceRoot)
+	if writePath == "" {
+		writeJSONError(w, http.StatusBadRequest,
+			"This workspace has no per-workspace settings layer (the home directory uses global settings). Save to global settings instead.")
+		return
+	}
+	ws.putConfigToFile(w, r, writePath)
 }
 
 // handlePutGlobalSettings writes settings to the global config file.
@@ -511,14 +531,14 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 					if cm := ws.getConfigManager(r, w); cm != nil {
 						if pt, err := cm.MapStringToClientType(newProvider); err == nil {
 							if err := agentInst.SetProvider(pt); err != nil {
-								log.Printf("webui: failed to set provider on live agent after persisted PUT: %v", err)
+								ws.log().Warn("failed to set provider on live agent after persisted settings update", slog.Any("err", err))
 							}
 						}
 					}
 				}
 				if newModel != "" {
 					if err := agentInst.SetModel(newModel); err != nil {
-						log.Printf("webui: failed to set model on live agent after persisted PUT: %v", err)
+						ws.log().Warn("failed to set model on live agent after persisted settings update", slog.Any("err", err))
 					}
 				}
 			}
@@ -553,490 +573,24 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 // Only whitelisted top-level keys are accepted to prevent accidental
 // overwrite of internal bookkeeping fields.
 // Unknown keys are collected and returned so callers can warn the user.
+// applyPartialSettings applies a partial JSON patch to the config struct.
+// Only whitelisted top-level keys are accepted to prevent accidental
+// overwrite of internal bookkeeping fields.
+// Unknown keys are collected and returned so callers can warn the user.
+//
+// The actual per-domain work lives in settings_api_partial_settings.go so
+// each domain can be reasoned about in isolation. This orchestrator just
+// walks the appliers in order and collects any patch keys that none of
+// them recognized.
 func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{}) ([]string, error) {
-	// knownKeys tracks which keys were recognized and consumed.
-	// After processing, any key NOT in this set is returned as unknown.
+	patch = expandDottedKeys(cfg, patch)
+
 	knownKeys := make(map[string]bool, len(patch))
-	// Simple scalar fields
-	if v, ok := patch["reasoning_effort"]; ok {
-		knownKeys["reasoning_effort"] = true
-		s, _ := v.(string)
-		s = truncateString(s, maxSettingEnumLength)
-		if err := validateReasoningEffort(s); err != nil {
-			return nil, fmt.Errorf("validate reasoning_effort: %w", err)
-		}
-		cfg.ReasoningEffort = s
-	}
-	if v, ok := patch["system_prompt_text"]; ok {
-		knownKeys["system_prompt_text"] = true
-		s, _ := v.(string)
-		cfg.SystemPromptText = truncateString(s, maxSettingPromptLength)
-	}
-	if v, ok := patch["skip_prompt"]; ok {
-		knownKeys["skip_prompt"] = true
-		cfg.SkipPrompt, _ = v.(bool)
-	}
-	if v, ok := patch["resource_directory"]; ok {
-		knownKeys["resource_directory"] = true
-		s, _ := v.(string)
-		cfg.ResourceDirectory = truncateString(s, maxSettingPathLength)
-	}
-	if v, ok := patch["history_scope"]; ok {
-		knownKeys["history_scope"] = true
-		s, _ := v.(string)
-		s = truncateString(s, maxSettingEnumLength)
-		if err := validateHistoryScope(s); err != nil {
-			return nil, fmt.Errorf("validate history_scope: %w", err)
-		}
-		cfg.HistoryScope = s
-	}
-	if v, ok := patch["risk_profile"]; ok {
-		knownKeys["risk_profile"] = true
-		s, _ := v.(string)
-		// Allow empty (= unset → resolves to "default") and any
-		// built-in profile name. User-defined names in
-		// cfg.RiskProfiles are also accepted. Reject names that
-		// match neither so a typo in the dropdown doesn't silently
-		// fall back to default.
-		if s != "" && !configuration.IsValidRiskProfile(s) {
-			if _, ok := cfg.RiskProfiles[s]; !ok {
-				return nil, fmt.Errorf("validate risk_profile: unknown profile %q (built-in: readonly, cautious, default, permissive, unrestricted; or define your own in risk_profiles)", s)
-			}
-		}
-		cfg.RiskProfile = s
-	}
-	if v, ok := patch["risk_profiles"]; ok {
-		knownKeys["risk_profiles"] = true
-		// Accept a map[name]AutoApproveRules. Round-trip via JSON so
-		// we get type-safe decoding without depending on map[string]any
-		// gymnastics for the nested struct. nil clears the override
-		// map and falls back to baked-in defaults for all profiles.
-		if v == nil {
-			cfg.RiskProfiles = nil
-		} else {
-			raw, mErr := json.Marshal(v)
-			if mErr != nil {
-				return nil, fmt.Errorf("validate risk_profiles: encode incoming value: %w", mErr)
-			}
-			var decoded map[string]configuration.AutoApproveRules
-			if uErr := json.Unmarshal(raw, &decoded); uErr != nil {
-				return nil, fmt.Errorf("validate risk_profiles: %w", uErr)
-			}
-			cfg.RiskProfiles = decoded
+	for _, apply := range partialSettingsAppliers {
+		if err := apply(cfg, patch, knownKeys); err != nil {
+			return nil, err
 		}
 	}
-	if v, ok := patch["self_review_gate_mode"]; ok {
-		knownKeys["self_review_gate_mode"] = true
-		s, _ := v.(string)
-		s = truncateString(s, maxSettingEnumLength)
-		if err := validateSelfReviewGateMode(s); err != nil {
-			return nil, fmt.Errorf("validate self_review_gate_mode: %w", err)
-		}
-		cfg.SelfReviewGateMode = s
-	}
-	if v, ok := patch["subagent_provider"]; ok {
-		knownKeys["subagent_provider"] = true
-		s, _ := v.(string)
-		cfg.SubagentProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["subagent_model"]; ok {
-		knownKeys["subagent_model"] = true
-		s, _ := v.(string)
-		cfg.SubagentModel = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["subagent_max_parallel"]; ok {
-		knownKeys["subagent_max_parallel"] = true
-		n, ok2 := asInt(v)
-		if ok2 && n >= 0 {
-			cfg.SubagentMaxParallel = n
-		}
-	}
-	if v, ok := patch["subagent_parallel_enabled"]; ok {
-		knownKeys["subagent_parallel_enabled"] = true
-		b, ok2 := v.(bool)
-		if ok2 {
-			cfg.SubagentParallelEnabled = &b
-		}
-	}
-	if v, ok := patch["default_subagent_persona"]; ok {
-		knownKeys["default_subagent_persona"] = true
-		s, _ := v.(string)
-		s = strings.TrimSpace(truncateString(s, maxSettingNameLength))
-		// Empty string clears the override (falls back to "general").
-		// A non-empty value must reference a known persona; otherwise reject
-		// rather than silently fail at spawn time.
-		if s != "" && cfg.GetSubagentType(s) == nil {
-			return nil, fmt.Errorf("default_subagent_persona %q is not a known persona ID or alias", s)
-		}
-		cfg.DefaultSubagentPersona = s
-	}
-	if v, ok := patch["disabled_personas"]; ok {
-		knownKeys["disabled_personas"] = true
-		// Accept either []string or []interface{} (JSON unmarshals to the latter).
-		var ids []string
-		switch list := v.(type) {
-		case []string:
-			ids = list
-		case []interface{}:
-			for _, item := range list {
-				if s, ok := item.(string); ok {
-					ids = append(ids, s)
-				}
-			}
-		case nil:
-			ids = nil
-		default:
-			return nil, fmt.Errorf("disabled_personas must be a list of persona IDs")
-		}
-		// Validate each entry resolves to a known persona. Unknown IDs would
-		// silently no-op the disable, which is a quiet bug.
-		var cleaned []string
-		for _, id := range ids {
-			trimmed := strings.TrimSpace(truncateString(id, maxSettingNameLength))
-			if trimmed == "" {
-				continue
-			}
-			if cfg.GetSubagentType(trimmed) == nil && !cfg.IsPersonaDisabled(trimmed) {
-				// Allow re-listing an already-disabled persona (so the list is
-				// stable across PUTs even after a catalog change removes one).
-				return nil, fmt.Errorf("disabled_personas: %q is not a known persona ID or alias", trimmed)
-			}
-			cleaned = append(cleaned, trimmed)
-		}
-		cfg.DisabledPersonas = cleaned
-	}
-	if v, ok := patch["commit_provider"]; ok {
-		knownKeys["commit_provider"] = true
-		s, _ := v.(string)
-		cfg.CommitProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["commit_model"]; ok {
-		knownKeys["commit_model"] = true
-		s, _ := v.(string)
-		cfg.CommitModel = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["review_provider"]; ok {
-		knownKeys["review_provider"] = true
-		s, _ := v.(string)
-		cfg.ReviewProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["review_model"]; ok {
-		knownKeys["review_model"] = true
-		s, _ := v.(string)
-		cfg.ReviewModel = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["pdf_ocr_enabled"]; ok {
-		knownKeys["pdf_ocr_enabled"] = true
-		cfg.PDFOCREnabled, _ = v.(bool)
-	}
-	if v, ok := patch["pdf_ocr_provider"]; ok {
-		knownKeys["pdf_ocr_provider"] = true
-		s, _ := v.(string)
-		cfg.PDFOCRProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["pdf_ocr_model"]; ok {
-		knownKeys["pdf_ocr_model"] = true
-		s, _ := v.(string)
-		cfg.PDFOCRModel = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["enable_zsh_command_detection"]; ok {
-		knownKeys["enable_zsh_command_detection"] = true
-		cfg.EnableZshCommandDetection, _ = v.(bool)
-	}
-	if v, ok := patch["auto_execute_detected_commands"]; ok {
-		knownKeys["auto_execute_detected_commands"] = true
-		cfg.AutoExecuteDetectedCommands, _ = v.(bool)
-	}
-	if v, ok := patch["disable_thinking"]; ok {
-		knownKeys["disable_thinking"] = true
-		cfg.DisableThinking, _ = v.(bool)
-	}
-	if v, ok := patch["ea_mode"]; ok {
-		knownKeys["ea_mode"] = true
-		s, _ := v.(string)
-		s = strings.ToLower(strings.TrimSpace(truncateString(s, maxSettingEnumLength)))
-		switch s {
-		case "", "interactive", "queue":
-			cfg.EAMode = s
-		default:
-			return nil, fmt.Errorf("validate ea_mode: must be 'interactive' or 'queue' (got %q)", s)
-		}
-	}
-	if v, ok := patch["subagent_max_depth"]; ok {
-		knownKeys["subagent_max_depth"] = true
-		n, ok2 := asInt(v)
-		if ok2 && n >= 0 && n <= 32 {
-			cfg.SubagentMaxDepth = n
-		}
-	}
-	if v, ok := patch["approved_shell_commands"]; ok {
-		knownKeys["approved_shell_commands"] = true
-		if arr, ok := v.([]interface{}); ok {
-			out := make([]string, 0, len(arr))
-			seen := make(map[string]struct{}, len(arr))
-			for _, item := range arr {
-				if s, ok := item.(string); ok {
-					trimmed := strings.TrimSpace(truncateString(s, maxSettingPathLength))
-					if trimmed == "" {
-						continue
-					}
-					if _, dup := seen[trimmed]; dup {
-						continue
-					}
-					seen[trimmed] = struct{}{}
-					out = append(out, trimmed)
-				}
-			}
-			cfg.ApprovedShellCommands = out
-		} else if v == nil {
-			cfg.ApprovedShellCommands = nil
-		}
-	}
-
-	// APITimeouts
-	if at, ok := patch["api_timeouts"]; ok {
-		knownKeys["api_timeouts"] = true
-		if atMap, ok := at.(map[string]interface{}); ok {
-			if existing := cfg.APITimeouts; existing == nil {
-				cfg.APITimeouts = &configuration.APITimeoutConfig{}
-			}
-			if v2, ok2 := atMap["connection_timeout_sec"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return nil, fmt.Errorf("api_timeouts.connection_timeout_sec must be a positive integer")
-				}
-				if err := validateAPITimeout(n); err != nil {
-					return nil, fmt.Errorf("validate connection_timeout_sec: %w", err)
-				}
-				cfg.APITimeouts.ConnectionTimeoutSec = n
-			}
-			if v2, ok2 := atMap["first_chunk_timeout_sec"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return nil, fmt.Errorf("api_timeouts.first_chunk_timeout_sec must be a positive integer")
-				}
-				if err := validateAPITimeout(n); err != nil {
-					return nil, fmt.Errorf("validate first_chunk_timeout_sec: %w", err)
-				}
-				cfg.APITimeouts.FirstChunkTimeoutSec = n
-			}
-			if v2, ok2 := atMap["chunk_timeout_sec"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return nil, fmt.Errorf("api_timeouts.chunk_timeout_sec must be a positive integer")
-				}
-				if err := validateAPITimeout(n); err != nil {
-					return nil, fmt.Errorf("validate chunk_timeout_sec: %w", err)
-				}
-				cfg.APITimeouts.ChunkTimeoutSec = n
-			}
-			if v2, ok2 := atMap["overall_timeout_sec"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return nil, fmt.Errorf("api_timeouts.overall_timeout_sec must be a positive integer")
-				}
-				if err := validateAPITimeout(n); err != nil {
-					return nil, fmt.Errorf("validate overall_timeout_sec: %w", err)
-				}
-				cfg.APITimeouts.OverallTimeoutSec = n
-			}
-			if v2, ok2 := atMap["commit_message_timeout_sec"]; ok2 {
-				n, ok3 := asInt(v2)
-				if !ok3 {
-					return nil, fmt.Errorf("api_timeouts.commit_message_timeout_sec must be a positive integer")
-				}
-				if err := validateAPITimeout(n); err != nil {
-					return nil, fmt.Errorf("validate commit_message_timeout_sec: %w", err)
-				}
-				cfg.APITimeouts.CommitMessageTimeoutSec = n
-			}
-		}
-	}
-
-	// Provider models / provider_priority (simple maps & slices)
-	if v, ok := patch["provider_models"]; ok {
-		knownKeys["provider_models"] = true
-		if m, ok := v.(map[string]interface{}); ok {
-			pm := make(map[string]string, len(m))
-			for k, val := range m {
-				s, _ := val.(string)
-				pm[truncateString(k, maxSettingNameLength)] = truncateString(s, maxSettingNameLength)
-			}
-			cfg.ProviderModels = pm
-		}
-	}
-	if v, ok := patch["provider_priority"]; ok {
-		knownKeys["provider_priority"] = true
-		if arr, ok := v.([]interface{}); ok {
-			pp := make([]string, 0, len(arr))
-			for _, item := range arr {
-				if s, ok := item.(string); ok {
-					pp = append(pp, truncateString(s, maxSettingNameLength))
-				}
-			}
-			cfg.ProviderPriority = pp
-		}
-	}
-
-	// Version
-	if v, ok := patch["version"]; ok {
-		knownKeys["version"] = true
-		s, _ := v.(string)
-		cfg.Version = truncateString(s, maxSettingGenericLength)
-	}
-
-	// LastUsedProvider
-	if v, ok := patch["last_used_provider"]; ok {
-		knownKeys["last_used_provider"] = true
-		s, _ := v.(string)
-		cfg.LastUsedProvider = truncateString(s, maxSettingNameLength)
-	}
-
-	// MCP — complex struct, use JSON marshal/unmarshal
-	if v, ok := patch["mcp"]; ok {
-		knownKeys["mcp"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("invalid mcp config: %w", err)
-		}
-		var mcpCfg mcp.MCPConfig
-		if err := json.Unmarshal(raw, &mcpCfg); err != nil {
-			return nil, fmt.Errorf("invalid mcp config: %w", err)
-		}
-		truncateMCPConfig(&mcpCfg)
-		cfg.MCP = mcpCfg
-	}
-
-	// CustomProviders — map[string]CustomProviderConfig
-	if v, ok := patch["custom_providers"]; ok {
-		knownKeys["custom_providers"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("invalid custom_providers config: %w", err)
-		}
-		var providers map[string]configuration.CustomProviderConfig
-		if err := json.Unmarshal(raw, &providers); err != nil {
-			return nil, fmt.Errorf("invalid custom_providers config: %w", err)
-		}
-		for i, p := range providers {
-			providers[i] = truncateCustomProvider(p)
-		}
-		cfg.CustomProviders = providers
-	}
-
-	// EmbeddingIndex — *EmbeddingIndexConfig, use JSON marshal/unmarshal
-	if v, ok := patch["embedding_index"]; ok {
-		knownKeys["embedding_index"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("invalid embedding_index config: %w", err)
-		}
-		var ei configuration.EmbeddingIndexConfig
-		if err := json.Unmarshal(raw, &ei); err != nil {
-			return nil, fmt.Errorf("invalid embedding_index config: %w", err)
-		}
-		for i, p := range ei.ExcludePaths {
-			ei.ExcludePaths[i] = truncateString(p, maxSettingPathLength)
-		}
-		// Provider field removed — embedding provider is always the
-		// bundled ONNX EmbeddingGemma-300M today.
-		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
-		cfg.EmbeddingIndex = &ei
-	}
-
-	// LanguageServers — []LanguageServerOverride, use JSON marshal/unmarshal
-	if v, ok := patch["language_servers"]; ok {
-		knownKeys["language_servers"] = true
-		if v == nil {
-			cfg.LanguageServers = nil
-		} else {
-			raw, err := json.Marshal(v)
-			if err != nil {
-				return nil, fmt.Errorf("invalid language_servers config: %w", err)
-			}
-			var servers []configuration.LanguageServerOverride
-			if err := json.Unmarshal(raw, &servers); err != nil {
-				return nil, fmt.Errorf("invalid language_servers config: %w", err)
-			}
-			for i := range servers {
-				servers[i].ID = truncateString(servers[i].ID, maxSettingNameLength)
-				servers[i].Binary = truncateString(servers[i].Binary, maxSettingPathLength)
-				servers[i].InstallHint = truncateString(servers[i].InstallHint, maxSettingDescriptionLength)
-				for j := range servers[i].Args {
-					servers[i].Args[j] = truncateString(servers[i].Args[j], maxSettingPathLength)
-				}
-				for j := range servers[i].LanguageIDs {
-					servers[i].LanguageIDs[j] = truncateString(servers[i].LanguageIDs[j], maxSettingNameLength)
-				}
-			}
-			cfg.LanguageServers = servers
-		}
-	}
-
-	// SecurityPolicy — *SecurityPolicy, JSON marshal/unmarshal
-	if v, ok := patch["security_policy"]; ok {
-		knownKeys["security_policy"] = true
-		if v == nil {
-			cfg.SecurityPolicy = nil
-		} else {
-			raw, err := json.Marshal(v)
-			if err != nil {
-				return nil, fmt.Errorf("invalid security_policy config: %w", err)
-			}
-			var sp configuration.SecurityPolicy
-			if err := json.Unmarshal(raw, &sp); err != nil {
-				return nil, fmt.Errorf("invalid security_policy config: %w", err)
-			}
-			cfg.SecurityPolicy = &sp
-		}
-	}
-
-	// PersistentContext — *PersistentContextConfig, JSON marshal/unmarshal
-	if v, ok := patch["persistent_context"]; ok {
-		knownKeys["persistent_context"] = true
-		if v == nil {
-			cfg.PersistentContext = nil
-		} else {
-			raw, err := json.Marshal(v)
-			if err != nil {
-				return nil, fmt.Errorf("invalid persistent_context config: %w", err)
-			}
-			var pc configuration.PersistentContextConfig
-			if err := json.Unmarshal(raw, &pc); err != nil {
-				return nil, fmt.Errorf("invalid persistent_context config: %w", err)
-			}
-			cfg.PersistentContext = &pc
-		}
-	}
-
-	// SubagentTypes — personas are catalog-fixed. Older clients (and
-	// round-trip GET→PUT flows like "copy global to workspace") may still
-	// include this field; we accept-and-ignore so existing payloads don't
-	// 400. Use 'disabled_personas' to hide a persona or 'default_subagent_persona'
-	// to redirect default spawns.
-	if _, ok := patch["subagent_types"]; ok {
-		knownKeys["subagent_types"] = true
-		// Intentionally no-op: the catalog is the source of truth.
-	}
-
-	// Skills — map[string]Skill
-	if v, ok := patch["skills"]; ok {
-		knownKeys["skills"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("invalid skills config: %w", err)
-		}
-		var skills map[string]configuration.Skill
-		if err := json.Unmarshal(raw, &skills); err != nil {
-			return nil, fmt.Errorf("invalid skills config: %w", err)
-		}
-		for name, s := range skills {
-			skills[name] = truncateSkill(s)
-		}
-		cfg.Skills = skills
-	}
-
-	// Collect unknown keys
 	var unknown []string
 	for k := range patch {
 		if !knownKeys[k] {
@@ -1044,4 +598,88 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 	}
 	return unknown, nil
+}
+
+// expandDottedKeys rewrites "section.field" patch keys into a whole "section"
+// object seeded from the config's current values.
+//
+// Two constraints meet here. The webui saves one field at a time
+// (updateSetting('embedding_index.enabled', v) puts {"embedding_index.enabled":true}
+// on the wire), but every section applier rebuilds its struct wholesale from
+// patch["embedding_index"]. So a dotted key matched no applier and the write was
+// dropped — surfaced only in a "warnings" field the client never reads, behind a
+// 200 and a green "Saved" toast. Seeding from the current values is what keeps
+// the expansion from trading that silent no-op for a silent wipe of the field's
+// siblings.
+func expandDottedKeys(cfg *configuration.Config, patch map[string]interface{}) map[string]interface{} {
+	sections := map[string]map[string]interface{}{}
+	var current map[string]interface{}
+
+	for key, value := range patch {
+		section, path, dotted := strings.Cut(key, ".")
+		if !dotted {
+			continue
+		}
+		if _, seeded := sections[section]; !seeded {
+			if current == nil {
+				current = configAsMap(cfg)
+			}
+			seed, _ := current[section].(map[string]interface{})
+			sections[section] = cloneStringMap(seed)
+		}
+		setNestedKey(sections[section], path, value)
+	}
+
+	if len(sections) == 0 {
+		return patch
+	}
+
+	expanded := make(map[string]interface{}, len(patch))
+	for key, value := range patch {
+		if !strings.Contains(key, ".") {
+			expanded[key] = value
+		}
+	}
+	for section, fields := range sections {
+		expanded[section] = fields
+	}
+	return expanded
+}
+
+func configAsMap(cfg *configuration.Config) map[string]interface{} {
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]interface{}{}
+	}
+	return out
+}
+
+func cloneStringMap(src map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(src)+1)
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// setNestedKey assigns value at a dotted path, creating intermediate maps and
+// replacing any non-map value blocking the way.
+func setNestedKey(target map[string]interface{}, path string, value interface{}) {
+	field, rest, nested := strings.Cut(path, ".")
+	if !nested {
+		target[field] = value
+		return
+	}
+	child, ok := target[field].(map[string]interface{})
+	if !ok {
+		child = map[string]interface{}{}
+	} else {
+		child = cloneStringMap(child)
+	}
+	setNestedKey(child, rest, value)
+	target[field] = child
 }

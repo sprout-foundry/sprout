@@ -16,13 +16,24 @@ import type {
   FileEdit,
   ToolRef,
 } from '@sprout/ui';
+import type { WsEvent } from '@sprout/events';
 import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 
 // Import canonical types from @sprout/ui
 
 // Re-export for downstream consumers
-export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, TodoPriority, FileEdit, ToolRef };
+export type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  LogEntry,
+  TodoStatus,
+  TodoItem,
+  TodoPriority,
+  FileEdit,
+  ToolRef,
+};
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 
@@ -62,7 +73,11 @@ export interface PerChatState {
   model: string;
   worktreePath?: string;
   queryCount: number;
+  pendingEvents?: WsEvent[];
 }
+
+/** All navigable views in the editor (chat, editor, git, costs) plus any plugin-registered view IDs. */
+export type ViewType = 'chat' | 'editor' | 'git' | 'costs' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
 
 export interface AppState {
   isConnected: boolean;
@@ -74,7 +89,7 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  currentView: ViewType;
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API
@@ -83,6 +98,10 @@ export interface AppState {
   subagentActivities: SubagentActivity[];
   activeChatId: string | null;
   chatSessions: ChatSession[];
+  // WASM shell loading state (cloud mode only)
+  wasmLoading?: boolean;
+  wasmReady?: boolean;
+  wasmError?: string | null;
   // Snapshot of per-chat state, saved on switch-away and restored on switch-back
   perChatCache: Record<string, PerChatState>;
   securityApprovalRequest: {
@@ -111,6 +130,26 @@ export interface AppState {
     // The exact filesystem path being accessed; shown verbatim in the
     // dialog so the user can verify they're approving the right path.
     fsPath?: string;
+    // SP-124-2: LLM-generated analysis of the command. Rendered above the
+    // command block when present.
+    securityAnalysis?: {
+      summary: string;
+      modifies: string;
+      riskAssessment: string;
+      recommendation: string;
+      // SP-124b Phase 2: chain metadata for the per-subcommand stepper.
+      // Present only when chain_length > 1 (i.e. the analyzer analyzed a
+      // chained command). Length/array fields are guarded by the parser
+      // (webui/src/utils/parseSecurityAnalysis.ts).
+      chainLength?: number;
+      chainSubcommands?: string[];
+      chainClassifications?: ('low' | 'moderate' | 'high')[];
+    };
+    // Set when the user's response could not be delivered (WebSocket not
+    // open). The dialog stays open so the user can retry; this message
+    // explains why the first click appeared to do nothing. Cleared on the
+    // next successful send.
+    deliveryError?: string;
   } | null;
   securityPromptRequest: {
     requestId: string;
@@ -125,6 +164,52 @@ export interface AppState {
     options?: Array<{ label: string; value?: string; description?: string }>;
     multiSelect?: boolean;
     default?: string;
+    // Set when the user's response could not be delivered (network error,
+    // non-2xx, or delivered:false from the WASM endpoint). The dialog stays
+    // open so the user can retry; this message explains the failure.
+    // Cleared on the next successful delivery.
+    deliveryError?: string;
+  } | null;
+  passwordRequest: {
+    requestId: string;
+    command: string;
+    prompt: string;
+  } | null;
+  shellApprovalRequest: {
+    requestId: string;
+    command: string;
+    parts: Array<{
+      id: string;
+      text: string;
+      kind: string;
+      semantic: string;
+      risk: string;
+    }>;
+    unifiedView: string;
+    riskLevel: string;
+    // SP-124-2: LLM-generated analysis of the command. Rendered above the
+    // command block when present.
+    securityAnalysis?: {
+      summary: string;
+      modifies: string;
+      riskAssessment: string;
+      recommendation: string;
+    };
+  } | null;
+  editApprovalRequest: {
+    requestId: string;
+    filePath: string;
+    unifiedDiff?: string;
+    hunks: Array<{
+      id: string;
+      oldStart: number;
+      oldLines: number;
+      newStart: number;
+      newLines: number;
+      lines: Array<{ type: 'context' | 'add' | 'remove'; content: string }>;
+      addCount: number;
+      delCount: number;
+    }>;
   } | null;
   modelSelectionRequest: {
     provider: string;
@@ -143,6 +228,12 @@ export interface AppState {
     sessionId: string;
     options: string[];
   } | null;
+  /** Controls how much inter-tool-call narration and streaming detail is shown. */
+  outputVerbosity: 'compact' | 'default' | 'verbose';
+  /** Value of the command input. Lives in the store (not local useState) so
+   * typing in the chat input doesn't re-render AppInner and cascade to the
+   * entire component tree via new prop references. */
+  inputValue: string;
 }
 
 export interface OnboardingState {

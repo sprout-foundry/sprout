@@ -10,7 +10,6 @@ import (
 // with non-trivial values (spaces in provider name, special chars in values).
 func TestResolve_EnvVarAndStoredBothPresent(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
@@ -38,7 +37,6 @@ func TestResolve_EnvVarAndStoredBothPresent(t *testing.T) {
 // trim produces a non-empty value — stored key should still be ignored.
 func TestResolve_EnvVarHasLeadingTrailingSpaces(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
@@ -67,10 +65,13 @@ func TestResolve_EnvVarHasLeadingTrailingSpaces(t *testing.T) {
 // Unicode keys and values (CJK characters, emoji, accented chars).
 func TestLoad_UnicodeKeysAndValues(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	unicodeJSON := `{
 		"日本語プロバイダー": "sk-にほんご-αβγ",
 		"provider-🚀": "key-with-é-ñ-ü-ö-ß",
@@ -102,14 +103,13 @@ func TestLoad_UnicodeKeysAndValues(t *testing.T) {
 // Unicode values exactly.
 func TestSaveLoadRoundTrip_UnicodeValues(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{
-		"日本語プロバイダー": "sk-にほんご-αβγ",
-		"provider-🚀":       "key-with-é-ñ-ü-ö-ß",
-		"中文":              "密钥值🔑",
-		"mixed":             "Hello世界🌍Cyber sécurité",
+		"日本語プロバイダー":  "sk-にほんご-αβγ",
+		"provider-🚀": "key-with-é-ñ-ü-ö-ß",
+		"中文":         "密钥值🔑",
+		"mixed":      "Hello世界🌍Cyber sécurité",
 	}
 	if err := Save(original); err != nil {
 		t.Fatalf("save: %v", err)
@@ -132,7 +132,6 @@ func TestSaveLoadRoundTrip_UnicodeValues(t *testing.T) {
 // TestGetConfigDir_WhitespaceOnlyXDG duplicates coverage for the whitespace
 // fallthrough path, explicitly testing that TrimSpace on XDG causes home fallback.
 func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "   ")
 
@@ -142,7 +141,7 @@ func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".sprout")
+	expected := filepath.Join(homeDir, ".config", "sprout", "credentials")
 	if got != expected {
 		t.Fatalf("expected fallthrough to home %q, got %q", expected, got)
 	}
@@ -152,7 +151,6 @@ func TestGetConfigDir_WhitespaceOnlyXDG(t *testing.T) {
 // whitespace-only provider name to empty string and returns no match from store.
 func TestResolve_WhitespaceOnlyProvider(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	resolved, err := resolve("   \t  ", "")
@@ -174,7 +172,6 @@ func TestResolve_WhitespaceOnlyProvider(t *testing.T) {
 // only provider, a valid env var still resolves correctly.
 func TestResolve_WhitespaceProviderWithEnvVar(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("MY_KEY", "env-value-42")
 
@@ -197,10 +194,13 @@ func TestResolve_WhitespaceProviderWithEnvVar(t *testing.T) {
 // an empty JSON object file.
 func TestLoad_EmptyJSONObject(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", dir)
 	t.Setenv("SPROUT_CONFIG", dir)
 
-	path := filepath.Join(dir, "api_keys.json")
+	credDir := filepath.Join(dir, "credentials")
+	if err := os.MkdirAll(credDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(credDir, "api_keys.json")
 	if err := os.WriteFile(path, []byte(`{}`), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}

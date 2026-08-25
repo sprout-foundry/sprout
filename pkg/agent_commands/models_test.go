@@ -3,8 +3,8 @@ package commands
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestModelsCommandFindExactModel(t *testing.T) {
@@ -49,8 +49,8 @@ func TestModelsCommandFindExactModel(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name: "empty models list",
-			models: []api.ModelInfo{},
+			name:    "empty models list",
+			models:  []api.ModelInfo{},
 			query:   "gpt-4",
 			wantID:  "",
 			wantNil: true,
@@ -65,8 +65,8 @@ func TestModelsCommandFindExactModel(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name: "nil models list",
-			models: nil,
+			name:    "nil models list",
+			models:  nil,
 			query:   "gpt-4",
 			wantID:  "",
 			wantNil: true,
@@ -99,11 +99,11 @@ func TestModelsCommandFuzzySearchModels(t *testing.T) {
 	cmd := &ModelsCommand{}
 
 	tests := []struct {
-		name     string
-		models   []api.ModelInfo
-		query    string
-		wantLen  int
-		wantIDs  []string
+		name    string
+		models  []api.ModelInfo
+		query   string
+		wantLen int
+		wantIDs []string
 	}{
 		{
 			name: "substring match",
@@ -139,18 +139,18 @@ func TestModelsCommandFuzzySearchModels(t *testing.T) {
 			wantIDs: []string{"gpt-4", "claude-3", "gemini-pro"},
 		},
 		{
-			name:     "no matches",
-			models:   []api.ModelInfo{{ID: "gpt-4"}, {ID: "claude-3"}},
-			query:    "xyz",
-			wantLen:  0,
-			wantIDs:  []string{},
+			name:    "no matches",
+			models:  []api.ModelInfo{{ID: "gpt-4"}, {ID: "claude-3"}},
+			query:   "xyz",
+			wantLen: 0,
+			wantIDs: []string{},
 		},
 		{
-			name:     "empty models",
-			models:   []api.ModelInfo{},
-			query:    "gpt",
-			wantLen:  0,
-			wantIDs:  []string{},
+			name:    "empty models",
+			models:  []api.ModelInfo{},
+			query:   "gpt",
+			wantLen: 0,
+			wantIDs: []string{},
 		},
 		{
 			name: "partial match with prefix bonus",
@@ -218,10 +218,10 @@ func TestModelsCommandCalculateFuzzyScore(t *testing.T) {
 		query string
 		want  int
 	}{
-				{
+		{
 			name: "exact substring match in ID",
 			model: api.ModelInfo{
-				ID:   "gpt-4",
+				ID:          "gpt-4",
 				Description: "OpenAI's GPT-4 model",
 			},
 			query: "gpt",
@@ -301,7 +301,7 @@ func TestModelsCommandCalculateFuzzyScore(t *testing.T) {
 			},
 			query: "gpt openai",
 			want:  40, // 30 (word "gpt" in ID) + 10 (word "openai" in description)
-		},}
+		}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

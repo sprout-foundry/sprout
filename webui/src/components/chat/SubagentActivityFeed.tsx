@@ -6,19 +6,13 @@ import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
 import './SubagentActivityFeed.css';
 import { SubagentTree } from './SubagentTree';
+import { formatDuration } from '../../utils/format';
 
 // SP-053-1a: getPersonaColor + PERSONA_COLORS now live in @sprout/ui so the
 // chat-bubble badges, the tool timeline, and this activity feed all read
 // from one source. Re-exported here for any older importers in this package
 // that referenced this module directly.
 export { getPersonaColor };
-
-export const formatDuration = (start: Date, end?: Date): string => {
-  const ms = (end || new Date()).getTime() - start.getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 // "Dn" is a compact subagent-depth badge. Surface a human-readable label
 // via tooltip / aria-label so users hovering a "D1" know it means an
@@ -67,7 +61,9 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
               className="subagent-feed-depth-badge"
               title={subagentDepthLabel(depth)}
               aria-label={subagentDepthLabel(depth)}
-            >D{depth}</span>
+            >
+              D{depth}
+            </span>
           )}
           {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
         </span>
@@ -75,12 +71,8 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
           {run.outputLines.length > 0 && (
             <span className="subagent-feed-line-count">{run.outputLines.length} lines</span>
           )}
-          {run.tokensUsed > 0 && (
-            <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>
-          )}
-          {run.cost > 0 && (
-            <span className="subagent-feed-metric">{formatCost(run.cost)}</span>
-          )}
+          {run.tokensUsed > 0 && <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>}
+          {run.cost > 0 && <span className="subagent-feed-metric">{formatCost(run.cost)}</span>}
           {startTime && <span className="subagent-feed-duration">{formatDuration(startTime)}</span>}
           {hasOutput && (
             <span className="subagent-feed-toggle">
@@ -121,10 +113,12 @@ function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element
       <span className="subagent-feed-persona">{run.persona}</span>
       {depth > 0 && (
         <span
-              className="subagent-feed-depth-badge"
-              title={subagentDepthLabel(depth)}
-              aria-label={subagentDepthLabel(depth)}
-            >D{depth}</span>
+          className="subagent-feed-depth-badge"
+          title={subagentDepthLabel(depth)}
+          aria-label={subagentDepthLabel(depth)}
+        >
+          D{depth}
+        </span>
       )}
       {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
       <span className="subagent-feed-sep">·</span>
@@ -175,7 +169,7 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
   if (!hasContent) return null;
 
   return (
-    <div className={`subagent-feed ${visible ? '' : 'subagent-feed--collapsed'}`}>
+    <div className={`subagent-feed ${visible ? '' : 'subagent-feed--collapsed'}`} data-testid="chat-subagent-feed">
       <button
         className="subagent-feed-toggle-bar"
         onClick={() => setVisible((prev) => !prev)}
@@ -192,10 +186,18 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
           )}
           <span
             className={`subagent-feed-view-toggle ${viewMode === 'tree' ? 'subagent-feed-view-toggle--active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewMode((v) => (v === 'flat' ? 'tree' : 'flat'));
+            }}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                setViewMode((v) => (v === 'flat' ? 'tree' : 'flat'));
+              }
+            }}
           >
             {viewMode === 'flat' ? 'Tree' : 'List'}
           </span>
@@ -231,9 +233,7 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
                   {totalTokens > 0 && (
                     <span className="subagent-feed-summary-metric">{formatTokens(totalTokens)} tok</span>
                   )}
-                  {totalCost > 0 && (
-                    <span className="subagent-feed-summary-metric">{formatCost(totalCost)}</span>
-                  )}
+                  {totalCost > 0 && <span className="subagent-feed-summary-metric">{formatCost(totalCost)}</span>}
                 </div>
               );
             }

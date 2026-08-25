@@ -10,19 +10,15 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// WorkspaceFileMetadata describes the per-file sync state that the
-// browser-primary workspace model in SP-046 needs to enforce consistency
-// between the browser-side OPFS replica and the container-side filesystem.
-//
+// WorkspaceFileMetadata describes the per-file sync state for enforcing
+// consistency between the browser-side OPFS replica and the container FS.
 // On native sprout (single-replica), only ModifiedAt and the agent's
-// turn-scoped read tracking actually matter. The sequence fields are
-// placeholders for the eventual WS-based sync layer to populate from the
-// browser side; until then they're zero. Storing the struct now (rather
-// than retrofitting later) keeps the persistence shape stable.
-//
-// Spec: roadmap/SP-046-workspace-sync-model.md §3.
+// turn-scoped read tracking matter; sequence fields are placeholders for
+// the eventual WS-based sync layer.
 type WorkspaceFileMetadata struct {
 	// BrowserSeq counts user-driven edits to the file from the browser side.
 	// Bumped each time the user types and the change flushes to OPFS.
@@ -54,26 +50,14 @@ func (m WorkspaceFileMetadata) HasUnsyncedBrowserEdits() bool {
 	return m.BrowserSeq > m.LastSyncedBrowser
 }
 
-// ErrWriteStale is the sentinel returned by checkWriteStaleness for the
-// "no recent read" / "modified after read" cases. The agent's correct
-// response is to read_file(path) and retry.
-//
-// ErrWriteHasUnsyncedEdits is the sentinel for the "browser has edits
-// the container hasn't seen yet" case. The agent must NOT auto-retry;
-// instead it should ask the user whether to overwrite. The platform's
-// WS sync layer populates the WorkspaceFileMetadata that drives this.
-//
-// Both are deliberately wrappable via errors.Is so callers (including
-// the tool-result formatter) can distinguish them without string-matching.
+// Sentinel errors for write-staleness and conflict detection.
+// Both are wrappable via errors.Is for caller distinction.
 var (
 	ErrWriteStale            = errors.New("write refused: file may be stale")
 	ErrWriteHasUnsyncedEdits = errors.New("write refused: user has unsynced edits to this file")
 )
 
-// patchSeqNum is a monotonically increasing atomic counter used to assign
-// unique sequence numbers to workspace_patch events emitted during tool-call
-// writes. The sequence ensures the browser can detect and order patches even
-// when events arrive out of order.
+// patchSeqNum assigns unique sequence numbers to workspace_patch events.
 var patchSeqNum int64
 
 // nextPatchSeq returns the next patch sequence number. Thread-safe via
@@ -82,27 +66,12 @@ func nextPatchSeq() int64 {
 	return atomic.AddInt64(&patchSeqNum, 1)
 }
 
-// stalenessFreshnessWindow is the "modified recently" cutoff for the
-// staleness rule. Files written this recently are considered possibly-
-// stale-on-read, so the agent must re-read before writing.
-//
-// 30s is chosen to comfortably cover a typed-edit flush from the browser
-// (which queues through OPFS → outbound op → container apply) under
-// realistic network conditions, while still keeping the false-positive
-// rate low when the agent does its own write→write sequences.
+// stalenessFreshnessWindow is the "modified recently" cutoff for the staleness rule.
 const stalenessFreshnessWindow = 30 * time.Second
 
-// workspaceMetadataStore is the in-memory per-path WorkspaceFileMetadata
-// the agent consults from checkWriteStaleness. The platform-side sync
-// layer (when wired up via the WS transport in SP-046-1d/1f/1g) is
-// expected to populate this via Agent.SetFileMetadata as it processes
-// browser-side edit notifications.
-//
-// Storing this in memory is fine for beta: the metadata is recomputable
-// from on-disk file state plus the browser's outbound op log, and a
-// container restart re-syncs the full state from the browser-side OPFS
-// replica anyway. A persistent store could be added later if measurement
-// shows the resync cost is meaningful.
+// workspaceMetadataStore is the in-memory per-path metadata the agent
+// consults from checkWriteStaleness. The platform-side sync layer
+// populates it via Agent.SetFileMetadata.
 type workspaceMetadataStore struct {
 	mu sync.RWMutex
 	m  map[string]WorkspaceFileMetadata
@@ -134,10 +103,7 @@ func (s *workspaceMetadataStore) set(path string, md WorkspaceFileMetadata) {
 	s.m[path] = md
 }
 
-// SetFileMetadata replaces the cached sync metadata for `path`. Called by
-// the platform-side sync bridge whenever it learns about a new browser
-// sequence or last-synced acknowledgement. Safe to call before the agent
-// is otherwise initialized.
+// SetFileMetadata replaces the cached sync metadata for `path`.
 func (a *Agent) SetFileMetadata(path string, md WorkspaceFileMetadata) {
 	if a == nil {
 		return
@@ -182,25 +148,17 @@ const (
 
 // ReconciliationActionResult is the per-file reconciliation outcome.
 type ReconciliationActionResult struct {
-	FilePath     string                  `json:"file_path"`
+	FilePath     string                   `json:"file_path"`
 	Action       ReconciliationActionType `json:"action"`
-	ContainerSeq int64                   `json:"container_seq"`
-	BrowserSeq   int64                   `json:"browser_seq"`
+	ContainerSeq int64                    `json:"container_seq"`
+	BrowserSeq   int64                    `json:"browser_seq"`
 }
 
 // ReconcileSeqNumbers compares browser-supplied per-file sequence numbers
 // against the container's stored metadata and returns a reconciliation plan.
-// The browser sends {file_path: browser_seq}; for each file, we compare
-// the browser's seq with the container's seq to determine the action.
-//
-// Rules:
-//   - browser_seq == container_seq → sync_ok
-//   - browser_seq == last_synced_container AND container_seq > browser_seq → container_ahead
-//   - browser_seq > last_synced_browser → browser_ahead (unsynced browser edits)
-//   - both sides diverged → diverged
 func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]ReconciliationActionResult, error) {
 	if ag == nil {
-		return nil, fmt.Errorf("agent is nil")
+		return nil, agenterrors.NewTool("workspace_sync", "agent is nil", nil)
 	}
 	if ag.fileMetadata == nil {
 		// No metadata store means no files tracked — everything is browser_ahead
@@ -299,11 +257,8 @@ func (a *Agent) CheckPatchConflict(path string) (bool, string) {
 	return false, ""
 }
 
-// normalizeFilePath resolves a path to its absolute form so that the
-// staleness tracker's map keys match regardless of whether the LLM passes
-// a relative path ("foo/bar.go") or an absolute one ("/home/user/foo/bar.go").
-// Uses workspaceRoot to resolve relative paths. Falls back to filepath.Abs
-// if workspaceRoot is empty.
+// normalizeFilePath resolves a path to its absolute form so the staleness
+// tracker's map keys match regardless of relative or absolute input.
 func normalizeFilePath(path, workspaceRoot string) string {
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path)
@@ -320,9 +275,7 @@ func normalizeFilePath(path, workspaceRoot string) string {
 }
 
 // turnFileTracker records which files the agent has called read_file on
-// during the current turn. Used by the staleness rule's "must read before
-// write this turn" check. All paths are normalized to absolute form so
-// that relative and absolute references to the same file share one key.
+// during the current turn. Paths are normalized to absolute form.
 type turnFileTracker struct {
 	mu    sync.Mutex
 	reads map[string]time.Time
@@ -376,8 +329,7 @@ func (t *turnFileTracker) reset() {
 }
 
 // RecordFileReadThisTurn marks `path` as read by the agent during the
-// current turn. Called from the read_file tool handler. Safe on a nil
-// receiver so test scaffolding doesn't have to initialize the tracker.
+// current turn. Called from the read_file tool handler.
 func (a *Agent) RecordFileReadThisTurn(path string) {
 	if a == nil {
 		return
@@ -390,10 +342,7 @@ func (a *Agent) RecordFileReadThisTurn(path string) {
 	a.filesReadThisTurn.recordRead(path, a.currentWorkspaceRoot())
 }
 
-// ResetFileReadsForNewTurn clears the per-turn read tracker. Called at
-// turn boundaries so the staleness rule resets between turns: a file the
-// agent read on turn N still needs a fresh read_file on turn N+1 before
-// writing.
+// ResetFileReadsForNewTurn clears the per-turn read tracker at turn boundaries.
 func (a *Agent) ResetFileReadsForNewTurn() {
 	if a == nil {
 		return
@@ -407,40 +356,22 @@ func (a *Agent) ResetFileReadsForNewTurn() {
 	a.filesReadThisTurn.reset()
 }
 
-// checkWriteStaleness applies the SP-046 §7 staleness rule plus the §3
-// conflict rule:
+// checkWriteStaleness enforces the staleness and conflict rules:
+//  1. If the file has unsynced browser edits, REFUSE with ErrWriteHasUnsyncedEdits.
+//  2. If the file doesn't exist, allow the write.
+//  3. If the agent hasn't read_file(path) this turn, REFUSE with ErrWriteStale.
+//  4. If the file was modified within the freshness window after the read, REFUSE.
 //
-//  1. If the file has WorkspaceFileMetadata showing unsynced browser
-//     edits (BrowserSeq > LastSyncedBrowser), REFUSE with
-//     ErrWriteHasUnsyncedEdits. The agent should ask the user before
-//     overwriting — auto-retry is NOT correct.
-//  2. If the file doesn't exist, allow the write (creating new files
-//     never needs a prior read).
-//  3. If the agent hasn't called read_file(path) this turn, REFUSE with
-//     ErrWriteStale. The agent's correct response is to call
-//     read_file(path) and retry.
-//  4. If the file was modified within the freshness window AND the
-//     modification was NOT by this turn's earlier read, REFUSE with
-//     ErrWriteStale.
-//
-// Both refusals wrap their respective sentinels via fmt.Errorf("...: %w",
-// sentinel) so callers can distinguish them with errors.Is.
-//
-// On nil Agent (test scaffolding), the check is a no-op.
+// On nil Agent, the check is a no-op.
 func (a *Agent) checkWriteStaleness(path string) error {
 	if a == nil {
 		return nil
 	}
 
-	// Conflict check runs BEFORE the staleness check so the agent doesn't
-	// get the "read first" hint when the real answer is "ask the user."
-	// The metadata store is populated by the platform-side sync layer
-	// (SP-046-1d/1f/1g); on native or free-tier WASM it's empty and this
-	// check is a no-op.
 	if md, ok := a.GetFileMetadata(path); ok && md.HasUnsyncedBrowserEdits() {
-		return fmt.Errorf(
-			"%w: %q has %d unsynced edits from the user (browser_seq=%d, last_synced=%d); ask the user whether to overwrite",
-			ErrWriteHasUnsyncedEdits, path,
+		return agenterrors.Wrapf(
+			ErrWriteHasUnsyncedEdits, "%q has %d unsynced edits from the user (browser_seq=%d, last_synced=%d); ask the user whether to overwrite",
+			path,
 			md.BrowserSeq-md.LastSyncedBrowser,
 			md.BrowserSeq, md.LastSyncedBrowser,
 		)
@@ -448,8 +379,7 @@ func (a *Agent) checkWriteStaleness(path string) error {
 
 	info, statErr := os.Stat(path)
 	if statErr != nil {
-		// File doesn't exist (or some unrelated stat error). Creating
-		// new files via write_file is fine — no prior read required.
+		// File doesn't exist — creating new files is fine.
 		return nil
 	}
 
@@ -463,24 +393,21 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	}
 
 	if !hasReadThisTurn {
-		return fmt.Errorf(
-			"%w: must call read_file(%q) first; the file may be stale and overwriting blindly is rarely correct",
-			ErrWriteStale, path,
+		return agenterrors.Wrapf(
+			ErrWriteStale, "must call read_file(%q) first; the file may be stale and overwriting blindly is rarely correct",
+			path,
 		)
 	}
 
 	// File was read this turn — but if it's been modified within the
-	// freshness window by something OTHER than the prior read (which the
-	// stat ModTime ≤ read time would tell us), refuse. We approximate
-	// "modified by something other than the agent's read" with: ModTime
-	// is more recent than when the agent recorded the read.
+	// freshness window by something OTHER than the prior read, refuse.
 	if tracker != nil {
 		readAt, ok := tracker.getReadTime(path, workspaceRoot)
 		if ok && info.ModTime().After(readAt) &&
 			time.Since(info.ModTime()) < stalenessFreshnessWindow {
-			return fmt.Errorf(
-				"%w: %q was modified after your last read_file call; re-read before writing",
-				ErrWriteStale, path,
+			return agenterrors.Wrapf(
+				ErrWriteStale, "%q was modified after your last read_file call; re-read before writing",
+				path,
 			)
 		}
 	}
@@ -489,9 +416,7 @@ func (a *Agent) checkWriteStaleness(path string) error {
 }
 
 // SyncOp represents a single file operation sent from the browser to the
-// container as part of the workspace sync protocol (SP-046 §2).
-// The browser queues these in OPFS and flushes them via HTTP POST when
-// the WebSocket is up.
+// container as part of the workspace sync protocol.
 type SyncOp struct {
 	OpType     string `json:"op_type"`     // "write", "delete", or "rename"
 	Path       string `json:"path"`        // Target file path (relative to workspace root)
@@ -503,9 +428,9 @@ type SyncOp struct {
 
 // SyncOpResult is the server response to a SyncOp application.
 type SyncOpResult struct {
-	Accepted     bool   `json:"accepted"`      // Whether the op was applied
-	ConflictPath string `json:"conflict_path"` // Set if there's a container-side conflict (path to .theirs file)
-	ContainerSeq int64  `json:"container_seq"` // Current container sequence after applying
+	Accepted     bool   `json:"accepted"`        // Whether the op was applied
+	ConflictPath string `json:"conflict_path"`   // Set if there's a container-side conflict (path to .theirs file)
+	ContainerSeq int64  `json:"container_seq"`   // Current container sequence after applying
 	Error        string `json:"error,omitempty"` // Error message if not accepted
 }
 
@@ -514,12 +439,12 @@ type SyncOpResult struct {
 // path traversal is attempted.
 func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 	if relPath == "" {
-		return "", fmt.Errorf("relative path must not be empty")
+		return "", agenterrors.NewValidation("relative path must not be empty", nil)
 	}
 
 	absRoot, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", agenterrors.Wrap(err, "resolve workspace root")
 	}
 
 	// Resolve symlinks in workspace root for consistent path resolution and
@@ -551,7 +476,7 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 				resolved = filepath.Join(resolvedRoot, relPath)
 			}
 		} else {
-			return "", fmt.Errorf("resolve path: %w", evalErr)
+			return "", agenterrors.Wrap(evalErr, "resolve path")
 		}
 	} else {
 		resolved = evaluated
@@ -560,7 +485,7 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 	// Verify the resolved path is within the workspace root
 	rel, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot)
+		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot), nil)
 	}
 
 	return resolved, nil
@@ -674,9 +599,6 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 		}
 		// Remove metadata for deleted file
 		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{})
-		// Return early — do NOT fall through to the shared metadata update
-		// block below. The file is gone; its metadata should be cleared and
-		// ContainerSeq must be 0 to signal that the path no longer exists.
 		return SyncOpResult{
 			Accepted:     true,
 			ContainerSeq: 0,
@@ -716,7 +638,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 		}
 		// Move metadata from old path to new path
 		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{}) // clear old
-		op.Path = op.NewPath                                // update key for subsequent metadata update
+		op.Path = op.NewPath                                 // update key for subsequent metadata update
 	}
 
 	// 7. Update metadata

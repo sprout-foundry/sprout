@@ -3,9 +3,8 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -20,26 +19,26 @@ const (
 // It returns a JSON response with all symbols or filtered symbols.
 func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	if workspaceRoot == "" {
-		http.Error(w, "Workspace not found", http.StatusBadRequest)
+		writeJSONErr(w, http.StatusBadRequest, "workspace_not_found", "Workspace not found")
 		return
 	}
 
 	// Try loading cached symbols first
 	idx, err := index.LoadSymbols(workspaceRoot)
 	if err != nil {
-		log.Printf("[debug] LoadSymbols error: %v", err)
+		ws.log().Debug("failed to load symbol index", slog.Any("err", err))
 	}
 	// If cache doesn't exist or has no files, build fresh
 	if idx == nil || len(idx.Files) == 0 {
 		idx, err = index.BuildSymbols(workspaceRoot)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to build symbol index: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "symbol_index_build_failed", fmt.Sprintf("Failed to build symbol index: %v", err))
 			return
 		}
 	}
@@ -115,9 +114,5 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 		"total":   total,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		// Logging error but can't do much at this point
-		log.Printf("Failed to encode symbol response: %v", err)
-	}
+	writeJSON(w, http.StatusOK, response)
 }

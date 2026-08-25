@@ -16,9 +16,16 @@ type ProjectMarker struct {
 }
 
 // projectMarkers defines the markers we look for, ordered by weight (highest first).
+//
+// `.sprout` is deliberately weighted below the 50-point single-marker
+// threshold. Sprout creates it in every directory it runs in — including
+// $HOME — so on its own it means "sprout has been here", not "this is a
+// project". At weight 90 it made the home directory self-certify as a
+// project, which is what let the workspace gate be bypassed. It still counts
+// as corroborating evidence alongside a real marker.
 var projectMarkers = []ProjectMarker{
 	{".git", 100, true},
-	{".sprout", 90, true},
+	{".sprout", 40, true},
 	{"go.mod", 80, false},
 	{"package.json", 80, false},
 	{"Cargo.toml", 80, false},
@@ -38,6 +45,42 @@ type ProjectInfo struct {
 	Path    string   `json:"path"`
 	Name    string   `json:"name"`
 	Markers []string `json:"markers,omitempty"`
+}
+
+// protectedHomeDirNames are top-level home directories that must never be
+// listed during project discovery. Reading them is what raises the macOS
+// privacy prompts ("sprout would like to access files in your Documents
+// folder") — TCC gates the directory listing itself, so merely probing for
+// project markers triggers a dialog per folder. None of them is a plausible
+// project root, so skipping costs nothing.
+//
+// Covers macOS, the XDG user dirs on Linux, and the Windows profile layout.
+var protectedHomeDirNames = map[string]bool{
+	// macOS TCC-gated + never-a-project
+	"Library":      true,
+	"Applications": true,
+	"Documents":    true,
+	"Desktop":      true,
+	"Downloads":    true,
+	"Pictures":     true,
+	"Music":        true,
+	"Movies":       true,
+	"Public":       true,
+	// Linux XDG user dirs
+	"Videos":    true,
+	"Templates": true,
+	// Windows profile
+	"AppData":     true,
+	"OneDrive":    true,
+	"Contacts":    true,
+	"Favorites":   true,
+	"Links":       true,
+	"Saved Games": true,
+	"Searches":    true,
+	// Cloud sync roots — huge, and traversal can force a network hydrate
+	"Dropbox":      true,
+	"Google Drive": true,
+	"iCloud Drive": true,
 }
 
 // IsProjectDirectory checks if a directory appears to be a project root.
@@ -133,14 +176,17 @@ func FindProjectsInDirectory(dir string, maxDepth int) []ProjectInfo {
 	if maxDepth <= 0 {
 		maxDepth = 2
 	}
-	walkForProjects(dir, maxDepth, 0, &results)
+	// The protected-name skip applies only to the immediate children of the
+	// user's home directory. A project may legitimately contain a folder named
+	// "Documents"; only the home-level ones are privacy-gated.
+	walkForProjects(dir, maxDepth, 0, &results, isHomeWorkspace(dir))
 	if len(results) > 20 {
 		results = results[:20]
 	}
 	return results
 }
 
-func walkForProjects(dir string, maxDepth, depth int, results *[]ProjectInfo) {
+func walkForProjects(dir string, maxDepth, depth int, results *[]ProjectInfo, rootIsHome bool) {
 	if depth > maxDepth || len(*results) >= 20 {
 		return
 	}
@@ -152,6 +198,9 @@ func walkForProjects(dir string, maxDepth, depth int, results *[]ProjectInfo) {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
+		if rootIsHome && depth == 0 && protectedHomeDirNames[entry.Name()] {
+			continue
+		}
 		subDir := filepath.Join(dir, entry.Name())
 		if isProject, _ := IsProjectDirectory(subDir); isProject {
 			*results = append(*results, ProjectInfo{
@@ -159,7 +208,7 @@ func walkForProjects(dir string, maxDepth, depth int, results *[]ProjectInfo) {
 				Name: entry.Name(),
 			})
 		} else if depth < maxDepth {
-			walkForProjects(subDir, maxDepth, depth+1, results)
+			walkForProjects(subDir, maxDepth, depth+1, results, rootIsHome)
 		}
 	}
 }

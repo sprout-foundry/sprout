@@ -23,6 +23,14 @@ export interface EditorBuffer {
   file: EditorFileEntry;
   content: string;
   originalContent: string; // Content when file was loaded/reset
+  /**
+   * True once the buffer's content is initialized in memory (loaded from
+   * disk by any pane, explicitly provided, or reloaded). Such buffers are
+   * authoritative in the store and must be restored from memory when shown
+   * — never re-read from disk, which would silently destroy unsaved edits.
+   * Fresh buffers (created by openFile) are false until the first read.
+   */
+  contentLoaded?: boolean;
   cursorPosition: {
     line: number;
     column: number;

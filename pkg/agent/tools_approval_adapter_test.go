@@ -3,10 +3,13 @@ package agent
 import (
 	"sync"
 	"testing"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // TestToolsApprovalAdapter_NilAgent verifies the adapter constructor returns
@@ -154,5 +157,261 @@ func TestToolsApprovalAdapter_ExtrasForwarded(t *testing.T) {
 
 	if !result.Approved {
 		t.Error("expected Approved=true")
+	}
+}
+
+// cliTestAdapter builds an adapter with all surfaces disabled except a
+// scriptable CLI prompt, isolating the CLI-fallback path under test.
+func cliTestAdapter(t *testing.T, agent *Agent, choiceFn func(prompt, command string) utils.ApprovalChoice) *toolsApprovalAdapter {
+	t.Helper()
+	return &toolsApprovalAdapter{
+		agent:    agent,
+		eventBus: events.NewEventBus(),
+		cliPrompt: func(prompt, command string) utils.ApprovalChoice {
+			return choiceFn(prompt, command)
+		},
+	}
+}
+
+// TestToolsApprovalAdapter_CLIFallbackApprove verifies the CLI fallback
+// engages when no WebUI client is connected: the prompt is shown, the user's
+// choice is honored, and allowlist side-effects run.
+func TestToolsApprovalAdapter_CLIFallbackApprove(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	var gotPrompt, gotCommand string
+	adapter := cliTestAdapter(t, a, func(prompt, command string) utils.ApprovalChoice {
+		gotPrompt, gotCommand = prompt, command
+		return utils.ApprovalChoiceApproveAlways
+	})
+	adapter.approvalMgr = security.NewApprovalManager()
+
+	result := adapter.RequestApproval("id", "shell_command", "CAUTION", "Execute shell_command: ls -la /tmp", map[string]string{"command": "ls -la /tmp"})
+
+	if !result.Approved {
+		t.Fatalf("expected Approved=true, got %+v", result)
+	}
+	if gotPrompt != "Execute shell_command: ls -la /tmp" {
+		t.Errorf("CLI prompt not shown: got %q", gotPrompt)
+	}
+	if gotCommand != "ls -la /tmp" {
+		t.Errorf("command not passed to CLI picker: got %q", gotCommand)
+	}
+	if !a.IsShellCommandAllowlisted("ls -la /tmp") {
+		t.Error("expected ApproveAlways to persist the command to the shell allowlist")
+	}
+}
+
+// TestToolsApprovalAdapter_CLIFallbackDeny verifies a CLI rejection produces
+// Approved=false with reason "rejected" and skips allowlist persistence.
+func TestToolsApprovalAdapter_CLIFallbackDeny(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	adapter := cliTestAdapter(t, a, func(prompt, command string) utils.ApprovalChoice {
+		return utils.ApprovalChoiceDeny
+	})
+	adapter.approvalMgr = security.NewApprovalManager()
+
+	result := adapter.RequestApproval("id", "shell_command", "CAUTION", "test prompt", map[string]string{"command": "git push"})
+
+	if result.Approved {
+		t.Fatal("expected Approved=false on CLI deny")
+	}
+	if result.Reason != "rejected" {
+		t.Errorf("expected Reason=%q, got %q", "rejected", result.Reason)
+	}
+}
+
+// TestToolsApprovalAdapter_CLIAvailableNotInteractive verifies the CLI
+// fallback is skipped (falls to the legacy publish) when no interactive
+// surface exists — matching headless and subagent runs.
+func TestToolsApprovalAdapter_CLIAvailableNotInteractive(t *testing.T) {
+	mgr := security.NewApprovalManager()
+	mgr.SetTimeout(50 * time.Millisecond)
+
+	ch := make(chan struct{})
+	var denied bool
+	adapter := &toolsApprovalAdapter{
+		approvalMgr: mgr,
+		eventBus:    events.NewEventBus(),
+		cliPrompt:   nil, // no injected prompt → real logger path
+	}
+
+	go func() {
+		result := adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil)
+		denied = !result.Approved
+		ch <- struct{}{}
+	}()
+	select {
+	case <-ch:
+		if !denied {
+			t.Error("expected denial (headless: no responder on bus)")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("adapter blocked past timeout")
+	}
+}
+
+// TestToolsApprovalAdapter_ElevateAppliesSideEffects verifies the Elevate
+// choice elevates the agent session via applyApprovalDecision.
+func TestToolsApprovalAdapter_ElevateAppliesSideEffects(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	adapter := cliTestAdapter(t, a, func(prompt, command string) utils.ApprovalChoice {
+		return utils.ApprovalChoiceElevate
+	})
+	adapter.approvalMgr = security.NewApprovalManager()
+
+	result := adapter.RequestApproval("id", "shell_command", "CAUTION", "test", map[string]string{"command": "make build"})
+
+	if !result.Approved {
+		t.Fatalf("expected Approved=true after elevate, got %+v", result)
+	}
+	if !a.IsSessionElevated() {
+		t.Error("expected session to be elevated after Elevate choice")
+	}
+}
+
+// TestToolsApprovalAdapter_WebUIPreferredOverCLI verifies that with an active
+// WebUI client connected, the bus answer wins and the CLI is not prompted.
+func TestToolsApprovalAdapter_WebUIPreferredOverCLI(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	adapter := cliTestAdapter(t, a, func(prompt, command string) utils.ApprovalChoice {
+		t.Error("CLI prompt should not run when WebUI responds")
+		return utils.ApprovalChoiceDeny
+	})
+	mgr := security.NewApprovalManager()
+	mgr.SetTimeout(2 * time.Second)
+	adapter.approvalMgr = mgr
+	a.eventBus = adapter.eventBus
+	a.SetHasActiveWebUIClients(func() bool { return true })
+
+	ch := adapter.eventBus.Subscribe("test")
+	defer adapter.eventBus.Unsubscribe("test")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ev := <-ch
+		data, _ := ev.Data.(map[string]interface{})
+		rid, _ := data["request_id"].(string)
+		mgr.RespondToApproval(rid, true)
+	}()
+
+	result := adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil)
+	wg.Wait()
+
+	if !result.Approved {
+		t.Fatal("expected Approved=true via webui surface")
+	}
+}
+
+// TestToolsApprovalAdapter_NoRepeatTimeout verifies that after a WebUI
+// timeout, the adapter does not republish to the bus: exactly one
+// SecurityApprovalRequest event is published for the call.
+func TestToolsApprovalAdapter_NoRepeatTimeout(t *testing.T) {
+	adapter := cliTestAdapter(t, nil, func(prompt, command string) utils.ApprovalChoice {
+		return utils.ApprovalChoiceApproveOnce
+	})
+	mgr := security.NewApprovalManager()
+	mgr.SetTimeout(50 * time.Millisecond)
+	adapter.approvalMgr = mgr
+
+	a := newIsolatedTestAgent(t)
+	a.eventBus = adapter.eventBus
+	a.SetHasActiveWebUIClients(func() bool { return true })
+	adapter.agent = a
+
+	published := make(chan struct{}, 16)
+	ch := adapter.eventBus.Subscribe("test")
+	defer adapter.eventBus.Unsubscribe("test")
+	go func() {
+		for range ch {
+			published <- struct{}{}
+		}
+	}()
+
+	result := adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil)
+
+	if !result.Approved {
+		t.Fatalf("expected CLI fallback to answer after webui timeout, got %+v", result)
+	}
+	select {
+	case <-published:
+	default:
+		t.Fatal("expected at least one bus publish")
+	}
+	// Drain briefly to catch a possible late second publish.
+	time.Sleep(150 * time.Millisecond)
+	if got := len(published); got != 1 {
+		t.Errorf("expected exactly 1 bus publish after webui timeout, got %d (double publish = double blocking)", got+1)
+	}
+}
+
+// TestToolsApprovalAdapter_SubagentNeverPromptsCLI pins the security guard
+// that subagent flows can never reach the interactive CLI prompt, even when
+// a stub is injected — the guard sits ahead of the test seam.
+func TestToolsApprovalAdapter_SubagentNeverPromptsCLI(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	a.subagentDepth = 1
+	adapter := &toolsApprovalAdapter{
+		agent:       a,
+		approvalMgr: security.NewApprovalManager(),
+		eventBus:    events.NewEventBus(),
+		cliPrompt: func(prompt, command string) utils.ApprovalChoice {
+			t.Error("CLI prompt must never run for subagents")
+			return utils.ApprovalChoiceDeny
+		},
+	}
+	mgr := adapter.approvalMgr
+	mgr.SetTimeout(50 * time.Millisecond)
+
+	ch := make(chan tools.ApprovalResult, 1)
+	go func() { ch <- adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil) }()
+
+	select {
+	case result := <-ch:
+		if result.Approved {
+			t.Error("expected denial when no surface can respond")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("subagent request blocked past the approval timeout")
+	}
+}
+
+// TestToolsApprovalAdapter_SkipPromptNeverPromptsCLI pins the headless
+// guard: with SkipPrompt=true and no injected stub, the adapter must fall
+// through to the bus (and its timeout denial), never the terminal.
+func TestToolsApprovalAdapter_SkipPromptNeverPromptsCLI(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	mgrCfg, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+	a.configManager = mgrCfg
+	if err := a.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
+		c.SkipPrompt = true
+		return nil
+	}); err != nil {
+		t.Fatalf("set SkipPrompt: %v", err)
+	}
+
+	mgr := security.NewApprovalManager()
+	mgr.SetTimeout(50 * time.Millisecond)
+
+	adapter := &toolsApprovalAdapter{
+		agent:       a,
+		approvalMgr: mgr,
+		eventBus:    events.NewEventBus(),
+	}
+
+	ch := make(chan tools.ApprovalResult, 1)
+	go func() { ch <- adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil) }()
+
+	select {
+	case result := <-ch:
+		if result.Approved {
+			t.Error("expected denial (headless: bus timeout applies the safe default)")
+		}
+		if result.Reason != "timed_out" {
+			t.Errorf("expected Reason=%q, got %q", "timed_out", result.Reason)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("headless request blocked past the approval timeout")
 	}
 }

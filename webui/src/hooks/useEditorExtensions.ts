@@ -62,6 +62,7 @@ import { lintDiagnostics } from '../extensions/lintDiagnostics';
 import { minimapExtension } from '../extensions/minimap';
 import { renameHighlightField } from '../extensions/renameOverlay';
 import { customSearchExtension } from '../extensions/searchPanel';
+import { aiCompletionsExtension } from '../extensions/aiCompletions';
 import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { tabExpandSnippets } from '../extensions/snippets';
 import { stickyScrollPlugin } from '../extensions/stickyScroll';
@@ -91,6 +92,7 @@ export interface ExtensionSettings {
   whitespaceRenderingMode: WhitespaceRenderingMode;
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
+  aiCompletionsEnabled: boolean;
 }
 
 export interface ThemeConfig {
@@ -156,6 +158,7 @@ export interface UseEditorExtensionsReturn {
     lsp: Compartment;
     inlayHints: Compartment;
     signatureHelp: Compartment;
+    aiCompletions: Compartment;
     history: Compartment;
   };
   /**
@@ -185,6 +188,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     lsp: new Compartment(),
     inlayHints: new Compartment(),
     signatureHelp: new Compartment(),
+    aiCompletions: new Compartment(),
     history: new Compartment(),
   }).current; // stable reference — never recreated
 
@@ -260,7 +264,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       // valid Extension values; the difference is the @uiw package pre-bakes the extension.
       compartments.relativeLineNumbers.of(settings.relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
-      foldGutter({ openText: '▼', closedText: '▶' }),
+      foldGutter({ openText: 'v', closedText: '>' }),
       codeFolding(),
       compartments.minimap.of(settings.minimapEnabled ? minimapExtension() : []),
       compartments.inlayHints.of(
@@ -270,6 +274,9 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
         settings.signatureHelpEnabled
           ? signatureHelpExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
           : [],
+      ),
+      compartments.aiCompletions.of(
+        settings.aiCompletionsEnabled ? aiCompletionsExtension(buffer.getFilePath, buffer.languageId) : [],
       ),
       compartments.fontSize.of([EditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } })]),
       compartments.tabSize.of([

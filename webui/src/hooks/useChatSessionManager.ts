@@ -1,5 +1,5 @@
-import type { Message } from '@sprout/ui';
-import { useCallback, useEffect, useState } from 'react';
+import type { Message, ToolRef } from '@sprout/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import {
@@ -14,12 +14,28 @@ import { debugLog } from '../utils/log';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 
+const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
+function extractToolRefsFromContent(content: string): ToolRef[] {
+  const refs: ToolRef[] = [];
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const match = line.match(TOOL_MARKER);
+    if (!match) continue;
+    const toolName = match[1].split(' ')[0] || match[1];
+    refs.push({
+      toolId: `restored-tool-${refs.length}-${Date.now()}`,
+      toolName,
+      label: toolName,
+    });
+  }
+  return refs;
+}
+
 export interface UseChatSessionManagerParams {
   setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<string[]>;
-  setInputValue: React.Dispatch<React.SetStateAction<string>>;
   isProcessing: boolean;
 }
 
@@ -32,6 +48,7 @@ export interface UseChatSessionManagerReturn {
   handleSendMessage: (message: string, options?: { allowConcurrent?: boolean }) => Promise<void>;
   handleQueueMessage: (message: string) => void;
   handleStopProcessing: () => Promise<void>;
+  handleRetractSteer: () => Promise<boolean>;
   queuedMessagesCount: number;
   setQueuedMessagesCount: React.Dispatch<React.SetStateAction<number>>;
 }
@@ -45,11 +62,16 @@ export function useChatSessionManager({
   activeRequestsRef,
   activeChatIdRef,
   queuedMessagesRef,
-  setInputValue,
   isProcessing,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const apiService = ApiService.getInstance();
+
+  // Retract state: tracks the last steer message so the user can pull it
+  // back for editing with Up-arrow. Cleared when the query completes or
+  // the user explicitly stops processing.
+  const lastSteerMessageRef = useRef<string>('');
+  const lastSteerBubbleIdRef = useRef<string>('');
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -76,7 +98,7 @@ export function useChatSessionManager({
         }
       }
       setState((prev) => ({
-        chatSessions: response.chat_sessions,
+        chatSessions: response.chat_sessions ?? [],
         activeChatId: prev.activeChatId || activeChatId,
         messages:
           prev.messages.length === 0 && initialMessages.length > 0 ? trimMessages(initialMessages) : prev.messages,
@@ -97,6 +119,15 @@ export function useChatSessionManager({
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
+        // Check pending events for completion signals. If the cache says
+        // isProcessing=true but a query_completed/session_terminated/error
+        // event arrived while viewing another chat, the cached flag is stale.
+        // The backend fetch below will confirm, but this prevents a brief
+        // phantom spinner on switch-back.
+        const hasCompletionInPending = (cached?.pendingEvents ?? []).some(
+          (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
+        );
+        const restoredIsProcessing = hasCompletionInPending ? false : (cached?.isProcessing ?? false);
         const newCache = currentId
           ? {
               ...prev.perChatCache,
@@ -115,7 +146,6 @@ export function useChatSessionManager({
               },
             }
           : prev.perChatCache;
-        const restoredIsProcessing = cached?.isProcessing ?? false;
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
         return {
           activeChatId: id,
@@ -125,7 +155,10 @@ export function useChatSessionManager({
           fileEdits: cached?.fileEdits ?? [],
           subagentActivities: cached?.subagentActivities ?? [],
           currentTodos: cached?.currentTodos ?? [],
-          queryProgress: cached?.queryProgress ?? null,
+          // Only restore queryProgress if the chat is still processing.
+          // A stale progress indicator from a query that completed while
+          // viewing another chat is worse than no indicator.
+          queryProgress: restoredIsProcessing ? (cached?.queryProgress ?? null) : null,
           lastError: cached?.lastError ?? null,
           perChatCache: newCache,
         };
@@ -147,19 +180,34 @@ export function useChatSessionManager({
         const backendIsActive = response.chat_session.active_query;
 
         setState((prev) => {
-          const useBackendMessages = backendMessages.length >= prev.messages.length;
+          // Backend is authoritative when it has at least as many messages,
+          // OR the query is not active (backend has finalised and persisted
+          // everything), OR the cache had pending events (stale signal).
+          // Previously this used a naive length comparison that could prefer
+          // shorter local state when streaming hadn't been persisted yet.
+          const cached = prev.perChatCache[id];
+          const hadPendingEvents = !!cached?.pendingEvents?.length;
+          const useBackendMessages =
+            backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents;
+          // Drain pending events — the backend fetch is authoritative now.
+          const newPerChatCache = { ...prev.perChatCache };
+          if (cached && cached.pendingEvents) {
+            newPerChatCache[id] = { ...cached };
+            delete newPerChatCache[id].pendingEvents;
+          }
           const finalIsProcessing = backendIsActive;
           activeRequestsRef.current = finalIsProcessing ? 1 : 0;
           return {
             activeChatId: response.active_chat_id,
             messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
             isProcessing: finalIsProcessing,
+            perChatCache: newPerChatCache,
           };
         });
 
         const sessionsResp = await listChatSessions();
         if (activeChatIdRef.current !== switchId) return;
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         if (activeChatIdRef.current !== switchId) return;
         activeChatIdRef.current = currentId;
@@ -174,7 +222,7 @@ export function useChatSessionManager({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
@@ -197,7 +245,7 @@ export function useChatSessionManager({
           }
         } else {
           const sessionsResp = await listChatSessions();
-          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
         }
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
@@ -211,7 +259,7 @@ export function useChatSessionManager({
       try {
         await renameChatSession(id, name);
         const sessionsResp = await listChatSessions();
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to rename chat session:', error);
       }
@@ -238,14 +286,12 @@ export function useChatSessionManager({
           ...prev,
           modelSelectionRequest: { provider: prev.provider },
         }));
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
       if (lc === '/provider' || lc.startsWith('/provider ')) {
-        window.dispatchEvent(
-          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
-        );
-        setInputValue('');
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
@@ -289,17 +335,18 @@ export function useChatSessionManager({
           }));
         }
 
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
       if (!allowConcurrent && activeRequestsRef.current > 0) {
+        const bubbleId = generateMessageId();
         setState((prev) => ({
           lastError: null,
           messages: trimMessages([
             ...prev.messages,
             {
-              id: generateMessageId(),
+              id: bubbleId,
               type: 'user',
               content: trimmedMessage,
               timestamp: new Date(),
@@ -307,7 +354,10 @@ export function useChatSessionManager({
           ]),
         }));
         await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-        setInputValue('');
+        // Remember the steer for possible retraction via Up-arrow.
+        lastSteerMessageRef.current = trimmedMessage;
+        lastSteerBubbleIdRef.current = bubbleId;
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
@@ -316,12 +366,21 @@ export function useChatSessionManager({
       setState((prev) => ({
         isProcessing: true,
         lastError: null,
+        messages: trimMessages([
+          ...prev.messages,
+          {
+            id: generateMessageId(),
+            type: 'user',
+            content: trimmedMessage,
+            timestamp: new Date(),
+          },
+        ]),
       }));
 
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
         await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
         console.error('[FAIL] Failed to send message:', error);
@@ -344,7 +403,7 @@ export function useChatSessionManager({
         }));
       }
     },
-    [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setInputValue, setQueuedMessagesCount],
+    [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setQueuedMessagesCount],
   );
 
   const handleQueueMessage = useCallback((message: string) => {
@@ -360,6 +419,8 @@ export function useChatSessionManager({
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessagesCount(0);
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
       setState((prev) => ({
         isProcessing: false,
         queryProgress: null,
@@ -369,6 +430,8 @@ export function useChatSessionManager({
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessagesCount(0);
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
       setState((prev) => ({
         isProcessing: false,
@@ -387,6 +450,37 @@ export function useChatSessionManager({
     }
   }, [apiService, setQueuedMessagesCount]);
 
+  // Pull back the newest un-picked steer message for editing. Removes the
+  // optimistic bubble and restores the text to the input. Returns false when
+  // nothing is retractable (already picked up, or none sent). Refs are only
+  // cleared on success so a transient API failure can be retried.
+  const retractInFlightRef = useRef(false);
+  const handleRetractSteer = useCallback(async (): Promise<boolean> => {
+    if (!lastSteerMessageRef.current || retractInFlightRef.current) {
+      return false;
+    }
+    retractInFlightRef.current = true;
+    const bubbleId = lastSteerBubbleIdRef.current;
+    try {
+      const response = await apiService.retractSteer(activeChatIdRef.current ?? undefined);
+      if (!response.success || !response.message) {
+        retractInFlightRef.current = false;
+        return false;
+      }
+      lastSteerMessageRef.current = '';
+      lastSteerBubbleIdRef.current = '';
+      retractInFlightRef.current = false;
+      setState((prev) => ({
+        messages: prev.messages.filter((m) => m.id !== bubbleId),
+        inputValue: response.message,
+      }));
+      return true;
+    } catch {
+      retractInFlightRef.current = false;
+      return false;
+    }
+  }, [apiService]);
+
   // Handle session-restored window event
   useEffect(() => {
     const handleSessionRestored = (event: Event) => {
@@ -396,12 +490,17 @@ export function useChatSessionManager({
 
       const restoredMessages: Message[] = rawMessages
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m, i) => ({
-          id: `restored-${i}`,
-          type: m.role as 'user' | 'assistant',
-          content: typeof m.content === 'string' ? m.content : '',
-          timestamp: new Date(),
-        }));
+        .map((m, i) => {
+          const content = typeof m.content === 'string' ? m.content : '';
+          const toolRefs = m.role === 'assistant' ? extractToolRefsFromContent(content) : undefined;
+          return {
+            id: `restored-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content,
+            timestamp: new Date(),
+            ...(toolRefs && toolRefs.length > 0 ? { toolRefs } : {}),
+          };
+        });
 
       if (restoredMessages.length > 0) {
         setState((prev) => ({
@@ -493,6 +592,14 @@ export function useChatSessionManager({
     return () => window.removeEventListener('sprout:chat-gap-reload', onGapReload);
   }, [reloadActiveChatFromBackend, activeChatIdRef]);
 
+  // Refresh the chat session list sidebar. Triggered after a fork so the
+  // user sees the updated session metadata.
+  useEffect(() => {
+    const onRefresh = () => void loadChatSessions();
+    window.addEventListener('sprout:refresh-sessions', onRefresh);
+    return () => window.removeEventListener('sprout:refresh-sessions', onRefresh);
+  }, [loadChatSessions]);
+
   return {
     loadChatSessions,
     handleActiveChatChange,
@@ -502,6 +609,7 @@ export function useChatSessionManager({
     handleSendMessage,
     handleQueueMessage,
     handleStopProcessing,
+    handleRetractSteer,
     queuedMessagesCount,
     setQueuedMessagesCount,
   };

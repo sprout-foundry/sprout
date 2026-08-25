@@ -130,10 +130,90 @@ func TestIndicator_StopIdempotent(t *testing.T) {
 	// No panic = pass.
 }
 
-// SP-048-2a: tab-completion cycle in InputReader.
+// TestIndicator_StopOnIdleWritesNothing is the regression for the
+// "word-by-word deleting" bug. When the indicator is fully idle (no
+// spinner running, no static text), Stop() must NOT emit \r\033[K to the
+// terminal. The streaming callback calls Stop() on every prose chunk; if
+// each redundant Stop clobbered the current row, the streaming prose got
+// erased character-by-character.
+//
+// We construct a TTY-mode indicator directly (bypassing NewActivityIndicator's
+// fd-based TTY detection, which can't see a bytes.Buffer) so the TTY code
+// path actually runs.
+func TestIndicator_StopOnIdleWritesNothing(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true, // force the TTY code path
+	}
+	// Indicator is idle (never Start'd, never SetStatic'd). Stop() must
+	// be a true no-op — no bytes written.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("Stop() on idle indicator should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+
+	// Calling Stop() again on the still-idle indicator must also write nothing.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("redundant Stop() on idle indicator should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+}
+
+// TestIndicator_StopAfterClearStaticWritesNothing verifies that after
+// SetStatic + ClearStatic (which leaves the indicator idle), subsequent
+// Stop() calls also write nothing — the static text was already cleared by
+// ClearStatic, so Stop has nothing to erase.
+func TestIndicator_StopAfterClearStaticWritesNothing(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true,
+	}
+	a.SetStatic("pinned text")
+	w.Reset() // discard the SetStatic render
+	a.ClearStatic()
+	// Now idle. ClearStatic wrote its own \r\033[K; verify it's there.
+	if !strings.Contains(w.String(), "\033[K") {
+		t.Fatalf("ClearStatic should have cleared the row; got %q", w.String())
+	}
+	w.Reset()
+	// Subsequent Stop() must write nothing.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("Stop() after ClearStatic should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+}
+
+// TestIndicator_StopErasesAfterStart verifies the fix didn't break the
+// primary contract: after Start(), Stop() still erases the spinner row.
+func TestIndicator_StopErasesAfterStart(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true,
+	}
+	a.Start("Thinking")
+	// Give the render goroutine time to emit at least one frame.
+	time.Sleep(3 * spinnerCadence)
+	a.Stop()
+	got := w.String()
+	if !strings.Contains(got, "\r\033[K") {
+		t.Errorf("Stop() after Start() should erase the spinner row (\\r\\033[K); got %q", got)
+	}
+}
+
+// SP-048-2a: tab-completion cycle in InputReader. With the live
+// autocomplete dropdown (which intercepts Tab to accept the selected
+// candidate), this test now exercises the cycle state machine directly
+// via handleTabCompletion to verify the non-slash-command Tab path.
 
 func TestInputReader_TabCompletion_CycleAndReset(t *testing.T) {
 	ir := NewInputReader("> ")
+
+	// Disable live autocomplete so handleTabCompletion's cycling path
+	// is exercised directly (not intercepted by the dropdown).
+	ir.autocomplete = nil
 
 	calls := 0
 	ir.SetCompleter(func(line string, cursorPos int) []string {
@@ -209,4 +289,120 @@ func TestInputReader_TabCompletion_NoCompleter(t *testing.T) {
 	if ir.line != "/help" {
 		t.Errorf("Tab without completer should leave line unchanged, got %q", ir.line)
 	}
+}
+
+// TestIndicator_RenderTruncatesLongMessage is the regression for the
+// spinner line-wrap bug. When msg + elapsed suffix would exceed the terminal
+// width, render() must truncate the message so the whole line fits on one row
+// — otherwise the line wraps to a second physical row and \r on the next tick
+// only clears the bottom row, leaving stale frames frozen above.
+//
+// We invoke render() directly (with a forced isTTY and a widthOverride) so we
+// can assert against the exact output without racing the background goroutine.
+func TestIndicator_RenderTruncatesLongMessage(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 20, // narrow terminal
+	}
+	// Simulate an active spinner.
+	a.active = true
+	a.msg = "shell_command (go test ./... 2>&1 | tail -80) very long preview"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+
+	// The rendered line must contain the ellipsis (truncation happened).
+	if !strings.Contains(out, "…") {
+		t.Errorf("long message should be truncated with …; got %q", out)
+	}
+	// And the visible width must not exceed the terminal width.
+	visible := displayWidth(out)
+	if visible > 20 {
+		t.Errorf("rendered line visible width %d > terminal width 20; got %q", visible, out)
+	}
+}
+
+// TestIndicator_RenderPreservesANSIBadge verifies that an ANSI-colored persona
+// badge in the message survives truncation — the color escape bytes must be
+// present in the rendered output.
+func TestIndicator_RenderPreservesANSIBadge(t *testing.T) {
+	// PersonaBadge's output depends on NO_COLOR/FORCE_COLOR env. Clear NO_COLOR
+	// (which always wins per no-color.org) so the test asserts ANSI preservation
+	// regardless of the caller's environment.
+	t.Setenv("NO_COLOR", "")
+
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 16,
+	}
+	a.active = true
+	badge := PersonaBadge(1, "coder") // "\033[36m[coder]\033[0m "
+	a.msg = badge + "running a really long command that overflows"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+
+	// The cyan color escape must still be present.
+	if !strings.Contains(out, personaColorCoder) {
+		t.Errorf("rendered line should preserve the persona cyan ANSI code; got %q", out)
+	}
+	// Visible width must respect the budget.
+	if visible := displayWidth(out); visible > 16 {
+		t.Errorf("rendered line visible width %d > 16; got %q", visible, out)
+	}
+}
+
+// TestIndicator_RenderDoesNotTruncateShortMessage ensures the fix doesn't add
+// a spurious ellipsis to messages that already fit.
+func TestIndicator_RenderDoesNotTruncateShortMessage(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 80,
+	}
+	a.active = true
+	a.msg = "Thinking"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+	if strings.Contains(out, "…") {
+		t.Errorf("short message should not be truncated; got %q", out)
+	}
+	if !strings.Contains(out, "Thinking") {
+		t.Errorf("short message text should be intact; got %q", out)
+	}
+}
+
+// TestIndicator_SetStaticTruncatesLongLine mirrors the render() regression for
+// SetStatic(): a long static line must be truncated to terminal width.
+func TestIndicator_SetStaticTruncatesLongLine(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 15,
+	}
+	a.SetStatic("this is a very long static line that should be truncated to fit")
+
+	out := w.String()
+	if !strings.Contains(out, "…") {
+		t.Errorf("long static line should be truncated with …; got %q", out)
+	}
+	if visible := displayWidth(stripClearCodes(out)); visible > 15 {
+		t.Errorf("static line visible width %d > 15; got %q", visible, out)
+	}
+}
+
+// stripClearCodes removes the leading "\r\033[K" clear sequence so displayWidth
+// measures only the visible content SetStatic wrote.
+func stripClearCodes(s string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(s, "\r"), "\033[K")
 }

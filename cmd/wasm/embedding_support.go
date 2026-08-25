@@ -37,11 +37,10 @@ func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 			return
 		}
 		cfg := &configuration.EmbeddingIndexConfig{
-			Enabled:             true,
-			AutoIndex:           false,
-			SimilarityThreshold: 0.5,
-			MaxResults:          10,
+			MaxResults: 10,
 		}
+		cfg.SetEnabled(true)
+		cfg.SetAutoIndex(false)
 		embedMgr = embedding.NewEmbeddingManager(cfg, cwd)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

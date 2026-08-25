@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -16,35 +16,35 @@ import (
 // =============================================================================
 
 func TestRunDiag_PrintsHeader(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Configuration Diagnostics") {
 		t.Errorf("expected 'Configuration Diagnostics' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsGlobalConfigPath(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Global config:") {
 		t.Errorf("expected 'Global config:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsProjectConfigPath(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Project-local config:") {
 		t.Errorf("expected 'Project-local config:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsPythonRuntimeSection(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Python runtime:") {
 		t.Errorf("expected 'Python runtime:' section in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsCustomProviders(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	// Should always print something about custom providers (either found or warning)
 	hasProvidersInfo := strings.Contains(out, "Custom providers") ||
 		strings.Contains(out, "custom providers")
@@ -195,54 +195,6 @@ func TestRunPlanMode_RequiresTerminal(t *testing.T) {
 }
 
 // =============================================================================
-// Tests for promptGitHubMCPSetupIfNeeded (github_setup_prompt.go)
-// =============================================================================
-
-func TestPromptGitHubMCPSetupIfNeeded_SkipPromptSet(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() failed: %v", err)
-	}
-
-	// Set SkipPrompt so the function should return immediately.
-	updateErr := a.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.SkipPrompt = true
-		return nil
-	})
-	if updateErr != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", updateErr)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("promptGitHubMCPSetupIfNeeded panicked: %v", r)
-		}
-	}()
-
-	promptGitHubMCPSetupIfNeeded(a)
-}
-
-func TestPromptGitHubMCPSetupIfNeeded_DoesNotPanic(t *testing.T) {
-	a, err := agent.NewAgent()
-	if err != nil {
-		t.Fatalf("NewAgent() failed: %v", err)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("promptGitHubMCPSetupIfNeeded panicked: %v", r)
-		}
-	}()
-
-	// The function reads from stdin, but in a test environment without a TTY
-	// and running in a temp directory, it should either:
-	// 1. Return early because SkipPrompt is set, or
-	// 2. Return early because ShouldPromptGitHubSetup returns false, or
-	// 3. Try to read from stdin (will get EOF, ReadString returns error, returns early)
-	promptGitHubMCPSetupIfNeeded(a)
-}
-
-// =============================================================================
 // Additional plan-related tests
 // =============================================================================
 
@@ -278,14 +230,14 @@ func TestCreatePlanningAgent_PlanCreateTodosFlag(t *testing.T) {
 }
 
 func TestRunDiag_PrintsProviderDirectory(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Custom provider directory:") {
 		t.Errorf("expected 'Custom provider directory:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsPDFRuntimeSection(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "PDF Python runtime") {
 		t.Errorf("expected 'PDF Python runtime' in output, got:\n%s", out)
 	}

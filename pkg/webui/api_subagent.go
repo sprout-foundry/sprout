@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,7 +19,7 @@ import (
 // siblings running). See SP-059 Phase 1a.
 func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
 
@@ -40,7 +39,7 @@ func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
-			http.Error(w, fmt.Sprintf("Failed to access chat agent: %v", err), http.StatusInternalServerError)
+			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}
 		return
 	}
@@ -54,9 +53,7 @@ func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http
 	if !runner.CancelSubagent(id) {
 		// Not active — treat as "already done" so the UI can clean up
 		// its row without surfacing a hard error to the user.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"status":            "ok",
 			"already_completed": true,
 			"id":                id,
@@ -65,9 +62,7 @@ func (ws *ReactWebServer) handleAPISubagentCancel(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"accepted":  true,
 		"id":        id,
 		"mode":      "cancel",

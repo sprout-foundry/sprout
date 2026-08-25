@@ -145,7 +145,7 @@
   height: 14px;
   padding: 0 3px;
   border-radius: 7px;
-  background: var(--accent-error, #ef4444);
+  background: var(--accent-error);
   color: white;
   font-size: 9px;
   font-weight: 600;
@@ -184,4 +184,9 @@
   .statusbar-item {
     transition: none;
   }
+}
+
+.statusbar-item-auto-tier {
+  color: var(--accent-primary, #61afef);
+  gap: 4px;
 }

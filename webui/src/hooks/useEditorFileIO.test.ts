@@ -226,6 +226,7 @@ function createBuffer(opts = {}) {
     content: o.content,
     originalContent: o.originalContent,
     isModified: o.isModified,
+    contentLoaded: o.contentLoaded,
     cursorPosition: o.cursorPosition,
     scrollPosition: o.scrollPosition,
   };
@@ -237,8 +238,36 @@ function setupHook(opts = {}) {
   const bufferRef = { current: buffer };
   const indentManuallySetRef = { current: false };
   const fetchDiagnosticsRef = { current: vi.fn() };
-  const isExternalUpdateRef = { current: false };
   const paneId = 'pane-1';
+
+  // Mock CodeMirror view API. The mock view's dispatch is the same vi.fn()
+  // the test asserts against, so passing through `dispatch` still records
+  // the call. `withExternalUpdate` runs the function and toggles a local
+  // gate so the cursor-skip behavior can be exercised in dedicated tests.
+  let externalUpdateGate = false;
+  const cmViewApiRef = {
+    current: {
+      view: viewRef.current,
+      isMounted: true,
+      dispatch: (tr) => viewRef.current?.dispatch(tr),
+      withExternalUpdate: (fn) => {
+        const prev = externalUpdateGate;
+        externalUpdateGate = true;
+        try {
+          return fn();
+        } finally {
+          externalUpdateGate = prev;
+        }
+      },
+      isExternalUpdate: () => externalUpdateGate,
+      save: vi.fn(),
+      getFilePath: () => viewRef.current?.state?.doc?.toString?.(),
+      getFileExt: () => undefined,
+      getContent: () => '',
+      subscribe: () => () => {},
+      compartments: undefined as any,
+    },
+  };
 
   const setters = {
     setLoading: vi.fn(),
@@ -256,8 +285,17 @@ function setupHook(opts = {}) {
     history: { reconfigure: vi.fn() },
   };
 
-  return { viewRef, buffer, bufferRef, indentManuallySetRef, fetchDiagnosticsRef,
-    isExternalUpdateRef, paneId, setters, compartments };
+  return {
+    viewRef,
+    cmViewApiRef,
+    buffer,
+    bufferRef,
+    indentManuallySetRef,
+    fetchDiagnosticsRef,
+    paneId,
+    setters,
+    compartments,
+  };
 }
 
 beforeEach(() => {
@@ -293,10 +331,14 @@ function renderHook(setup) {
   let hookReturn = null;
   function Wrapper() {
     hookReturn = useEditorFileIO(
-      setup.viewRef, setup.buffer, setup.bufferRef,
-      setup.compartments, setup.indentManuallySetRef,
-      setup.fetchDiagnosticsRef, setup.paneId,
-      setup.setters, setup.isExternalUpdateRef,
+      setup.cmViewApiRef,
+      setup.buffer,
+      setup.bufferRef,
+      setup.compartments,
+      setup.indentManuallySetRef,
+      setup.fetchDiagnosticsRef,
+      setup.paneId,
+      setup.setters,
     );
     return null;
   }
@@ -336,7 +378,7 @@ describe('loadFile — normal file loading', () => {
     expect(setup.setters.setSelectionInfo).toHaveBeenCalledWith(null);
   });
 
-  it('sets isExternalUpdateRef to false after load completes', async () => {
+  it('clears external-update gate after load completes', async () => {
     const setup = setupHook();
     const hook = renderHook(setup);
 
@@ -344,7 +386,9 @@ describe('loadFile — normal file loading', () => {
       await hook.loadFile('/test/file.ts');
     });
 
-    expect(setup.isExternalUpdateRef.current).toBe(false);
+    // After load, the gate is back to false. If withExternalUpdate were
+    // buggy (e.g., failed to restore in finally), this would be true.
+    expect(setup.cmViewApiRef.current.isExternalUpdate()).toBe(false);
   });
 });
 
@@ -496,7 +540,9 @@ describe('loadFile — indent detection', () => {
   it('applies indent detection with tabs when detected', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: true, indentWidth: 4, indentedLineCount: 10,
+      useTabs: true,
+      indentWidth: 4,
+      indentedLineCount: 10,
     });
     const hook = renderHook(setup);
 
@@ -511,7 +557,9 @@ describe('loadFile — indent detection', () => {
   it('applies indent detection with spaces', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: false, indentWidth: 2, indentedLineCount: 5,
+      useTabs: false,
+      indentWidth: 2,
+      indentedLineCount: 5,
     });
     const hook = renderHook(setup);
 
@@ -539,7 +587,9 @@ describe('loadFile — indent detection', () => {
   it('falls back to defaults when not enough indented lines', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: false, indentWidth: 4, indentedLineCount: 1,
+      useTabs: false,
+      indentWidth: 4,
+      indentedLineCount: 1,
     });
     const hook = renderHook(setup);
 
@@ -583,10 +633,7 @@ describe('loadFile — fetch diagnostics', () => {
       await hook.loadFile('/test/file.ts');
     });
 
-    expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'file content from disk',
-    );
+    expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalledWith('/test/file.ts', 'file content from disk');
   });
 });
 
@@ -656,8 +703,11 @@ describe('handleSave', () => {
     });
 
     expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalled();
-    const callArgs = setup.fetchDiagnosticsRef.current.mock.calls[0];
-    expect(callArgs[2]).toBe('save');
+    // The buffer-load effect fetches diagnostics on mount (no trigger), so
+    // find the save call specifically rather than assuming it is calls[0].
+    const saveCall = setup.fetchDiagnosticsRef.current.mock.calls.find((c) => c[2] === 'save');
+    expect(saveCall).toBeDefined();
+    expect(saveCall?.[2]).toBe('save');
   });
 
   it('handles save error gracefully', async () => {
@@ -714,6 +764,7 @@ describe('handleSave', () => {
   it('does nothing when viewRef is null', async () => {
     const setup = setupHook();
     setup.viewRef.current = null;
+    setup.cmViewApiRef.current.view = null;
     const hook = renderHook(setup);
 
     await act(async () => {
@@ -721,6 +772,117 @@ describe('handleSave', () => {
     });
 
     expect(mockSaveBuffer).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: buffer switch-back restore (BUG: re-reading disk clobbered unsaved edits)
+// ---------------------------------------------------------------------------
+
+describe('buffer switch-back restore', () => {
+  it('restores a previously loaded buffer from memory instead of re-reading from disk', async () => {
+    const setup = setupHook({
+      bufferOptions: { id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A' },
+    });
+    let currentBuffer = setup.buffer;
+    let hookReturn: ReturnType<typeof useEditorFileIO> | null = null;
+
+    function Wrapper() {
+      hookReturn = useEditorFileIO(
+        setup.cmViewApiRef,
+        currentBuffer,
+        { current: currentBuffer },
+        setup.compartments,
+        setup.indentManuallySetRef,
+        setup.fetchDiagnosticsRef,
+        setup.paneId,
+        setup.setters,
+      );
+      return null;
+    }
+
+    // Initial render: effect loads buffer A from disk.
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(1);
+    expect(mockReadFileWithConsent).toHaveBeenCalledWith('/test/a.ts');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-a')).toBe(true);
+
+    // Switch to buffer B — loads from disk (new buffer).
+    currentBuffer = createBuffer({ id: 'buf-b', filePath: '/test/b.ts', fileName: 'b.ts', content: 'content B' });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(2);
+
+    // Switch back to buffer A with unsaved edits in memory. The restore
+    // branch must push the in-memory content into the view WITHOUT calling
+    // readFileWithConsent again.
+    currentBuffer = createBuffer({
+      id: 'buf-a',
+      filePath: '/test/a.ts',
+      fileName: 'a.ts',
+      content: 'content A EDITED',
+    });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // No third disk read — the buffer was restored from memory.
+    expect(mockReadFileWithConsent).toHaveBeenCalledTimes(2);
+    // The view received the in-memory content, not the disk content.
+    expect(setup.setters.setLocalContent).toHaveBeenLastCalledWith('content A EDITED');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-b')).toBe(true);
+  });
+
+  it('restores a buffer moved from another pane (contentLoaded) without re-reading disk', async () => {
+    const setup = setupHook({
+      bufferOptions: { id: 'buf-a', filePath: '/test/a.ts', fileName: 'a.ts', content: 'content A' },
+    });
+    let currentBuffer = setup.buffer;
+    let hookReturn: ReturnType<typeof useEditorFileIO> | null = null;
+
+    function Wrapper() {
+      hookReturn = useEditorFileIO(
+        setup.cmViewApiRef,
+        currentBuffer,
+        { current: currentBuffer },
+        setup.compartments,
+        setup.indentManuallySetRef,
+        setup.fetchDiagnosticsRef,
+        setup.paneId,
+        setup.setters,
+      );
+      return null;
+    }
+
+    // Simulate a buffer that was ALREADY loaded by another pane and then
+    // moved here (drag/drop via moveBufferToPane). It carries
+    // `contentLoaded: true` (set by setBufferOriginalContent on the pane
+    // that read it from disk), but THIS pane's loadedBufferIdsRef is empty
+    // — a fresh pane created after the move. Before the fix, the restore
+    // branch only checked the per-pane loadedBufferIdsRef, so the moved
+    // buffer re-read the disk and clobbered the in-memory edits.
+    currentBuffer = createBuffer({
+      id: 'buf-a',
+      filePath: '/test/a.ts',
+      fileName: 'a.ts',
+      content: 'content A EDITED',
+      contentLoaded: true,
+    });
+    act(() => root.render(createElement(Wrapper)));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // No disk read at all — the moved buffer restores from memory.
+    expect(mockReadFileWithConsent).not.toHaveBeenCalled();
+    expect(setup.setters.setLocalContent).toHaveBeenLastCalledWith('content A EDITED');
+    expect(hookReturn?.loadedBufferIdsRef.current.has('buf-a')).toBe(false);
   });
 });
 
@@ -739,6 +901,5 @@ describe('return value', () => {
     expect(typeof hook.handleSave).toBe('function');
     expect(hook.saveRef).toBeDefined();
     expect(typeof hook.saveRef.current).toBe('function');
-    expect(hook.isExternalUpdateRef).toBe(setup.isExternalUpdateRef);
   });
 });

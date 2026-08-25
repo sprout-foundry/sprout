@@ -169,22 +169,22 @@ func TestStartRemoteSSHBackendSignature(t *testing.T) {
 func TestStopRemoteSSHBackend(t *testing.T) {
 	t.Run("empty host returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("", 1234)
-	if err != nil {
-		t.Fatalf("expected nil, got %v", err)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
 		}
 	})
 
 	t.Run("invalid PID returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("host", 0)
-	if err != nil {
-		t.Fatalf("expected nil, got %v", err)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
 		}
 	})
 
 	t.Run("negative PID returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("host", -1)
-	if err != nil {
-		t.Fatalf("expected nil, got %v", err)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
 		}
 	})
 }

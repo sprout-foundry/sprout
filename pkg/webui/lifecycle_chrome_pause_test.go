@@ -123,7 +123,7 @@ func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	server.daemonRoot = daemonRoot
-	server.workspaceRoot = daemonRoot
+	server.SetWorkspaceRoot(daemonRoot)
 
 	clientID := "chrome-tab-1"
 

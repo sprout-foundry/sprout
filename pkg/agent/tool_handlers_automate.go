@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/automate"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/automate"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -19,38 +20,29 @@ import (
 // the BackgroundProcessManager to prevent data races.
 var backgroundProcessManagerOnce sync.Once
 
-// completionMessageTailLimit is the maximum number of output bytes included
-// in an automate completion injection message when the workflow fails.
-const completionMessageTailLimit = 2048
+// automateSproutDirKey is a context key for the workspace-aware sprout
+// directory. The WebUI API layer sets this before calling RunAutomateWorkflow
+// so that writeAutomatePIDFile writes session files to the correct .sprout/
+// directory instead of the process CWD.
+type automateSproutDirKey struct{}
 
-// buildAutomateCompletionMessage builds the self-contained completion injection
-// message for an automate workflow that has finished. It is extracted from the
-// proc.Done() goroutine in handleRunAutomate so it can be unit-tested without
-// spinning up real background processes.
-func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, exitCode int, outputPath string) string {
-	// On failure, include the output tail for diagnostics.
-	if exitCode != 0 {
-		tail := readOutputTail(outputPath, completionMessageTailLimit)
-		if tail != "" {
-			return fmt.Sprintf(
-				"[automate] Background workflow completed:\n"+
-					"  Workflow: %s\n"+
-					"  Description: %s\n"+
-					"  Session: %s\n"+
-					"  Status: %s (exit code %d)\n"+
-					"  Output (last 2KB):\n%s",
-				wfName, wfDesc, sessionID, status, exitCode, tail,
-			)
-		}
+// SproutDirFromContext returns the workspace-aware sprout directory from ctx,
+// or falls back to os.Getwd() (matching the legacy behavior for CLI-triggered
+// workflows where CWD is the workspace root).
+func SproutDirFromContext(ctx context.Context) string {
+	if dir, ok := ctx.Value(automateSproutDirKey{}).(string); ok && dir != "" {
+		return dir
 	}
-	return fmt.Sprintf(
-		"[automate] Background workflow completed:\n"+
-			"  Workflow: %s\n"+
-			"  Description: %s\n"+
-			"  Session: %s\n"+
-			"  Status: %s (exit code %d)",
-		wfName, wfDesc, sessionID, status, exitCode,
-	)
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return wd
+}
+
+// ContextWithSproutDir returns a context that carries the sprout directory.
+func ContextWithSproutDir(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, automateSproutDirKey{}, dir)
 }
 
 // handleRunAutomate runs a workflow from the automate/ directory as a background process.
@@ -59,11 +51,11 @@ func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, ex
 func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	workflowName, _ := getStringArg(args, "workflow")
 	if workflowName == "" {
-		return "", fmt.Errorf("workflow parameter is required")
+		return "", agenterrors.NewValidation("workflow parameter is required", nil)
 	}
 
 	// Resolve the automate directory
-	dir := automate.Dir()
+	dir := automate.DirIn(a.GetWorkspaceRoot())
 
 	// Find the workflow file (includes path traversal protection)
 	wfPath, err := automate.ResolvePath(dir, workflowName)
@@ -71,13 +63,103 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		return "", err
 	}
 
-	// Read description for user context
-	desc, _ := automate.ExtractDescription(wfPath)
+	// Build the summary once and read both the description and the
+	// allowed_paths from it. Replaces the prior
+	// automate.ExtractDescription(wfPath) call which re-parsed the
+	// JSON just for `description`. Summarize also runs the
+	// allowed_paths schema check (via workflow.AllowedPath.Validate
+	// replicated in pkg/automate), so a malformed entry surfaces
+	// here as a parse error rather than silently dropping the
+	// whole field.
+	summary, sumErr := automate.Summarize(wfPath)
+	desc := ""
+	if sumErr == nil && summary != nil {
+		desc = summary.Description
+	}
+
+	// Pre-seed the running agent's session allowlist
+	// with every declared allowed_path, tagged with the declared
+	// mode. Must happen BEFORE the in-process / BPM fork so
+	// the launched workflow inherits the grants.
+	if sumErr == nil && summary != nil {
+		for _, ap := range summary.AllowedPaths {
+			a.AddSessionAllowedFolder(ap.Path)
+			a.SetSessionAllowedFolderMode(ap.Path, ap.Mode)
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// In-process path: detect loop workflows and run them as a goroutine
+	// without spawning a subprocess. This eliminates the need for nohup
+	// and avoids process-group/session detachment issues.
+	// -----------------------------------------------------------------------
+	if wfCfg, parseErr := parseWorkflowFile(wfPath); parseErr == nil && wfCfg.Loop != nil {
+		sessionID := generateWorkflowSessionID()
+
+		// Publish session_started event immediately.
+		a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(
+			sessionID, filepath.Base(wfPath), "automate",
+		))
+
+		// Capture variables for the goroutine closure.
+		wfName := filepath.Base(wfPath)
+		wfDesc := desc
+
+		// Launch the in-process workflow runner as a goroutine.
+		go func() {
+			// Use a background context so the goroutine survives the
+			// parent agent's current query. Cancellation propagation
+			// is handled internally by RunWorkflowLoopInProcess via
+			// the interrupt context derived from the parent.
+			result, runErr := RunWorkflowLoopInProcess(context.Background(), a, wfPath, a.eventBus)
+
+			status := "success"
+			if runErr != nil || (result != nil && result.Error != nil) {
+				status = "error"
+			}
+			var totalCost float64
+			if a.GetTotalCost() > 0 {
+				totalCost = a.GetTotalCost()
+			}
+
+			a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
+				sessionID, wfName, status, totalCost,
+			))
+
+			injectMsg := buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status, result)
+			a.QueueNotification(Notification{
+				Content:   injectMsg,
+				SessionID: sessionID,
+				Kind:      NotifAutomate,
+			})
+		}()
+
+		result := map[string]interface{}{
+			"workflow":    filepath.Base(wfPath),
+			"description": desc,
+			"background":  true,
+			"mode":        "in-process",
+			"status":      "started",
+			"session_id":  sessionID,
+			"message":     fmt.Sprintf("Workflow started: session `%s` — view in [Automations panel](sprout://automations/session/%s)", sessionID, sessionID),
+		}
+
+		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		return string(resultJSON), nil
+	}
+
+	// -----------------------------------------------------------------------
+	// BPM subprocess path (fallback for steps-based workflows)
+	// -----------------------------------------------------------------------
 
 	// Resolve the sprout binary
 	execPath, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve sprout binary: %w", err)
+		return "", agenterrors.NewTool("automate", "failed to resolve sprout binary", err)
+	}
+
+	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
+		return "", agenterrors.NewTool("automate", "memory floor check failed", floorErr)
 	}
 
 	// Build the command — filename is validated by the shared automate
@@ -99,27 +181,29 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	sessionID, err := bpm.StartWithOptions(ctx, cmdStr, "", "automate", &tools.StartOptions{EventBus: a.eventBus})
 	if err != nil {
-		return "", fmt.Errorf("failed to start workflow: %w", err)
+		return "", agenterrors.NewTool("automate", "failed to start workflow", err)
 	}
 
 	// Write PID file for cross-process discoverability.
 	// The error is non-fatal — the session is still tracked by BPM.
-	if err := writeAutomatePIDFile(sessionID, bpm, wfPath); err != nil {
+	sproutDir := filepath.Join(SproutDirFromContext(ctx), ".sprout")
+	if err := writeAutomatePIDFile(sessionID, bpm, wfPath, sproutDir); err != nil {
 		// Log warning but don't fail the workflow.
 	}
 
-	// SP-065-2b: Publish session_started event
+	// Publish session_started event
 	a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(
 		sessionID, filepath.Base(wfPath), "automate",
 	))
 
-	// SP-065-2d: Watch for process exit and publish session_ended
+	// Watch for process exit and publish session_ended
 	if proc, exists := bpm.GetProcess(sessionID); exists {
 		// Capture variables for goroutine closure
 		wfName := filepath.Base(wfPath)
 		wfDesc := desc
 
 		go func() {
+			bgCtx := context.Background()
 			select {
 			case <-proc.Done():
 				exitCode := proc.GetExitCode()
@@ -127,23 +211,27 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				if exitCode != 0 {
 					status = "error"
 				}
+				if finErr := automate.FinalizeSessionFile(sproutDir, sessionID, exitCode); finErr != nil {
+					// Non-fatal: the session_ended event and notification
+					// still carry the outcome.
+				}
 				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
 					sessionID, wfName, status, 0,
 				))
-
-				// SP-067: Inject self-contained completion message back to the model
-				// so it can act autonomously (e.g., retry on failure) without polling.
 				injectMsg := buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status, exitCode, proc.GetOutputPath())
-				_ = a.InjectInputContext(injectMsg)
-			case <-ctx.Done():
-				// Agent shutting down; skip injection.
+				a.QueueNotification(Notification{
+					Content:   injectMsg,
+					SessionID: sessionID,
+					Kind:      NotifAutomate,
+				})
+			case <-bgCtx.Done():
 			}
 		}()
 	}
 
 	result["status"] = "started"
 	result["session_id"] = sessionID
-	// SP-065-5a: Include a message with session ID and link to Automations panel
+	// Include a message with session ID and link to Automations panel
 	result["message"] = fmt.Sprintf("Workflow started: session `%s` — view in [Automations panel](sprout://automations/session/%s)", sessionID, sessionID)
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
@@ -157,23 +245,41 @@ func (a *Agent) RunAutomateWorkflow(ctx context.Context, workflow string) (strin
 	return handleRunAutomate(ctx, a, args)
 }
 
+// WorkflowRequiresApprovalIn reports whether the named workflow needs
+// user confirmation before launching, using the specified directory
+// instead of the CWD-based automate.Dir().
+//
+// FAIL-SAFE: any error resolving or parsing the workflow returns true so a
+// missing file or malformed JSON can't be used to slip past the prompt.
+func WorkflowRequiresApprovalIn(dir, workflowName string) bool {
+	path, err := automate.ResolvePath(dir, workflowName)
+	if err != nil {
+		return true
+	}
+	summary, err := automate.Summarize(path)
+	if err != nil {
+		return true
+	}
+	return summary.IsApprovalRequired()
+}
+
 // WorkflowRequiresApproval reports whether the named workflow needs user
-// confirmation before launching. This wraps the unexported workflowRequiresApproval
-// so the WebUI layer can enforce the same policy as the CLI tool path.
+// confirmation before launching. This wraps WorkflowRequiresApprovalIn with
+// the CWD-based automate.Dir() so the CLI tool path works correctly.
 func WorkflowRequiresApproval(workflowName string) bool {
-	return workflowRequiresApproval(workflowName)
+	return WorkflowRequiresApprovalIn(automate.Dir(), workflowName)
 }
 
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.
 func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	dir := automate.Dir()
+	dir := automate.DirIn(a.GetWorkspaceRoot())
 
 	workflows, err := automate.Discover(dir)
 	if err != nil {
 		if automate.IsNotExists(err) {
 			return "No automate/ directory found. Activate the workflow-automation skill to create one.", nil
 		}
-		return "", fmt.Errorf("failed to scan %s: %w", dir, err)
+		return "", agenterrors.Wrapf(err, "failed to scan %s", dir)
 	}
 
 	if len(workflows) == 0 {
@@ -218,19 +324,13 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 // declares requires_approval: false. Used by the security gate to decide
 // whether to bypass the intent-confirmation prompt for run_automate calls.
 //
-// FAIL-SAFE: any error resolving or parsing the workflow returns true so a
-// missing file or malformed JSON can't be used to slip past the prompt.
-func workflowRequiresApproval(workflowName string) bool {
-	dir := automate.Dir()
-	path, err := automate.ResolvePath(dir, workflowName)
-	if err != nil {
-		return true
-	}
-	summary, err := automate.Summarize(path)
-	if err != nil {
-		return true
-	}
-	return summary.IsApprovalRequired()
+// The agent is required (not optional) so the approval check resolves
+// the automate/ directory against the agent's workspace root —
+// `automate.Dir()` alone returns the daemon CWD in SPROUT_SERVICE mode,
+// which would mismatch the directory the workflow itself will be loaded
+// from.
+func workflowRequiresApproval(agent *Agent, workflowName string) bool {
+	return WorkflowRequiresApprovalIn(automate.DirIn(agent.GetWorkspaceRoot()), workflowName)
 }
 
 // normalizeWorkflowKey produces a stable cache key for the in-session approval
@@ -289,21 +389,14 @@ func (a *Agent) MarkWorkflowApprovedInSession(workflow string) {
 
 // writeAutomatePIDFile creates a PID file in .sprout/automate/ for cross-process
 // discoverability of agent-launched automate workflows.
-func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager, wfPath string) error {
+func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager, wfPath string, sproutDir string) error {
 	// Get the process info from BPM using public accessors
 	proc, exists := bpm.GetProcess(sessionID)
 	if !exists {
-		return fmt.Errorf("session %s not found in BPM", sessionID)
+		return agenterrors.NewNotFoundCause(sessionID, nil)
 	}
 	pid := proc.GetPID()
 	outputPath := proc.GetOutputPath()
-
-	// Resolve sprout directory
-	wd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-	sproutDir := filepath.Join(wd, ".sprout")
 
 	info := &automate.AutomateSessionInfo{
 		Workflow:       filepath.Base(wfPath),

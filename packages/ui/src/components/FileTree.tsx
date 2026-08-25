@@ -78,6 +78,9 @@ export interface FileTreeProps {
   onRenamePath?: (oldPath: string, newPath: string) => Promise<void>;
   /** Optional callback for opening path in system file browser */
   onOpenInFileBrowser?: (path: string) => Promise<void>;
+  /** Optional callback for the "Clone Repository" button (cloud mode only).
+   *  When provided, a clone button is rendered in the header. */
+  cloneRepoButton?: () => Promise<void>;
 }
 
 type DraftMode = 'create-file' | 'create-folder' | 'rename';
@@ -111,6 +114,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       onDeletePath,
       onRenamePath,
       onOpenInFileBrowser,
+      cloneRepoButton,
     },
     ref,
   ) => {
@@ -274,11 +278,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           });
         }
 
-        // Fetch children for newly expanded directories that don't have children loaded
-        // Fetch from deepest to shallowest so parent structures are in place
+        // Fetch children for newly expanded directories that don't have children loaded.
+        // Sort shallow→deep so parent directories exist in state before we
+        // attach children to them — updateFileChildren() no-ops if the
+        // parent node isn't found, so fetching deepest-first (the previous
+        // order) silently dropped ancestors and broke deep-path reveals.
         if (newAncestors.length > 0) {
-          // Sort by depth (deepest first)
-          const sortedAncestors = [...newAncestors].sort((a, b) => b.split('/').length - a.split('/').length);
+          const sortedAncestors = [...newAncestors].sort((a, b) => a.split('/').length - b.split('/').length);
 
           for (const dirPath of sortedAncestors) {
             const dir = findFileByPath(filesRef.current, dirPath);
@@ -1176,6 +1182,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               onDrop={(event) => handleDrop(event, file.path)}
               onContextMenu={handleItemContextMenu}
               role="treeitem"
+              data-testid="file-tree-item"
               tabIndex={0}
               aria-level={depth + 1}
               aria-setsize={fileList.length}
@@ -1273,7 +1280,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     // ── Main render ─────────────────────────────────────────────────────
 
     return (
-      <div className="file-tree">
+      <div className="file-tree" data-testid="file-tree">
         <div className="file-tree-header">
           <div className="header-left">
             <span className="header-title">Files</span>
@@ -1330,6 +1337,19 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             >
               <FolderPlus size={14} />
             </button>
+            {cloneRepoButton && (
+              <button
+                className="action-button clone-repo-btn"
+                onClick={cloneRepoButton}
+                disabled={loading}
+                aria-label="Clone repository"
+                title="Clone repository from GitHub"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                </svg>
+              </button>
+            )}
             <button className="refresh-button" onClick={refreshTree} disabled={loading} aria-label="Refresh">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -1431,7 +1451,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             </div>
           ) : null}
           {isFiltering && treeData.length === 0 && !loading && !error ? (
-            <div className="file-tree-no-results" role="status">
+            <div className="file-tree-no-results" role="status" data-testid="file-tree-empty">
               <span>No files matching &quot;{filterQuery}&quot;</span>
             </div>
           ) : null}

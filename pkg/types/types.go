@@ -63,14 +63,15 @@ type ChatResponse struct {
 
 // ModelInfo represents information about a model
 type ModelInfo struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Provider      string  `json:"provider"`
-	Description   string  `json:"description,omitempty"`
-	ContextLength int     `json:"context_length,omitempty"`
-	InputCost     float64 `json:"input_cost,omitempty"`
-	OutputCost    float64 `json:"output_cost,omitempty"`
-	Cost          float64 `json:"cost,omitempty"`
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	Provider        string  `json:"provider"`
+	Description     string  `json:"description,omitempty"`
+	ContextLength   int     `json:"context_length,omitempty"`
+	InputCost       float64 `json:"input_cost,omitempty"`
+	OutputCost      float64 `json:"output_cost,omitempty"`
+	CachedInputCost float64 `json:"cached_input_cost,omitempty"`
+	Cost            float64 `json:"cost,omitempty"`
 }
 
 // TokenUsage represents token usage from LLM responses (alias for Usage)

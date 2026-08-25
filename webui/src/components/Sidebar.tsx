@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import { supportsSettings } from '../config/mode';
+import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
+import { usePlugins } from '../contexts/PluginContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { debugLog } from '../utils/log';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
 import { useSidebarModel } from '../hooks/useSidebarModel';
 import {
@@ -17,17 +17,20 @@ import {
 } from '../hooks/useSidebarState';
 import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
+import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import { debugLog } from '../utils/log';
+import AutomationsPanel from './AutomationsPanel';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
   FolderCog,
+  FolderOpen,
   Settings,
   Search,
   GitBranch,
-  History,
   type LucideIcon,
   // New icons for platform nav items
   CreditCard,
@@ -35,10 +38,12 @@ import {
   Users,
   LayoutDashboard,
   ExternalLink,
+  Shield,
+  Server,
+  Monitor,
   Zap,
+  CircleDollarSign,
 } from 'lucide-react';
-import AgentChangesPanel from './AgentChangesPanel';
-import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
 import SidebarGitSection from './SidebarGitSection';
@@ -59,8 +64,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  currentView?: ViewType;
+  onViewChange?: (view: ViewType) => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -127,20 +132,14 @@ interface SidebarProps {
 }
 
 /**
- * Section tabs rendered in the icon rail. Main section tabs (git, files, search)
- * are rendered first, followed by platform nav items, then settings (conditional)
- * and logs.
+ * Section tabs rendered in the icon rail. Filtered to only show supported tabs.
  */
-const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
+const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'git', icon: GitBranch, label: 'Git' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
-  { id: 'changes', icon: History, label: 'Agent Changes' },
   { id: 'automations', icon: Zap, label: 'Automations' },
 ];
-
-/** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
@@ -149,6 +148,9 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   users: Users,
   'layout-dashboard': LayoutDashboard,
   'external-link': ExternalLink,
+  shield: Shield,
+  server: Server,
+  monitor: Monitor,
 };
 
 function Sidebar({
@@ -200,6 +202,7 @@ function Sidebar({
     setFormatOnSaveEnabled,
   } = useEditorManager();
   const { platformNavItems } = usePlatformNav();
+  const { pluginViews, pluginPanels } = usePlugins();
   const sortedPlatformNavItems = useMemo(
     () => [...platformNavItems].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
     [platformNavItems],
@@ -207,7 +210,7 @@ function Sidebar({
   const fileTreeRef = useRef<FileTreeHandle | null>(null);
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
-  const effectiveSelectedSection = selectedSection || 'git';
+  const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
   // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
   // Plain object fallback avoids calling useRef when the prop is not provided
@@ -313,6 +316,13 @@ function Sidebar({
   const renderContentPane = () => {
     switch (effectiveSelectedSection) {
       case 'git':
+        if (!supportsGit) {
+          return (
+            <div className="git-sidebar-panel">
+              <div className="empty">No git in browser mode — use repo import instead.</div>
+            </div>
+          );
+        }
         return <SidebarGitSection gitPanel={gitPanel} currentView={currentView} onSectionChange={onSectionChange} />;
       case 'logs':
         return <SidebarLogsPane logs={normalizedRecentLogs} />;
@@ -322,13 +332,15 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
-      case 'changes':
-        return <AgentChangesPanel onFileClick={onFileClick} />;
       case 'automations':
-        return <AutomationsPanel onNavigateToSession={(id) => {
-          // TODO: Navigate to session output view
-          debugLog('[Sidebar] Navigate to automation session:', id);
-        }} />;
+        return (
+          <AutomationsPanel
+            onNavigateToSession={(id) => {
+              debugLog('[Sidebar] Navigate to automation session:', id);
+              onSectionChange?.('automations');
+            }}
+          />
+        );
       case 'settings':
         return supportsSettings ? (
           <SidebarSettingsSection
@@ -375,12 +387,18 @@ function Sidebar({
           />
         ) : null;
       default:
+        // Check if this is a plugin panel
+        const pluginPanel = pluginPanels.find((p) => p.id === effectiveSelectedSection);
+        if (pluginPanel) {
+          const PanelComponent = pluginPanel.component;
+          return <PanelComponent />;
+        }
         return null;
     }
   };
 
   return (
-    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container">
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={
@@ -397,28 +415,43 @@ function Sidebar({
             onClick={handleLogoToggle}
             aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-brand"
           >
             <SproutLogo showWordmark={false} compact />
           </button>
           {!effectiveSidebarCollapsed ? (
-            <LocationSwitcher
-              isConnected={isConnected}
-              instances={instances}
-              selectedInstancePID={selectedInstancePID}
-              isSwitchingInstance={isSwitchingInstance}
-              onInstanceChange={onInstanceChange}
-              sidebarCollapsed={effectiveSidebarCollapsed}
-            />
+            <>
+              {supportsWorkspaceSwitching ? (
+                <LocationSwitcher
+                  isConnected={isConnected}
+                  instances={instances}
+                  selectedInstancePID={selectedInstancePID}
+                  isSwitchingInstance={isSwitchingInstance}
+                  onInstanceChange={onInstanceChange}
+                  sidebarCollapsed={effectiveSidebarCollapsed}
+                />
+              ) : (
+                <div className="sidebar-static-workspace" title="Browser Workspace">
+                  <FolderOpen size={14} className="sidebar-static-workspace-icon" />
+                  <span className="sidebar-static-workspace-label">Browser Workspace</span>
+                </div>
+              )}
+            </>
           ) : null}
         </div>
 
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
         <div className="sidebar-body">
           {/* Icon Rail */}
-          <div className="sidebar-icon-rail" role="navigation" aria-label="Sidebar navigation">
-            {/* Main section tabs: git, files, search */}
+          <div
+            className="sidebar-icon-rail"
+            role="navigation"
+            aria-label="Sidebar navigation"
+            data-testid="sidebar-icon-rail"
+          >
+            {/* Main section tabs: filtered by capability flags */}
             <div role="tablist" aria-orientation="vertical">
-              {MAIN_SECTION_TABS.map((tab) => (
+              {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
                 <button
                   key={tab.id}
                   role="tab"
@@ -428,6 +461,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick(tab.id)}
                   title={tab.label}
                   aria-label={tab.label}
+                  data-testid={`sidebar-${tab.id}-tab`}
                 >
                   <tab.icon size={18} strokeWidth={1.5} />
                 </button>
@@ -441,6 +475,7 @@ function Sidebar({
                 <nav aria-label="Platform navigation">
                   {sortedPlatformNavItems.map((item) => {
                     const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
+                    const hasPluginView = pluginViews.some((v) => v.id === item.id);
                     const isActive = currentView === item.id;
                     return (
                       <button
@@ -449,8 +484,10 @@ function Sidebar({
                         aria-selected={isActive}
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
-                          if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team');
+                          if (hasPluginView) {
+                            onViewChange?.(item.id);
+                          } else {
+                            window.location.href = item.href;
                           }
                         }}
                         title={item.label}
@@ -464,6 +501,48 @@ function Sidebar({
               </>
             )}
 
+            {/* Plugin Panels (between platform nav and costs) */}
+            {pluginPanels.length > 0 && (
+              <>
+                <div className="sidebar-icon-rail-divider" role="separator" />
+                <nav aria-label="Plugin panels">
+                  {pluginPanels.map((panel) => {
+                    const IconComponent = panel.icon ? (PLATFORM_ICON_MAP[panel.icon] ?? ExternalLink) : ExternalLink;
+                    const isActive = effectiveSelectedSection === panel.id;
+                    return (
+                      <button
+                        key={panel.id}
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls="sidebar-tabpanel"
+                        className={`rail-icon ${isActive ? 'active' : ''}`}
+                        onClick={() => handleSectionTabClick(panel.id)}
+                        title={panel.label}
+                        aria-label={panel.label}
+                      >
+                        <IconComponent size={18} strokeWidth={1.5} />
+                      </button>
+                    );
+                  })}
+                </nav>
+              </>
+            )}
+
+            {/* Costs — local feature, always visible */}
+            <div role="tablist" aria-orientation="vertical">
+              <button
+                role="tab"
+                aria-selected={currentView === 'costs'}
+                className={`rail-icon ${currentView === 'costs' ? 'active' : ''}`}
+                onClick={() => onViewChange?.('costs')}
+                title="Costs"
+                aria-label="Costs"
+                data-testid="sidebar-costs-button"
+              >
+                <CircleDollarSign size={18} strokeWidth={1.5} />
+              </button>
+            </div>
+
             {/* Settings & Logs tabs */}
             <div role="tablist" aria-orientation="vertical">
               {supportsSettings && (
@@ -475,6 +554,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick('settings')}
                   title="Settings"
                   aria-label="Settings"
+                  data-testid="sidebar-settings-toggle"
                 >
                   <Settings size={18} strokeWidth={1.5} />
                 </button>
@@ -487,6 +567,7 @@ function Sidebar({
                 onClick={() => handleSectionTabClick('logs')}
                 title="Logs"
                 aria-label="Logs"
+                data-testid="sidebar-logs-tab"
               >
                 <ScrollText size={18} strokeWidth={1.5} />
               </button>

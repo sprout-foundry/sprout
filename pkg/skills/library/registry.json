@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "security-review",
+      "name": "Security Review",
+      "description": "Performs a structured security review of changed code or a PR diff, looking for common vulnerability classes.",
+      "git_url": "https://github.com/sprout-foundry/sprout-skills.git",
+      "git_ref": "main",
+      "path_in_repo": "skills/security-review"
+    },
+    {
+      "id": "release-notes",
+      "name": "Release Notes",
+      "description": "Generates a release-notes draft from merged PRs / git log between two refs.",
+      "git_url": "https://github.com/sprout-foundry/sprout-skills.git",
+      "git_ref": "main",
+      "path_in_repo": "skills/release-notes"
+    },
+    {
+      "id": "code-explain",
+      "name": "Code Explain",
+      "description": "Walks a file or directory and produces a beginner-friendly explanation of what the code does.",
+      "git_url": "https://github.com/sprout-foundry/sprout-skills.git",
+      "git_ref": "main",
+      "path_in_repo": "skills/code-explain"
+    },
+    {
+      "id": "test-generator",
+      "name": "Test Generator",
+      "description": "Scaffolds a test file (table-driven where appropriate) for a given function or type.",
+      "git_url": "https://github.com/sprout-foundry/sprout-skills.git",
+      "git_ref": "main",
+      "path_in_repo": "skills/test-generator"
+    },
+    {
+      "id": "docs-format",
+      "name": "Docs Format",
+      "description": "Formats a markdown doc to sprout's style (heading levels, code fences, frontmatter).",
+      "git_url": "https://github.com/sprout-foundry/sprout-skills.git",
+      "git_ref": "main",
+      "path_in_repo": "skills/docs-format"
+    }
+  ]
+}

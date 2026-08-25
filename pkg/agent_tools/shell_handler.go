@@ -2,12 +2,14 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // shellCommandHandler implements ToolHandler for the shell_command tool.
@@ -28,7 +30,7 @@ func (h *shellCommandHandler) Name() string {
 func (h *shellCommandHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id).",
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "command",
@@ -60,92 +62,120 @@ func (h *shellCommandHandler) Definition() ToolDefinition {
 				Required:    false,
 				Description: "Session ID of a background session to stop/terminate",
 			},
+			{
+				Name:        "wakeup_timeout",
+				Type:        "integer",
+				Required:    false,
+				Description: "Optional deadline in seconds for background commands. When the background command completes, the agent is automatically notified and resumed so it can check the output. This adds an early timeout notification if the process hasn't finished within the deadline. The watcher survives turn boundaries — the notification will fire even if the agent's current turn has already ended.",
+			},
 		},
 	}
 }
 
 func (h *shellCommandHandler) Validate(args map[string]any) error {
 	if args == nil {
-		return fmt.Errorf("arguments must not be nil")
+		return agenterrors.NewValidation("arguments must not be nil", nil)
 	}
 
 	// Extract parameters
 	var command string
-	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {
+	if cmdRaw, ok := lookupKey(args, "command"); ok && cmdRaw != nil {
 		cmd, err := extractString(args, "command")
 		if err != nil {
-			return fmt.Errorf("parameter 'command' must be a string")
+			return agenterrors.NewValidation("parameter 'command' must be a string", nil)
 		}
 		command = cmd
 	}
 
 	var checkBackground string
-	if cbRaw, ok := args["check_background"]; ok && cbRaw != nil {
+	if cbRaw, ok := lookupKey(args, "check_background"); ok && cbRaw != nil {
 		cb, err := extractString(args, "check_background")
 		if err != nil {
-			return fmt.Errorf("parameter 'check_background' must be a string")
+			return agenterrors.NewValidation("parameter 'check_background' must be a string", nil)
 		}
 		checkBackground = cb
 	}
 
 	var stopBackground string
-	if sbRaw, ok := args["stop_background"]; ok && sbRaw != nil {
+	if sbRaw, ok := lookupKey(args, "stop_background"); ok && sbRaw != nil {
 		sb, err := extractString(args, "stop_background")
 		if err != nil {
-			return fmt.Errorf("parameter 'stop_background' must be a string")
+			return agenterrors.NewValidation("parameter 'stop_background' must be a string", nil)
 		}
 		stopBackground = sb
 	}
 
 	// Validate background parameter if provided
-	if bgRaw, exists := args["background"]; exists && bgRaw != nil {
+	if bgRaw, exists := lookupKey(args, "background"); exists && bgRaw != nil {
 		switch bgRaw.(type) {
 		case bool:
 			// Valid
 		case string:
 			// String "true"/"false" is acceptable from JSON
 		default:
-			return fmt.Errorf("parameter 'background' must be a boolean")
+			return agenterrors.NewValidation("parameter 'background' must be a boolean", nil)
 		}
 	}
 
 	// Reject conflicting parameters
 	if checkBackground != "" && getBoolArg(args, "background") {
-		return fmt.Errorf("check_background and background=true cannot be used together")
+		return agenterrors.NewValidation("check_background and background=true cannot be used together", nil)
 	}
 	if stopBackground != "" && getBoolArg(args, "background") {
-		return fmt.Errorf("stop_background and background=true cannot be used together")
+		return agenterrors.NewValidation("stop_background and background=true cannot be used together", nil)
 	}
 	if stopBackground != "" && checkBackground != "" {
-		return fmt.Errorf("stop_background and check_background cannot be used together")
+		return agenterrors.NewValidation("stop_background and check_background cannot be used together", nil)
 	}
 
 	// wait_seconds is only meaningful with check_background.
-	if waitRaw, ok := args["wait_seconds"]; ok && waitRaw != nil {
+	if waitRaw, ok := lookupKey(args, "wait_seconds"); ok && waitRaw != nil {
 		wait, err := extractInt(args, "wait_seconds")
 		if err != nil {
 			return err
 		}
 		if wait < 0 {
-			return fmt.Errorf("parameter 'wait_seconds' must be >= 0")
+			return agenterrors.NewValidation("parameter 'wait_seconds' must be >= 0", nil)
 		}
 		if checkBackground == "" && wait > 0 {
-			return fmt.Errorf("wait_seconds is only valid with check_background")
+			return agenterrors.NewValidation("wait_seconds is only valid with check_background", nil)
+		}
+	}
+
+	// wakeup_timeout is only valid with background=true.
+	if wtRaw, ok := lookupKey(args, "wakeup_timeout"); ok && wtRaw != nil {
+		wt, err := extractInt(args, "wakeup_timeout")
+		if err != nil {
+			return err
+		}
+		if wt < 0 {
+			return agenterrors.NewValidation("parameter 'wakeup_timeout' must be >= 0", nil)
+		}
+		if !getBoolArg(args, "background") {
+			return agenterrors.NewValidation("wakeup_timeout is only valid with background=true", nil)
 		}
 	}
 
 	// If neither check_background nor stop_background is set, command is required
 	if checkBackground == "" && stopBackground == "" && strings.TrimSpace(command) == "" {
-		return fmt.Errorf("command parameter is required when check_background and stop_background are not provided")
+		return agenterrors.NewValidation("command parameter is required when check_background and stop_background are not provided", nil)
 	}
 
 	return nil
 }
 
 func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// Inject env.WorkspaceRoot into context so runShellCommand resolves
+	// the correct cmd.Dir. Without this, the shell falls back to
+	// os.Getwd() which is the package source dir during tests —
+	// creating nested .git repos that corrupt the ChangeTracker.
+	if env.WorkspaceRoot != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	}
+
 	// Extract parameters
 	var command string
-	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {
+	if cmdRaw, ok := lookupKey(args, "command"); ok && cmdRaw != nil {
 		var err error
 		command, err = extractString(args, "command")
 		if err != nil {
@@ -154,7 +184,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	var checkBackground string
-	if cbRaw, ok := args["check_background"]; ok && cbRaw != nil {
+	if cbRaw, ok := lookupKey(args, "check_background"); ok && cbRaw != nil {
 		var err error
 		checkBackground, err = extractString(args, "check_background")
 		if err != nil {
@@ -163,7 +193,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	var stopBackground string
-	if sbRaw, ok := args["stop_background"]; ok && sbRaw != nil {
+	if sbRaw, ok := lookupKey(args, "stop_background"); ok && sbRaw != nil {
 		var err error
 		stopBackground, err = extractString(args, "stop_background")
 		if err != nil {
@@ -172,6 +202,16 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	background := getBoolArg(args, "background")
+
+	// Validate: command is required when not doing a background session operation.
+	// This catches malformed tool calls early — they are validation failures,
+	// not security issues, and should never reach the approval flow.
+	if command == "" && checkBackground == "" && stopBackground == "" {
+		return ToolResult{
+			Output:  "command parameter is required when check_background and stop_background are not provided",
+			IsError: true,
+		}, agenterrors.NewValidation("command parameter is required when check_background and stop_background are not provided", nil)
+	}
 
 	// --- Usage guidance (not a security gate) ---
 	// Standalone sleep/wait is an antipattern in tool calls. The classifier
@@ -184,24 +224,31 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 				"For inserting a delay between commands inside a script, chain with && (e.g., \"cmd1 && sleep 5 && cmd2\"). " +
 				"Standalone sleep here will be cut off at the 2-minute shell deadline and adopted as a background session; the agent will NOT have actually waited the requested duration.",
 			IsError: true,
-		}, fmt.Errorf("standalone sleep/wait not supported as a tool call — use check_background with wait_seconds instead")
+		}, agenterrors.NewTool("shell_command", "standalone sleep/wait not supported as a tool call — use check_background with wait_seconds instead", nil)
 	}
 
 	// --- Security classification ---
-	secResult := ClassifyToolCall("shell_command", args)
+	secResult := ClassifyToolCallWithWorkspace("shell_command", args, env.WorkspaceRoot)
 
-	if secResult.ShouldBlock {
+	// Only truly unrecoverable operations (IsHardBlock) are blocked outright.
+	// ShouldBlock without IsHardBlock falls through to the approval prompt
+	// below — the user can still approve or reject it interactively.
+	if secResult.IsHardBlock {
 		return ToolResult{
 			Output:  fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning),
 			IsError: true,
-		}, fmt.Errorf("security block: shell_command — %s", secResult.Reasoning)
+		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
-	if secResult.ShouldPrompt && env.ApprovalManager != nil {
+	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !(env.Gate1AutoApproved && !secResult.IsHardBlock) {
+		approvalExtras := map[string]string{}
+		if command != "" {
+			approvalExtras["command"] = command
+		}
 		result := env.ApprovalManager.RequestApproval(
 			"", "shell_command", secResult.Risk.String(),
 			fmt.Sprintf("Execute shell command: %s\n\n%s", command, secResult.Reasoning),
-			nil,
+			approvalExtras,
 		)
 		if !result.Approved {
 			reason := result.Reason
@@ -211,7 +258,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 			return ToolResult{
 				Output:  fmt.Sprintf("shell_command rejected (%s): %s", reason, secResult.Reasoning),
 				IsError: true,
-			}, fmt.Errorf("shell_command rejected (%s): %s", reason, secResult.Reasoning)
+			}, agenterrors.NewPermission(fmt.Sprintf("shell_command rejected (%s): %s", reason, secResult.Reasoning), nil)
 		}
 	}
 	// If ShouldPrompt but ApprovalManager is nil, proceed without approval
@@ -236,12 +283,17 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	// command is required for both background and normal execution
 	if strings.TrimSpace(command) == "" {
 		return ToolResult{Output: "command parameter is required", IsError: true},
-			fmt.Errorf("command parameter is required")
+			agenterrors.NewValidation("command parameter is required", nil)
 	}
 
 	// background mode
 	if background {
-		return h.handleBackground(ctx, env, command)
+		wakeupTimeout, _ := extractInt(args, "wakeup_timeout")
+		result, err := h.handleBackground(ctx, env, command)
+		if err == nil && env.Notifier != nil {
+			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout)
+		}
+		return result, err
 	}
 
 	// Normal synchronous execution
@@ -257,7 +309,7 @@ func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env Too
 		return ToolResult{
 			Output:  fmt.Sprintf("check background %q: %v", sessionID, err),
 			IsError: true,
-		}, fmt.Errorf("check background %q: %w", sessionID, err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("check background %q: %v", sessionID, err), err)
 	}
 
 	if env.OutputWriter != nil {
@@ -280,7 +332,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 			return ToolResult{
 				Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),
 				IsError: true,
-			}, fmt.Errorf("stop background %q: %w", sessionID, err)
+			}, agenterrors.NewTool("shell_command", fmt.Sprintf("stop background %q: %v", sessionID, err), err)
 		}
 
 		result := fmt.Sprintf("Background session %s stopped.", sessionID)
@@ -298,9 +350,9 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 	bpm := BackgroundProcessManagerFromContext(ctx)
 	if bpm == nil {
 		return ToolResult{
-			Output:  "stop_background requires WebUI terminal manager or CLI background process manager",
+			Output:  "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context",
 			IsError: true,
-		}, fmt.Errorf("stop_background requires WebUI terminal manager or CLI background process manager")
+		}, agenterrors.NewTool("shell_command", "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context", nil)
 	}
 
 	err := bpm.Stop(sessionID, 10*time.Second)
@@ -308,7 +360,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 		return ToolResult{
 			Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),
 			IsError: true,
-		}, fmt.Errorf("stop background %q: %w", sessionID, err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("stop background %q: %v", sessionID, err), err)
 	}
 
 	result := fmt.Sprintf("Background session %s stopped.", sessionID)
@@ -329,7 +381,7 @@ func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv,
 		return ToolResult{
 			Output:  fmt.Sprintf("execute background command: %v", err),
 			IsError: true,
-		}, fmt.Errorf("execute background command: %w", err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("execute background command: %v", err), err)
 	}
 
 	if env.OutputWriter != nil {
@@ -344,14 +396,6 @@ func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv,
 
 // handleSync runs a command synchronously.
 func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, command string) (ToolResult, error) {
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":    "shell_command",
-			"command": truncateForEvent(command, 200),
-		})
-	}
-
 	// Execute with safety checks.
 	// interactiveMode=false, streamOutput=false for agent tool calls.
 	result, err := ExecuteShellCommandWithSafety(ctx, command, false, "", false)
@@ -359,17 +403,7 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 		return ToolResult{
 			Output:  fmt.Sprintf("shell_command %q: %v", command, err),
 			IsError: true,
-		}, fmt.Errorf("shell_command %q: %w", command, err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":    "shell_command",
-			"command": truncateForEvent(command, 200),
-			"bytes":   len(result),
-			"tokens":  estimateTokenUsage(result),
-		})
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("shell_command %q: %v", command, err), err)
 	}
 
 	// Write to output writer if available
@@ -383,10 +417,114 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 	}, nil
 }
 
-// truncateForEvent truncates a string for event logging.
-func truncateForEvent(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
+func (h *shellCommandHandler) Aliases() []string      { return nil }
+func (h *shellCommandHandler) Timeout() time.Duration { return 0 }
+func (h *shellCommandHandler) MaxResultSize() int     { return 0 }
+func (h *shellCommandHandler) SafeForParallel() bool  { return false }
+func (h *shellCommandHandler) Interactive() bool      { return false }
+
+type bgResult struct {
+	SessionID string `json:"session_id"`
+	Status    string `json:"status"`
+}
+
+func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEnv, resultJSON string, timeoutSec int) {
+	var res bgResult
+	if err := json.Unmarshal([]byte(resultJSON), &res); err != nil || res.SessionID == "" {
+		return
 	}
-	return s[:maxLen-3] + "..."
+	sessionID := res.SessionID
+	var done <-chan struct{}
+	var getExitCode func() int
+
+	notifier := env.Notifier
+	if notifier == nil {
+		return
+	}
+
+	// Cap the deadline so absurd values can't overflow time.Duration
+	// (a wrapped-negative duration fires the timer immediately).
+	if timeoutSec > maxWakeupTimeoutSeconds {
+		timeoutSec = maxWakeupTimeoutSeconds
+	}
+
+	// Use the agent's lifetime context for the watcher goroutines so they
+	// survive turn boundaries. The per-turn ctx is cancelled when the model
+	// finishes its response, which would kill watchers that are waiting for
+	// long-running background tasks. LifetimeCtx lives until agent Shutdown.
+	watchCtx := env.LifetimeCtx
+	if watchCtx == nil {
+		watchCtx = context.Background()
+	}
+
+	if tm := TerminalManagerFromContext(ctx); tm != nil {
+		doneCh := make(chan struct{})
+		done = doneCh
+		go func() {
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+			for tm.IsSessionActive(sessionID) {
+				select {
+				case <-ticker.C:
+				case <-watchCtx.Done():
+					// Cancelled before the session finished: leave doneCh
+					// open so the completion goroutine also takes the
+					// cancellation branch instead of emitting a spurious
+					// completion notification.
+					return
+				}
+			}
+			close(doneCh)
+		}()
+		// TerminalManager does not expose exit codes for PTY sessions.
+		getExitCode = func() int { return 0 }
+	} else if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+		if proc, exists := bpm.GetProcess(sessionID); exists {
+			done = proc.Done()
+			getExitCode = proc.GetExitCode
+		} else {
+			return
+		}
+	} else {
+		return
+	}
+
+	// Deadline heads-up: fires at most once if the session is still running
+	// after timeoutSec seconds. It never stops the completion watch below —
+	// the deadline is a heads-up, not a give-up.
+	if timeoutSec > 0 {
+		go func() {
+			timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				// Completion can win the race with the timer; suppress the
+				// heads-up in that case so the message always means "still
+				// running" and stays ordered before the completion notice.
+				select {
+				case <-done:
+					return
+				default:
+				}
+				notifier.NotifyCompletion(sessionID, "shell_bg_timeout",
+					fmt.Sprintf("Background session %s still running after %ds (wakeup deadline reached).\nIt will be notified again when it completes.",
+						sessionID, timeoutSec))
+			case <-done:
+				// Completed before the deadline; the completion goroutine
+				// already reported it — no heads-up needed.
+			case <-watchCtx.Done():
+			}
+		}()
+	}
+
+	// Completion watch: exactly one notification when the session exits.
+	go func() {
+		select {
+		case <-done:
+			notifier.NotifyCompletion(sessionID, "shell_bg",
+				fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
+					sessionID, getExitCode(), sessionID))
+		case <-watchCtx.Done():
+		}
+	}()
 }

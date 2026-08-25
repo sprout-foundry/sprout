@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"golang.org/x/term"
@@ -28,6 +28,12 @@ var ErrModelNotAvailable = errors.New("configured model is not available for thi
 // web UI to start without an agent and present a provider configuration UI instead
 // of crashing the daemon.
 var ErrProviderNotConfigured = errors.New("provider is not configured — configure via webui settings")
+
+// ErrQueryInProgress is returned when ProcessQuery is called while another
+// query is already running on the same Agent instance. This happens when two
+// frontends (CLI REPL and WebUI) share the same Agent — only one query can
+// execute at a time to prevent message-list and state corruption.
+var ErrQueryInProgress = errors.New("a query is already in progress on this agent")
 
 // isNonInteractive returns true if the process is running in non-interactive
 // mode (stdin is not a terminal). Used to prevent blocking prompts when
@@ -93,6 +99,10 @@ func (a *Agent) SelectProvider() error {
 	client.SetDebug(a.debug)
 	a.setClient(client, newProvider)
 
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
+
 	return nil
 }
 
@@ -144,7 +154,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	}
 
 	if choice == 0 {
-		return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+		return "", "", agenterrors.Wrapf(errProviderStartupClosed, "%s", failedProviderName)
 	}
 
 	// Choice 1 (or choice 2 when no model error): try a different model on the
@@ -158,7 +168,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 		}
 		selectedModel, ok := promptModelSelection(models)
 		if !ok {
-			return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+			return "", "", agenterrors.Wrapf(errProviderStartupClosed, "%s", failedProviderName)
 		}
 		return failedProvider, selectedModel, nil
 	}

@@ -20,7 +20,7 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	}
 
 	// Slash/bang commands should bypass command-detection fast paths.
-	registry := agent_commands.NewCommandRegistry()
+	registry := agent_commands.DefaultRegistry()
 	if registry.IsSlashCommand(query) {
 		return ProcessQuery(ctx, chatAgent, eventBus, query)
 	}
@@ -28,14 +28,6 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	// Try zsh command detection first
 	if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 		return fmt.Errorf("zsh command execution failed: %w", err)
-	} else if executed {
-		// Command was executed directly, skip normal agent flow
-		return nil
-	}
-
-	// Try LLM-based fast path: direct command execution
-	if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-		return fmt.Errorf("direct command execution failed: %w", err)
 	} else if executed {
 		// Command was executed directly, skip normal agent flow
 		return nil

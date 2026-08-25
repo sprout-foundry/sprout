@@ -1,5 +1,5 @@
 import { SkeletonText } from '@sprout/ui';
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Cog } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
@@ -16,8 +16,10 @@ interface ProviderSettingsTabProps {
   providerModelName: string;
   providerContextSize: number;
   providerEnvVar: string;
+  providerApiKey: string;
   providerSupportsVision: boolean;
   providerVisionModel: string;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
   providerModelContextSizes: string;
   loadingProviderInfo: boolean;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
@@ -39,8 +41,10 @@ interface ProviderSettingsTabProps {
   setProviderModelName: (v: string) => void;
   setProviderContextSize: (v: number) => void;
   setProviderEnvVar: (v: string) => void;
+  setProviderApiKey: (v: string) => void;
   setProviderSupportsVision: (v: boolean) => void;
   setProviderVisionModel: (v: string) => void;
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   setProviderModelContextSizes: (v: string) => void;
   resetProviderForm: () => void;
   handleAddProvider: () => Promise<void>;
@@ -57,8 +61,10 @@ export default function ProviderSettingsTab({
   providerModelName,
   providerContextSize,
   providerEnvVar,
+  providerApiKey,
   providerSupportsVision,
   providerVisionModel,
+  providerBillingType,
   providerModelContextSizes,
   loadingProviderInfo,
   currentProviderInfo,
@@ -71,8 +77,10 @@ export default function ProviderSettingsTab({
   setProviderModelName,
   setProviderContextSize,
   setProviderEnvVar,
+  setProviderApiKey,
   setProviderSupportsVision,
   setProviderVisionModel,
+  setProviderBillingType,
   setProviderModelContextSizes,
   resetProviderForm,
   handleAddProvider,
@@ -123,8 +131,8 @@ export default function ProviderSettingsTab({
   };
 
   return (
-    <div className="section">
-      <div className="current-provider-section">
+    <div className="section" data-testid="settings-providers-tab">
+      <div className="current-provider-section" data-testid="settings-current-provider">
         <h4>Current Provider</h4>
         {loadingProviderInfo ? (
           <div className="settings-skeleton" role="status" aria-label="Loading provider info">
@@ -143,6 +151,7 @@ export default function ProviderSettingsTab({
                     value={currentProviderId}
                     onChange={(e) => persistPrimary('provider', e.target.value)}
                     disabled={primarySaving !== null}
+                    data-testid="settings-primary-provider"
                   >
                     {!currentProviderId && <option value="">Not configured</option>}
                     {availableProviders!.map((p) => (
@@ -160,6 +169,7 @@ export default function ProviderSettingsTab({
                     value={currentModelId}
                     onChange={(e) => persistPrimary('model', e.target.value)}
                     disabled={primarySaving !== null || !currentProviderId || availableModelsForCurrent.length === 0}
+                    data-testid="settings-primary-model"
                   >
                     {currentModelId && !availableModelsForCurrent.includes(currentModelId) && (
                       <option value={currentModelId}>{currentModelId}</option>
@@ -175,7 +185,13 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                    {currentProviderInfo.hasCredential ? (
+                      <>
+                        <Check size={12} /> Configured
+                      </>
+                    ) : (
+                      'Missing'
+                    )}
                   </span>
                 </div>
               </>
@@ -192,7 +208,13 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                    {currentProviderInfo.hasCredential ? (
+                      <>
+                        <Check size={12} /> Configured
+                      </>
+                    ) : (
+                      'Missing'
+                    )}
                   </span>
                 </div>
               </>
@@ -260,8 +282,10 @@ export default function ProviderSettingsTab({
                   setProviderModelName(cfg.model_name || '');
                   setProviderContextSize(cfg.context_size || 32768);
                   setProviderEnvVar(cfg.env_var || '');
+                  setProviderApiKey('');
                   setProviderSupportsVision(!!cfg.supports_vision);
                   setProviderVisionModel(cfg.vision_model || '');
+                  setProviderBillingType(cfg.billing_type || 'pay_per_token');
                   const mcs = cfg.model_context_sizes;
                   if (mcs && typeof mcs === 'object') {
                     const pairs = Object.entries(mcs)
@@ -350,6 +374,33 @@ export default function ProviderSettingsTab({
               <small className="config-help">Format: model_name:context_size, separated by commas</small>
             </div>
             <div className="form-row">
+              <label>Billing Type</label>
+              <select
+                className="styled-input"
+                value={providerBillingType}
+                onChange={(e) => setProviderBillingType(e.target.value as 'pay_per_token' | 'subscription' | 'free')}
+              >
+                <option value="pay_per_token">Pay-per-token (API cost per call)</option>
+                <option value="subscription">Subscription (flat-rate, included)</option>
+                <option value="free">Free / Local (zero marginal cost)</option>
+              </select>
+              <small className="config-help">
+                Determines how costs are tracked. Auto-detected for localhost endpoints.
+              </small>
+            </div>
+            <div className="form-row">
+              <label>API Key (optional)</label>
+              <input
+                type="password"
+                className="styled-input"
+                value={providerApiKey}
+                onChange={(e) => setProviderApiKey(e.target.value)}
+                placeholder="Paste API key, or use env var below"
+                autoComplete="off"
+              />
+              <small className="config-help">Enter the key directly, or set an env var name below instead</small>
+            </div>
+            <div className="form-row">
               <label>API Key Env Var (optional)</label>
               <input
                 type="text"
@@ -406,6 +457,7 @@ export default function ProviderSettingsTab({
               setProviderModelName('');
               setProviderContextSize(32768);
               setProviderEnvVar('');
+              setProviderApiKey('');
               setProviderSupportsVision(false);
               setProviderVisionModel('');
               setProviderModelContextSizes('');
@@ -426,10 +478,13 @@ interface ProviderPrioritySectionProps {
 }
 
 /**
- * Ordered fallback list. When the active provider can't be reached (no
- * credential, endpoint down, etc.), sprout walks this list and switches
- * to the first usable entry. Empty list = no fallback; only the active
- * provider is used.
+ * Ordered provider preference list. This is the default selection order
+ * for new chat sessions — sprout starts each session with the first
+ * provider in this list (when configured) rather than the active
+ * provider being unavailable. It is NOT an automatic runtime failover:
+ * if the selected provider errors mid-session, sprout surfaces the error
+ * rather than silently switching providers. Empty list = always use the
+ * explicitly active provider.
  */
 function ProviderPrioritySection({ settings, availableProviders, updateSetting }: ProviderPrioritySectionProps) {
   const priority = ((settings as unknown as { provider_priority?: string[] }).provider_priority ?? []) as string[];
@@ -474,8 +529,8 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
     <div className="settings-block-spaced">
       <h4>Provider Priority</h4>
       <div className="config-help settings-help-spaced">
-        Fallback order when the active provider is unreachable. The first usable provider in this list wins. Empty list
-        means no fallback.
+        Default provider preference for new sessions. Sessions start on the first configured provider in this list; the
+        list does not switch providers automatically at runtime. Empty list means the active provider is always used.
       </div>
 
       {priority.length === 0 ? (
@@ -516,7 +571,7 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
                     className="settings-icon-btn danger"
                     onClick={async () => {
                       const confirmed = await showThemedConfirm(
-                        `Remove "${meta?.name ?? id}" from the priority fallback list?`,
+                        `Remove "${meta?.name ?? id}" from the provider priority list?`,
                         { title: 'Remove from priority list', type: 'warning', confirmLabel: 'Remove' },
                       );
                       if (!confirmed) return;
@@ -534,11 +589,7 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
 
       <div className="config-item settings-help-spaced-top">
         <div className="settings-inline-row">
-          <select
-            className="styled-select"
-            value={pendingAdd}
-            onChange={(e) => setPendingAdd(e.target.value)}
-          >
+          <select className="styled-select" value={pendingAdd} onChange={(e) => setPendingAdd(e.target.value)}>
             <option value="">
               {candidateOptions.length === 0 ? 'All providers already in list' : 'Select provider to add…'}
             </option>

@@ -1,22 +1,5 @@
 // Agent-facing tools backed by the ChangeTracker's session buffer.
-//
-// After the SP-061-2 consolidation this file ships only two tools — the
-// rest were folded into options on these:
-//
-//   - list_changes
-//       Manifest of the session's changes, with three optional knobs:
-//         include_diff: bool        per-file unified diff (was show_my_change)
-//         group_by: "block"|""      activity-block summary (was summarize_my_session)
-//         include_persisted: bool   merge hot+warm history (was my_recent_changes)
-//       Plus the existing filters: since, tool, path_pattern.
-//
-//   - revert_my_changes
-//       Bulk undo by scope ("all" or "since"). The previous file= scope was
-//       removed because recover_file(scope="session_start") does the same
-//       thing with clearer semantics.
-//
-// Recovery of an individual file (or bulk entry, or session-start state)
-// lives in tool_handlers_recover.go.
+// Provides list_changes and revert_my_changes.
 package agent
 
 import (
@@ -30,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pmezard/go-difflib/difflib"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
@@ -61,6 +45,16 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		includePersisted = v
 	}
 
+	// include_cross_session, when true, merges persisted changes from
+	// ALL sessions instead of only the current one. Used by the
+	// timeline ("Recent history") tab so cross-session change history
+	// is visible even when a live agent is running. The default path
+	// (session tab) uses session-scoped merge to keep noise out.
+	includeCrossSession := false
+	if v, ok := args["include_cross_session"].(bool); ok {
+		includeCrossSession = v
+	}
+
 	if tracker == nil || !tracker.IsEnabled() {
 		if groupBy == "block" {
 			return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`, nil
@@ -77,7 +71,7 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		return buildBlockSummary(tracker.GetRevisionID(), changes)
 	}
 
-	return buildFileList(tracker, changes, includeDiff, includePersisted, args)
+	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args)
 }
 
 // handleListChangesPersistedOnly is the include_persisted path when no
@@ -134,7 +128,7 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 
 // buildFileList renders the per-file shape for list_changes. Used both
 // for session-only and session+persisted output.
-func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted bool, args map[string]interface{}) (string, error) {
+func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}) (string, error) {
 	type bulkItemEntry struct {
 		Path string `json:"path"`
 		Op   string `json:"op"`
@@ -216,12 +210,14 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		// on a large history.
 		if persisted, err := history.GetAllChangesMetadata(); err == nil {
 			for _, ch := range persisted {
-				// Session filter: skip other sessions' revisions.
-				if sessionRevID != "" && ch.RequestHash != sessionRevID {
+				// Session filter: skip other sessions' revisions
+				// unless include_cross_session is true (timeline path).
+				if !includeCrossSession && sessionRevID != "" && ch.RequestHash != sessionRevID {
 					continue
 				}
 				// Dedup: skip if the in-memory buffer already shows
-				// this path (it has newer or equal info).
+				// this path (it has newer or equal info). Applies to
+				// both same-session and cross-session merges.
 				if seenInMemory[ch.Filename] {
 					continue
 				}
@@ -448,8 +444,8 @@ func buildUnifiedDiff(path, before, after string) string {
 //
 //   - scope="all"            Restore every file the tracker recorded.
 //   - since="<RFC3339|dur>"  Revert changes recorded at or after the
-//                            given timestamp (e.g. "2026-05-27T10:00:00Z"
-//                            or "30m"). When set, scope defaults to "all".
+//     given timestamp (e.g. "2026-05-27T10:00:00Z"
+//     or "30m"). When set, scope defaults to "all".
 //
 // Returns a JSON envelope listing per-file outcomes so the model can
 // report exactly what happened back to the user.
@@ -502,7 +498,7 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 	if since != "" {
 		t, err := parseRecentSince(since)
 		if err != nil {
-			return nil, fmt.Errorf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z or duration like 30m): %w", err)
+			return nil, agenterrors.Wrap(err, fmt.Sprintf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z or duration like 30m)"))
 		}
 		cutoff = t
 	}
@@ -522,7 +518,15 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 	// Collapse to earliest entry per path (preserving the first
 	// OriginalCode encountered for each file). The slice is in
 	// append-order so the first occurrence wins.
+	//
+	// Also track the latest NewCode per path so the staleness guard
+	// can compare disk content against the current intended state
+	// (not just the earliest edit's NewCode).
 	seen := make(map[string]bool, len(filtered))
+	latestNewCode := make(map[string]string, len(filtered))
+	for _, ch := range filtered {
+		latestNewCode[ch.FilePath] = ch.NewCode
+	}
 	earliest := make([]TrackedFileChange, 0, len(filtered))
 	for _, ch := range filtered {
 		key := ch.FilePath
@@ -530,6 +534,7 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 			continue
 		}
 		seen[key] = true
+		ch.NewCode = latestNewCode[key]
 		earliest = append(earliest, ch)
 	}
 	return earliest, nil
@@ -552,6 +557,15 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// majority without aborting on a single stray path.
 	if a.IsPathOutsideWorkspace(abs) {
 		return "", false, "path is outside the workspace — skipped"
+	}
+
+	// Staleness guard: if the file on disk no longer matches what the
+	// agent wrote (NewCode), it was modified intentionally after the
+	// snapshot — by a git commit, another session, or manual edit.
+	// Reverting would silently clobber that newer work.
+	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode) {
+		history.AuditRevertSkip("revertOne", abs, "stale or committed")
+		return "", false, "file modified since snapshot (stale — skipped)"
 	}
 
 	tracker := a.GetChangeTracker()
@@ -579,6 +593,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	if ch.OriginalCode == RedactedContentMarker {
 		return "", false, "refusing to write redacted marker to disk"
 	}
+	history.AuditRevertWrite("revertOne", abs, "OriginalCode")
 	if err := os.WriteFile(abs, []byte(ch.OriginalCode), 0o644); err != nil {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}
@@ -640,7 +655,7 @@ func parseRecentSince(raw string) (time.Time, error) {
 	if d, err := time.ParseDuration(s); err == nil {
 		return time.Now().Add(-d), nil
 	}
-	return time.Time{}, fmt.Errorf("'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw)
+	return time.Time{}, agenterrors.NewValidation(fmt.Sprintf("'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw), nil)
 }
 
 // deriveOpFromChangeLog infers the create/edit/delete code for a
@@ -684,4 +699,34 @@ func isRecoverableOriginal(original string) bool {
 		return false
 	}
 	return true
+}
+
+// isStaleForRevert reports whether reverting the file must be skipped
+// because the revert would clobber intentional work. It returns true
+// (stale — skip) when:
+//   - the file on disk differs from the agent's recorded NewCode
+//     (modified after the snapshot by a git commit, manual edit, or
+//     another session), OR
+//   - the disk content matches NewCode but that content is now
+//     committed to git HEAD (the work is version-controlled and
+//     reverting to OriginalCode would silently undo it).
+//
+// It returns false (safe to proceed) when:
+//   - newCode is empty or the redacted marker (no baseline to compare)
+//   - the file doesn't exist on disk (create/delete is safe)
+//   - the disk content matches newCode and is not committed to git
+//
+// isStaleForRevert is the negation of history.IsRevertSafe so the agent
+// package and the history package share a single canonical, git-aware
+// staleness decision. See history.IsRevertSafe for the full rationale.
+func isStaleForRevert(absPath, newCode string) bool {
+	return !history.IsRevertSafe(absPath, newCode)
+}
+
+// isStaleForRevertWithOriginal is the original-aware variant used by
+// recovery paths that have the snapshot's OriginalCode. This allows
+// recovery of uncommitted work destroyed by a destructive git command
+// (git checkout, git reset, git clean) that aligned the file to HEAD.
+func isStaleForRevertWithOriginal(absPath, newCode, originalCode string) bool {
+	return !history.IsRevertSafeWithOriginal(absPath, newCode, originalCode)
 }

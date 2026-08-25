@@ -1,14 +1,10 @@
 // Package agent provides the seed integration layer.
-//
-// seed_provider.go — sproutProvider implements seed/core.Provider by wrapping
-// api.ClientInterface, handling streaming, cost accumulation, fleet budget
-// tracking, and image attachment.
+// sproutProvider implements seed/core.Provider by wrapping api.ClientInterface.
 
 package agent
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,24 +13,62 @@ import (
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
-
-// ---------------------------------------------------------------------------
-// sproutProvider — implements seed/core.Provider by wrapping api.ClientInterface
-// ---------------------------------------------------------------------------
 
 // sproutProvider adapts sprout's ClientInterface to seed's Provider interface.
 type sproutProvider struct {
-	agent          *Agent
-	client         api.ClientInterface
-	pastedImages   map[string][]api.ImageData // path → image data (for multimodal attachment)
-	pastedImagesMu sync.RWMutex
+	agent           *Agent
+	client          api.ClientInterface
+	pastedImages    map[string][]api.ImageData
+	pastedImagesMu  sync.RWMutex
+	tokenAnchor     tokenAnchor
+	maxTokensHint   int
+	maxTokensHintMu sync.RWMutex
+	// specialTokenGuard bounds corrective hints for the special-token
+	// truncation failure (see seed_special_token_guard.go).
+	specialTokenGuard specialTokenGuardState
+
+	// steerFlushHook is invoked at the end of every Chat/ChatStream call —
+	// a conversation-loop boundary in seed's loop goroutine where staged
+	// steer messages can be handed to seed before its injection checks.
+	steerFlushHookMu sync.RWMutex
+	steerFlushHook   func()
+}
+
+// setSteerFlushHook installs (or with nil, removes) the boundary hook.
+func (sp *sproutProvider) setSteerFlushHook(hook func()) {
+	sp.steerFlushHookMu.Lock()
+	sp.steerFlushHook = hook
+	sp.steerFlushHookMu.Unlock()
+}
+
+// fireSteerFlushHook runs the boundary hook if installed.
+func (sp *sproutProvider) fireSteerFlushHook() {
+	sp.steerFlushHookMu.RLock()
+	hook := sp.steerFlushHook
+	sp.steerFlushHookMu.RUnlock()
+	if hook != nil {
+		hook()
+	}
+}
+
+// currentClient returns the agent's live client if available, otherwise the snapshot.
+func (sp *sproutProvider) currentClient() api.ClientInterface {
+	if sp.agent != nil {
+		if c := sp.agent.getClient(); c != nil {
+			return c
+		}
+	}
+	return sp.client
 }
 
 // NewSproutProvider creates a Provider that wraps a sprout ClientInterface.
 func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider, error) {
 	if client == nil {
-		return nil, fmt.Errorf("sprout provider requires a non-nil client")
+		return nil, agenterrors.NewValidation("sprout provider requires a non-nil client", nil)
 	}
 	return &sproutProvider{
 		agent:        agent,
@@ -43,8 +77,7 @@ func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider,
 	}, nil
 }
 
-// RegisterPastedImages associates extracted image data with file paths so
-// they can be attached to the first user message in each Chat request.
+// RegisterPastedImages associates extracted image data with file paths for multimodal attachment.
 func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData) {
 	if images == nil {
 		return
@@ -78,6 +111,43 @@ func extractHTTPStatusCode(msg string) int {
 	return 0
 }
 
+// exponentialBackoffDelay calculates the delay for a given retry attempt.
+// Formula: 2^attempt * baseDelay, capped at maxDelay.
+// Base delay is 100ms, max delay is 10s.
+func exponentialBackoffDelay(attempt int) time.Duration {
+	const baseDelay = 100 * time.Millisecond
+	const maxDelay = 10 * time.Second
+
+	delay := baseDelay
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+		if delay >= maxDelay {
+			return maxDelay
+		}
+	}
+	if delay > maxDelay {
+		return maxDelay
+	}
+	return delay
+}
+
+// isRetryableProviderError returns true if the error should trigger a provider retry.
+// Retries are performed on:
+//   - RateLimitError (always retryable)
+//   - ProviderError with a retryable cause (server errors, overload)
+func isRetryableProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if agenterrors.IsRateLimited(err) {
+		return true
+	}
+	if agenterrors.IsProviderError(err) && agenterrors.IsRetryable(err) {
+		return true
+	}
+	return false
+}
+
 // recordProviderError stores error info in the agent's state for observability.
 func (sp *sproutProvider) recordProviderError(err error, retries int) {
 	if sp.agent == nil || err == nil {
@@ -102,25 +172,55 @@ func (sp *sproutProvider) clearProviderError() {
 	sp.agent.state.SetLastProviderError(nil)
 }
 
-// doChatWithRetry performs a single chat request with fleet budget tracking and error recording.
-// Retry logic is handled by the seed core's chatFn in conversation.go;
-// this layer no longer retries to avoid nested retry explosion.
+// doChatWithRetry performs a chat request with exponential backoff retry (max 3).
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	resp, err := sp.doChatOnce(ctx, req)
-	if err != nil {
-		sp.recordProviderError(err, 0)
-		return nil, err
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// On retry attempts, wait for the backoff delay before retrying.
+		if attempt > 0 {
+			delay := exponentialBackoffDelay(attempt)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		resp, err := sp.doChatOnce(ctx, req)
+		if err == nil {
+			sp.clearProviderError()
+			// Fleet budget tracking: debit tokens after each LLM call.
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
+			return resp, nil
+		}
+
+		lastErr = err
+
+		// Record the error for observability and emit retry event.
+		sp.recordProviderError(err, attempt)
+		if sp.agent != nil && sp.agent.eventBus != nil {
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+		}
+
+		// Check if this error is retryable. If not, fail immediately.
+		if !isRetryableProviderError(err) {
+			return nil, err
+		}
+
+		// If we've exhausted retries, return the last error.
+		if attempt >= maxRetries {
+			return nil, err
+		}
 	}
-	sp.clearProviderError()
-	// Fleet budget tracking: debit tokens after each LLM call.
-	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-		return nil, budgetErr
-	}
-	return resp, nil
+
+	return nil, lastErr
 }
 
-// doChatOnce performs a single chat request, attaching pasted images to the
-// first user message if the client supports vision.
+// doChatOnce performs a single chat request, attaching pasted images if supported.
 func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	var resp *core.ChatResponse
 	var err error
@@ -131,35 +231,144 @@ func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest)
 	}
 	if err == nil {
 		sp.accumulateResponseCost(resp)
+		sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	}
 	return resp, err
 }
 
-// accumulateResponseCost adds the provider-reported cost of a single
-// response to the agent's lifetime cost counter. seed's chat loop tracks
-// tokens (State.AddTokens) but never cost, so without this every footer
-// reads $0. We add cost here — once per successful LLM call — directly on
-// sprout's state, independent of seed's always-zero cost counter, so the
-// seedState.TotalCost() reconciliation in syncSeedStateToSprout can't double
-// count. The cost itself is captured at decode time (api.UsageCost), with a
-// provider-agnostic field-name fallback (api.CostFromJSON) so providers that
-// report cost under differing property names are all covered.
+// accumulateResponseCost adds the provider-reported cost to the agent's lifetime cost counter.
+// Also populates prompt/completion token breakdowns and debits the fleet USD budget.
 func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	if sp.agent == nil || sp.agent.state == nil || resp == nil {
 		return
 	}
-	if cost := api.UsageCost(resp.Usage); cost > 0 {
-		sp.agent.state.AddCost(cost)
+	billingType := sp.resolveBillingType()
+	chargedCost := api.UsageCost(resp.Usage)
+	if chargedCost == 0 && billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 {
+		chargedCost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
 	}
+	var tokenCost float64
+	if billingType != BillingPayPerToken {
+		tokenCost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+	}
+	entry := CostEntry{
+		BillingType:      billingType,
+		Provider:         sp.agent.GetProvider(),
+		Model:            sp.agent.GetModel(),
+		ChargedCost:      chargedCost,
+		TokenCost:        tokenCost,
+		PromptTokens:     resp.Usage.PromptTokens,
+		CompletionTokens: resp.Usage.CompletionTokens,
+		CachedTokens:     resp.Usage.CachedTokens,
+		ImageTokens:      resp.Usage.ImageTokens,
+	}
+	sp.agent.state.AddCostEntry(entry)
+
+	sp.agent.state.SetPromptTokens(sp.agent.state.GetPromptTokens() + resp.Usage.PromptTokens)
+	sp.agent.state.SetCompletionTokens(sp.agent.state.GetCompletionTokens() + resp.Usage.CompletionTokens)
+	sp.agent.state.SetLLMCallCount(sp.agent.state.GetLLMCallCount() + 1)
+
+	// Debit the fleet USD budget (only charged cost, not subscription/free).
+	if sp.agent.fleetUsdBudget != nil && chargedCost > 0 {
+		spent, crossed, justExceeded := sp.agent.fleetUsdBudget.Add(chargedCost)
+		_, limit := sp.agent.fleetUsdBudget.Snapshot()
+		for _, t := range crossed {
+			if cb, ok := sp.agent.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
+				cb(t, spent, limit)
+			}
+		}
+		if justExceeded {
+			sp.agent.fleetBudgetTrunc.Store(true)
+			if cb, ok := sp.agent.budgetExceededCallback.Load().(func(spent, limit float64)); ok && cb != nil {
+				cb(spent, limit)
+			}
+		}
+	}
+
+	if n := resp.Usage.CachedTokens; n > 0 {
+		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
+	}
+	if resp.Usage.CacheWriteTokens != nil {
+		if n := *resp.Usage.CacheWriteTokens; n > 0 {
+			sp.agent.state.SetCacheWriteTokens(sp.agent.state.GetCacheWriteTokens() + n)
+		}
+	}
+	if n := resp.Usage.ImageTokens; n > 0 {
+		sp.agent.state.SetImageTokens(sp.agent.state.GetImageTokens() + n)
+	}
+}
+
+// resolveBillingType returns the billing model for the current provider.
+func (sp *sproutProvider) resolveBillingType() string {
+	if sp.agent == nil {
+		return BillingPayPerToken
+	}
+	provider := sp.agent.GetProvider()
+	// Check embedded provider configs for explicit billing_type
+	cfg, err := providers.GlobalFactory().GetProviderConfig(provider)
+	if err == nil && cfg != nil {
+		return cfg.BillingTypeResolved()
+	}
+	// Fallback heuristics for custom/dynamic providers
+	if provider == "zai-coding" {
+		return BillingSubscription
+	}
+	return BillingPayPerToken
+}
+
+// estimateCostFromPricing computes a cost estimate from token counts and per-million pricing.
+func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens int) float64 {
+	if sp.agent == nil || sp.agent.client == nil {
+		return 0
+	}
+	model := sp.agent.client.GetModel()
+	if model == "" {
+		return 0
+	}
+
+	if models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType()); err == nil {
+		for _, m := range models {
+			if m.ID != model {
+				continue
+			}
+			if m.InputCost > 0 || m.OutputCost > 0 {
+				return float64(promptTokens)/1e6*m.InputCost + float64(completionTokens)/1e6*m.OutputCost
+			}
+			break
+		}
+	}
+
+	provider := sp.agent.GetProvider()
+	if inPerM, outPerM, _, ok := providercatalog.FindModelPricing(provider, model); ok {
+		return float64(promptTokens)/1e6*inPerM + float64(completionTokens)/1e6*outPerM
+	}
+
+	return 0
 }
 
 // doChatNonStream performs a non-streaming chat request.
 func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images to the first user message
+	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
+	messages = sp.stampTurnTimestamp(messages)
+	// Special-token truncation guard: observe seed nudges, add corrective
+	// hint if the last assistant message ends in a control-token literal.
+	// Runs AFTER stampTurnTimestamp so the turn timestamp lands on the
+	// user's real message, not on the appended hint.
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
 	sproutReq := seedRequestToSprout(req)
-	resp, err := sp.client.SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
+
+	// Pre-compute max_tokens using the anchored token breakdown.
+	sp.computeMaxTokensHint(req)
+
+	// If the client supports max_tokens hints, set the pre-computed value.
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
+
+	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
 	if err != nil {
 		return nil, err
 	}
@@ -168,61 +377,88 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 
 // doChatStream performs a streaming chat request.
 func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images to the first user message
+	// Attach pasted images before adding the provider-only turn timestamp.
 	messages := sp.attachPastedImages(req.Messages)
-
-	// Create a stream handler that writes to the agent's output manager
-	handler := &streamHandler{}
+	messages = sp.stampTurnTimestamp(messages)
+	// Special-token truncation guard (see doChatNonStream).
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
 	sproutReq := seedRequestToSprout(req)
+
+	// Pre-compute max_tokens using the anchored token breakdown.
+	sp.computeMaxTokensHint(req)
+
+	// If the client supports max_tokens hints, set the pre-computed value.
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
+
+	// Route every chunk through OutputRouter.RouteStreamChunk for both WebUI and CLI.
 	callback := func(content string, contentType string) {
-		switch contentType {
-		case "reasoning":
-			handler.reasoning = true
-			if sp.agent != nil && sp.agent.output.GetReasoningCallback() != nil {
-				sp.agent.output.GetReasoningCallback()(content)
-			}
+		if contentType == "reasoning" {
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
-		default:
-			handler.reasoning = false
-			if sp.agent != nil && sp.agent.output.GetStreamingCallback() != nil {
-				sp.agent.output.GetStreamingCallback()(content)
-			}
+		} else {
 			sp.agent.output.GetStreamingBuffer().WriteString(content)
+		}
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, contentType)
 		}
 	}
 
-	resp, err := sp.client.SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
+	resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
 	if err != nil {
 		return nil, err
 	}
+
+	// Reasoning-model fallback: some models stream visible prose as reasoning_content.
+	// If the streaming buffer is empty but the response has content, stream it.
+	if resp != nil && len(resp.Choices) > 0 {
+		msgContent := resp.Choices[0].Message.Content
+		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {
+			sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
+			if router := sp.agent.OutputRouter(); router != nil {
+				for _, line := range strings.SplitAfter(msgContent, "\n") {
+					if line != "" {
+						router.RouteStreamChunk(line, "assistant_text")
+					}
+				}
+			}
+		}
+	}
+
 	return sproutResponseToSeed(resp), nil
 }
 
-// streamHandler implements core.StreamHandler
-type streamHandler struct {
-	reasoning bool
+// stampTurnTimestamp adds the current turn's fixed timestamp to the latest user message.
+func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Message {
+	if sp.agent == nil {
+		return messages
+	}
+	sp.agent.turnTimestampMu.RLock()
+	turnTimestamp := sp.agent.turnTimestamp
+	sp.agent.turnTimestampMu.RUnlock()
+	if turnTimestamp.IsZero() {
+		return messages
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		message := messages[i]
+		if message.Role != "user" {
+			continue
+		}
+		if strings.HasPrefix(message.Content, "<current-time>") {
+			return messages
+		}
+		out := make([]core.Message, len(messages))
+		copy(out, messages)
+		out[i].Content = InjectUserMessageTimestampAt(message.Content, turnTimestamp)
+		return out
+	}
+	return messages
 }
 
-func (h *streamHandler) OnContent(content string) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnReasoning(content string) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnDone(resp *core.ChatResponse) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnError(err error) {
-	// Already handled in the callback
-}
-
-// attachPastedImages attaches previously registered image data to the first
-// user message in the request. This makes pasted images available to the
-// vision model through the seed request pipeline.
+// attachPastedImages attaches previously registered image data to the first user message.
 func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Message {
 	sp.pastedImagesMu.RLock()
 	defer sp.pastedImagesMu.RUnlock()
@@ -231,7 +467,7 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 		return messages
 	}
 
-	if !sp.client.SupportsVision() {
+	if !sp.currentClient().SupportsVision() {
 		return messages
 	}
 
@@ -256,13 +492,7 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 	return out
 }
 
-// trackFleetBudgetForResponse debits the tokens from this LLM response to
-// the shared fleet budget tracker, if one is configured on the agent.  If
-// the budget is exceeded, it sets the truncation flag so the conversation
-// loop can stop gracefully.
-//
-// Returns FleetBudgetExceededError if the budget was just exceeded by this
-// call (i.e. the cumulative total went from under-limit to at/over-limit).
+// trackFleetBudgetForResponse debits tokens from this LLM response to the fleet budget tracker.
 func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) error {
 	if sp.agent == nil {
 		return nil
@@ -277,7 +507,6 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 		return nil
 	}
 	newTotal := tracker.Add(tokens)
-	// Budget is exceeded when cumulative tokens reach or exceed the limit.
 	if newTotal >= limit && !sp.agent.fleetBudgetTrunc.Load() {
 		sp.agent.fleetBudgetTrunc.Store(true)
 		return FleetBudgetExceededError
@@ -287,86 +516,187 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 
 // Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	return sp.doChatWithRetry(ctx, req)
+	resp, err := sp.doChatWithRetry(ctx, req)
+	sp.fireSteerFlushHook()
+	return resp, err
 }
 
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
 	sproutReq := seedRequestToSprout(req)
 
-	// Attach pasted images to the first user message
 	messages := sp.attachPastedImages(req.Messages)
+	messages = sp.stampTurnTimestamp(messages)
+	messages = sp.observeAndHint(messages)
+	sp.recordContinuationNudges(messages)
 
+	sp.computeMaxTokensHint(req)
+
+	if h, ok := sp.currentClient().(providers.MaxTokensHinter); ok {
+		h.SetMaxTokensHint(sp.getMaxTokensHint())
+	}
+
+	// Route through OutputRouter.RouteStreamChunk for both WebUI and seed handler.
 	callback := func(content string, contentType string) {
-		switch contentType {
-		case "reasoning":
+		if contentType == "reasoning" {
 			handler.OnReasoning(content)
-		default:
+			sp.agent.output.GetReasoningBuffer().WriteString(content)
+		} else {
 			handler.OnContent(content)
+			sp.agent.output.GetStreamingBuffer().WriteString(content)
+		}
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, contentType)
 		}
 	}
 
 	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
 	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback)
+	sp.fireSteerFlushHook()
 	if err != nil {
 		handler.OnError(err)
 		return err
 	}
+	// Anchor future EstimateTokens calls to this response's real prompt-token count.
+	sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
 }
 
-// doChatWithRetryStreaming performs a single streaming chat request with fleet budget tracking and error recording.
-// Retry logic is handled by the seed core's chatFn in conversation.go;
-// this layer no longer retries to avoid nested retry explosion.
+// doChatWithRetryStreaming performs a streaming chat request with exponential backoff retry (max 3).
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
-	if err != nil {
-		sp.recordProviderError(err, 0)
-		return nil, err
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// On retry attempts, wait for the backoff delay before retrying.
+		if attempt > 0 {
+			delay := exponentialBackoffDelay(attempt)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
+		if err == nil {
+			sp.clearProviderError()
+			// Fleet budget tracking: debit tokens after each LLM call
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
+			return resp, nil
+		}
+
+		lastErr = err
+
+		// Record the error for observability and emit retry event.
+		sp.recordProviderError(err, attempt)
+		if sp.agent != nil && sp.agent.eventBus != nil {
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+		}
+
+		// Check if this error is retryable. If not, fail immediately.
+		if !isRetryableProviderError(err) {
+			return nil, err
+		}
+
+		// If we've exhausted retries, return the last error.
+		if attempt >= maxRetries {
+			return nil, err
+		}
 	}
-	sp.clearProviderError()
-	// Fleet budget tracking: debit tokens after each LLM call
-	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-		return nil, budgetErr
-	}
-	return resp, nil
+
+	return nil, lastErr
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
-	ctxLimit, _ := sp.client.GetModelContextLimit()
+	client := sp.currentClient()
+	ctxLimit, limitErr := client.GetModelContextLimit()
+	if limitErr != nil || ctxLimit <= 0 {
+		// A 0 ContextSize disables seed's compaction trigger entirely —
+		// fall back to the last known effective cap (or 32K) instead.
+		ctxLimit = 0
+		if sp.agent != nil {
+			ctxLimit = sp.agent.effectiveCapSnapshot()
+		}
+		if ctxLimit <= 0 {
+			ctxLimit = 32000
+		}
+	}
+	if sp.agent != nil {
+		ctxLimit = sp.agent.reconcileContextCap(ctxLimit)
+	}
 	return core.ProviderInfo{
-		Model:       sp.client.GetModel(),
+		Model:       client.GetModel(),
 		ContextSize: ctxLimit,
-		HasVision:   sp.client.SupportsVision(),
+		HasVision:   client.SupportsVision(),
 	}
 }
 
 func (sp *sproutProvider) GetModel() string {
-	if sp.client != nil {
-		return sp.client.GetModel()
+	if c := sp.currentClient(); c != nil {
+		return c.GetModel()
 	}
 	return "unknown"
 }
 
+// EstimateTokens estimates the input token count for a chat request.
+// Uses the token anchor when available; falls back to the centralized estimator.
 func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	if req == nil {
 		return 0
 	}
-	// Delegate to sprout's centralized estimator, which accounts for:
-	//   - per-message content + reasoning content (tiktoken-ish word/char hybrid)
-	//   - tool-call payloads (id + name + args + overhead)
-	//   - tool-result tool_call_id overhead
-	//   - image attachments
-	//   - per-message role/wrapper overhead
-	//   - tool catalog (200 tokens × len(tools))
-	//   - system-instruction buffer
-	//
-	// The previous "len(content) / 4" stub under-counted by an order of
-	// magnitude on tool-heavy iter-0 prompts (the entire tool catalog and
-	// every assistant tool_call payload went uncounted), making compaction
-	// triggers and max_tokens math both stale on every call.
-	//
-	// core.Message and core.Tool are type aliases for api.Message / api.Tool
-	// (see pkg/agent_api/types.go), so we can pass through directly.
+	// Anchor to the last real Usage.PromptTokens count when the message prefix still matches.
+	// Falls back to a full from-scratch heuristic estimate on the first call or after compaction.
+	if total, _, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools)); ok {
+		return total
+	}
+
+	// Delegate to sprout's centralized estimator.
 	return api.EstimateInputTokens(req.Messages, req.Tools)
+}
+
+// setMaxTokensHint stores a pre-computed max_tokens hint for the next request.
+func (sp *sproutProvider) setMaxTokensHint(v int) {
+	sp.maxTokensHintMu.Lock()
+	sp.maxTokensHint = v
+	sp.maxTokensHintMu.Unlock()
+}
+
+// getMaxTokensHint returns the pre-computed max_tokens hint.
+func (sp *sproutProvider) getMaxTokensHint() int {
+	sp.maxTokensHintMu.RLock()
+	v := sp.maxTokensHint
+	sp.maxTokensHintMu.RUnlock()
+	return v
+}
+
+// getContextLimit returns the effective context limit for the current provider.
+func (sp *sproutProvider) getContextLimit() int {
+	info := sp.Info()
+	if info.ContextSize > 0 {
+		return info.ContextSize
+	}
+	return 32000
+}
+
+// computeMaxTokensHint pre-computes max_tokens using the anchored token breakdown when available.
+func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
+	if req == nil {
+		sp.setMaxTokensHint(0)
+		return
+	}
+	total, heuristic, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools))
+	if !ok {
+		sp.setMaxTokensHint(0) // no hint — let provider compute from scratch
+		return
+	}
+	contextLimit := sp.getContextLimit()
+	maxOutput, budgetOK := api.CalculateOutputBudgetAnchored(contextLimit, total-heuristic, heuristic)
+	if !budgetOK {
+		sp.setMaxTokensHint(0)
+		return
+	}
+	sp.setMaxTokensHint(maxOutput)
 }

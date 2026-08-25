@@ -7,7 +7,8 @@
  *   console.log(result.stdout);
  */
 
-import { installSproutONNXBridge } from './sproutONNXBridge';
+import { installSproutONNXBridge, installJinaBridge } from './sproutONNXBridge';
+import { installEmbeddingBackendController } from './embeddingBackendController';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,26 @@ export interface WasmShell {
   listDir(path: string): WasmListDirResult;
   /** Delete a file. */
   deleteFile(path: string): string; // error or ""
+  /** Run the full agent loop (ProcessQuery) in-browser.
+   *  Returns the agent's response and dispatches events via the callback. */
+  runAgent(
+    provider: string,
+    model: string,
+    query: string,
+    onEvent?: (eventJson: string) => void,
+  ): Promise<{ response: string; provider: string; model: string }>;
+  /** Clear the WASM agent's conversation history (start fresh chat). */
+  clearConversation(): void;
+  /** Interrupt the currently running agent loop. */
+  stopAgent(): void;
+  /** Steer the running agent (inject a follow-up message). */
+  steerAgent?(message: string): Record<string, unknown>;
+  /** Deliver a response to a pending ask_user request. */
+  respondToAskUser?(requestId: string, response: string): { delivered: boolean };
+  /** Deliver an edit approval decision to a pending edit approval request. */
+  respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
+  /** Deliver a shell approval decision to a pending shell approval request. */
+  respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -161,8 +182,17 @@ async function idbListFiles(): Promise<string> {
 
 // ── WASM loader ─────────────────────────────────────────────────────────────
 
-const DEFAULT_WASM_URL = '/wasm/sprout.wasm';
-const DEFAULT_WASM_EXEC_URL = '/wasm/wasm_exec.js';
+const DEFAULT_WASM_URL = '/webui/wasm/sprout.wasm';
+const DEFAULT_WASM_EXEC_URL = '/webui/wasm/wasm_exec.js';
+
+/** Debug logger — only logs when localStorage flag is set or VITE_DEBUG is enabled. */
+// eslint-disable-next-line no-console
+const debug = (...args: unknown[]) => {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
+    // eslint-disable-next-line no-console
+    console.debug('[wasm]', ...args);
+  }
+};
 
 /** Interface of the Go→WASM SproutWasm global exposed by the compiled binary. */
 export interface SproutWasmAPI {
@@ -177,10 +207,23 @@ export interface SproutWasmAPI {
   deleteFile(path: string): string;
   getHistory(): string;
   getEnv(): string;
+  // ── Agent loop (cmd/wasm/agent_funcs.go) ──
+  // Runs the full sprout agent loop (ProcessQuery) in-browser.
+  // Returns a Promise resolving to { response, provider, model }.
+  // The onEvent callback receives JSON-stringified UI events.
+  runAgent?(
+    provider: string,
+    model: string,
+    query: string,
+    onEvent?: (eventJson: string) => void,
+  ): Promise<{ response: string; provider: string; model: string }>;
+  clearConversation?(): void;
+  stopAgent?(): void;
+  steerAgent?(message: string): Record<string, unknown>;
+  respondToAskUser?(requestId: string, response: string): { delivered: boolean };
+  respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
+  respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
-  // Inputs are JSON-encoded payloads from the Go side; consumers should
-  // JSON.parse() the return value. Content bytes accept Uint8Array or
-  // ArrayBuffer. On error the result includes an "error" field.
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   supportedLanguages?(): string;
@@ -198,154 +241,246 @@ declare global {
 }
 
 let sharedInstance: WasmShell | null = null;
+let initPromise: Promise<WasmShell> | null = null;
 
 /**
  * Initialize the sprout WASM shell.
  *
- * Must be called before any shell operations. Sets up IndexedDB bridge,
- * loads the WASM binary, and calls SproutWasm.init().
+ * Must be called before any shell operations. Safe for concurrent calls —
+ * only one initialization runs; subsequent callers receive the same promise.
  *
  * @param config.home - Override the virtual home directory (default: /home/user)
  * @returns The WasmShell interface
  */
 export async function initWasmShell(config?: {
   home?: string;
-  wasmUrl?: string; // default: '/wasm/sprout.wasm'
-  wasmExecUrl?: string; // default: '/wasm/wasm_exec.js'
+  wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
+  wasmExecUrl?: string; // default: '/webui/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
+  debug(' initWasmShell called');
   if (sharedInstance) {
+    debug(' returning existing instance');
     return sharedInstance;
   }
-
-  // 1. Set up the IndexedDB store bridge on window so Go can call it.
-  const store: SproutStore = {
-    saveFile: (path, content) => {
-      idbSaveFile(path, content).catch((err) =>
-        console.warn('[sprout-wasm] Failed to save file to IndexedDB:', path, err),
-      );
-    },
-    loadFile: (_path) => {
-      // Synchronous not possible with IndexedDB — the store.listFiles restores all
-      // files on init instead. loadFile is provided for completeness but returns null.
-      return null;
-    },
-    deleteFile: (path) => {
-      idbDeleteFile(path).catch((err) =>
-        console.warn('[sprout-wasm] Failed to delete file from IndexedDB:', path, err),
-      );
-    },
-    listFiles: () => {
-      // listFiles is called synchronously from Go init. Since IndexedDB is async,
-      // we return a cached JSON string. The store updates the cache lazily.
-      // For the initial load, we return empty — this is fine because the
-      // JS side will call listFiles before WASM init and cache the result.
-      return idbListFilesSync();
-    },
-  };
-
-  // Warm up the cache by loading all files before WASM init.
-  await warmIdbCache();
-
-  window.__sproutStore = store;
-
-  // Install the ONNX bridge so the Go-WASM build's embedding manager can
-  // delegate inference to onnxruntime-web running in this page. The bridge
-  // is lazy under the hood — BrowserONNXProvider.initialize() (which
-  // downloads the ~80 MB EmbeddingGemma model) only fires on the first
-  // .embed() call from the Go side. Installing here is just registering a
-  // global, so there's no startup cost for users who never trigger
-  // semantic search. See pkg/embedding/onnx_wasm.go and docs/WASM_API.md
-  // for the contract.
-  installSproutONNXBridge();
-
-  // 2. Load wasm_exec.js.
-  const script = document.createElement('script');
-  const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
-  script.src = execUrl;
-  document.head.appendChild(script);
-  await new Promise<void>((resolve, reject) => {
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
-  });
-
-  // 3. Fetch and instantiate the WASM binary.
-  const go = new window.Go();
-  const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
-  const wasmResponse = await fetch(wasmUrl);
-  if (!wasmResponse.ok) {
-    throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
+  if (initPromise) {
+    debug(' returning existing init promise');
+    return initPromise;
   }
 
-  const wasmBuffer = await wasmResponse.arrayBuffer();
-  const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+  debug(' starting new init');
 
-  // 4. Run the Go instance (this blocks until main() hits the channel wait).
-  go.run(instance);
+  initPromise = (async () => {
+    const store: SproutStore = {
+      saveFile: (path, content) => {
+        idbSaveFile(path, content).catch((err) =>
+          console.warn('[sprout-wasm] Failed to save file to IndexedDB:', path, err),
+        );
+      },
+      loadFile: (_path) => {
+        // Synchronous not possible with IndexedDB — the store.listFiles restores all
+        // files on init instead. loadFile is provided for completeness but returns null.
+        return null;
+      },
+      deleteFile: (path) => {
+        idbDeleteFile(path).catch((err) =>
+          console.warn('[sprout-wasm] Failed to delete file from IndexedDB:', path, err),
+        );
+      },
+      listFiles: () => {
+        // listFiles is called synchronously from Go init. Since IndexedDB is async,
+        // we return a cached JSON string. The store updates the cache lazily.
+        // For the initial load, we return empty — this is fine because the
+        // JS side will call listFiles before WASM init and cache the result.
+        return idbListFilesSync();
+      },
+    };
 
-  // At this point window.SproutWasm should be defined by Go's main().
-  const wasm = window.SproutWasm;
+    // Warm up the cache by loading all files before WASM init.
+    await warmIdbCache();
 
-  if (!wasm || typeof wasm.init !== 'function') {
-    throw new Error('SproutWasm global not found after WASM init');
-  }
+    window.__sproutStore = store;
 
-  // 5. Initialize the Go side (restores files from IndexedDB cache).
-  const configStr = config ? JSON.stringify(config) : undefined;
-  const initError = wasm.init(configStr);
-  if (initError) {
-    console.warn('[sprout-wasm] Init warning:', initError);
-  }
+    // Install the ONNX bridges so the Go-WASM build's embedding manager can
+    // delegate inference to onnxruntime-web running in this page.
+    //
+    // __sproutJinaONNX is the primary provider — the embedding manager now
+    // constructs Jina Code v2 exclusively (createONNXProvider →
+    // acquireSharedJinaProvider → NewJinaONNXEmbeddingProvider). The older
+    // __sproutONNX (EmbeddingGemma) bridge is kept for the wasmshell-level
+    // embedding wrapper (pkg/wasmshell/embedding_funcs.go) which still calls
+    // NewONNXEmbeddingProvider directly.
+    installSproutONNXBridge();
+    installJinaBridge();
+    // Install the SP-100 embedding-backend controller so the WASM shell's
+    // SproutWasm.switchEmbeddingBackend / .embeddingBackendStatus / .embeddingModel
+    // functions have a host-side handler to delegate to.
+    installEmbeddingBackendController();
 
-  // 6. Create the shell interface.
-  const shell: WasmShell = {
-    executeCommand(input: string): WasmShellResult {
-      const json = wasm.executeCommand(input);
-      return JSON.parse(json);
-    },
+    // 2. Load wasm_exec.js.
+    debug(' Step 1: Loading wasm_exec.js...');
+    const script = document.createElement('script');
+    const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
+    script.src = execUrl;
+    document.head.appendChild(script);
+    await new Promise<void>((resolve, reject) => {
+      script.onload = () => {
+        debug(' wasm_exec.js loaded');
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
+    });
 
-    autoComplete(input: string): WasmCompletionResult {
-      const json = wasm.autoComplete(input);
-      return JSON.parse(json);
-    },
+    // 3. Fetch and instantiate the WASM binary.
+    debug(' Step 2: Creating Go instance...');
+    const go = new window.Go();
+    const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
+    debug(' Step 3: Fetching sprout.wasm from', wasmUrl);
+    const wasmResponse = await fetch(wasmUrl);
+    if (!wasmResponse.ok) {
+      throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
+    }
 
-    getCwd(): string {
-      return wasm.getCwd();
-    },
+    debug(' Step 4: Reading arrayBuffer...');
+    const wasmBuffer = await wasmResponse.arrayBuffer();
+    debug(' ArrayBuffer size:', wasmBuffer.byteLength);
+    debug(' Step 5: WebAssembly.instantiate...');
+    const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+    debug(' Step 5: Instantiated');
 
-    changeDir(dir: string): WasmChangeDirResult {
-      const json = wasm.changeDir(dir);
-      return JSON.parse(json);
-    },
+    // 4. Run the Go instance (this blocks until main() hits the channel wait).
+    debug(' Step 6: go.run(instance)...');
+    go.run(instance);
+    debug(' Step 6: go.run returned');
 
-    writeFile(path: string, content: string): string {
-      return wasm.writeFile(path, content);
-    },
+    // At this point window.SproutWasm should be defined by Go's main().
+    const wasm = window.SproutWasm;
+    debug(' Step 7: SproutWasm =', typeof wasm);
 
-    readFile(path: string): WasmReadFileResult {
-      const json = wasm.readFile(path);
-      return JSON.parse(json);
-    },
+    if (!wasm || typeof wasm.init !== 'function') {
+      throw new Error('SproutWasm global not found after WASM init');
+    }
 
-    listDir(path: string): WasmListDirResult {
-      const json = wasm.listDir(path);
-      try {
+    // 5. Initialize the Go side (restores files from IndexedDB cache).
+    debug(' Step 8: Calling wasm.init()...');
+    const configStr = config ? JSON.stringify(config) : undefined;
+    const initError = wasm.init(configStr);
+    debug(' Step 8: init returned:', initError || 'ok');
+    if (initError) {
+      console.warn('[sprout-wasm] Init warning:', initError);
+    }
+
+    // 6. Create the shell interface.
+    const shell: WasmShell = {
+      executeCommand(input: string): WasmShellResult {
+        const json = wasm.executeCommand(input);
         return JSON.parse(json);
-      } catch {
-        return { entries: [], error: json };
-      }
-    },
+      },
 
-    deleteFile(path: string): string {
-      return wasm.deleteFile(path);
-    },
+      autoComplete(input: string): WasmCompletionResult {
+        const json = wasm.autoComplete(input);
+        return JSON.parse(json);
+      },
 
-    get wasm() {
-      return window as typeof globalThis & { SproutWasm: unknown };
-    },
-  };
+      getCwd(): string {
+        return wasm.getCwd();
+      },
 
-  sharedInstance = shell;
-  return shell;
+      changeDir(dir: string): WasmChangeDirResult {
+        const json = wasm.changeDir(dir);
+        return JSON.parse(json);
+      },
+
+      writeFile(path: string, content: string): string {
+        return wasm.writeFile(path, content);
+      },
+
+      readFile(path: string): WasmReadFileResult {
+        const json = wasm.readFile(path);
+        return JSON.parse(json);
+      },
+
+      listDir(path: string): WasmListDirResult {
+        const json = wasm.listDir(path);
+        try {
+          return JSON.parse(json);
+        } catch {
+          return { entries: [], error: json };
+        }
+      },
+
+      deleteFile(path: string): string {
+        return wasm.deleteFile(path);
+      },
+
+      runAgent(
+        provider: string,
+        model: string,
+        query: string,
+        onEvent?: (eventJson: string) => void,
+      ): Promise<{ response: string; provider: string; model: string }> {
+        const api = wasm as SproutWasmAPI;
+        if (!api.runAgent) {
+          return Promise.reject(new Error('WASM binary does not expose runAgent'));
+        }
+        return api.runAgent(provider, model, query, onEvent);
+      },
+
+      clearConversation(): void {
+        const api = wasm as SproutWasmAPI;
+        if (api.clearConversation) {
+          api.clearConversation();
+        }
+      },
+
+      stopAgent(): void {
+        const api = wasm as SproutWasmAPI;
+        if (api.stopAgent) {
+          api.stopAgent();
+        }
+      },
+
+      steerAgent(message: string): Record<string, unknown> {
+        const api = wasm as SproutWasmAPI;
+        if (api.steerAgent) {
+          return api.steerAgent(message);
+        }
+        return { steered: false, error: 'steerAgent not available' };
+      },
+
+      respondToAskUser(requestId: string, response: string): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToAskUser) {
+          return api.respondToAskUser(requestId, response);
+        }
+        return { delivered: false };
+      },
+
+      respondToEditDecision(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToEditDecision) {
+          return api.respondToEditDecision(requestId, approved, acceptedHunks);
+        }
+        return { delivered: false };
+      },
+
+      respondToShellApproval(requestId: string, decisions: Record<string, boolean>): { delivered: boolean } {
+        const api = wasm as SproutWasmAPI;
+        if (api.respondToShellApproval) {
+          return api.respondToShellApproval(requestId, decisions);
+        }
+        return { delivered: false };
+      },
+
+      get wasm() {
+        return window as typeof globalThis & { SproutWasm: unknown };
+      },
+    };
+
+    sharedInstance = shell;
+    return shell;
+  })();
+
+  return initPromise;
 }
 
 // ── Synchronous cache for IndexedDB (used during WASM init) ──────────────
@@ -370,4 +505,5 @@ function idbListFilesSync(): string {
  */
 export function resetWasmShell(): void {
   sharedInstance = null;
+  initPromise = null;
 }

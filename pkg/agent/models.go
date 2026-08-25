@@ -7,7 +7,9 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
 
 // GetModel gets the current model being used by the agent
@@ -46,61 +48,81 @@ func (a *Agent) GetProviderType() api.ClientType {
 	return a.getClientType()
 }
 
-// selectDefaultModel chooses an appropriate default model from available models
+// selectDefaultModel chooses an appropriate default model from available models. Prefers probe-recommended candidates first.
 func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
-	// If there are no models, return empty
 	if len(models) == 0 {
 		return ""
 	}
 
-	// Provider-specific logic to select best default model
-	switch provider {
-	case api.DeepInfraClientType:
-		// Prefer DeepSeek models for DeepInfra
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "deepseek") && strings.Contains(strings.ToLower(model.ID), "instruct") {
-				return model.ID
-			}
-		}
-
-	case api.OpenRouterClientType:
-		// Prefer free models for OpenRouter
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), ":free") {
-				return model.ID
-			}
-		}
-
-	case api.OllamaClientType, api.OllamaLocalClientType:
-		// Prefer smaller models for local Ollama
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "llama3.2") || strings.Contains(strings.ToLower(model.ID), "llama3.1") {
-				return model.ID
-			}
-		}
-
-	case api.OllamaCloudClientType:
-		// Prefer gpt-oss models for Ollama Cloud
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "gpt-oss:20b") {
-				return model.ID
-			}
-		}
-
-	case api.LMStudioClientType:
-		// Prefer chat models for LM Studio, skip embedding models
-		for _, model := range models {
-			if !strings.Contains(strings.ToLower(model.ID), "embedding") &&
-				!strings.Contains(strings.ToLower(model.ID), "embed") {
-				return model.ID
-			}
-		}
-		// If no non-embedding models found, return the first one
-		return models[0].ID
+	if probe := selectProbeRecommended(models); probe != "" {
+		return probe
 	}
 
-	// Default: return the first model
+	for _, pattern := range a.getDefaultModelPatterns(provider) {
+		for _, model := range models {
+			if matchPattern(model.ID, pattern) {
+				return model.ID
+			}
+		}
+	}
+
+	// LM Studio may expose embedding models alongside chat models. An empty
+	// configured pattern deliberately reaches this filter rather than matching all.
+	if provider == api.LMStudioClientType {
+		for _, model := range models {
+			id := strings.ToLower(model.ID)
+			if !strings.Contains(id, "embedding") && !strings.Contains(id, "embed") {
+				return model.ID
+			}
+		}
+	}
+
 	return models[0].ID
+}
+
+// getDefaultModelPatterns returns auto-selection preferences from the embedded provider config. Ollama is special-cased.
+func (a *Agent) getDefaultModelPatterns(provider api.ClientType) []string {
+	if provider == api.OllamaClientType || provider == api.OllamaLocalClientType {
+		return []string{"llama3.2", "llama3.1"}
+	}
+
+	providerFactory := providers.NewProviderFactory()
+	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
+		return nil
+	}
+	config, err := providerFactory.GetProviderConfig(string(provider))
+	if err != nil {
+		return nil
+	}
+	return config.Models.DefaultModelPatterns
+}
+
+// matchPattern performs a case-insensitive substring match for every non-empty component separated by '*'.
+func matchPattern(modelID, pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	id := strings.ToLower(modelID)
+	for _, part := range strings.Split(strings.ToLower(pattern), "*") {
+		if part != "" && !strings.Contains(id, part) {
+			return false
+		}
+	}
+	return true
+}
+
+// selectProbeRecommended scans for probe-backed recommendations: primary first, then subagent. Returns "" if none.
+func selectProbeRecommended(models []api.ModelInfo) string {
+	var firstSubagent string
+	for _, m := range models {
+		if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RolePrimary) {
+			return m.ID
+		}
+		if firstSubagent == "" && modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RoleSubagent) {
+			firstSubagent = m.ID
+		}
+	}
+	return firstSubagent
 }
 
 // getDefaultModelFromFactory gets the default model from the provider factory for dynamic providers
@@ -139,9 +161,22 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	return ""
 }
 
-// SetProvider switches to a specific provider with its default or current model.
-// Session-scoped: changes are not written to config. Use SetProviderPersisted
-// when the user explicitly chose the provider (e.g. CLI /provider command).
+// getModelFromCustomProviderConfig returns the ModelName from the custom
+// provider configuration if the provider is registered as a custom provider.
+// This handles user-defined providers (e.g. ai-worker) that may not expose
+// a models list endpoint.
+func (a *Agent) getModelFromCustomProviderConfig(provider api.ClientType) string {
+	cfg := a.configManager.GetConfig()
+	if cfg.CustomProviders == nil {
+		return ""
+	}
+	if cp, exists := cfg.CustomProviders[string(provider)]; exists && cp.ModelName != "" {
+		return cp.ModelName
+	}
+	return ""
+}
+
+// SetProvider switches to a specific provider with its default or current model. Session-scoped (not persisted).
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -156,6 +191,11 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 			if a.debug {
 				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
+		} else if customModel := a.getModelFromCustomProviderConfig(provider); customModel != "" {
+			model = customModel
+			if a.debug {
+				a.Logger().Debug("[search] Using model %s from custom provider config for provider %s\n", model, api.GetProviderName(provider))
+			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
 			if len(availableModels) > 0 {
@@ -166,7 +206,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
+				return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -183,14 +223,13 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Create a new client with the specified provider
 	newClient, err := factory.CreateProviderClient(provider, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
+		return agenterrors.NewConfig(fmt.Sprintf("failed to create client for provider %s", api.GetProviderName(provider)), err)
 	}
 
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so provider/model switches feel instant in the UI.
+	// Connection is validated on the first real request — skip the blocking check here for instant switches.
 
 	// Switch to the new client atomically (both fields under the write lock)
 	a.setClient(newClient, provider)
@@ -199,13 +238,13 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	actualModel := newClient.GetModel()
 
 	// Store in session fields (not config) - this allows session-scoped changes
-	// without affecting other sessions or persisting to config
 	a.state.SetSessionProvider(provider)
 	a.state.SetSessionModel(actualModel)
 
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -220,12 +259,10 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	return nil
 }
 
-// SetProviderPersisted switches to a specific provider and persists the choice to config.
-// This is intended for CLI use where the selection should be saved.
-// The test/mock provider is rejected since it should never be the persisted default.
+// SetProviderPersisted switches to a specific provider and persists the choice to config. Rejects test provider.
 func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	if provider == api.TestClientType {
-		return fmt.Errorf("test provider cannot be persisted as the active provider")
+		return agenterrors.NewInvalidInputError("test provider cannot be persisted as the active provider", nil)
 	}
 
 	prevProvider := a.GetProvider()
@@ -241,6 +278,11 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 			if a.debug {
 				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
+		} else if customModel := a.getModelFromCustomProviderConfig(provider); customModel != "" {
+			model = customModel
+			if a.debug {
+				a.Logger().Debug("[search] Using model %s from custom provider config for provider %s\n", model, api.GetProviderName(provider))
+			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
 			if len(availableModels) > 0 {
@@ -251,7 +293,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
+				return agenterrors.NewProviderError(fmt.Sprintf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -268,14 +310,13 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Create a new client with the specified provider
 	newClient, err := factory.CreateProviderClient(provider, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
+		return agenterrors.NewConfig(fmt.Sprintf("failed to create client for provider %s", api.GetProviderName(provider)), err)
 	}
 
 	// Set debug mode on the new client
 	newClient.SetDebug(a.debug)
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so provider/model switches feel instant in the CLI.
+	// Connection is validated on the first real request — skip the blocking check for instant CLI switches.
 
 	// Switch to the new client atomically (both fields under the write lock)
 	a.setClient(newClient, provider)
@@ -283,17 +324,22 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
 
+	// Update session state so GetModel()/GetProvider() return the new values immediately.
+	a.state.SetSessionProvider(provider)
+	a.state.SetSessionModel(actualModel)
+
 	// Save to configuration (persisted for CLI use)
 	if err := a.configManager.SetProvider(provider); err != nil {
-		return fmt.Errorf("failed to save provider: %w", err)
+		return agenterrors.NewConfig("failed to save provider", err)
 	}
 	if err := a.configManager.SetModelForProvider(provider, actualModel); err != nil {
-		return fmt.Errorf("failed to save model: %w", err)
+		return agenterrors.NewConfig("failed to save model", err)
 	}
 
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -321,31 +367,24 @@ func resolveModelIDForProvider(model string, models []api.ModelInfo) (string, bo
 	return "", false
 }
 
-// SetModel changes the current model for the session.
-// This is the session-scoped version that doesn't persist to config.
-// For CLI use with persistence, use SetModelPersisted.
+// SetModel changes the current model for the session (session-scoped, not persisted).
 func (a *Agent) SetModel(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
 
-	// Hold the read lock for the entire SetModel operation. SetModel only
-	// changes the model name on the existing client — it doesn't swap the
-	// client pointer. Holding RLock prevents SetProvider from swapping
-	// the client out from under us mid-operation. A concurrent SetModel
-	// on the same agent is fine (RLock is shared).
+	// Hold the read lock for the entire SetModel operation. RLock prevents SetProvider from swapping the client out.
 	a.clientMu.RLock()
 	defer a.clientMu.RUnlock()
 
-	// Try to set the model directly first - this allows testing unknown models
-	// Only validate against known models if the direct setting fails
+	// Try to set the model directly first - allows testing unknown models. Only validate against known models if direct setting fails.
 	err := a.client.SetModel(model)
 	if err != nil {
 		// If direct setting failed, try to find the model in the known list
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %v)",
-				model, api.GetProviderName(a.clientType), err, getModelErr)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to set model '%s' on provider %s (also failed to get model list: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr), err)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)
@@ -357,20 +396,19 @@ func (a *Agent) SetModel(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
+					return agenterrors.NewConfig(fmt.Sprintf("model '%s' found in list but failed to set", model), retryErr)
 				}
 				break
 			}
 		}
 
 		if !modelFound {
-			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
-				model, api.GetProviderName(a.clientType), err)
+			return agenterrors.NewConfig(fmt.Sprintf("model '%s' not found for provider %s and failed to set directly",
+				model, api.GetProviderName(a.clientType)), err)
 		}
 	}
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so model switches feel instant in the UI.
+	// Connection is validated on the first real request — skip the blocking check for instant UI switches.
 
 	// Store in session fields (not config) - this allows session-scoped changes
 	a.state.SetSessionModel(model)
@@ -378,13 +416,13 @@ func (a *Agent) SetModel(model string) error {
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
 }
 
 // SetModelPersisted changes the current model and persists the choice to config.
-// This is intended for CLI use where the selection should be saved.
 func (a *Agent) SetModelPersisted(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
@@ -393,16 +431,15 @@ func (a *Agent) SetModelPersisted(model string) error {
 	a.clientMu.RLock()
 	defer a.clientMu.RUnlock()
 
-	// Try to set the model directly first - this allows testing unknown models
-	// Only validate against known models if the direct setting fails
+	// Try to set the model directly first - allows testing unknown models. Only validate against known models if direct setting fails.
 	err := a.client.SetModel(model)
 	if err != nil {
 		// If direct setting failed, try to find the model in the known list
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %v)",
-				model, api.GetProviderName(a.clientType), err, getModelErr)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to set model '%s' on provider %s (also failed to get model list: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr), err)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)
@@ -414,32 +451,35 @@ func (a *Agent) SetModelPersisted(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
+					return agenterrors.NewConfig(fmt.Sprintf("model '%s' found in list but failed to set", model), retryErr)
 				}
 				break
 			}
 		}
 
 		if !modelFound {
-			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
-				model, api.GetProviderName(a.clientType), err)
+			return agenterrors.NewConfig(fmt.Sprintf("model '%s' not found for provider %s and failed to set directly",
+				model, api.GetProviderName(a.clientType)), err)
 		}
 	}
 
-	// Connection is validated on the first real request — skip the blocking
-	// connection check here so model switches feel instant in the CLI.
+	// Connection is validated on the first real request — skip the blocking check for instant CLI switches.
+
+	// Store in session fields so GetModel() returns the new value immediately.
+	a.state.SetSessionModel(model)
 
 	// Save the selection to config (persisted for CLI use)
 	if err := a.configManager.SetProvider(a.clientType); err != nil {
-		return fmt.Errorf("failed to save provider: %w", err)
+		return agenterrors.NewConfig("failed to save provider", err)
 	}
 	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
-		return fmt.Errorf("failed to save model: %w", err)
+		return agenterrors.NewConfig("failed to save model", err)
 	}
 
 	// Update context limits for the new model
 	a.state.SetMaxContextTokens(a.getModelContextLimit())
 	a.state.SetCurrentContextTokens(0)
+	a.refreshEffectiveContextCap()
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
@@ -449,7 +489,7 @@ func (a *Agent) SetModelPersisted(model string) error {
 func (a *Agent) getModelsForProvider(provider api.ClientType) ([]api.ModelInfo, error) {
 	// Check if provider is available first
 	if !a.isProviderAvailable(provider) {
-		return nil, fmt.Errorf("provider %s not available", api.GetProviderName(provider))
+		return nil, agenterrors.NewProviderError(fmt.Sprintf("provider %s not available", api.GetProviderName(provider)), nil, api.GetProviderName(provider), "")
 	}
 
 	// Use the same logic as the main API to avoid discrepancies
@@ -468,6 +508,22 @@ func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
 func (a *Agent) ClearSessionOverrides() {
 	a.state.SetSessionProvider("")
 	a.state.SetSessionModel("")
+	// Reset per-session computer-use consent so the next session re-prompts.
+	a.ResetComputerUseSessionApproval()
+	// Clear the per-session app allowlist too.
+	a.computerUseMu.Lock()
+	a.computerUseAppAllowlist = nil
+	a.computerUseMu.Unlock()
+}
+
+// ResetComputerUseSessionApproval clears the per-session computer-use opt-in flag. Called from ClearSessionOverrides.
+func (a *Agent) ResetComputerUseSessionApproval() {
+	if a == nil {
+		return
+	}
+	a.computerUseMu.Lock()
+	a.computerUseSessionApproved = false
+	a.computerUseMu.Unlock()
 }
 
 // HasSessionOverrides returns true if there are session-scoped provider/model overrides

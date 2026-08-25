@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,25 +20,25 @@ import (
 // hydration scans. These are build artifacts, dependency caches, and VCS
 // data that are not needed in the OPFS replica.
 var excludedDirNames = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	".DS_Store":   true,
-	"__pycache__": true,
-	".next":       true,
-	"dist":        true,
-	".cache":      true,
+	".DS_Store":    true,
+	"__pycache__":  true,
+	".next":        true,
+	"dist":         true,
+	".cache":       true,
 }
 
 // excludedBinaryExtensions lists file extensions that are considered binary.
 // These files are still transferred, but those larger than 1MB are skipped.
 var excludedBinaryExtensions = map[string]bool{
-	".exe":   true, ".dll":    true, ".so":     true, ".dylib": true,
-	".png":   true, ".jpg":   true, ".jpeg":   true, ".gif":   true,
-	".ico":   true, ".woff":  true, ".woff2":  true, ".ttf":   true,
-	".eot":   true, ".zip":   true, ".tar":    true, ".gz":    true,
-	".rar":   true, ".7z":    true, ".mp3":    true, ".mp4":   true,
-	".avi":   true, ".mov":   true, ".wmv":    true, ".wasm":  true,
-	".sqlite": true, ".db":   true,
+	".exe": true, ".dll": true, ".so": true, ".dylib": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".ico": true, ".woff": true, ".woff2": true, ".ttf": true,
+	".eot": true, ".zip": true, ".tar": true, ".gz": true,
+	".rar": true, ".7z": true, ".mp3": true, ".mp4": true,
+	".avi": true, ".mov": true, ".wmv": true, ".wasm": true,
+	".sqlite": true, ".db": true,
 }
 
 // sensitiveFileNames lists filenames that should never be transmitted during
@@ -128,10 +128,10 @@ func isSensitiveFile(relPath string) bool {
 // populate its OPFS replica (SP-046 §6).
 //
 // Protocol phases:
-//   1. Scan workspace, collect file list
-//   2. Send hydrate_manifest with totals and ETA
-//   3. Stream each file as hydrate_file
-//   4. Send hydrate_complete with transfer statistics
+//  1. Scan workspace, collect file list
+//  2. Send hydrate_manifest with totals and ETA
+//  3. Stream each file as hydrate_file
+//  4. Send hydrate_complete with transfer statistics
 func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspaceRoot string) {
 	// Validate workspace root
 	if workspaceRoot == "" {
@@ -202,13 +202,13 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		// Skip files that are too large
 		fileSize := fi.Size()
 		if fileSize > maxFileSize {
-			log.Printf("[hydrate] Skipping oversized file: %s (%d bytes)", rel, fileSize)
+			ws.log().Debug("skipping oversized hydration file", slog.String("path", rel), slog.Int64("size_bytes", fileSize))
 			return nil
 		}
 
 		// Skip large binary files (>1MB)
 		if isHydrateBinaryFile(rel) && fileSize > maxBinaryFileSize {
-			log.Printf("[hydrate] Skipping large binary file: %s (%d bytes)", rel, fileSize)
+			ws.log().Debug("skipping large binary hydration file", slog.String("path", rel), slog.Int64("size_bytes", fileSize))
 			return nil
 		}
 
@@ -260,12 +260,11 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		},
 	})
 	if err != nil {
-		log.Printf("[hydrate] Failed to send manifest: %v", err)
+		ws.log().Error("hydration manifest send failed", slog.Any("err", err))
 		return
 	}
 
-	log.Printf("[hydrate] Streaming %d files (%d bytes, ~%ds ETA) for workspace %s",
-		totalFiles, totalSize, estimateSeconds, workspaceRoot)
+	ws.log().Info("workspace hydration streaming started", slog.Int64("file_count", totalFiles), slog.Int64("total_bytes", totalSize), slog.Int64("estimated_seconds", estimateSeconds), slog.String("workspace_root", workspaceRoot))
 
 	// --- Phase 3: Stream files ---
 	filesSent := int64(0)
@@ -276,7 +275,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	// → /private/var, etc.).
 	absRoot, rootErr := filepath.Abs(workspaceRoot)
 	if rootErr != nil {
-		log.Printf("[hydrate] cannot resolve workspace root: %v", rootErr)
+		ws.log().Warn("hydration workspace root resolution failed; using unresolved path", slog.Any("err", rootErr))
 		absRoot = workspaceRoot
 	}
 	if evaled, err := filepath.EvalSymlinks(absRoot); err == nil {
@@ -286,7 +285,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	for i, fi := range files {
 		select {
 		case <-ctx.Done():
-			log.Printf("[hydrate] Context cancelled after %d/%d files", filesSent, totalFiles)
+			ws.log().Info("workspace hydration cancelled", slog.Int64("files_sent", filesSent), slog.Int64("total_files", totalFiles))
 			return
 		default:
 		}
@@ -295,11 +294,11 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		fullPath := filepath.Join(workspaceRoot, fi.path)
 		resolvedPath, evalErr := filepath.EvalSymlinks(fullPath)
 		if evalErr != nil {
-			log.Printf("[hydrate] skipping %s: cannot resolve path: %v", fi.path, evalErr)
+			ws.log().Warn("skipping hydration file with unresolvable path", slog.String("path", fi.path), slog.Any("err", evalErr))
 			continue
 		}
 		if !strings.HasPrefix(resolvedPath, absRoot+string(filepath.Separator)) && resolvedPath != absRoot {
-			log.Printf("[hydrate] skipping %s: path escapes workspace root", fi.path)
+			ws.log().Warn("skipping hydration file outside workspace root", slog.String("path", fi.path))
 			continue
 		}
 
@@ -307,13 +306,13 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		var buf bytes.Buffer
 		f, openErr := os.Open(fullPath)
 		if openErr != nil {
-			log.Printf("[hydrate] failed to open file %s: %v", fi.path, openErr)
+			ws.log().Error("hydration file open failed", slog.String("path", fi.path), slog.Any("err", openErr))
 			continue
 		}
 		encoder := base64.NewEncoder(base64.StdEncoding, &buf)
 		if _, err := io.Copy(encoder, f); err != nil {
 			f.Close()
-			log.Printf("[hydrate] failed to read file %s: %v", fi.path, err)
+			ws.log().Error("hydration file read failed", slog.String("path", fi.path), slog.Any("err", err))
 			continue
 		}
 		encoder.Close()
@@ -335,7 +334,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 			},
 		})
 		if err != nil {
-			log.Printf("[hydrate] Failed to send file %s: %v", fi.path, err)
+			ws.log().Error("hydration file send failed", slog.String("path", fi.path), slog.Any("err", err))
 			return
 		}
 
@@ -346,7 +345,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		if (i+1)%hydrateFileBatchSize == 0 {
 			select {
 			case <-ctx.Done():
-				log.Printf("[hydrate] cancelled during batch pause after %d files", filesSent)
+				ws.log().Info("workspace hydration cancelled during batch pause", slog.Int64("files_sent", filesSent))
 				return
 			case <-time.After(hydrateBatchPause):
 			}
@@ -365,9 +364,9 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		},
 	})
 	if err != nil {
-		log.Printf("[hydrate] Failed to send completion: %v", err)
+		ws.log().Error("hydration completion send failed", slog.Any("err", err))
 		return
 	}
 
-	log.Printf("[hydrate] Complete: %d files, %d bytes in %dms", filesSent, bytesSent, durationMs)
+	ws.log().Info("workspace hydration completed", slog.Int64("files_sent", filesSent), slog.Int64("bytes_sent", bytesSent), slog.Int64("duration_ms", durationMs))
 }

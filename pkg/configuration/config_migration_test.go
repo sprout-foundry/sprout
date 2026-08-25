@@ -52,10 +52,10 @@ func TestConfigMigration_0_0_to_2_0_PartialAPITimeouts(t *testing.T) {
 	// Check that the existing value is preserved and missing fields are filled
 	apiTimeouts, ok := migrated["api_timeouts"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, 120.0, apiTimeouts["connection_timeout_sec"].(float64)) // Preserved
-	assert.Equal(t, 600.0, apiTimeouts["first_chunk_timeout_sec"].(float64)) // Default applied
-	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64)) // Default applied
-	assert.Equal(t, 1800.0, apiTimeouts["overall_timeout_sec"].(float64)) // Default applied
+	assert.Equal(t, 120.0, apiTimeouts["connection_timeout_sec"].(float64))     // Preserved
+	assert.Equal(t, 600.0, apiTimeouts["first_chunk_timeout_sec"].(float64))    // Default applied
+	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64))          // Default applied
+	assert.Equal(t, 1800.0, apiTimeouts["overall_timeout_sec"].(float64))       // Default applied
 	assert.Equal(t, 300.0, apiTimeouts["commit_message_timeout_sec"].(float64)) // Default applied
 }
 
@@ -138,7 +138,6 @@ func TestRegisterMigration_DuplicateSource(t *testing.T) {
 // TestConfigMigration_Integration tests the full integration with Load()
 func TestConfigMigration_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a minimal config file without version or any new fields
@@ -155,7 +154,7 @@ func TestConfigMigration_Integration(t *testing.T) {
 
 	// Load the config - should apply migration
 	// Note: We can't use Load() directly here because it expects the config
-	// to be in LEDIT_CONFIG directory. Let's test the migration directly
+	// to be in SPROUT_CONFIG directory. Let's test the migration directly
 	// with raw JSON.
 	var raw map[string]interface{}
 	err = json.Unmarshal([]byte(configContent), &raw)
@@ -213,7 +212,7 @@ func TestConfigMigration_1_0_to_2_0_PartialAPITimeouts(t *testing.T) {
 	raw := map[string]interface{}{
 		"version": "1.0",
 		"api_timeouts": map[string]interface{}{
-			"connection_timeout_sec": 500.0,
+			"connection_timeout_sec":  500.0,
 			"first_chunk_timeout_sec": 900.0,
 			// Other fields are missing
 		},
@@ -226,10 +225,10 @@ func TestConfigMigration_1_0_to_2_0_PartialAPITimeouts(t *testing.T) {
 	// Check that existing values are preserved and missing fields get defaults
 	apiTimeouts, ok := migrated["api_timeouts"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, 500.0, apiTimeouts["connection_timeout_sec"].(float64))  // Preserved
-	assert.Equal(t, 900.0, apiTimeouts["first_chunk_timeout_sec"].(float64)) // Preserved
-	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64))        // Default applied
-	assert.Equal(t, 1800.0, apiTimeouts["overall_timeout_sec"].(float64))      // Default applied
+	assert.Equal(t, 500.0, apiTimeouts["connection_timeout_sec"].(float64))     // Preserved
+	assert.Equal(t, 900.0, apiTimeouts["first_chunk_timeout_sec"].(float64))    // Preserved
+	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64))          // Default applied
+	assert.Equal(t, 1800.0, apiTimeouts["overall_timeout_sec"].(float64))       // Default applied
 	assert.Equal(t, 300.0, apiTimeouts["commit_message_timeout_sec"].(float64)) // Default applied
 }
 
@@ -239,11 +238,11 @@ func TestConfigMigration_1_0_to_2_0_ZeroAPITimeouts(t *testing.T) {
 	raw := map[string]interface{}{
 		"version": "1.0",
 		"api_timeouts": map[string]interface{}{
-			"connection_timeout_sec":    0.0, // Should be replaced with default
-			"first_chunk_timeout_sec":   450.0, // Should be preserved
-			"chunk_timeout_sec":         0.0, // Should be replaced with default
-			"overall_timeout_sec":       2000.0, // Should be preserved
-			"commit_message_timeout_sec": 0.0, // Should be replaced with default
+			"connection_timeout_sec":     0.0,    // Should be replaced with default
+			"first_chunk_timeout_sec":    450.0,  // Should be preserved
+			"chunk_timeout_sec":          0.0,    // Should be replaced with default
+			"overall_timeout_sec":        2000.0, // Should be preserved
+			"commit_message_timeout_sec": 0.0,    // Should be replaced with default
 		},
 	}
 
@@ -252,9 +251,9 @@ func TestConfigMigration_1_0_to_2_0_ZeroAPITimeouts(t *testing.T) {
 
 	apiTimeouts, ok := migrated["api_timeouts"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, 300.0, apiTimeouts["connection_timeout_sec"].(float64))    // Default applied (was 0)
+	assert.Equal(t, 300.0, apiTimeouts["connection_timeout_sec"].(float64))     // Default applied (was 0)
 	assert.Equal(t, 450.0, apiTimeouts["first_chunk_timeout_sec"].(float64))    // Preserved
-	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64))         // Default applied (was 0)
+	assert.Equal(t, 600.0, apiTimeouts["chunk_timeout_sec"].(float64))          // Default applied (was 0)
 	assert.Equal(t, 2000.0, apiTimeouts["overall_timeout_sec"].(float64))       // Preserved
 	assert.Equal(t, 300.0, apiTimeouts["commit_message_timeout_sec"].(float64)) // Default applied (was 0)
 }
@@ -264,8 +263,8 @@ func TestConfigMigration_1_0_to_2_0_PartialPDFOCR(t *testing.T) {
 	// Test case 1: Only pdf_ocr_enabled is set to true
 	t.Run("OnlyEnabledTrue", func(t *testing.T) {
 		raw := map[string]interface{}{
-			"version":          "1.0",
-			"pdf_ocr_enabled":  true,
+			"version":         "1.0",
+			"pdf_ocr_enabled": true,
 		}
 
 		migrated, err := MigrateConfig(raw, "2.0")
@@ -274,15 +273,15 @@ func TestConfigMigration_1_0_to_2_0_PartialPDFOCR(t *testing.T) {
 		// Defaults should NOT be applied because enabled is true (not at unset value)
 		assert.True(t, migrated["pdf_ocr_enabled"].(bool))
 		assert.Nil(t, migrated["pdf_ocr_provider"]) // No default applied
-		assert.Nil(t, migrated["pdf_ocr_model"])     // No default applied
+		assert.Nil(t, migrated["pdf_ocr_model"])    // No default applied
 	})
 
 	// Test case 2: pdf_ocr_enabled is false but provider is set
 	t.Run("EnabledFalseProviderSet", func(t *testing.T) {
 		raw := map[string]interface{}{
-			"version":           "1.0",
-			"pdf_ocr_enabled":   false,
-			"pdf_ocr_provider":  "tesseract",
+			"version":          "1.0",
+			"pdf_ocr_enabled":  false,
+			"pdf_ocr_provider": "tesseract",
 		}
 
 		migrated, err := MigrateConfig(raw, "2.0")
@@ -291,14 +290,14 @@ func TestConfigMigration_1_0_to_2_0_PartialPDFOCR(t *testing.T) {
 		// Defaults should NOT be applied because provider is set
 		assert.False(t, migrated["pdf_ocr_enabled"].(bool))
 		assert.Equal(t, "tesseract", migrated["pdf_ocr_provider"]) // Preserved
-		assert.Nil(t, migrated["pdf_ocr_model"]) // No default applied
+		assert.Nil(t, migrated["pdf_ocr_model"])                   // No default applied
 	})
 
 	// Test case 3: All three fields at unset values (defaults should apply)
 	t.Run("AllUnset", func(t *testing.T) {
 		raw := map[string]interface{}{
-			"version":          "1.0",
-			"pdf_ocr_enabled":  false, // Unset value
+			"version":         "1.0",
+			"pdf_ocr_enabled": false, // Unset value
 		}
 
 		migrated, err := MigrateConfig(raw, "2.0")
@@ -313,10 +312,10 @@ func TestConfigMigration_1_0_to_2_0_PartialPDFOCR(t *testing.T) {
 	// Test case 4: Empty string for provider and model
 	t.Run("EmptyStrings", func(t *testing.T) {
 		raw := map[string]interface{}{
-			"version":           "1.0",
-			"pdf_ocr_enabled":   false,
-			"pdf_ocr_provider":  "",
-			"pdf_ocr_model":     "",
+			"version":          "1.0",
+			"pdf_ocr_enabled":  false,
+			"pdf_ocr_provider": "",
+			"pdf_ocr_model":    "",
 		}
 
 		migrated, err := MigrateConfig(raw, "2.0")
@@ -382,16 +381,16 @@ func TestConfigMigration_1_0_to_2_0_PreservesExistingValues(t *testing.T) {
 	raw := map[string]interface{}{
 		"version": "1.0",
 		"api_timeouts": map[string]interface{}{
-			"connection_timeout_sec":      400.0,
+			"connection_timeout_sec":     400.0,
 			"first_chunk_timeout_sec":    700.0,
-			"chunk_timeout_sec":           800.0,
-			"overall_timeout_sec":         2400.0,
-			"commit_message_timeout_sec":  400.0,
+			"chunk_timeout_sec":          800.0,
+			"overall_timeout_sec":        2400.0,
+			"commit_message_timeout_sec": 400.0,
 		},
-		"pdf_ocr_enabled":               false,
-		"pdf_ocr_provider":              "tesseract",
-		"pdf_ocr_model":                 "custom-ocr",
-		"enable_zsh_command_detection":  false,
+		"pdf_ocr_enabled":                false,
+		"pdf_ocr_provider":               "tesseract",
+		"pdf_ocr_model":                  "custom-ocr",
+		"enable_zsh_command_detection":   false,
 		"auto_execute_detected_commands": false,
 	}
 
@@ -420,7 +419,7 @@ func TestConfigMigration_1_0_to_2_0_PreservesExistingValues(t *testing.T) {
 func TestConfigMigration_1_0_to_2_0_Idempotent(t *testing.T) {
 	// Start with a minimal v1.0 config
 	raw := map[string]interface{}{
-		"version": "1.0",
+		"version":            "1.0",
 		"last_used_provider": "openai",
 	}
 
@@ -516,7 +515,7 @@ func TestConfigMigration_1_0_to_2_0_Integration(t *testing.T) {
 	// Verify defaults were applied for missing fields
 	apiTimeouts, ok := migrated["api_timeouts"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, 250.0, apiTimeouts["connection_timeout_sec"].(float64)) // Preserved
+	assert.Equal(t, 250.0, apiTimeouts["connection_timeout_sec"].(float64))  // Preserved
 	assert.Equal(t, 600.0, apiTimeouts["first_chunk_timeout_sec"].(float64)) // Default
 
 	// Verify other defaults were applied
@@ -606,9 +605,9 @@ func TestApplyDefaultSubagentTypes_PreservesExisting(t *testing.T) {
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"coder": map[string]interface{}{
-				"id":           "coder",
-				"name":         "My Custom Coder",
-				"enabled":      false,
+				"id":            "coder",
+				"name":          "My Custom Coder",
+				"enabled":       false,
 				"allowed_tools": []interface{}{"read_file"},
 			},
 		},
@@ -692,15 +691,15 @@ func TestApplyLegacyToolAllowlistMigration_AddsStructuredTools(t *testing.T) {
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"orchestrator": map[string]interface{}{
-				"id":           "orchestrator",
-				"name":         "Orchestrator",
-				"enabled":      true,
+				"id":            "orchestrator",
+				"name":          "Orchestrator",
+				"enabled":       true,
 				"allowed_tools": []interface{}{"read_file", "write_file", "edit_file"},
 			},
 			"coder": map[string]interface{}{
-				"id":           "coder",
-				"name":         "Coder",
-				"enabled":      true,
+				"id":            "coder",
+				"name":          "Coder",
+				"enabled":       true,
 				"allowed_tools": []interface{}{"edit_file"},
 			},
 		},
@@ -732,9 +731,9 @@ func TestApplyLegacyToolAllowlistMigration_SkipsWithoutWriteEdit(t *testing.T) {
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"researcher": map[string]interface{}{
-				"id":           "researcher",
-				"name":         "Researcher",
-				"enabled":      true,
+				"id":            "researcher",
+				"name":          "Researcher",
+				"enabled":       true,
 				"allowed_tools": []interface{}{"read_file", "search_files"},
 			},
 		},
@@ -760,9 +759,9 @@ func TestApplyLegacyToolAllowlistMigration_AddsShellCommandToWebScraper(t *testi
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"web_scraper": map[string]interface{}{
-				"id":           "web_scraper",
-				"name":         "Web Scraper",
-				"enabled":      true,
+				"id":            "web_scraper",
+				"name":          "Web Scraper",
+				"enabled":       true,
 				"allowed_tools": []interface{}{"read_file", "write_file"},
 			},
 		},
@@ -784,9 +783,9 @@ func TestApplyLegacyToolAllowlistMigration_PreservesAlreadyMigrated(t *testing.T
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"orchestrator": map[string]interface{}{
-				"id":           "orchestrator",
-				"name":         "Orchestrator",
-				"enabled":      true,
+				"id":      "orchestrator",
+				"name":    "Orchestrator",
+				"enabled": true,
 				"allowed_tools": []interface{}{
 					"read_file",
 					"write_file",
@@ -916,7 +915,7 @@ func TestMigration_Idempotent_FullDefaults(t *testing.T) {
 // and leaving custom personas untouched.
 func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
 	// Simulate a stale v2 config where the orchestrator has only 6 tools
-	// (missing browse_url, view_history, rollback_changes, self_review, etc.)
+	// (missing browse_url, view_history, rollback_changes, etc.)
 	// but has a user-added custom tool that should be preserved.
 	staleOrchestratorTools := []interface{}{
 		"shell_command", "read_file", "write_file", "edit_file", "TodoWrite", "TodoRead",
@@ -927,22 +926,22 @@ func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
 		"version": "2.0",
 		"subagent_types": map[string]interface{}{
 			"orchestrator": map[string]interface{}{
-				"id":             "orchestrator",
-				"name":           "Orchestrator",
-				"description":    "Stale orchestrator",
-				"enabled":        true,
-				"system_prompt":  "subagent_prompts/orchestrator.md",
-				"provider":       "custom-provider",
+				"id":            "orchestrator",
+				"name":          "Orchestrator",
+				"description":   "Stale orchestrator",
+				"enabled":       true,
+				"system_prompt": "subagent_prompts/orchestrator.md",
+				"provider":      "custom-provider",
 				"model":         "custom-model",
-				"allowed_tools":  staleOrchestratorTools,
+				"allowed_tools": staleOrchestratorTools,
 				"aliases":       []interface{}{"orch"},
 			},
 			"my_custom_persona": map[string]interface{}{
-				"id":             "my_custom_persona",
-				"name":           "My Custom",
-				"description":    "Custom persona not in defaults",
-				"enabled":        true,
-				"allowed_tools":  []interface{}{"shell_command", "read_file"},
+				"id":            "my_custom_persona",
+				"name":          "My Custom",
+				"description":   "Custom persona not in defaults",
+				"enabled":       true,
+				"allowed_tools": []interface{}{"shell_command", "read_file"},
 			},
 		},
 	}
@@ -969,7 +968,6 @@ func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
 	assert.True(t, toolSet["browse_url"], "orchestrator should have browse_url from defaults")
 	assert.True(t, toolSet["view_history"], "orchestrator should have view_history from defaults")
 	assert.True(t, toolSet["rollback_changes"], "orchestrator should have rollback_changes from defaults")
-	assert.True(t, toolSet["self_review"], "orchestrator should have self_review from defaults")
 	assert.True(t, toolSet["shell_command"], "orchestrator should have shell_command from defaults")
 
 	// User-added extras must be preserved

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,11 +18,10 @@ var (
 )
 
 func runAutomateLogs(sessionID string) error {
-	cwd, err := os.Getwd()
+	sproutDir, err := automateSessionRoot()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return err
 	}
-	sproutDir := filepath.Join(cwd, ".sprout")
 
 	info, err := automate.ReadSessionFile(sproutDir, sessionID)
 	if err != nil {

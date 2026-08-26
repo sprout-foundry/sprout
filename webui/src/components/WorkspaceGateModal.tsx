@@ -1,5 +1,5 @@
-import { AlertTriangle } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { supportsWorkspaceSwitching } from '../config/mode';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
 import WorkspaceBrowser from './WorkspaceBrowser';
@@ -17,6 +17,9 @@ import './WorkspaceGateModal.css';
  *
  * Renders only in local mode — cloud mode has a single virtual FS, so
  * `supportsWorkspaceSwitching` (false in cloud) short-circuits to null.
+ *
+ * The overlay sits above the app's toast layer, so every failure surfaces
+ * as an inline error here — a toast would be invisible behind the scrim.
  */
 interface WorkspaceGateModalProps {
   workspaceInfo: WorkspaceInfo;
@@ -35,12 +38,41 @@ function WorkspaceGateModal({
   // scrim has already covered.
   const [browsing, setBrowsing] = useState(false);
 
+  // The select/consent handlers in AppContent fire-and-forget promises.
+  // They throw on failure (daemon stall, 409 query_in_progress, terminal
+  // teardown error), and before this state existed those rejections were
+  // unhandled: the button appeared dead and the modal never explained why.
+  const [pending, setPending] = useState<'select' | 'consent' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useCallback(
+    (kind: 'select' | 'consent', action: () => void) => {
+      if (pending) return;
+      setError(null);
+      setPending(kind);
+      try {
+        // The callers are async but not awaited here on purpose: a resolved
+        // setWorkspace triggers a page reload, so post-success cleanup is moot.
+        // Only the failure path matters, and it is captured below.
+        Promise.resolve(action()).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message || 'Failed to update workspace');
+          setPending(null);
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setPending(null);
+      }
+    },
+    [pending],
+  );
+
   // Cloud mode (and any mode without workspace switching) is never gated.
   if (!supportsWorkspaceSwitching) return null;
 
   return (
     <div className="workspace-gate-overlay" data-testid="workspace-gate-modal">
-      <div className="workspace-gate-content">
+      <div className={`workspace-gate-content${pending ? ' is-busy' : ''}`}>
         <div className="workspace-gate-header">
           <div className="workspace-gate-header-icon">
             <AlertTriangle size={28} />
@@ -57,7 +89,7 @@ function WorkspaceGateModal({
         {browsing ? (
           <WorkspaceBrowser
             initialPath={workspaceInfo.workspace_root || workspaceInfo.daemon_root}
-            onSelect={onSelectWorkspace}
+            onSelect={(path) => run('select', () => onSelectWorkspace(path))}
             onCancel={() => setBrowsing(false)}
           />
         ) : (
@@ -66,14 +98,33 @@ function WorkspaceGateModal({
             currentWorkspace={workspaceInfo.workspace_root}
             suggestedProjects={workspaceInfo.suggested_projects}
             recentWorkspaces={workspaceInfo.recent_workspaces}
-            onSelect={onSelectWorkspace}
+            onSelect={(path) => run('select', () => onSelectWorkspace(path))}
             onBrowse={() => setBrowsing(true)}
           />
         )}
 
+        {error && (
+          <div className="workspace-gate-error" role="alert" data-testid="workspace-gate-error">
+            {error}
+          </div>
+        )}
+
         <div className="workspace-gate-home-consent">
-          <button className="workspace-gate-home-btn" type="button" onClick={onConsentHome}>
-            Use my home directory anyway
+          <button
+            className="workspace-gate-home-btn"
+            type="button"
+            onClick={() => run('consent', onConsentHome)}
+            disabled={pending !== null}
+            data-testid="workspace-gate-home-btn"
+          >
+            {pending === 'consent' ? (
+              <>
+                <Loader2 size={14} className="workspace-gate-btn-spin" aria-hidden="true" />
+                Dismissing&hellip;
+              </>
+            ) : (
+              'Use my home directory anyway'
+            )}
           </button>
           <p className="workspace-gate-home-warning">
             Running in your home directory gives the agent unrestricted access to all files and may trigger macOS

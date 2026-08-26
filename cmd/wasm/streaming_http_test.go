@@ -602,6 +602,10 @@ func (m *mockClient) GetModelContextLimit() (int, error)                      { 
 func (m *mockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (m *mockClient) SupportsVision() bool                                    { return false }
 
+func (m *mockClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.
 func (m *mockClient) SupportsConversationalVision() bool {

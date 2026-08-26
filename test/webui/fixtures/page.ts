@@ -23,6 +23,13 @@ export interface NewWebUIPageOptions {
   browser: Browser;
   /** URL to navigate to (e.g. Vite dev server URL) */
   url?: string;
+  /**
+   * Emulated prefers-reduced-motion for the context. 'reduce' is useful for
+   * specs whose target UI animates in: headless rAF throttling can freeze a
+   * CSS animation mid-flight, leaving elements permanently "unstable" for
+   * Playwright interaction. Components gate animations on this media query.
+   */
+  reducedMotion?: 'no-preference' | 'reduce';
 }
 
 // ---------------------------------------------------------------------------
@@ -32,10 +39,12 @@ export interface NewWebUIPageOptions {
 export async function newWebuiPage({
   browser,
   url,
+  reducedMotion,
 }: NewWebUIPageOptions): Promise<WebUIPageHandle> {
   const context = await browser.newContext({
     // Give the context a reasonable viewport for web UI testing
     viewport: { width: 1280, height: 720 },
+    ...(reducedMotion ? { reducedMotion } : {}),
   });
 
   const page = await context.newPage();

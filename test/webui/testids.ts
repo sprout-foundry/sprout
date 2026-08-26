@@ -288,6 +288,12 @@ const TESTIDS = {
   'shell-approval-reset': 'shell-approval-reset',
   'shell-approval-risk-badge': 'shell-approval-risk-badge',
   'shell-approval-submit': 'shell-approval-submit',
+
+  // Escalation toast (browser-limitation → Mode A cloud task / Mode B workspace)
+  'escalation-toast-cloud-task': 'escalation-toast-cloud-task',
+  'escalation-toast-cloud-task-status': 'escalation-toast-cloud-task-status',
+  'escalation-toast-cloud-task-link': 'escalation-toast-cloud-task-link',
+  'escalation-toast-cloud-task-error': 'escalation-toast-cloud-task-error',
 } as const;
 
 // Derived set for O(1) coverage lookups

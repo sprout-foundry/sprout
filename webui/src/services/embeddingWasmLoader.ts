@@ -71,7 +71,20 @@ declare global {
 
 // ── Lazy loader ─────────────────────────────────────────────────────────────
 
-const DEFAULT_EMBEDDING_WASM_URL = '/webui/wasm/embedding.wasm';
+// Resolve the wasm base the same way wasmShell does: the daemon serves
+// the bundle under /webui, but root-served dists (Sprout Studio's
+// WKWebView, static hosts) keep the assets at /wasm/*.
+function resolveWasmBase(): string {
+  if (typeof window === 'undefined' || !window.location) return '/webui/wasm';
+  const path = window.location.pathname ?? '/';
+  const underMount =
+    path === '/webui' ||
+    path.startsWith('/webui/') ||
+    (window.location.search ?? '').includes('mount=/webui');
+  return underMount ? '/webui/wasm' : '/wasm';
+}
+
+const DEFAULT_EMBEDDING_WASM_URL = `${resolveWasmBase()}/embedding.wasm`;
 
 let embeddingPromise: Promise<SproutEmbedWasmAPI> | null = null;
 

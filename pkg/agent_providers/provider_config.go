@@ -102,9 +102,22 @@ type MessageConversion struct {
 
 // StreamingConfig defines streaming behavior
 type StreamingConfig struct {
-	Format         string `json:"format"` // "sse", "json_lines", "raw"
-	ChunkTimeoutMs int    `json:"chunk_timeout_ms"`
-	DoneMarker     string `json:"done_marker"`
+	Format string `json:"format"` // "sse", "json_lines", "raw"
+	// ChunkTimeoutMs overrides the streaming HTTP client timeout and the
+	// inter-chunk idle deadline (legacy single knob; default 900s/120s).
+	ChunkTimeoutMs int `json:"chunk_timeout_ms"`
+	// FirstChunkTimeoutMs overrides the deadline for the FIRST chunk of a
+	// stream (default 10m). Slow or locally-hosted models routinely spend
+	// several minutes in prompt prefill before emitting the first token —
+	// the inter-chunk deadline must not apply to that window or every
+	// attempt is killed and retried in an invisible loop.
+	FirstChunkTimeoutMs int `json:"first_chunk_timeout_ms"`
+	// IdleChunkTimeoutMs overrides only the inter-chunk idle deadline after
+	// the first chunk (default 120s). Takes precedence over ChunkTimeoutMs;
+	// unlike ChunkTimeoutMs it does NOT shorten the HTTP client timeout,
+	// which would kill legitimately long streams.
+	IdleChunkTimeoutMs int    `json:"idle_chunk_timeout_ms"`
+	DoneMarker         string `json:"done_marker"`
 }
 
 // PatternOverride defines context limit overrides for model patterns
@@ -370,6 +383,37 @@ func (c *ProviderConfig) GetStreamingTimeout() time.Duration {
 		return time.Duration(c.Streaming.ChunkTimeoutMs) * time.Millisecond
 	}
 	return 900 * time.Second // Default streaming timeout (15 minutes)
+}
+
+// GetFirstChunkTimeout returns the deadline for the first chunk of a
+// streaming response. Defaults far above the inter-chunk deadline because
+// prompt prefill on large contexts (or slow/local models) can legitimately
+// run many minutes before the first token. Must stay <= the HTTP client's
+// streaming timeout or the transport kills the stream first.
+func (c *ProviderConfig) GetFirstChunkTimeout() time.Duration {
+	if c.Streaming.FirstChunkTimeoutMs > 0 {
+		d := time.Duration(c.Streaming.FirstChunkTimeoutMs) * time.Millisecond
+		if streamCap := c.GetStreamingTimeout(); d > streamCap {
+			return streamCap
+		}
+		return d
+	}
+	return 10 * time.Minute
+}
+
+// GetIdleChunkTimeout returns the inter-chunk idle deadline applied after
+// the first chunk has arrived. A stall mid-generation (proxy idle hole,
+// dead upstream) is detected here and surfaced as a retryable network
+// error. IdleChunkTimeoutMs takes precedence over the legacy ChunkTimeoutMs
+// knob without shortening the HTTP client timeout.
+func (c *ProviderConfig) GetIdleChunkTimeout() time.Duration {
+	if c.Streaming.IdleChunkTimeoutMs > 0 {
+		return time.Duration(c.Streaming.IdleChunkTimeoutMs) * time.Millisecond
+	}
+	if c.Streaming.ChunkTimeoutMs > 0 {
+		return time.Duration(c.Streaming.ChunkTimeoutMs) * time.Millisecond
+	}
+	return 120 * time.Second
 }
 
 // GetContextLimit returns the context limit for a given model based on configuration

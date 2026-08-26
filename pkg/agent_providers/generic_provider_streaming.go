@@ -121,6 +121,14 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 	reader := bufio.NewReader(resp.Body)
 	builder := api.NewStreamingResponseBuilder(callback)
 
+	// Two-phase deadline: before the first chunk the stream may legitimately
+	// sit silent for minutes while the model prefills a large prompt (slow or
+	// locally-hosted models), so that window gets the first-chunk deadline.
+	// After the first chunk, a silent gap means a stalled stream and gets the
+	// much shorter inter-chunk idle deadline.
+	firstChunkDeadline := p.config.GetFirstChunkTimeout()
+	idleChunkDeadline := p.config.GetIdleChunkTimeout()
+
 	// readLine reads one line with context + idle-deadline awareness.
 	// The underlying bufio.Reader.ReadString blocks until a newline arrives,
 	// which on a network stall (proxy idle hole, NAT timeout) can hang until
@@ -132,7 +140,13 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 		err  error
 	}
 
+	gotFirstChunk := false
 	for {
+		deadline := idleChunkDeadline
+		if !gotFirstChunk {
+			deadline = firstChunkDeadline
+		}
+
 		lineCh := make(chan readResult, 1)
 		go func() {
 			line, err := reader.ReadString('\n')
@@ -146,11 +160,16 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 			// then return a cancellation error.
 			resp.Body.Close()
 			return nil, agenterrors.NewNetwork("streaming response cancelled", ctx.Err())
-		case <-time.After(120 * time.Second):
-			// Idle deadline: no chunk arrived in 120s. Close the body and
-			// surface a transient error so seed's retry logic can retry.
+		case <-time.After(deadline):
+			// Deadline: no chunk arrived in the allowed window. Close the body
+			// and surface a transient error so seed's retry logic can retry.
 			resp.Body.Close()
-			return nil, agenterrors.NewNetwork("streaming response idle timeout (no chunk for 120s)", nil)
+			if !gotFirstChunk {
+				return nil, agenterrors.NewNetwork(
+					fmt.Sprintf("streaming response first-token timeout (no chunk within %s)", deadline), nil)
+			}
+			return nil, agenterrors.NewNetwork(
+				fmt.Sprintf("streaming response idle timeout (no chunk for %s)", deadline), nil)
 		case res = <-lineCh:
 			// Got a line (or EOF/error) — fall through to process it below.
 		}
@@ -181,6 +200,7 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 		}
 
 		if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {
+			gotFirstChunk = true
 			if err := builder.ProcessChunk(chunk); err != nil {
 				resp.Body.Close()
 				return nil, err

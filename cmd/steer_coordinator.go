@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
@@ -40,6 +42,10 @@ type SteerCoordinator struct {
 	agent  *agent.Agent
 	reader *console.SteerInputReader
 	footer *console.StatusFooter
+
+	// lastInterruptAt backs the double-Ctrl+C force-quit in
+	// handleSteerInterrupt (mirrors the SIGINT handler's escalation).
+	lastInterruptAt int64
 }
 
 // NewSteerCoordinator constructs the coordinator with the SteerInputReader's
@@ -260,6 +266,12 @@ func (c *SteerCoordinator) handleSteerRetract() (string, bool) {
 // two paths intentionally converge: whichever surface the user reaches
 // for to stop a turn, the underlying mechanism is the same.
 //
+// In raw steer mode the terminal never raises SIGINT (ISIG is off), so
+// the cooked-mode "double Ctrl+C to force quit" escalation would be
+// unreachable mid-turn — a wedged turn would leave no exit but killing
+// the terminal. Mirror it here: a second Ctrl+C within 2s force-quits
+// via the same ForceSaveAndExit path the SIGINT handler uses.
+//
 // The string argument is unused — it exists for API symmetry with
 // SteerInputReader.NewSteerInputReader, which uses a single closure
 // shape for both callbacks.
@@ -267,6 +279,15 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 	if c.agent == nil {
 		return
 	}
+	now := time.Now().UnixNano()
+	if prev := atomic.LoadInt64(&c.lastInterruptAt); prev > 0 && time.Duration(now-prev) < 2*time.Second {
+		console.StopGlobalStatusFooter()
+		fmt.Println()
+		console.GlyphStopped.Printf("Force quitting immediately...")
+		c.agent.ForceSaveAndExit(1)
+		os.Exit(1)
+	}
+	atomic.StoreInt64(&c.lastInterruptAt, now)
 	c.agent.TriggerInterrupt()
 }
 

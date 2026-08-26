@@ -26,6 +26,9 @@ export interface EscalationTriggerEvent {
   message: string;
   /** Repo URL to pass to the workspace creation endpoint */
   repoURL?: string;
+  /** The exact command that hit the browser limit (127 — no runtime in the
+   *  WASM shell). Carried so the txn action can run it in the container. */
+  command?: string;
 }
 
 // ── Custom event name ──────────────────────────────────────────────────────
@@ -54,6 +57,18 @@ const BUILD_COMMAND_PATTERNS = [
  */
 export function isBuildCommand(command: string): boolean {
   return BUILD_COMMAND_PATTERNS.some((pattern) => pattern.test(command.trim()));
+}
+
+/**
+ * Stable short hash of a command string, used to dedupe 127 triggers per
+ * command (the same unavailable command must not re-toast after a retry).
+ */
+export function hashCommand(command: string): string {
+  let hash = 5381;
+  for (let i = 0; i < command.length; i += 1) {
+    hash = ((hash << 5) + hash + command.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(16);
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -169,9 +184,24 @@ export function useEscalationTriggers({
     };
     window.addEventListener('sprout:terminal-timeout', handleTerminalTimeout);
 
-    // ── Listen for build commands from terminal output ─────────
+    // ── Listen for terminal commands ────────────────────────────
+    // Two producers share this event: a 127 exit (the WASM shell has no
+    // compiler/runtime for the command — a BLOCKING trigger that offers the
+    // transactional cloud run) and the informational build-pattern hint.
     const handleTerminalCommand = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail?.exitCode === 127 && typeof detail.command === 'string' && detail.command.trim() !== '') {
+        const command = detail.command.trim();
+        fireTrigger({
+          id: 'wasm-command-unavailable-' + hashCommand(command),
+          reason: 'command_unavailable_in_browser',
+          severity: 'blocking',
+          message: `“${command}” needs a real runtime. Run it in your cloud workspace (pay-per-run) or keep browsing.`,
+          repoURL: repoURLRef.current ?? undefined,
+          command,
+        });
+        return;
+      }
       if (detail?.command && isBuildCommand(detail.command)) {
         fireTrigger({
           id: 'build-command-' + detail.command.replace(/[^a-z0-9]/gi, '-').slice(0, 40),

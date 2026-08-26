@@ -161,3 +161,57 @@
   color: var(--accent-primary, inherit);
   align-self: flex-start;
 }
+
+/* ── ETH-2 txn result view ─────────────────────────────────────────────── */
+
+.escalation-toast-txn-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.escalation-toast-txn-exit {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-primary, inherit);
+  background: var(--bg-elevated, transparent);
+  border: 1px solid var(--border-default, transparent);
+}
+
+.escalation-toast-txn-exit.is-ok {
+  color: var(--accent-success, inherit);
+  border-color: var(--accent-success, transparent);
+}
+
+.escalation-toast-txn-duration,
+.escalation-toast-txn-flag {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, inherit);
+}
+
+.escalation-toast-txn-flag {
+  color: var(--accent-warning, inherit);
+}
+
+.escalation-toast-txn-pre {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary, inherit);
+  background: var(--bg-secondary, transparent);
+  border: 1px solid var(--border-subtle, transparent);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.escalation-toast-txn-pre.is-stderr {
+  color: var(--accent-error, inherit);
+}

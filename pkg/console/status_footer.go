@@ -37,6 +37,10 @@ type StatusFooter struct {
 	active bool
 	source ContentSource
 
+	// sizeOverride pins terminalSize for tests (no pty needed). nil in
+	// production.
+	sizeOverride *terminalSizeOverride
+
 	// lastRows remembers the terminal height at the most recent draw so
 	// that a resize handler can clear the OLD footer rows (which would
 	// otherwise be orphaned mid-screen after a grow) before applying a
@@ -108,6 +112,13 @@ type StatusFooter struct {
 	// SetProseStreaming(false) fires the deferred resize once the
 	// segment is done.
 	pendingResize bool
+
+	// pendingSteerRegion is set when the steer panel's row count changes
+	// while prose is streaming. The DECSTBM re-apply is deferred to
+	// segment end (same rationale as pendingResize); the new row is
+	// still rendered immediately by drawLocked. Applied by
+	// SetProseStreaming(false) via the catch-up refresh.
+	pendingSteerRegion bool
 
 	// resizeInFlight prevents multiple deferred-resize goroutines from
 	// stacking when SetProseStreaming(false) fires rapidly across
@@ -288,9 +299,19 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 	// The goroutine is safe because Resize acquires its own locks
 	// (f.mu, LockOutput) from a clean stack.
 	shouldResize := false
-	if !active && f.pendingResize {
-		f.pendingResize = false
-		shouldResize = true
+	shouldSteerRegion := false
+	if !active {
+		if f.pendingResize {
+			f.pendingResize = false
+			shouldResize = true
+		}
+		if f.pendingSteerRegion {
+			f.pendingSteerRegion = false
+			// A steer row-count change pends only when the resize path
+			// is NOT already firing — Resize re-applies the scroll
+			// region anyway, which supersedes the steer-region apply.
+			shouldSteerRegion = !shouldResize
+		}
 	}
 	f.mu.Unlock()
 
@@ -305,6 +326,17 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 				f.Resize()
 			}()
 		}
+	} else if shouldSteerRegion {
+		// Deferred steer-panel row-count change: re-apply the scroll
+		// region and redraw under outputMu, from a clean stack (this
+		// method runs inside LockOutput). Async for the same
+		// non-reentrancy reason as the resize above.
+		go func() {
+			LockOutput()
+			defer UnlockOutput()
+			f.applyScrollRegionLocked()
+			f.drawLocked()
+		}()
 	}
 }
 
@@ -543,6 +575,34 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 // pastes / messages.
 const maxSteerRows = 6
 
+// applySteerRegionOrDefer handles the activation/row-count-change path
+// shared by the steer setters: when prose is streaming, the DECSTBM
+// re-apply is deferred (it would displace in-flight prose) and only
+// the steer rows render; otherwise orphaned rows are cleared, the
+// region is re-applied, and a full draw happens — atomically under
+// outputMu, so the sequence can't interleave with prose writes.
+// Returns true when the caller's follow-up draw() should be skipped
+// (the full draw already happened here).
+func (f *StatusFooter) applySteerRegionOrDefer(wasActive bool, prevRows, newRows int) bool {
+	f.mu.Lock()
+	streaming := f.proseStreaming
+	f.mu.Unlock()
+	if streaming {
+		f.mu.Lock()
+		f.pendingSteerRegion = true
+		f.mu.Unlock()
+		return false
+	}
+	LockOutput()
+	defer UnlockOutput()
+	if wasActive && newRows < prevRows {
+		f.clearOrphanedSteerRows(prevRows, newRows)
+	}
+	f.applyScrollRegionLocked()
+	f.drawLocked()
+	return true
+}
+
 // SetSteerLine reserves one or more pinned rows above the rule and
 // renders the supplied text there. Newlines (`\n`) in `text` produce
 // additional rows up to maxSteerRows. Called by SteerInputReader as
@@ -577,10 +637,9 @@ func (f *StatusFooter) SetSteerLine(text string) {
 		// the previous size before reapplying the region. Without this,
 		// shrinking from 3 rows to 1 would leave the top two rows
 		// stranded above the new scroll region.
-		if wasActive && newRows < prevRows {
-			f.clearOrphanedSteerRows(prevRows, newRows)
+		if f.applySteerRegionOrDefer(wasActive, prevRows, newRows) {
+			return
 		}
-		f.applyScrollRegion()
 	}
 	f.draw()
 }
@@ -610,10 +669,9 @@ func (f *StatusFooter) SetSteerLineWithCursor(text string, cursorByteOffset int)
 		return
 	}
 	if !wasActive || newRows != prevRows {
-		if wasActive && newRows < prevRows {
-			f.clearOrphanedSteerRows(prevRows, newRows)
+		if f.applySteerRegionOrDefer(wasActive, prevRows, newRows) {
+			return
 		}
-		f.applyScrollRegion()
 	}
 	f.draw()
 }
@@ -651,10 +709,15 @@ func (f *StatusFooter) SetSteerLineWrapped(text string, cursorRow, cursorCol int
 		return
 	}
 	if !wasActive || newRows != prevRows {
-		if wasActive && newRows < prevRows {
-			f.clearOrphanedSteerRows(prevRows, newRows)
+		// Defer the scroll-region change to segment end while prose
+		// streams: DECSTBM homes the cursor and re-clamps the region,
+		// which races with in-flight prose writes inside the region.
+		// The extra row is rendered by drawLocked regardless, and
+		// SetProseStreaming(false) re-applies the region once prose
+		// is done.
+		if f.applySteerRegionOrDefer(wasActive, prevRows, newRows) {
+			return
 		}
-		f.applyScrollRegion()
 	}
 	f.draw()
 }
@@ -688,7 +751,19 @@ func (f *StatusFooter) SetSteerLineWrappedLocked(text string, cursorRow, cursorC
 		if wasActive && newRows < prevRows {
 			f.clearOrphanedSteerRows(prevRows, newRows)
 		}
-		f.applyScrollRegionLocked()
+		// Defer the DECSTBM re-apply while prose streams — same
+		// rationale as applySteerRegionOrDefer. This Locked variant's
+		// caller already holds outputMu, so the catch-up runs via the
+		// pendingSteerRegion goroutine at SetProseStreaming(false).
+		f.mu.Lock()
+		streaming := f.proseStreaming
+		if streaming {
+			f.pendingSteerRegion = true
+		}
+		f.mu.Unlock()
+		if !streaming {
+			f.applyScrollRegionLocked()
+		}
 	}
 	f.drawLocked()
 }
@@ -855,8 +930,101 @@ func (f *StatusFooter) drawLocked() {
 	streaming := f.proseStreaming
 	f.mu.Unlock()
 	if streaming {
+		// Prose is streaming into the scroll region. Full chrome draws
+		// are suppressed (the DECSC/DECRC + rule/content rows are what
+		// historically raced with scrolling prose) — but the STEER rows
+		// must still render: they live in the reserved area BELOW the
+		// scroll region, and suppressing them is why typed characters
+		// went invisible mid-stream and "caught up" only at segment
+		// boundaries. Steering while the model talks is the whole point
+		// of the steer panel.
+		//
+		// This is safe now that every prose write (WriteChunk and
+		// friends) holds outputMu: the steer-row render below cannot
+		// interleave with a partial prose write. It writes no \n and
+		// does not touch the scroll region, so it cannot displace the
+		// cursor the streaming writer is using inside the region.
+		f.drawSteerRowsLocked()
 		return
 	}
+	f.drawFullLocked()
+}
+
+// drawSteerRowsLocked renders only the pinned steer input rows (no rule,
+// no content line, no hint row, no scroll-region mutation). Caller must
+// hold outputMu. Used while prose is streaming: keeps keystroke echo
+// live without reintroducing the mid-stream chrome race.
+func (f *StatusFooter) drawSteerRowsLocked() {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	steerActive := f.steerActive
+	steerLine := f.steerLine
+	steerCursor := f.steerCursor
+	steerWrapped := f.steerWrappedActive
+	steerRows := f.steerRowCount()
+	hintRows := f.hintRowCount()
+	f.mu.Unlock()
+	if !steerActive || steerRows == 0 {
+		return
+	}
+	cols, rows := f.terminalSize()
+	if rows < f.reservedRows()+1 {
+		return
+	}
+	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
+	for i, lineText := range lines {
+		withCursor := false
+		col := -1
+		if steerCursor >= 0 || steerWrapped {
+			if i == cursorLineIdx {
+				withCursor = true
+				col = cursorByteCol
+			}
+		} else {
+			withCursor = i == len(lines)-1
+		}
+		rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, hintRows, i), steerColor, rendered, footerResetAll)
+	}
+}
+
+// steerVisualLines computes the visual steer rows and cursor placement
+// for the current steer state at the given width. steerWrapped and
+// steerRows are snapshotted under f.mu by the caller.
+func (f *StatusFooter) steerVisualLines(steerLine string, steerCursor, steerRows, cols int, steerWrapped bool) (lines []string, cursorLineIdx, cursorByteCol int) {
+	if steerWrapped {
+		return WrapSteerLayout(steerLine, steerCursor, cols, maxSteerRows)
+	}
+	lines = splitSteerLines(steerLine, steerRows)
+	cursorLineIdx = len(lines) - 1
+	cursorByteCol = -1
+	if steerCursor >= 0 {
+		offset := 0
+		for i, lineText := range lines {
+			lineEnd := offset + len(lineText)
+			if steerCursor <= lineEnd || i == len(lines)-1 {
+				cursorLineIdx = i
+				rawByteCol := steerCursor - offset
+				if rawByteCol < 0 {
+					rawByteCol = 0
+				}
+				if rawByteCol > len(lineText) {
+					rawByteCol = len(lineText)
+				}
+				cursorByteCol = visibleRuneWidth(lineText[:rawByteCol])
+				break
+			}
+			offset = lineEnd + 1
+		}
+	}
+	return lines, cursorLineIdx, cursorByteCol
+}
+
+// drawFullLocked is the pre-streaming-gate body of drawLocked: the full
+// chrome (steer rows + optional hint row + rule + content line).
+func (f *StatusFooter) drawFullLocked() {
 	cols, rows := f.terminalSize()
 	if rows < f.reservedRows()+1 {
 		return
@@ -868,6 +1036,7 @@ func (f *StatusFooter) drawLocked() {
 	steerActive := f.steerActive
 	steerLine := f.steerLine
 	steerCursor := f.steerCursor
+	steerWrapped := f.steerWrappedActive
 	steerRows := f.steerRowCount()
 	hintRows := f.hintRowCount()
 	f.mu.Unlock()
@@ -877,55 +1046,14 @@ func (f *StatusFooter) drawLocked() {
 	// UI" without leaking color into surrounding output.
 	fmt.Fprint(f.w, "\0337")
 	if steerActive && steerRows > 0 {
-		// SP-078 Phase 1: two render paths.
-		//   - Wrapped mode (width-aware): build visual rows via
-		//     WrapSteerLayout, render each as its own terminal row.
-		//   - Legacy mode: splitSteerLines on \n only.
-		var lines []string
-		var cursorLineIdx, cursorByteCol int
-		if f.steerWrappedActive {
-			lines, cursorLineIdx, cursorByteCol = WrapSteerLayout(steerLine, f.steerCursorByteOffset(), cols, maxSteerRows)
-		} else {
-			lines = splitSteerLines(steerLine, steerRows)
-
-			// Map steerCursor (byte offset into the full steerLine) to a
-			// (lineIndex, visualColWithinLine) pair so we can render the
-			// caret on the correct row at the correct column. When
-			// steerCursor < 0 we fall back to legacy behavior: caret at
-			// the end of the last line.
-			//
-			// SP-078 Phase 3: the column passed to steerRowTextWithCursor
-			// must be a VISIBLE column, not a byte offset. Otherwise a
-			// wide-rune (CJK) content where each rune is 3 bytes but 2
-			// visible columns lands the caret at half the column. Use
-			// visibleRuneWidth(lineText[:byteCol]) to convert.
-			cursorLineIdx = len(lines) - 1 // default: last line
-			cursorByteCol = -1             // -1 = caret at end (legacy)
-			if steerCursor >= 0 {
-				offset := 0
-				for i, lineText := range lines {
-					lineEnd := offset + len(lineText)
-					if steerCursor <= lineEnd || i == len(lines)-1 {
-						cursorLineIdx = i
-						rawByteCol := steerCursor - offset
-						if rawByteCol < 0 {
-							rawByteCol = 0
-						}
-						if rawByteCol > len(lineText) {
-							rawByteCol = len(lineText)
-						}
-						cursorByteCol = visibleRuneWidth(lineText[:rawByteCol])
-						break
-					}
-					offset = lineEnd + 1 // +1 for the \n separator
-				}
-			}
-		}
+		// SP-078 Phase 1: two render paths (wrapped vs legacy \n split),
+		// shared with drawSteerRowsLocked via steerVisualLines.
+		lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
 
 		for i, lineText := range lines {
 			withCursor := false
 			col := -1
-			if steerCursor >= 0 || f.steerWrappedActive {
+			if steerCursor >= 0 || steerWrapped {
 				// Cursor-aware path: caret only on the line the cursor
 				// actually falls on, at the computed column.
 				if i == cursorLineIdx {
@@ -1002,6 +1130,9 @@ func StopGlobalStatusFooter() {
 }
 
 func (f *StatusFooter) terminalSize() (cols, rows int) {
+	if f.sizeOverride != nil {
+		return f.sizeOverride.cols, f.sizeOverride.rows
+	}
 	if f.fd < 0 {
 		return 0, 0
 	}
@@ -1012,23 +1143,16 @@ func (f *StatusFooter) terminalSize() (cols, rows int) {
 	return c, r
 }
 
+// terminalSizeOverride lets tests pin the terminal geometry without a
+// pty; terminalSize consults it first.
+type terminalSizeOverride struct {
+	cols, rows int
+}
+
 // TerminalSize is the exported alias of terminalSize, for callers
 // outside the console package (e.g. SteerInputReader's width-aware
 // render path). Returns (cols, rows). Both are 0 when the footer is
 // not attached to a real TTY (fd < 0 or GetSize errored).
 func (f *StatusFooter) TerminalSize() (cols, rows int) {
 	return f.terminalSize()
-}
-
-// steerCursorByteOffset returns the byte cursor position within
-// steerLine for the active render path. In wrapped mode
-// (SP-078), the caller pre-computes (row, col) and we have no
-// meaningful byte offset, so callers pass it via (steerCursorRow,
-// steerCursorCol) directly; this returns -1 to signal "use the
-// (row, col) path." In legacy mode, it returns steerCursor.
-func (f *StatusFooter) steerCursorByteOffset() int {
-	if f.steerWrappedActive {
-		return -1
-	}
-	return f.steerCursor
 }

@@ -60,9 +60,13 @@ func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
 	}
 	stats["cached_cost_savings"] = agentInst.GetCachedCostSavings()
 	stats["current_context_tokens"] = agentInst.GetCurrentContextTokens()
-	stats["max_context_tokens"] = agentInst.GetMaxContextTokens()
+	// Cached read only — GetMaxContextTokens can hit the provider
+	// (Ollama `show`, 2s timeout) on cache miss, and this runs under
+	// ws.mutex on every /api/stats poll.
+	maxTokens := agentInst.GetMaxContextTokensCached()
+	stats["max_context_tokens"] = maxTokens
 	stats["context_usage_percent"] = float64(0)
-	if maxTokens := agentInst.GetMaxContextTokens(); maxTokens > 0 {
+	if maxTokens > 0 {
 		stats["context_usage_percent"] = float64(agentInst.GetCurrentContextTokens()) / float64(maxTokens) * 100
 	}
 	stats["context_warning_issued"] = agentInst.GetContextWarningIssued()
@@ -95,6 +99,18 @@ func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]int
 	if stats["provider"] == "" && clientID != "" {
 		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
 			populateAgentStats(stats, agentInst)
+		}
+	}
+
+	// Fill provider/model from user config when no agent exists yet, so
+	// the frontend doesn't flash "no provider" — outside ws.mutex because
+	// configuration.Load does disk I/O.
+	if stats["provider"] == "" {
+		if cfg, cfgErr := configuration.Load(); cfgErr == nil && cfg != nil {
+			if p := strings.TrimSpace(cfg.LastUsedProvider); p != "" && p != "editor" {
+				stats["provider"] = p
+				stats["model"] = cfg.GetModelForProvider(p)
+			}
 		}
 	}
 
@@ -162,18 +178,10 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 	// Add agent-specific stats if available
 	if agentInst != nil {
 		populateAgentStats(stats, agentInst)
-	} else {
-		// Agent hasn't been lazily created yet. Fall back to the configured
-		// provider/model from user settings so the frontend doesn't flash
-		// "no provider" even though one is configured.
-		cfg, cfgErr := configuration.Load()
-		if cfgErr == nil && cfg != nil {
-			if p := strings.TrimSpace(cfg.LastUsedProvider); p != "" && p != "editor" {
-				stats["provider"] = p
-				stats["model"] = cfg.GetModelForProvider(p)
-			}
-		}
 	}
+	// When no agent exists yet, the caller fills provider/model from user
+	// config OUTSIDE ws.mutex — configuration.Load does disk I/O and would
+	// extend the exclusive-lock window on every /api/stats poll.
 	if clientCtx != nil && len(clientCtx.AgentState) > 0 {
 		var clientState agent.AgentState
 		if err := json.Unmarshal(clientCtx.AgentState, &clientState); err == nil {

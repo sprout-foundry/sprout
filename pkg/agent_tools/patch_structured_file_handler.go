@@ -21,7 +21,18 @@ func (h *patchStructuredFileHandler) Definition() ToolDefinition {
 		Required:    []string{"path"},
 		Parameters: []ParameterDef{
 			{Name: "path", Type: "string", Required: true, Description: "Path to the structured file"},
-			{Name: "patch_ops", Type: "array", Description: "JSON Patch operations array"},
+			{Name: "patch_ops", Type: "array", Description: "JSON Patch operations array",
+				Items: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"op":    map[string]any{"type": "string", "description": "Patch operation: add, replace, remove, or test (required)"},
+						"path":  map[string]any{"type": "string", "description": "JSON Pointer target path (required)"},
+						"value": map[string]any{"description": "Value to set (for add/replace)"},
+						"from":  map[string]any{"type": "string", "description": "Source path (for move/copy)"},
+						"test":  map[string]any{"description": "Expected value to assert (for test)"},
+					},
+					"required": []any{"op", "path"},
+				}},
 			{Name: "data", Type: "object", Description: "Full-document payload (treated as write if no patch_ops)"},
 			{Name: "format", Type: "string", Description: "Format override: json or yaml (inferred from extension)"},
 			{Name: "schema", Type: "object", Description: "JSON Schema subset for validation after patch"},

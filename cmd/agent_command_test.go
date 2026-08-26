@@ -160,6 +160,17 @@ func TestShouldPreloadLocalModel_DaemonReachable(t *testing.T) {
 			t.Error("shouldPreloadLocalModel() = false, want true: workflow runs never route through tryDaemonOneShot")
 		}
 	})
+
+	t.Run("jsonOut: daemon serves it (socket carries output format), skip preload", func(t *testing.T) {
+		daemonMode = false
+		agentWorkflowConfig = ""
+		origJSON := outputFormatJSON
+		outputFormatJSON = true
+		defer func() { outputFormatJSON = origJSON }()
+		if shouldPreloadLocalModel() {
+			t.Error("shouldPreloadLocalModel() = true, want false: --output-json one-shots route through the daemon (SP-136 P4 carries the output format over the socket), so the daemon serves this query")
+		}
+	})
 }
 
 // TestIsDaemonReachableForAgentRouting_RealRoundTrip verifies the health

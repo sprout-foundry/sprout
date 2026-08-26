@@ -21,6 +21,23 @@ func (a *Agent) TriggerInterrupt() {
 	if cancel != nil {
 		cancel()
 	}
+	// Preempt running subagents too. The ctx cancellation above propagates
+	// to their in-flight LLM calls, but a wedged subagent (retry cascade,
+	// stuck tool) never surfaces it; CancelSubagent additionally fires the
+	// subagent's own interrupt and tears down its run context so runTask's
+	// 5s cancellation window can reclaim the parent's turn. Without this,
+	// Ctrl+C during a hung subagent leaves the turn blocked until the
+	// subagent's 30-minute timeout.
+	a.cancelRunningSubagents()
+}
+
+// cancelRunningSubagents preempts every active subagent owned by this
+// agent's runner. Nil-safe and safe when no runner/subagents exist.
+func (a *Agent) cancelRunningSubagents() {
+	if a.subagentRunner == nil {
+		return
+	}
+	a.subagentRunner.CancelAll()
 }
 
 // CheckForInterrupt checks if an interrupt was requested

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -149,8 +150,9 @@ func (a *Agent) PublishRateLimited(ev *events.RateLimitedEvent) {
 
 // publishRetryEvent emits metrics updates for retry events with the
 // error category label. This is called from the provider retry loop
-// in seed_provider.go on each retry attempt.
-func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider string) {
+// in seed_provider.go on each retry attempt. willRetry reports whether
+// another attempt will actually follow (false on the final failure).
+func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider string, willRetry bool) {
 	if err == nil || a.eventBus == nil {
 		return
 	}
@@ -185,6 +187,25 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 			Message:     err.Error(),
 		})
 	}
+
+	// Visible per-attempt notice. The metrics event above only reaches the
+	// status footer; during subagent runs a retry loop can otherwise churn
+	// for many minutes with no terminal output at all. The terminal
+	// subscriber renders non-tool_log categories mid-turn via PrintExternal
+	// (steer-panel safe); tool_log is suppressed there.
+	msg := err.Error()
+	if len(msg) > 160 {
+		msg = msg[:159] + "…"
+	}
+	status := "retrying"
+	if !willRetry {
+		status = "giving up"
+	}
+	a.publishEvent(
+		events.EventTypeAgentMessage,
+		events.AgentMessageEvent("provider_retry",
+			fmt.Sprintf("LLM request failed (%s), %s attempt %d/%d: %s", category, status, attempt+1, maxRetries+1, msg), nil),
+	)
 }
 
 // PublishEvent publishes an event through the agent's event bus with metadata decoration.

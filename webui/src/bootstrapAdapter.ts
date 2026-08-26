@@ -12,7 +12,7 @@
 
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
-import type { RuntimeConfig } from './types/runtimeConfig';
+import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
 
 /** Shape of the JSON returned by /api/bootstrap (all fields optional). */
 interface BootstrapResponse {
@@ -31,6 +31,8 @@ interface BootstrapResponse {
   };
   /** URLs of external plugin script bundles (IIFE) to load after adapter installation. */
   pluginScripts?: string[];
+  /** Workspace git snapshot (ETH-1). Absent/null when the daemon could not determine it. */
+  sync?: GitSyncReport | null;
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
@@ -85,6 +87,21 @@ let currentUserIdentity: { id: string; email: string; tier: string } | undefined
  */
 export function getBootstrapUser(): { id: string; email: string; tier: string } | undefined {
   return currentUserIdentity;
+}
+
+/**
+ * Most recently resolved workspace git snapshot (ETH-1 sync-on-resume) from
+ * the bootstrap response. null when the platform/daemon did not provide one
+ * or bootstrap has not resolved yet — callers wanting fresher state should
+ * hit GET /api/sync directly.
+ */
+let currentSyncSnapshot: GitSyncReport | null | undefined;
+
+/**
+ * Return the boot-time git snapshot, or null when unavailable.
+ */
+export function getBootstrapSync(): GitSyncReport | null {
+  return currentSyncSnapshot ?? null;
 }
 
 /**
@@ -181,9 +198,11 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         sharedMode: data.sharedMode ?? false,
         navItems: data.navItems,
         user: data.user,
+        sync: data.sync,
       };
       lastConfig = config;
       currentUserIdentity = config.user;
+      currentSyncSnapshot = data.sync;
       // eslint-disable-next-line no-console
       await installAdapterForConfig(config);
 

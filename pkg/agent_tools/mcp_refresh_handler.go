@@ -63,6 +63,7 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 				Name:        "args",
 				Type:        "array",
 				Description: "Command arguments (optional, for add)",
+				Items:       map[string]any{"type": "string"},
 			},
 			{
 				Name:        "env",

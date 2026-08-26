@@ -124,6 +124,12 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 
 	// Add tools if provided
 	if len(tools) > 0 {
+		// Defense in depth for strict function-calling validators (Gemini 3.x):
+		// fill any array property missing "items" so the request is always
+		// well-formed. No-op for providers that haven't opted in.
+		if p.config.Conversion.FillMissingArrayItems {
+			tools = fillMissingArrayItems(tools, p.config.Conversion.ArrayItemsFallback)
+		}
 		if p.config.Conversion.CacheControl {
 			// Convert tools to map form so we can attach cache_control to the
 			// last tool, marking the tool definitions as cacheable prefix.

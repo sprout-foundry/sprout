@@ -161,6 +161,12 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 // being parked indefinitely.
 const maxBackgroundWaitSeconds = 600
 
+// maxWakeupTimeoutSeconds caps the wakeup_timeout parameter on background
+// shell sessions. Same value as maxBackgroundWaitSeconds: long enough to be
+// a useful "check back later" deadline for multi-hour workflows, short enough
+// that a typo'd value can't park the agent or overflow time.Duration.
+const maxWakeupTimeoutSeconds = 600
+
 // backgroundWaitTick is the internal polling interval used while waiting for
 // a background session to exit. It only touches in-process state (session
 // flag, file size) so it doesn't burn LLM tokens — the cost lives entirely

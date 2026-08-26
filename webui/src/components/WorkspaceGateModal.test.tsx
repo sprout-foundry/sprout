@@ -130,6 +130,36 @@ describe('WorkspaceGateModal', () => {
     expect(props.onConsentHome).toHaveBeenCalledTimes(1);
   });
 
+  // The consent handler is fire-and-forget in AppContent; a rejected promise
+  // used to vanish as an unhandled rejection, leaving the button looking dead
+  // with the modal still up. The modal must catch it and explain itself.
+  it('surfaces an inline error when the consent handler rejects', async () => {
+    const props = renderModal({
+      onConsentHome: vi.fn().mockRejectedValue(new Error('daemon stalled')),
+    });
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('.workspace-gate-home-btn')!.click();
+    });
+    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    expect(err).not.toBeNull();
+    expect(err!.textContent).toContain('daemon stalled');
+    expect(props.onConsentHome).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces an inline error when a workspace selection rejects', async () => {
+    const props = renderModal({
+      onSelectWorkspace: vi.fn().mockRejectedValue(new Error('query_in_progress')),
+    });
+    const row = findRowByPath('~/dev/myapp');
+    await act(async () => {
+      row!.click();
+    });
+    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    expect(err).not.toBeNull();
+    expect(err!.textContent).toContain('query_in_progress');
+    expect(props.onSelectWorkspace).toHaveBeenCalledTimes(1);
+  });
+
   it('calls onSelectWorkspace when a project row is clicked', () => {
     const props = renderModal();
     // WorkspacePicker expands the home prefix (~/dev/myapp) for display,

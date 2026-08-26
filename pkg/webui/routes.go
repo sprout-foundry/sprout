@@ -198,6 +198,13 @@ func (ws *ReactWebServer) registerSyncRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
+	// ETH-1 sync-on-resume: workspace git reconciliation report (same JSON
+	// as `sprout sync`). Exact-match pattern — it does not collide with the
+	// /api/sync/op|batch|status agent file-sync routes registered in
+	// registerSyncRoutes. Method semantics are load-bearing: GET/HEAD is
+	// status-only (unauthenticated through the auth middleware), POST is
+	// the only method that may pull — see handleAPISync.
+	mux.HandleFunc("/api/sync", ws.handleAPISync)
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
 	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)
 	mux.HandleFunc("/api/git/unstage", ws.handleAPIGitUnstage)

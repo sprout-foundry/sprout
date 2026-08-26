@@ -105,6 +105,13 @@ const taskEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'List/create user tasks (webui compatibility)',
   },
+  {
+    path: '/api/tasks/',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Get task status/details by id',
+  },
 ];
 
 // --- Settings & Configuration ---

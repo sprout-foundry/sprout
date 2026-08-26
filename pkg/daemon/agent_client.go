@@ -49,42 +49,17 @@ func (c *AgentClient) do(ctx context.Context, req AgentRequest) (*AgentResponse,
 			c.conn = conn
 		}
 
-		c.conn.mu.Lock()
-		payload, err := json.Marshal(req)
-		if err == nil {
-			deadline := time.Now().Add(DefaultRemoteSocketTimeout)
-			if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-				deadline = d
-			}
-			err = c.conn.conn.SetDeadline(deadline)
-			if err == nil {
-				_, err = c.conn.rw.Write(append(payload, '\n'))
-			}
-			if err == nil {
-				err = c.conn.rw.Flush()
-			}
-			if err == nil {
-				var line []byte
-				line, err = c.conn.rw.ReadBytes('\n')
-				if err == nil {
-					var resp AgentResponse
-					err = json.Unmarshal(line, &resp)
-					if err == nil {
-						if resp.ID != req.ID {
-							err = fmt.Errorf("agent response ID mismatch: got %q want %q", resp.ID, req.ID)
-						} else if resp.Error != "" {
-							err = errors.New(resp.Error)
-						} else {
-							c.conn.mu.Unlock()
-							return &resp, nil
-						}
-					}
-				}
-			}
+		resp, err := c.exchange(ctx, req)
+		if resp != nil {
+			// A complete, ID-matched response is a successful protocol
+			// exchange even when it carries an error — the error IS the
+			// answer. Retrying would re-execute the whole request on the
+			// daemon (double LLM cost, repeated tool side effects).
+			return resp, err
 		}
-		c.conn.mu.Unlock()
 
-		// Connection failed — drop it, retry once with a fresh dial.
+		// Transport-level failure — drop the connection, retry once with a
+		// fresh dial (the daemon may have restarted).
 		_ = c.conn.close()
 		c.conn = nil
 		if attempt == 0 {
@@ -95,12 +70,55 @@ func (c *AgentClient) do(ctx context.Context, req AgentRequest) (*AgentResponse,
 	return nil, errors.New("agent client: unreachable")
 }
 
+// exchange performs one request/response round-trip on the current
+// connection. It returns (nil, err) on transport failure (retryable) and
+// (resp, nil) or (resp, err) once a complete, ID-matched response arrives
+// (terminal — never retried).
+func (c *AgentClient) exchange(ctx context.Context, req AgentRequest) (*AgentResponse, error) {
+	c.conn.mu.Lock()
+	defer c.conn.mu.Unlock()
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal agent request: %w", err)
+	}
+	deadline := time.Now().Add(DefaultRemoteSocketTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	if err := c.conn.conn.SetDeadline(deadline); err != nil {
+		return nil, fmt.Errorf("set socket deadline: %w", err)
+	}
+	if _, err := c.conn.rw.Write(append(payload, '\n')); err != nil {
+		return nil, fmt.Errorf("write agent request: %w", err)
+	}
+	if err := c.conn.rw.Flush(); err != nil {
+		return nil, fmt.Errorf("flush agent request: %w", err)
+	}
+
+	line, err := c.conn.rw.ReadBytes('\n')
+	if err != nil {
+		return nil, fmt.Errorf("read agent response: %w", err)
+	}
+	var resp AgentResponse
+	if err := json.Unmarshal(line, &resp); err != nil {
+		return nil, fmt.Errorf("decode agent response: %w", err)
+	}
+	if resp.ID != req.ID {
+		return nil, fmt.Errorf("agent response ID mismatch: got %q want %q", resp.ID, req.ID)
+	}
+	if resp.Error != "" {
+		return &resp, errors.New(resp.Error)
+	}
+	return &resp, nil
+}
+
 // Query runs a one-shot query on the daemon and returns the final response.
 // workDir is the caller's working directory, required so the daemon (a
 // single long-lived process that may serve many different projects over its
 // lifetime) scopes tool execution to the right one.
-func (c *AgentClient) Query(ctx context.Context, prompt, workDir string) (string, error) {
-	resp, err := c.do(ctx, AgentRequest{Op: AgentOpQuery, Prompt: prompt, WorkDir: workDir})
+func (c *AgentClient) Query(ctx context.Context, prompt, workDir string, opts QueryOptions) (string, error) {
+	resp, err := c.do(ctx, AgentRequest{Op: AgentOpQuery, Prompt: prompt, WorkDir: workDir, Options: &opts})
 	if err != nil {
 		return "", err
 	}
@@ -134,9 +152,9 @@ func (c *AgentClient) SwitchSession(ctx context.Context, sessionID string) (*Ses
 	return resp.Session, nil
 }
 
-// ExecuteTool invokes a tool on the daemon.
-func (c *AgentClient) ExecuteTool(ctx context.Context, name string, args map[string]any) (*ToolResult, error) {
-	resp, err := c.do(ctx, AgentRequest{Op: AgentOpExecuteTool, Tool: name, ToolArgs: args})
+// ExecuteTool invokes a tool on the daemon, scoped to the caller's workDir.
+func (c *AgentClient) ExecuteTool(ctx context.Context, name string, args map[string]any, workDir string) (*ToolResult, error) {
+	resp, err := c.do(ctx, AgentRequest{Op: AgentOpExecuteTool, Tool: name, ToolArgs: args, WorkDir: workDir})
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +163,7 @@ func (c *AgentClient) ExecuteTool(ctx context.Context, name string, args map[str
 
 // StreamQuery is Query with streamed events instead of a single result. The
 // call returns after the terminal "done"/"error" event.
-func (c *AgentClient) StreamQuery(ctx context.Context, prompt, workDir string, emit func(StreamEvent) error) error {
+func (c *AgentClient) StreamQuery(ctx context.Context, prompt, workDir string, opts QueryOptions, emit func(StreamEvent) error) error {
 	if err := c.ensureConn(); err != nil {
 		return err
 	}
@@ -158,7 +176,7 @@ func (c *AgentClient) StreamQuery(ctx context.Context, prompt, workDir string, e
 		return fmt.Errorf("set socket deadline: %w", err)
 	}
 
-	req := AgentRequest{Op: AgentOpStreamQuery, Prompt: prompt, WorkDir: workDir}
+	req := AgentRequest{Op: AgentOpStreamQuery, Prompt: prompt, WorkDir: workDir, Options: &opts}
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal stream request: %w", err)

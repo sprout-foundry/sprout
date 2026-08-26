@@ -221,16 +221,18 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_SystemPrefixWarn(t *testing.T
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
 	logCaptureMu.Lock()
-	defer logCaptureMu.Unlock()
 	var buf bytes.Buffer
 	prevWriter := log.Writer()
 	prevFlags := log.Flags()
 	log.SetOutput(&buf)
 	log.SetFlags(0)
-	t.Cleanup(func() {
+	// Restore the global log state while still holding the lock so a waiting
+	// test can never observe (or have stomped by cleanup) the swapped writer.
+	defer func() {
 		log.SetOutput(prevWriter)
 		log.SetFlags(prevFlags)
-	})
+		logCaptureMu.Unlock()
+	}()
 
 	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
@@ -445,16 +447,18 @@ func TestValidate_StepAllowedPaths_WorkflowStepConflictDifferentModes(t *testing
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
 	logCaptureMu.Lock()
-	defer logCaptureMu.Unlock()
 	var buf bytes.Buffer
 	prevWriter := log.Writer()
 	prevFlags := log.Flags()
 	log.SetOutput(&buf)
 	log.SetFlags(0)
-	t.Cleanup(func() {
+	// Restore the global log state while still holding the lock so a waiting
+	// test can never observe (or have stomped by cleanup) the swapped writer.
+	defer func() {
 		log.SetOutput(prevWriter)
 		log.SetFlags(prevFlags)
-	})
+		logCaptureMu.Unlock()
+	}()
 
 	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
@@ -567,16 +571,18 @@ func TestValidate_InitialAllowedPaths_SystemPrefixWarn(t *testing.T) {
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
 	logCaptureMu.Lock()
-	defer logCaptureMu.Unlock()
 	var buf bytes.Buffer
 	prevWriter := log.Writer()
 	prevFlags := log.Flags()
 	log.SetOutput(&buf)
 	log.SetFlags(0)
-	t.Cleanup(func() {
+	// Restore the global log state while still holding the lock so a waiting
+	// test can never observe (or have stomped by cleanup) the swapped writer.
+	defer func() {
 		log.SetOutput(prevWriter)
 		log.SetFlags(prevFlags)
-	})
+		logCaptureMu.Unlock()
+	}()
 
 	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {
@@ -618,16 +624,18 @@ func TestValidate_InitialAllowedPaths_WorkflowInitialConflictDifferentModes(t *t
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
 	logCaptureMu.Lock()
-	defer logCaptureMu.Unlock()
 	var buf bytes.Buffer
 	prevWriter := log.Writer()
 	prevFlags := log.Flags()
 	log.SetOutput(&buf)
 	log.SetFlags(0)
-	t.Cleanup(func() {
+	// Restore the global log state while still holding the lock so a waiting
+	// test can never observe (or have stomped by cleanup) the swapped writer.
+	defer func() {
 		log.SetOutput(prevWriter)
 		log.SetFlags(prevFlags)
-	})
+		logCaptureMu.Unlock()
+	}()
 
 	cfg, err := LoadAgentWorkflowConfig(path)
 	if err != nil {

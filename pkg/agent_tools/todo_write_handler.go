@@ -18,7 +18,23 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 		Description: "Create and manage a structured task list for the current coding session.",
 		Required:    []string{"todos"},
 		Parameters: []ParameterDef{
-			{Name: "todos", Type: "array", Required: true, Description: "Array of todo items: [{content, status, activeForm?, priority?, id?}]. `content` is the imperative task description; `activeForm` is the present-continuous phrasing shown in the activity indicator while in_progress (e.g. content \"Implement X\" → activeForm \"Implementing X\"). `priority` is high/medium/low (visual hint only)."},
+			{
+				Name:        "todos",
+				Type:        "array",
+				Required:    true,
+				Description: "Array of todo items: [{content, status, activeForm?, priority?, id?}]. `content` is the imperative task description; `activeForm` is the present-continuous phrasing shown in the activity indicator while in_progress (e.g. content \"Implement X\" → activeForm \"Implementing X\"). `priority` is high/medium/low (visual hint only).",
+				Items: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"content":    map[string]any{"type": "string", "description": "Imperative task description"},
+						"status":     map[string]any{"type": "string", "enum": []any{"pending", "in_progress", "completed", "cancelled"}, "description": "Todo status"},
+						"activeForm": map[string]any{"type": "string", "description": "Present-continuous phrasing shown while in_progress"},
+						"priority":   map[string]any{"type": "string", "enum": []any{"high", "medium", "low"}, "description": "Priority (visual hint only)"},
+						"id":         map[string]any{"type": "string", "description": "Optional stable ID for the todo"},
+					},
+					"required": []any{"content", "status"},
+				},
+			},
 		},
 	}
 }

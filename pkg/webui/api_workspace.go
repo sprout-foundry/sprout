@@ -223,16 +223,6 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Reject workspace changes only for the window that currently owns an active run.
-	if ws.hasActiveQueryForClient(clientID) {
-		writeJSON(w, http.StatusConflict, map[string]interface{}{
-			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
-			"code":           "query_in_progress",
-			"active_queries": 1,
-		})
-		return
-	}
-
 	// Home-workspace consent gate (SP-130): selecting the home directory as
 	// the workspace is an intentional, high-blast-radius choice (the agent
 	// gains access to all files under ~). Require explicit consent on the
@@ -245,6 +235,13 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	// this gate and only gets caught by the defense-in-depth check in
 	// setClientWorkspaceRoot, which returns a generic error instead of the
 	// structured consent error the frontend expects).
+	//
+	// Consent is recorded BEFORE the active-query check below. The gate UI
+	// dismisses on consent alone (GET computes needs_workspace_selection
+	// from the consent file, not from the workspace state), and the modal
+	// blocks every other control — if a query were stuck active, rejecting
+	// here would leave the user trapped behind an undismissable overlay
+	// with no way to record the very consent they just granted.
 	if !ws.isSSHProxyRequest(r) {
 		if canonicalPath, cerr := filepathAbsEval(req.Path); cerr == nil {
 			if isHomeWorkspace(canonicalPath) && !hasHomeWorkspaceConsent() {
@@ -261,6 +258,16 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 				}
 			}
 		}
+	}
+
+	// Reject workspace changes only for the window that currently owns an active run.
+	if ws.hasActiveQueryForClient(clientID) {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
+			"code":           "query_in_progress",
+			"active_queries": 1,
+		})
+		return
 	}
 
 	// Capture the previous workspace root before setting the new one

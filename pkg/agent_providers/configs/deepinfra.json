@@ -734,6 +734,17 @@
         ]
       },
       {
+        "context_length": 131072,
+        "description": "Nano Banana Pro (Gemini 3 Pro Image) is designed to tackle the most challenging image generation by incorporating state-of-the-art reasoning capabilities. It is the best model for complex and multi-turn image generation and editing.",
+        "id": "google/gemini-3-pro-image",
+        "input_cost": 0,
+        "name": "google/gemini-3-pro-image",
+        "output_cost": 0,
+        "tags": [
+          "image-gen"
+        ]
+      },
+      {
         "context_length": 1000000,
         "description": "Gemini 3.5 Flash delivers near-Pro intelligence at Flash-tier cost and speed: Pro-level coding proficiency, parallel agentic execution, all at a much lower price.",
         "id": "google/gemini-3.5-flash",
@@ -1358,6 +1369,13 @@
       }
     ],
     "model_overrides": {
+      "google/gemini-2.5-flash": 1048576,
+      "google/gemini-2.5-pro": 1048576,
+      "google/gemini-3-pro-image": 131072,
+      "google/gemini-3.1-flash-lite": 1048576,
+      "google/gemini-3.1-pro": 1048576,
+      "google/gemini-3.5-flash": 1048576,
+      "google/gemini-3.7-flash": 1048576,
       "Qwen/Qwen2.5-72B-Instruct": 32768,
       "meta-llama/Llama-3-70B-Instruct": 8192,
       "meta-llama/Llama-3.1-405B-Instruct": 131072,

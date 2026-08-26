@@ -20,6 +20,7 @@ type AgentResult struct {
 	Status         string             `json:"status"`                     // "success" or "error"
 	Error          string             `json:"error,omitempty"`            // error message if status=="error"
 	Query          string             `json:"query"`                      // the original prompt
+	Response       string             `json:"response,omitempty"`         // final assistant response text (success runs with an in-process agent)
 	FilesModified  []string           `json:"files_modified,omitempty"`   // files changed during execution
 	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
@@ -96,6 +97,12 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Error = runErr.Error()
 	} else {
 		result.Status = "success"
+		// Only on success: on an error run the last assistant message may
+		// belong to an earlier turn in a resumed session, which is not this
+		// query's response.
+		if a != nil {
+			result.Response = lastAssistantResponse(a)
+		}
 	}
 
 	// Collect git diff (best-effort)
@@ -235,4 +242,19 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 			_ = stdoutEnc.Encode(result) // best-effort; nothing more we can do
 		}
 	}
+}
+
+// lastAssistantResponse returns the content of the most recent assistant
+// message with non-empty content, walking the conversation history in
+// reverse. Tool-only assistant messages (empty content + ToolCalls) are
+// skipped so the envelope carries the user-visible final answer, not an
+// intermediate tool-call turn.
+func lastAssistantResponse(a *agent.Agent) string {
+	msgs := a.GetMessages()
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "assistant" && strings.TrimSpace(msgs[i].Content) != "" {
+			return msgs[i].Content
+		}
+	}
+	return ""
 }

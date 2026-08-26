@@ -23,6 +23,18 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	// Home-workspace hardening (SP-130). When the workspace root resolves
+	// to the user's home directory without explicit consent, refuse the
+	// listing. In daemon/service mode the CWD-derived workspace IS $HOME
+	// until the user picks a project, and each directory listing of a
+	// TCC-protected folder (Documents, Music, …) raises a macOS privacy
+	// prompt. The frontend shows the workspace gate instead; until a
+	// real workspace is selected there is nothing legitimate to browse.
+	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
+			"Workspace is the home directory and no consent was granted; select a workspace first")
+		return
+	}
 	// Get directory from query parameter
 	dir := strings.TrimSpace(r.URL.Query().Get("path"))
 	if dir == "" {

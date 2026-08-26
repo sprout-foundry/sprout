@@ -79,6 +79,17 @@ type ParameterDef struct {
 	Type        string `json:"type"`
 	Required    bool   `json:"required"`
 	Description string `json:"description"`
+
+	// Items is the JSON schema for this parameter's elements; only used
+	// when Type is "array". It is serialized into the outgoing
+	// function-calling schema as the `items` key.
+	//
+	// Every array parameter MUST declare Items: Gemini 3.x strict
+	// function-calling validation rejects the entire request (HTTP 400 via
+	// OpenRouter) when any array property lacks `items`. Gemini 2.5 and
+	// other providers tolerated the omission. Enforced by
+	// TestToolSchemas_ArrayParametersHaveItems.
+	Items map[string]any `json:"items,omitempty"`
 }
 
 // ToolEnv provides the execution context for a tool without coupling to *Agent.

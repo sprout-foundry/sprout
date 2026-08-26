@@ -47,10 +47,14 @@ var (
 	agentSubagentProvider      string
 	agentResourceDirectory     string
 	agentWorkflowConfig        string
-	agentNoConnectionCheck     bool
-	agentTraceDatasetDir       string
-	agentPromptStdin           bool
-	agentRiskProfile           string
+	// Path of the detached-run session record to finalize on exit. Only
+	// `automate run --detach` sets it (via --automate-session-file); an
+	// empty value means this process owns no session record.
+	agentAutomateSessionFile string
+	agentNoConnectionCheck   bool
+	agentTraceDatasetDir     string
+	agentPromptStdin         bool
+	agentRiskProfile         string
 	// Workflow budget overrides — populated from CLI flags on `sprout
 	// automate` and applied on top of the workflow JSON's budget block.
 	// Only positive values apply; pass 0 (or omit) to inherit the workflow
@@ -163,8 +167,29 @@ func shouldPreloadLocalModel() bool {
 // the command errors out before ever reaching tryDaemonOneShot anyway, so
 // treating "flag set" as "won't route" never skips a preload that had
 // something to fall back on.
+//
+// These flags can't travel the wire protocol today; routing would silently
+// drop them, so run in-process where they're honored. agentAutomateSessionFile
+// is in the same class: the detached automate child owns finalizing its own
+// session record, which a daemon-routed query would never do.
 func agentSkipDaemonRouting() bool {
-	return agentWorkflowConfig != ""
+	return agentWorkflowConfig != "" ||
+		agentAutomateSessionFile != "" ||
+		agentSessionID != "" ||
+		agentLastSession ||
+		agentSystemPrompt != "" ||
+		agentSystemPromptFile != "" ||
+		agentDryRun ||
+		agentUnsafe ||
+		agentUnsafeShell ||
+		agentNoSubagents ||
+		agentSubagentModel != "" ||
+		agentSubagentProvider != "" ||
+		agentResourceDirectory != "" ||
+		agentBudgetUSD != 0 ||
+		agentTraceDatasetDir != "" ||
+		agentMockLLM ||
+		noProjectSkills
 }
 
 func createChatAgent() (*agent.Agent, error) {
@@ -313,6 +338,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
+	agentCmd.Flags().StringVar(&agentAutomateSessionFile, "automate-session-file", "", "Session record JSON path to finalize when this run exits (set by 'automate run --detach'; empty = no finalization)")
 	agentCmd.Flags().Float64Var(&agentBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
 	agentCmd.Flags().StringVar(&agentBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")
@@ -440,7 +466,20 @@ Examples:
   # Disable web UI
   sprout agent --no-web-ui "Analyze this code"`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
+		// Detached automate runs self-finalize: the launcher exited right
+		// after spawning us, so nobody else will ever record how this run
+		// ended. Registered before agent creation on purpose — a child that
+		// dies during provider bootstrap is still a failing run and must
+		// record exit 1, not stay "running" forever. Force-quit os.Exit
+		// paths (second Ctrl+C, 5s shutdown timeout) skip defers entirely;
+		// those records fall back to PID-liveness "exited".
+		if agentAutomateSessionFile != "" {
+			defer func() {
+				finalizeAutomateSession(agentAutomateSessionFile, err)
+			}()
+		}
+
 		// `sprout agent --help-all` (without -h) lists every flag, then exits.
 		if maybeRenderAgentHelpAll(cmd) {
 			return nil

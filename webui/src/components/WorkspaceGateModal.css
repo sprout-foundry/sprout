@@ -6,8 +6,17 @@
   inset: 0;
   z-index: 9999;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Top-align content when taller than the viewport. `align-items: center`
+   * on the scroll container itself clips the overflow above the scroll
+   * origin (classic flexbox centering bug) — the top of the dialog becomes
+   * unreachable when the project list is long. Centering instead happens
+   * on the content box, which is constrained to the viewport via
+   * max-height, so the scroll container never has to scroll at all when
+   * the dialog fits, and scrolls cleanly from the very top when it
+   * doesn't. */
+  justify-content: flex-start;
   /* Scrim: tint the primary background and blur the app behind it. */
   background: color-mix(in srgb, var(--bg-primary) 90%, transparent);
   backdrop-filter: blur(4px);
@@ -22,13 +31,58 @@
   box-shadow: var(--shadow-elevated);
   max-width: 560px;
   width: 100%;
+  /* Never taller than the scroll container's padding box; lets the inner
+   * sections own their own scrolling instead of overflowing the card. */
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  margin: auto 0;
   padding: var(--space-12);
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+/* The picker (and the inline browser) scroll inside the card, under the
+ * fixed header and home-consent footer. This is the single scroll region
+ * for the modal body; the overlay itself never scrolls when the dialog
+ * fits. */
+.workspace-gate-content > .workspace-picker,
+.workspace-gate-content > .workspace-browser {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Neutralize the picker's standalone-page styling: inside the gate it is
+   * a card section, not a page. The modal provides the padding; the picker
+   * provides the list. */
+  padding: 0;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+/* The picker's browse button is pinned to the bottom of the scroll region
+ * by margin-top:auto on a full-height flex column; inside the gate that
+ * would stretch it to the card's full height. Undo it. */
+.workspace-gate-content > .workspace-picker .workspace-picker-browse-btn {
+  margin-top: 0;
+}
+
+/* The inline browser caps its list at 240px standalone; inside the gate it
+ * should fill the card instead, so there is exactly one scroll region (the
+ * list), not a capped list inside a scrolling card. */
+.workspace-gate-content > .workspace-browser {
+  overflow-y: visible;
+}
+
+.workspace-gate-content > .workspace-browser .workspace-browser-list {
+  flex: 1 1 auto;
+  max-height: none;
 }
 
 .workspace-gate-header {
   display: flex;
   gap: var(--space-6);
   margin-bottom: var(--space-10);
+  flex-shrink: 0;
 }
 
 .workspace-gate-header-icon {
@@ -57,9 +111,39 @@
   padding-top: var(--space-8);
   border-top: 1px solid var(--border-subtle);
   text-align: center;
+  flex-shrink: 0;
+}
+
+/* Inline error shown when the consent/select POST fails (e.g. daemon
+ * stall, 409 query_in_progress). The gate overlay sits above the app's
+ * toast layer (z-index 2000 < 9999), so errors MUST render inside the
+ * modal — a toast would be invisible behind the scrim. */
+.workspace-gate-error {
+  margin: var(--space-4) 0 0 0;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--accent-error);
+  border-radius: var(--radius-md);
+  background: var(--bg-error);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  text-align: left;
+  word-break: break-word;
+}
+
+/* While a consent/select request is in flight the list is read-only:
+ * prevents double-submits racing the reload. */
+.workspace-gate-content.is-busy .workspace-picker,
+.workspace-gate-content.is-busy .workspace-browser {
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 .workspace-gate-home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   background: transparent;
   border: 1px solid var(--border-default);
   color: var(--text-secondary);
@@ -72,6 +156,21 @@
     background 0.15s ease,
     color 0.15s ease,
     border-color 0.15s ease;
+}
+
+.workspace-gate-home-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.workspace-gate-btn-spin {
+  animation: workspace-gate-spin 1s linear infinite;
+}
+
+@keyframes workspace-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workspace-gate-home-btn:hover {
@@ -90,4 +189,16 @@
   color: var(--text-tertiary);
   margin: var(--space-4) 0 0 0;
   line-height: 1.4;
+}
+
+/* Small viewports: reclaim the overlay padding so the card has room to
+ * breathe; the card keeps its own inner padding. */
+@media (max-width: 640px) {
+  .workspace-gate-overlay {
+    padding: var(--space-4);
+  }
+
+  .workspace-gate-content {
+    padding: var(--space-8);
+  }
 }

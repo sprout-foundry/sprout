@@ -203,7 +203,7 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 		// Record the error for observability and emit retry event.
 		sp.recordProviderError(err, attempt)
 		if sp.agent != nil && sp.agent.eventBus != nil {
-			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), attempt < maxRetries && isRetryableProviderError(err))
 		}
 
 		// Check if this error is retryable. If not, fail immediately.
@@ -593,7 +593,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		// Record the error for observability and emit retry event.
 		sp.recordProviderError(err, attempt)
 		if sp.agent != nil && sp.agent.eventBus != nil {
-			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider())
+			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), attempt < maxRetries && isRetryableProviderError(err))
 		}
 
 		// Check if this error is retryable. If not, fail immediately.

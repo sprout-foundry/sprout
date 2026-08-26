@@ -354,6 +354,40 @@ func TestHandleAPIWorkspaceSet_HomeWithConsent(t *testing.T) {
 	}
 }
 
+// TestHandleAPIWorkspaceSet_ConsentRecordedEvenWhenQueryActive verifies that
+// the home-consent branch runs before the active-query 409. The gate modal
+// dismisses on consent alone: GET /api/workspace computes
+// needs_workspace_selection from the consent file, not from workspace state,
+// and the overlay blocks every other control. If a stuck query could 409 the
+// consent POST before the consent is persisted, the user would be trapped
+// behind an undismissable modal.
+func TestHandleAPIWorkspaceSet_ConsentRecordedEvenWhenQueryActive(t *testing.T) {
+	ws, resolvedHome := newHomeWorkspaceServer(t)
+
+	// Simulate a query stuck active on the client context (the daemon-stall
+	// symptom: ActiveQuery never cleared).
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
+	ctx.WorkspaceRoot = resolvedHome
+	ctx.ActiveQuery = true
+	ws.mutex.Unlock()
+
+	body := `{"path": "` + resolvedHome + `", "consent_home": true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	ws.handleAPIWorkspaceSet(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 from the workspace-switch branch, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The consent must nevertheless have been persisted — this is what lets
+	// the gate dismiss (and the reload clear the modal) despite the 409.
+	if !hasHomeWorkspaceConsent() {
+		t.Error("expected consent to be recorded before the active-query 409")
+	}
+}
+
 // keysOf returns the map keys of a map[string]interface{} for diagnostics.
 func keysOf(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))

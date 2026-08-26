@@ -32,6 +32,7 @@ export interface BrowserGitConfig {
   email?: string;
   readVfsFiles: () => Promise<Array<{ path: string; content: string }>>;
   writeVfsFiles: (files: Array<{ path: string; content: string }>) => Promise<void>;
+  deleteVfsFiles?: (paths: string[]) => Promise<void>;
 }
 
 let config: BrowserGitConfig | null = null;
@@ -39,6 +40,15 @@ let config: BrowserGitConfig | null = null;
 export function configureBrowserGit(cfg: BrowserGitConfig) {
   config = cfg;
   repoInitialized = false;
+}
+
+/**
+ * The VFS bridge configureBrowserGit was called with, or null when browser
+ * git was never wired up (local mode / pre-bootstrap). The ETH-2 txn path
+ * uses it to enumerate files for push and write pulled files back.
+ */
+export function getBrowserGitVfsBridge(): BrowserGitConfig | null {
+  return config;
 }
 
 async function ensureDir(path: string) {

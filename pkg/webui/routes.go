@@ -198,6 +198,17 @@ func (ws *ReactWebServer) registerSyncRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
+	// ETH-2 transactional escalation: the container-side execution surface
+	// the platform drives a push/run/pull transaction against. Exact-match
+	// patterns. Method semantics are load-bearing: GET/HEAD on /api/txn/status
+	// is read-only (unauthenticated through the auth middleware); the three
+	// POSTs mutate or execute and sit behind the Bearer boundary — see
+	// api_txn.go.
+	mux.HandleFunc("/api/txn/push", ws.handleAPITxnPush)
+	mux.HandleFunc("/api/txn/run", ws.handleAPITxnRun)
+	mux.HandleFunc("/api/txn/status", ws.handleAPITxnStatus)
+	mux.HandleFunc("/api/txn/pull", ws.handleAPITxnPull)
+
 	// ETH-1 sync-on-resume: workspace git reconciliation report (same JSON
 	// as `sprout sync`). Exact-match pattern — it does not collide with the
 	// /api/sync/op|batch|status agent file-sync routes registered in

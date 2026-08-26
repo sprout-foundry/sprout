@@ -281,6 +281,7 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(exportTrainingCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(customModelCmd)

@@ -126,6 +126,11 @@ export function useAppInitialization({
                         shell.writeFile(f.path, f.content);
                       }
                     },
+                    deleteVfsFiles: async (paths) => {
+                      for (const p of paths) {
+                        shell.deleteFile(p);
+                      }
+                    },
                   });
                 }
               });

@@ -294,6 +294,16 @@ const TESTIDS = {
   'escalation-toast-cloud-task-status': 'escalation-toast-cloud-task-status',
   'escalation-toast-cloud-task-link': 'escalation-toast-cloud-task-link',
   'escalation-toast-cloud-task-error': 'escalation-toast-cloud-task-error',
+
+  // Escalation toast, ETH-2 txn action (run in the cloud container)
+  'escalation-toast-txn': 'escalation-toast-txn',
+  'escalation-toast-txn-progress': 'escalation-toast-txn-progress',
+  'escalation-toast-txn-status': 'escalation-toast-txn-status',
+  'escalation-toast-txn-result': 'escalation-toast-txn-result',
+  'escalation-toast-txn-pulled': 'escalation-toast-txn-pulled',
+  'escalation-toast-txn-skipped': 'escalation-toast-txn-skipped',
+  'escalation-toast-txn-warning': 'escalation-toast-txn-warning',
+  'escalation-toast-txn-error': 'escalation-toast-txn-error',
 } as const;
 
 // Derived set for O(1) coverage lookups

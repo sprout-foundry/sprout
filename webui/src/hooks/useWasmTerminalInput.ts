@@ -59,6 +59,21 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     return `\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${display}\x1b[0m$ `;
   }, []);
 
+  /**
+   * Report a command the WASM shell could not run (exit 127 — no compilers
+   * or runtimes in the browser). useEscalationTriggers listens for this and
+   * offers the transactional cloud run. Only 127s are reported: every other
+   * exit already produced its own terminal output.
+   */
+  const notifyCommandUnavailable = useCallback((command: string, exitCode: number): void => {
+    if (exitCode !== 127) return;
+    window.dispatchEvent(
+      new CustomEvent('sprout:terminal-command', {
+        detail: { command, exitCode: 127 },
+      }),
+    );
+  }, []);
+
   /** Write the prompt to xterm without adding a newline. */
   const writeWasmPrompt = useCallback(() => {
     const term = xtermRef.current;
@@ -200,6 +215,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
               if (shellResult.stderr) {
                 term.write('\x1b[31m' + shellResult.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
               }
+              notifyCommandUnavailable(result, shellResult.exitCode);
             } catch (err) {
               term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
             }
@@ -328,6 +344,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
             if (res.stderr) {
               term.write('\x1b[31m' + res.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
             }
+            notifyCommandUnavailable(cmd, res.exitCode);
           } catch (err) {
             term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
           }
@@ -499,7 +516,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
         }
       }
     },
-    [xtermRef, rewriteWasmLine, writeWasmPrompt],
+    [xtermRef, rewriteWasmLine, writeWasmPrompt, notifyCommandUnavailable],
   );
 
   // ── WASM shell lifecycle ──────────────────────────────────────────

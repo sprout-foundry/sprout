@@ -17,6 +17,15 @@
   }
 }
 
+/* Reduced-motion users (and headless test contexts where rAF throttling
+   freezes CSS animations mid-flight, leaving the element permanently
+   "unstable" for interaction) get the toast fully positioned immediately. */
+@media (prefers-reduced-motion: reduce) {
+  .escalation-toast-overlay {
+    animation: none;
+  }
+}
+
 .escalation-toast {
   background: var(--bg-elevated, #252540);
   border: 1px solid var(--border-default, #3a3a5c);
@@ -97,4 +106,58 @@
 
 .escalation-toast-action:hover {
   opacity: 0.9;
+}
+
+/* ── Mode A inline cloud-task affordance ─────────────────────────────── */
+
+.escalation-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+/* Secondary variant for the cloud-task CTA so the primary Mode B action
+ * stays visually dominant when both are offered. */
+.escalation-toast-action.escalation-toast-action-secondary {
+  background: var(--bg-surface, transparent);
+  color: var(--text-primary, inherit);
+  border: 1px solid var(--border-default, transparent);
+}
+
+.escalation-toast-action.escalation-toast-action-secondary:hover {
+  background: var(--accent-primary-bg-hover, var(--bg-hover));
+  opacity: 1;
+}
+
+.escalation-toast-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary, transparent);
+}
+
+.escalation-toast-task-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, inherit);
+  margin: 0;
+}
+
+.escalation-toast-task-error {
+  font-size: 0.8125rem;
+  color: var(--error-text, inherit);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.escalation-toast-task-link {
+  font-size: 0.8125rem;
+  color: var(--accent-primary, inherit);
+  align-self: flex-start;
 }

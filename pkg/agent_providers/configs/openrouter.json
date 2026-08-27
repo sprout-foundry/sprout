@@ -5739,6 +5739,171 @@
         "tags": [
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.007,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
+        "id": "deepseek/deepseek-v4-flash-vision-exp",
+        "input_cost": 0.22,
+        "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
+        "output_cost": 0.66,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.002,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.2 contributor tier is a reasoning model from Meta designed for developers who want to start building at an even lower cost. It’s meaningfully cheaper than Muse Spark...",
+        "id": "meta/muse-spark-1.2-contributor",
+        "input_cost": 0.1,
+        "name": "Meta: Muse Spark 1.2 Contributor",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participate in its own evolution, M2.7 integrates advanced agentic capabilities through multi-agent...",
+        "id": "minimax/minimax-m2.7:free",
+        "input_cost": 0,
+        "name": "MiniMax: MiniMax M2.7 (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
+        "id": "minimax/minimax-m3:free",
+        "input_cost": 0,
+        "name": "MiniMax: MiniMax M3 (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.044,
+        "context_length": 262144,
+        "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 supports exploring...",
+        "id": "mistralai/devstral-2512",
+        "input_cost": 0.44,
+        "name": "Mistral: Devstral 2 2512",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length...",
+        "id": "mistralai/ministral-8b",
+        "input_cost": 0.11,
+        "name": "Mistral: Ministral 8B",
+        "output_cost": 0.11,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Ox Alpha is a reasoning model designed for coding, sustained agentic work, and production workloads. It is suited for long-horizon software engineering, complex reasoning, and workflows that combine text with...",
+        "id": "stealth/ox-alpha",
+        "input_cost": 0,
+        "name": "Ox Alpha",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 8192,
+        "description": "Hy-MT2-1.8B is a compact 1.8B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided...",
+        "id": "tencent/hy-mt2-1.8b",
+        "input_cost": 0.044,
+        "name": "Tencent: Hy-MT2-1.8B",
+        "output_cost": 0.177
+      },
+      {
+        "context_length": 8192,
+        "description": "Hy-MT2-30B-A3B is Tencent's flagship translation model in the Hy-MT2 family. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and...",
+        "id": "tencent/hy-mt2-30b-a3b",
+        "input_cost": 0.074,
+        "name": "Tencent: Hy-MT2-30B-A3B",
+        "output_cost": 0.295,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 8192,
+        "description": "Hy-MT2-7B is a 7B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided translation.",
+        "id": "tencent/hy-mt2-7b",
+        "input_cost": 0.074,
+        "name": "Tencent: Hy-MT2-7B",
+        "output_cost": 0.295,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
+        "id": "thinkingmachines/inkling-small:free",
+        "input_cost": 0,
+        "name": "Thinking Machines: Inkling Small (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
+        "id": "thinkingmachines/inkling:free",
+        "input_cost": 0,
+        "name": "Thinking Machines: Inkling (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.26,
+        "context_length": 1048576,
+        "description": "This model always redirects to the latest GLM model from Z.ai.",
+        "id": "~z-ai/glm-latest",
+        "input_cost": 1.4,
+        "name": "Z.ai: GLM Latest",
+        "output_cost": 4.4,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

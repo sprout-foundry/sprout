@@ -30,6 +30,11 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === '--ws-url' && i + 1 < args.length) {
     foundryWsUrl = args[i + 1];
     i++;
+  } else if (arg === '--components') {
+    // E-M3: build ONLY the standalone editor + terminal entries with
+    // root base (Sprout Studio serves them at /, not under /webui/).
+    // Output goes to <outputDir>/components/.
+    mode = 'components';
   } else if (arg === '--help' || arg === '-h') {
     console.log('Usage: node build-webui-dist.mjs [options]');
     console.log('');
@@ -61,8 +66,8 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // Validate mode
-if (mode !== 'cloud' && mode !== 'local') {
-  console.error(`Error: Invalid mode '${mode}'. Must be 'cloud' or 'local'.`);
+if (mode !== 'cloud' && mode !== 'local' && mode !== 'components') {
+  console.error(`Error: Invalid mode '${mode}'. Must be 'cloud', 'local', or 'components'.`);
   process.exit(1);
 }
 
@@ -162,6 +167,14 @@ function copyBuildOutput(sourceDir, targetDir) {
   }
 
   console.log('  ✓ Build assets copied');
+}
+
+function copyEntry(sourceDir, targetDir, name) {
+  if (!existsSync(join(sourceDir, name))) {
+    console.error(`Error: expected entry '${name}' missing from component build`);
+    process.exit(1);
+  }
+  cpSync(join(sourceDir, name), join(targetDir, name));
 }
 
 function copyWasmFiles(targetDir) {
@@ -439,6 +452,35 @@ function main() {
 
   // Set build environment variables
   const buildEnv = {};
+
+  if (mode === 'components') {
+    // E-M3: standalone editor + terminal only, root base. Sprout Studio
+    // hosts these in scoped WKWebViews served at / (Telegraph), NOT
+    // under the platform daemon's /webui/ mount.
+    console.log('🔨 Building standalone components (editor + terminal, root base)...');
+    const componentsDir = join(outputDir, 'components');
+    cleanOutputDirectory(componentsDir);
+    run('npx', [
+      'vite', 'build', '--mode', 'cloud', '--base', '/',
+      '--outDir', join('..', '.components-build'),
+    ], webuiDir, { VITE_SPROUT_MODE: 'cloud' });
+    // Copy only the component entries + their assets (skip the app).
+    const compBuild = join(repoRoot, '.components-build');
+    mkdirSync(componentsDir, { recursive: true });
+    copyEntry(compBuild, componentsDir, 'editor.html');
+    copyEntry(compBuild, componentsDir, 'terminal.html');
+    // Copy the full assets dir: component chunks + their shared deps
+    // (xterm chunk, codemirror chunks, preload helper).
+    cpSync(join(compBuild, 'assets'), join(componentsDir, 'assets'), { recursive: true });
+    // Components load wasm lazily from /wasm/ (root base) — the parent
+    // dist's wasm/ dir serves them; ensure it exists next to components/.
+    if (!existsSync(join(outputDir, 'wasm'))) {
+      copyWasmFiles(outputDir);
+    }
+    rmSync(compBuild, { recursive: true, force: true });
+    console.log(`✅ Components built to ${componentsDir}`);
+    process.exit(0);
+  }
 
   if (mode === 'cloud') {
     buildEnv.VITE_SPROUT_MODE = 'cloud';

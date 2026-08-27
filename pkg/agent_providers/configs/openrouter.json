@@ -5904,6 +5904,48 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for real-world investment analysis, financial research, and market reasoning tasks.",
+        "id": "inclusionai/ling-3.0-flash-fin:free",
+        "input_cost": 0,
+        "name": "Ling 3.0 Flash Fin (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.016,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Flash is a multimodal reasoning model from Alibaba. It is suited for coding assistance, agentic workflows, visual understanding, document and codebase analysis, desktop interaction, chart analysis, and long-video analysis.",
+        "id": "qwen/qwen3.8-flash",
+        "input_cost": 0.15,
+        "name": "Qwen: Qwen3.8 Flash",
+        "output_cost": 0.47,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1310720,
+        "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
+        "id": "z-ai/glm-5.3-flash",
+        "input_cost": 0.075,
+        "name": "Z.ai: GLM 5.3 Flash",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

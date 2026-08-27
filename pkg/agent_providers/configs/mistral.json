@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.3,
-    "output_token_cost": 0.9
+    "input_token_cost": 0.44,
+    "output_token_cost": 2.2
   },
   "defaults": {
     "max_tokens": -1,
@@ -314,12 +314,25 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.044,
+        "context_length": 262144,
+        "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 excels at using tools to explore codebases, editing multiple files, and powering software engineering agents.",
+        "id": "devstral-2512",
+        "input_cost": 0.44,
+        "name": "Mistral: Devstral 2 2512",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {
       "codestral-2405": 32768,
       "codestral-latest": 32768,
-      "devstral-2512": 32768,
+      "devstral-2512": 262144,
       "mistral-embed": 32768,
       "mistral-large-2407": 131072,
       "mistral-large-2411": 131072,

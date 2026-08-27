@@ -1381,6 +1381,63 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 131072,
+        "description": "Granite-4.2-30B is the flagship reasoning model in the Granite 4.2 family. It delivers the strongest performance across reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+        "id": "ibm-granite/granite-4.2-30b",
+        "input_cost": 0.16,
+        "name": "ibm-granite/granite-4.2-30b",
+        "output_cost": 0.65,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0075,
+        "context_length": 131072,
+        "description": "Granite-4.2-3B is the compact reasoning model in the Granite 4.2 family. Despite its small parameter count, it delivers strong performance on reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+        "id": "ibm-granite/granite-4.2-3b",
+        "input_cost": 0.03,
+        "name": "ibm-granite/granite-4.2-3b",
+        "output_cost": 0.12,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 131072,
+        "description": "Granite-4.2-8B is the mid-size reasoning model in the Granite 4.2 family. It delivers strong performance on reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+        "id": "ibm-granite/granite-4.2-8b",
+        "input_cost": 0.06,
+        "name": "ibm-granite/granite-4.2-8b",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while reducing compute overhead.",
+        "id": "zai-org/GLM-5.3-Flash",
+        "input_cost": 0.15,
+        "name": "zai-org/GLM-5.3-Flash",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

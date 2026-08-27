@@ -77,7 +77,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-08-25",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -600,6 +600,30 @@
         "input_per_mtok": 0.4,
         "output_per_mtok": 3,
         "cached_per_mtok": 0.04
+      },
+      {
+        "id": "ibm-granite/granite-4.2-30b",
+        "input_per_mtok": 0.16,
+        "output_per_mtok": 0.65,
+        "cached_per_mtok": 0.04
+      },
+      {
+        "id": "ibm-granite/granite-4.2-3b",
+        "input_per_mtok": 0.03,
+        "output_per_mtok": 0.12,
+        "cached_per_mtok": 0.0075
+      },
+      {
+        "id": "ibm-granite/granite-4.2-8b",
+        "input_per_mtok": 0.06,
+        "output_per_mtok": 0.25,
+        "cached_per_mtok": 0.015
+      },
+      {
+        "id": "zai-org/GLM-5.3-Flash",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.5,
+        "cached_per_mtok": 0.03
       }
     ]
   },
@@ -731,7 +755,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-08-25",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -857,12 +881,18 @@
         "input_per_mtok": 0.1,
         "output_per_mtok": 0.3,
         "cached_per_mtok": 0.01
+      },
+      {
+        "id": "devstral-2512",
+        "input_per_mtok": 0.44,
+        "output_per_mtok": 2.2,
+        "cached_per_mtok": 0.044
       }
     ]
   },
   "ollama-cloud": {
     "source": "https://api.ollama-cloud.com/v1/models",
-    "last_verified": "2026-08-16",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -966,6 +996,11 @@
       },
       {
         "id": "deepseek-v4-pro:0813",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "glm-5.3-flash",
         "input_per_mtok": 0,
         "output_per_mtok": 0
       }
@@ -1512,7 +1547,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-08-25",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3918,12 +3953,29 @@
         "input_per_mtok": 1.4,
         "output_per_mtok": 4.4,
         "cached_per_mtok": 0.26
+      },
+      {
+        "id": "inclusionai/ling-3.0-flash-fin:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "qwen/qwen3.8-flash",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.47,
+        "cached_per_mtok": 0.016
+      },
+      {
+        "id": "z-ai/glm-5.3-flash",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.25,
+        "cached_per_mtok": 0.015
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-17",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "glm-4.5v",
@@ -4004,12 +4056,18 @@
         "id": "glm-5.2:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "glm-5.3-flash",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.25,
+        "cached_per_mtok": 0.015
       }
     ]
   },
   "zai-coding": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-17",
+    "last_verified": "2026-08-27",
     "models": [
       {
         "id": "glm-4.5",
@@ -4099,6 +4157,12 @@
         "id": "glm-5.2:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "glm-5.3-flash",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.25,
+        "cached_per_mtok": 0.015
       }
     ]
   }

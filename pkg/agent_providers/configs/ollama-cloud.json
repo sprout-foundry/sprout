@@ -234,6 +234,17 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "GLM-5.3-Flash - Z.AI natively multimodal model (320B total, 18B active) with 1M context, frontier coding and agentic performance at flash-tier cost",
+        "id": "glm-5.3-flash",
+        "name": "GLM-5.3 Flash",
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

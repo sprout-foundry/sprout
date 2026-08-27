@@ -84,6 +84,14 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: false,
       rollupOptions: {
+        // E-M3 component entries: standalone editor + terminal shells
+        // (no React app bundle). Built alongside index.html; the native
+        // app hosts these in scoped WKWebViews (D5 strategy).
+        input: {
+          main: 'index.html',
+          editor: 'editor.html',
+          terminal: 'terminal.html',
+        },
         // Bundle hygiene: production drops console.{log,debug,info,warn,error}
         // and `debugger` so the shipped JS never contains the ~100 dev-time
         // log calls scattered through src/. Configured at the Rollup level

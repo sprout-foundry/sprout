@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-23T09:46:09Z",
+  "updated_at": "2026-08-26T10:00:12Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -445,8 +445,8 @@
         {
           "id": "deepseek-v4-flash-vision-exp",
           "name": "deepseek-v4-flash-vision-exp",
-          "input_cost": 0.22,
-          "output_cost": 0.66
+          "input_cost": 0.44,
+          "output_cost": 1.32
         },
         {
           "id": "deepseek-v4-pro",
@@ -507,8 +507,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.05166,
-          "output_cost": 0.10332
+          "input_cost": 0.08259999999999999,
+          "output_cost": 0.16519999999999999
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -539,8 +539,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.396894,
-          "output_cost": 0.793788
+          "input_cost": 0.87,
+          "output_cost": 1.74
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -581,8 +581,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.26,
+          "output_cost": 3.9600000000000004
         },
         {
           "id": "glm-5.2",
@@ -592,8 +592,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.19,
+          "output_cost": 3.74
         },
         {
           "id": "gpt-oss:120b",
@@ -1621,8 +1621,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.05166,
-          "output_cost": 0.10332
+          "input_cost": 0.08259999999999999,
+          "output_cost": 0.16519999999999999
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1634,8 +1634,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08,
-          "output_cost": 0.18
+          "input_cost": 0.06,
+          "output_cost": 0.12
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp",
@@ -1648,8 +1648,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.66
+          "input_cost": 0.44,
+          "output_cost": 1.32
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1661,8 +1661,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.396894,
-          "output_cost": 0.793788
+          "input_cost": 0.87,
+          "output_cost": 1.74
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -2159,9 +2159,7 @@
           "context_length": 32768,
           "tags": [
             "structured_output"
-          ],
-          "input_cost": 0.06,
-          "output_cost": 0.12
+          ]
         },
         {
           "id": "google/gemma-4-26b-a4b-it",
@@ -2200,7 +2198,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
+          "input_cost": 0.09,
           "output_cost": 0.33999999999999997
         },
         {
@@ -2290,9 +2288,7 @@
           "tags": [
             "tools",
             "structured_output"
-          ],
-          "input_cost": 0.075,
-          "output_cost": 0.625
+          ]
         },
         {
           "id": "inclusionai/ling-2.6-flash",
@@ -2302,9 +2298,7 @@
           "tags": [
             "tools",
             "structured_output"
-          ],
-          "input_cost": 0.01,
-          "output_cost": 0.03
+          ]
         },
         {
           "id": "inclusionai/ling-3.0-flash",
@@ -2348,9 +2342,7 @@
             "tools",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.075,
-          "output_cost": 0.625
+          ]
         },
         {
           "id": "kwaipilot/kat-coder-air-v2.5",
@@ -2474,8 +2466,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.32
+          "input_cost": 0.71,
+          "output_cost": 0.71
         },
         {
           "id": "meta-llama/llama-4-maverick",
@@ -2500,14 +2492,14 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.3
+          "input_cost": 0.11,
+          "output_cost": 0.33999999999999997
         },
         {
           "id": "meta-llama/llama-guard-4-12b",
           "name": "Meta: Llama Guard 4 12B",
           "description": "Llama Guard 4 is a Llama 4 Scout-derived multimodal pretrained model, fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM...",
-          "context_length": 1048576,
+          "context_length": 163840,
           "tags": [
             "vision",
             "structured_output"
@@ -2677,6 +2669,17 @@
           "output_cost": 1.2
         },
         {
+          "id": "minimax/minimax-m2.7:free",
+          "name": "MiniMax: MiniMax M2.7 (free)",
+          "description": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participate in its own evolution, M2.7 integrates advanced agentic capabilities through multi-agent...",
+          "context_length": 196608,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
           "id": "minimax/minimax-m3",
           "name": "MiniMax: MiniMax M3",
           "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
@@ -2705,6 +2708,18 @@
           "output_cost": 1.2
         },
         {
+          "id": "minimax/minimax-m3:free",
+          "name": "MiniMax: MiniMax M3 (free)",
+          "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
           "id": "mistralai/codestral-2508",
           "name": "Mistral: Codestral 2508",
           "description": "Mistral's cutting-edge language model for coding released end of July 2025. Codestral specializes in low-latency, high-frequency tasks such as fill-in-the-middle (FIM), code correction and test generation.\n\n[Blog Post](https://mistral.ai/news/codestral-25-08)",
@@ -2715,6 +2730,18 @@
           ],
           "input_cost": 0.3,
           "output_cost": 0.8999999999999999
+        },
+        {
+          "id": "mistralai/devstral-2512",
+          "name": "Mistral: Devstral 2 2512",
+          "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 supports exploring...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "structured_output"
+          ],
+          "input_cost": 0.44,
+          "output_cost": 2.2
         },
         {
           "id": "mistralai/ministral-14b-2512",
@@ -2987,8 +3014,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 2.25
+          "input_cost": 0.6,
+          "output_cost": 3
         },
         {
           "id": "moonshotai/kimi-k2.6",
@@ -4754,9 +4781,7 @@
             "tools",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.26,
-          "output_cost": 0.78
+          ]
         },
         {
           "id": "qwen/qwen2.5-vl-72b-instruct",
@@ -4767,8 +4792,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.7999999999999999,
-          "output_cost": 1
+          "input_cost": 0.25,
+          "output_cost": 0.75
         },
         {
           "id": "qwen/qwen3-14b",
@@ -4812,7 +4837,7 @@
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
           "name": "Qwen: Qwen3 235B A22B Thinking 2507",
           "description": "Qwen3-235B-A22B-Thinking-2507 is a high-performance, open-weight Mixture-of-Experts (MoE) language model optimized for complex reasoning tasks. It activates 22B of its 235B parameters per forward pass and natively supports up to 262,144...",
-          "context_length": 262144,
+          "context_length": 131072,
           "tags": [
             "tools",
             "reasoning",
@@ -5335,8 +5360,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 3
+          "input_cost": 0.425,
+          "output_cost": 2.5500000000000003
         },
         {
           "id": "qwen/qwen3.8-max",
@@ -5620,7 +5645,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1,
+          "input_cost": 0.95,
           "output_cost": 4.05
         },
         {
@@ -5631,8 +5656,7 @@
           "tags": [
             "tools",
             "vision",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
           "input_cost": 0.44999999999999996,
           "output_cost": 1.2
@@ -5641,7 +5665,7 @@
           "id": "thinkingmachines/inkling-small:free",
           "name": "Thinking Machines: Inkling Small (free)",
           "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
-          "context_length": 262144,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
@@ -5665,7 +5689,7 @@
           "id": "thinkingmachines/inkling:free",
           "name": "Thinking Machines: Inkling (free)",
           "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
-          "context_length": 262144,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
@@ -5955,8 +5979,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.26,
+          "output_cost": 3.9600000000000004
         },
         {
           "id": "z-ai/glm-5.2",
@@ -5968,8 +5992,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.19,
+          "output_cost": 3.74
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -6088,8 +6112,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.04,
-          "output_cost": 0.13
+          "input_cost": 0.03,
+          "output_cost": 0.075
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -6130,8 +6154,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.6,
-          "output_cost": 13
+          "input_cost": 2.5500000000000003,
+          "output_cost": 12.75
         },
         {
           "id": "~openai/gpt-latest",
@@ -6510,6 +6534,12 @@
           "output_cost": 10
         },
         {
+          "id": "google/gemini-3-pro-image",
+          "name": "google/gemini-3-pro-image",
+          "description": "Nano Banana Pro (Gemini 3 Pro Image) is designed to tackle the most challenging image generation by incorporating state-of-the-art reasoning capabilities. It is the best model for complex and multi-turn image generation and editing.",
+          "context_length": 131072
+        },
+        {
           "id": "google/gemini-3.1-flash-lite",
           "name": "google/gemini-3.1-flash-lite",
           "description": "Bring any idea to life with state-of-the-art reasoning to help you learn, build, and plan anything. Best for high-volume tasks that need efficiency and intelligence.",
@@ -6680,6 +6710,45 @@
           ],
           "input_cost": 0.4,
           "output_cost": 0.4
+        },
+        {
+          "id": "ibm-granite/granite-4.2-30b",
+          "name": "ibm-granite/granite-4.2-30b",
+          "description": "Granite-4.2-30B is the flagship reasoning model in the Granite 4.2 family. It delivers the strongest performance across reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.16,
+          "output_cost": 0.6499999999999999
+        },
+        {
+          "id": "ibm-granite/granite-4.2-3b",
+          "name": "ibm-granite/granite-4.2-3b",
+          "description": "Granite-4.2-3B is the compact reasoning model in the Granite 4.2 family. Despite its small parameter count, it delivers strong performance on reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.030000000000000002,
+          "output_cost": 0.12000000000000001
+        },
+        {
+          "id": "ibm-granite/granite-4.2-8b",
+          "name": "ibm-granite/granite-4.2-8b",
+          "description": "Granite-4.2-8B is the mid-size reasoning model in the Granite 4.2 family. It delivers strong performance on reasoning-intensive tasks by leveraging built-in \u003cthink\u003e...\u003c/think\u003e chain-of-thought. It supports flexible thinking modes — full thinking (default), non-thinking, and low-effort — allowing users to balance depth vs. latency on a per-query basis.",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.060000000000000005,
+          "output_cost": 0.25
         },
         {
           "id": "inclusionAI/Ling-3.0-flash",

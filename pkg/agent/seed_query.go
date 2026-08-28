@@ -117,11 +117,11 @@ type queryRunContext struct {
 
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
 // instead of sprout's native ConversationHandler.
-func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
+func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	// Admit the query before publishing any per-turn state. This makes the
 	// query guard the ownership boundary for turnTimestamp: a rejected caller
 	// cannot overwrite or clear the timestamp belonging to the active turn.
-	if err := a.TryBeginQuery(); err != nil {
+	if err := a.TryBeginQueryAs(source); err != nil {
 		return "", err
 	}
 	defer func() {

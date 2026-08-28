@@ -21,10 +21,20 @@ import (
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
-	return a.processQueryWithSeed(userQuery)
+	return a.processQueryWithSeed(QuerySourceUnknown, userQuery)
+}
+
+// ProcessQueryAs is ProcessQuery with an explicit caller source recorded on
+// the query guard for accurate busy-state messaging.
+func (a *Agent) ProcessQueryAs(source, userQuery string) (string, error) {
+	return a.processQueryWithSeed(source, userQuery)
 }
 
 func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
+	return a.ProcessQueryWithContinuityAs(QuerySourceUnknown, userQuery)
+}
+
+func (a *Agent) ProcessQueryWithContinuityAs(source, userQuery string) (string, error) {
 	if userQuery != "" {
 		a.EnableWakeupIfDisabled()
 	}
@@ -64,7 +74,7 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 		}
 	}
 
-	return a.ProcessQuery(userQuery)
+	return a.ProcessQueryAs(source, userQuery)
 }
 
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {

@@ -1362,6 +1362,31 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 131072,
+        "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized for efficient inference on a single H100 GPU.",
+        "id": "gpt-oss-120b:batch",
+        "input_cost": 0.15,
+        "name": "OpenAI: gpt-oss-120b (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for low-latency reasoning and agentic workloads.",
+        "id": "gpt-oss-20b:batch",
+        "input_cost": 0.05,
+        "name": "OpenAI: gpt-oss-20b (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

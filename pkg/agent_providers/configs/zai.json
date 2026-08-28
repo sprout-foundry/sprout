@@ -37,7 +37,8 @@
       "glm-4.7-flash",
       "glm-5.2:batch",
       "glm-5.2:free",
-      "glm-5.3-flash"
+      "glm-5.3-flash",
+      "glm-5.3-flash:batch"
     ],
     "default_context_limit": 200000,
     "default_model": "glm-5",
@@ -252,6 +253,21 @@
         "input_cost": 0.075,
         "name": "GLM-5.3 Flash",
         "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while delivering flash-tier cost and latency.",
+        "id": "glm-5.3-flash:batch",
+        "input_cost": 0.15,
+        "name": "Z.ai: GLM 5.3 Flash (batch)",
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",

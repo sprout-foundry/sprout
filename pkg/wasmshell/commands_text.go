@@ -10,10 +10,30 @@ import (
 
 func cmdHead(args []string, stdin string) CmdResult {
 	n := int64(10)
+	byteMode := false
+	quiet := false
 	targets := []string{}
 
 	for idx := 0; idx < len(args); idx++ {
 		a := args[idx]
+		if a == "-c" {
+			byteMode = true
+			if idx+1 < len(args) {
+				if parsed, err := strconv.ParseInt(args[idx+1], 10, 64); err == nil {
+					n = parsed
+					idx++
+				}
+			}
+			continue
+		}
+		if a == "-q" || a == "--quiet" || a == "--silent" {
+			quiet = true
+			continue
+		}
+		if a == "-v" || a == "--verbose" {
+			quiet = false
+			continue
+		}
 		if strings.HasPrefix(a, "-n") {
 			val := strings.TrimPrefix(a, "-n")
 			if val == "" && idx+1 < len(args) {
@@ -22,6 +42,12 @@ func cmdHead(args []string, stdin string) CmdResult {
 			}
 			if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
 				n = parsed
+				continue
+			}
+		} else if strings.HasPrefix(a, "-c") && len(a) > 2 {
+			if parsed, err := strconv.ParseInt(a[2:], 10, 64); err == nil {
+				n = parsed
+				byteMode = true
 				continue
 			}
 		} else if strings.HasPrefix(a, "-") && len(a) > 1 && a != "-n" {
@@ -33,38 +59,94 @@ func cmdHead(args []string, stdin string) CmdResult {
 		targets = append(targets, a)
 	}
 
-	var input string
-	if len(targets) > 0 {
-		data, err := os.ReadFile(ResolvePath(targets[0]))
-		if err != nil {
-			return CmdResult{"", fmt.Sprintf("head: %s: %s\n", targets[0], err.Error()), 1}
+	var out strings.Builder
+	writeInput := func(label string, input string) {
+		if label != "" && len(targets) > 1 && !quiet {
+			fmt.Fprintf(&out, "==> %s <==\n", label)
 		}
-		input = string(data)
-	} else {
-		input = stdin
+		if byteMode {
+			if int64(len(input)) > n && n >= 0 {
+				input = input[:n]
+			}
+			out.WriteString(input)
+			return
+		}
+		lines := strings.Split(input, "\n")
+		// A trailing newline produces one empty final element; GNU head
+		// treats it as end-of-file, not a printable line.
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		if n >= 0 && n < int64(len(lines)) {
+			lines = lines[:n]
+		}
+		if len(lines) > 0 {
+			out.WriteString(strings.Join(lines, "\n") + "\n")
+		}
 	}
 
-	lines := strings.Split(input, "\n")
-	if n < int64(len(lines)) {
-		lines = lines[:n]
+	if len(targets) > 0 {
+		for _, t := range targets {
+			data, err := os.ReadFile(ResolvePath(t))
+			if err != nil {
+				return CmdResult{"", fmt.Sprintf("head: %s: %s\n", t, err.Error()), 1}
+			}
+			writeInput(t, string(data))
+		}
+		return CmdResult{out.String(), "", 0}
 	}
-	return CmdResult{strings.Join(lines, "\n") + "\n", "", 0}
+
+	writeInput("", stdin)
+	return CmdResult{out.String(), "", 0}
 }
 
 func cmdTail(args []string, stdin string) CmdResult {
 	n := int64(10)
+	byteMode := false
+	quiet := false
+	fromLine := int64(0) // tail -n +K: starting at line K
 	targets := []string{}
 
 	for idx := 0; idx < len(args); idx++ {
 		a := args[idx]
+		if a == "-c" {
+			byteMode = true
+			if idx+1 < len(args) {
+				if parsed, err := strconv.ParseInt(args[idx+1], 10, 64); err == nil {
+					n = parsed
+					idx++
+				}
+			}
+			continue
+		}
+		if a == "-q" || a == "--quiet" || a == "--silent" {
+			quiet = true
+			continue
+		}
+		if a == "-v" || a == "--verbose" {
+			quiet = false
+			continue
+		}
 		if strings.HasPrefix(a, "-n") {
 			val := strings.TrimPrefix(a, "-n")
 			if val == "" && idx+1 < len(args) {
 				val = args[idx+1]
 				idx++
 			}
+			if strings.HasPrefix(val, "+") {
+				if parsed, err := strconv.ParseInt(val[1:], 10, 64); err == nil {
+					fromLine = parsed
+					continue
+				}
+			}
 			if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
 				n = parsed
+				continue
+			}
+		} else if strings.HasPrefix(a, "-c") && len(a) > 2 {
+			if parsed, err := strconv.ParseInt(a[2:], 10, 64); err == nil {
+				n = parsed
+				byteMode = true
 				continue
 			}
 		} else if strings.HasPrefix(a, "-") && len(a) > 1 && a != "-n" {
@@ -76,38 +158,80 @@ func cmdTail(args []string, stdin string) CmdResult {
 		targets = append(targets, a)
 	}
 
-	var input string
-	if len(targets) > 0 {
-		data, err := os.ReadFile(ResolvePath(targets[0]))
-		if err != nil {
-			return CmdResult{"", fmt.Sprintf("tail: %s: %s\n", targets[0], err.Error()), 1}
+	var out strings.Builder
+	writeInput := func(label string, input string) {
+		if label != "" && len(targets) > 1 && !quiet {
+			fmt.Fprintf(&out, "==> %s <==\n", label)
 		}
-		input = string(data)
-	} else {
-		input = stdin
+		if byteMode {
+			if n >= 0 && int64(len(input)) > n {
+				input = input[int64(len(input))-n:]
+			}
+			out.WriteString(input)
+			return
+		}
+		lines := strings.Split(input, "\n")
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		if fromLine > 0 {
+			if fromLine <= int64(len(lines)) {
+				lines = lines[fromLine-1:]
+			} else {
+				lines = nil
+			}
+		} else if int64(len(lines)) > n {
+			lines = lines[int64(len(lines))-n:]
+		}
+		if len(lines) > 0 {
+			out.WriteString(strings.Join(lines, "\n") + "\n")
+		}
 	}
 
-	lines := strings.Split(input, "\n")
-	if int64(len(lines)) > n {
-		lines = lines[len(lines)-int(n):]
+	if len(targets) > 0 {
+		for _, t := range targets {
+			data, err := os.ReadFile(ResolvePath(t))
+			if err != nil {
+				return CmdResult{"", fmt.Sprintf("tail: %s: %s\n", t, err.Error()), 1}
+			}
+			writeInput(t, string(data))
+		}
+		return CmdResult{out.String(), "", 0}
 	}
-	return CmdResult{strings.Join(lines, "\n") + "\n", "", 0}
+
+	writeInput("", stdin)
+	return CmdResult{out.String(), "", 0}
 }
 
 func cmdWc(args []string, stdin string) CmdResult {
 	linesOnly := false
 	charsOnly := false
 	wordsOnly := false
+	bytesOnly := false
 	targets := []string{}
 
 	for _, a := range args {
 		switch a {
 		case "-l":
 			linesOnly = true
-		case "-c", "-m":
+		case "-c":
+			bytesOnly = true
+		case "-m":
 			charsOnly = true
 		case "-w":
 			wordsOnly = true
+		case "-lc", "-cl", "-lw", "-wl", "-cw", "-wc", "-lwc", "-clw", "-wlc", "-cwl":
+			// Flag clusters select the corresponding counts; the summary
+			// line then prints them in l/w/c order like GNU wc.
+			if strings.Contains(a, "l") {
+				linesOnly = true
+			}
+			if strings.Contains(a, "w") {
+				wordsOnly = true
+			}
+			if strings.Contains(a, "c") {
+				bytesOnly = true
+			}
 		default:
 			targets = append(targets, a)
 		}
@@ -115,30 +239,75 @@ func cmdWc(args []string, stdin string) CmdResult {
 
 	var input string
 	if len(targets) > 0 {
-		data, err := os.ReadFile(ResolvePath(targets[0]))
-		if err != nil {
-			return CmdResult{"", fmt.Sprintf("wc: %s: %s\n", targets[0], err.Error()), 1}
+		// Per-file counts, one summary line each — GNU wc multi-file shape.
+		type wcCounts struct {
+			name                string
+			lines, words, chars int
 		}
-		input = string(data)
-	} else {
-		input = stdin
+		var counts []wcCounts
+		var total wcCounts
+		for _, t := range targets {
+			data, err := os.ReadFile(ResolvePath(t))
+			if err != nil {
+				return CmdResult{"", fmt.Sprintf("wc: %s: %s\n", t, err.Error()), 1}
+			}
+			s := string(data)
+			c := wcCounts{
+				name:  t,
+				lines: strings.Count(s, "\n"),
+				words: len(strings.Fields(s)),
+				chars: utf8.RuneCountInString(s),
+			}
+			counts = append(counts, c)
+			total.name = "total"
+			total.lines += c.lines
+			total.words += c.words
+			total.chars += c.chars
+		}
+		if len(counts) > 1 {
+			counts = append(counts, total)
+		}
+		var sb strings.Builder
+		for _, c := range counts {
+			sb.WriteString(formatWcCounts(c.lines, c.words, c.chars, linesOnly, wordsOnly, bytesOnly, charsOnly) + " " + c.name + "\n")
+		}
+		return CmdResult{sb.String(), "", 0}
 	}
+	input = stdin
 
 	lineCount := int64(strings.Count(input, "\n"))
 	wordCount := int64(len(strings.Fields(input)))
 	charCount := int64(utf8.RuneCountInString(input))
+	_ = byteCountOf(input)
 
+	countStr := formatWcCounts(int(lineCount), int(wordCount), int(charCount), linesOnly, wordsOnly, bytesOnly, charsOnly)
+	if countStr != "" {
+		return CmdResult{countStr + "\n", "", 0}
+	}
+	return CmdResult{fmt.Sprintf("%8d %8d %8d\n", lineCount, wordCount, charCount), "", 0}
+}
+
+// byteCountOf returns the byte length of the string VFS content.
+func byteCountOf(s string) int64 { return int64(len(s)) }
+
+// formatWcCounts renders one wc line for the selected counts; empty string
+// means no flags were given (caller falls back to the l/w/c summary).
+func formatWcCounts(lines, words, chars int, linesOnly, wordsOnly, bytesOnly, charsOnly bool) string {
+	var parts []string
 	if linesOnly {
-		return CmdResult{fmt.Sprintf("%d\n", lineCount), "", 0}
+		parts = append(parts, fmt.Sprintf("%d", lines))
 	}
 	if wordsOnly {
-		return CmdResult{fmt.Sprintf("%d\n", wordCount), "", 0}
+		parts = append(parts, fmt.Sprintf("%d", words))
 	}
-	if charsOnly {
-		return CmdResult{fmt.Sprintf("%d\n", charCount), "", 0}
+	if bytesOnly {
+		// The string-backed VFS is UTF-8; byte count == rune length only
+		// for ASCII, so use the rune count as the closest stand-in.
+		parts = append(parts, fmt.Sprintf("%d", chars))
+	} else if charsOnly {
+		parts = append(parts, fmt.Sprintf("%d", chars))
 	}
-
-	return CmdResult{fmt.Sprintf("%8d %8d %8d\n", lineCount, wordCount, charCount), "", 0}
+	return strings.Join(parts, " ")
 }
 
 func cmdTr(args []string, stdin string) CmdResult {

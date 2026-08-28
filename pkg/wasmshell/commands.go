@@ -100,6 +100,7 @@ var BuiltinNames = map[string]bool{
 	"type": true, "history": true, "println": true, "basename": true,
 	"dirname": true, "realpath": true, "tr": true, "uniq": true,
 	"cut": true, "tee": true,
+	"git": true,
 }
 
 func init() {
@@ -138,6 +139,7 @@ func init() {
 	CmdRegistry["uniq"] = cmdUniq
 	CmdRegistry["cut"] = cmdCut
 	CmdRegistry["tee"] = cmdTee
+	CmdRegistry["git"] = cmdGit
 }
 
 // ─── Utility functions ──────────────────────────────────────────────────

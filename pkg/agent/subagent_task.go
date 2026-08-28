@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,14 +32,44 @@ const orchestratorSubagentTimeout = time.Hour
 // orchestrator persona (by canonical ID or alias) gets a full hour and every
 // other persona gets the 30-minute default. Alias resolution goes through
 // the config catalog so it stays in sync with the persona definitions.
+//
+// Automation workflows can raise both defaults via
+// SPROUT_TOOL_TIMEOUT (seconds) — `sprout automate run` sets it from the
+// workflow's subagent_timeout_seconds field. The env value applies as a
+// floor-multiple: subagents get the value directly when it exceeds their
+// tier default; orchestrators get it when it exceeds the orchestrator
+// default. (Implementation: see envSubagentTimeout below.)
 func (r *SubagentRunner) resolveSubagentTimeout(opts SubagentOptions) time.Duration {
 	if opts.Timeout > 0 {
 		return opts.Timeout
+	}
+	if t := envSubagentTimeout(); t > 0 {
+		if r.isOrchestratorPersona(opts.Persona) {
+			if t > orchestratorSubagentTimeout {
+				return t
+			}
+		} else if t > defaultSubagentTimeout {
+			return t
+		}
 	}
 	if r.isOrchestratorPersona(opts.Persona) {
 		return orchestratorSubagentTimeout
 	}
 	return defaultSubagentTimeout
+}
+
+// envSubagentTimeout reads SPROUT_TOOL_TIMEOUT (seconds). Returns 0 when
+// unset or unparseable so callers fall back to the persona defaults.
+func envSubagentTimeout() time.Duration {
+	raw := os.Getenv("SPROUT_TOOL_TIMEOUT")
+	if raw == "" {
+		return 0
+	}
+	secs, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // isOrchestratorPersona reports whether the given persona string resolves to

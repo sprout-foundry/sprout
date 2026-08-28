@@ -182,8 +182,26 @@ async function idbListFiles(): Promise<string> {
 
 // ── WASM loader ─────────────────────────────────────────────────────────────
 
-const DEFAULT_WASM_URL = '/webui/wasm/sprout.wasm';
-const DEFAULT_WASM_EXEC_URL = '/webui/wasm/wasm_exec.js';
+// Resolve the wasm asset base relative to the document when the app is
+// NOT mounted under the daemon's /webui prefix. The dist ships wasm
+// assets at /wasm/* (vite copies public/wasm to the bundle root), so a
+// root-served bundle (Sprout Studio's WKWebView/Telegraph, static
+// hosts) must load /wasm/sprout.wasm, while the daemon mount serves
+// them at /webui/wasm/*. Probe document location: under-mount pages
+// keep the /webui prefix; everything else uses the root path.
+function resolveWasmBase(): string {
+  if (typeof window === 'undefined' || !window.location) return '/webui/wasm';
+  // jsdom/test environments may not define pathname.
+  const path = window.location.pathname ?? '/';
+  const underMount =
+    path === '/webui' ||
+    path.startsWith('/webui/') ||
+    (window.location.search ?? '').includes('mount=/webui');
+  return underMount ? '/webui/wasm' : '/wasm';
+}
+
+const DEFAULT_WASM_URL = `${resolveWasmBase()}/sprout.wasm`;
+const DEFAULT_WASM_EXEC_URL = `${resolveWasmBase()}/wasm_exec.js`;
 
 /** Debug logger — only logs when localStorage flag is set or VITE_DEBUG is enabled. */
 // eslint-disable-next-line no-console

@@ -168,7 +168,21 @@ export async function switchChatSessionWorktree(
 export async function listWorktrees(): Promise<WorktreeListResponse> {
   const res = await clientFetch('/api/git/worktrees');
   if (!res.ok) throw new Error('Failed to list worktrees');
-  return res.json();
+  const data = await res.json();
+  // Defend against malformed backend/adapter responses: a missing or
+  // non-array `worktrees` (or non-string `current`) would otherwise
+  // flow into state and crash the sidebar render (e.g. worktrees.length
+  // on undefined). Treat it as a load failure so the UI shows the
+  // inline error instead of an error boundary.
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !Array.isArray(data.worktrees) ||
+    typeof data.current !== 'string'
+  ) {
+    throw new Error('Malformed worktrees response');
+  }
+  return data;
 }
 
 export async function createWorktree(

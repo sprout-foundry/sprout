@@ -581,6 +581,20 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
+    it('should classify task list/submit and per-task status as foundry-backend', () => {
+      // The escalation toast submits Mode A tasks (POST /api/tasks) and polls
+      // them (GET /api/tasks/{id}); both must reach the platform backend.
+      const listResult = classifyEndpoint('/api/tasks', 'GET');
+      expect(listResult?.category).toBe('foundry-backend');
+
+      const submitResult = classifyEndpoint('/api/tasks', 'POST');
+      expect(submitResult?.category).toBe('foundry-backend');
+
+      const statusResult = classifyEndpoint('/api/tasks/task-abc-123', 'GET');
+      expect(statusResult?.category).toBe('foundry-backend');
+      expect(statusResult?.isPrefix).toBe(true);
+    });
+
     it('should classify worktree-only chat session endpoints as synthetic', () => {
       // Worktree/compact sub-endpoints are intercepted as synthetic in
       // browser mode (worktree support is not available in the cloud IDE).

@@ -245,6 +245,17 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Z.AI GLM-5.3 - Flagship model with 1M-token context for long-horizon reasoning and agentic coding tasks",
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ]
   },

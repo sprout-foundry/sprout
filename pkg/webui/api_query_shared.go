@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	agent "github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -425,7 +426,7 @@ func (ws *ReactWebServer) runChatQuery(
 		)
 		queryStart := time.Now()
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
-		_, err := clientAgent.ProcessQueryWithContinuity(query)
+		_, err := clientAgent.ProcessQueryWithContinuityAs(agent.QuerySourceWebUI, query)
 		queryDuration := time.Since(queryStart)
 
 		// Record cost after query completes

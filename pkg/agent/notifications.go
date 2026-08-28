@@ -207,7 +207,7 @@ func (a *Agent) TryAutoResume() bool {
 			}
 		}()
 		tokensBefore := a.GetTotalTokens()
-		_, err := a.ProcessQueryWithContinuity(msg)
+		_, err := a.ProcessQueryWithContinuityAs(QuerySourceAutoResume, msg)
 		if err != nil {
 			a.Logger().Debug("[wakeup] auto-resume failed: %v\n", err)
 			return

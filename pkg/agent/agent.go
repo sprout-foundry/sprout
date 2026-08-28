@@ -341,6 +341,8 @@ type Agent struct {
 	// queryInProgress guards ProcessQuery against concurrent execution.
 	// When two frontends share the same Agent instance, only one query can run at a time.
 	queryInProgress atomic.Bool
+	queryOwnerMu    sync.Mutex
+	queryOwner      QueryGuardOwner
 
 	// Security telemetry counters — track post-caution LLM behavior.
 	secCautionsIssued      atomic.Int64

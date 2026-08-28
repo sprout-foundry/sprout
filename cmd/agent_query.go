@@ -168,108 +168,180 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 	}
 
 	resultCh := make(chan result, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
-			}
+	retried := false
+
+	launchQuery := func() {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
+				}
+			}()
+			response, err := chatAgent.ProcessQueryWithContinuityAs(agent.QuerySourceCLI, query)
+			resultCh <- result{response, err}
 		}()
-		response, err := chatAgent.ProcessQueryWithContinuity(query)
-		resultCh <- result{response, err}
-	}()
+	}
+	launchQuery()
 
 	// Wait for either completion or cancellation
-	select {
-	case res := <-resultCh:
-		duration := time.Since(startTime)
-
-		if res.err != nil {
-			// If the WebUI is using the shared agent, show a friendly message
-			// instead of the raw error. The query was not processed.
-			if errors.Is(res.err, agent.ErrQueryInProgress) {
-				console.GlyphWarning.Fprintf(os.Stderr, "The Web UI is currently processing a query. Try again in a moment.\n")
-				return markReported(res.err)
-			}
-			// Print the response (user-friendly error message) if available.
-			// When we show it here, mark the returned error as already-reported
-			// so Execute() doesn't print the raw wrapped chain a second time.
-			reported := false
-			if res.response != "" {
-				console.GlyphError.Fprintln(os.Stderr, res.response)
-				reported = true
-			}
-			chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
-				fmt.Sprintf("Failed to process query: %s", query), res.err,
-			))
-			if reported {
-				return markReported(res.err)
-			}
-			return fmt.Errorf("agent processing failed: %w", res.err)
-		}
-
-		// Note: EventTypeQueryCompleted is published by the agent itself in
-		// finalizeConversationPostHooks (seed_query.go), which fires on all
-		// paths (success, error, budget-exceeded) with routing metadata.
-		// Re-publishing here caused duplicate "turn complete" lines in the CLI.
-
-		// In shared-agent mode, sync the agent state back to the WebUI so
-		// the browser tab's conversation history stays current after CLI queries.
-		if ws := getSharedWebServer(); ws != nil {
-			_ = ws.SyncSharedAgentState(chatAgent)
-		}
-
-		switch chatAgent.GetLastRunTerminationReason() {
-		case agent.RunTerminationMaxIterations:
-			fmt.Println()
-			console.GlyphWarning.Printf("Reached max iterations (%d) in %s", chatAgent.GetMaxIterations(), FormatDuration(duration))
-		case agent.RunTerminationInterrupted:
-			fmt.Println()
-			console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
-		default:
-			// The terminal subscriber (interactive + queue modes) prints its
-			// own "✓ turn complete" line from the QueryCompleted event. When
-			// it's active, skip the direct print here to avoid a duplicate
-			// completion line. Direct mode (sprout agent "query" with no
-			// subscriber) keeps this as its only completion path.
-			if router := chatAgent.OutputRouter(); router != nil && router.TerminalSubscriberActive() {
-				break
-			}
-			// Print completion message with a compact inline summary so
-			// terminal users get the same transparency the WebUI footer
-			// already shows (CI output handler has PrintSummary; the
-			// interactive path didn't). Skip the inline summary when the
-			// agent didn't actually run (no tokens accumulated) so the
-			// slash-command / direct-execution paths stay quiet.
-			fmt.Println()
-			if summary := formatCompletionSummary(chatAgent); summary != "" {
-				console.GlyphSuccess.Printf("Completed in %s · %s", FormatDuration(duration), summary)
-			} else {
-				console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
-			}
-		}
-
-		// SP-070: Fire completion notification (bell + OS notify) when the
-		// turn ran long enough, gated by NotificationsConfig.
-		maybeNotifyCompletion(chatAgent, duration)
-
-		return nil
-
-	case <-ctx.Done():
-		// Context was cancelled - agent processing was interrupted
-		chatAgent.TriggerInterrupt()
-		duration := time.Since(startTime)
-		console.GlyphStopped.Fprintf(os.Stdout, "Query interrupted after %s", FormatDuration(duration))
-
-		// Allow the agent goroutine to stop cleanly after receiving interrupt.
+	for {
 		select {
-		case <-resultCh:
-		case <-time.After(3 * time.Second):
-		}
+		case res := <-resultCh:
+			duration := time.Since(startTime)
 
-		chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
-			fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),
-		))
-		return fmt.Errorf("query interrupted: %w", ctx.Err())
+			if res.err != nil {
+				// If another holder is running on the shared agent, show a
+				// friendly message naming the actual holder instead of the
+				// raw error. The query was not processed.
+				if errors.Is(res.err, agent.ErrQueryInProgress) {
+					owner := chatAgent.QueryGuardOwner()
+					source := owner.Source
+					if source == "" {
+						source = agent.QuerySourceUnknown
+					}
+					held := time.Since(owner.StartedAt)
+					if held < 0 {
+						held = 0
+					}
+
+					if !retried && source == agent.QuerySourceAutoResume {
+						if owner.StartedAt.IsZero() {
+							console.GlyphWarning.Fprintf(os.Stderr, "A background auto-resume query is in progress — interrupting it to run your query...\n")
+						} else {
+							console.GlyphWarning.Fprintf(os.Stderr, "A background auto-resume query is in progress (running %s) — interrupting it to run your query...\n", FormatDuration(held))
+						}
+						chatAgent.TriggerInterrupt()
+						if waitQueryGuardRelease(ctx, chatAgent) {
+							// Guard released: run our query in its place.
+							retried = true
+							launchQuery()
+							continue
+						}
+						// Still held after the grace period — fall through to the message below.
+					}
+
+					if chatAgent.IsQueryInProgress() {
+						owner = chatAgent.QueryGuardOwner()
+						source = owner.Source
+						if source == "" {
+							source = agent.QuerySourceUnknown
+						}
+						held = time.Since(owner.StartedAt)
+						if held < 0 {
+							held = 0
+						}
+					}
+					if owner.StartedAt.IsZero() {
+						console.GlyphWarning.Fprintf(os.Stderr, "A query is already in progress on this agent (source: %s). Try again in a moment, or press Ctrl+C to interrupt it.\n", source)
+					} else {
+						console.GlyphWarning.Fprintf(os.Stderr, "A query is already in progress on this agent (source: %s, running %s). Try again in a moment, or press Ctrl+C to interrupt it.\n", source, FormatDuration(held))
+					}
+					return markReported(res.err)
+				}
+				// Print the response (user-friendly error message) if available.
+				// When we show it here, mark the returned error as already-reported
+				// so Execute() doesn't print the raw wrapped chain a second time.
+				reported := false
+				if res.response != "" {
+					console.GlyphError.Fprintln(os.Stderr, res.response)
+					reported = true
+				}
+				chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
+					fmt.Sprintf("Failed to process query: %s", query), res.err,
+				))
+				if reported {
+					return markReported(res.err)
+				}
+				return fmt.Errorf("agent processing failed: %w", res.err)
+			}
+
+			// Note: EventTypeQueryCompleted is published by the agent itself in
+			// finalizeConversationPostHooks (seed_query.go), which fires on all
+			// paths (success, error, budget-exceeded) with routing metadata.
+			// Re-publishing here caused duplicate "turn complete" lines in the CLI.
+
+			// In shared-agent mode, sync the agent state back to the WebUI so
+			// the browser tab's conversation history stays current after CLI queries.
+			if ws := getSharedWebServer(); ws != nil {
+				_ = ws.SyncSharedAgentState(chatAgent)
+			}
+
+			switch chatAgent.GetLastRunTerminationReason() {
+			case agent.RunTerminationMaxIterations:
+				fmt.Println()
+				console.GlyphWarning.Printf("Reached max iterations (%d) in %s", chatAgent.GetMaxIterations(), FormatDuration(duration))
+			case agent.RunTerminationInterrupted:
+				fmt.Println()
+				console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
+			default:
+				// The terminal subscriber (interactive + queue modes) prints its
+				// own "✓ turn complete" line from the QueryCompleted event. When
+				// it's active, skip the direct print here to avoid a duplicate
+				// completion line. Direct mode (sprout agent "query" with no
+				// subscriber) keeps this as its only completion path.
+				if router := chatAgent.OutputRouter(); router != nil && router.TerminalSubscriberActive() {
+					break
+				}
+				// Print completion message with a compact inline summary so
+				// terminal users get the same transparency the WebUI footer
+				// already shows (CI output handler has PrintSummary; the
+				// interactive path didn't). Skip the inline summary when the
+				// agent didn't actually run (no tokens accumulated) so the
+				// slash-command / direct-execution paths stay quiet.
+				fmt.Println()
+				if summary := formatCompletionSummary(chatAgent); summary != "" {
+					console.GlyphSuccess.Printf("Completed in %s · %s", FormatDuration(duration), summary)
+				} else {
+					console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
+				}
+			}
+
+			// SP-070: Fire completion notification (bell + OS notify) when the
+			// turn ran long enough, gated by NotificationsConfig.
+			maybeNotifyCompletion(chatAgent, duration)
+
+			return nil
+
+		case <-ctx.Done():
+			// Context was cancelled - agent processing was interrupted
+			chatAgent.TriggerInterrupt()
+			duration := time.Since(startTime)
+			console.GlyphStopped.Fprintf(os.Stdout, "Query interrupted after %s", FormatDuration(duration))
+
+			// Allow the agent goroutine to stop cleanly after receiving interrupt.
+			select {
+			case <-resultCh:
+			case <-time.After(3 * time.Second):
+			}
+
+			chatAgent.PublishEvent(events.EventTypeError, events.ErrorEvent(
+				fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),
+			))
+			return fmt.Errorf("query interrupted: %w", ctx.Err())
+		}
+	}
+}
+
+// waitQueryGuardRelease polls the agent's query guard for up to 5s after a
+// TriggerInterrupt, giving the holder (e.g. a background auto-resume) time
+// to unwind. Returns true if the guard was released, false on timeout or
+// context cancellation.
+func waitQueryGuardRelease(ctx context.Context, chatAgent *agent.Agent) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if !chatAgent.IsQueryInProgress() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
 	}
 }
 

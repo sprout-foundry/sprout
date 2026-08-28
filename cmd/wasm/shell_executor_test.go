@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/wasmshell"
 )
 
 func TestWASMShellExecutor_EchoBuiltin(t *testing.T) {
@@ -263,5 +264,54 @@ func TestSetToolExecutionHook_NonFunctionArg(t *testing.T) {
 	}
 	if resMap["ok"] {
 		t.Error("expected ok: false when setting hook with non-function argument")
+	}
+}
+
+// TestWASMShellExecutor_GitBridgeAbsent pins the no-bridge behavior: a
+// read-only git subcommand without globalThis.__sproutShellGit stays a 127
+// so the escalation surface can take it to a container txn.
+//
+// The resolved-Promise path itself can't run under the Node test harness
+// (microtasks can't fire while Go blocks on the channel — browsers tick
+// their event loop, wasm_exec's test loop doesn't), so it is covered by
+// webui vitest (shellGitAdapter) plus these contract tests.
+func TestWASMShellExecutor_GitBridgeAbsent(t *testing.T) {
+	js.Global().Set("__sproutShellGit", js.Null())
+
+	r := wasmshell.ParseAndExecute("git status")
+	if r.ExitCode != 127 {
+		t.Errorf("git status without bridge exit = %d, want 127", r.ExitCode)
+	}
+	if !strings.Contains(r.Stderr, "git") {
+		t.Errorf("stderr should explain the missing bridge, got: %q", r.Stderr)
+	}
+}
+
+// TestWASMShellExecutor_GitWriteSubcommandStays127 pins the escalation
+// contract: write subcommands (add/commit/push/…) are not allowlisted, so
+// the shell returns 127 and the txn surface takes over — bridge or not.
+func TestWASMShellExecutor_GitWriteSubcommandStays127(t *testing.T) {
+	for _, cmdStr := range []string{"git add file.go", "git commit -m x", "git push", "git reset --hard"} {
+		r := wasmshell.ParseAndExecute(cmdStr)
+		if r.ExitCode != 127 {
+			t.Errorf("%s exit = %d, want 127 (write subcommands escalate)", cmdStr, r.ExitCode)
+		}
+	}
+}
+
+// TestShellGitResultFromJS pins the bridge result decoding.
+func TestShellGitResultFromJS(t *testing.T) {
+	obj := js.Global().Get("Object").New()
+	obj.Set("stdout", "M a.go\n")
+	obj.Set("stderr", "")
+	obj.Set("exitCode", 0)
+	res := shellGitResultFromJS(obj)
+	if res.Stdout != "M a.go\n" || res.ExitCode != 0 || res.Stderr != "" {
+		t.Errorf("decoded %+v", res)
+	}
+
+	nonObj := shellGitResultFromJS(js.ValueOf("oops"))
+	if nonObj.Stdout != "" || nonObj.ExitCode != 0 {
+		t.Errorf("non-object result should decode to zero values, got %+v", nonObj)
 	}
 }

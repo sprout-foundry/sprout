@@ -17,6 +17,15 @@
   }
 }
 
+/* Reduced-motion users (and headless test contexts where rAF throttling
+   freezes CSS animations mid-flight, leaving the element permanently
+   "unstable" for interaction) get the toast fully positioned immediately. */
+@media (prefers-reduced-motion: reduce) {
+  .escalation-toast-overlay {
+    animation: none;
+  }
+}
+
 .escalation-toast {
   background: var(--bg-elevated, #252540);
   border: 1px solid var(--border-default, #3a3a5c);
@@ -97,4 +106,112 @@
 
 .escalation-toast-action:hover {
   opacity: 0.9;
+}
+
+/* ── Mode A inline cloud-task affordance ─────────────────────────────── */
+
+.escalation-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+/* Secondary variant for the cloud-task CTA so the primary Mode B action
+ * stays visually dominant when both are offered. */
+.escalation-toast-action.escalation-toast-action-secondary {
+  background: var(--bg-surface, transparent);
+  color: var(--text-primary, inherit);
+  border: 1px solid var(--border-default, transparent);
+}
+
+.escalation-toast-action.escalation-toast-action-secondary:hover {
+  background: var(--accent-primary-bg-hover, var(--bg-hover));
+  opacity: 1;
+}
+
+.escalation-toast-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary, transparent);
+}
+
+.escalation-toast-task-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, inherit);
+  margin: 0;
+}
+
+.escalation-toast-task-error {
+  font-size: 0.8125rem;
+  color: var(--error-text, inherit);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.escalation-toast-task-link {
+  font-size: 0.8125rem;
+  color: var(--accent-primary, inherit);
+  align-self: flex-start;
+}
+
+/* ── ETH-2 txn result view ─────────────────────────────────────────────── */
+
+.escalation-toast-txn-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.escalation-toast-txn-exit {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-primary, inherit);
+  background: var(--bg-elevated, transparent);
+  border: 1px solid var(--border-default, transparent);
+}
+
+.escalation-toast-txn-exit.is-ok {
+  color: var(--accent-success, inherit);
+  border-color: var(--accent-success, transparent);
+}
+
+.escalation-toast-txn-duration,
+.escalation-toast-txn-flag {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, inherit);
+}
+
+.escalation-toast-txn-flag {
+  color: var(--accent-warning, inherit);
+}
+
+.escalation-toast-txn-pre {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary, inherit);
+  background: var(--bg-secondary, transparent);
+  border: 1px solid var(--border-subtle, transparent);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.escalation-toast-txn-pre.is-stderr {
+  color: var(--accent-error, inherit);
 }

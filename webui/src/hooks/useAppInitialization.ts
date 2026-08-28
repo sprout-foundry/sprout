@@ -126,6 +126,11 @@ export function useAppInitialization({
                         shell.writeFile(f.path, f.content);
                       }
                     },
+                    deleteVfsFiles: async (paths) => {
+                      for (const p of paths) {
+                        shell.deleteFile(p);
+                      }
+                    },
                   });
                 }
               });
@@ -153,6 +158,17 @@ export function useAppInitialization({
               })
               .catch((err) => {
                 debugLog('[startup] agentGitToolBridge import failed:', err);
+              });
+            // Back the WASM shell's `git` command with browser git (read-only
+            // subcommands) so `git status`/`diff`/`log` run in-browser instead
+            // of exiting 127 into a container txn.
+            import('../services/shellGitAdapter')
+              .then(({ registerShellGitGlobal }) => {
+                registerShellGitGlobal();
+                debugLog('[startup] Shell git adapter installed (__sproutShellGit)');
+              })
+              .catch((err) => {
+                debugLog('[startup] shellGitAdapter import failed:', err);
               });
           }
         } else if (isCloud) {

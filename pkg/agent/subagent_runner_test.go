@@ -1545,3 +1545,47 @@ func TestResolveSubagentTimeout(t *testing.T) {
 		t.Errorf("resolveSubagentTimeout with nil ConfigManager = %v, want %v", got, defaultSubagentTimeout)
 	}
 }
+
+// TestResolveSubagentTimeoutEnvOverride verifies SPROUT_TOOL_TIMEOUT
+// (set by `sprout automate run` from subagent_timeout_seconds) raises
+// the persona defaults when larger, and never lowers them.
+func TestResolveSubagentTimeoutEnvOverride(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	t.Run("env above default raises persona timeout", func(t *testing.T) {
+		t.Setenv("SPROUT_TOOL_TIMEOUT", "7200") // 2h
+		if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "coder"}); got != 2*time.Hour {
+			t.Errorf("coder with env 7200s = %v, want 2h", got)
+		}
+		if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "orchestrator"}); got != 2*time.Hour {
+			t.Errorf("orchestrator with env 7200s = %v, want 2h", got)
+		}
+	})
+	t.Run("env below default never lowers timeout", func(t *testing.T) {
+		t.Setenv("SPROUT_TOOL_TIMEOUT", "60") // 1m
+		if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "coder"}); got != defaultSubagentTimeout {
+			t.Errorf("coder with env 60s = %v, want %v", got, defaultSubagentTimeout)
+		}
+	})
+	t.Run("invalid env falls back to defaults", func(t *testing.T) {
+		t.Setenv("SPROUT_TOOL_TIMEOUT", "not-a-number")
+		if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "coder"}); got != defaultSubagentTimeout {
+			t.Errorf("coder with invalid env = %v, want %v", got, defaultSubagentTimeout)
+		}
+	})
+	t.Run("explicit timeout still beats env", func(t *testing.T) {
+		t.Setenv("SPROUT_TOOL_TIMEOUT", "7200")
+		if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "coder", Timeout: 5 * time.Minute}); got != 5*time.Minute {
+			t.Errorf("explicit 5m with env 7200s = %v, want 5m", got)
+		}
+	})
+}

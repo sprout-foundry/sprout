@@ -9,7 +9,6 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // CommitFileChange describes a staged file with git status code.
@@ -17,6 +16,11 @@ type CommitFileChange struct {
 	Status string
 	Path   string
 }
+
+// multiFileRules teaches synthesis over per-file narration. When many
+// files change at once, models tend to produce laundry-list messages;
+// these rules push toward intent-level summaries.
+const multiFileRules = `When multiple files change, synthesize the overall intent rather than describing each file. Focus on WHAT changed and WHY, not which files were touched. Avoid vague words like "updated" or "modified" — be specific about the actual change.`
 
 // CommitMessageOptions configures commit message generation behavior.
 type CommitMessageOptions struct {
@@ -66,20 +70,38 @@ func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts Commit
 		}
 	}
 
-	optimizer := utils.NewDiffOptimizer()
-	optimizedDiff := optimizer.OptimizeDiff(diffText)
+	// Budgeted diff presentation: semantic diffs first under a byte cap,
+	// non-semantic files as one-line summaries (see diff_presentation.go).
+	budgetedDiff, budgetWarnings := prepareBudgetedDiff(opts.FileChanges, diffText, maxCommitDiffBytes)
 
-	var contextInfo string
-	if len(optimizedDiff.FileSummaries) > 0 {
-		contextInfo = "\n\nFile summaries for optimized content:\n"
-		for file, summary := range optimizedDiff.FileSummaries {
-			contextInfo += fmt.Sprintf("- %s: %s\n", file, summary)
-		}
-	}
-	promptContent := fmt.Sprintf("%s%s", optimizedDiff.OptimizedContent, contextInfo)
+	promptContent := budgetedDiff
 	if strings.TrimSpace(opts.UserInstructions) != "" {
 		promptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", strings.TrimSpace(opts.UserInstructions), promptContent)
 	}
+
+	// Diff notation guide, shared by both generation passes. Small models
+	// reliably misread unified diffs without it (e.g. treating -lines as
+	// deleted content that still exists), and the worked example anchors
+	// the expected output format.
+	diffGuide := `Diff notation guide:
+- Each file section begins with a context header: → path (action, type): +N -M
+- Lines starting with + are additions, - are deletions, unmarked lines are unchanged context
+- Lines beginning with @@ are hunk headers showing the function or line range that changed
+- If the same line appears as both + and -, it was modified
+- Files may be tagged as source, dependency lock file, binary, minified build output, or auto-generated
+
+Example diff:
+-------
+→ src/App.tsx (modified, source): +2 -3
+diff --git a/src/App.tsx b/src/App.tsx
+@@ -17,6 +17,8 @@ import {Platform } from 'react-native';
+ const InnerApp = () => {
+-  console.log('hello World')
+   const applicationConfig = platformAppConfig(appConfig);
++  const edgeInsets = useSafeAreaInsets();
++  return applicationConfig;
+--------
+`
 
 	titleSystemPrompt := `You are a git commit message generator. ALWAYS generate titles following the Conventional Commits format.
 
@@ -101,7 +123,14 @@ The changes primarily %s the following files.
 
 %s
 
-Return ONLY the commit title. No markdown, no code blocks, no explanation.`, primaryAction, promptContent)
+%s
+
+Staged changes:
+\"\"\"
+%s
+\"\"\"
+
+Return ONLY the commit title. No markdown, no code blocks, no explanation.`, primaryAction, diffGuide, multiFileRules, promptContent)
 
 	titleMessages := []api.Message{
 		{
@@ -126,7 +155,14 @@ RULES:
 
 %s
 
-Return ONLY the description paragraph. No title, no markdown, no code blocks, no explanation.`, promptContent)
+%s
+
+Staged changes:
+\"\"\"
+%s
+\"\"\"
+
+Return ONLY the description paragraph. No title, no markdown, no code blocks, no explanation.`, diffGuide, multiFileRules, promptContent)
 
 	descMessages := []api.Message{
 		{
@@ -230,7 +266,7 @@ Return ONLY the description paragraph. No title, no markdown, no code blocks, no
 	return &CommitMessageResult{
 		Message:      commitMessage,
 		ApproxTokens: approx,
-		Warnings:     append([]string(nil), optimizedDiff.Warnings...),
+		Warnings:     budgetWarnings,
 	}, nil
 }
 

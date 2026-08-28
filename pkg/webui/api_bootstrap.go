@@ -3,8 +3,18 @@
 package webui
 
 import (
+	"context"
 	"net/http"
+	"time"
+
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 )
+
+// bootstrapSyncBudget bounds the total time spent computing the boot-time git
+// snapshot. Each git call is already bounded by git.SyncGitTimeout; this
+// caps the worst-case sum so a pathological repo can never stall
+// /api/bootstrap.
+const bootstrapSyncBudget = 10 * time.Second
 
 // RuntimeConfig provides runtime configuration for the web UI.
 // Served via GET /api/bootstrap (unauthenticated) so the frontend
@@ -29,6 +39,14 @@ type RuntimeConfig struct {
 	// (non-daemon interactive mode). The frontend uses this to hide
 	// multi-chat UI and show "coupled with terminal" messaging.
 	SharedMode bool `json:"sharedMode"`
+
+	// Sync is the ETH-1 sync-on-resume git snapshot for the workspace:
+	// branch, dirty files, ahead/behind and last commit at boot. It is
+	// computed with the pull DISABLED — bootstrap must never mutate the
+	// repo — so pull.result is always "not_attempted" here. nil (rendered
+	// as "sync": null) when git state could not be determined; it never
+	// fails the bootstrap response.
+	Sync *gitops.SyncReport `json:"sync"`
 }
 
 func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +81,23 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		AppMode:      appMode,
 		BuildVersion: "dev",
 		SharedMode:   ws.IsSharedMode(),
+		Sync:         computeBootstrapSync(r.Context(), ws.getWorkspaceRootForRequest(r)),
 	}
 	writeJSON(w, http.StatusOK, config)
+}
+
+// computeBootstrapSync builds the boot-time git snapshot via the same
+// git.RunSync used by `sprout sync` and GET /api/sync, with the pull
+// disabled (bootstrap never mutates the repo). Any failure — including the
+// budget expiring — returns nil, which renders as "sync": null; bootstrap
+// itself must never fail because of it.
+func computeBootstrapSync(ctx context.Context, workspaceRoot string) *gitops.SyncReport {
+	budgetCtx, cancel := context.WithTimeout(ctx, bootstrapSyncBudget)
+	defer cancel()
+
+	report, err := gitops.RunSync(budgetCtx, workspaceRoot, false)
+	if err != nil {
+		return nil
+	}
+	return &report
 }

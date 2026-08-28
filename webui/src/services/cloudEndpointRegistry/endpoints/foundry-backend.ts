@@ -105,6 +105,35 @@ const taskEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'List/create user tasks (webui compatibility)',
   },
+  {
+    path: '/api/tasks/',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Get task status/details by id',
+  },
+];
+
+// --- Fly workspaces & ETH-2 transactions ---
+// /workspace/fly is platform-only surface (never a local sprout route), used
+// by the escalation paths: list/create workspaces and the txn lifecycle the
+// "Run in cloud container" action drives (push deltas → run → pull deltas →
+// finish). Relative URLs so the CloudAdapter proxies them with session
+// credentials.
+const flyWorkspaceEndpoints: CloudEndpoint[] = [
+  {
+    path: '/workspace/fly',
+    methods: ['GET', 'POST'],
+    category: 'foundry-backend',
+    description: 'List/create Fly workspaces (escalation + txn workspace resolve)',
+  },
+  {
+    path: '/workspace/fly/',
+    methods: ['POST', 'GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Fly workspace txn lifecycle (open/status/push/run/pull/finish)',
+  },
 ];
 
 // --- Settings & Configuration ---
@@ -190,6 +219,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...historyEndpoints,
   ...sessionEndpoints,
   ...taskEndpoints,
+  ...flyWorkspaceEndpoints,
   ...settingsEndpoints,
   ...costEndpoints,
   ...providerEndpoints,

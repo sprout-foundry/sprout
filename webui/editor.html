@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Sprout Editor</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--editor-bg, #1e1e1e);
+        color: var(--editor-fg, #d4d4d4);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        overflow: hidden;
+      }
+      #editor {
+        height: 100%;
+      }
+      .cm-editor { height: 100%; }
+      .cm-scroller { overflow: auto; }
+      #status {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 10px;
+        font-size: 11px;
+        background: rgba(0, 0, 0, 0.35);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        z-index: 10;
+      }
+      #status .path { opacity: 0.85; }
+      #status .state { margin-left: auto; opacity: 0.6; }
+      #status.dirty .state { opacity: 1; color: #e2b93d; }
+    </style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <div id="status">
+      <span class="path">—</span>
+      <span class="state">ready</span>
+    </div>
+    <!--
+      E-M3 component shell (D5 strategy): CodeMirror 6 + the WASM
+      file layer ONLY — no webui app bundle, no React. The native host
+      drives this page via the postMessage protocol in
+      webui/src/components/standalone/editorMain.ts.
+
+      Studio-bridge.js is NOT injected here: file persistence goes
+      through the same SproutWasm store the webui uses (wasmShell
+      service), loaded directly by editorMain.
+    -->
+    <script type="module" src="/src/components/standalone/editorMain.ts"></script>
+  </body>
+</html>

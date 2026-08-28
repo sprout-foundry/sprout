@@ -16,7 +16,7 @@ func TestProcessQueryWithSeedRejectedCallerPreservesActiveTurnTimestamp(t *testi
 	}
 	defer a.EndQuery()
 
-	_, err := a.processQueryWithSeed("concurrent query")
+	_, err := a.processQueryWithSeed(QuerySourceUnknown, "concurrent query")
 	if !errors.Is(err, ErrQueryInProgress) {
 		t.Fatalf("error = %v, want ErrQueryInProgress", err)
 	}
@@ -59,7 +59,7 @@ func TestProcessQueryWithSeedAdmittedFailureClearsTimestampAndReleasesGuard(t *t
 	// A nil provider client makes prepareQueryRun fail after admission and after
 	// the per-turn timestamp is assigned. The owner defer must still clean up
 	// both pieces of turn state.
-	_, err := a.processQueryWithSeed("query that fails during preparation")
+	_, err := a.processQueryWithSeed(QuerySourceUnknown, "query that fails during preparation")
 	if err == nil {
 		t.Fatal("processQueryWithSeed returned nil error with no provider client")
 	}

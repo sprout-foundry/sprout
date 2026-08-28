@@ -390,7 +390,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					continue
 				}
 
-				if isInteractive && isQueryInProgress() {
+				if isInteractive && (isQueryInProgress() || (chatAgent != nil && chatAgent.IsQueryInProgress())) {
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {

@@ -29,6 +29,10 @@ func markReported(cause error) error {
 	return fmt.Errorf("%w: %w", errReported, cause)
 }
 
+// isReported reports whether an error was already rendered to the terminal by
+// the command that returned it, so callers (e.g. the REPL) can skip re-printing.
+func isReported(err error) bool { return errors.Is(err, errReported) }
+
 // plumbingPrefixes are internal "context" wrappers we add as an error bubbles
 // up the command stack. They carry no meaning for a user, so the central
 // renderer strips them from the front of the message — turning

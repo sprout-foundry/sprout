@@ -188,6 +188,11 @@ test-coverage: prepare-grammars
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
+		if grep -qaE "WARNING: DATA RACE" /tmp/sprout-test-coverage.log; then \
+			echo "DATA RACE detected — full race reports (last 800 lines of log):"; \
+			tail -n 800 /tmp/sprout-test-coverage.log || true; \
+			exit $$status; \
+		fi; \
 		if grep -qaE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log; then \
 			echo "Tests failed. Failing test names:"; \
 			grep -aE "^[[:space:]]*--- FAIL" /tmp/sprout-test-coverage.log | head -40 || true; \

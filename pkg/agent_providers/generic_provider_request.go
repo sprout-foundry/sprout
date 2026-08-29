@@ -119,8 +119,13 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	// non-thinking recommendation (e.g. Qwen3.6, Qwen3.8) get the correct
 	// parameters.
 	applyModelSpecificSettings(model, request, disableThinking)
-	applyReasoningEffort(model, reasoning, request)
-	applyDisableThinking(model, disableThinking, request)
+	// Disable wins: when thinking is being turned off, the effort level is
+	// meaningless and would overwrite the disable-targeting reasoning object.
+	if !disableThinking {
+		p.applyReasoningEffort(model, reasoning, request)
+	}
+	p.applyDisableThinking(model, disableThinking, request)
+	p.applyChatTemplateKwargs(model, disableThinking, request)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -157,23 +162,94 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	return json.Marshal(request)
 }
 
-func applyReasoningEffort(model, reasoning string, request map[string]interface{}) {
+func (p *GenericProvider) applyReasoningEffort(model, reasoning string, request map[string]interface{}) {
 	effort := strings.ToLower(strings.TrimSpace(reasoning))
 	if effort == "" {
 		return
 	}
-	if effort != "low" && effort != "medium" && effort != "high" {
+	if !isReasoningEffortLevel(effort) {
 		return
 	}
-	if !strings.Contains(strings.ToLower(model), "gpt-oss") {
+	// OpenRouter's unified reasoning object is the canonical control surface
+	// and the only knob that reaches Anthropic models through it. Emit it
+	// only for models the catalog says accept `reasoning`.
+	if p.config.Conversion.UnifiedReasoningParam && modelsettings.ResolveModelSettings(model).Supported["reasoning"] {
+		request["reasoning"] = map[string]interface{}{"effort": effort}
 		return
 	}
-	request["reasoning_effort"] = effort
+	if strings.Contains(strings.ToLower(model), "gpt-oss") {
+		request["reasoning_effort"] = effort
+	}
+}
+
+func isReasoningEffortLevel(effort string) bool {
+	switch effort {
+	case "low", "medium", "high", "xhigh", "max", "minimal", "none":
+		return true
+	}
+	return false
+}
+
+// applyChatTemplateKwargs merges configured chat_template_kwargs into the
+// request for template-driven local servers (vLLM, llama.cpp, LM Studio),
+// where template flags like preserve_thinking/enable_thinking only take
+// effect inside that object. Restricted to localhost endpoints: hosted APIs
+// reject unknown request fields. For Qwen3.6+ models preserve_thinking is
+// defaulted on (unless explicitly configured false) so prior-turn reasoning
+// replayed via reasoning_content renders back into the prompt; it is
+// suppressed when thinking is disabled for the request.
+func (p *GenericProvider) applyChatTemplateKwargs(model string, disableThinking bool, request map[string]interface{}) {
+	if !p.isLoopbackEndpoint() {
+		return
+	}
+	merged, _ := request["chat_template_kwargs"].(map[string]interface{})
+	if merged == nil {
+		merged = map[string]interface{}{}
+	}
+	for k, v := range p.config.Conversion.ChatTemplateKwargs {
+		merged[k] = v
+	}
+	if !disableThinking && isQwen36PlusModel(model) {
+		if _, explicit := merged["preserve_thinking"]; !explicit {
+			merged["preserve_thinking"] = true
+		}
+	} else if disableThinking {
+		delete(merged, "preserve_thinking")
+	}
+	if len(merged) == 0 {
+		return
+	}
+	request["chat_template_kwargs"] = merged
+}
+
+// isLoopbackEndpoint reports whether the configured endpoint targets a
+// local server. Template kwargs (and other server-specific extras) are only
+// safe to send there.
+func (p *GenericProvider) isLoopbackEndpoint() bool {
+	endpoint := strings.ToLower(p.config.Endpoint)
+	return strings.Contains(endpoint, "127.0.0.1") ||
+		strings.Contains(endpoint, "localhost") ||
+		strings.Contains(endpoint, "[::1]")
+}
+
+// isQwen36PlusModel matches Qwen families whose chat templates implement
+// preserve_thinking (Qwen3.6 and newer, including 3.7+/Qwen3.8).
+func isQwen36PlusModel(model string) bool {
+	m := strings.ToLower(model)
+	if !strings.Contains(m, "qwen") {
+		return false
+	}
+	for _, prefix := range []string{"qwen3.6", "qwen3.7", "qwen3.8", "qwen3.9", "qwen4"} {
+		if strings.Contains(m, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // applyDisableThinking applies the disable_thinking setting to the request for models that support it.
 // Different model families use different parameter names to disable thinking:
-func applyDisableThinking(model string, disableThinking bool, request map[string]interface{}) {
+func (p *GenericProvider) applyDisableThinking(model string, disableThinking bool, request map[string]interface{}) {
 	if !disableThinking {
 		return
 	}
@@ -223,8 +299,13 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 		strings.Contains(modelLower, "claude-opus-4.6") ||
 		strings.Contains(modelLower, "claude-sonnet-4.6") ||
 		strings.Contains(modelLower, "claude-haiku-4.6") {
-		// For Claude 4/Opus 4.6, use adaptive with low effort to minimize thinking
-		// Note: Older deprecated syntax was type: "disabled"
+		// Via OpenRouter the unified reasoning object is the correct knob;
+		// Anthropic-native `thinking` syntax is only for direct
+		// Anthropic-compatible endpoints.
+		if p.config.Conversion.UnifiedReasoningParam {
+			request["reasoning"] = map[string]interface{}{"effort": "low"}
+			return
+		}
 		request["thinking"] = map[string]interface{}{
 			"type":   "adaptive",
 			"effort": "low",
@@ -234,7 +315,19 @@ func applyDisableThinking(model string, disableThinking bool, request map[string
 
 	// Qwen models (Alibaba) - Qwen3, Qwen3.5, Qwen2.5 use enable_thinking
 	if strings.Contains(modelLower, "qwen3") || strings.Contains(modelLower, "qwen2.5") || strings.Contains(modelLower, "qwen2") {
-		request["enable_thinking"] = false
+		// vLLM/llama.cpp only honor template flags inside
+		// chat_template_kwargs; hosted DashScope-style APIs take the
+		// top-level field.
+		if p.isLoopbackEndpoint() {
+			kwargs, _ := request["chat_template_kwargs"].(map[string]interface{})
+			if kwargs == nil {
+				kwargs = map[string]interface{}{}
+			}
+			kwargs["enable_thinking"] = false
+			request["chat_template_kwargs"] = kwargs
+		} else {
+			request["enable_thinking"] = false
+		}
 		return
 	}
 

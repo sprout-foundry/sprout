@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"encoding/json"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
@@ -18,6 +20,12 @@ func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
 			ToolCallID:       msg.ToolCallID,
+		}
+		if raw := msg.Meta[api.ReasoningDetailsMetaKey]; raw != "" {
+			var details []map[string]interface{}
+			if err := json.Unmarshal([]byte(raw), &details); err == nil && len(details) > 0 {
+				result[i].ReasoningDetails = details
+			}
 		}
 
 		if len(msg.ToolCalls) > 0 {

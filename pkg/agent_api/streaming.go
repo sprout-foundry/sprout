@@ -16,6 +16,13 @@ import (
 // contentType is "assistant_text" for regular content or "reasoning" for thinking/reasoning content.
 type StreamCallback func(content string, contentType string)
 
+// ReasoningDetailsMetaKey is the Meta key under which structured reasoning
+// blocks (OpenRouter reasoning_details array, JSON-encoded) travel on a
+// Message. api.Message aliases the external seed core.Message whose fields
+// cannot be extended, so the map is the in-memory carrier; history
+// persistence uses the APIMessage.ReasoningDetails field instead.
+const ReasoningDetailsMetaKey = "reasoning_details"
+
 // StreamingChoice represents a streaming response choice
 type StreamingChoice struct {
 	Index        int            `json:"index"`
@@ -80,6 +87,7 @@ type StreamingResponseBuilder struct {
 	response         ChatResponse
 	content          strings.Builder
 	reasoningContent strings.Builder
+	reasoningDetails []map[string]interface{} // OpenRouter structured reasoning blocks
 	toolCalls        map[int]*ToolCall        // Index to tool call
 	toolCallArgs     map[int]*strings.Builder // Index to arguments builder
 	finishReason     string
@@ -195,14 +203,22 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		if reasoningDelta == "" && choice.Delta.Reasoning != "" {
 			reasoningDelta = choice.Delta.Reasoning // GLM format
 		}
-		if reasoningDelta == "" && len(choice.Delta.ReasoningDetails) > 0 {
-			// For Minimax, reasoning_details is a string
-			// For GLM models, it's an array (which we ignore since we already used the reasoning field)
-			var detailsStr string
-			if err := json.Unmarshal(choice.Delta.ReasoningDetails, &detailsStr); err == nil {
-				reasoningDelta = detailsStr // Prioritize reasoning_details for Minimax
+		if len(choice.Delta.ReasoningDetails) > 0 {
+			// reasoning_details arrives as either a JSON string (Minimax) or
+			// a JSON array (OpenRouter unified reasoning_details). The array
+			// form carries structured blocks (encrypted/signed/summary) that
+			// must round-trip verbatim for preserved thinking — accumulate
+			// them independently of the flat string, since OpenRouter may
+			// stream both `reasoning` and `reasoning_details` together.
+			var detailsArr []map[string]interface{}
+			if err := json.Unmarshal(choice.Delta.ReasoningDetails, &detailsArr); err == nil {
+				b.reasoningDetails = append(b.reasoningDetails, detailsArr...)
+			} else if reasoningDelta == "" {
+				var detailsStr string
+				if err := json.Unmarshal(choice.Delta.ReasoningDetails, &detailsStr); err == nil {
+					reasoningDelta = detailsStr
+				}
 			}
-			// If it's an array (GLM format), we ignore it since we already used the reasoning field
 		}
 
 		if reasoningDelta != "" {
@@ -283,6 +299,15 @@ func (b *StreamingResponseBuilder) GetResponse() *ChatResponse {
 		choice := &b.response.Choices[0]
 		content := b.content.String()
 		reasoningContent := b.reasoningContent.String()
+
+		if len(b.reasoningDetails) > 0 {
+			if raw, err := json.Marshal(b.reasoningDetails); err == nil {
+				if choice.Message.Meta == nil {
+					choice.Message.Meta = make(map[string]string)
+				}
+				choice.Message.Meta[ReasoningDetailsMetaKey] = string(raw)
+			}
+		}
 
 		// Handle case where reasoning models only provide reasoning_content
 		// Move reasoning_content to content field to avoid empty content (causes 502 errors)

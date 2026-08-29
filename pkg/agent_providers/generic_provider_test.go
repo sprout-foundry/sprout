@@ -383,7 +383,8 @@ func TestApplyModelSpecificSettingsQwen36ModeWiring(t *testing.T) {
 
 func TestApplyReasoningEffortAddsGptOssReasoningEffort(t *testing.T) {
 	request := map[string]interface{}{}
-	applyReasoningEffort("openai/gpt-oss-20b", "medium", request)
+	p := &GenericProvider{config: &ProviderConfig{Name: "test"}}
+	p.applyReasoningEffort("openai/gpt-oss-20b", "medium", request)
 	if request["reasoning_effort"] != "medium" {
 		t.Fatalf("expected reasoning_effort=medium for gpt-oss model, got %#v", request["reasoning_effort"])
 	}

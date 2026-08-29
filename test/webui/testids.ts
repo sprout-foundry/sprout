@@ -233,6 +233,8 @@ const TESTIDS = {
   'workspace-browser-entry': 'workspace-browser-entry',
   'workspace-browser-confirm': 'workspace-browser-confirm',
   'workspace-gate-modal': 'workspace-gate-modal',
+  'workspace-gate-error': 'workspace-gate-error',
+  'workspace-gate-home-btn': 'workspace-gate-home-btn',
 
   // Command output
   'command-output-panel': 'command-output-panel',

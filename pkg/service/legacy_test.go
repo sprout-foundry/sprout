@@ -1,14 +1,24 @@
-//go:build linux
+//go:build linux || android
 
 package service
 
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
+// Android matches the linux build tag but detectLegacyService's runtime.GOOS
+// switch treats it as "default" — no systemd user dir semantics apply.
+func skipAndroid(t *testing.T) {
+	if runtime.GOOS == "android" {
+		t.Skip("android has no systemd user services")
+	}
+}
+
 func TestDetectLegacyServiceLinux(t *testing.T) {
+	skipAndroid(t)
 	testDir := t.TempDir()
 
 	t.Setenv("HOME", testDir)
@@ -120,6 +130,7 @@ func TestRemoveLegacyServices(t *testing.T) {
 }
 
 func TestRemoveLegacyServices_Empty(t *testing.T) {
+	skipAndroid(t)
 	err := removeLegacyServices(nil)
 	if err != nil {
 		t.Errorf("removeLegacyServices(nil) = %v, want nil", err)

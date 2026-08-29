@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.20] - 2026-08-29
+
+- feat: preserve thinking across turns — OpenRouter reasoning_details round-trip (capture on Message.Meta, replay verbatim, persist in history), unified reasoning:{effort} control for catalog-supported models replacing the gpt-oss-only gate, Claude disable-path fix; local preserve_thinking via chat_template_kwargs for Qwen3.6+ (loopback-gated, default on), enable_thinking routed correctly for vLLM/llama.cpp, reasoning_content replay enabled for sprout-local/lmstudio (dbab260ed)
+- fix(ci): repair failing gates — gofmt/prettier formatting, stale pricing test (now config-derived), WorkspaceGateModal testids, cloudTxn total-cap test 100MiB base64 timeout (caps now injectable), webui MIME test Vite entry-name regex, Termux-only test environment skips (c9cdc94a8)
+
 ## [v0.17.19] - 2026-08-24
 
 - Fix flaky log-capture race in pkg/workflow allowed_paths_test: the 4 log-capture tests used defer Unlock() + t.Cleanup(SetOutput restore), so cleanup ran AFTER the lock released, letting a waiting test install its buffer before the first test's cleanup stomped the global writer — causing intermittent 'got logs: ""' failures under -race. Restore writer/flags inside a single defer that unlocks last. Verified: 25x race iterations + full package pass. (025740c3a)

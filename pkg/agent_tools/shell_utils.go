@@ -5,31 +5,6 @@ import (
 	"strings"
 )
 
-// stripQuotedSections replaces the content of quoted strings (single and double
-// quotes) with spaces, preserving string length. This is used before pattern
-// matching to avoid false positives from | or other shell metacharacters that
-// appear inside quoted argument values (e.g., grep regex alternation like
-// "rgba|gradient|shadow|image").
-func stripQuotedSections(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	inQuote := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '\'' || c == '"' {
-			inQuote = !inQuote
-			b.WriteByte(c)
-			continue
-		}
-		if inQuote {
-			b.WriteByte(' ')
-		} else {
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
-}
-
 // maxRisk returns the maximum risk level from a slice
 func maxRisk(risks []SecurityRisk) SecurityRisk {
 	max := SecuritySafe

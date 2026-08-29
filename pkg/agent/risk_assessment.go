@@ -9,6 +9,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // RiskSource identifies which check contributed to an assessment.
@@ -78,7 +79,7 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 
 			// 3. Git history-rewrite gate (promptable, not a hard block).
 			// Rebase is unconditionally banned; --abort is the only permitted form.
-			if isGitHistoryRewriteCommand(cmd) {
+			if shelltext.IsGitHistoryRewriteCommand(cmd) {
 				if isGitRebaseCommand(cmd) {
 					assessment = assessment.combine(
 						RiskAssessment{
@@ -322,7 +323,7 @@ func resolveUnifiedDecision(ra RiskAssessment) string {
 // isGitRebaseCommand reports whether `command` contains a `git rebase`
 // invocation that rewrites history (i.e. NOT `git rebase --abort`).
 func isGitRebaseCommand(command string) bool {
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	remaining := command
 	for {
 		idx := strings.Index(remaining, "git ")

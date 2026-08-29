@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -644,4 +645,38 @@ func TestSubscriberStdoutInterleaveDoesNotEraseRenderedProse(t *testing.T) {
 	require.Equal(t, 3, r.physicalLines,
 		"physicalLines should count prose rows + external write rows")
 	require.True(t, r.atLineStart, "should be at line start after trailing newline")
+}
+
+// TestRenderer_FlushCompletedLineTriggersPendingStreamingResize proves that
+// flushCompleteLines — the completed-line boundary inside WriteChunk — fires
+// ApplyPendingResizeStreamingLocked when a resize was pended mid-stream. The
+// footer's DECSTBM re-apply bytes must appear on the writer, and
+// pendingResize must remain set for the segment-end full resize.
+func TestRenderer_FlushCompletedLineTriggersPendingStreamingResize(t *testing.T) {
+	var footerBuf bytes.Buffer
+	f := NewStatusFooter(&footerBuf, &stubSource{model: "test"})
+	f.isTTY = true
+	f.active = true
+	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 24}
+	f.mu.Lock()
+	f.pendingResize = true
+	f.mu.Unlock()
+
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	r.SetFooter(f)
+
+	captureRendererStdout(t, func() {
+		r.WriteChunk("a line of prose\n")
+	})
+
+	// The mid-stream DECSTBM re-apply (24 rows − 2 reserved) was emitted.
+	const decstbm = "\033[1;22r"
+	if !strings.Contains(footerBuf.String(), decstbm) {
+		t.Fatalf("flushCompleteLines did not fire the mid-stream scroll-region re-apply; footer output=%q", footerBuf.String())
+	}
+	// pendingResize must survive for the segment-end full resize.
+	f.mu.Lock()
+	pending := f.pendingResize
+	f.mu.Unlock()
+	require.True(t, pending, "pendingResize must remain set after a mid-stream region re-apply")
 }

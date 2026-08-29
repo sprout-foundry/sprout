@@ -112,7 +112,10 @@ func (t *FooterTooltip) Show(cols, rows int) {
 		if row < 1 {
 			break
 		}
-		fmt.Fprintf(t.w, "\033[%d;1H\033[K%s\n", row, line)
+		// No trailing \n: rows-2 is the scroll region's bottom margin,
+		// so a newline there scrolls the whole region — shifting the
+		// just-written line up so the next absolute write overwrites it.
+		fmt.Fprintf(t.w, "\033[%d;1H\033[K%s", row, line)
 	}
 
 	// Auto-dismiss timer.

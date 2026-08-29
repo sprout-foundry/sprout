@@ -209,6 +209,7 @@ func isModelNotFoundError(err error) bool {
 func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -255,6 +256,7 @@ func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 func promptModelSelection(models []api.ModelInfo) (string, bool) {
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	reader := bufio.NewReader(os.Stdin)
 	_, _ = os.Stderr.Write([]byte("\nAvailable models:\n"))

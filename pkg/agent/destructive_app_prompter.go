@@ -131,6 +131,7 @@ func (a *Agent) promptForDestructiveApp(action string, args map[string]any, fg c
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
+		defer clihooks.ResumeIndicator()
 		defer clihooks.ResumeSteer()
 
 		if a.debug {

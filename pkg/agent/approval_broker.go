@@ -294,7 +294,7 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				args["command"] != "" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
 					proposal := NewShellProposal(cmd)
-					pickerCtx, pickerCancel := context.WithTimeout(context.Background(), utils.ApprovalPromptTimeout)
+					pickerCtx, pickerCancel := context.WithTimeout(a.interruptCtx, utils.ApprovalPromptTimeout)
 					decisions, pickErr := a.RequestShellApproval(pickerCtx, proposal)
 					pickerCancel()
 					if pickErr != nil {

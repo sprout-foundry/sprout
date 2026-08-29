@@ -4,6 +4,11 @@ All notable changes to Sprout will be documented in this file.
 
 ## [v0.17.21] - 2026-08-29
 
+- chore: changelog for v0.17.21 (203a8b8aa)
+- docs: Update changelog for v0.17.20 (eba6ab024)
+
+## [v0.17.21] - 2026-08-29
+
 - fix(agent): route CLI auto-resume turns through the REPL loop — wakeup poller resume turns ran on a bare goroutine while the REPL idled in ReadLine, so no turn renderer existed and every streamed chunk hit the PrintExternal fallback (newline per chunk + prompt redraw), rendering prose one token per line with no header/steer panel/turn summary. Interactive CLI now registers a wake fn (SetWakeupWakeFn); InputReader gains Wake/ArmWakeup/ErrWakeupPending with a readability-poll gate so a wake can interrupt an idle read, and the REPL runs the resume through full turn machinery with wakeup-budget accounting. WebUI/headless keep the goroutine path. (fcf79916b)
 
 ## [v0.17.20] - 2026-08-29

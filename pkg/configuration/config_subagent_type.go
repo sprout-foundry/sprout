@@ -4,6 +4,8 @@ package configuration
 
 import (
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // IsCriticalOperation reports whether a command matches a pattern that
@@ -40,7 +42,7 @@ func IsCriticalOperation(command string) bool {
 	// so DATA content inside a heredoc or string literal doesn't trigger
 	// false-positive critical-pattern matches (e.g. a script that mentions
 	// "rm -rf /" in a comment or string).
-	cmdLower = stripHeredocAndQuotes(cmdLower)
+	cmdLower = shelltext.StripHeredocAndQuotes(cmdLower)
 
 	fields := strings.Fields(cmdLower)
 
@@ -186,7 +188,7 @@ func (st *SubagentType) EvaluateOperationRisk(command string) RiskLevel {
 	// or "rm -rf" would falsely match risk patterns — the classic case
 	// is a script that embeds a command example as DATA (e.g. writing a
 	// Go test file whose source code mentions "git checkout").
-	cmdLower := strings.ToLower(stripHeredocAndQuotes(command))
+	cmdLower := strings.ToLower(shelltext.StripHeredocAndQuotes(command))
 
 	// HighRiskNever patterns are gated. "force_flag" is one such
 	// pattern that lives in the list for all gated profiles; the

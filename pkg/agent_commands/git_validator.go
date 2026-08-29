@@ -1,35 +1,10 @@
 package commands
 
-import "strings"
+import (
+	"strings"
 
-// stripQuotedContent replaces all single-quoted and double-quoted string
-// content in a shell command with spaces, preserving quote boundaries.
-// This prevents false-positive git command detection when words like
-// "git commit" appear inside JSON payloads or other quoted arguments.
-func stripQuotedContent(s string) string {
-	var b strings.Builder
-	inSingle := false
-	inDouble := false
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			b.WriteByte(ch)
-		} else if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			b.WriteByte(ch)
-		} else if inSingle || inDouble {
-			if ch == '\n' {
-				b.WriteByte('\n')
-			} else {
-				b.WriteByte(' ')
-			}
-		} else {
-			b.WriteByte(ch)
-		}
-	}
-	return b.String()
-}
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
+)
 
 // GitCommandValidator provides utility functions for validating git commands
 // to prevent dangerous operations from being executed without proper approval.
@@ -40,7 +15,7 @@ func stripQuotedContent(s string) string {
 // This function checks ALL git commands in a compound shell command (e.g., "cd x && git checkout").
 func IsGitCheckoutSubcommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	remaining := command
 	for {
@@ -86,7 +61,7 @@ func IsGitCheckoutSubcommand(command string) bool {
 // This function checks ALL git commands in a compound shell command (e.g., "cd x && git reset").
 func IsGitDiscardCommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	remaining := command
 	for {
@@ -165,7 +140,7 @@ func IsGitDiscardCommand(command string) bool {
 // ExtractGitSubcommand extracts the first git subcommand from a command string for display purposes.
 func ExtractGitSubcommand(command string) string {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	idx := strings.Index(command, "git ")
 	if idx == -1 {
 		return "unknown"

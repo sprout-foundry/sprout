@@ -19,6 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // configManagerInterface defines the interface for accessing config
@@ -181,7 +182,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	// via reflog). AllowGitHistoryRewrite=true skips the prompt entirely.
 	// If the persona cascade above already prompted and approved (e.g.
 	// git reset --hard is HighRiskNever → High), skip the re-prompt.
-	if isGitHistoryRewriteCommand(command) && !historyRewriteAlreadyApproved {
+	if shelltext.IsGitHistoryRewriteCommand(command) && !historyRewriteAlreadyApproved {
 		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
 			if !a.highRiskApprovedForCommand(ctx, command) {
 				return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and was not approved (command: '%s')", extractGitSubcommand(command), command), nil)

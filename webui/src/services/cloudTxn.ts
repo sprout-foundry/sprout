@@ -184,11 +184,22 @@ function toBytes(content: string | Uint8Array): Uint8Array {
  * land in `skipped` (with the contract's reason strings) instead of failing
  * the transfer, and `truncated` marks any skip. `opts.deletes` carries files
  * the browser removed relative to HEAD so the container converges.
+ * `opts.maxFileBytes`/`opts.maxFiles`/`opts.maxTotalBytes` exist for tests;
+ * production callers use the contract defaults.
  */
 export async function buildPushManifest(
   readFiles: () => Promise<TxnPushInput[]> | TxnPushInput[],
-  opts: { deletes?: string[]; gitSha?: string } = {},
+  opts: {
+    deletes?: string[];
+    gitSha?: string;
+    maxFileBytes?: number;
+    maxFiles?: number;
+    maxTotalBytes?: number;
+  } = {},
 ): Promise<TxnManifest> {
+  const maxFileBytes = opts.maxFileBytes ?? TXN_MAX_FILE_BYTES;
+  const maxFiles = opts.maxFiles ?? TXN_MAX_FILES;
+  const maxTotalBytes = opts.maxTotalBytes ?? TXN_MAX_TOTAL_BYTES;
   const inputs = await readFiles();
   const files: TxnFile[] = [];
   const skipped: TxnSkipped[] = [];
@@ -200,16 +211,16 @@ export async function buildPushManifest(
       skipped.push({ path: String(input?.path ?? ''), reason: pathReason });
       continue;
     }
-    if (files.length >= TXN_MAX_FILES) {
+    if (files.length >= maxFiles) {
       skipped.push({ path: input.path, reason: 'exceeds_file_count_cap' });
       continue;
     }
     const bytes = toBytes(input.content);
-    if (bytes.byteLength > TXN_MAX_FILE_BYTES) {
+    if (bytes.byteLength > maxFileBytes) {
       skipped.push({ path: input.path, reason: 'exceeds_per_file_cap' });
       continue;
     }
-    if (total + bytes.byteLength > TXN_MAX_TOTAL_BYTES) {
+    if (total + bytes.byteLength > maxTotalBytes) {
       skipped.push({ path: input.path, reason: 'exceeds_total_cap' });
       continue;
     }

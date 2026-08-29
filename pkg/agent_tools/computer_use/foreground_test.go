@@ -137,7 +137,9 @@ func TestForegroundDarwin_MockTooManyFields(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestForegroundOther_ReturnsUnavailable(t *testing.T) {
-	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+	// Android/Termux matches the linux build tag but has no X11/xdotool, so
+	// the linux impl runs there — same class as unsupported platforms.
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "android" {
 		t.Skipf("only runs on unsupported platforms; current GOOS=%s", runtime.GOOS)
 	}
 	got, err := GetForegroundApp()

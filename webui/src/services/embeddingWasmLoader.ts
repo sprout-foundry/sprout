@@ -78,9 +78,7 @@ function resolveWasmBase(): string {
   if (typeof window === 'undefined' || !window.location) return '/webui/wasm';
   const path = window.location.pathname ?? '/';
   const underMount =
-    path === '/webui' ||
-    path.startsWith('/webui/') ||
-    (window.location.search ?? '').includes('mount=/webui');
+    path === '/webui' || path.startsWith('/webui/') || (window.location.search ?? '').includes('mount=/webui');
   return underMount ? '/webui/wasm' : '/wasm';
 }
 

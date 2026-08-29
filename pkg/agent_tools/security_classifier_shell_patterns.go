@@ -5,6 +5,8 @@ package tools
 import (
 	"regexp"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // pipeToShellPattern matches pipe-to-shell patterns that can execute arbitrary code.
@@ -163,7 +165,7 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 	// genuinely dangerous commands in the chain (e.g., rm -rf /etc/) still
 	// elevate to DANGEROUS.
 	cmdLower := strings.ToLower(cmd)
-	stripped := stripQuotedSections(cmdLower)
+	stripped := shelltext.StripQuotedContent(cmdLower)
 	pipeToShell := isPipeToShell(stripped)
 
 	parts := SplitChainedCommand(cmd)

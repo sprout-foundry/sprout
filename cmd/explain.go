@@ -15,130 +15,14 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
-
-// ---------------------------------------------------------------------------
-// Git history-rewrite detection (replicated from pkg/agent/tool_handlers.go)
-// ---------------------------------------------------------------------------
-
-// stripQuotedContent replaces all single-quoted and double-quoted string
-// content with spaces, preserving quote boundaries so token positions stay
-// stable.
-func stripQuotedContent(s string) string {
-	var b strings.Builder
-	inSingle := false
-	inDouble := false
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			b.WriteByte(ch)
-		} else if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			b.WriteByte(ch)
-		} else if inSingle || inDouble {
-			if ch == '\n' {
-				b.WriteByte('\n')
-			} else {
-				b.WriteByte(' ')
-			}
-		} else {
-			b.WriteByte(ch)
-		}
-	}
-	return b.String()
-}
-
-// isGitHistoryRewriteCommand checks whether `command` contains a git
-// invocation that can lose commit history. Replicated from pkg/agent to
-// avoid a circular import.
-func isGitHistoryRewriteCommand(command string) bool {
-	command = stripQuotedContent(command)
-	remaining := command
-	for {
-		idx := strings.Index(remaining, "git ")
-		if idx == -1 {
-			return false
-		}
-		gitCmd := remaining[idx:]
-		parts := strings.Fields(gitCmd)
-		if len(parts) < 2 {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		subcommand := ""
-		subIdx := 0
-		for i := 1; i < len(parts); i++ {
-			part := parts[i]
-			if strings.HasPrefix(part, "-") {
-				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-					i++
-				}
-				continue
-			}
-			subcommand = strings.TrimRight(part, ");\"'")
-			subIdx = i
-			break
-		}
-		if subcommand == "" {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		rest := parts[subIdx+1:]
-		switch subcommand {
-		case "rebase":
-			// `git rebase --abort` is a recovery op, not a history rewrite.
-			// Any other rebase form (including `--abort` with other flags or
-			// arguments, or any other rebase variant) is treated as a rewrite.
-			// The only permitted rebase invocation is pure `--abort`.
-			if len(rest) == 1 && rest[0] == "--abort" {
-				return false
-			}
-			return true
-		case "reset":
-			hard := false
-			for _, a := range rest {
-				if a == "--hard" {
-					hard = true
-				}
-			}
-			if !hard {
-				remaining = remaining[idx+1:]
-				continue
-			}
-			hasCommitIsh := false
-			for _, a := range rest {
-				if a == "--hard" || strings.HasPrefix(a, "-") || a == "HEAD" {
-					continue
-				}
-				hasCommitIsh = true
-				break
-			}
-			if hasCommitIsh {
-				return true
-			}
-		case "branch":
-			for _, a := range rest {
-				if a == "-d" || a == "-D" || a == "--delete" {
-					return true
-				}
-			}
-		case "tag":
-			for _, a := range rest {
-				if a == "-d" || a == "--delete" {
-					return true
-				}
-			}
-		}
-		remaining = remaining[idx+1:]
-	}
-}
 
 // isGitWriteCommand reports whether `command` contains a git invocation
 // whose intent requires the orchestrator git-write flow. Replicated from
 // pkg/agent to avoid a circular import.
 func isGitWriteCommand(command string) bool {
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	remaining := command
 	for {
 		idx := strings.Index(remaining, "git ")
@@ -239,7 +123,7 @@ func isGitWriteCommand(command string) bool {
 // AGENTS.md bans rebase unconditionally; the only permitted rebase is
 // `--abort` (recovery from a prior session's interrupted rebase).
 func isGitRebaseCommand(command string) bool {
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	remaining := command
 	for {
 		idx := strings.Index(remaining, "git ")
@@ -502,7 +386,7 @@ func explainSourcesFor(toolName string, res tools.SecurityResult, args map[strin
 
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			if isGitHistoryRewriteCommand(cmd) {
+			if shelltext.IsGitHistoryRewriteCommand(cmd) {
 				if isGitRebaseCommand(cmd) {
 					// AGENTS.md: rebase is unconditionally banned — every
 					// form including interactive, --continue, --skip, and
@@ -580,7 +464,7 @@ func combinedAssessment(toolName string, secResult tools.SecurityResult, args ma
 
 	if toolName == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			if isGitHistoryRewriteCommand(cmd) {
+			if shelltext.IsGitHistoryRewriteCommand(cmd) {
 				if isGitRebaseCommand(cmd) {
 					// AGENTS.md: rebase is unconditionally banned — hard-block.
 					level = configuration.RiskLevelCritical

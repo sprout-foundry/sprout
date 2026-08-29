@@ -191,6 +191,18 @@ type Agent struct {
 	wakeupDisabled       bool
 	wakeupMu             sync.Mutex
 
+	// wakeupWakeFn routes TryAutoResume through the REPL loop instead of
+	// a bare background goroutine. Set by the interactive CLI; nil in
+	// headless/WebUI-daemon mode (goroutine path). The REPL loop owns
+	// the turn machinery (assistant renderer, spinner, steer panel), so
+	// resume turns must run there or streamed prose renders one chunk
+	// per line via the PrintExternal fallback.
+	wakeupWakeFn atomic.Pointer[func()]
+	// pendingWakeupResume holds formatted wakeup batches stashed by
+	// TryAutoResume for the REPL to run as auto-queued turns. Guarded
+	// by wakeupMu.
+	pendingWakeupResume []string
+
 	// lifetimeCtx is a process-scoped context for background goroutines that must outlive a single turn.
 	lifetimeCtx    context.Context
 	lifetimeCancel context.CancelFunc

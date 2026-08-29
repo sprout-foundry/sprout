@@ -182,9 +182,21 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// poller (pkg/webui/wakeup_poller.go), checking for pending background-
 	// task completion notifications every 3s and auto-resuming the agent
 	// so it can act on them. Without this, background tasks launched via
-	// shell_command(background=true) complete silently in CLI mode — the
+	// shell_command(background=true) complete silently in CLI mode —
 	// notification is queued but nothing drains it until the user types
 	// another message.
+	//
+	// The wake function routes TryAutoResume through the REPL loop (see
+	// notifications.go): the poller stashes the wakeup batch and wakes the
+	// idle ReadLine, and the loop runs the resume turn through its normal
+	// turn machinery. This covers both the CLI poller and the shared-agent
+	// WebUI poller, which share the same TryAutoResume entry point.
+	//
+	// ArmWakeup enables the readability-gated read loop so Wake() can
+	// interrupt an idle prompt — without it, an already-parked Read only
+	// sees the flag at its next iteration (i.e. on the next keystroke).
+	inputReader.ArmWakeup()
+	chatAgent.SetWakeupWakeFn(inputReader.Wake)
 	go startCLIWakeupPoller(subCtx, chatAgent, indicator, 3*time.Second)
 
 	// Tracks the time of the last Ctrl+C at the idle prompt so a
@@ -214,7 +226,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				query = autoQueued[0]
 				autoQueued = autoQueued[1:]
 				fmt.Fprintln(os.Stderr)
-				console.GlyphPaused.Fprintf(os.Stderr, "auto-run queued: %s", query)
+				if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
+					console.GlyphPaused.Fprintf(os.Stderr, "auto-resume: background task completed — resuming")
+				} else {
+					console.GlyphPaused.Fprintf(os.Stderr, "auto-run queued: %s", query)
+				}
 				rawQuery = ""
 			} else {
 				// SP-048-5d follow-up: refresh the prompt prefix each loop so
@@ -227,6 +243,17 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				query, err = inputReader.ReadLine()
 
 				if err != nil {
+					if errors.Is(err, console.ErrWakeupPending) {
+						// A background event (auto-resume wakeup) needs the
+						// REPL's turn machinery. Preserve any typed text and
+						// loop; the top of the next iteration drains the
+						// stashed wakeup batches into autoQueued.
+						if strings.TrimSpace(inputReader.LineBuffer()) != "" {
+							inputReader.SetInitialContent(inputReader.LineBuffer())
+						}
+						autoQueued = append(autoQueued, chatAgent.DrainWakeupForREPL()...)
+						continue
+					}
 					if err.Error() == "interrupted" {
 						// Standard REPL convention (psql, redis-cli, node):
 						// first Ctrl+C at an empty prompt clears the line and
@@ -324,6 +351,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnStart := time.Now()
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
+			turnTotalStart := chatAgent.GetTotalTokens()
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
 			cliui.ResetTurnFirstToken()
@@ -438,6 +466,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).
 			cliui.PrintPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
+			// Charge REPL-run auto-resume turns against the wakeup budget —
+			// the background-goroutine path does this in TryAutoResume, so
+			// this keeps both surfaces equivalent.
+			if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
+				if delta := chatAgent.GetTotalTokens() - turnTotalStart; delta > 0 {
+					chatAgent.RecordWakeupTokens(delta, chatAgent.GetConfig().Wakeup)
+				}
+			}
 		}
 	}
 }

@@ -39,13 +39,7 @@ export interface GitSyncReport {
   pull: {
     /** True iff a pull subprocess actually ran (false for every skipped_* outcome). */
     attempted: boolean;
-    result:
-      | 'not_attempted'
-      | 'up_to_date'
-      | 'fast_forwarded'
-      | 'skipped_no_upstream'
-      | 'skipped_dirty'
-      | 'error';
+    result: 'not_attempted' | 'up_to_date' | 'fast_forwarded' | 'skipped_no_upstream' | 'skipped_dirty' | 'error';
     /** git's own message when result is "error"; empty otherwise. */
     error: string;
   };

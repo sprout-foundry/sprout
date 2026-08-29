@@ -182,8 +182,8 @@ func TestPrepareBudgetedDiff_NonSemanticFilesBecomeSummaries(t *testing.T) {
 }
 
 func TestPrepareBudgetedDiff_SemanticPriorityAndTruncation(t *testing.T) {
-	sem1 := strings.Repeat("a\n", 300)          // 600 bytes
-	sem2 := strings.Repeat("b\n", 500)          // 1000 bytes
+	sem1 := strings.Repeat("a\n", 300) // 600 bytes
+	sem2 := strings.Repeat("b\n", 500) // 1000 bytes
 	raw := "diff --git a/first.go b/first.go\n--- a/first.go\n+++ b/first.go\n" +
 		"+_sem1_placeholder\n" +
 		"diff --git a/second.go b/second.go\n--- a/second.go\n+++ b/second.go\n"

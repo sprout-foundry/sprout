@@ -15,7 +15,6 @@ import {
   resolveTxnWorkspace,
   TXN_MAX_FILES,
   TXN_MAX_FILE_BYTES,
-  TXN_MAX_TOTAL_BYTES,
   txnFinish,
   txnPull,
   txnPush,
@@ -123,19 +122,22 @@ describe('buildPushManifest', () => {
   });
 
   it('skips files that would exceed the total cap', async () => {
-    // Every entry must stay under the 5 MiB per-file cap, so the 100 MiB
-    // total is reached by many files. Twenty views of one shared buffer
-    // sum to exactly the cap; the next entry — however small — tips over.
-    const chunk = new Uint8Array(TXN_MAX_FILE_BYTES);
-    const inputs = Array.from({ length: TXN_MAX_TOTAL_BYTES / TXN_MAX_FILE_BYTES }, (_, i) => ({
+    // Same arithmetic as the contract caps but with tiny injectable values:
+    // three 1 KiB chunks fill a 3 KiB total exactly; the next entries —
+    // however small — tip over. (The real 5 MiB/100 MiB values make this
+    // test encode 100 MiB of base64 and blow the runner timeout.)
+    const maxFileBytes = 1024;
+    const maxTotalBytes = 3 * 1024;
+    const chunk = new Uint8Array(maxFileBytes);
+    const inputs = Array.from({ length: maxTotalBytes / maxFileBytes }, (_, i) => ({
       path: `part-${i}.bin`,
       content: chunk,
     }));
     inputs.push({ path: 'over.txt', content: 'tiny' });
     inputs.push({ path: 'after.txt', content: 'also tiny' });
 
-    const manifest = await buildPushManifest(() => inputs);
-    expect(manifest.files).toHaveLength(20);
+    const manifest = await buildPushManifest(() => inputs, { maxFileBytes, maxTotalBytes });
+    expect(manifest.files).toHaveLength(3);
     expect(manifest.skipped).toEqual([
       { path: 'over.txt', reason: 'exceeds_total_cap' },
       { path: 'after.txt', reason: 'exceeds_total_cap' },

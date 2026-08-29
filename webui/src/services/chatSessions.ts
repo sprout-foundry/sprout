@@ -174,12 +174,7 @@ export async function listWorktrees(): Promise<WorktreeListResponse> {
   // flow into state and crash the sidebar render (e.g. worktrees.length
   // on undefined). Treat it as a load failure so the UI shows the
   // inline error instead of an error boundary.
-  if (
-    !data ||
-    typeof data !== 'object' ||
-    !Array.isArray(data.worktrees) ||
-    typeof data.current !== 'string'
-  ) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.worktrees) || typeof data.current !== 'string') {
     throw new Error('Malformed worktrees response');
   }
   return data;

@@ -86,16 +86,21 @@ term.onData((data) => {
         term.write('\b \b');
       }
       break;
-    case '\t': { // Tab completion
+    case '\t': {
+      // Tab completion
       const completions = wasm.autoComplete(inputBuffer);
       if (completions.completions && completions.completions.length === 1) {
         const completion = completions.completions[0];
         term.write('\x1b[K'); // clear to end of line
-        term.write(`\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${completion}`);
+        term.write(
+          `\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${completion}`,
+        );
         inputBuffer = completion;
       } else if (completions.completions && completions.completions.length > 1) {
         term.write(`\r\n${completions.completions.join('  ')}\r\n`);
-        term.write(`\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${inputBuffer}`);
+        term.write(
+          `\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${inputBuffer}`,
+        );
       }
       break;
     }
@@ -104,24 +109,32 @@ term.onData((data) => {
       term.write('^C');
       prompt();
       break;
-    case '\u001b[A': { // Up
+    case '\u001b[A': {
+      // Up
       if (historyIndex > 0) {
         historyIndex--;
         const cmd = commandHistory[historyIndex];
-        term.write(`\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${cmd}`);
+        term.write(
+          `\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${cmd}`,
+        );
         inputBuffer = cmd;
       }
       break;
     }
-    case '\u001b[B': { // Down
+    case '\u001b[B': {
+      // Down
       if (historyIndex < commandHistory.length - 1) {
         historyIndex++;
         const cmd = commandHistory[historyIndex];
-        term.write(`\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${cmd}`);
+        term.write(
+          `\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ ${cmd}`,
+        );
         inputBuffer = cmd;
       } else {
         historyIndex = commandHistory.length;
-        term.write(`\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ `);
+        term.write(
+          `\x1b[2K\r\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m${wasm.getCwd().replace(/^\/home\/user/, '~')}\x1b[0m$ `,
+        );
         inputBuffer = '';
       }
       break;

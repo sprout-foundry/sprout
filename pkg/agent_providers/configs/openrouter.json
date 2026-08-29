@@ -26,7 +26,9 @@
     "fill_missing_array_items": true,
     "array_items_fallback": "object",
     "include_tool_call_id": true,
-    "reasoning_content_field": "reasoning_content"
+    "reasoning_content_field": "reasoning_content",
+    "preserve_reasoning_details": true,
+    "unified_reasoning_param": true
   },
   "models": {
     "available_models": [],

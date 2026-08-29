@@ -62,12 +62,28 @@ type RequestDefaults struct {
 
 // MessageConversion defines how messages should be converted
 type MessageConversion struct {
-	IncludeToolCallID        bool   `json:"include_tool_call_id"`
-	ConvertToolRoleToUser    bool   `json:"convert_tool_role_to_user"`
-	ReasoningContentField    string `json:"reasoning_content_field"`
-	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
-	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
-	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
+	IncludeToolCallID     bool   `json:"include_tool_call_id"`
+	ConvertToolRoleToUser bool   `json:"convert_tool_role_to_user"`
+	ReasoningContentField string `json:"reasoning_content_field"`
+	// PreserveReasoningDetails replays the structured reasoning_details array
+	// (OpenRouter unified reasoning blocks — encrypted/signed/summary) on
+	// assistant history messages verbatim. Required for preserved thinking on
+	// models whose reasoning cannot round-trip as a plain string (Anthropic).
+	// Takes precedence over ReasoningContentField string replay when both exist.
+	PreserveReasoningDetails bool `json:"preserve_reasoning_details,omitempty"`
+	// UnifiedReasoningParam emits the unified top-level `reasoning` object
+	// ({"effort": ...}) instead of provider-native thinking knobs. This is
+	// OpenRouter's canonical control surface and the only way to steer
+	// reasoning effort on Anthropic models through it.
+	UnifiedReasoningParam bool `json:"unified_reasoning_param,omitempty"`
+	// ChatTemplateKwargs are merged into the per-request
+	// chat_template_kwargs object for template-driven local servers
+	// (vLLM, llama.cpp, LM Studio). Only emitted for localhost endpoints —
+	// hosted APIs reject unknown request fields.
+	ChatTemplateKwargs       map[string]interface{} `json:"chat_template_kwargs,omitempty"`
+	ArgumentsAsJSON          bool                   `json:"arguments_as_json"`
+	SkipToolExecutionSummary bool                   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
+	ForceToolCallType        string                 `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
 	// NeutralizeSpecialTokens replaces special-token literals (<|im_end|> etc.)
 	// in message content with inert look-alikes before sending. Opt-in: enable
 	// only for providers whose tokenizer treats those byte sequences as control

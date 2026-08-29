@@ -4,6 +4,7 @@ package console
 
 import (
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/term"
@@ -169,6 +170,19 @@ type InputReader struct {
 	// ClearSteerLineLocked) and clears this flag so the footer's scroll
 	// region returns to its 2-row baseline.
 	pinnedDropdownActive bool
+
+	// wakeupRequested is set by Wake() so an idle ReadLine returns
+	// ErrWakeupPending promptly instead of waiting for the next
+	// keystroke. Lets the REPL act on background events (auto-resume
+	// wakeups) while the user is idle at the prompt.
+	wakeupRequested atomic.Bool
+	// wakeupArmed is set once via ArmWakeup() (the REPL does this at
+	// startup). Once armed, the read loop gates each stdin Read on a
+	// readability poll so the flag can be observed while idle (Go's
+	// netpoller would otherwise park the Read and absorb O_NONBLOCK).
+	// Arming is opt-in so the default (never-armed) path stays
+	// byte-for-byte identical to the old blocking behavior.
+	wakeupArmed atomic.Bool
 }
 
 type pasteSpan struct {
@@ -193,7 +207,11 @@ const (
 	// pastePollInterval is the idle spin sleep in the non-blocking
 	// read loop; tuned empirically to keep typing responsive.
 	pastePollInterval = 10 * time.Millisecond
-	suspendDrainDelay = 50 * time.Millisecond // wait for in-flight bytes after SIGCONT
+	// wakeupPollInterval is the readability-poll timeout used by the
+	// read loop once the wake mechanism is armed. 25ms keeps a Wake()
+	// response under ~3 frames while the idle poll costs ~nothing.
+	wakeupPollInterval = 25 * time.Millisecond
+	suspendDrainDelay  = 50 * time.Millisecond // wait for in-flight bytes after SIGCONT
 
 	// maxHistoryEntries caps the in-memory prompt history. Older entries
 	// are dropped FIFO once the cap is exceeded.

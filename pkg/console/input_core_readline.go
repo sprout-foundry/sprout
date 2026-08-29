@@ -132,6 +132,32 @@ func (ir *InputReader) ReadLine() (string, error) {
 			continue
 		}
 
+		// A background event (auto-resume wakeup) asked the REPL to take
+		// over. Return before consuming more input; the REPL loop drains
+		// pending notifications and runs the resume turn through the full
+		// turn machinery (renderer, spinner, steer panel). The raw-mode
+		// teardown runs via the deferred term.Restore, and any partial
+		// line the user had typed is preserved via LineBuffer.
+		if ir.wakeupRequested.Load() {
+			ir.wakeupRequested.Store(false)
+			// Leave the typed line on a clean row so the resume turn's
+			// output doesn't overwrite it mid-line.
+			if ir.line != "" {
+				fmt.Println()
+			}
+			return "", ErrWakeupPending
+		}
+
+		// Gate the read on readability when the wake mechanism is armed,
+		// so an idle loop can observe a Wake() without a keystroke.
+		// os.Stdin.Read parks in Go's netpoller and absorbs O_NONBLOCK,
+		// so without this gate the flag would sit unseen until the user
+		// types. When the mechanism isn't armed (default), Read blocks
+		// exactly as before — zero idle CPU, zero added latency.
+		if ir.wakeupArmed.Load() && !waitForStdinReadable(ir.termFd, wakeupPollInterval) {
+			continue
+		}
+
 		n, err := os.Stdin.Read(buf)
 
 		// Handle non-blocking read errors

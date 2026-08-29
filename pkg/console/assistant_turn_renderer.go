@@ -292,6 +292,7 @@ func (r *AssistantTurnRenderer) writeChunkLocked(chunk string) {
 // lineBuf, formats each through the streaming formatter, and emits the
 // result with the configured indent. Partial lines remain in the buffer.
 func (r *AssistantTurnRenderer) flushCompleteLines() {
+	flushed := 0
 	for {
 		s := r.lineBuf.String()
 		idx := strings.IndexByte(s, '\n')
@@ -305,7 +306,7 @@ func (r *AssistantTurnRenderer) flushCompleteLines() {
 				r.curLineRunes = displayWidth(r.indent) + runewidth.StringWidth(s)
 				r.atLineStart = false
 			}
-			return
+			break
 		}
 
 		line := s[:idx]
@@ -319,6 +320,19 @@ func (r *AssistantTurnRenderer) flushCompleteLines() {
 		r.physicalLines += emitted
 		r.atLineStart = true
 		r.curLineRunes = 0
+		flushed++
+	}
+	if flushed > 0 && r.lineBuf.Len() == 0 && r.footer != nil {
+		// A completed-line boundary is the only point where a mid-stream
+		// scroll-region re-apply is safe: the cursor is at column 0 of a
+		// fresh row, so the DECSTBM save/restore can't scatter in-flight
+		// prose. Without this, a terminal shrink mid-segment leaves the
+		// DECSTBM margins describing the OLD height — after a shrink the
+		// bottom margin exceeds the physical screen and prose writes
+		// scroll the whole screen, clobbering the pinned footer rows.
+		// pendingResize is left set so the full resize still fires at
+		// segment end. writeChunkLocked holds outputMu, as required.
+		r.footer.ApplyPendingResizeStreamingLocked()
 	}
 }
 

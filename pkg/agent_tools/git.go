@@ -108,6 +108,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 func PromptForGitApprovalStdin(command string) (bool, error) {
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("\n⚠ Git Operation Requires Approval\n")

@@ -163,16 +163,21 @@ func (a *Agent) NotifyCompletion(sessionID, kind, content string) {
 
 // TryAutoResume checks whether there are pending background-task
 // notifications that warrant an automatic agent resume. If so, it
-// drains them and calls ProcessQueryWithContinuity to re-invoke the
-// agent so it can act on the completed background tasks.
+// drains them and re-invokes the agent so it can act on the completed
+// background tasks.
 //
-// This is the shared entry point used by both the WebUI wakeup poller
-// (pkg/webui/wakeup_poller.go) and the CLI interactive loop
-// (cmd/agent_mode_interactive.go). It encapsulates the budget checks
-// (max resumes, max tokens), notification draining, and the actual
-// resume call.
+// Routing depends on the host surface:
+//   - Interactive CLI: a wake function is registered (SetWakeupWakeFn)
+//     that interrupts the idle REPL prompt and runs the resume turn
+//     through the loop's full turn machinery — assistant renderer,
+//     spinner, steer panel, turn summary. Running the turn on a side
+//     goroutine instead left currentTurnRenderer nil, so every stream
+//     chunk fell through the PrintExternal fallback, which appends a
+//     newline per chunk — prose rendered one token per line.
+//   - WebUI / headless: no wake function; the resume runs inline on a
+//     background goroutine (events publish to the bus, WebUI renders).
 //
-// Returns true if a resume was performed, false if conditions were not
+// Returns true if a resume was scheduled, false if conditions were not
 // met (no notifications, wakeup disabled, budget exhausted, or a query
 // is already in progress).
 func (a *Agent) TryAutoResume() bool {
@@ -200,6 +205,17 @@ func (a *Agent) TryAutoResume() bool {
 		return false
 	}
 	msg := FormatWakeupBatch(notifications)
+
+	if fn := a.wakeupWakeFn.Load(); fn != nil {
+		// REPL-owned resume. Stash the batch; the wake function kicks the
+		// REPL out of ReadLine and the loop's autoQueued drain runs it.
+		a.wakeupMu.Lock()
+		a.pendingWakeupResume = append(a.pendingWakeupResume, msg)
+		a.wakeupMu.Unlock()
+		(*fn)()
+		return true
+	}
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -219,4 +235,40 @@ func (a *Agent) TryAutoResume() bool {
 		}
 	}()
 	return true
+}
+
+// WakeupBatchPrefix marks formatted wakeup batches. The REPL uses it to
+// distinguish auto-resume turns from user-queued steer messages so the
+// echo line and query source can be specialized.
+const WakeupBatchPrefix = "[wakeup] "
+
+// SetWakeupWakeFn registers the REPL wake callback used by TryAutoResume
+// (interactive CLI). Pass nil to revert to the background-goroutine path.
+func (a *Agent) SetWakeupWakeFn(fn func()) {
+	if a == nil {
+		return
+	}
+	if fn == nil {
+		a.wakeupWakeFn.Store(nil)
+		return
+	}
+	a.wakeupWakeFn.Store(&fn)
+}
+
+// DrainWakeupForREPL returns and clears stashed wakeup batches destined
+// for the REPL loop. Called by the REPL after ReadLine returns
+// ErrWakeupPending (or at the top of each loop iteration) so the resume
+// turn runs as an auto-queued turn through the normal machinery.
+func (a *Agent) DrainWakeupForREPL() []string {
+	if a == nil {
+		return nil
+	}
+	a.wakeupMu.Lock()
+	defer a.wakeupMu.Unlock()
+	if len(a.pendingWakeupResume) == 0 {
+		return nil
+	}
+	out := a.pendingWakeupResume
+	a.pendingWakeupResume = nil
+	return out
 }

@@ -169,16 +169,18 @@ func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
 		t.Fatalf("failed to read embedded index.html: %v", err)
 	}
 
-	// Discover index JS bundle: <script type="module" src="/assets/index-xxx.js">
-	reJS := regexp.MustCompile(`src="/assets/(index-[^"]+\.js)"`)
+	// Discover index JS bundle: <script type="module" src="/assets/main-xxx.js">
+	// (Vite names the entry chunk after the build's input module; historically
+	// index-*, currently main-*.)
+	reJS := regexp.MustCompile(`src="/assets/((?:index|main)-[^"]+\.js)"`)
 	matches := reJS.FindSubmatch(indexHTML)
 	if len(matches) < 2 {
 		t.Fatal("could not find index JS bundle reference in index.html")
 	}
 	indexJSBundle := "/assets/" + string(matches[1])
 
-	// Discover index CSS bundle: <link rel="stylesheet" href="/assets/index-xxx.css">
-	reCSS := regexp.MustCompile(`href="/assets/(index-[^"]+\.css)"`)
+	// Discover index CSS bundle: <link rel="stylesheet" href="/assets/main-xxx.css">
+	reCSS := regexp.MustCompile(`href="/assets/((?:index|main)-[^"]+\.css)"`)
 	cssMatches := reCSS.FindSubmatch(indexHTML)
 	if len(cssMatches) < 2 {
 		t.Fatal("could not find index CSS bundle reference in index.html")

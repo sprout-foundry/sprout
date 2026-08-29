@@ -369,12 +369,47 @@ func TestEnrichFromConfig_FillsZeroValuedPricing(t *testing.T) {
 	if out[0].Pricing.Source != "embedded-config" {
 		t.Errorf("Source = %q, want %q", out[0].Pricing.Source, "embedded-config")
 	}
-	if out[0].Pricing.InputPerMTok != 0.14 {
-		t.Errorf("InputPerMTok = %f, want 0.14", out[0].Pricing.InputPerMTok)
+	// Expectations derive from the embedded config so the test tracks catalog
+	// refreshes instead of drifting against updated prices.
+	wantInput, wantOutput := expectedDeepSeekFlashPricing(t)
+	if out[0].Pricing.InputPerMTok != wantInput {
+		t.Errorf("InputPerMTok = %f, want %f", out[0].Pricing.InputPerMTok, wantInput)
 	}
-	if out[0].Pricing.OutputPerMTok != 0.28 {
-		t.Errorf("OutputPerMTok = %f, want 0.28", out[0].Pricing.OutputPerMTok)
+	if out[0].Pricing.OutputPerMTok != wantOutput {
+		t.Errorf("OutputPerMTok = %f, want %f", out[0].Pricing.OutputPerMTok, wantOutput)
 	}
+}
+
+// expectedDeepSeekFlashPricing reads the deepseek provider config for the
+// deepseek-v4-flash model entry, returning its input/output cost per Mtok.
+func expectedDeepSeekFlashPricing(t *testing.T) (float64, float64) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(findRepoRoot(t), "pkg", "agent_providers", "configs", "deepseek.json"))
+	if err != nil {
+		t.Fatalf("read deepseek config: %v", err)
+	}
+	var cfg struct {
+		Models struct {
+			ModelInfo []struct {
+				ID         string   `json:"id"`
+				InputCost  *float64 `json:"input_cost"`
+				OutputCost *float64 `json:"output_cost"`
+			} `json:"model_info"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse deepseek config: %v", err)
+	}
+	for _, m := range cfg.Models.ModelInfo {
+		if m.ID == "deepseek-v4-flash" {
+			if m.InputCost == nil || m.OutputCost == nil {
+				t.Fatalf("deepseek-v4-flash missing costs in config")
+			}
+			return *m.InputCost, *m.OutputCost
+		}
+	}
+	t.Fatalf("deepseek-v4-flash not found in config")
+	return 0, 0
 }
 
 // findRepoRoot walks up from the test directory to locate the repo root

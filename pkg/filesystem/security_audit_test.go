@@ -13,9 +13,23 @@ import (
 // Filesystem audit logging (SP-127 Phase 2.6)
 // ---------------------------------------------------------------------------
 
+// auditTestRoot returns a tmp root that is NOT os.TempDir() — the audit
+// emission under test only fires when the path sits outside the default
+// tmp classification. /var/tmp qualifies on unix CI runners. Environments
+// without /var/tmp (Android/Termux, Windows) skip these tests.
+func auditTestRoot(t *testing.T) string {
+	t.Helper()
+	root := "/var/tmp"
+	if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+		t.Skipf("%s unavailable on this platform — audit-outside-tmp coverage requires it", root)
+	}
+	return root
+}
+
 func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
-	// Create a test workspace in /var/tmp (which is not /tmp, so audit is emitted)
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	// Create a test workspace outside /tmp so audit is emitted
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
 	testFile := filepath.Join(workspace, "test.txt")
@@ -96,11 +110,11 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 }
 
 func TestSafeResolvePathWithBypass_AuditLoggerAllowedViaSessionFolder(t *testing.T) {
-	// Create a test workspace and allowed folder in /var/tmp
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
-	allowedFolder := filepath.Join("/var/tmp", "fs-audit-allowed-"+t.Name())
+	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
 	defer os.RemoveAll(allowedFolder)
 
@@ -139,8 +153,8 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowedViaSessionFolder(t *testing
 func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 	t.Parallel()
 
-	// Create a test workspace in /var/tmp
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
 
@@ -156,8 +170,8 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 }
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
-	// Create a test workspace in /var/tmp
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
 
@@ -230,11 +244,11 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 }
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testing.T) {
-	// Create a test workspace, allowed folder, and symlink in /var/tmp
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
-	allowedFolder := filepath.Join("/var/tmp", "fs-audit-allowed-"+t.Name())
+	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
 	defer os.RemoveAll(allowedFolder)
 
@@ -284,8 +298,8 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testi
 func TestSafeResolvePathForWriteWithBypass_NilLoggerNoPanic(t *testing.T) {
 	t.Parallel()
 
-	// Create a test workspace in /var/tmp
-	workspace := filepath.Join("/var/tmp", "fs-audit-workspace-"+t.Name())
+	root := auditTestRoot(t)
+	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
 	os.MkdirAll(workspace, 0755)
 	defer os.RemoveAll(workspace)
 

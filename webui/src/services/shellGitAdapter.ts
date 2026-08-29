@@ -18,12 +18,7 @@
  * labels, `git log --oneline` shape, branch markers).
  */
 
-import {
-  gitBranch,
-  gitDiff,
-  gitLog,
-  gitStatus,
-} from './browserGit';
+import { gitBranch, gitDiff, gitLog, gitStatus } from './browserGit';
 
 /** Shape the Go bridge expects from execute(). */
 export interface ShellGitResult {
@@ -154,9 +149,7 @@ async function runLog(args: string[]): Promise<ShellGitResult> {
   if (oneline) {
     return ok(commits.map((c) => `${c.hash.slice(0, 7)} ${firstLine(c.message)}`).join('\n') + '\n');
   }
-  const blocks = commits.map(
-    (c) => `commit ${c.hash}\nAuthor: ${c.author}\nDate:   ${c.date}\n\n    ${c.message}\n`,
-  );
+  const blocks = commits.map((c) => `commit ${c.hash}\nAuthor: ${c.author}\nDate:   ${c.date}\n\n    ${c.message}\n`);
   return ok(blocks.join('\n'));
 }
 
@@ -187,28 +180,29 @@ async function runLsFiles(args: string[]): Promise<ShellGitResult> {
   const bridge = (await import('./browserGit')).getBrowserGitVfsBridge();
   if (!bridge) return ok('');
   const files = await bridge.readVfsFiles();
-  return ok(files.map((f) => f.path).sort().join('\n') + (files.length ? '\n' : ''));
+  return ok(
+    files
+      .map((f) => f.path)
+      .sort()
+      .join('\n') + (files.length ? '\n' : ''),
+  );
 }
 
 /** git show — commit message by hash prefix (best-effort in-browser). */
 async function runShow(args: string[]): Promise<ShellGitResult> {
   const ref = args.find((a) => !a.startsWith('-')) ?? 'HEAD';
   const commits = await gitLog(50);
-  const commit = ref === 'HEAD'
-    ? commits[0]
-    : commits.find((c) => c.hash.startsWith(ref));
+  const commit = ref === 'HEAD' ? commits[0] : commits.find((c) => c.hash.startsWith(ref));
   if (!commit) {
     return fail(`git show: ambiguous argument '${ref}': unknown revision\n`, 1);
   }
-  return ok(
-    `commit ${commit.hash}\nAuthor: ${commit.author}\nDate:   ${commit.date}\n\n    ${commit.message}\n`,
-  );
+  return ok(`commit ${commit.hash}\nAuthor: ${commit.author}\nDate:   ${commit.date}\n\n    ${commit.message}\n`);
 }
 
 /** git rev-parse — HEAD hash (browserGit's resolveRef equivalent). */
 async function runRevParse(_args: string[]): Promise<ShellGitResult> {
   const commits = await gitLog(1);
-  if (commits.length === 0) return fail('HEAD\nfatal: ambiguous argument \'HEAD\': unknown revision\n', 128);
+  if (commits.length === 0) return fail("HEAD\nfatal: ambiguous argument 'HEAD': unknown revision\n", 128);
   return ok(commits[0].hash + '\n');
 }
 

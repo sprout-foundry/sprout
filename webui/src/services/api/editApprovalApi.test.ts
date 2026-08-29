@@ -48,9 +48,7 @@ describe('editApprovalApi', () => {
   it('getPendingEdit surfaces the error message from the JSON body on HTTP error', async () => {
     const fetchFn = makeFetch(404, { message: 'edit not found' });
 
-    await expect(getPendingEdit(fetchFn as unknown as typeof fetch, 'missing')).rejects.toThrow(
-      'edit not found',
-    );
+    await expect(getPendingEdit(fetchFn as unknown as typeof fetch, 'missing')).rejects.toThrow('edit not found');
   });
 
   it('submitEditDecision surfaces the error message from the JSON body on HTTP error', async () => {
@@ -65,13 +63,16 @@ describe('editApprovalApi', () => {
   });
 
   it('falls back to a message when the error body is not JSON', async () => {
-    const fetchFn = vi.fn(async () => ({
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error('not json');
-      },
-    }) as unknown as typeof fetch);
+    const fetchFn = vi.fn(
+      async () =>
+        ({
+          ok: false,
+          status: 500,
+          json: async () => {
+            throw new Error('not json');
+          },
+        }) as unknown as typeof fetch,
+    );
 
     await expect(getPendingEdit(fetchFn, 'edit-1')).rejects.toThrow('Failed to fetch edit');
   });

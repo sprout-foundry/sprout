@@ -16,10 +16,7 @@ vi.mock('./browserGit', () => ({
   getBrowserGitVfsBridge: vi.fn(),
 }));
 
-import {
-  SHELL_GIT_SUBCOMMANDS,
-  registerShellGitGlobal,
-} from './shellGitAdapter';
+import { SHELL_GIT_SUBCOMMANDS, registerShellGitGlobal } from './shellGitAdapter';
 import { gitStatus, gitDiff, gitLog, gitBranch } from './browserGit';
 
 const mockStatus = vi.mocked(gitStatus);
@@ -71,9 +68,7 @@ describe('git diff', () => {
   });
 
   it('formats added files as new-file patches', async () => {
-    mockDiff.mockResolvedValue([
-      { path: 'new.go', type: 'added', content: 'package main\n' },
-    ]);
+    mockDiff.mockResolvedValue([{ path: 'new.go', type: 'added', content: 'package main\n' }]);
     const r = await SHELL_GIT_SUBCOMMANDS.diff([]);
     expect(r.stdout).toContain('diff --git a/new.go b/new.go');
     expect(r.stdout).toContain('new file mode 100644');
@@ -81,9 +76,7 @@ describe('git diff', () => {
   });
 
   it('formats deleted files', async () => {
-    mockDiff.mockResolvedValue([
-      { path: 'gone.go', type: 'deleted', content: '' },
-    ]);
+    mockDiff.mockResolvedValue([{ path: 'gone.go', type: 'deleted', content: '' }]);
     const r = await SHELL_GIT_SUBCOMMANDS.diff([]);
     expect(r.stdout).toContain('deleted file mode 100644');
   });
@@ -128,9 +121,7 @@ describe('git branch', () => {
 
 describe('git rev-parse / rev-list / symbolic-ref', () => {
   it('rev-parse HEAD returns the hash', async () => {
-    mockLog.mockResolvedValue([
-      { hash: 'deadbeefdeadbeef', message: 'm', author: 'a', date: 'd' },
-    ]);
+    mockLog.mockResolvedValue([{ hash: 'deadbeefdeadbeef', message: 'm', author: 'a', date: 'd' }]);
     const r = await SHELL_GIT_SUBCOMMANDS['rev-parse']([]);
     expect(r.stdout.trim()).toBe('deadbeefdeadbeef');
   });

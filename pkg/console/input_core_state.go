@@ -20,12 +20,49 @@ func (ir *InputReader) SetPrompt(p string) {
 	ir.prompt = p
 }
 
+// ErrWakeupPending is returned by ReadLine when a background event asked
+// the REPL to wake up before the user submitted a line. The caller should
+// re-enter ReadLine after handling the wake reason (e.g. draining pending
+// wakeup notifications and running the auto-resume turn). Any in-progress
+// partial line the user typed is preserved via LineBuffer.
+var ErrWakeupPending = errors.New("input: wakeup pending")
+
 // SetInitialContent pre-fills the input buffer with text that should
 // appear as if the user typed it. Used by the REPL loop to carry over
 // unsent steer-panel text into the main prompt after a turn ends.
 // The content is consumed on the next ReadLine call and then cleared.
 func (ir *InputReader) SetInitialContent(content string) {
 	ir.initialContent = content
+}
+
+// Wake asks an in-flight (or next) ReadLine to return ErrWakeupPending
+// as soon as possible. Intended for background events (auto-resume
+// wakeups) that need the REPL loop's turn machinery — spinner, steer
+// panel, assistant turn renderer — rather than a side goroutine's raw
+// prints. The caller should ArmWakeup() first (the interactive REPL
+// does this once before its first ReadLine); without arming, an
+// already-parked Read only observes the flag at its next iteration.
+func (ir *InputReader) Wake() {
+	ir.wakeupRequested.Store(true)
+}
+
+// ArmWakeup enables the readability-gated read loop so Wake() can
+// interrupt an idle ReadLine without a keystroke. Go's netpoller parks
+// os.Stdin.Read and absorbs O_NONBLOCK, so the loop must poll for
+// readability itself to observe the flag while idle. Arming is a
+// one-way switch; the REPL arms once at startup. Reads still block
+// normally for the poll timeout window, so typing latency is unchanged
+// once data arrives.
+func (ir *InputReader) ArmWakeup() {
+	ir.wakeupArmed.Store(true)
+}
+
+// LineBuffer returns the in-progress text the user has typed, without
+// clearing it. Read after ReadLine returns ErrWakeupPending so the REPL
+// can restore the text via SetInitialContent once the wake reason (e.g.
+// an auto-resume turn) has been handled.
+func (ir *InputReader) LineBuffer() string {
+	return ir.line
 }
 
 // SetGroundTruth installs the terminal's pristine cooked-mode termios

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func makeTestParts(count int) []ShellPartInfo {
@@ -173,5 +175,68 @@ func TestPromptShellApprovalPartsIO_ContextCancelled(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+// A pipe that never delivers a line blocks the picker mid-prompt;
+// cancelling the ctx must unblock it with an error and deny the rest.
+func TestPromptShellApprovalPartsIO_ContextCancelledMidPrompt(t *testing.T) {
+	parts := makeTestParts(3)
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var out strings.Builder
+	var decisions map[string]bool
+	var err error
+	done := make(chan struct{})
+	go func() {
+		decisions, err = promptShellApprovalPartsIO(ctx, parts, pr, &out)
+		close(done)
+	}()
+
+	// Let the first part's prompt render and block on its read, then cancel.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("picker did not return after context cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		id := "part-" + fmt.Sprintf("%d", i)
+		if decisions[id] {
+			t.Errorf("expected %s to be denied after context cancellation", id)
+		}
+	}
+	if !strings.Contains(out.String(), "interrupted") {
+		t.Error("expected interruption notice in output")
+	}
+}
+
+func TestPromptShellApprovalParts_SuspendResume(t *testing.T) {
+	var calls []string
+	prevSuspend := shellPickerSuspend
+	prevResume := shellPickerResume
+	shellPickerSuspend = func() { calls = append(calls, "suspend") }
+	shellPickerResume = func() { calls = append(calls, "resume") }
+	defer func() {
+		shellPickerSuspend = prevSuspend
+		shellPickerResume = prevResume
+	}()
+
+	// Empty parts returns before any stdin read, so os.Stdin is untouched.
+	_, err := PromptShellApprovalParts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(calls, []string{"suspend", "resume"}) {
+		t.Errorf("expected [suspend resume] in order, got %v", calls)
 	}
 }

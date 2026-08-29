@@ -236,6 +236,7 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	// return an empty answer.
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	defer clihooks.ResumeStreaming()
 

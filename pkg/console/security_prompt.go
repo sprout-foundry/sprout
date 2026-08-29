@@ -72,6 +72,7 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string, analysis 
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	defer clihooks.ResumeStreaming()
 
@@ -141,6 +142,7 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 	defer clihooks.ResumeStreaming()
 

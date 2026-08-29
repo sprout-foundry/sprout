@@ -226,6 +226,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// webui response — same rationale as the tool approval path above.
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
+		defer clihooks.ResumeIndicator()
 		defer clihooks.ResumeSteer()
 
 		kind := "fs_external"

@@ -2,6 +2,7 @@ package console
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 )
@@ -129,5 +130,78 @@ func TestSetProseStreaming_DeferredResizeNoDeadlock(t *testing.T) {
 	f.mu.Unlock()
 	if pending {
 		t.Fatal("pendingResize was not cleared after SetProseStreaming(false)")
+	}
+}
+
+// TestApplyPendingResizeStreamingLocked_EmitsSaveRestoreAndRegion pins the
+// mid-stream DECSTBM re-apply: when pendingResize is set (a resize arrived
+// during streaming), ApplyPendingResizeStreamingLocked must wrap the
+// scroll-region re-application in a DECSC/DECRC save/restore pair so the
+// streaming writer's cursor is preserved, and must NOT consume
+// pendingResize (the full resize still fires at segment end).
+func TestApplyPendingResizeStreamingLocked_EmitsSaveRestoreAndRegion(t *testing.T) {
+	var buf bytes.Buffer
+	f := NewStatusFooter(&buf, &stubSource{model: "test"})
+	f.isTTY = true
+	f.active = true
+	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 24}
+
+	f.mu.Lock()
+	f.pendingResize = true
+	f.mu.Unlock()
+
+	LockOutput()
+	f.ApplyPendingResizeStreamingLocked()
+	UnlockOutput()
+
+	out := buf.String()
+	// 24 rows − 2 reserved → DECSTBM "1;22".
+	const decstbm = "\033[1;22r"
+	saveIdx := strings.Index(out, "\0337")
+	regionIdx := strings.Index(out, decstbm)
+	restoreIdx := strings.Index(out, "\0338")
+	if saveIdx < 0 || regionIdx < 0 || restoreIdx < 0 {
+		t.Fatalf("expected \\0337, %q, \\0338 in output; got %q", decstbm, out)
+	}
+	if !(saveIdx < regionIdx && regionIdx < restoreIdx) {
+		t.Fatalf("sequences out of order (save<region<restore required); got %q", out)
+	}
+
+	// pendingResize must be left set for the segment-end full resize.
+	f.mu.Lock()
+	pending := f.pendingResize
+	f.mu.Unlock()
+	if !pending {
+		t.Fatal("ApplyPendingResizeStreamingLocked consumed pendingResize; the full resize must still fire at segment end")
+	}
+}
+
+// TestApplyPendingResizeStreamingLocked_NoopWhenNotPending verifies the
+// method is a no-op (no bytes emitted) when pendingResize is false, and
+// that calling it while holding LockOutput does not deadlock.
+func TestApplyPendingResizeStreamingLocked_NoopWhenNotPending(t *testing.T) {
+	var buf bytes.Buffer
+	f := NewStatusFooter(&buf, &stubSource{model: "test"})
+	f.isTTY = true
+	f.active = true
+	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 24}
+
+	// pendingResize is false by default.
+	done := make(chan struct{})
+	go func() {
+		LockOutput()
+		defer UnlockOutput()
+		f.ApplyPendingResizeStreamingLocked()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// good — no deadlock
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApplyPendingResizeStreamingLocked deadlocked under LockOutput")
+	}
+
+	if got := buf.String(); got != "" {
+		t.Fatalf("expected no bytes emitted when pendingResize is false; got %q", got)
 	}
 }

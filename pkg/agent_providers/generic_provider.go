@@ -223,6 +223,26 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 			}
 		}
 	}
+	// Structured reasoning blocks (OpenRouter reasoning_details) live outside
+	// the typed core.Message — probe the raw body and stash on Meta.
+	if len(response.Choices) > 0 {
+		var raw struct {
+			Choices []struct {
+				Message struct {
+					ReasoningDetails []map[string]interface{} `json:"reasoning_details"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if json.Unmarshal(body, &raw) == nil && len(raw.Choices) > 0 && len(raw.Choices[0].Message.ReasoningDetails) > 0 {
+			if encoded, err := json.Marshal(raw.Choices[0].Message.ReasoningDetails); err == nil {
+				msg := &response.Choices[0].Message
+				if msg.Meta == nil {
+					msg.Meta = make(map[string]string)
+				}
+				msg.Meta[api.ReasoningDetailsMetaKey] = string(encoded)
+			}
+		}
+	}
 	return &response, nil
 }
 

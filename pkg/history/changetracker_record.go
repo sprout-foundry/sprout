@@ -28,11 +28,15 @@ type RevisionGroup struct {
 
 // APIMessage represents a message in the conversation (imported from agent_api to avoid circular dependency)
 type APIMessage struct {
-	Role             string        `json:"role"`
-	Content          string        `json:"content"`
-	ReasoningContent string        `json:"reasoning_content,omitempty"`
-	ToolCallID       string        `json:"tool_call_id,omitempty"`
-	ToolCalls        []APIToolCall `json:"tool_calls,omitempty"`
+	Role             string `json:"role"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	// ReasoningDetails persists structured reasoning blocks (OpenRouter
+	// unified reasoning_details array). In-memory these travel on
+	// api.Message.Meta; the JSON field is the durable form for session files.
+	ReasoningDetails []map[string]interface{} `json:"reasoning_details,omitempty"`
+	ToolCallID       string                   `json:"tool_call_id,omitempty"`
+	ToolCalls        []APIToolCall            `json:"tool_calls,omitempty"`
 }
 
 // APIToolCall represents a tool call in a message

@@ -12,9 +12,6 @@ import (
 // which can occur when an API call fails and the user retries — no assistant
 // response is inserted between attempts. Most providers reject such sequences.
 func (p *GenericProvider) convertMessages(messages []api.Message, reasoning string) []map[string]interface{} {
-	reasoningField := p.config.Conversion.ReasoningContentField
-	skipReasoningHistory := p.shouldSkipReasoningContentHistory()
-
 	// Build converted messages, merging consecutive same-role messages.
 	// Merging accumulates content with a newline separator. For tool_calls
 	// or tool_call_id, merging is not attempted — the duplicate user messages
@@ -23,6 +20,7 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	var pendingRole string
 	var pendingContent string
 	var pendingReasoning string // preserved for compatible providers
+	var pendingMeta map[string]string
 
 	flush := func() {
 		if pendingRole == "" {
@@ -32,13 +30,12 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			"role":    pendingRole,
 			"content": pendingContent,
 		}
-		if !skipReasoningHistory && pendingReasoning != "" && reasoningField != "" {
-			entry[reasoningField] = pendingReasoning
-		}
+		p.attachReasoningReplay(entry, pendingRole, pendingReasoning, pendingMeta)
 		converted = append(converted, entry)
 		pendingRole = ""
 		pendingContent = ""
 		pendingReasoning = ""
+		pendingMeta = nil
 	}
 
 	for _, msg := range messages {
@@ -57,10 +54,11 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			if pendingReasoning == "" && msg.ReasoningContent != "" {
 				pendingReasoning = msg.ReasoningContent
 			}
+			if pendingMeta == nil && len(msg.Meta) > 0 {
+				pendingMeta = msg.Meta
+			}
 			continue
-		}
-
-		// Role changed or non-mergeable — flush pending and handle this message
+		} // Role changed or non-mergeable — flush pending and handle this message
 		flush()
 
 		if !isMergeable {
@@ -82,9 +80,7 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			if msg.Role == "tool" && p.config.Conversion.ConvertToolRoleToUser {
 				convertedMsg["role"] = "user"
 			}
-			if !skipReasoningHistory && msg.ReasoningContent != "" && reasoningField != "" {
-				convertedMsg[reasoningField] = msg.ReasoningContent
-			}
+			p.attachReasoningReplay(convertedMsg, msg.Role, msg.ReasoningContent, msg.Meta)
 			if len(msg.ToolCalls) > 0 {
 				convertedMsg["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
 			}
@@ -105,6 +101,7 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		} else {
 			pendingContent = msg.Content
 			pendingReasoning = msg.ReasoningContent
+			pendingMeta = msg.Meta
 		}
 	}
 	flush()
@@ -188,6 +185,29 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	_ = reasoning // reasoning effort is sent via provider/model-specific request params, not message fields
 
 	return converted
+}
+
+// attachReasoningReplay adds preserved reasoning to a converted assistant
+// message heading to the wire. Structured reasoning_details (OpenRouter
+// unified blocks) take precedence over the flat string form: the array can
+// carry encrypted/signed reasoning that has no string representation, and
+// sending both would double-count.
+func (p *GenericProvider) attachReasoningReplay(entry map[string]interface{}, role, reasoningContent string, meta map[string]string) {
+	if role != "assistant" {
+		return
+	}
+	if p.config.Conversion.PreserveReasoningDetails {
+		if raw := meta[api.ReasoningDetailsMetaKey]; raw != "" {
+			var details []map[string]interface{}
+			if err := json.Unmarshal([]byte(raw), &details); err == nil && len(details) > 0 {
+				entry["reasoning_details"] = details
+				return
+			}
+		}
+	}
+	if !p.shouldSkipReasoningContentHistory() && reasoningContent != "" && p.config.Conversion.ReasoningContentField != "" {
+		entry[p.config.Conversion.ReasoningContentField] = reasoningContent
+	}
 }
 
 func (p *GenericProvider) shouldSkipReasoningContentHistory() bool {
@@ -582,7 +602,7 @@ func mergeAssistantInto(dst, src map[string]interface{}) {
 	}
 
 	// Preserve reasoning from src if dst lacks it.
-	for _, key := range []string{"reasoning_content", "reasoning"} {
+	for _, key := range []string{"reasoning_content", "reasoning", "reasoning_details"} {
 		if _, ok := dst[key]; !ok {
 			if v, ok := src[key]; ok {
 				dst[key] = v

@@ -6,40 +6,10 @@ import (
 	"strings"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // Shared utility functions for tool handlers
-
-// stripQuotedContent replaces all single-quoted and double-quoted string
-// content in a shell command with spaces, preserving quote boundaries so
-// token positions stay stable. This prevents false-positive git command
-// detection when words like "git commit" appear inside JSON payloads or
-// other quoted arguments.
-func stripQuotedContent(s string) string {
-	var b strings.Builder
-	inSingle := false
-	inDouble := false
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			b.WriteByte(ch)
-		} else if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			b.WriteByte(ch)
-		} else if inSingle || inDouble {
-			// Inside quotes: replace content with spaces (keep structural positions)
-			if ch == '\n' {
-				b.WriteByte('\n')
-			} else {
-				b.WriteByte(' ')
-			}
-		} else {
-			b.WriteByte(ch)
-		}
-	}
-	return b.String()
-}
 
 // isGitWriteCommand reports whether `command` contains a git invocation
 // whose intent (not safety) requires the orchestrator git-write flow:
@@ -58,7 +28,7 @@ func stripQuotedContent(s string) string {
 // and prompts the user (auto-approved when AllowGitHistoryRewrite=true).
 func isGitWriteCommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	remaining := command
 	for {
@@ -192,7 +162,7 @@ func isGitWriteCommand(command string) bool {
 // or `show` is blocked, because even `git stash push` sets up the
 // pop-that-can-corrupt that we want to prevent.
 func isGitStashCommand(command string) bool {
-	command = stripQuotedContent(command)
+	command = shelltext.StripQuotedContent(command)
 	remaining := command
 	for {
 		idx := strings.Index(remaining, "git ")
@@ -232,117 +202,6 @@ func isGitStashCommand(command string) bool {
 			}
 			// Bare `git stash` or any non-list/show subcommand.
 			return true
-		}
-		remaining = remaining[idx+1:]
-	}
-}
-
-// isGitHistoryRewriteCommand checks whether `command` contains a git
-// invocation that can lose commit history (a ref moves backward, a
-// branch/tag pointer disappears, a rebase rewrites commits). The change
-// tracker can recover working-tree changes but cannot recover lost
-// commits — only the reflog can — so these ops stay gated by default.
-//
-// Specifically matches:
-//
-//   - `git reset --hard <commit-ish>`  (backward ref-move)
-//   - `git rebase` (any form — rewrites or drops commits)
-//   - `git branch -d`/`-D`/`--delete` (deletes a branch ref)
-//   - `git tag -d`/`--delete` (deletes a tag ref)
-//
-// `git reset --hard` *without* an explicit commit-ish argument is
-// equivalent to `reset --hard HEAD` — it only reverts the working tree
-// and is fully recoverable. We err toward "gated" when the argument
-// shape is ambiguous (cheap false positive, expensive false negative).
-func isGitHistoryRewriteCommand(command string) bool {
-	command = stripQuotedContent(command)
-	remaining := command
-	for {
-		idx := strings.Index(remaining, "git ")
-		if idx == -1 {
-			return false
-		}
-		gitCmd := remaining[idx:]
-		parts := strings.Fields(gitCmd)
-		if len(parts) < 2 {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		// Find the subcommand, skipping leading git global flags.
-		subcommand := ""
-		subIdx := 0
-		for i := 1; i < len(parts); i++ {
-			part := parts[i]
-			if strings.HasPrefix(part, "-") {
-				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-					i++
-				}
-				continue
-			}
-			subcommand = strings.TrimRight(part, ");\"'")
-			subIdx = i
-			break
-		}
-		if subcommand == "" {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		rest := parts[subIdx+1:]
-
-		switch subcommand {
-		case "rebase":
-			// `git rebase --abort` is a recovery op (reverts the in-progress
-			// rebase state), not a history rewrite. Any other rebase form
-			// (including `--abort` with other flags or arguments) is a rewrite.
-			// The only permitted rebase invocation is pure `--abort`.
-			if len(rest) == 1 && rest[0] == "--abort" {
-				return false
-			}
-			return true
-		case "reset":
-			// `reset --hard` followed by an explicit commit-ish other than
-			// HEAD (or a positional path filter) is a backward ref move.
-			// Bare `reset --hard` or `reset --hard HEAD` only mutates the
-			// working tree and is handled by the change tracker.
-			hard := false
-			for _, a := range rest {
-				if a == "--hard" {
-					hard = true
-				}
-			}
-			if !hard {
-				remaining = remaining[idx+1:]
-				continue
-			}
-			// `--hard` with no further args, or with `HEAD` as the only
-			// other token, is working-tree-only. Anything else (`HEAD~1`,
-			// `abc123`, `origin/main`) abandons commits.
-			hasCommitIsh := false
-			for _, a := range rest {
-				if a == "--hard" || strings.HasPrefix(a, "-") {
-					continue
-				}
-				if a == "HEAD" {
-					continue
-				}
-				hasCommitIsh = true
-				break
-			}
-			if hasCommitIsh {
-				return true
-			}
-		case "branch":
-			for _, a := range rest {
-				if a == "-d" || a == "-D" || a == "--delete" {
-					return true
-				}
-			}
-		case "tag":
-			for _, a := range rest {
-				if a == "-d" || a == "--delete" {
-					return true
-				}
-			}
 		}
 		remaining = remaining[idx+1:]
 	}

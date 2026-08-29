@@ -7,29 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStripQuotedSections(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"no quotes", "echo hello", "echo hello"},
-		{"single quoted", `echo 'hello world'`, `echo '           '`},
-		{"double quoted", `echo "hello world"`, `echo "           "`},
-		{"pipe in quotes", `grep 'rgba|gradient|shadow'`, `grep '                    '`},
-		{"mixed", `echo "hello" 'world'`, `echo "     " '     '`},
-		{"empty", "", ""},
-		{"unclosed quote", `echo "hello`, `echo "     `},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := stripQuotedSections(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestMaxRisk(t *testing.T) {
 	assert.Equal(t, SecuritySafe, maxRisk([]SecurityRisk{SecuritySafe}))
 	assert.Equal(t, SecurityDangerous, maxRisk([]SecurityRisk{SecuritySafe, SecurityCaution, SecurityDangerous}))

@@ -4,30 +4,6 @@ import (
 	"testing"
 )
 
-func TestStripQuotedContent(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"no quotes", "curl -s http://api", "curl -s http://api"},
-		{"single-quoted content", "echo 'git commit'", "echo '          '"},
-		{"double-quoted content", "echo \"git commit\"", "echo \"          \""},
-		{"JSON in single quotes", "curl -d '{\"msg\":\"git commit title\"}'", "curl -d '                          '"},
-		{"empty string", "", ""},
-		{"preserves newlines", "echo 'line1\nline2'", "echo '     \n     '"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := stripQuotedContent(tc.input)
-			if got != tc.want {
-				t.Errorf("stripQuotedContent(%q)\n  got: %q\n want: %q", tc.input, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestIsGitWriteCommand(t *testing.T) {
 	// After the lockdown relaxation, isGitWriteCommand only fires for
 	// intent-gated subcommands: commit, push, merge, clone, init,
@@ -145,75 +121,6 @@ func TestIsGitWriteCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isGitWriteCommand(tc.command); got != tc.write {
 				t.Errorf("isGitWriteCommand(%q) = %v, want %v", tc.command, got, tc.write)
-			}
-		})
-	}
-}
-
-func TestIsGitHistoryRewriteCommand(t *testing.T) {
-	tests := []struct {
-		command string
-		rewrite bool
-	}{
-		// rebase — any form rewrites commit history.
-		// Exception: `--abort` is a recovery op, not a history rewrite.
-		{"git rebase main", true},
-		{"git rebase --abort", false},
-		{"git rebase --abort --no-verify", true}, // --abort with other flags is still a rewrite
-		{"git rebase -i HEAD~5", true},
-		{"git -C /repo rebase main", true},
-
-		// reset --hard — only with a non-HEAD commit-ish.
-		{"git reset --hard", false},
-		{"git reset --hard HEAD", false},
-		{"git reset --hard HEAD~1", true},
-		{"git reset --hard HEAD~5", true},
-		{"git reset --hard abc1234", true},
-		{"git reset --hard origin/main", true},
-		// `--soft` and `--mixed` don't lose commits via reset's pointer move;
-		// they leave the working tree (and possibly index) intact.
-		{"git reset --soft HEAD~5", false},
-		{"git reset --mixed HEAD~5", false},
-		{"git reset HEAD~5", false},
-
-		// branch delete — loses ref + potentially commits.
-		{"git branch -d old-feature", true},
-		{"git branch -D feature", true},
-		{"git branch --delete feature", true},
-		{"git branch feature", false}, // create
-		{"git branch -a", false},      // list
-		{"git branch --list", false},  // list
-
-		// tag delete.
-		{"git tag -d v1.0", true},
-		{"git tag --delete v1.0", true},
-		{"git tag v1.0", false},
-		{"git tag -l", false},
-
-		// Compound: any destructive segment wins.
-		{"git status && git rebase main", true},
-		{"cd /repo && git reset --hard HEAD~1", true},
-		{"git rebase main || true", true},
-
-		// Non-destructive.
-		{"git status", false},
-		{"git checkout main", false},
-		{"git restore .", false},
-		{"git clean -fd", false},
-		{"git commit -m 'x'", false},
-		{"git push", false},
-		{"git pull", false},
-
-		// Quoted content should not be scanned.
-		{`curl -d '{"cmd":"git reset --hard HEAD~1"}' http://api`, false},
-		{`echo "run git rebase main"`, false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.command, func(t *testing.T) {
-			got := isGitHistoryRewriteCommand(tc.command)
-			if got != tc.rewrite {
-				t.Errorf("isGitHistoryRewriteCommand(%q) = %v, want %v", tc.command, got, tc.rewrite)
 			}
 		})
 	}

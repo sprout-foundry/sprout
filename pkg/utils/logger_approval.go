@@ -110,6 +110,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string, analysis *Sec
 
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
 	reader := bufio.NewReader(os.Stdin)
@@ -210,6 +211,7 @@ func (w *Logger) AskForFilesystemApproval(prompt, path, folder string, tier File
 
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
 	reader := bufio.NewReader(os.Stdin)

@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	mu                 sync.RWMutex
-	suspendFunc        func()
-	resumeFunc         func()
-	steerPause         func()
-	steerResume        func()
-	streamingSuspended atomic.Bool
+	mu             sync.RWMutex
+	suspendFunc    func()
+	resumeFunc     func()
+	steerPause     func()
+	steerResume    func()
+	streamingDepth atomic.Int32
 )
 
 // SetSuspendIndicator installs (or clears, with nil) the global function
@@ -104,17 +104,19 @@ func ResumeSteer() {
 	}
 }
 
-// WithCookedStdin runs fn with the activity-indicator suspended and the
-// SteerInputReader paused so stdin is back in cooked mode for the
-// duration of the call. Wraps the SuspendIndicator + PauseSteer /
-// ResumeSteer dance that interactive prompts and child-process
+// WithCookedStdin runs fn with the activity-indicator suspended, the
+// SteerInputReader paused, and streaming suspended so stdin is back in
+// cooked mode for the duration of the call and no streaming prose
+// clobbers anything the callback renders. Wraps the SuspendIndicator +
+// SuspendStreaming + PauseSteer / ResumeSteer + ResumeStreaming +
+// ResumeIndicator dance that interactive prompts and child-process
 // editors must perform when invoked during a turn — the steer reader
 // otherwise holds stdin in raw mode and bufio.Reader / term.ReadPassword
 // calls hit EOF immediately.
 //
 // Safe to call even when no indicator or steer reader is registered
 // (e.g. non-interactive runs, slash commands that fire before the
-// first turn): both hooks no-op in that case.
+// first turn): all hooks no-op in that case.
 //
 // Callers that prefer the explicit pattern can still do so directly;
 // this helper exists so the most common "I'm about to read stdin or
@@ -122,31 +124,49 @@ func ResumeSteer() {
 // hard to get wrong.
 func WithCookedStdin(fn func() error) error {
 	SuspendIndicator()
+	SuspendStreaming()
 	PauseSteer()
 	defer ResumeSteer()
+	defer ResumeStreaming()
+	defer ResumeIndicator()
 	return fn()
 }
 
-// SuspendStreaming sets a flag that the streaming callback checks before
-// writing prose to the terminal. Used by interactive prompts (security
+// SuspendStreaming increments the streaming-suspension depth. The
+// streaming callback (see IsStreamingSuspended) suppresses prose while
+// the depth is greater than zero. Used by interactive prompts (security
 // approvals, edit review) that render to the terminal while the agent's
 // streaming goroutine may still be receiving chunks — without this, the
 // streaming callback clobbers the prompt with mid-stream prose.
 //
-// The flag is process-global and atomic; callers MUST pair this with a
-// deferred ResumeStreaming to avoid permanently suppressing output.
+// The depth is refcounted so overlapping prompts (e.g. a parallel
+// subagent's ask_user plus a security elevation prompt) each keep the
+// suspension alive for their own duration; a stray early ResumeStreaming
+// from one prompt cannot clear the flag while another prompt is still on
+// screen. Callers MUST pair each SuspendStreaming with a deferred
+// ResumeStreaming.
 func SuspendStreaming() {
-	streamingSuspended.Store(true)
+	streamingDepth.Add(1)
 }
 
-// ResumeStreaming clears the SuspendStreaming flag. Safe to call when
-// streaming was never suspended (the flag defaults to false).
+// ResumeStreaming decrements the streaming-suspension depth. Clamped at
+// zero so an unbalanced extra resume can never drive the counter
+// negative and mask a later suspend. Safe to call when nothing was
+// suspended (the counter floors at zero).
 func ResumeStreaming() {
-	streamingSuspended.Store(false)
+	for {
+		cur := streamingDepth.Load()
+		if cur <= 0 {
+			return
+		}
+		if streamingDepth.CompareAndSwap(cur, cur-1) {
+			return
+		}
+	}
 }
 
 // IsStreamingSuspended reports whether SuspendStreaming is active.
 // Called by the streaming callback to decide whether to suppress a chunk.
 func IsStreamingSuspended() bool {
-	return streamingSuspended.Load()
+	return streamingDepth.Load() > 0
 }

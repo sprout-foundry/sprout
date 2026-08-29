@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -463,6 +464,31 @@ func (f *StatusFooter) computeOverflowRows(oldCols, newCols, footerRows int) int
 	return total
 }
 
+// ApplyPendingResizeStreamingLocked re-applies the scroll region for the
+// current terminal geometry while prose is streaming, WITHOUT consuming
+// pendingResize and WITHOUT the stale-row clearing or footer redraw that
+// Resize() performs — both would wipe in-flight prose. Safe only when the
+// caller knows the cursor sits at column 0 of a fresh row (a completed-line
+// boundary): the DECSTBM re-apply is wrapped in DECSC/DECRC (\0337/\0338)
+// so the streaming writer's cursor is preserved. Caller MUST hold outputMu.
+func (f *StatusFooter) ApplyPendingResizeStreamingLocked() {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	snapshot := f.active && f.pendingResize
+	f.mu.Unlock()
+	if !snapshot {
+		return
+	}
+	// Wrap the DECSTBM re-apply in a cursor save/restore so the
+	// streaming writer's cursor is preserved. applyScrollRegionLocked
+	// skips when the terminal is too short for the reserved rows.
+	fmt.Fprint(f.w, "\0337")
+	f.applyScrollRegionLocked()
+	fmt.Fprint(f.w, "\0338")
+}
+
 // Stop resets the scroll region to full-screen, clears the footer row, and
 // halts the SIGWINCH watcher. MUST be called on every exit path (including
 // signal-driven shutdown) or the user's terminal is left with a broken
@@ -487,51 +513,57 @@ func (f *StatusFooter) Stop() {
 
 	if stopCh != nil {
 		close(stopCh)
-		<-doneCh
+		// Bounded wait: the SIGWINCH watcher may be blocked acquiring
+		// outputMu behind a wedged PTY write. Waiting forever here (this
+		// runs from signal handlers via StopGlobalStatusFooter right
+		// before os.Exit) deadlocks shutdown; the watcher exits on its
+		// own once unblocked and the region reset below is idempotent.
+		select {
+		case <-doneCh:
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 	if pollerStop != nil {
 		pollerStop()
 	}
 
 	_, rows := f.terminalSize()
-	if rows > 1 {
-		f.mu.Lock()
-		lastSteer := f.lastSteerRows
-		lastHint := f.lastHintRows
-		oldCols := f.lastCols
-		f.mu.Unlock()
+	// Snapshot every field the teardown reads once, under f.mu; the
+	// write sequence below runs under outputMu so it cannot interleave
+	// with a concurrent Refresh/Resize, and reading f.lastHintRows
+	// directly inside it raced with drawLocked's bookkeeping.
+	f.mu.Lock()
+	lastSteerSnap := f.lastSteerRows
+	lastHintSnap := f.lastHintRows
+	oldColsSnap := f.lastCols
+	steerActiveSnap := f.steerActive
+	f.mu.Unlock()
 
-		// Compute the footer's reserved rows.
-		reserved := 2 + lastSteer + lastHint
+	LockOutput()
+	if rows > 1 {
+		reserved := 2 + lastSteerSnap + lastHintSnap
 		topRow := rows - reserved
 
-		// Extend upward for wrapped overflow (same logic as Resize).
 		newCols, _ := f.terminalSize()
-		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
+		overflow := f.computeOverflowRows(oldColsSnap, newCols, reserved)
 		topRow -= overflow
 		if topRow < 1 {
 			topRow = 1
 		}
 		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 	}
-	// Reset scroll region to full screen.
 	fmt.Fprint(f.w, "\033[r")
-	// Restore cursor to a sensible position (where the topmost pinned
-	// row used to be) so subsequent output lands somewhere sensible.
 	if rows > 1 {
-		f.mu.Lock()
-		hintWasActive := f.lastHintRows > 0
-		steerWasActive := f.steerActive
-		lastSteer := f.lastSteerRows
-		f.mu.Unlock()
 		topPinned := rows - 1
-		if steerWasActive && lastSteer > 0 {
-			topPinned = steerRowFor(rows, lastSteer, f.lastHintRows, 0)
-		} else if hintWasActive {
+		if steerActiveSnap && lastSteerSnap > 0 {
+			topPinned = steerRowFor(rows, lastSteerSnap, lastHintSnap, 0)
+		} else if lastHintSnap > 0 {
 			topPinned = rows - 2
 		}
 		fmt.Fprintf(f.w, "\033[%d;1H", topPinned)
 	}
+	UnlockOutput()
+
 	f.mu.Lock()
 	f.steerActive = false
 	f.steerLine = ""
@@ -824,6 +856,9 @@ func (f *StatusFooter) ClearSteerLine() {
 	// Reset region, blank each previously-occupied steer row, then
 	// re-apply with no steer reservation. Order: reset region first so
 	// we can address the previously-reserved rows by absolute number.
+	// The whole sequence runs under outputMu so it cannot interleave
+	// with a concurrent Refresh/Resize mid-sequence.
+	LockOutput()
 	_, rows := f.terminalSize()
 	if rows > 2 && prevRows > 0 {
 		fmt.Fprint(f.w, "\033[r")
@@ -847,8 +882,9 @@ func (f *StatusFooter) ClearSteerLine() {
 		}
 		fmt.Fprint(f.w, "\0338")
 	}
-	f.applyScrollRegion()
-	f.draw()
+	f.applyScrollRegionLocked()
+	f.drawLocked()
+	UnlockOutput()
 }
 
 // ClearSteerLineLocked is the lock-free variant of ClearSteerLine for
@@ -1155,4 +1191,17 @@ type terminalSizeOverride struct {
 // not attached to a real TTY (fd < 0 or GetSize errored).
 func (f *StatusFooter) TerminalSize() (cols, rows int) {
 	return f.terminalSize()
+}
+
+// proseStreamingActive reports whether assistant prose is currently
+// streaming into the scroll region. Read under f.mu only (never
+// outputMu) so callers like the indicator's resume closure can check
+// it from any stack without risking the lock-ordering contract.
+func (f *StatusFooter) proseStreamingActive() bool {
+	if f == nil {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.proseStreaming
 }

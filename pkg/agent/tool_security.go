@@ -143,6 +143,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 					// Suspend the CLI spinner and pause the steer reader before blocking on the webui response.
 					clihooks.SuspendIndicator()
 					clihooks.PauseSteer()
+					defer clihooks.ResumeIndicator()
 					defer clihooks.ResumeSteer()
 
 					if agent.debug {

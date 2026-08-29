@@ -34,6 +34,7 @@ func PromptForSelection(options []string, prompt string) (int, bool) {
 	// otherwise see EOF immediately).
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
 	fmt.Printf("\n%s ", prompt)
@@ -75,6 +76,7 @@ func PromptForConfirmation(prompt string) bool {
 	// for tool/turn-time callers that might otherwise hit EOF.
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
 	fmt.Printf("%s ", prompt)

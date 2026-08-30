@@ -55,13 +55,15 @@ interface FakeBridge {
  * tests can assert the exact args (normalized paths, payloads) and the
  * results are returned from the passed-in closures.
  */
-function makeBridge(opts: {
-  capabilities?: Capabilities;
-  capsImpl?: () => Promise<unknown>;
-  capsReject?: unknown;
-  read?: (path: string) => Promise<unknown>;
-  write?: (path: string, payload: unknown) => Promise<unknown>;
-} = {}): FakeBridge {
+function makeBridge(
+  opts: {
+    capabilities?: Capabilities;
+    capsImpl?: () => Promise<unknown>;
+    capsReject?: unknown;
+    read?: (path: string) => Promise<unknown>;
+    write?: (path: string, payload: unknown) => Promise<unknown>;
+  } = {},
+): FakeBridge {
   const capsImpl =
     opts.capsImpl ??
     (async () =>
@@ -78,9 +80,7 @@ function makeBridge(opts: {
       opts.read ? opts.read(p) : { ok: true, path: p, content: 'default' },
     ),
     writeWorkspaceFile: vi.fn(async (p: string, payload: unknown) =>
-      opts.write
-        ? opts.write(p, payload)
-        : { ok: true, path: p },
+      opts.write ? opts.write(p, payload) : { ok: true, path: p },
     ),
     listWorkspace: vi.fn(async () => ({ ok: true, files: [] })),
   };
@@ -299,9 +299,7 @@ describe('gate-fail preserves the pre-R-2w "provided natively" throw', () => {
     const { readFileWithConsent, writeFileWithConsent, resetGate } = await loadStub(true);
     resetGate();
     // No bridge installed.
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
     await expect(writeFileWithConsent('a.txt', 'x')).rejects.toThrow(/Track R --native-fs/);
   });
 
@@ -319,9 +317,7 @@ describe('gate-fail preserves the pre-R-2w "provided natively" throw', () => {
     });
     installBridge(bridge);
 
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
     await expect(writeFileWithConsent('a.txt', 'x')).rejects.toThrow(/Track R --native-fs/);
 
     // Gate failed → the read/write bridge helpers were never invoked.
@@ -338,9 +334,7 @@ describe('gate-fail preserves the pre-R-2w "provided natively" throw', () => {
     const bridge = makeBridge({});
     installBridge(bridge);
 
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
     await expect(writeFileWithConsent('a.txt', 'x')).rejects.toThrow(/Track R --native-fs/);
 
     // The default build never touches the bridge's FS helpers.
@@ -398,9 +392,7 @@ describe('transport failure → gate-fail → pre-R-2w throw', () => {
     const bridge = makeBridge({ capsReject: new Error('transport down') });
     installBridge(bridge);
 
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
     expect(bridge.readWorkspaceFile).not.toHaveBeenCalled();
   });
 
@@ -410,9 +402,7 @@ describe('transport failure → gate-fail → pre-R-2w throw', () => {
     const bridge = makeBridge({ capsImpl: async () => null });
     installBridge(bridge);
 
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
   });
 
   it('getCapabilities resolves {} (no capabilities key) → rejects', async () => {
@@ -421,9 +411,7 @@ describe('transport failure → gate-fail → pre-R-2w throw', () => {
     const bridge = makeBridge({ capsImpl: async () => ({}) });
     installBridge(bridge);
 
-    await expect(readFileWithConsent('a.txt')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
+    await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
   });
 });
 

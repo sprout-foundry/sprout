@@ -26,8 +26,8 @@
       "provider": "ai-worker"
     },
       "orchestrator": {
-      "model": "deepseek-v4-flash",
-      "provider": "deepseek"
+      "model": "glm-5.3",
+      "provider": "zai-coding"
     },
       "reviewer": {
       "model": "qwen3.8-27b",
@@ -39,7 +39,7 @@
     }
   },
     "max_iterations": 0,
-    "model": "deepseek-v4-flash",
+    "model": "glm-5.3",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "deepseek"

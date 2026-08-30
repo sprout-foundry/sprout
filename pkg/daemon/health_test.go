@@ -201,16 +201,19 @@ func TestHealthMonitorFiresFallbackAfterThreshold(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestHealthMonitorRecoversAfterFailures
 //
-// Server fails for first 3 requests, then starts succeeding.
-// ConsecutiveFailures should return to 0 after recovery.
+// Server fails while the test hasn't yet observed the failure count reach
+// 3, then starts succeeding. Gate on the OBSERVED count rather than a
+// fixed request budget: with a 10ms check interval, a fixed 3-request
+// budget makes ">= 3" observable for a single ~10ms window before the
+// counter swaps back to 0 — a loaded runner's 10ms poll can step over
+// that window entirely and the phase-1 wait times out even though
+// recovery worked.
 // ---------------------------------------------------------------------------
 
 func TestHealthMonitorRecoversAfterFailures(t *testing.T) {
-	var requestCount int64
-
+	var phase1Done atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt64(&requestCount, 1)
-		if n <= 3 {
+		if !phase1Done.Load() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -238,6 +241,8 @@ func TestHealthMonitorRecoversAfterFailures(t *testing.T) {
 	}) {
 		t.Fatal("timed out waiting for initial failures")
 	}
+	// Let the gate open only after phase 1 has observed the count.
+	phase1Done.Store(true)
 
 	// Phase 2: wait for recovery (ConsecutiveFailures → 0).
 	if !pollUntil(t, 1*time.Second, 10*time.Millisecond, func() bool {

@@ -62,7 +62,11 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 	unsub := console.RegisterResizeSubscriber(func(width int) {
 		r.SetTerminalWidth(width)
 	})
-	currentResizeUnsub.Store(&unsub)
+	if prev := currentResizeUnsub.Swap(&unsub); prev != nil {
+		// Overwriting a live subscription would leak it — the prior
+		// renderer would keep receiving resizes forever.
+		(*prev)()
+	}
 	if router := chatAgent.OutputRouter(); router != nil {
 		router.SetExternalWriteHook(r.OnExternalWrite)
 	}

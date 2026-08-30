@@ -19,10 +19,10 @@
     "subagent_overrides": {
     "coder": {
     "provider": "ai-worker",
-    "model": "qwen3.6-27b-b"
+    "model": "qwen3.8-27b"
     },
       "debugger": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     },
       "orchestrator": {
@@ -30,11 +30,11 @@
       "provider": "deepseek"
     },
       "reviewer": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     },
       "tester": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     }
   },
@@ -44,5 +44,6 @@
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "deepseek"
   },
-  "no_web_ui": true
+  "no_web_ui": true,
+  "subagent_timeout_seconds": 10800
 }

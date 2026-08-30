@@ -19,30 +19,31 @@
     "subagent_overrides": {
     "coder": {
     "provider": "ai-worker",
-    "model": "qwen3.6-27b-b"
+    "model": "qwen3.8-27b"
     },
       "debugger": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     },
       "orchestrator": {
-      "model": "deepseek-v4-flash",
-      "provider": "deepseek"
+      "model": "glm-5.3",
+      "provider": "zai-coding"
     },
       "reviewer": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     },
       "tester": {
-      "model": "qwen3.6-27b-b",
+      "model": "qwen3.8-27b",
       "provider": "ai-worker"
     }
   },
     "max_iterations": 0,
-    "model": "deepseek-v4-flash",
+    "model": "glm-5.3",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
-    "provider": "deepseek"
+    "provider": "zai-coding"
   },
-  "no_web_ui": true
+  "no_web_ui": true,
+  "subagent_timeout_seconds": 10800
 }

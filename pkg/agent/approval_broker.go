@@ -192,8 +192,10 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		// Suspend CLI spinner before blocking on the webui response.
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
+		clihooks.SuspendStreaming()
 		defer clihooks.ResumeIndicator()
 		defer clihooks.ResumeSteer()
+		defer clihooks.ResumeStreaming()
 
 		// Build extras for the dialog
 		extras := map[string]string{

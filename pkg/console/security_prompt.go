@@ -177,7 +177,7 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 		Footer: "↑/↓ navigate · Enter confirm · Esc denies",
 	})
 
-	value, ok := runApprovalPicker(w, sl)
+	value, ok := approvalPicker(w, sl)
 	if !ok {
 		return utils.ApprovalChoiceDeny
 	}

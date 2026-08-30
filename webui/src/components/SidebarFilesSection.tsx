@@ -4,12 +4,7 @@ import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 're
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
-import {
-  detectSproutStudio,
-  mapWorkspaceListing,
-  nativeFsGate,
-  workspaceListDepth,
-} from '../services/nativeFs';
+import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { debugLog } from '../utils/log';
 
@@ -268,9 +263,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
               if (gate.active) {
                 const bridge = detectSproutStudio();
                 if (bridge) {
-                  const result = await bridge.listWorkspace(
-                    workspaceListDepth(path),
-                  );
+                  const result = await bridge.listWorkspace(workspaceListDepth(path));
                   return mapWorkspaceListing(result, path);
                 }
               }

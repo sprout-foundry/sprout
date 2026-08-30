@@ -52,7 +52,31 @@ Shipped fixes:
 
 ---
 
-## R-2w: webui native-FS deferral (Track R, second half of the first swap)
+## R-2f: wasm-free boot for ratified dists (follow-up to R-2w, integration finding)
+
+Context: 2026-08-30 end-to-end test — the studio iOS shell serving a
+`--native-fs --ratify-fs` cloud dist shows the webui error screen
+"Failed to load browser runtime … WebAssembly". The R-2w deferral gate
+covers FS *operations*, but the boot path still unconditionally
+instantiates the WASM command runtime, whose artifacts the ratified dist
+excludes by design (`--native-fs` drops the 26 MB wasm chain). The dist
+is thus correct per ADR-0008; the boot sequence is the gap.
+
+- [ ] **R-2f — conditional WASM boot**: when `NATIVE_FS_ENABLED` (the
+      compile-time `--native-fs` flag), the webui must boot WITHOUT
+      instantiating any excluded WASM module: no wasmShell fetch/instantiate
+      (and no ONNX/embedding chain), chat/API flows over their normal HTTP
+      channels, FS ops via the R-2w bridge deferral, and any UI surface
+      that requires the local runtime (e.g. local terminal tab) renders a
+      clear "provided by shell" placeholder instead of a boot failure.
+      Default build unchanged (flag false → today's boot, byte-identical).
+      Exit: a browser-harness test boots the ratified `--native-fs` cloud
+      dist with a mocked bridge and renders the workspace error-free; the
+      default dist still boots exactly as today; ADR-0008 "Deferral
+      wiring" section gains a boot-sequence subsection.
+
+---
+
 
 Context: Studio side is DONE 2026-08-30 (sprout-studio `484436e`:
 WebUIServeGate enforces the ADR-0008 servability gate; `484436e`/`0e2256d`

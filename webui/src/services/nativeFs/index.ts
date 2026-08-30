@@ -69,18 +69,12 @@ export type SproutStudioFsBridge = {
   getCapabilities(): Promise<SproutStudioCapabilities>;
   readWorkspaceFile(
     path: string,
-  ): Promise<
-    | { ok: true; path: string; content?: string; contentBase64?: string }
-    | { ok: false; error: string }
-  >;
+  ): Promise<{ ok: true; path: string; content?: string; contentBase64?: string } | { ok: false; error: string }>;
   writeWorkspaceFile(
     path: string,
     payload: string | { content?: string; contentBase64?: string },
   ): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
-  listWorkspace(maxDepth?: number): Promise<
-    | { ok: true; files: WorkspaceFileEntry[] }
-    | { ok: false; error: string }
-  >;
+  listWorkspace(maxDepth?: number): Promise<{ ok: true; files: WorkspaceFileEntry[] } | { ok: false; error: string }>;
 };
 
 // ── Structural detector ───────────────────────────────────────────────────────
@@ -143,10 +137,7 @@ export function resolveNativeFsGate(
   if (!hasSproutStudioFsBridge(bridge)) {
     return { active: false, reason: 'no-bridge' };
   }
-  const caps = capabilitiesResponse as
-    | SproutStudioCapabilities
-    | null
-    | undefined;
+  const caps = capabilitiesResponse as SproutStudioCapabilities | null | undefined;
   if (!caps || typeof caps !== 'object') {
     return { active: false, reason: 'malformed-capabilities' };
   }
@@ -154,10 +145,7 @@ export function resolveNativeFsGate(
     return { active: false, reason: 'fs-not-declared' };
   }
   const ratified =
-    Array.isArray(caps.excluded) &&
-    caps.excluded.some(
-      (e) => e && e.portion === 'fs' && e.status === 'ratified',
-    );
+    Array.isArray(caps.excluded) && caps.excluded.some((e) => e && e.portion === 'fs' && e.status === 'ratified');
   if (!ratified) {
     return { active: false, reason: 'fs-not-ratified' };
   }
@@ -422,10 +410,7 @@ export function sortNativeFileInfo(items: NativeFileInfo[]): NativeFileInfo[] {
  *
  * The result is returned already sorted (dirs first, then by name).
  */
-export function mapWorkspaceListing(
-  result: unknown,
-  requestedPath: string,
-): NativeFileInfo[] {
+export function mapWorkspaceListing(result: unknown, requestedPath: string): NativeFileInfo[] {
   const r = result as { ok?: boolean; files?: WorkspaceFileEntry[]; error?: string };
   if (!r || r.ok !== true || !Array.isArray(r.files)) {
     return [];
@@ -467,9 +452,7 @@ export function mapWorkspaceListing(
 
 /** Map a `writeWorkspaceFile` result to a synthesized `Response`. */
 export function writeWorkspaceResponse(result: unknown): Response {
-  const r = result as
-    | { ok: true; path: string }
-    | { ok: false; error: string };
+  const r = result as { ok: true; path: string } | { ok: false; error: string };
   if (r && (r as { ok?: boolean }).ok === false) {
     const err = (r as { ok: false; error: string }).error;
     return errorJsonResponse(err, workspaceErrorStatus(err));
@@ -491,9 +474,7 @@ export function writeWorkspaceResponse(result: unknown): Response {
 export async function nativeReadWorkspaceFile(path: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
-    throw new Error(
-      'nativeReadWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)',
-    );
+    throw new Error('nativeReadWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
   }
   let result: unknown;
   try {
@@ -510,15 +491,10 @@ export async function nativeReadWorkspaceFile(path: string): Promise<Response> {
  * Write a workspace file through the bridge and synthesize a `Response`.
  * `path` must already be normalized; `content` is a utf-8 text string.
  */
-export async function nativeWriteWorkspaceFile(
-  path: string,
-  content: string,
-): Promise<Response> {
+export async function nativeWriteWorkspaceFile(path: string, content: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
-    throw new Error(
-      'nativeWriteWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)',
-    );
+    throw new Error('nativeWriteWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
   }
   let result: unknown;
   try {

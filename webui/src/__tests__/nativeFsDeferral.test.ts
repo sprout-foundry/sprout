@@ -63,11 +63,7 @@ describe('resolveNativeFsGate (pure)', () => {
 
   it('inactive when the shell does not declare fs', () => {
     const bridge = makeBridge({ fs: false }, ratifiedFs);
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: false }, excluded: ratifiedFs },
-    );
+    const d = resolveNativeFsGate(true, bridge, { capabilities: { fs: false }, excluded: ratifiedFs });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-declared');
   });
@@ -265,64 +261,46 @@ describe('resolveNativeFsGate — malformed / edge excluded[] shapes', () => {
   const bridge = makeBridge({ fs: true }, [{ portion: 'fs', status: 'ratified' }]);
 
   it('excluded is a string (not an array) → inactive (fs-not-ratified)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: true }, excluded: 'fs' as unknown as Array<Record<string, unknown>> },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: true },
+      excluded: 'fs' as unknown as Array<Record<string, unknown>>,
+    });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
 
   it('excluded is null → inactive (fs-not-ratified)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: true }, excluded: null as unknown as Array<Record<string, unknown>> },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: true },
+      excluded: null as unknown as Array<Record<string, unknown>>,
+    });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
 
   it('excluded entry missing `portion` → inactive (fs-not-ratified)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: true }, excluded: [{ status: 'ratified' }] },
-    );
+    const d = resolveNativeFsGate(true, bridge, { capabilities: { fs: true }, excluded: [{ status: 'ratified' }] });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
 
   it('excluded entry missing `status` → inactive (fs-not-ratified)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: true }, excluded: [{ portion: 'fs' }] },
-    );
+    const d = resolveNativeFsGate(true, bridge, { capabilities: { fs: true }, excluded: [{ portion: 'fs' }] });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
 
   it('a non-fs portion ratified (e.g. terminal) does NOT activate fs', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      {
-        capabilities: { fs: true },
-        excluded: [{ portion: 'terminal', status: 'ratified' }],
-      },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: true },
+      excluded: [{ portion: 'terminal', status: 'ratified' }],
+    });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
 
   it('capabilities.fs === true but excluded is empty [] → inactive (fs-not-ratified)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: true }, excluded: [] },
-    );
+    const d = resolveNativeFsGate(true, bridge, { capabilities: { fs: true }, excluded: [] });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-ratified');
   });
@@ -331,17 +309,13 @@ describe('resolveNativeFsGate — malformed / edge excluded[] shapes', () => {
   // ANY ratified fs entry activates the gate even if a sibling fs entry is
   // seam-only. This asserts that first-match-wins consequence.
   it('duplicate fs entries (one seam-only + one ratified) → ACTIVE (first ratified wins)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      {
-        capabilities: { fs: true },
-        excluded: [
-          { portion: 'fs', status: 'seam-only' },
-          { portion: 'fs', status: 'ratified' },
-        ],
-      },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: true },
+      excluded: [
+        { portion: 'fs', status: 'seam-only' },
+        { portion: 'fs', status: 'ratified' },
+      ],
+    });
     expect(d.active).toBe(true);
     expect(d.reason).toBe('active');
   });
@@ -351,11 +325,7 @@ describe('resolveNativeFsGate — capabilities.fs strict-typing edge cases', () 
   const bridge = makeBridge({ fs: true }, [{ portion: 'fs', status: 'ratified' }]);
 
   it('capabilities key missing entirely → inactive (fs-not-declared)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { excluded: [{ portion: 'fs', status: 'ratified' }] },
-    );
+    const d = resolveNativeFsGate(true, bridge, { excluded: [{ portion: 'fs', status: 'ratified' }] });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-declared');
   });
@@ -364,21 +334,19 @@ describe('resolveNativeFsGate — capabilities.fs strict-typing edge cases', () 
   // (strict). Truthy non-boolean values (`'yes'`, `1`) therefore FAIL the
   // gate (fs-not-declared) even though they are truthy — asserted as-is.
   it('capabilities.fs truthy but not boolean (e.g. "yes") → inactive (fs-not-declared)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: 'yes' as unknown as boolean }, excluded: [{ portion: 'fs', status: 'ratified' }] },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: 'yes' as unknown as boolean },
+      excluded: [{ portion: 'fs', status: 'ratified' }],
+    });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-declared');
   });
 
   it('capabilities.fs truthy but not boolean (e.g. 1) → inactive (fs-not-declared)', () => {
-    const d = resolveNativeFsGate(
-      true,
-      bridge,
-      { capabilities: { fs: 1 as unknown as boolean }, excluded: [{ portion: 'fs', status: 'ratified' }] },
-    );
+    const d = resolveNativeFsGate(true, bridge, {
+      capabilities: { fs: 1 as unknown as boolean },
+      excluded: [{ portion: 'fs', status: 'ratified' }],
+    });
     expect(d.active).toBe(false);
     expect(d.reason).toBe('fs-not-declared');
   });

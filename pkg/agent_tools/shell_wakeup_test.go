@@ -167,7 +167,7 @@ func TestWakeupWatcher_TerminalCompletion(t *testing.T) {
 	completions := notifier.of("shell_bg")
 	require.Len(t, completions, 1)
 	require.Equal(t,
-		fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.", sessionID, 0, sessionID),
+		fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see full output.", sessionID, 0, sessionID),
 		completions[0].content)
 	require.Empty(t, notifier.of("shell_bg_timeout"))
 }
@@ -207,7 +207,7 @@ func TestWakeupWatcher_TerminalDeadlineThenCompletion(t *testing.T) {
 	completions := notifier.of("shell_bg")
 	require.Len(t, completions, 1, "exactly one completion expected")
 	require.Equal(t,
-		fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.", sessionID, 0, sessionID),
+		fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see full output.", sessionID, 0, sessionID),
 		completions[0].content)
 
 	// Ordering: the heads-up was recorded strictly before the completion.

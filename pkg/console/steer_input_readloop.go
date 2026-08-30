@@ -52,6 +52,36 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		default:
 		}
 
+		// Poll-gate the read: park for at most one tick waiting for
+		// stdin to become readable instead of blocking inside Read.
+		// A blocking Read is only interruptible by termios VMIN=0 —
+		// if a concurrent PauseSteer (or a prompt's exitSteerMode)
+		// restores cooked mode (VMIN=1) under a parked read, the Read
+		// never returns, Stop()'s 2s wait times out, and the leaked
+		// goroutine keeps racing future stdin consumers for bytes.
+		// Polling bounds every wait to 10ms regardless of termios.
+		if !waitForStdinReadable(r.fd, 10*time.Millisecond) {
+			select {
+			case <-stopCh:
+				return
+			case <-resizeCh:
+				// Terminal resized. Delegate to the footer's Resize
+				// which handles scroll-region re-application, row
+				// clearing, and redraw atomically under LockOutput.
+				// Calling renderLine directly would race with the
+				// footer's own SIGWINCH handler — both would try to
+				// manipulate scroll regions and cursor position,
+				// producing stacked-duplicates and garbled output.
+				if r.footer != nil {
+					r.footer.Resize()
+				} else {
+					r.renderLine()
+				}
+			case <-ticker.C:
+			}
+			continue
+		}
+
 		n, err := os.Stdin.Read(buf)
 		if n == 0 {
 			// No byte ready (or EOF). Sleep briefly via the ticker
@@ -64,13 +94,6 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			case <-stopCh:
 				return
 			case <-resizeCh:
-				// Terminal resized. Delegate to the footer's Resize
-				// which handles scroll-region re-application, row
-				// clearing, and redraw atomically under LockOutput.
-				// Calling renderLine directly would race with the
-				// footer's own SIGWINCH handler — both would try to
-				// manipulate scroll regions and cursor position,
-				// producing stacked-duplicates and garbled output.
 				if r.footer != nil {
 					r.footer.Resize()
 				} else {

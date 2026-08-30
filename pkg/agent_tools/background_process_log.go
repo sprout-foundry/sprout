@@ -195,11 +195,38 @@ func (m *BackgroundProcessManager) cleanup() {
 	}
 }
 
+// maxLiveOwnerSkipAge bounds how long orphan cleanup will keep sparing a
+// .pid file whose owner process appears alive. Real sessions are reaped by
+// their owner's BPM within the 2h inactivity expiry; anything older than
+// this with a "live" owner is almost certainly a recycled PID pinning
+// stale files, so cleanup reclaims it anyway.
+const maxLiveOwnerSkipAge = 24 * time.Hour
+
 // orphanCleanupItem holds parsed info from a .pid file for batch processing.
 type orphanCleanupItem struct {
 	pid        int
+	ownerPID   int // 0 for legacy single-PID pidfiles
 	pidFile    string
 	outputFile string
+}
+
+// parsePIDFile parses a .pid file's contents. Current format is
+// "<child-pid> <owner-pid>" (space-separated); legacy files contain only
+// the child PID, in which case ownerPID is 0 and orphan cleanup treats
+// the session as unowned (previous behavior).
+func parsePIDFile(data []byte) (pid, ownerPID int, err error) {
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return 0, 0, fmt.Errorf("empty pid file")
+	}
+	pid, err = strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(fields) > 1 {
+		ownerPID, _ = strconv.Atoi(fields[1])
+	}
+	return pid, ownerPID, nil
 }
 
 // CleanupOrphanedBackgroundProcesses scans the baseDir for .pid files left
@@ -266,6 +293,7 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 
 	// Pre-parse all .pid files into work items (fast I/O, no sleeps)
 	var items []orphanCleanupItem
+	var skippedLiveOwner int
 	for _, pidFile := range pidFiles {
 		data, err := os.ReadFile(pidFile)
 		if err != nil {
@@ -273,7 +301,7 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 			continue
 		}
 
-		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		pid, ownerPID, err := parsePIDFile(data)
 		if err != nil {
 			log.Printf("warn: failed to parse PID from %s: %v", pidFile, err)
 			// Stale/unparseable file — remove both the .pid and its
@@ -285,16 +313,39 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 			continue
 		}
 
-		// Derive the session ID from the .pid file name
+		// Owner-aware liveness: a .pid file whose owner sprout process is
+		// still running marks a LIVE session owned by that process, not
+		// an orphan. Killing it here was the root cause of background
+		// sessions dying with "exit code -1" while their output files
+		// vanished — any second sprout sharing the config dir (a test
+		// binary inheriting SPROUT_CONFIG, a CLI invocation) ran this
+		// cleanup at agent creation and reaped the first process's
+		// still-running sessions. Leave both files in place; the owner's
+		// own BPM continues to track them.
+		//
+		// The skip is age-gated: after maxLiveOwnerSkipAge the session is
+		// reaped regardless of owner liveness, so a recycled owner PID
+		// can't pin stale files forever.
+		if ownerPID > 0 && ownerProcessAlive(ownerPID) {
+			if info, statErr := os.Stat(pidFile); statErr == nil && time.Since(info.ModTime()) < maxLiveOwnerSkipAge {
+				skippedLiveOwner++
+				continue
+			}
+		} // Derive the session ID from the .pid file name
 		// e.g., "bg-sleep-abc123.pid" → "bg-sleep-abc123"
 		base := filepath.Base(pidFile)
 		sessionID := strings.TrimSuffix(base, ".pid")
 
 		items = append(items, orphanCleanupItem{
 			pid:        pid,
+			ownerPID:   ownerPID,
 			pidFile:    pidFile,
 			outputFile: filepath.Join(baseDir, sessionID+".output"),
 		})
+	}
+
+	if skippedLiveOwner > 0 {
+		log.Printf("orphan cleanup: skipped %d session(s) with a live owner process", skippedLiveOwner)
 	}
 
 	if len(items) == 0 && len(strayOutputs) == 0 {

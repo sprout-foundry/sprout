@@ -44,10 +44,6 @@ export async function syncRepoToWasmVfs(
  * Stub for the real `syncWasmFileToRepo`. Safe no-op: no WASM VFS file exists
  * to copy back in the native-fs build.
  */
-export async function syncWasmFileToRepo(
-  _repoDir: string,
-  _wasmPath: string,
-  _content: string,
-): Promise<void> {
+export async function syncWasmFileToRepo(_repoDir: string, _wasmPath: string, _content: string): Promise<void> {
   // no-op
 }

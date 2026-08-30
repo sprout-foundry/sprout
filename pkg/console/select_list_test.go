@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSelectList_NoItems(t *testing.T) {
@@ -554,5 +555,118 @@ func TestSelectList_MouseOutDefaultsToStderr(t *testing.T) {
 	s := NewSelectList(SelectListOptions{Items: []SelectItem{{Label: "a", Value: "a"}}})
 	if got := s.mouseOut(); got != io.Writer(os.Stderr) {
 		t.Fatalf("mouseOut()=%v want os.Stderr when testOut is nil", got)
+	}
+}
+
+// Under `go test` stdin is not a terminal, so NewSelectList naturally
+// takes the fallback path. An idle pipe reader used to block
+// runFallback forever; cancelling the ctx must return the same
+// ("", false, nil) the TTY path returns for Esc/cancel.
+func TestSelectListRunFallbackHonorsContext(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+		},
+	})
+	if s.isTTY {
+		t.Skip("test environment has TTY stdin; fallback path not exercised")
+	}
+	// Inject a pipe that never delivers a line: without ctx support
+	// the fallback would block in ReadString until this test times out.
+	pipe, _ := io.Pipe()
+	s.fallbackReader = pipe
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	var (
+		val string
+		ok  bool
+		err error
+	)
+	go func() {
+		defer close(done)
+		val, ok, err = s.Run(ctx)
+	}()
+
+	// Let the fallback render and block on its read, then cancel.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after context cancellation")
+	}
+	if val != "" || ok || err != nil {
+		t.Fatalf("Run = (%q, %v, %v) want (\"\", false, nil)", val, ok, err)
+	}
+}
+
+func TestClampWalkBack(t *testing.T) {
+	cases := []struct {
+		prev, rows, want int
+	}{
+		{0, 24, 0},
+		{5, 24, 5},
+		{5, 3, 2},
+		{5, 1, 0},
+		{5, 0, 0},
+		{5, -1, 0},
+		{2, 24, 2},
+		{1, 1, 0},
+		{-3, 24, 0},
+	}
+	for _, c := range cases {
+		if got := clampWalkBack(c.prev, c.rows); got != c.want {
+			t.Errorf("clampWalkBack(%d, %d) = %d, want %d", c.prev, c.rows, got, c.want)
+		}
+	}
+}
+
+// handleResize sets the flag even when the output lock is contended,
+// and repaintIfResized consumes it. Exercises the flag handoff without
+// needing a real SIGWINCH.
+func TestSelectListResizeFlagHandoff(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Title: "test",
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+
+	// With the output lock held (simulating a busy read loop), the
+	// callback must only flag — no draw attempt, no deadlock.
+	LockOutput()
+	s.handleResize(80)
+	UnlockOutput()
+
+	s.mu.Lock()
+	flagged := s.resized
+	s.mu.Unlock()
+	if !flagged {
+		t.Fatal("handleResize did not set the resized flag while output lock was held")
+	}
+	// The idle-tick consumer clears the flag. The render it triggers
+	// writes ANSI to stderr; harmless in tests (non-TTY rows clamp to 0).
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.repaintIfResized()
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("repaintIfResized deadlocked")
+	}
+
+	s.mu.Lock()
+	flagged = s.resized
+	s.mu.Unlock()
+	if flagged {
+		t.Error("repaintIfResized did not consume the resized flag")
 	}
 }

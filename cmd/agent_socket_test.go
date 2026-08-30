@@ -436,22 +436,44 @@ func TestAgentServer_OnClose_Invoked(t *testing.T) {
 }
 
 // setEphemeralAgentSeam overrides newEphemeralDaemonAgentFn to build a
-// hermetic test agent per workDir, recording each created agent in *created
-// (pass nil to skip recording). Restored via t.Cleanup.
-func setEphemeralAgentSeam(t *testing.T, created *[]*agent.Agent) {
+// hermetic test agent per workDir, recording every created agent. The
+// returned snapshot function lets tests await async shutdown before
+// their temp dirs are torn down: releaseAgent runs Shutdown on a
+// background goroutine, and Shutdown flushes session/config files into
+// dirs created by t.TempDir inside newTestAgent — a test that returns
+// first races RemoveAll with those writes ("unlinkat ... directory not
+// empty"). Restored via t.Cleanup.
+func setEphemeralAgentSeam(t *testing.T) (createdAgents func() []*agent.Agent) {
 	t.Helper()
 	origFn := newEphemeralDaemonAgentFn
 	t.Cleanup(func() { newEphemeralDaemonAgentFn = origFn })
 	var mu sync.Mutex
+	var created []*agent.Agent
 	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
 		a.SetWorkspaceRoot(workDir)
-		if created != nil {
-			mu.Lock()
-			*created = append(*created, a)
-			mu.Unlock()
-		}
+		mu.Lock()
+		created = append(created, a)
+		mu.Unlock()
 		return a, nil
+	}
+	return func() []*agent.Agent {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]*agent.Agent(nil), created...)
+	}
+}
+
+// awaitAgentsShutdown blocks until every agent in the snapshot has
+// finished Shutdown. Tests using setEphemeralAgentSeam MUST defer this
+// (a test-body defer, not t.Cleanup — cleanups run after TempDir's
+// RemoveAll, which is exactly the write the wait must precede).
+func awaitAgentsShutdown(t *testing.T, agents []*agent.Agent) {
+	t.Helper()
+	for _, a := range agents {
+		require.Eventually(t, func() bool { return a.IsShutdown() },
+			10*time.Second, 20*time.Millisecond,
+			"ephemeral agent must finish shutting down before the test's temp dirs are removed")
 	}
 }
 
@@ -460,7 +482,11 @@ func setEphemeralAgentSeam(t *testing.T, created *[]*agent.Agent) {
 // on ExecuteTool: wire protocol → dispatch → per-call ephemeral agent →
 // ExecuteToolByName → seed registry → tool handler, all together.
 func TestSharedAgentService_ExecuteTool_EndToEnd(t *testing.T) {
-	setEphemeralAgentSeam(t, nil)
+	createdAgents := setEphemeralAgentSeam(t)
+	// The agent's Shutdown (async in releaseAgent) flushes config/session
+	// files under t.TempDir; wait for it before returning or TempDir's
+	// RemoveAll races those writes.
+	defer awaitAgentsShutdown(t, createdAgents())
 
 	svc := NewSharedAgentService(nil)
 	sockPath := startCmdAgentServer(t, svc)
@@ -503,7 +529,8 @@ func TestSharedAgentService_ExecuteTool_RejectsEmptyWorkDir(t *testing.T) {
 // TestSharedAgentService_ExecuteTool_UnknownTool verifies that an unknown
 // tool name returns a ToolResult with a non-empty Error and nil RPC error.
 func TestSharedAgentService_ExecuteTool_UnknownTool(t *testing.T) {
-	setEphemeralAgentSeam(t, nil)
+	createdAgents := setEphemeralAgentSeam(t)
+	defer awaitAgentsShutdown(t, createdAgents())
 
 	svc := NewSharedAgentService(nil)
 	result, err := svc.ExecuteTool(context.Background(), "no_such_tool", map[string]any{}, t.TempDir())
@@ -516,8 +543,7 @@ func TestSharedAgentService_ExecuteTool_UnknownTool(t *testing.T) {
 // an ephemeral agent created by ExecuteTool is shut down after the call
 // returns (same pattern as TestSharedAgentService_ReleasesEphemeralAgents).
 func TestSharedAgentService_ExecuteTool_ReleasesEphemeralAgents(t *testing.T) {
-	var created []*agent.Agent
-	setEphemeralAgentSeam(t, &created)
+	createdAgents := setEphemeralAgentSeam(t)
 
 	workDir := t.TempDir()
 	filePath := filepath.Join(workDir, "f.txt")
@@ -527,6 +553,7 @@ func TestSharedAgentService_ExecuteTool_ReleasesEphemeralAgents(t *testing.T) {
 	_, err := svc.ExecuteTool(context.Background(), "read_file", map[string]any{"path": filePath}, workDir)
 	require.NoError(t, err)
 
+	created := createdAgents()
 	require.NotEmpty(t, created, "the tool call must have created an ephemeral agent")
 	for _, a := range created {
 		require.Eventually(t, func() bool { return a.IsShutdown() },

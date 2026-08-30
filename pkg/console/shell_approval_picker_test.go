@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -238,5 +239,96 @@ func TestPromptShellApprovalParts_SuspendResume(t *testing.T) {
 	}
 	if !reflect.DeepEqual(calls, []string{"suspend", "resume"}) {
 		t.Errorf("expected [suspend resume] in order, got %v", calls)
+	}
+}
+
+// blockingReader blocks in Read until release is closed, then hands out
+// its data and EOF. It keeps the prompt's persistent reader goroutine
+// parked in a Scan so a regression test can observe goroutine teardown.
+type blockingReader struct {
+	data     []byte
+	release  chan struct{}
+	dataSent bool
+}
+
+func (r *blockingReader) Read(p []byte) (int, error) {
+	if r.dataSent {
+		return 0, io.EOF
+	}
+	<-r.release
+	if len(r.data) == 0 {
+		r.dataSent = true
+		return 0, io.EOF
+	}
+	n := copy(p, r.data)
+	r.dataSent = true
+	return n, nil
+}
+
+// lockedBuilder is a mutex-guarded strings.Builder so the test's main
+// goroutine can poll the prompt output while the prompt goroutine is
+// still writing (strings.Builder alone is not concurrency-safe).
+type lockedBuilder struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (w *lockedBuilder) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *lockedBuilder) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
+}
+
+// The persistent reader goroutine must always terminate: close(done)
+// unblocks its next channel send once the in-flight read resolves, so no
+// zombie stays blocked in Scan() (and later races the steer reader for
+// stdin after ResumeSteer).
+func TestPromptShellApprovalPartsIO_ReaderGoroutineTerminates(t *testing.T) {
+	parts := makeTestParts(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	release := make(chan struct{})
+	reader := &blockingReader{data: []byte("y\n"), release: release}
+	var out lockedBuilder
+
+	// Reader blocks pre-prompt, so the reader goroutine is parked in
+	// Scan() while the prompt is pending. Its defer closes readerGone
+	// once the reader machinery has fully unwound.
+	readerGone := make(chan struct{})
+	go func() {
+		defer close(readerGone)
+		promptShellApprovalPartsIO(ctx, parts, reader, &out)
+	}()
+
+	// Wait until the prompt rendered its first question (goroutine
+	// demonstrably parked in Scan) without assuming a fixed sleep.
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(out.String(), "approve?") {
+		select {
+		case <-readerGone:
+			t.Fatal("reader goroutine exited before the prompt could block")
+		case <-deadline:
+			t.Fatal("prompt did not reach its first question")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	// Unblock the parked read, then cancel. The goroutine's in-flight
+	// Scan resolves, and its next send is lost to the closed done chan.
+	close(release)
+	cancel()
+
+	select {
+	case <-readerGone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reader goroutine did not terminate")
 	}
 }

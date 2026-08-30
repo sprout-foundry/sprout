@@ -83,10 +83,14 @@ describe('parseArgs', () => {
 
   it('parses --mode / --output / --api-url / --ws-url', () => {
     const o = mod.parseArgs([
-      '--mode', 'local',
-      '--output', './out',
-      '--api-url', 'https://api.example.com',
-      '--ws-url', 'wss://api.example.com',
+      '--mode',
+      'local',
+      '--output',
+      './out',
+      '--api-url',
+      'https://api.example.com',
+      '--ws-url',
+      'wss://api.example.com',
     ]);
     expect(o.mode).toBe('local');
     expect(o.outputDir).toBe('./out');

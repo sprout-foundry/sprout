@@ -12,20 +12,10 @@
  * are safe no-op stubs that degrade gracefully if ever touched at runtime.
  */
 
-import type {
-  OPFSFileMetadata,
-  OPFSReplicaStatus,
-  OPFSManifestEntry,
-  OPFSPatchOp,
-} from '../opfsReplica';
+import type { OPFSFileMetadata, OPFSReplicaStatus, OPFSManifestEntry, OPFSPatchOp } from '../opfsReplica';
 
 // Re-export the type surface (type-only, erased at compile time).
-export type {
-  OPFSFileMetadata,
-  OPFSReplicaStatus,
-  OPFSManifestEntry,
-  OPFSPatchOp,
-} from '../opfsReplica';
+export type { OPFSFileMetadata, OPFSReplicaStatus, OPFSManifestEntry, OPFSPatchOp } from '../opfsReplica';
 
 /**
  * No-op stand-in for the real `OPFSReplicaService`. Reports "unavailable"
@@ -41,9 +31,7 @@ export class OPFSReplicaService {
     // no-op
   }
 
-  async initReplica(
-    _manifest: OPFSManifestEntry[],
-  ): Promise<{ fileCount: number; totalSize: number }> {
+  async initReplica(_manifest: OPFSManifestEntry[]): Promise<{ fileCount: number; totalSize: number }> {
     return { fileCount: 0, totalSize: 0 };
   }
 

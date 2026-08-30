@@ -51,13 +51,11 @@ function notProvidedNative(name: string): Error {
  * that still tries to boot the WASM shell fails fast and loudly rather than
  * silently no-op'ing.
  */
-export async function initWasmShell(
-  _config?: {
-    home?: string;
-    wasmUrl?: string;
-    wasmExecUrl?: string;
-  },
-): Promise<WasmShell> {
+export async function initWasmShell(_config?: {
+  home?: string;
+  wasmUrl?: string;
+  wasmExecUrl?: string;
+}): Promise<WasmShell> {
   throw notProvidedNative('initWasmShell');
 }
 

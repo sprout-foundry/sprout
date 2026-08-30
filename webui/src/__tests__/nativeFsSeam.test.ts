@@ -45,10 +45,7 @@ async function loadWebuiViteConfig() {
   // and localizes loader failures to the call site.
   const vite = await import('vite');
   const configPath = resolvePath(here, '../../vite.config.ts');
-  const loaded = await vite.loadConfigFromFile(
-    { command: 'build', mode: 'development' },
-    configPath,
-  );
+  const loaded = await vite.loadConfigFromFile({ command: 'build', mode: 'development' }, configPath);
   if (!loaded) {
     throw new Error(`loadConfigFromFile returned null for ${configPath}`);
   }
@@ -82,12 +79,7 @@ describe('vite.config.ts native-fs alias seam', () => {
       expect(aliases).toHaveLength(4);
 
       // The three stub aliases must be the first three entries, in order.
-      const stubPatterns = [
-        'fileAccess',
-        'repoVfsBridge',
-        'opfsReplica',
-        'wasmShell',
-      ];
+      const stubPatterns = ['fileAccess', 'repoVfsBridge', 'opfsReplica', 'wasmShell'];
       for (let i = 0; i < 3; i++) {
         expect(aliases[i].find).toBeInstanceOf(RegExp);
         expect(String((aliases[i].find as RegExp).source)).toContain(stubPatterns[i]);
@@ -108,12 +100,8 @@ describe('vite.config.ts native-fs alias seam', () => {
 describe('nativeFsStubs modules', () => {
   it('fileAccess stub rejects with a "provided natively by the shell" error', async () => {
     const fileAccess = await import('../services/nativeFsStubs/fileAccess');
-    await expect(fileAccess.readFileWithConsent('/tmp/x')).rejects.toThrow(
-      /provided natively by the shell/,
-    );
-    await expect(
-      fileAccess.writeFileWithConsent('/tmp/x', 'data'),
-    ).rejects.toThrow(/Track R --native-fs/);
+    await expect(fileAccess.readFileWithConsent('/tmp/x')).rejects.toThrow(/provided natively by the shell/);
+    await expect(fileAccess.writeFileWithConsent('/tmp/x', 'data')).rejects.toThrow(/Track R --native-fs/);
   });
 
   it('nativeFsFlag exports NATIVE_FS_ENABLED as boolean false when the flag is unset', async () => {

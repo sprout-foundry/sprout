@@ -223,23 +223,25 @@ describe('writeCapabilityManifest', () => {
     if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  function freshOutputDir() {
+  function freshOutputDir(suffix = 'out') {
     // writeCapabilityManifest writes into the dir but does NOT create it
-    // (the build script's cleanOutputDirectory does that first).
-    const dir = join(tmp, 'out');
+    // (the build script's cleanOutputDirectory does that first). Each call
+    // gets its own subdirectory so a file written by one test can never
+    // leak into another (they share this suite-level tmp anchor).
+    const dir = join(tmp, suffix);
     mkdirSync(dir, { recursive: true });
     return dir;
   }
 
   it('returns null and writes no file for default opts', () => {
-    const path = mod.writeCapabilityManifest(freshOutputDir(), mod.parseArgs([]));
+    const path = mod.writeCapabilityManifest(freshOutputDir('default'), mod.parseArgs([]));
     expect(path).toBeNull();
     // Absence of capabilities.json == nothing excluded.
-    expect(existsSync(join(tmp, 'out', 'capabilities.json'))).toBe(false);
+    expect(existsSync(join(tmp, 'default', 'capabilities.json'))).toBe(false);
   });
 
   it('writes a parseable, 2-space-indented capabilities.json for --native-fs', () => {
-    const outDir = freshOutputDir();
+    const outDir = freshOutputDir('native-fs');
     const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--native-fs']));
     expect(path).toBe(join(outDir, 'capabilities.json'));
     if (path === null) throw new Error('expected capabilities.json path, got null');
@@ -255,5 +257,168 @@ describe('writeCapabilityManifest', () => {
     expect(parsed.excluded[0].status).toBe('seam-only');
     // 2-space JSON indentation (line 2 is "  " prefixed).
     expect(raw.split('\n')[1].startsWith('  "')).toBe(true);
+  });
+
+  it('writes a ratified capabilities.json for --native-fs --ratify-fs', () => {
+    const outDir = freshOutputDir('ratified');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--native-fs', '--ratify-fs']));
+    expect(path).toBe(join(outDir, 'capabilities.json'));
+    if (path === null) throw new Error('expected capabilities.json path, got null');
+    expect(existsSync(path)).toBe(true);
+
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.excluded).toHaveLength(1);
+    expect(parsed.excluded[0].portion).toBe('fs');
+    // The R-2w swap: ratify-fs flips the entry to a shell-servable status.
+    expect(parsed.excluded[0].status).toBe('ratified');
+  });
+
+  it('writes no file when --ratify-fs alone (no fs portion excluded)', () => {
+    // writeCapabilityManifest emits a file only when at least one portion is
+    // excluded. --ratify-fs without --native-fs excludes nothing, so it must
+    // return null and write nothing (mirrors the default-build contract).
+    const outDir = freshOutputDir('ratify-alone');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--ratify-fs']));
+    expect(path).toBeNull();
+    expect(existsSync(join(outDir, 'capabilities.json'))).toBe(false);
+  });
+});
+
+// ── --ratify-fs (R-2w ratified manifest) ────────────────────────────────
+// Focused coverage for the --ratify-fs flag across parseArgs, validateArgs,
+// buildCapabilityManifest, and the help text. Pure functions only — no build.
+describe('--ratify-fs (R-2w ratified manifest)', () => {
+  // ── parseArgs ──────────────────────────────────────────────────────────
+  it('sets ratifyFs true and leaves nativeFs false when --ratify-fs is alone', () => {
+    const o = mod.parseArgs(['--ratify-fs']);
+    expect(o.ratifyFs).toBe(true);
+    expect(o.nativeFs).toBe(false);
+  });
+
+  it('sets both nativeFs and ratifyFs when both flags are passed', () => {
+    const o = mod.parseArgs(['--native-fs', '--ratify-fs']);
+    expect(o.nativeFs).toBe(true);
+    expect(o.ratifyFs).toBe(true);
+  });
+
+  it('leaves ratifyFs falsey when the flag is absent', () => {
+    expect(mod.parseArgs([]).ratifyFs).toBe(false);
+    expect(mod.parseArgs(['--native-fs']).ratifyFs).toBe(false);
+  });
+
+  it('sets ratifyFs regardless of flag order', () => {
+    const fwd = mod.parseArgs(['--native-fs', '--ratify-fs']);
+    const rev = mod.parseArgs(['--ratify-fs', '--native-fs']);
+    expect(fwd.ratifyFs).toBe(true);
+    expect(rev.ratifyFs).toBe(true);
+    expect(fwd.nativeFs).toBe(true);
+    expect(rev.nativeFs).toBe(true);
+  });
+
+  it('does not consume the following token and leaves unknownArgs untouched', () => {
+    const o = mod.parseArgs(['--ratify-fs', '--frobnicate', '--native-fs']);
+    expect(o.ratifyFs).toBe(true);
+    expect(o.nativeFs).toBe(true);
+    // --ratify-fs is a boolean flag; the next token must still be examined.
+    expect(o.unknownArgs).toEqual(['--frobnicate']);
+  });
+
+  // ── validateArgs ───────────────────────────────────────────────────────
+  it('rejects --ratify-fs alone with a single "requires --native-fs" error', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--ratify-fs']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toMatch(/--ratify-fs requires --native-fs/);
+  });
+
+  it('accepts --native-fs --ratify-fs with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--ratify-fs']))).toEqual([]);
+  });
+
+  it('still rejects --components when --native-fs --ratify-fs are combined', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-fs', '--ratify-fs', '--components']));
+    expect(errs.length).toBeGreaterThan(0);
+    // The --native-fs/--components prohibition must surface (independent of
+    // ratify-fs); the requires error is absent because nativeFs is set.
+    expect(errs.some((e) => e.toLowerCase().includes('cannot be combined'))).toBe(true);
+    expect(errs.some((e) => e.includes('--ratify-fs requires'))).toBe(false);
+  });
+
+  it('treats --ratify-fs-typo as an unknown option (no prefix match)', () => {
+    const o = mod.parseArgs(['--ratify-fs-typo']);
+    expect(o.ratifyFs).toBe(false);
+    expect(o.unknownArgs).toEqual(['--ratify-fs-typo']);
+    const errs = mod.validateArgs(o);
+    expect(errs.some((e) => e.includes("Unknown option '--ratify-fs-typo'"))).toBe(true);
+  });
+
+  // ── buildCapabilityManifest ────────────────────────────────────────────
+  it('emits an empty exclusion list when nativeFs is false', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud' });
+    expect(m.excluded).toEqual([]);
+  });
+
+  it('emits a seam-only fs entry for nativeFs alone (original notes)', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeFs: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.status).toBe('seam-only');
+    expect(e.portion).toBe('fs');
+    // The seam-only notes point at the decoupling audit, not R-2w.
+    expect(e.notes).not.toMatch(/R-2w/i);
+  });
+
+  it('emits a ratified fs entry for nativeFs + ratifyFs', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      ratifyFs: true,
+    });
+    expect(m.schemaVersion).toBe(1);
+    expect(m.buildMode).toBe('cloud');
+    expect(new Date(m.generatedAt).toISOString()).toBe(m.generatedAt);
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.status).toBe('ratified');
+    expect(e.portion).toBe('fs');
+    expect(e.flag).toBe('--native-fs');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    expect(e.notes).toMatch(/R-2w/i);
+    expect(e.notes).toMatch(/ratif/i);
+  });
+
+  it('propagates buildMode from opts.mode into the manifest', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'local',
+      nativeFs: true,
+      ratifyFs: true,
+    });
+    expect(m.buildMode).toBe('local');
+    expect(m.excluded[0].status).toBe('ratified');
+  });
+
+  it('still emits no fs entry when ratifyFs is set but nativeFs is not', () => {
+    // ratify-fs only ratifies the fs portion of a --native-fs build; without
+    // --native-fs there is nothing to ratify, so the manifest stays empty.
+    // (validateArgs fails fast on this combo in the CLI, but the pure
+    // manifest builder must not invent an entry.)
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', ratifyFs: true });
+    expect(m.excluded).toEqual([]);
+  });
+
+  // ── help text ──────────────────────────────────────────────────────────
+  it('mentions --ratify-fs in the help output', () => {
+    // printHelp is exported; capture its console output and assert the new
+    // flag (and the R-2w ratification semantics) are documented.
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mod.printHelp();
+      const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toContain('--ratify-fs');
+      expect(out).toMatch(/ratif/i);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

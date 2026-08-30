@@ -32,6 +32,8 @@ function printHelp() {
   console.log('  --ws-url <url>         Foundry WebSocket URL (runtime-configurable)');
   console.log('  --components           Build standalone editor + terminal entries (root base)');
   console.log('  --native-fs            Track R: strip WASM FS/workspace ops (shell provides them natively)');
+  console.log('  --ratify-fs            Track R (R-2w): emit the fs portion of capabilities.json as "ratified"');
+  console.log('                         (requires --native-fs; makes the dist a shell-servable swap)');
   console.log('  --help, -h             Show this help message');
   console.log('');
   console.log('Modes:');
@@ -49,6 +51,11 @@ function printHelp() {
   console.log('  --native-fs         Implemented. Removes the WASM FS / workspace');
   console.log('                      operations from the bundle; the host shell supplies');
   console.log('                      them natively. Cannot be combined with --components.');
+  console.log('  --ratify-fs       Implemented (R-2w). Marks the fs portion of');
+  console.log('                      capabilities.json as status "ratified" (a');
+  console.log('                      parity-proven, shell-servable swap) instead of the');
+  console.log('                      default "seam-only". Requires --native-fs; with the');
+  console.log('                      flag alone it fails fast (exit 1, no build).');
   console.log('  --native-terminal   Reserved (R-3). Not yet implemented — fails fast');
   console.log('  --native-chat       Reserved (R-4). Not yet implemented — fails fast');
   console.log('  --native-git        Reserved (R-5). Not yet implemented — fails fast');
@@ -60,6 +67,8 @@ function printHelp() {
   console.log('                      Each excluded entry carries status "seam-only" (a build-time');
   console.log('                      artifact; a shell must not serve it until the R-2 parity');
   console.log('                      gate ratifies the swap, status "ratified").');
+  console.log('                      Add --ratify-fs to emit the fs entry as "ratified" —');
+  console.log('                      the R-2w parity-proven, shell-servable swap.');
   console.log('  Rollback            Rebuild with the flag omitted to restore the portion.');
   console.log('');
   console.log('Examples:');
@@ -68,6 +77,7 @@ function printHelp() {
   console.log('  node build-webui-dist.mjs --mode cloud --output ./release');
   console.log('  node build-webui-dist.mjs --api-url https://api.example.com/api --ws-url wss://api.example.com/ws');
   console.log('  node build-webui-dist.mjs --native-fs     # Cloud build with WASM FS stripped');
+  console.log('  node build-webui-dist.mjs --native-fs --ratify-fs  # fs portion ratified (shell-servable)');
 }
 
 /**
@@ -84,6 +94,7 @@ export function parseArgs(argv) {
     foundryWsUrl: undefined,
     components: false,
     nativeFs: false,
+    ratifyFs: false,
     nativeTerminal: false,
     nativeChat: false,
     nativeGit: false,
@@ -112,6 +123,11 @@ export function parseArgs(argv) {
       opts.components = true;
     } else if (arg === '--native-fs') {
       opts.nativeFs = true;
+    } else if (arg === '--ratify-fs') {
+      // Track R (R-2w): emit the fs portion of capabilities.json with
+      // status "ratified" (a parity-proven, shell-servable swap) instead of
+      // "seam-only". Requires --native-fs (validated in validateArgs).
+      opts.ratifyFs = true;
     } else if (arg === '--native-terminal') {
       opts.nativeTerminal = true;
     } else if (arg === '--native-chat') {
@@ -155,6 +171,13 @@ export function validateArgs(opts) {
     errors.push('Error: --native-fs cannot be combined with --components (standalone component entries are not the app bundle).');
   }
 
+  // Track R (R-2w): --ratify-fs ratifies the fs portion of a --native-fs build.
+  // It is meaningless (and a no-op that would be a lie) without --native-fs,
+  // so it fails fast like the other validators — BEFORE any build step.
+  if (opts.ratifyFs && !opts.nativeFs) {
+    errors.push('Error: --ratify-fs requires --native-fs.');
+  }
+
   if (opts.mode !== 'cloud' && opts.mode !== 'local' && opts.mode !== 'components') {
     errors.push(`Error: Invalid mode '${opts.mode}'. Must be 'cloud', 'local', or 'components'.`);
   }
@@ -162,17 +185,29 @@ export function validateArgs(opts) {
   return errors;
 }
 
-/** Build the Track R capability manifest (pure). `excluded` is empty by default. */
+/**
+ * Build the Track R capability manifest (pure). `excluded` is empty by default.
+ *
+ * Track R (R-2w): when `opts.ratifyFs` is set (i.e. `--native-fs --ratify-fs`),
+ * the fs entry carries `status: "ratified"` (a parity-proven, shell-servable
+ * swap) instead of the default `"seam-only"` (build-time artifact only). The
+ * `notes` field records which mode produced the entry.
+ */
 export function buildCapabilityManifest(opts) {
   const excluded = [];
   if (opts.nativeFs) {
+    const ratified = Boolean(opts.ratifyFs);
     excluded.push({
       portion: 'fs',
       flag: '--native-fs',
       replacedBy: 'native',
       hardExclusion: true,
-      status: 'seam-only',
-      notes: 'WASM FS / workspace ops provided natively by the shell; FS modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+      status: ratified ? 'ratified' : 'seam-only',
+      notes: ratified
+        ? 'R-2w ratified: WASM FS / workspace ops provided natively by the shell; ' +
+          'the webui defers file-tree open/browse/read/write/save to the bridge ' +
+          'files channel (see docs/adr-0008-webui-native-seams.md, R-2w deferral wiring).'
+        : 'WASM FS / workspace ops provided natively by the shell; FS modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
     });
   }
   return {
@@ -630,6 +665,14 @@ function main(opts) {
   if (opts.nativeFs) {
     buildEnv.VITE_SPROUT_NATIVE_FS = '1';
     console.log('    VITE_SPROUT_NATIVE_FS=1 (--native-fs: WASM FS stripped, shell provides it)');
+  }
+
+  // Track R (R-2w): --ratify-fs marks the fs portion of capabilities.json as
+  // "ratified" (a parity-proven, shell-servable swap). It does not change the
+  // Vite build itself (the bundle is identical to --native-fs); it only
+  // changes the capabilities.json manifest that the shell reads at serve time.
+  if (opts.ratifyFs) {
+    console.log('    capabilities.json fs portion will be emitted as status "ratified" (--ratify-fs)');
   }
 
   // Runtime-configurable Foundry URLs — only bake them in if explicitly provided.

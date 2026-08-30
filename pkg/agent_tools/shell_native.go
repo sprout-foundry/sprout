@@ -45,6 +45,13 @@ func extractExitCode(err error) int {
 	}
 	if exitError, ok := err.(*exec.ExitError); ok {
 		if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+			if status.Signaled() {
+				// Shell convention: signal deaths report 128+N. The raw
+				// -1 that ExitStatus() returns for signal kills reads as
+				// "unknown" in wakeup notifications and can't be
+				// distinguished from "not yet exited".
+				return 128 + int(status.Signal())
+			}
 			return status.ExitStatus()
 		}
 	}

@@ -522,8 +522,7 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 		select {
 		case <-done:
 			notifier.NotifyCompletion(sessionID, "shell_bg",
-				fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
-					sessionID, getExitCode(), sessionID))
+				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)))
 		case <-watchCtx.Done():
 		}
 	}()

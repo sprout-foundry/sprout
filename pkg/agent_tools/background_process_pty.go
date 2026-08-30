@@ -230,9 +230,13 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		log.Printf("warn: failed to assign background PID %d to Job Object (descendants may leak)", cmd.Process.Pid)
 	}
 
-	// Write the PID file alongside the output file for orphan cleanup
+	// Write the PID file alongside the output file for orphan cleanup.
+	// Format: "<child-pid> <owner-pid>" — the owner is this sprout
+	// process; orphan cleanup skips sessions whose owner is still alive
+	// so a second sprout (test binary, CLI invocation sharing the config
+	// dir) can't kill live sessions it doesn't own.
 	pidPath := filepath.Join(m.baseDir, sessionID+".pid")
-	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0600); err != nil {
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d %d\n", cmd.Process.Pid, os.Getpid())), 0600); err != nil {
 		log.Printf("warn: failed to write PID file %s: %v", pidPath, err)
 	}
 
@@ -269,18 +273,21 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 			proc.jobHandle = 0
 		}
 
+		// Flush any remaining output chunks and close the output file
+		// BEFORE signalling done: completion watchers read the file for
+		// their notification tail, so the file must be fully written
+		// (and, on Windows, closed) by the time done closes.
+		if proc.publisher != nil {
+			proc.publisher.Flush()
+		}
+		outputFile.Close()
+
 		proc.mu.Lock()
 		proc.exitCode = exitCode
 		proc.Cmd = nil
 		proc.Process = nil
 		proc.mu.Unlock()
 		close(proc.done)
-		// Flush any remaining output chunks before closing the file
-		if proc.publisher != nil {
-			proc.publisher.Flush()
-		}
-		// Close the output file handle after process exits
-		outputFile.Close()
 	}()
 
 	return sessionID, nil
@@ -307,10 +314,11 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 	}
 	sessionID := fmt.Sprintf("bg-%s-%s", sanitizedPrefix, randomHex)
 
-	// Write the PID file for orphan cleanup support
+	// Write the PID file for orphan cleanup support. Same owner-aware
+	// format as StartWithOptions: "<child-pid> <owner-pid>".
 	pidPath := filepath.Join(m.baseDir, sessionID+".pid")
 	if cmd.Process != nil {
-		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0600); err != nil {
+		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d %d\n", cmd.Process.Pid, os.Getpid())), 0600); err != nil {
 			log.Printf("warn: failed to write PID file %s: %v", pidPath, err)
 		}
 	}

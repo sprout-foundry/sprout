@@ -36,14 +36,14 @@ func TestBPM_PIDFileWritten(t *testing.T) {
 	require.NoError(t, err, "pid file should exist at %s", pidPath)
 	assert.False(t, info.IsDir(), "pid file should be a regular file, not a directory")
 
-	// Read and parse the PID
+	// Read and parse the PID (owner-aware format: "<child-pid> <owner-pid>")
 	data, err := os.ReadFile(pidPath)
 	require.NoError(t, err)
 
-	pidStr := strings.TrimSpace(string(data))
-	pid, err := strconv.Atoi(pidStr)
-	require.NoError(t, err, "pid file should contain a valid decimal integer")
+	pid, ownerPID, err := parsePIDFile(data)
+	require.NoError(t, err, "pid file should contain a parseable child PID and owner PID")
 	assert.Greater(t, pid, 0, "pid should be a positive integer")
+	assert.Greater(t, ownerPID, 0, "owner pid should be a positive integer")
 }
 
 // =============================================================================
@@ -59,12 +59,12 @@ func TestBPM_PIDFileMatchesProcessPID(t *testing.T) {
 	sessionID, err := bpm.Start(context.Background(), "sleep 5", "")
 	require.NoError(t, err)
 
-	// Read PID from file
+	// Read PID from file (owner-aware format: "<child-pid> <owner-pid>")
 	pidPath := filepath.Join(bpm.GetBaseDir(), sessionID+".pid")
 	data, err := os.ReadFile(pidPath)
 	require.NoError(t, err)
 
-	filePID, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	filePID, _, err := parsePIDFile(data)
 	require.NoError(t, err)
 
 	// Get PID from process object
@@ -78,7 +78,10 @@ func TestBPM_PIDFileMatchesProcessPID(t *testing.T) {
 }
 
 // =============================================================================
-// TestBPM_PIDFileFormat — PID file contains only decimal digits and a newline
+// TestBPM_PIDFileFormat — PID file contains two whitespace-separated
+// decimal integers (child PID, owner PID). The format change is
+// intentional: owner-aware pidfiles let orphan cleanup skip sessions
+// whose spawning sprout process is still alive.
 // =============================================================================
 
 func TestBPM_PIDFileFormat(t *testing.T) {
@@ -94,15 +97,15 @@ func TestBPM_PIDFileFormat(t *testing.T) {
 	data, err := os.ReadFile(pidPath)
 	require.NoError(t, err)
 
-	pidStr := strings.TrimSpace(string(data))
-
-	// Every character should be a digit
-	for i, c := range pidStr {
-		assert.GreaterOrEqual(t, c, rune('0'), "char %d (%q) should be a digit", i, c)
-		assert.LessOrEqual(t, c, rune('9'), "char %d (%q) should be a digit", i, c)
+	fields := strings.Fields(string(data))
+	require.Len(t, fields, 2, "pid file should contain '<child-pid> <owner-pid>'")
+	for i, f := range fields {
+		for j, c := range f {
+			assert.GreaterOrEqual(t, c, rune('0'), "field %d char %d (%q) should be a digit", i, j, c)
+			assert.LessOrEqual(t, c, rune('9'), "field %d char %d (%q) should be a digit", i, j, c)
+		}
+		assert.NotEmpty(t, f, "field %d should not be empty", i)
 	}
-
-	assert.NotEmpty(t, pidStr, "pid file should not be empty")
 }
 
 // =============================================================================
@@ -149,6 +152,9 @@ func TestBPM_PIDFileAfterAdopt(t *testing.T) {
 	require.NoError(t, err, "pid file should exist after AdoptProcess")
 
 	pidStr := strings.TrimSpace(string(data))
+	if fields := strings.Fields(pidStr); len(fields) > 1 {
+		pidStr = fields[0]
+	}
 	pid, err := strconv.Atoi(pidStr)
 	require.NoError(t, err, "pid file should contain a valid integer")
 	assert.Equal(t, cmd.Process.Pid, pid, "PID in file should match the adopted cmd's process PID")

@@ -554,7 +554,14 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 func TestPatchStructuredFile_PreservesExistingFilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	target := filepath.Join(tmpDir, "script.json")
-	if err := os.WriteFile(target, []byte(`{"mode":"script"}`), 0o755); err != nil {
+	if err := os.WriteFile(target, []byte(`{"mode":"script"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Chmod after create: os.WriteFile applies the process umask at file
+	// creation, so a restrictive umask (e.g. 077) would silently turn
+	// 0o755 into 0o700 and the preservation assertion below would test
+	// umask behavior instead of the handler's permission logic.
+	if err := os.Chmod(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
 

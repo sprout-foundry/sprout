@@ -21,6 +21,7 @@ var (
 	steerPause     func()
 	steerResume    func()
 	streamingDepth atomic.Int32
+	steerDepth     atomic.Int32
 )
 
 // SetSuspendIndicator installs (or clears, with nil) the global function
@@ -73,11 +74,17 @@ func ResumeIndicator() {
 // pause must stop the reader's goroutine and restore cooked termios.
 // resume must re-enter raw mode and restart the reader. Both must be
 // idempotent.
+//
+// Installing or clearing the hooks marks a turn boundary, so the pause
+// refcount is reset here: a leaked unbalanced pause (a prompt that
+// returned without its deferred ResumeSteer) must not suppress the
+// next turn's first real pause.
 func SetSteerHooks(pause, resume func()) {
 	mu.Lock()
 	defer mu.Unlock()
 	steerPause = pause
 	steerResume = resume
+	steerDepth.Store(0)
 }
 
 // PauseSteer runs the registered pause hook if one is set. Callers
@@ -85,7 +92,21 @@ func SetSteerHooks(pause, resume func()) {
 // MUST pair this with a deferred ResumeSteer so the reader resumes
 // when the prompt returns. No-op when no hook is registered (e.g.
 // non-interactive run, no active turn).
+//
+// Refcounted like SuspendStreaming: overlapping prompts (an approval
+// prompt inside a WithCookedStdin callback, a parallel subagent's
+// ask_user) each keep the pause alive for their own duration. Only
+// the OUTERMOST PauseSteer actually stops the reader; inner pauses
+// just count. A stray early resume from one prompt cannot resurrect
+// the reader while another prompt is still on screen — the last-
+// writer-wins behavior previously let an inner ResumeSteer restart
+// the readLoop under a cooked-mode prompt, and the prompt's termios
+// restore then wedged that loop in a blocking Read (VMIN=1) past
+// Stop()'s 2s timeout.
 func PauseSteer() {
+	if steerDepth.Add(1) > 1 {
+		return
+	}
 	mu.RLock()
 	fn := steerPause
 	mu.RUnlock()
@@ -94,8 +115,23 @@ func PauseSteer() {
 	}
 }
 
-// ResumeSteer runs the registered resume hook if one is set.
+// ResumeSteer unwinds one PauseSteer. Only the outermost resume (depth
+// returns to zero) restarts the reader. Clamped at zero so an
+// unbalanced extra resume can never go negative and suppress a later
+// legit pause.
 func ResumeSteer() {
+	for {
+		cur := steerDepth.Load()
+		if cur <= 0 {
+			return
+		}
+		if steerDepth.CompareAndSwap(cur, cur-1) {
+			if cur-1 > 0 {
+				return
+			}
+			break
+		}
+	}
 	mu.RLock()
 	fn := steerResume
 	mu.RUnlock()

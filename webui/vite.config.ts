@@ -24,6 +24,36 @@ export default defineConfig(({ mode }) => {
   // build:cloud) correct too. An explicit --base flag still wins.
   const isCloud = mode === 'cloud';
 
+  // Track R (--native-fs): set by scripts/build-webui-dist.mjs when invoked
+  // with --native-fs. When exactly '1', the WASM/OPFS-backed FS leaf modules
+  // are aliased to type-compatible stubs (src/services/nativeFsStubs/) so the
+  // whole FS subsystem is hard-excluded from the bundle — the native shell
+  // provides those capabilities natively. Default builds, `vite dev`, and
+  // vitest never set the flag, so they see no aliases and no behavior change.
+  // Rollback = rebuild without the flag.
+  const isNativeFs = process.env.VITE_SPROUT_NATIVE_FS === '1';
+  const nativeFsStubsDir = path.resolve(__dirname, './src/services/nativeFsStubs');
+  // More-specific aliases (stub regexes) are placed BEFORE the `@` alias.
+  // All current importers use relative specifiers, so the relative-form
+  // entries are what actually perform the exclusion; the @/services/ entry
+  // covers alias-form specifiers.
+  const nativeFsStubAliases: { find: RegExp; replacement: string }[] = isNativeFs
+    ? [
+        {
+          find: /^@\/services\/(fileAccess|repoVfsBridge|opfsReplica|wasmShell)(?:\.js)?$/,
+          replacement: `${nativeFsStubsDir}/$1`,
+        },
+        {
+          find: /^\.\/(fileAccess|repoVfsBridge|opfsReplica|wasmShell)(?:\.js)?$/,
+          replacement: `${nativeFsStubsDir}/$1`,
+        },
+        {
+          find: /^(?:\.\.\/)+services\/(fileAccess|repoVfsBridge|opfsReplica|wasmShell)(?:\.js)?$/,
+          replacement: `${nativeFsStubsDir}/$1`,
+        },
+      ]
+    : [];
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -60,7 +90,14 @@ export default defineConfig(({ mode }) => {
     
     // Resolve aliases
     resolve: {
-      alias: [{ find: '@', replacement: path.resolve(__dirname, './src') }],
+      alias: [
+        // Track R (--native-fs) seam: when VITE_SPROUT_NATIVE_FS=1, the four
+        // FS leaf modules resolve to their nativeFsStubs/ stand-ins instead
+        // of the real modules, hard-excluding the WASM/OPFS FS subsystem.
+        // Empty array (no-ops) in every other build — see isNativeFs above.
+        ...nativeFsStubAliases,
+        { find: '@', replacement: path.resolve(__dirname, './src') },
+      ],
       // React resolves to a single version across the whole workspace: the
       // root package.json `overrides` pins react/react-dom to 18.3.1, so the
       // previous hard-pin React aliases (which fought a duplicate React 19

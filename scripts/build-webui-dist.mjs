@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -9,75 +9,237 @@ const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const webuiDir = join(repoRoot, 'webui');
 const buildDir = join(webuiDir, 'dist'); // Vite output directory
 
-// Parse command line arguments
-const args = process.argv.slice(2);
-let mode = 'cloud'; // default
-let outputDir = '';
-let foundryApiUrl = undefined;
-let foundryWsUrl = undefined;
+// ── Native feature flags (Track R) ─────────────────────────────────
+// --native-fs        Implemented: strips WASM FS/workspace ops from the
+//                    bundle (shell provides them natively).
+// --native-terminal  Reserved (R-3) — not yet implemented.
+// --native-chat      Reserved (R-4) — not yet implemented.
+// --native-git       Reserved (R-5) — not yet implemented.
+// See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.
+const RESERVED_NATIVE_FLAGS = {
+  '--native-terminal': 'Error: --native-terminal is reserved for future Track R work (R-3) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
+  '--native-chat': 'Error: --native-chat is reserved for future Track R work (R-4) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
+  '--native-git': 'Error: --native-git is reserved for future Track R work (R-5) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
+};
 
-for (let i = 0; i < args.length; i++) {
-  const arg = args[i];
-  if (arg === '--mode' && i + 1 < args.length) {
-    mode = args[i + 1];
-    i++;
-  } else if (arg === '--output' && i + 1 < args.length) {
-    outputDir = args[i + 1];
-    i++;
-  } else if (arg === '--api-url' && i + 1 < args.length) {
-    foundryApiUrl = args[i + 1];
-    i++;
-  } else if (arg === '--ws-url' && i + 1 < args.length) {
-    foundryWsUrl = args[i + 1];
-    i++;
-  } else if (arg === '--components') {
-    // E-M3: build ONLY the standalone editor + terminal entries with
-    // root base (Sprout Studio serves them at /, not under /webui/).
-    // Output goes to <outputDir>/components/.
-    mode = 'components';
-  } else if (arg === '--help' || arg === '-h') {
-    console.log('Usage: node build-webui-dist.mjs [options]');
-    console.log('');
-    console.log('Options:');
-    console.log('  --mode <cloud|local>  Build mode (default: cloud)');
-    console.log('  --output <dir>         Output directory (default: dist/<mode>/)');
-    console.log('  --api-url <url>        Foundry API base URL (runtime-configurable)');
-    console.log('  --ws-url <url>         Foundry WebSocket URL (runtime-configurable)');
-    console.log('  --help, -h             Show this help message');
-    console.log('');
-    console.log('Modes:');
-    console.log('  cloud   - Sets VITE_SPROUT_MODE=cloud during build');
-    console.log('            Produces cloud-mode bundle (remote terminal/SSH enabled)');
-    console.log('  local   - Sets VITE_SPROUT_MODE=local during build');
-    console.log('            Produces local-mode bundle (local terminal enabled)');
-    console.log('');
-    console.log('Runtime configuration:');
-    console.log('  If --api-url and --ws-url are NOT provided, the built application');
-    console.log('  will derive these URLs from window.location at runtime.');
-    console.log('  Provide them only if you need to pin a specific backend.');
-    console.log('');
-    console.log('Examples:');
-    console.log('  node build-webui-dist.mjs                 # Build cloud-mode to dist/cloud/');
-    console.log('  node build-webui-dist.mjs --mode local    # Build local-mode to dist/local/');
-    console.log('  node build-webui-dist.mjs --mode cloud --output ./release');
-    console.log('  node build-webui-dist.mjs --api-url https://api.example.com/api --ws-url wss://api.example.com/ws');
-    process.exit(0);
+function printHelp() {
+  console.log('Usage: node build-webui-dist.mjs [options]');
+  console.log('');
+  console.log('Options:');
+  console.log('  --mode <cloud|local>  Build mode (default: cloud)');
+  console.log('  --output <dir>         Output directory (default: dist/<mode>/)');
+  console.log('  --api-url <url>        Foundry API base URL (runtime-configurable)');
+  console.log('  --ws-url <url>         Foundry WebSocket URL (runtime-configurable)');
+  console.log('  --components           Build standalone editor + terminal entries (root base)');
+  console.log('  --native-fs            Track R: strip WASM FS/workspace ops (shell provides them natively)');
+  console.log('  --ratify-fs            Track R (R-2w): emit the fs portion of capabilities.json as "ratified"');
+  console.log('                         (requires --native-fs; makes the dist a shell-servable swap)');
+  console.log('  --help, -h             Show this help message');
+  console.log('');
+  console.log('Modes:');
+  console.log('  cloud   - Sets VITE_SPROUT_MODE=cloud during build');
+  console.log('            Produces cloud-mode bundle (remote terminal/SSH enabled)');
+  console.log('  local   - Sets VITE_SPROUT_MODE=local during build');
+  console.log('            Produces local-mode bundle (local terminal enabled)');
+  console.log('');
+  console.log('Runtime configuration:');
+  console.log('  If --api-url and --ws-url are NOT provided, the built application');
+  console.log('  will derive these URLs from window.location at runtime.');
+  console.log('  Provide them only if you need to pin a specific backend.');
+  console.log('');
+  console.log('Native feature flags (Track R):');
+  console.log('  --native-fs         Implemented. Removes the WASM FS / workspace');
+  console.log('                      operations from the bundle; the host shell supplies');
+  console.log('                      them natively. Cannot be combined with --components.');
+  console.log('  --ratify-fs       Implemented (R-2w). Marks the fs portion of');
+  console.log('                      capabilities.json as status "ratified" (a');
+  console.log('                      parity-proven, shell-servable swap) instead of the');
+  console.log('                      default "seam-only". Requires --native-fs; with the');
+  console.log('                      flag alone it fails fast (exit 1, no build).');
+  console.log('  --native-terminal   Reserved (R-3). Not yet implemented — fails fast');
+  console.log('  --native-chat       Reserved (R-4). Not yet implemented — fails fast');
+  console.log('  --native-git        Reserved (R-5). Not yet implemented — fails fast');
+  console.log('  Reserved flags cause exit 1 before any build step (no npm/vite run).');
+  console.log('');
+  console.log('  capabilities.json   Written to the output dir ONLY when a --native-*');
+  console.log('                      flag excludes a portion (e.g. --native-fs -> "fs").');
+  console.log('                      Absence of the file = full webui dist, nothing excluded.');
+  console.log('                      Each excluded entry carries status "seam-only" (a build-time');
+  console.log('                      artifact; a shell must not serve it until the R-2 parity');
+  console.log('                      gate ratifies the swap, status "ratified").');
+  console.log('                      Add --ratify-fs to emit the fs entry as "ratified" —');
+  console.log('                      the R-2w parity-proven, shell-servable swap.');
+  console.log('  Rollback            Rebuild with the flag omitted to restore the portion.');
+  console.log('');
+  console.log('Examples:');
+  console.log('  node build-webui-dist.mjs                 # Build cloud-mode to dist/cloud/');
+  console.log('  node build-webui-dist.mjs --mode local    # Build local-mode to dist/local/');
+  console.log('  node build-webui-dist.mjs --mode cloud --output ./release');
+  console.log('  node build-webui-dist.mjs --api-url https://api.example.com/api --ws-url wss://api.example.com/ws');
+  console.log('  node build-webui-dist.mjs --native-fs     # Cloud build with WASM FS stripped');
+  console.log('  node build-webui-dist.mjs --native-fs --ratify-fs  # fs portion ratified (shell-servable)');
+}
+
+/**
+ * Parse CLI arguments into an options object. Pure and testable: --help is
+ * signalled via `{ help: true }` (no process.exit) so tests can assert it.
+ * Any unrecognized `--*` token is recorded in `unknownArgs` (validation in
+ * validateArgs() turns them into errors). Non-flag tokens are ignored as today.
+ */
+export function parseArgs(argv) {
+  const opts = {
+    mode: 'cloud',
+    outputDir: '',
+    foundryApiUrl: undefined,
+    foundryWsUrl: undefined,
+    components: false,
+    nativeFs: false,
+    ratifyFs: false,
+    nativeTerminal: false,
+    nativeChat: false,
+    nativeGit: false,
+    help: false,
+    unknownArgs: [],
+  };
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--mode' && i + 1 < argv.length) {
+      opts.mode = argv[i + 1];
+      i++;
+    } else if (arg === '--output' && i + 1 < argv.length) {
+      opts.outputDir = argv[i + 1];
+      i++;
+    } else if (arg === '--api-url' && i + 1 < argv.length) {
+      opts.foundryApiUrl = argv[i + 1];
+      i++;
+    } else if (arg === '--ws-url' && i + 1 < argv.length) {
+      opts.foundryWsUrl = argv[i + 1];
+      i++;
+    } else if (arg === '--components') {
+      // E-M3: build ONLY the standalone editor + terminal entries with
+      // root base (Sprout Studio serves them at /, not under /webui/).
+      // Output goes to <outputDir>/components/.
+      opts.components = true;
+    } else if (arg === '--native-fs') {
+      opts.nativeFs = true;
+    } else if (arg === '--ratify-fs') {
+      // Track R (R-2w): emit the fs portion of capabilities.json with
+      // status "ratified" (a parity-proven, shell-servable swap) instead of
+      // "seam-only". Requires --native-fs (validated in validateArgs).
+      opts.ratifyFs = true;
+    } else if (arg === '--native-terminal') {
+      opts.nativeTerminal = true;
+    } else if (arg === '--native-chat') {
+      opts.nativeChat = true;
+    } else if (arg === '--native-git') {
+      opts.nativeGit = true;
+    } else if (arg === '--help' || arg === '-h') {
+      opts.help = true;
+    } else if (arg.startsWith('--')) {
+      opts.unknownArgs.push(arg);
+    }
+    // Any other token (no leading --): left unhandled, exactly as today.
   }
+
+  if (opts.components) {
+    opts.mode = 'components';
+  }
+
+  return opts;
 }
 
-// Validate mode
-if (mode !== 'cloud' && mode !== 'local' && mode !== 'components') {
-  console.error(`Error: Invalid mode '${mode}'. Must be 'cloud', 'local', or 'components'.`);
-  process.exit(1);
+/** Validate parsed options. Returns an array of error strings (empty = valid). */
+export function validateArgs(opts) {
+  const errors = [];
+
+  for (const [flag, optKey] of [
+    ['--native-terminal', 'nativeTerminal'],
+    ['--native-chat', 'nativeChat'],
+    ['--native-git', 'nativeGit'],
+  ]) {
+    if (opts[optKey]) {
+      errors.push(RESERVED_NATIVE_FLAGS[flag]);
+    }
+  }
+
+  for (const unknown of opts.unknownArgs) {
+    errors.push(`Error: Unknown option '${unknown}'. Run with --help for usage.`);
+  }
+
+  if (opts.nativeFs && opts.components) {
+    errors.push('Error: --native-fs cannot be combined with --components (standalone component entries are not the app bundle).');
+  }
+
+  // Track R (R-2w): --ratify-fs ratifies the fs portion of a --native-fs build.
+  // It is meaningless (and a no-op that would be a lie) without --native-fs,
+  // so it fails fast like the other validators — BEFORE any build step.
+  if (opts.ratifyFs && !opts.nativeFs) {
+    errors.push('Error: --ratify-fs requires --native-fs.');
+  }
+
+  if (opts.mode !== 'cloud' && opts.mode !== 'local' && opts.mode !== 'components') {
+    errors.push(`Error: Invalid mode '${opts.mode}'. Must be 'cloud', 'local', or 'components'.`);
+  }
+
+  return errors;
 }
 
-// Set default output directory if not specified
-if (!outputDir) {
-  outputDir = join(repoRoot, 'dist', mode);
+/**
+ * Build the Track R capability manifest (pure). `excluded` is empty by default.
+ *
+ * Track R (R-2w): when `opts.ratifyFs` is set (i.e. `--native-fs --ratify-fs`),
+ * the fs entry carries `status: "ratified"` (a parity-proven, shell-servable
+ * swap) instead of the default `"seam-only"` (build-time artifact only). The
+ * `notes` field records which mode produced the entry.
+ */
+export function buildCapabilityManifest(opts) {
+  const excluded = [];
+  if (opts.nativeFs) {
+    const ratified = Boolean(opts.ratifyFs);
+    excluded.push({
+      portion: 'fs',
+      flag: '--native-fs',
+      replacedBy: 'native',
+      hardExclusion: true,
+      status: ratified ? 'ratified' : 'seam-only',
+      notes: ratified
+        ? 'R-2w ratified: WASM FS / workspace ops provided natively by the shell; ' +
+          'the webui defers file-tree open/browse/read/write/save to the bridge ' +
+          'files channel (see docs/adr-0008-webui-native-seams.md, R-2w deferral wiring).'
+        : 'WASM FS / workspace ops provided natively by the shell; FS modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+    });
+  }
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    buildMode: opts.mode,
+    excluded,
+  };
 }
 
-// Resolve to absolute path
-outputDir = resolve(outputDir);
+/**
+ * Write capabilities.json into outputDir (2-space indent) and return its path.
+ * Emits the file only when the manifest excludes at least one portion; a
+ * default build produces no capabilities.json (absence = nothing excluded)
+ * and returns null BEFORE creating anything on disk. When it does write, the
+ * output dir is created if missing (the build flow cleans/creates it first;
+ * this keeps direct callers working).
+ */
+export function writeCapabilityManifest(outputDir, opts) {
+  const manifest = buildCapabilityManifest(opts);
+  if (manifest.excluded.length === 0) {
+    return null;
+  }
+  mkdirSync(outputDir, { recursive: true });
+  const path = join(outputDir, 'capabilities.json');
+  writeFileSync(path, JSON.stringify(manifest, null, 2));
+  console.log('  ✓ capabilities.json');
+  for (const entry of manifest.excluded) {
+    console.log(`    excluded: ${entry.portion} (replaced by ${entry.replacedBy})`);
+  }
+  return path;
+}
 
 function run(command, argsList, cwd, extraEnv = {}) {
   const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
@@ -392,6 +554,7 @@ function verifyDistLayout(outputDir) {
     { path: 'wasm/embedding.wasm', desc: 'Embedding WASM binary (SP-045-3)' },
     { path: 'manifest.json', desc: 'PWA manifest' },
     { path: 'sw.js', desc: 'Service worker' },
+    { path: 'capabilities.json', desc: 'Track R native capability manifest (only present when a --native-* flag was used)' },
   ];
 
   let allRequired = true;
@@ -437,7 +600,12 @@ function verifyDistLayout(outputDir) {
   console.log('  ✓ Canonical layout verified.');
 }
 
-function main() {
+function main(opts) {
+  const mode = opts.mode;
+  const outputDir = opts.outputDir || join(repoRoot, 'dist', mode);
+  const foundryApiUrl = opts.foundryApiUrl;
+  const foundryWsUrl = opts.foundryWsUrl;
+
   console.log(`🏗️  Building ${mode}-mode WebUI distribution...`);
   console.log('');
 
@@ -491,6 +659,22 @@ function main() {
     console.log('🔨 Building React app with Vite in local mode (VITE_SPROUT_MODE=local)...');
   }
 
+  // Track R: native filesystem — tell the frontend bundle that FS/workspace
+  // ops are provided natively by the shell so the WASM FS code paths are
+  // stubbed out of the build.
+  if (opts.nativeFs) {
+    buildEnv.VITE_SPROUT_NATIVE_FS = '1';
+    console.log('    VITE_SPROUT_NATIVE_FS=1 (--native-fs: WASM FS stripped, shell provides it)');
+  }
+
+  // Track R (R-2w): --ratify-fs marks the fs portion of capabilities.json as
+  // "ratified" (a parity-proven, shell-servable swap). It does not change the
+  // Vite build itself (the bundle is identical to --native-fs); it only
+  // changes the capabilities.json manifest that the shell reads at serve time.
+  if (opts.ratifyFs) {
+    console.log('    capabilities.json fs portion will be emitted as status "ratified" (--ratify-fs)');
+  }
+
   // Runtime-configurable Foundry URLs — only bake them in if explicitly provided.
   // When omitted, bootstrapAdapter.ts falls back to window.location at runtime.
   if (foundryApiUrl !== undefined) {
@@ -526,6 +710,11 @@ function main() {
   generateVersionJson(outputDir, mode);
   console.log('');
 
+  // Track R: write capabilities.json (only when a --native-* flag excludes
+  // a portion). Absence of the file in a default build means nothing excluded.
+  const capabilityPath = writeCapabilityManifest(outputDir, opts);
+  console.log('');
+
   // Verify canonical dist layout (SP-015-R6)
   verifyDistLayout(outputDir);
   console.log('');
@@ -546,14 +735,70 @@ function main() {
   console.log('  version.json    - Version and build metadata');
   console.log('  manifest.json   - PWA manifest');
   console.log('  sw.js           - Service worker');
+  if (capabilityPath) {
+    console.log('  capabilities.json - Track R native capability manifest');
+  }
   console.log('');
   console.log('See docs/DIST_BUNDLE_LAYOUT.md for the canonical layout spec.');
   console.log('');
 }
 
-try {
-  main();
-} catch (err) {
-  console.error('Build failed:', err);
-  process.exit(1);
+/** CLI entry point: parse, validate (fail fast), help, then build. */
+function cli() {
+  const opts = parseArgs(process.argv.slice(2));
+
+  if (opts.help) {
+    printHelp();
+    process.exit(0);
+  }
+
+  // Fail fast on validation errors BEFORE any spawn / npm ci runs.
+  const errors = validateArgs(opts);
+  if (errors.length > 0) {
+    for (const e of errors) {
+      console.error(e);
+    }
+    process.exit(1);
+  }
+
+  // Resolve the (possibly relative) output directory to an absolute path.
+  opts.outputDir = opts.outputDir || join(repoRoot, 'dist', opts.mode);
+  opts.outputDir = resolve(opts.outputDir);
+
+  main(opts);
 }
+
+/**
+ * Direct-run guard (realpath-robust): run the CLI only when this module is
+ * the launched script. import.meta.url reflects the module's REAL path, while
+ * pathToFileURL(process.argv[1]) keeps a SYMLINK path — the old URL-only
+ * comparison therefore silently no-oped (exit 0, nothing built) when the
+ * script was invoked through a symlink. Resolve both sides with realpathSync
+ * so symlinked invocations (in either direction) still fire the guard, while
+ * importing the module (e.g. from vitest) still runs nothing.
+ */
+function isDirectRunCheck() {
+  if (!process.argv[1]) return false;
+  try {
+    const moduleReal = realpathSync(fileURLToPath(import.meta.url));
+    const invokedReal = realpathSync(resolve(process.argv[1]));
+    // The realpath comparison is authoritative; keep the legacy URL
+    // comparison as a harmless OR fallback.
+    return (
+      invokedReal === moduleReal ||
+      import.meta.url === pathToFileURL(process.argv[1]).href
+    );
+  } catch {
+    return false;
+  }
+}
+if (isDirectRunCheck()) {
+  try {
+    cli();
+  } catch (err) {
+    console.error('Build failed:', err);
+    process.exit(1);
+  }
+}
+
+export { printHelp, main, cli };

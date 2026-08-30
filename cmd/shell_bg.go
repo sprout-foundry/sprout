@@ -202,13 +202,19 @@ func discoverFromPIDFiles(baseDir string) ([]shellBgEntry, error) {
 }
 
 // loadProcessFromPIDFile reads the PID file and returns session ID, PID, and started-at time.
+// Accepts both the owner-aware format ("<child-pid> <owner-pid>") and the
+// legacy single-PID format.
 func loadProcessFromPIDFile(pidFile string) (string, int, time.Time, error) {
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		return "", 0, time.Time{}, fmt.Errorf("read pid file %s: %w", pidFile, err)
 	}
 
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	pidStr := strings.TrimSpace(string(data))
+	if fields := strings.Fields(pidStr); len(fields) > 1 {
+		pidStr = fields[0]
+	}
+	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
 		return "", 0, time.Time{}, fmt.Errorf("parse pid from %s: %w", pidFile, err)
 	}

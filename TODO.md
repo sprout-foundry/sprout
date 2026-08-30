@@ -60,7 +60,7 @@ also shipped the `bridge.capabilities` handshake). The contract is
 `docs/adr-0008-webui-native-seams.md` + `docs/WEBUI_DECOUPLING_AUDIT.md`
 (both in this repo) — consume as written, do not invent new formats.
 
-- [ ] **R-2w — manifest-driven FS deferral**: when the dist's
+- [x] **R-2w — manifest-driven FS deferral**: when the dist's
       `capabilities.json` declares portion `fs` with `status: "ratified"`
       AND the runtime `bridge.capabilities` op confirms the shell provides
       `fs`, the webui's workspace FS operations (file tree open/browse/

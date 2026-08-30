@@ -118,6 +118,70 @@ migrations.
    claim: `status: "seam-only"` entries mark dists the shell must not serve
    until the parity gate ratifies them (`status: "ratified"`).
 
+### Deferral wiring (R-2w)
+
+R-2w is the *manifest-driven* half of the FS swap: the webui's workspace FS
+ops defer to the shell's native `files` channel when the shell proves it
+provides `fs`. (The other half, the hard leaf exclusion of the four FS
+modules, is the existing `--native-fs` alias seam.)
+
+**Runtime gate.** Deferral is active IFF all four hold, in precedence order:
+
+1. the compile-time `NATIVE_FS_ENABLED` flag is true (i.e. the dist was
+   built with `--native-fs`; in the default build this short-circuits
+   before ever touching `window.SproutStudio` — a dead branch, so the
+   default build stays byte-identical),
+2. the shell bridge is present (`window.SproutStudio` with
+   `getCapabilities` / `readWorkspaceFile` / `writeWorkspaceFile` /
+   `listWorkspace`),
+3. the `bridge.capabilities` op's `capabilities.fs === true`, AND
+4. the op's `excluded[]` contains an entry `{ portion: 'fs', status:
+   'ratified' }`.
+
+Gate-fail on any step (no bridge, `getCapabilities()` rejecting or
+malformed, `seam-only`/absent manifest, shell not declaring `fs`) → the
+webui keeps its existing behavior (the `--native-fs` stubs throw). The
+gate is resolved once, cached for the app's lifetime, and never throws.
+(Leaf module: `webui/src/services/nativeFs/`; stubs:
+`webui/src/services/nativeFsStubs/fileAccess.ts`.)
+
+**Routing surface.** When the gate passes:
+- `readFileWithConsent` / `writeFileWithConsent` → `readWorkspaceFile` /
+  `writeWorkspaceFile`, with the result synthesized into a standard
+  `Response` (no call-site changes — consumers already use `.ok`, `.text()`,
+  `.blob()`).
+- file-tree open/browse (Sidebar `onFetchFiles`) → `listWorkspace(maxDepth)`.
+
+Path normalization: webui paths are converted to workspace-relative (strip
+a leading `/` or `./`; backslash → `/`); `..` segments and empty paths are
+rejected client-side before the bridge.
+
+**Error → status mapping** (bridge `{ok:false, error}` → synthesized
+Response status): `notFound` → 404; `invalidParams` / `notInWorkspace` /
+`isDirectory` → 400; `userCancelled` → 409; `workspaceNotSet` → 503;
+`ioFailed` / unknown → 500. (Exported as a pure table in
+`services/nativeFs`.)
+
+**Build flag.** `--ratify-fs` (on `scripts/build-webui-dist.mjs`) emits the
+`fs` portion of `capabilities.json` with `status: "ratified"` instead of the
+default `"seam-only"`. It **requires** `--native-fs` (a lone `--ratify-fs`
+fails fast, exit 1, before any build step) and inherits the
+`--native-fs` + `--components` prohibition. The default build (no
+`--native-fs`) still emits **no** `capabilities.json`.
+
+**Known limitation.** The `files` channel has no create / delete / rename
+ops, so `filesApi.createItem` / `deleteItem` / `renameItem` (and therefore
+file/folder create, delete, and rename in the file tree) stay on the
+existing path even in a `--native-fs` dist. They are a known limitation of
+`--native-fs` dists, to be closed when the channel gains those ops.
+
+**Operational caveats:**
+
+- The gate resolution is cached for the app's lifetime; if the shell-injected
+  bridge arrives after the first resolution, deferral stays off until reload.
+- `listWorkspace` caps results at 5000 entries, so very wide/deep listings
+  can be silently truncated (the daemon path was complete).
+
 ## Consequences
 - Future swaps (R-3 terminal, R-4 chat, R-5 git) add a flag + a `portion`
   value + a parity audit; the manifest shape is stable.

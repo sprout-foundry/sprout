@@ -11,6 +11,9 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string | undefined;
   readonly VITE_AUTH_MODE: 'none' | 'bearer' | undefined;
   readonly VITE_APP_MODE: 'local' | 'cloud' | undefined;
+  // Track R: set to '1' by scripts/build-webui-dist.mjs --native-fs; selects
+  // the nativeFsStubs/ alias set in vite.config.ts (excludes the WASM FS).
+  readonly VITE_SPROUT_NATIVE_FS?: '1';
 }
 
 interface ImportMeta {

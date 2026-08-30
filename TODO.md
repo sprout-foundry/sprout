@@ -14,7 +14,7 @@ implementations one at a time, gated on full parity. This repo owns the
 seams: build-time feature flags and a capability manifest so a shell can
 serve a dist whose excluded portions are provided natively.
 
-- [ ] **R-0 — decoupling audit + build flags**: (1) audit and document the
+- [x] **R-0 — decoupling audit + build flags**: (1) audit and document the
       webui's swappable subsystems — file system/workspace ops, terminal,
       chat loop, git — with their module boundaries and call sites under
       `webui/src`; (2) add feature flags to `scripts/build-webui-dist.mjs`

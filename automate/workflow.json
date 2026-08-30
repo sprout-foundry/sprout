@@ -42,7 +42,7 @@
     "model": "glm-5.3",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
-    "provider": "deepseek"
+    "provider": "zai-coding"
   },
   "no_web_ui": true,
   "subagent_timeout_seconds": 10800

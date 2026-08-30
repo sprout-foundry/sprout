@@ -81,6 +81,17 @@ type SelectList struct {
 	// the REPL input buffer) should read it via DismissKey().
 	dismissKey string
 
+	// fallbackReader is the reader for the non-TTY numbered-list
+	// fallback. os.Stdin by default; tests inject a pipe so they can
+	// drive the fallback path hermetically.
+	fallbackReader io.Reader
+
+	// resized is set by the resize subscriber (handleResize) so the
+	// read loop repaints the frame after a SIGWINCH. The footer's own
+	// resize handler teleports the cursor, which stales this picker's
+	// cursor-relative walk-back math until the next repaint.
+	resized bool
+
 	// lastEnterProcessed tracks whether we've already processed an Enter
 	// key to avoid re-processing multi-byte sequences like \r\n.
 	lastEnterProcessed bool
@@ -95,9 +106,10 @@ func NewSelectList(opts SelectListOptions) *SelectList {
 	}
 	fd := int(os.Stdin.Fd())
 	s := &SelectList{
-		opts:  opts,
-		fd:    fd,
-		isTTY: term.IsTerminal(fd),
+		opts:           opts,
+		fd:             fd,
+		isTTY:          term.IsTerminal(fd),
+		fallbackReader: os.Stdin,
 	}
 	s.applyFilter("")
 	return s
@@ -115,7 +127,7 @@ func (s *SelectList) Run(ctx context.Context) (string, bool, error) {
 		return "", false, errors.New("select list: no items")
 	}
 	if !s.isTTY {
-		return s.runFallback()
+		return s.runFallback(ctx)
 	}
 	return s.runTTY(ctx)
 }
@@ -123,7 +135,7 @@ func (s *SelectList) Run(ctx context.Context) (string, bool, error) {
 // runFallback renders a numbered list to stdout and reads a number
 // from stdin. Used when stdin isn't a TTY (piped input, CI) so the
 // picker remains usable in scripts.
-func (s *SelectList) runFallback() (string, bool, error) {
+func (s *SelectList) runFallback(ctx context.Context) (string, bool, error) {
 	if s.opts.Title != "" {
 		GlyphInfo.Print(s.opts.Title)
 	}
@@ -136,10 +148,37 @@ func (s *SelectList) runFallback() (string, bool, error) {
 	}
 	fmt.Printf("  Enter choice [1-%d, blank to cancel]: ", len(s.opts.Items))
 
-	reader := bufio.NewReader(os.Stdin)
-	raw, err := reader.ReadString('\n')
-	if err != nil {
+	reader := bufio.NewReader(s.fallbackReader)
+	// Race the blocking read against ctx so a cancelled context
+	// (timeout / user interrupt) doesn't hang the fallback forever on
+	// an idle piped stdin. A single goroutine owns the reader for the
+	// whole fallback; close(done) unblocks it after the read resolves.
+	type readRes struct {
+		raw string
+		err error
+	}
+	ch := make(chan readRes, 1)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		raw, err := reader.ReadString('\n')
+		select {
+		case ch <- readRes{raw, err}:
+		case <-done:
+			return
+		}
+	}()
+	var raw string
+	select {
+	case <-ctx.Done():
+		// Cancelled: treat like the TTY path's Esc/cancel — an empty
+		// value with ok=false and no error.
 		return "", false, nil
+	case res := <-ch:
+		if res.err != nil {
+			return "", false, nil
+		}
+		raw = res.raw
 	}
 	choice := strings.TrimSpace(raw)
 	if choice == "" {
@@ -166,6 +205,14 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 		_ = exitSteerMode(s.fd, st)
 		s.clearRendered()
 	}()
+
+	// Repaint on terminal resize. Registered AFTER the teardown defer
+	// so LIFO runs unsub() first — no resize callback may fire after
+	// clearRendered has wiped the frame. The callback never draws on
+	// the SIGWINCH goroutine unless TryLockOutput succeeds; otherwise
+	// it just flags and the read loop's idle tick repaints.
+	unsub := RegisterResizeSubscriber(s.handleResize)
+	defer unsub()
 
 	// Print the title once before entering the render loop. The title
 	// stays pinned above the list and is excluded from the render()
@@ -200,6 +247,7 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 				return "", false, err
 			}
 			<-ticker.C
+			s.repaintIfResized()
 			continue
 		}
 
@@ -248,6 +296,19 @@ func (s *SelectList) disableMouseTracking() {
 // render draws the current list state. Uses cursor-up + clear-to-EOL
 // to overwrite the prior frame so the list updates in place.
 func (s *SelectList) render() {
+	// Serialize against PrintExternal and other console chrome so
+	// background messages can't interleave with the row-clear/write
+	// sequence and leave duplicate rows on screen.
+	LockOutput()
+	defer UnlockOutput()
+	s.renderLocked()
+}
+
+// renderLocked is the lock-free body of render. Caller MUST hold
+// outputMu — mirrors the draw/drawLocked split in status_footer.go so
+// the resize repaint path can reuse the body without re-entering the
+// non-reentrant mutex.
+func (s *SelectList) renderLocked() {
 	s.mu.Lock()
 	prev := s.rendered
 	filter := s.filter
@@ -284,15 +345,12 @@ func (s *SelectList) render() {
 	}
 	s.mu.Unlock()
 
-	// Serialize against PrintExternal and other console chrome so
-	// background messages can't interleave with the row-clear/write
-	// sequence and leave duplicate rows on screen.
-	LockOutput()
-	defer UnlockOutput()
-
 	// Walk up over the previously-rendered rows and clear them so the
-	// new frame overwrites the old without leaving residue.
-	for i := 0; i < prev; i++ {
+	// new frame overwrites the old without leaving residue. The clamp
+	// bounds the walk to rows that physically exist after a resize —
+	// walking past row 1 would wrap around and clear unrelated rows.
+	walk := clampWalkBack(prev, termRows(os.Stderr.Fd()))
+	for i := 0; i < walk; i++ {
 		fmt.Fprint(os.Stderr, "\r\033[K\033[A")
 	}
 	fmt.Fprint(os.Stderr, "\r\033[K")
@@ -422,8 +480,69 @@ func (s *SelectList) clearRendered() {
 	if hasTitle {
 		n++
 	}
-	for i := 0; i < n; i++ {
+	// Clamp to the physical height: a shrink may have left the tracked
+	// row count describing rows that no longer exist, and an unclamped
+	// walk-back would clear unrelated content above the prompt.
+	walk := clampWalkBack(n, termRows(os.Stderr.Fd()))
+	for i := 0; i < walk; i++ {
 		fmt.Fprint(os.Stderr, "\r\033[K\033[A")
 	}
 	fmt.Fprint(os.Stderr, "\r\033[K")
+}
+
+// handleResize is the RegisterResizeSubscriber callback. It never
+// draws on the SIGWINCH goroutine unless the output lock is free —
+// contending for it would deadlock against the read loop's render.
+// When the lock is held, the flag defers the repaint to the read
+// loop's next idle tick.
+func (s *SelectList) handleResize(width int) {
+	s.mu.Lock()
+	s.resized = true
+	s.mu.Unlock()
+	if !TryLockOutput() {
+		return
+	}
+	defer UnlockOutput()
+	s.mu.Lock()
+	s.resized = false
+	s.mu.Unlock()
+	s.renderLocked()
+}
+
+// repaintIfResized consumes the resized flag and repaints the frame.
+// Called from the read loop's idle tick.
+func (s *SelectList) repaintIfResized() {
+	s.mu.Lock()
+	flagged := s.resized
+	s.resized = false
+	s.mu.Unlock()
+	if !flagged {
+		return
+	}
+	LockOutput()
+	defer UnlockOutput()
+	s.renderLocked()
+}
+
+// clampWalkBack bounds a cursor-relative walk-back so it never ascends
+// past row 1. rows is the current terminal height; non-positive or
+// unknown heights clamp to 0 — callers treat that as "clear nothing,
+// redraw from the current row".
+func clampWalkBack(prev, rows int) int {
+	if prev <= 0 || rows <= 1 {
+		return 0
+	}
+	if prev > rows-1 {
+		return rows - 1
+	}
+	return prev
+}
+
+// termRows returns the current terminal height for fd, 0 when unknown.
+func termRows(fd uintptr) int {
+	_, r, err := term.GetSize(int(fd))
+	if err != nil || r <= 0 {
+		return 0
+	}
+	return r
 }

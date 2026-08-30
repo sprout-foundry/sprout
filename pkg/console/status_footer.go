@@ -1117,6 +1117,17 @@ func (f *StatusFooter) drawFullLocked() {
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)
 
+	// Re-assert the scroll region at the END of the draw, wrapped in its
+	// own DECSC/DECRC so the outer \0338 above still restores the pre-draw
+	// cursor. Child processes (editors, pagers, anything emitting \033[r)
+	// can drop the DECSTBM margins, after which prose and tool output
+	// scroll the FULL screen — writing over the pinned footer rows.
+	// Re-applying here makes every full draw a self-healing checkpoint
+	// for region damage the footer didn't cause.
+	fmt.Fprint(f.w, "\0337")
+	f.applyScrollRegionLocked()
+	fmt.Fprint(f.w, "\0338")
+
 	// Track the row count so the next Resize knows which OLD rows to
 	// clear before re-applying a region for the new size, and so the
 	// next SetSteerLine can detect row-count changes.

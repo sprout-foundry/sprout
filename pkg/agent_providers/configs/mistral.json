@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.3,
-    "output_token_cost": 0.9
+    "input_token_cost": 0.44,
+    "output_token_cost": 2.2
   },
   "defaults": {
     "max_tokens": -1,
@@ -314,12 +314,109 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.044,
+        "context_length": 262144,
+        "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 excels at using tools to explore codebases, editing multiple files, and powering software engineering agents.",
+        "id": "devstral-2512",
+        "input_cost": 0.44,
+        "name": "Mistral: Devstral 2 2512",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 256000,
+        "description": "Mistral's cutting-edge language model for coding released end of July 2025. Codestral specializes in low-latency, high-frequency tasks such as fill-in-the-middle (FIM), code correction and test generation.\n\n[Blog Post](https://mistral.ai/news/codestral-25-08)",
+        "id": "codestral-2508:batch",
+        "input_cost": 0.15,
+        "name": "Mistral: Codestral 2508 (batch)",
+        "output_cost": 0.45,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0075,
+        "context_length": 262144,
+        "description": "A balanced model in the Ministral 3 family, Ministral 3 8B is a powerful, efficient tiny language model with vision capabilities.",
+        "id": "ministral-8b-2512:batch",
+        "input_cost": 0.075,
+        "name": "Mistral: Ministral 3 8B 2512 (batch)",
+        "output_cost": 0.075,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.025,
+        "context_length": 262144,
+        "description": "Mistral Large 3 2512 is Mistral’s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
+        "id": "mistral-large-2512:batch",
+        "input_cost": 0.25,
+        "name": "Mistral: Mistral Large 3 2512 (batch)",
+        "output_cost": 0.75,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex reasoning tasks.",
+        "id": "mistral-medium-3-5:batch",
+        "input_cost": 0.75,
+        "name": "Mistral: Mistral Medium 3.5 (batch)",
+        "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 131072,
+        "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances performance and cost for enterprise workloads.",
+        "id": "mistral-medium-3.1:batch",
+        "input_cost": 0.2,
+        "name": "Mistral: Mistral Medium 3.1 (batch)",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0075,
+        "context_length": 262144,
+        "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from larger models with low latency and cost efficiency.",
+        "id": "mistral-small-2603:batch",
+        "input_cost": 0.075,
+        "name": "Mistral: Mistral Small 4 (batch)",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {
       "codestral-2405": 32768,
       "codestral-latest": 32768,
-      "devstral-2512": 32768,
+      "devstral-2512": 262144,
       "mistral-embed": 32768,
       "mistral-large-2407": 131072,
       "mistral-large-2411": 131072,

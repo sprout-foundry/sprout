@@ -9,6 +9,7 @@
 
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { initWasmShell, type WasmShell, type WasmShellResult } from '../services/wasmShell';
 import { debugLog } from '../utils/log';
 
@@ -23,6 +24,13 @@ export interface UseWasmTerminalInputReturn {
   wasmActiveRef: React.MutableRefObject<boolean>;
   wasmLoading: boolean;
   wasmError: string | null;
+  /**
+   * True when the build is a `--native-fs` dist (R-2f): the shell provides
+   * the terminal natively, so the WASM shell is never initialized. Callers
+   * render a "provided by the shell" placeholder instead of the
+   * loading/error status lines.
+   */
+  wasmProvidedByShell: boolean;
   handleWasmInput: (data: string) => void;
 }
 
@@ -522,6 +530,18 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   // ── WASM shell lifecycle ──────────────────────────────────────────
 
   useEffect(() => {
+    // Compile-time short-circuit (R-2f): in a --native-fs dist the shell
+    // provides the terminal natively, so the (hard-excluded) wasmShell
+    // module is never initialized — no fetch/instantiate, and the caller
+    // shows the shell-provided placeholder instead of the
+    // loading/error status lines. NATIVE_FS_ENABLED is a compile-time
+    // constant, so this is a dead branch in the default build (flag off →
+    // today's exact behavior, byte-identical).
+    if (NATIVE_FS_ENABLED) {
+      debugLog('[TerminalPane] WASM effect: native-fs build — terminal provided by the shell, skipping init');
+      return;
+    }
+
     debugLog('[TerminalPane] WASM effect fired, isActive=' + isActive + ' isConnected=' + isConnected);
     if (!isActive) {
       debugLog('[TerminalPane] WASM effect: not active, skipping');
@@ -630,6 +650,11 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     wasmActiveRef,
     wasmLoading,
     wasmError,
+    // R-2f: in a --native-fs dist the terminal is provided natively by the
+    // shell; the lifecycle effect above short-circuits (no init, no
+    // wasmLoading/wasmError), so the compile-time constant is the whole
+    // state. False in the default build (dead-branch constant).
+    wasmProvidedByShell: NATIVE_FS_ENABLED,
     handleWasmInput,
   };
 }

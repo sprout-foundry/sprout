@@ -127,7 +127,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div className="header-bar">
       {isCloud && (
-        <a href="/" className="header-back-to-dashboard" title="Back to Dashboard">
+        <a href="/?from=editor" className="header-back-to-dashboard" title="Back to Dashboard">
           ← Dashboard
         </a>
       )}

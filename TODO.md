@@ -84,10 +84,20 @@ one pass:
 
 ## R-3: native terminal swap
 
-Status: **ACTIVE — unblocked by user 2026-08-30 21:07** ("don't block on
-waiting for a battery recharge"). Device verification for this item and
-R-2's ratification remain batched into one iPad session when the device
-is recharged; all development proceeds now.
+Status: **SURFACE COMPLETE 2026-08-31** — the live console pane replaced
+the placeholder in sprout main (`843bb7cc8`, gate-gated on ratified
+terminal + bridge capability; shells-fetch/toast suppressed in native
+mode). Studio-side engine: `EmulatorTerminalTransport` (ShellEmulator
+wired behind the §15 channel) on sprout-studio branch
+`r3s-emulator-terminal` (`9b6cdb6`, 781 tests / 0 failures), merges to
+studio main after the in-flight chat/git item lands. Device-verified on
+iPad (console renders, commands run) 2026-08-31. Interactive PTY
+sessions remain a documented follow-up (one-shot command semantics).
+
+Previous status: **ACTIVE — unblocked by user 2026-08-30 21:07** ("don't
+block on waiting for a battery recharge"). Device verification for this
+item and R-2's ratification remain batched into one iPad session when
+the device is recharged; all development proceeds now.
 Contract: ADR-0008 reserves `--native-terminal` (fail-fast today); the
 `--native-fs`/R-2w/R-2f machinery (flag scaffolding, servability gate,
 capability handshake, wasm-free boot) is the proven template — mirror it

@@ -85,6 +85,12 @@ function getTerminalFontFamily(): string {
   return raw;
 }
 
+/** App-wide xterm look — shared by the PTY tier and the native console so
+    every terminal surface renders identically. */
+export const TERMINAL_THEME_EXPORT = TERMINAL_THEME;
+export const getTerminalFontFamilyExport = getTerminalFontFamily;
+export const FONT_SIZE_DEFAULT_EXPORT = FONT_SIZE_DEFAULT;
+
 export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalXTermReturn {
   const {
     isActive,

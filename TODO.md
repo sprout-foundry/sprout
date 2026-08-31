@@ -68,6 +68,45 @@ build time. Exit mirrors R-2: seam-only dist refuses to serve, ratified
 dist defers, default byte-identical, suites green, device-verified
 (jointly with R-2's checklist on the same charge).
 
+- [x] **R-3 — native terminal swap (sprout-side seam)**: implement
+      `--native-terminal` on `scripts/build-webui-dist.mjs` (mirroring
+      `--native-fs`): sets `VITE_SPROUT_NATIVE_TERMINAL=1`, excludes the
+      webui terminal module set (`services/terminalWebSocket` via
+      `nativeTerminalStubs/` aliases in `webui/vite.config.ts`; compile-time
+      short-circuits in `useTerminalSession` and `useWasmTerminalInput`
+      so the PTY WS and WASM terminal tier never initialize), emits the
+      `terminal` portion in `capabilities.json` (`seam-only` default), and
+      adds `--ratify-terminal` (requires `--native-terminal`; emits
+      `status: "ratified"`). Add the runtime-gate leaf
+      `services/nativeTerminal/` (both builds, inert by default) mirroring
+      `services/nativeFs/`. Prohibit `--native-terminal` + `--components`.
+      Update ADR-0008 (flag table + terminal seam subsection) and the
+      decoupling audit §2.1 table. Tests: buildFlags (flag + manifest +
+      ratify + additive-with-fs), native-terminal gate/stub tests, boot
+      short-circuit tests both flag states. Default build byte-identical;
+      `--native-terminal` dist builds with manifest; full webui suite
+      green. Device verification stays batched with R-2 (out of scope
+      here). **Evidence 2026-08-30 (main @ d245c5595):** seam shipped,
+      reviewer-verified (all 8 invariants hold, no MUST_FIX). Build script:
+      `--native-terminal` implemented (env var + terminal manifest entry,
+      seam-only), `--ratify-terminal` (requires base flag, emits ratified),
+      `--components` prohibition, additive with `--native-fs`; chat/git stay
+      reserved. Vite: `nativeTerminalStubAliases` swap `services/
+      terminalWebSocket` → `nativeTerminalStubs/` no-op stand-in (never opens
+      a WS). Short-circuits (dead branch flag-off): `useTerminalSession` (+
+      `terminalProvidedByShell`), `usePageVisibility`, TerminalPane renders
+      the "provided by the native shell" placeholder once for either shell
+      bit. Runtime-gate leaf `services/nativeTerminal/` mirrors `nativeFs`
+      (inert until ratification). ADR-0008 flag table + "Terminal seam
+      (R-3)" subsection; audit §2.1 updated. Verified: tsc clean; full
+      webui suite 6042 passed / 0 failed (240 files, 24 batches ≤10,
+      VITEST_MAX_WORKERS=2); real dist builds — `--native-terminal` cloud
+      dist emits capabilities.json with terminal/seam-only and the real
+      terminalWebSocket module genuinely absent (marker 3→0); default dist
+      has NO capabilities.json and the module present; fail-fast exits
+      verified. Device verification (joint with R-2 checklist) remains
+      batched on the iPad recharge, as filed.
+
 ---
 
 

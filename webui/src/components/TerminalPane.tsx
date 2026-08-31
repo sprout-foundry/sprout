@@ -249,21 +249,22 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     // 7. Session hook
     // ═══════════════════════════════════════════════════════════════════
-    const { paneConnected, terminalWSRef, eventHandlerRef, sendResize, lastRestoreTimeRef } = useTerminalSession({
-      isActive,
-      isConnected,
-      xtermRef,
-      fitAddonRef,
-      preferredShell: preferredShell ?? null,
-      reattachSessionId: reattachSessionId ?? null,
-      onConnectionChange,
-      onProcessExit: handleProcessExit,
-      onResetSearch: resetSearch,
-      onResetReverseSearch: resetReverseSearch,
-      onSaveScrollback: saveScrollback,
-      onLoadScrollback: loadScrollbackToTerminal,
-      onActivity,
-    });
+    const { paneConnected, terminalWSRef, eventHandlerRef, sendResize, lastRestoreTimeRef, terminalProvidedByShell } =
+      useTerminalSession({
+        isActive,
+        isConnected,
+        xtermRef,
+        fitAddonRef,
+        preferredShell: preferredShell ?? null,
+        reattachSessionId: reattachSessionId ?? null,
+        onConnectionChange,
+        onProcessExit: handleProcessExit,
+        onResetSearch: resetSearch,
+        onResetReverseSearch: resetReverseSearch,
+        onSaveScrollback: saveScrollback,
+        onLoadScrollback: loadScrollbackToTerminal,
+        onActivity,
+      });
 
     // Wire session's terminalWSRef for PTY input handler and xterm dispose
     useEffect(() => {
@@ -365,7 +366,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
         </div>
         {isExited && <div className="terminal-status-inline terminal-status-inline--exited">Session ended.</div>}
-        {!paneConnected && !wasmActive && !wasmLoading && !wasmProvidedByShell && (
+        {!paneConnected && !wasmActive && !wasmLoading && !wasmProvidedByShell && !terminalProvidedByShell && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
             Loading terminal...
@@ -393,10 +394,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             Browser shell · Files persist in IndexedDB
           </div>
         )}
-        {/* R-2f: in a --native-fs dist the shell provides the terminal natively (the
-            WASM shell module is hard-excluded), so the tab shows a clear
-            placeholder instead of a boot failure. */}
-        {wasmProvidedByShell && (
+        {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell provides the
+            terminal natively (the WASM/PTY transport modules are hard-excluded),
+            so the tab shows a clear placeholder instead of a boot failure.
+            Rendered exactly once when either flag set the shell-provided bit. */}
+        {(wasmProvidedByShell || terminalProvidedByShell) && (
           <div className="terminal-status-inline">
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
             Terminal provided by the native shell

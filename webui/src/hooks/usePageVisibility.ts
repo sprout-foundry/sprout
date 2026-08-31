@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useEvents } from '../contexts/EventsContext';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { NATIVE_TERMINAL_ENABLED } from '../services/nativeTerminalStubs/nativeTerminalFlag';
 import { debugLog } from '../utils/log';
 
 /** Interval (ms) to debounce rapid visibility toggles and avoid freeze/resume thrashing. */
@@ -37,6 +38,20 @@ export function usePageVisibility(): void {
   const events = useEvents();
 
   useEffect(() => {
+    // Compile-time short-circuit (R-3, ADR-0008): in a --native-terminal dist
+    // the shell owns the terminal, so there is no PTY/WASM transport to
+    // freeze/resume — skip the whole visibility wiring (this also skips
+    // events.freeze()/resume(), which is acceptable here; the app-level
+    // WebSocket is not affected by this seam). NATIVE_TERMINAL_ENABLED is a
+    // compile-time constant, so this is a dead branch in the default build
+    // (flag off → today's exact behavior, byte-identical). The hook still
+    // calls useRef/useEvents/useEffect unconditionally above (Rules of
+    // Hooks); only the effect BODY short-circuits.
+    if (NATIVE_TERMINAL_ENABLED) {
+      debugLog('[visibility] native-terminal build — terminal owned by the shell, skipping freeze/resume wiring');
+      return;
+    }
+
     mountedRef.current = true;
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;

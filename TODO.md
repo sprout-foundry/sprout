@@ -52,7 +52,87 @@ Shipped fixes:
 
 ---
 
-## R-2w: webui native-FS deferral (Track R, second half of the first swap)
+## R-3: native terminal swap
+
+Status: **ACTIVE — unblocked by user 2026-08-30 21:07** ("don't block on
+waiting for a battery recharge"). Device verification for this item and
+R-2's ratification remain batched into one iPad session when the device
+is recharged; all development proceeds now.
+Contract: ADR-0008 reserves `--native-terminal` (fail-fast today); the
+`--native-fs`/R-2w/R-2f machinery (flag scaffolding, servability gate,
+capability handshake, wasm-free boot) is the proven template — mirror it
+for the terminal portion: shell provides the terminal channel natively,
+webui renders the placeholder ("provided by native shell" — already
+shipping since R-2f) as the real UI, WASM terminal chain excluded at
+build time. Exit mirrors R-2: seam-only dist refuses to serve, ratified
+dist defers, default byte-identical, suites green, device-verified
+(jointly with R-2's checklist on the same charge).
+
+- [x] **R-3 — native terminal swap (sprout-side seam)**: implement
+      `--native-terminal` on `scripts/build-webui-dist.mjs` (mirroring
+      `--native-fs`): sets `VITE_SPROUT_NATIVE_TERMINAL=1`, excludes the
+      webui terminal module set (`services/terminalWebSocket` via
+      `nativeTerminalStubs/` aliases in `webui/vite.config.ts`; compile-time
+      short-circuits in `useTerminalSession` and `useWasmTerminalInput`
+      so the PTY WS and WASM terminal tier never initialize), emits the
+      `terminal` portion in `capabilities.json` (`seam-only` default), and
+      adds `--ratify-terminal` (requires `--native-terminal`; emits
+      `status: "ratified"`). Add the runtime-gate leaf
+      `services/nativeTerminal/` (both builds, inert by default) mirroring
+      `services/nativeFs/`. Prohibit `--native-terminal` + `--components`.
+      Update ADR-0008 (flag table + terminal seam subsection) and the
+      decoupling audit §2.1 table. Tests: buildFlags (flag + manifest +
+      ratify + additive-with-fs), native-terminal gate/stub tests, boot
+      short-circuit tests both flag states. Default build byte-identical;
+      `--native-terminal` dist builds with manifest; full webui suite
+      green. Device verification stays batched with R-2 (out of scope
+      here). **Evidence 2026-08-30 (main @ d245c5595):** seam shipped,
+      reviewer-verified (all 8 invariants hold, no MUST_FIX). Build script:
+      `--native-terminal` implemented (env var + terminal manifest entry,
+      seam-only), `--ratify-terminal` (requires base flag, emits ratified),
+      `--components` prohibition, additive with `--native-fs`; chat/git stay
+      reserved. Vite: `nativeTerminalStubAliases` swap `services/
+      terminalWebSocket` → `nativeTerminalStubs/` no-op stand-in (never opens
+      a WS). Short-circuits (dead branch flag-off): `useTerminalSession` (+
+      `terminalProvidedByShell`), `usePageVisibility`, TerminalPane renders
+      the "provided by the native shell" placeholder once for either shell
+      bit. Runtime-gate leaf `services/nativeTerminal/` mirrors `nativeFs`
+      (inert until ratification). ADR-0008 flag table + "Terminal seam
+      (R-3)" subsection; audit §2.1 updated. Verified: tsc clean; full
+      webui suite 6042 passed / 0 failed (240 files, 24 batches ≤10,
+      VITEST_MAX_WORKERS=2); real dist builds — `--native-terminal` cloud
+      dist emits capabilities.json with terminal/seam-only and the real
+      terminalWebSocket module genuinely absent (marker 3→0); default dist
+      has NO capabilities.json and the module present; fail-fast exits
+      verified. Device verification (joint with R-2 checklist) remains
+      batched on the iPad recharge, as filed.
+
+---
+
+
+Context: 2026-08-30 end-to-end test — the studio iOS shell serving a
+`--native-fs --ratify-fs` cloud dist shows the webui error screen
+"Failed to load browser runtime … WebAssembly". The R-2w deferral gate
+covers FS *operations*, but the boot path still unconditionally
+instantiates the WASM command runtime, whose artifacts the ratified dist
+excludes by design (`--native-fs` drops the 26 MB wasm chain). The dist
+is thus correct per ADR-0008; the boot sequence is the gap.
+
+- [x] **R-2f — conditional WASM boot**: when `NATIVE_FS_ENABLED` (the
+      compile-time `--native-fs` flag), the webui must boot WITHOUT
+      instantiating any excluded WASM module: no wasmShell fetch/instantiate
+      (and no ONNX/embedding chain), chat/API flows over their normal HTTP
+      channels, FS ops via the R-2w bridge deferral, and any UI surface
+      that requires the local runtime (e.g. local terminal tab) renders a
+      clear "provided by shell" placeholder instead of a boot failure.
+      Default build unchanged (flag false → today's boot, byte-identical).
+      Exit: a browser-harness test boots the ratified `--native-fs` cloud
+      dist with a mocked bridge and renders the workspace error-free; the
+      default dist still boots exactly as today; ADR-0008 "Deferral
+      wiring" section gains a boot-sequence subsection.
+
+---
+
 
 Context: Studio side is DONE 2026-08-30 (sprout-studio `484436e`:
 WebUIServeGate enforces the ADR-0008 servability gate; `484436e`/`0e2256d`
@@ -60,7 +140,7 @@ also shipped the `bridge.capabilities` handshake). The contract is
 `docs/adr-0008-webui-native-seams.md` + `docs/WEBUI_DECOUPLING_AUDIT.md`
 (both in this repo) — consume as written, do not invent new formats.
 
-- [ ] **R-2w — manifest-driven FS deferral**: when the dist's
+- [x] **R-2w — manifest-driven FS deferral**: when the dist's
       `capabilities.json` declares portion `fs` with `status: "ratified"`
       AND the runtime `bridge.capabilities` op confirms the shell provides
       `fs`, the webui's workspace FS operations (file tree open/browse/

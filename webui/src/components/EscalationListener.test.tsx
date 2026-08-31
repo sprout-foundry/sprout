@@ -413,6 +413,32 @@ describe('EscalationListener — Mode A/B regressions', () => {
     await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://fly.sprout.dev/w/1'));
   });
 
+  // DASH-3: the dashboard fallbacks must carry ?from=editor so the platform
+  // SPA skips its authed `/` → `/webui/` redirect (otherwise the user loops
+  // straight back into the editor).
+  it('falls back to /?from=editor when workspace creation fails', async () => {
+    const fetchMock = vi.fn(async () => { throw new TypeError('network down'); });
+    vi.stubGlobal('fetch', fetchMock);
+    render(createElement(EscalationListener));
+    fireTrigger({ command: undefined });
+
+    fireEvent.click(screen.getByText('Start Full Workspace'));
+
+    await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('/?from=editor'));
+  });
+
+  it('goes to /?from=editor when the trigger has no repo context', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(createElement(EscalationListener));
+    fireTrigger({ command: undefined, repoURL: undefined });
+
+    fireEvent.click(screen.getByText('Start Full Workspace'));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(hrefSetter).toHaveBeenCalledWith('/?from=editor');
+  });
+
   it('submits Mode A with the escalation reason in the prompt, then shows inline progress', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();

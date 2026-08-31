@@ -87,11 +87,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // 1. WASM terminal input hook
     // ═══════════════════════════════════════════════════════════════════
     const wasmXtermRef = useRef<XTerm | null>(null);
-    const { wasmActive, wasmActiveRef, wasmLoading, wasmError, handleWasmInput } = useWasmTerminalInput({
-      xtermRef: wasmXtermRef,
-      isActive,
-      isConnected,
-    });
+    const { wasmActive, wasmActiveRef, wasmLoading, wasmError, wasmProvidedByShell, handleWasmInput } =
+      useWasmTerminalInput({
+        xtermRef: wasmXtermRef,
+        isActive,
+        isConnected,
+      });
 
     // ═══════════════════════════════════════════════════════════════════
     // 2. Search hook
@@ -364,7 +365,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
         </div>
         {isExited && <div className="terminal-status-inline terminal-status-inline--exited">Session ended.</div>}
-        {!paneConnected && !wasmActive && !wasmLoading && (
+        {!paneConnected && !wasmActive && !wasmLoading && !wasmProvidedByShell && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
             Loading terminal...
@@ -390,6 +391,15 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           <div className="terminal-status-inline terminal-status-inline--success">
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
             Browser shell · Files persist in IndexedDB
+          </div>
+        )}
+        {/* R-2f: in a --native-fs dist the shell provides the terminal natively (the
+            WASM shell module is hard-excluded), so the tab shows a clear
+            placeholder instead of a boot failure. */}
+        {wasmProvidedByShell && (
+          <div className="terminal-status-inline">
+            <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
+            Terminal provided by the native shell
           </div>
         )}
         <TerminalContextMenu

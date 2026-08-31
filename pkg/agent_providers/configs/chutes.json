@@ -199,9 +199,9 @@
         "context_length": 1000000,
         "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
-        "input_cost": 0.14,
+        "input_cost": 0.44,
         "name": "DeepSeek V4 Flash 0731 (TEE)",
-        "output_cost": 0.28,
+        "output_cost": 1.32,
         "tags": [
           "tools",
           "reasoning"
@@ -211,9 +211,9 @@
         "context_length": 262144,
         "description": "Qwen3.8 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.8-27B-TEE",
-        "input_cost": 0.4,
+        "input_cost": 0.35,
         "name": "Qwen3.8 27B (TEE)",
-        "output_cost": 3,
+        "output_cost": 2.75,
         "tags": [
           "vision",
           "tools",

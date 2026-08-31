@@ -52,7 +52,22 @@ Shipped fixes:
 
 ---
 
-## R-2f: wasm-free boot for ratified dists (follow-up to R-2w, integration finding)
+## R-3: native terminal swap (HOLD — do not start)
+
+Status: **ON HOLD at user direction (2026-08-30)** — start only after R-2's
+device ratification is batched with this item's device verification.
+Contract: ADR-0008 reserves `--native-terminal` (fail-fast today); the
+`--native-fs`/R-2w/R-2f machinery (flag scaffolding, servability gate,
+capability handshake, wasm-free boot) is the proven template — mirror it
+for the terminal portion: shell provides the terminal channel natively,
+webui renders the placeholder ("provided by native shell" — already
+shipping since R-2f) as the real UI, WASM terminal chain excluded at
+build time. Exit mirrors R-2: seam-only dist refuses to serve, ratified
+dist defers, default byte-identical, suites green, device-verified
+(jointly with R-2's checklist on the same charge).
+
+---
+
 
 Context: 2026-08-30 end-to-end test — the studio iOS shell serving a
 `--native-fs --ratify-fs` cloud dist shows the webui error screen

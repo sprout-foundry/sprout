@@ -102,8 +102,11 @@ describe('parseArgs', () => {
     expect(mod.parseArgs(['--native-fs']).nativeFs).toBe(true);
   });
 
-  it('records the reserved --native-* flags on opts (validation is separate)', () => {
+  it('records --native-terminal on opts.nativeTerminal (R-3, validated clean)', () => {
     expect(mod.parseArgs(['--native-terminal']).nativeTerminal).toBe(true);
+  });
+
+  it('records the reserved --native-* flags on opts (validation is separate)', () => {
     expect(mod.parseArgs(['--native-chat']).nativeChat).toBe(true);
     expect(mod.parseArgs(['--native-git']).nativeGit).toBe(true);
   });
@@ -138,13 +141,14 @@ describe('validateArgs', () => {
     expect(mod.validateArgs(mod.parseArgs(['--native-fs']))).toEqual([]);
   });
 
-  it('rejects --native-terminal (R-3) with the reserved + roadmap messages', () => {
-    const errs = mod.validateArgs(mod.parseArgs(['--native-terminal']));
-    expect(errs).toHaveLength(1);
-    expect(errs[0].toLowerCase()).toContain('reserved');
-    expect(errs[0]).toContain('R-3');
-    expect(errs[0]).toContain('docs/WEBUI_DECOUPLING_AUDIT.md');
-    expect(errs[0]).toContain('docs/adr-0008-webui-native-seams.md');
+  it('accepts --native-terminal (R-3) with no errors', () => {
+    // R-3 is now implemented: --native-terminal validates clean on its own.
+    expect(mod.validateArgs(mod.parseArgs(['--native-terminal']))).toEqual([]);
+  });
+
+  it('accepts the additive --native-fs --native-terminal build', () => {
+    // Flags are additive: a fs + terminal build carries both exclusions.
+    expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal']))).toEqual([]);
   });
 
   it('rejects --native-chat (R-4) with the reserved + roadmap messages', () => {
@@ -172,6 +176,22 @@ describe('validateArgs', () => {
   it('rejects combining --native-fs with --components', () => {
     const errs = mod.validateArgs(mod.parseArgs(['--native-fs', '--components']));
     expect(errs.some((e) => e.toLowerCase().includes('cannot be combined'))).toBe(true);
+  });
+
+  it('rejects combining --native-terminal with --components', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-terminal', '--components']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain('cannot be combined with --components');
+  });
+
+  it('rejects a lone --ratify-terminal (requires --native-terminal)', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--ratify-terminal']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain('--ratify-terminal requires --native-terminal');
+  });
+
+  it('accepts --native-terminal --ratify-terminal', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-terminal', '--ratify-terminal']))).toEqual([]);
   });
 
   it('rejects an invalid --mode', () => {
@@ -417,6 +437,185 @@ describe('--ratify-fs (R-2w ratified manifest)', () => {
       const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
       expect(out).toContain('--ratify-fs');
       expect(out).toMatch(/ratif/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+// ── --native-terminal / --ratify-terminal (R-3) ─────────────────────────
+// Focused coverage for the R-3 terminal seam across parseArgs, validateArgs,
+// buildCapabilityManifest, and the help text. Pure functions only — no build.
+// Mirrors the --ratify-fs block above; all R-3-specific assertions live here
+// (the generic --native-terminal parse/validate cases that already exist in
+// the parseArgs / validateArgs blocks are intentionally NOT duplicated).
+describe('--native-terminal / --ratify-terminal (R-3)', () => {
+  // ── parseArgs ──────────────────────────────────────────────────────────
+  it('records --ratify-terminal on opts.ratifyTerminal (leaves nativeTerminal false when alone)', () => {
+    const o = mod.parseArgs(['--ratify-terminal']);
+    expect(o.ratifyTerminal).toBe(true);
+    expect(o.nativeTerminal).toBe(false);
+  });
+
+  it('sets both nativeTerminal and ratifyTerminal when both flags are passed', () => {
+    const o = mod.parseArgs(['--native-terminal', '--ratify-terminal']);
+    expect(o.nativeTerminal).toBe(true);
+    expect(o.ratifyTerminal).toBe(true);
+  });
+
+  it('leaves ratifyTerminal falsey when the flag is absent', () => {
+    expect(mod.parseArgs([]).ratifyTerminal).toBe(false);
+    expect(mod.parseArgs(['--native-terminal']).ratifyTerminal).toBe(false);
+  });
+
+  it('sets ratifyTerminal regardless of flag order', () => {
+    const fwd = mod.parseArgs(['--native-terminal', '--ratify-terminal']);
+    const rev = mod.parseArgs(['--ratify-terminal', '--native-terminal']);
+    expect(fwd.ratifyTerminal).toBe(true);
+    expect(rev.ratifyTerminal).toBe(true);
+    expect(fwd.nativeTerminal).toBe(true);
+    expect(rev.nativeTerminal).toBe(true);
+  });
+
+  it('does not consume the following token and leaves unknownArgs untouched', () => {
+    const o = mod.parseArgs(['--ratify-terminal', '--frobnicate', '--native-terminal']);
+    expect(o.ratifyTerminal).toBe(true);
+    expect(o.nativeTerminal).toBe(true);
+    expect(o.unknownArgs).toEqual(['--frobnicate']);
+  });
+
+  it('treats --ratify-terminal-typo as an unknown option (no prefix match)', () => {
+    const o = mod.parseArgs(['--ratify-terminal-typo']);
+    expect(o.ratifyTerminal).toBe(false);
+    expect(o.unknownArgs).toEqual(['--ratify-terminal-typo']);
+  });
+
+  // ── validateArgs ───────────────────────────────────────────────────────
+  it('accepts the additive --native-fs --native-terminal build', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal']))).toEqual([]);
+  });
+
+  it('accepts --native-terminal --ratify-terminal', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-terminal', '--ratify-terminal']))).toEqual([]);
+  });
+
+  it('rejects a lone --ratify-terminal with a single "requires --native-terminal" error', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--ratify-terminal']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe('Error: --ratify-terminal requires --native-terminal.');
+  });
+
+  it('still rejects --components when --native-terminal --ratify-terminal are combined', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-terminal', '--ratify-terminal', '--components']));
+    expect(errs.length).toBeGreaterThan(0);
+    // The --native-terminal/--components prohibition must surface; the
+    // requires error is absent because nativeTerminal is set.
+    expect(errs.some((e) => e.toLowerCase().includes('cannot be combined'))).toBe(true);
+    expect(errs.some((e) => e.includes('--ratify-terminal requires'))).toBe(false);
+  });
+
+  it('rejects the exact --native-terminal + --components message', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-terminal', '--components']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe(
+      'Error: --native-terminal cannot be combined with --components (standalone component entries are not the app bundle).',
+    );
+  });
+
+  // ── buildCapabilityManifest ────────────────────────────────────────────
+  it('emits a single seam-only terminal entry for nativeTerminal alone', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeTerminal: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.portion).toBe('terminal');
+    expect(e.flag).toBe('--native-terminal');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    expect(e.status).toBe('seam-only');
+    // The exact seam-only notes string (points at the decoupling audit).
+    expect(e.notes).toBe(
+      'WASM/PTY terminal transport provided natively by the shell; terminal modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+    );
+  });
+
+  it('emits a ratified terminal entry for nativeTerminal + ratifyTerminal', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeTerminal: true, ratifyTerminal: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.status).toBe('ratified');
+    expect(e.portion).toBe('terminal');
+    expect(e.flag).toBe('--native-terminal');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    // The R-3 ratified notes (parity-proven swap, points at the ADR).
+    expect(e.notes).toBe(
+      'R-3 ratified: parity-proven swap — the WASM/PTY terminal transport is ' +
+        'provided natively by the shell; the terminal module is stubbed out of ' +
+        'the bundle (see docs/adr-0008-webui-native-seams.md, terminal seam).',
+    );
+  });
+
+  it('carries BOTH the fs and terminal entries when both flags are set (additive)', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeFs: true, nativeTerminal: true });
+    expect(m.excluded).toHaveLength(2);
+    // Entry order follows the fs → terminal order of the code.
+    expect(m.excluded[0].portion).toBe('fs');
+    expect(m.excluded[0].flag).toBe('--native-fs');
+    expect(m.excluded[1].portion).toBe('terminal');
+    expect(m.excluded[1].flag).toBe('--native-terminal');
+    // Both default to seam-only without their ratify flags.
+    expect(m.excluded[0].status).toBe('seam-only');
+    expect(m.excluded[1].status).toBe('seam-only');
+  });
+
+  it('ratifies only the terminal entry when both flags + --ratify-terminal are set', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      nativeTerminal: true,
+      ratifyTerminal: true,
+    });
+    expect(m.excluded).toHaveLength(2);
+    expect(m.excluded[0].status).toBe('seam-only'); // fs untouched
+    expect(m.excluded[1].status).toBe('ratified'); // terminal ratified
+  });
+
+  it('still emits no terminal entry when ratifyTerminal is set but nativeTerminal is not', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', ratifyTerminal: true });
+    expect(m.excluded).toEqual([]);
+  });
+
+  it('propagates buildMode into the R-3 manifest', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'local', nativeTerminal: true, ratifyTerminal: true });
+    expect(m.buildMode).toBe('local');
+    expect(m.excluded[0].status).toBe('ratified');
+  });
+
+  // ── help text ──────────────────────────────────────────────────────────
+  it('documents --native-terminal and --ratify-terminal as Implemented (R-3)', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mod.printHelp();
+      const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toContain('--native-terminal');
+      expect(out).toContain('--ratify-terminal');
+      // Both R-3 flags are documented as implemented.
+      expect(out).toMatch(/--native-terminal\s+Implemented \(R-3\)/);
+      expect(out).toMatch(/--ratify-terminal\s+Implemented \(R-3\)/);
+      // --ratify-terminal requires --native-terminal (documented).
+      expect(out).toMatch(/Requires --native-terminal/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('still documents --native-chat / --native-git as Reserved', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mod.printHelp();
+      const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toMatch(/--native-chat\s+Reserved \(R-4\)/);
+      expect(out).toMatch(/--native-git\s+Reserved \(R-5\)/);
     } finally {
       spy.mockRestore();
     }

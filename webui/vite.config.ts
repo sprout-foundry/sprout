@@ -54,6 +54,40 @@ export default defineConfig(({ mode }) => {
       ]
     : [];
 
+  // Track R (--native-terminal, R-3): set by scripts/build-webui-dist.mjs
+  // when invoked with --native-terminal. When exactly '1', the terminal
+  // transport module (services/terminalWebSocket) is aliased to its
+  // type-compatible no-op stand-in (src/services/nativeTerminalStubs/) so
+  // the PTY/WASM terminal transport is hard-excluded from the bundle —
+  // the native shell provides the terminal natively. Default builds,
+  // `vite dev`, and vitest never set the flag, so they see no aliases and
+  // no behavior change. Rollback = rebuild without the flag. (Mirrors the
+  // --native-fs seam above; the two flag sets are additive — a
+  // --native-fs --native-terminal build activates both alias sets.)
+  const isNativeTerminal = process.env.VITE_SPROUT_NATIVE_TERMINAL === '1';
+  const nativeTerminalStubsDir = path.resolve(__dirname, './src/services/nativeTerminalStubs');
+  // More-specific aliases (stub regexes) are placed BEFORE the `@` alias
+  // (same ordering rule as the native-fs set). All current importers use
+  // relative specifiers, so the relative-form entries are what actually
+  // perform the exclusion; the @/services/ entry covers alias-form
+  // specifiers.
+  const nativeTerminalStubAliases: { find: RegExp; replacement: string }[] = isNativeTerminal
+    ? [
+        {
+          find: /^@\/services\/(terminalWebSocket)(?:\.js)?$/,
+          replacement: `${nativeTerminalStubsDir}/$1`,
+        },
+        {
+          find: /^\.\/(terminalWebSocket)(?:\.js)?$/,
+          replacement: `${nativeTerminalStubsDir}/$1`,
+        },
+        {
+          find: /^(?:\.\.\/)+services\/(terminalWebSocket)(?:\.js)?$/,
+          replacement: `${nativeTerminalStubsDir}/$1`,
+        },
+      ]
+    : [];
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -96,6 +130,12 @@ export default defineConfig(({ mode }) => {
         // of the real modules, hard-excluding the WASM/OPFS FS subsystem.
         // Empty array (no-ops) in every other build — see isNativeFs above.
         ...nativeFsStubAliases,
+        // Track R (--native-terminal) seam: when VITE_SPROUT_NATIVE_TERMINAL=1,
+        // the terminal transport module resolves to its nativeTerminalStubs/
+        // no-op stand-in instead of the real module, hard-excluding the
+        // PTY/WASM terminal transport. Empty array (no-ops) in every other
+        // build — see isNativeTerminal above.
+        ...nativeTerminalStubAliases,
         { find: '@', replacement: path.resolve(__dirname, './src') },
       ],
       // React resolves to a single version across the whole workspace: the

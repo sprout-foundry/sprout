@@ -36,16 +36,22 @@ Implemented and reserved flags on `scripts/build-webui-dist.mjs`
 | Flag | Status | Portion | Effect |
 |---|---|---|---|
 | `--native-fs` | **Implemented** | `fs` | Sets `VITE_SPROUT_NATIVE_FS=1` (enables the Vite `nativeFsStubAliases`) and emits `capabilities.json` with `fs` excluded. |
-| `--native-terminal` | **Reserved** | `terminal` | Fails fast (exit 1) before any build step: "reserved for future Track R work (R-3)". |
+| `--native-terminal` | **Implemented (R-3)** | `terminal` | Sets `VITE_SPROUT_NATIVE_TERMINAL=1` (enables the Vite `nativeTerminalStubAliases`) and emits `capabilities.json` with `terminal` excluded. |
 | `--native-chat` | **Reserved** | `chat` | Fails fast (exit 1): "reserved for future Track R work (R-4)". |
 | `--native-git` | **Reserved** | `git` | Fails fast (exit 1): "reserved for future Track R work (R-5)". |
 
 Semantics:
-- Any reserved `--native-*` flag, any unknown `--*` token, an invalid
-  `--mode`, or `--native-fs` + `--components` together → **exit 1 before any
-  build step** (no `npm ci`, no Vite run).
+- Any reserved `--native-*` flag (`--native-chat`, `--native-git`), any
+  unknown `--*` token, an invalid `--mode`, or `--native-fs` +
+  `--components` / `--native-terminal` + `--components` together → **exit 1
+  before any build step** (no `npm ci`, no Vite run).
+- `--ratify-fs` requires `--native-fs`; `--ratify-terminal` requires
+  `--native-terminal` (a lone ratify flag fails fast, exit 1, before any
+  build step).
 - A portion's flag only excludes that portion; flags are additive and each is
-  gated on its own parity audit (roadmap: one portion at a time).
+  gated on its own parity audit (roadmap: one portion at a time). A
+  `--native-fs --native-terminal` build emits both `excluded[]` entries (fs
+  first, then terminal) and enables both alias sets.
 
 ### Manifest format (`capabilities.json`)
 
@@ -218,6 +224,50 @@ compile-time constant that is the first thing evaluated in its block, so
 it compiles out as a dead branch and the exact pre-R-2f call sequence and
 console output run. (Files: `useAppInitialization.ts`,
 `cloudAdapter.ts`, `useWasmTerminalInput.ts`, `TerminalPane.tsx`.)
+
+#### Terminal seam (R-3)
+
+R-3 is the terminal analogue of the FS seam: the WASM/PTY terminal transport
+is provided natively by the shell, so the webui's terminal module is excluded
+from the bundle. Everything below is a compile-time constant that is the
+first thing evaluated in its block, so the default build (flag off) is
+byte-identical — every R-3 check compiles out as a dead branch.
+
+- **Excluded module.** `services/terminalWebSocket` is aliased to a no-op
+  stand-in in `webui/src/services/nativeTerminalStubs/terminalWebSocket.ts`
+  (via `nativeTerminalStubAliases` in `webui/vite.config.ts`, active only
+  when `VITE_SPROUT_NATIVE_TERMINAL === '1'`). The stand-in keeps the full
+  public `TerminalWebSocketService` signature (instance + statics) but never
+  opens a WebSocket; the `@`-alias regexes cover all three import forms
+  (`@/services/terminalWebSocket`, `./terminalWebSocket`, `../services/…`)
+  with optional `.js` suffixes, mirroring `nativeFsStubAliases` exactly.
+- **Compile-time short-circuits.** `useTerminalSession` skips the
+  WS-lifecycle effect (no `TerminalWebSocketService.createInstance()`, no WS
+  connect) and exposes `terminalProvidedByShell`; `usePageVisibility` skips
+  the PTY/WASM freeze/resume visibility wiring; `TerminalPane` gates the
+  "Loading terminal..." line on `!terminalProvidedByShell` and renders the
+  SAME "Terminal provided by the native shell" placeholder for
+  `terminalProvidedByShell` that it renders for `wasmProvidedByShell` (one
+  shared block when both hold).
+- **Runtime gate leaf.** `webui/src/services/nativeTerminal/index.ts`
+  mirrors `services/nativeFs/index.ts` (narrow structural bridge type
+  `SproutStudioTerminalBridge` + detector, PURE `resolveNativeTerminalGate`
+  with the nativeFs reason set, cached `nativeTerminalGate()` resolver +
+  `__resetNativeTerminalGateForTests()`). It is the SHELL-side deferral
+  decision (terminal sessions route to the shell); the webui placeholder UI
+  is unconditional in `--native-terminal` builds. The leaf is
+  resolved-but-unused until ratification (imported by nothing yet except
+  tests) and inert in default builds.
+- **`--ratify-terminal`** (requires `--native-terminal`; a lone ratify flag
+  fails fast) emits the `terminal` entry of `capabilities.json` with
+  `status: "ratified"` instead of the default `"seam-only"` (the
+  ratification records the parity-proven swap).
+- **Additive with fs.** A `--native-fs --native-terminal` build emits BOTH
+  `excluded[]` entries (fs first, then terminal — order follows the build
+  script's code shape) and enables BOTH alias sets.
+- **Rollback.** Rebuild without `--native-terminal`: no aliases, no
+  `terminal` manifest entry, the real terminal module returns to the bundle.
+  No source changes, no migrations.
 
 ## Consequences
 - Future swaps (R-3 terminal, R-4 chat, R-5 git) add a flag + a `portion`

@@ -11,6 +11,8 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { NATIVE_TERMINAL_ENABLED } from '../services/nativeTerminalStubs/nativeTerminalFlag';
+import { debugLog } from '../utils/log';
 
 export interface UseTerminalSessionOptions {
   isActive: boolean;
@@ -41,6 +43,13 @@ export interface UseTerminalSessionReturn {
   sendResize: () => void;
   /** Timestamp of the last session_restored event, for guarding against duplicate resizes. */
   lastRestoreTimeRef: React.MutableRefObject<number>;
+  /**
+   * True when the build is a `--native-terminal` dist (R-3): the shell provides
+   * the terminal natively, so no PTY/WASM transport is ever connected. Callers
+   * render a "provided by the shell" placeholder instead of the "Loading
+   * terminal..." line. (Mirrors `wasmProvidedByShell` in useWasmTerminalInput.)
+   */
+  terminalProvidedByShell: boolean;
 }
 
 export function useTerminalSession(options: UseTerminalSessionOptions): UseTerminalSessionReturn {
@@ -115,6 +124,17 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
   // ── WebSocket lifecycle ─────────────────────────────────────────
 
   useEffect(() => {
+    // Compile-time short-circuit (R-3): in a --native-terminal dist the shell
+    // provides the terminal natively, so the (hard-excluded) PTY/WASM
+    // terminal transport module is never initialized — no WebSocket connects.
+    // NATIVE_TERMINAL_ENABLED is a compile-time constant, so this is a dead
+    // branch in the default build (flag off → today's exact behavior,
+    // byte-identical). Mirrors the R-2f pattern in useWasmTerminalInput.
+    if (NATIVE_TERMINAL_ENABLED) {
+      debugLog('[TerminalPane] WS effect: native-terminal build — terminal provided by the shell, skipping WS connect');
+      return;
+    }
+
     if (!isActive) {
       if (eventHandlerRef.current && terminalWSRef.current) {
         terminalWSRef.current.removeEvent(eventHandlerRef.current);
@@ -280,6 +300,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
     eventHandlerRef,
     sendResize,
     lastRestoreTimeRef,
+    terminalProvidedByShell: NATIVE_TERMINAL_ENABLED,
   };
 }
 

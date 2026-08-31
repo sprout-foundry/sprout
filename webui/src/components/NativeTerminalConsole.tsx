@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import {
+  TERMINAL_THEME_EXPORT,
+  getTerminalFontFamilyExport,
+  FONT_SIZE_DEFAULT_EXPORT,
+} from '../hooks/useTerminalXTerm';
 
 /**
  * Native-mode interactive console (Track R, terminal portion).
@@ -8,8 +16,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * build + shell declares the `terminal` capability). Each submitted line
  * goes over the §15 bridge channel (`window.SproutStudio.terminalSpawn`)
  * to the shell's concrete transport (workspace-scoped emulated shell on
- * iOS), streaming `chunk` pushes into a scrollback buffer — so the user
- * gets a working prompt surface instead of a dead handoff notice.
+ * iOS), streaming `chunk` pushes into a real xterm.js grid — the same
+ * engine, theme, and font the PTY tier renders with, so every terminal
+ * surface in the app looks identical.
  *
  * One-shot command semantics: every line is an independent spawn (no PTY,
  * no interactive programs, no ctrl-C). The emulated shell is rooted at
@@ -43,19 +52,22 @@ declare global {
 
 const WELCOME = [
   'Native shell console (workspace-scoped emulated shell).',
-  'Commands: ls cat head tail wc grep find touch rm mkdir echo pwd · pipes · && ;',
-  'type `help` for details',
-].join('\n');
+  'ls cat head tail wc grep find touch rm mkdir echo pwd · pipes · && ;',
+  "type 'help' for details",
+];
+
+const PROMPT = '\x1b[32m$\x1b[0m ';
 
 export function NativeTerminalConsole(): React.ReactElement {
-  const [lines, setLines] = useState<string[]>(WELCOME.split('\n'));
-  const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const busyRef = useRef(false);
+  const runLineRef = useRef<(line: string) => void>(() => {});
 
-  const append = useCallback((...newLines: string[]) => {
-    setLines((prev) => [...prev, ...newLines]);
+  const println = useCallback((text: string) => {
+    const term = termRef.current;
+    if (!term) return;
+    for (const line of text.split('\n')) term.writeln(line);
   }, []);
 
   useEffect(() => {
@@ -76,113 +88,202 @@ export function NativeTerminalConsole(): React.ReactElement {
     };
   }, []);
 
+  // ── xterm lifecycle ────────────────────────────────────────────────
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+    const host = hostRef.current;
+    if (!host || termRef.current) return;
+
+    const term = new Terminal({
+      fontFamily: getTerminalFontFamilyExport(),
+      fontSize: FONT_SIZE_DEFAULT_EXPORT,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      scrollback: 5000,
+      wordSeparator: ' ()[]{}\',"`',
+      theme: TERMINAL_THEME_EXPORT,
+      cursorBlink: true,
+    });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(host);
+    termRef.current = term;
+
+    // Defer first fit one frame so the container has layout.
+    const raf = requestAnimationFrame(() => fitAddon.fit());
+    for (const line of WELCOME) term.writeln(line);
+    term.write(PROMPT);
+
+    // Line-editor state (xterm has no line discipline here — the
+    // transport is spawn-per-line, so we implement one).
+    let lineBuf = '';
+    let history: string[] = [];
+    let histIdx = -1; // index into `history`; length == "blank line"
+    let escState = 0; // 0 = normal, 1 = saw ESC, 2 = saw CSI/SS3 introducer
+
+    const writePrompt = () => term.write(PROMPT);
+    const redraw = () => term.write(`\r\x1b[K${PROMPT}${lineBuf}`);
+
+    const recall = (delta: -1 | 1) => {
+      if (history.length === 0) return;
+      const next = histIdx + delta;
+      if (next < 0 || next > history.length) return;
+      histIdx = next;
+      lineBuf = histIdx === history.length ? '' : history[histIdx];
+      redraw();
+    };
+
+    const dataSub = term.onData((data) => {
+      if (busyRef.current) return; // input locked while a command runs
+      for (const ch of data) {
+        const code = ch.codePointAt(0) ?? 0;
+
+        // Escape-sequence state machine first, so typed letters like
+        // 'A', 'B', 'O' never collide with arrow-key bytes.
+        if (escState === 0 && ch === '\x1b') {
+          escState = 1;
+          continue;
+        }
+        if (escState === 1) {
+          escState = ch === '[' || ch === 'O' ? 2 : 0; // other: Alt-combo, drop
+          continue;
+        }
+        if (escState === 2) {
+          escState = 0;
+          if (ch === 'A') recall(-1);
+          else if (ch === 'B') recall(1);
+          // other CSI termini (C/D/~/…): unused here
+          continue;
+        }
+
+        if (ch === '\r') {
+          const line = lineBuf;
+          lineBuf = '';
+          histIdx = history.length;
+          term.write('\r\n');
+          if (line.trim()) {
+            history.push(line);
+            histIdx = history.length;
+            void runLineRef.current(line);
+          } else {
+            writePrompt();
+          }
+        } else if (ch === '\x7f') {
+          if (lineBuf.length > 0) {
+            lineBuf = lineBuf.slice(0, -1);
+            term.write('\b \b');
+          }
+        } else if (code === 3) {
+          // Ctrl-C: cancel the current input line
+          lineBuf = '';
+          histIdx = history.length;
+          term.write('^C\r\n');
+          writePrompt();
+        } else if (code === 4 && lineBuf.length === 0) {
+          // Ctrl-D on an empty line: print a hint (no persistent
+          // session to exit — say so instead of doing nothing).
+          term.write('^D\r\n');
+          term.writeln('(one-shot console: no session to exit)');
+          writePrompt();
+        } else if (code >= 32) {
+          lineBuf += ch;
+          term.write(ch);
+        }
+        // other control chars: ignored
+      }
+    });
+
+    const onResize = () => fitAddon.fit();
+    window.addEventListener('resize', onResize);
+    const ro = new ResizeObserver(() => fitAddon.fit());
+    ro.observe(host);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      ro.disconnect();
+      dataSub.dispose();
+      term.dispose();
+      termRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runLine = useCallback(
-    async (raw: string) => {
-      const line = raw.trim();
-      append(`$ ${line}`);
-      if (!line) return;
+    (line: string) => {
+      const term = termRef.current;
+      if (!term) return;
 
-      const bridge = window.SproutStudio;
-      if (!hasSpawnBridge(bridge)) {
-        append('sprout-studio: bridge unavailable');
-        return;
-      }
+      const prompt = () => term.write(PROMPT);
 
       if (line === 'help') {
-        append(
-          'Built-ins: ' +
-            'ls cat head tail wc grep find touch rm mkdir echo pwd. ' +
-            'Pipes (|), sequences (;) and chains (&&) supported. ' +
-            'All paths resolve from the workspace root.',
+        term.writeln(
+          'Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd.',
         );
+        term.writeln(
+          'Pipes (|), sequences (;) and chains (&&) supported. All paths',
+        );
+        term.writeln('resolve from the workspace root. Ctrl-C cancels input.');
+        prompt();
         return;
       }
 
       // The emulated shell is rooted at the workspace root and has no
       // `cd` builtin — say so instead of silently misbehaving.
       if (/^cd(\s|$)/.test(line)) {
-        append('cd: not supported (commands run from the workspace root)');
+        term.writeln('cd: not supported (commands run from the workspace root)');
+        prompt();
         return;
       }
 
-      setBusy(true);
+      busyRef.current = true;
       let exitCode = 0;
-      try {
-        await new Promise<void>((resolve) => {
-          void bridge
-            .terminalSpawn(line, {
-              onChunk: (text) => {
-                // Emulator output arrives atomically; split into lines
-                // and drop a single trailing empty (final newline).
-                const parts = String(text).split('\n');
-                if (parts.length > 1 && parts[parts.length - 1] === '') parts.pop();
-                if (parts.length) append(...parts);
-              },
-              onExit: (code) => {
-                exitCode = code;
-                resolve();
-              },
-              onError: (err) => {
-                append(`error: ${err}`);
-                exitCode = 127;
-                resolve();
-              },
-            })
-            .catch(() => {
-              append('terminalSpawn: bridge call failed');
+      void new Promise<void>((resolve) => {
+        const bridge = window.SproutStudio;
+        if (!hasSpawnBridge(bridge)) {
+          term.writeln('sprout-studio: bridge unavailable');
+          resolve();
+          return;
+        }
+        void bridge
+          .terminalSpawn(line, {
+            onChunk: (text) => {
+              // Emulator output arrives atomically; strip ONE final
+              // newline (writeln re-adds line endings).
+              const t = String(text);
+              println(t.endsWith('\n') ? t.slice(0, -1) : t);
+            },
+            onExit: (code) => {
+              exitCode = code;
               resolve();
-            });
-        });
-      } finally {
-        setBusy(false);
-        if (exitCode !== 0) append(`(exit ${exitCode})`);
-      }
+            },
+            onError: (err) => {
+              term.writeln(`\x1b[31merror:\x1b[0m ${err}`);
+              exitCode = 127;
+              resolve();
+            },
+          })
+          .catch(() => {
+            term.writeln('terminalSpawn: bridge call failed');
+            resolve();
+          });
+      }).finally(() => {
+        busyRef.current = false;
+        if (exitCode !== 0) term.writeln(`\x1b[2m(exit ${exitCode})\x1b[0m`);
+        prompt();
+      });
     },
-    [append],
+    [println],
   );
 
+  useEffect(() => {
+    runLineRef.current = runLine;
+  }, [runLine]);
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0d1117] font-mono text-[13px] text-[#c9d1d9]">
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
-        onClick={() => inputRef.current?.focus()}
-      >
-        {lines.map((l, i) => (
-          <div key={i} className="whitespace-pre-wrap break-words leading-[1.45]">
-            {l}
-          </div>
-        ))}
-        {busy && <div className="text-[#8b949e]">…</div>}
-      </div>
-      <form
-        className="flex items-center gap-2 border-t border-[#21262d] px-3 py-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (busy) return;
-          const value = input;
-          setInput('');
-          void runLine(value);
-        }}
-      >
-        <span className="shrink-0 text-[#3fb950]">$</span>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-[#c9d1d9] outline-none"
-          placeholder="run a command…"
-          autoFocus
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-        />
-      </form>
-    </div>
+    <div
+      ref={hostRef}
+      className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
+      style={{ padding: '6px 8px' }}
+    />
   );
 }

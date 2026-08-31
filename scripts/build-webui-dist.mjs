@@ -12,12 +12,12 @@ const buildDir = join(webuiDir, 'dist'); // Vite output directory
 // ── Native feature flags (Track R) ─────────────────────────────────
 // --native-fs        Implemented: strips WASM FS/workspace ops from the
 //                    bundle (shell provides them natively).
-// --native-terminal  Reserved (R-3) — not yet implemented.
+// --native-terminal  Implemented: strips the WASM/PTY terminal transport
+//                    from the bundle (shell provides it natively).
 // --native-chat      Reserved (R-4) — not yet implemented.
 // --native-git       Reserved (R-5) — not yet implemented.
 // See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.
 const RESERVED_NATIVE_FLAGS = {
-  '--native-terminal': 'Error: --native-terminal is reserved for future Track R work (R-3) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
   '--native-chat': 'Error: --native-chat is reserved for future Track R work (R-4) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
   '--native-git': 'Error: --native-git is reserved for future Track R work (R-5) and is not yet implemented. See docs/WEBUI_DECOUPLING_AUDIT.md and docs/adr-0008-webui-native-seams.md.',
 };
@@ -34,6 +34,9 @@ function printHelp() {
   console.log('  --native-fs            Track R: strip WASM FS/workspace ops (shell provides them natively)');
   console.log('  --ratify-fs            Track R (R-2w): emit the fs portion of capabilities.json as "ratified"');
   console.log('                         (requires --native-fs; makes the dist a shell-servable swap)');
+  console.log('  --native-terminal      Track R: strip the terminal transport (shell provides it natively)');
+  console.log('  --ratify-terminal      Track R (R-3): emit the terminal portion of capabilities.json as "ratified"');
+  console.log('                         (requires --native-terminal; makes the dist a shell-servable swap)');
   console.log('  --help, -h             Show this help message');
   console.log('');
   console.log('Modes:');
@@ -56,7 +59,15 @@ function printHelp() {
   console.log('                      parity-proven, shell-servable swap) instead of the');
   console.log('                      default "seam-only". Requires --native-fs; with the');
   console.log('                      flag alone it fails fast (exit 1, no build).');
-  console.log('  --native-terminal   Reserved (R-3). Not yet implemented — fails fast');
+  console.log('  --native-terminal   Implemented (R-3). Removes the terminal transport');
+  console.log('                      (PTY WebSocket + WASM terminal tier) from the bundle;');
+  console.log('                      the host shell supplies it natively. Cannot be');
+  console.log('                      combined with --components.');
+  console.log('  --ratify-terminal   Implemented (R-3). Marks the terminal portion of');
+  console.log('                      capabilities.json as status "ratified" (a');
+  console.log('                      parity-proven, shell-servable swap) instead of the');
+  console.log('                      default "seam-only". Requires --native-terminal; with');
+  console.log('                      the flag alone it fails fast (exit 1, no build).');
   console.log('  --native-chat       Reserved (R-4). Not yet implemented — fails fast');
   console.log('  --native-git        Reserved (R-5). Not yet implemented — fails fast');
   console.log('  Reserved flags cause exit 1 before any build step (no npm/vite run).');
@@ -68,7 +79,9 @@ function printHelp() {
   console.log('                      artifact; a shell must not serve it until the R-2 parity');
   console.log('                      gate ratifies the swap, status "ratified").');
   console.log('                      Add --ratify-fs to emit the fs entry as "ratified" —');
-  console.log('                      the R-2w parity-proven, shell-servable swap.');
+  console.log('                      the R-2w parity-proven, shell-servable swap. Add');
+  console.log('                      --ratify-terminal to emit the terminal entry as');
+  console.log('                      "ratified" (the R-3 parity-proven, shell-servable swap).');
   console.log('  Rollback            Rebuild with the flag omitted to restore the portion.');
   console.log('');
   console.log('Examples:');
@@ -78,6 +91,9 @@ function printHelp() {
   console.log('  node build-webui-dist.mjs --api-url https://api.example.com/api --ws-url wss://api.example.com/ws');
   console.log('  node build-webui-dist.mjs --native-fs     # Cloud build with WASM FS stripped');
   console.log('  node build-webui-dist.mjs --native-fs --ratify-fs  # fs portion ratified (shell-servable)');
+  console.log('  node build-webui-dist.mjs --native-terminal # Cloud build with terminal transport stripped');
+  console.log('  node build-webui-dist.mjs --native-fs --native-terminal  # additive: fs + terminal stripped');
+  console.log('  node build-webui-dist.mjs --native-terminal --ratify-terminal  # terminal portion ratified (shell-servable)');
 }
 
 /**
@@ -96,6 +112,7 @@ export function parseArgs(argv) {
     nativeFs: false,
     ratifyFs: false,
     nativeTerminal: false,
+    ratifyTerminal: false,
     nativeChat: false,
     nativeGit: false,
     help: false,
@@ -129,7 +146,16 @@ export function parseArgs(argv) {
       // "seam-only". Requires --native-fs (validated in validateArgs).
       opts.ratifyFs = true;
     } else if (arg === '--native-terminal') {
+      // Track R (R-3): strip the terminal transport (PTY WS + WASM terminal
+      // tier) from the bundle; the shell provides it natively. Sets
+      // VITE_SPROUT_NATIVE_TERMINAL=1 for the Vite build (enables
+      // nativeTerminalStubAliases in webui/vite.config.ts).
       opts.nativeTerminal = true;
+    } else if (arg === '--ratify-terminal') {
+      // Track R (R-3): emit the terminal portion of capabilities.json with
+      // status "ratified" (a parity-proven, shell-servable swap) instead of
+      // "seam-only". Requires --native-terminal (validated in validateArgs).
+      opts.ratifyTerminal = true;
     } else if (arg === '--native-chat') {
       opts.nativeChat = true;
     } else if (arg === '--native-git') {
@@ -154,7 +180,6 @@ export function validateArgs(opts) {
   const errors = [];
 
   for (const [flag, optKey] of [
-    ['--native-terminal', 'nativeTerminal'],
     ['--native-chat', 'nativeChat'],
     ['--native-git', 'nativeGit'],
   ]) {
@@ -171,11 +196,25 @@ export function validateArgs(opts) {
     errors.push('Error: --native-fs cannot be combined with --components (standalone component entries are not the app bundle).');
   }
 
+  // Track R (R-3): same prohibition as --native-fs — the standalone
+  // component entries are not the app bundle, so the terminal-seam build
+  // cannot target them either.
+  if (opts.nativeTerminal && opts.components) {
+    errors.push('Error: --native-terminal cannot be combined with --components (standalone component entries are not the app bundle).');
+  }
+
   // Track R (R-2w): --ratify-fs ratifies the fs portion of a --native-fs build.
   // It is meaningless (and a no-op that would be a lie) without --native-fs,
   // so it fails fast like the other validators — BEFORE any build step.
   if (opts.ratifyFs && !opts.nativeFs) {
     errors.push('Error: --ratify-fs requires --native-fs.');
+  }
+
+  // Track R (R-3): --ratify-terminal ratifies the terminal portion of a
+  // --native-terminal build. Meaningless without --native-terminal, so it
+  // fails fast like the other validators — BEFORE any build step.
+  if (opts.ratifyTerminal && !opts.nativeTerminal) {
+    errors.push('Error: --ratify-terminal requires --native-terminal.');
   }
 
   if (opts.mode !== 'cloud' && opts.mode !== 'local' && opts.mode !== 'components') {
@@ -192,6 +231,10 @@ export function validateArgs(opts) {
  * the fs entry carries `status: "ratified"` (a parity-proven, shell-servable
  * swap) instead of the default `"seam-only"` (build-time artifact only). The
  * `notes` field records which mode produced the entry.
+ *
+ * Track R (R-3): `opts.nativeTerminal` adds a `terminal` entry AFTER any `fs`
+ * entry (flags are additive; entry order follows the fs → terminal order of
+ * the code). `opts.ratifyTerminal` flips its status to "ratified".
  */
 export function buildCapabilityManifest(opts) {
   const excluded = [];
@@ -208,6 +251,21 @@ export function buildCapabilityManifest(opts) {
           'the webui defers file-tree open/browse/read/write/save to the bridge ' +
           'files channel (see docs/adr-0008-webui-native-seams.md, R-2w deferral wiring).'
         : 'WASM FS / workspace ops provided natively by the shell; FS modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+    });
+  }
+  if (opts.nativeTerminal) {
+    const ratified = Boolean(opts.ratifyTerminal);
+    excluded.push({
+      portion: 'terminal',
+      flag: '--native-terminal',
+      replacedBy: 'native',
+      hardExclusion: true,
+      status: ratified ? 'ratified' : 'seam-only',
+      notes: ratified
+        ? 'R-3 ratified: parity-proven swap — the WASM/PTY terminal transport is ' +
+          'provided natively by the shell; the terminal module is stubbed out of ' +
+          'the bundle (see docs/adr-0008-webui-native-seams.md, terminal seam).'
+        : 'WASM/PTY terminal transport provided natively by the shell; terminal modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
     });
   }
   return {
@@ -667,12 +725,30 @@ function main(opts) {
     console.log('    VITE_SPROUT_NATIVE_FS=1 (--native-fs: WASM FS stripped, shell provides it)');
   }
 
+  // Track R (R-3): native terminal — tell the frontend bundle that the
+  // terminal transport (PTY WebSocket + WASM terminal tier) is provided
+  // natively by the shell so the terminal module is stubbed out of the
+  // build.
+  if (opts.nativeTerminal) {
+    buildEnv.VITE_SPROUT_NATIVE_TERMINAL = '1';
+    console.log('    VITE_SPROUT_NATIVE_TERMINAL=1 (--native-terminal: terminal transport stripped, shell provides it)');
+  }
+
   // Track R (R-2w): --ratify-fs marks the fs portion of capabilities.json as
   // "ratified" (a parity-proven, shell-servable swap). It does not change the
   // Vite build itself (the bundle is identical to --native-fs); it only
   // changes the capabilities.json manifest that the shell reads at serve time.
   if (opts.ratifyFs) {
     console.log('    capabilities.json fs portion will be emitted as status "ratified" (--ratify-fs)');
+  }
+
+  // Track R (R-3): --ratify-terminal marks the terminal portion of
+  // capabilities.json as "ratified". Like --ratify-fs, it does not change
+  // the Vite build (the bundle is identical to --native-terminal); it only
+  // changes the capabilities.json manifest that the shell reads at serve
+  // time.
+  if (opts.ratifyTerminal) {
+    console.log('    capabilities.json terminal portion will be emitted as status "ratified" (--ratify-terminal)');
   }
 
   // Runtime-configurable Foundry URLs — only bake them in if explicitly provided.

@@ -204,19 +204,26 @@ roadmap's proposed `--native-fs` exactly; the reserved flags follow the same
 | Flag | Status | Effect | Exit |
 |---|---|---|---|
 | `--native-fs` | **Implemented** (R-2) | Sets `VITE_SPROUT_NATIVE_FS=1` for the Vite build (enables the `nativeFsStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `fs` portion excluded. | 0 |
-| `--native-terminal` | **Reserved** (R-3) | Fails fast before any build step. | 1 |
+| `--native-terminal` | **Implemented (R-3)** | Sets `VITE_SPROUT_NATIVE_TERMINAL=1` for the Vite build (enables the `nativeTerminalStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `terminal` portion excluded. | 0 |
 | `--native-chat` | **Reserved** (R-4) | Fails fast before any build step. | 1 |
 | `--native-git` | **Reserved** (R-5) | Fails fast before any build step. | 1 |
 
 Validation rules (all fire **before** `npm ci` / Vite run):
 
-- Any reserved `--native-*` flag → `Error: --native-<x> is reserved for future
-  Track R work (R-<n>) and is not yet implemented. See docs/...` → **exit 1**.
+- Any reserved `--native-*` flag (`--native-chat` R-4, `--native-git` R-5) →
+  `Error: --native-<x> is reserved for future Track R work (R-<n>) and is not
+  yet implemented. See docs/...` → **exit 1**.
 - Any unrecognized `--*` token → `Error: Unknown option '<x>'. Run with --help.`
   → **exit 1**.
 - `--native-fs` **and** `--components` together → `Error: --native-fs cannot be
   combined with --components (standalone component entries are not the app
   bundle).` → **exit 1**.
+- `--native-terminal` **and** `--components` together → `Error: --native-terminal
+  cannot be combined with --components (standalone component entries are not the
+  app bundle).` → **exit 1**.
+- `--ratify-fs` without `--native-fs` → `Error: --ratify-fs requires --native-fs.`
+  → **exit 1**. `--ratify-terminal` without `--native-terminal` → `Error:
+  --ratify-terminal requires --native-terminal.` → **exit 1**.
 - Invalid `--mode` (must be `cloud` | `local` | `components`) → **exit 1**.
 
 ### 2.2 `capabilities.json` — JSON Schema

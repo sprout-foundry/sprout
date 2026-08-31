@@ -417,7 +417,9 @@ describe('EscalationListener — Mode A/B regressions', () => {
   // SPA skips its authed `/` → `/webui/` redirect (otherwise the user loops
   // straight back into the editor).
   it('falls back to /?from=editor when workspace creation fails', async () => {
-    const fetchMock = vi.fn(async () => { throw new TypeError('network down'); });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('network down');
+    });
     vi.stubGlobal('fetch', fetchMock);
     render(createElement(EscalationListener));
     fireTrigger({ command: undefined });

@@ -29,7 +29,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 
 // ── Mock the FileTree child so we can capture the onFetchFiles prop ─────────
 //
@@ -50,10 +50,7 @@ function getCapturedOnFetchFiles(): (path: string) => Promise<unknown> {
   const node = screen.getByTestId('mock-filetree') as HTMLElement & {
     __capturedOnFetch?: (p: string) => Promise<unknown>;
   };
-  expect(
-    node.__capturedOnFetch,
-    'onFetchFiles prop must have been captured on the FileTree node',
-  ).toBeTruthy();
+  expect(node.__capturedOnFetch, 'onFetchFiles prop must have been captured on the FileTree node').toBeTruthy();
   return node.__capturedOnFetch!;
 }
 
@@ -66,8 +63,7 @@ vi.mock('@sprout/ui', () => {
     FileTree: (props: Record<string, unknown>) => {
       const ref = (node: HTMLElement | null) => {
         if (node) {
-          (node as HTMLElement & { __capturedOnFetch?: unknown }).__capturedOnFetch =
-            props.onFetchFiles;
+          (node as HTMLElement & { __capturedOnFetch?: unknown }).__capturedOnFetch = props.onFetchFiles;
         }
       };
       return createElement('div', { 'data-testid': 'mock-filetree', ref });
@@ -101,13 +97,15 @@ vi.mock('../services/api', () => ({
 
 // ── Bridge + flag helpers (shared with the stub-routing tests) ──────────────
 
-function makeBridge(opts: {
-  capabilities?: {
-    capabilities: Record<string, boolean>;
-    excluded: Array<Record<string, unknown>>;
-  };
-  list?: (maxDepth?: number) => Promise<unknown>;
-} = {}): {
+function makeBridge(
+  opts: {
+    capabilities?: {
+      capabilities: Record<string, boolean>;
+      excluded: Array<Record<string, unknown>>;
+    };
+    list?: (maxDepth?: number) => Promise<unknown>;
+  } = {},
+): {
   getCapabilities: ReturnType<typeof vi.fn>;
   readWorkspaceFile: ReturnType<typeof vi.fn>;
   writeWorkspaceFile: ReturnType<typeof vi.fn>;
@@ -127,11 +125,10 @@ function makeBridge(opts: {
     })),
     readWorkspaceFile: vi.fn(async (p: string) => ({ ok: true, path: p, content: 'x' })),
     writeWorkspaceFile: vi.fn(async (p: string) => ({ ok: true, path: p })),
-    listWorkspace: vi.fn(
-      async (maxDepth?: number) =>
-        opts.list
-          ? opts.list(maxDepth)
-          : { ok: true, files: [] as Array<{ path: string; size: number; isDir: boolean }> },
+    listWorkspace: vi.fn(async (maxDepth?: number) =>
+      opts.list
+        ? opts.list(maxDepth)
+        : { ok: true, files: [] as Array<{ path: string; size: number; isDir: boolean }> },
     ),
   };
 }
@@ -147,7 +144,9 @@ type SidebarModule = typeof import('../components/SidebarFilesSection');
 let Sidebar: SidebarModule['default'];
 
 /** Fresh import of the component with the given compile-time flag value. */
-async function loadComponent(enabled: boolean): Promise<ReturnType<typeof import('../components/SidebarFilesSection')>> {
+async function loadComponent(
+  enabled: boolean,
+): Promise<ReturnType<typeof import('../components/SidebarFilesSection')>> {
   if (enabled) vi.stubEnv('VITE_SPROUT_NATIVE_FS', '1');
   else vi.stubEnv('VITE_SPROUT_NATIVE_FS', '');
   vi.resetModules();
@@ -294,13 +293,5 @@ describe('onFetchFiles — gate INACTIVE falls back to clientFetch', () => {
     expect(clientFetchMock).toHaveBeenCalledTimes(1);
     expect(String(clientFetchMock.mock.calls[0][0])).toContain('/api/files?path=');
     expect(bridge.listWorkspace).not.toHaveBeenCalled();
-  });
-});
-
-// ── Housekeeping ────────────────────────────────────────────────────────────
-
-describe('teardown', () => {
-  it('cleans up the render', () => {
-    cleanup();
   });
 });

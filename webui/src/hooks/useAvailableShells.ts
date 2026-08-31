@@ -26,6 +26,20 @@ export function useAvailableShells(): UseAvailableShellsResult {
 
   useEffect(() => {
     let cancelled = false;
+    // Track R (terminal): in native mode (ratified dist + shell-provided
+    // terminal) the daemon shells endpoint never exists — the native
+    // console marks sessionStorage before this effect runs. Skip the
+    // fetch (and its warning toast) instead of failing every mount.
+    let nativeMode = false;
+    try {
+      nativeMode = sessionStorage.getItem('sprout-native-terminal') === '1';
+    } catch {
+      /* ignore */
+    }
+    if (nativeMode) {
+      setShellsLoaded(true);
+      return;
+    }
     ApiService.getInstance()
       .getAvailableShells()
       .then((res) => {

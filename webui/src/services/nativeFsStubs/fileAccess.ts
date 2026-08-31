@@ -10,8 +10,21 @@
  *
  * This file has NO runtime dependency on the real module. The real
  * fileAccess.ts exports no types of its own, so there is nothing to
- * re-export — the stub below is the entire surface.
+ * re-export — the surface below is the entire module.
+ *
+ * R-2w (manifest-driven FS deferral): when the runtime gate passes —
+ * the compile-time `NATIVE_FS_ENABLED` flag is on, the shell bridge is
+ * present, `capabilities.fs === true`, and the served manifest carries a
+ * ratified `fs` exclusion — reads and writes are routed through the
+ * bridge's files channel (`readWorkspaceFile` / `writeWorkspaceFile`)
+ * and returned as synthesized `Response`s (see the leaf module in
+ * services/nativeFs/). When the gate does NOT pass (no bridge, no
+ * manifest, seam-only, shell doesn't declare fs, or getCapabilities
+ * fails), the functions throw exactly as before (see the ADR-0008
+ * deferral-wiring section and docs/WEBUI_DECOUPLING_AUDIT.md §4).
  */
+
+import { nativeFsGate, nativeReadWorkspaceFile, nativeWriteWorkspaceFile, normalizeWorkspacePath } from '../nativeFs';
 
 function notProvidedNative(op: string): Error {
   return new Error(
@@ -20,10 +33,24 @@ function notProvidedNative(op: string): Error {
   );
 }
 
-export function readFileWithConsent(_filePath: string): Promise<Response> {
-  return Promise.reject(notProvidedNative('readFileWithConsent'));
+export async function readFileWithConsent(filePath: string): Promise<Response> {
+  const gate = await nativeFsGate();
+  if (!gate.active) {
+    // Gate-fail: no bridge / no manifest / seam-only / fs not declared or
+    // ratified → throw exactly as the pre-R-2w stub did.
+    throw notProvidedNative('readFileWithConsent');
+  }
+  // Normalize webui path → workspace-relative (rejects `..` / empty /
+  // absolute paths client-side, before ever hitting the bridge).
+  const wsPath = normalizeWorkspacePath(filePath);
+  return nativeReadWorkspaceFile(wsPath);
 }
 
-export function writeFileWithConsent(_filePath: string, _content: string): Promise<Response> {
-  return Promise.reject(notProvidedNative('writeFileWithConsent'));
+export async function writeFileWithConsent(filePath: string, content: string): Promise<Response> {
+  const gate = await nativeFsGate();
+  if (!gate.active) {
+    throw notProvidedNative('writeFileWithConsent');
+  }
+  const wsPath = normalizeWorkspacePath(filePath);
+  return nativeWriteWorkspaceFile(wsPath, content);
 }

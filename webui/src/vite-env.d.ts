@@ -14,6 +14,10 @@ interface ImportMetaEnv {
   // Track R: set to '1' by scripts/build-webui-dist.mjs --native-fs; selects
   // the nativeFsStubs/ alias set in vite.config.ts (excludes the WASM FS).
   readonly VITE_SPROUT_NATIVE_FS?: '1';
+  // Track R (R-3): set to '1' by scripts/build-webui-dist.mjs --native-terminal;
+  // selects the nativeTerminalStubs/ alias set in vite.config.ts (excludes the
+  // terminal transport — the shell provides it natively).
+  readonly VITE_SPROUT_NATIVE_TERMINAL?: '1';
 }
 
 interface ImportMeta {

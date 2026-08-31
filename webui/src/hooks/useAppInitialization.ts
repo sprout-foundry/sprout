@@ -19,6 +19,7 @@ import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
 import { getTabWorkspacePath } from '../services/clientSession';
 import type { CloudAdapter } from '../services/cloudAdapter';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
@@ -98,86 +99,98 @@ export function useAppInitialization({
       // and file requests fire, eliminates the init-race window where
       // the first /api/files call falls through to the backend (which
       // may return 401 or empty data).
-      const wasmPreloadPromise: Promise<boolean> = isCloud
-        ? ((getAdapter() as CloudAdapter | null)?.preloadWasmShell() ?? Promise.resolve(false))
-        : Promise.resolve(false);
+      // Compile-time short-circuit (R-2f): a --native-fs dist hard-excludes
+      // the wasmShell module (the shell provides the POSIX shell / VFS
+      // natively), so the boot path must NOT touch the adapter WASM
+      // preload at all — no fetch/instantiate, no ONNX/embedding chain,
+      // no wasmLoading/wasmError state. NATIVE_FS_ENABLED is a
+      // compile-time constant, so in the default build this guard
+      // short-circuits into a dead branch and the block below runs
+      // exactly as before (byte-identical behavior).
+      if (!NATIVE_FS_ENABLED) {
+        const wasmPreloadPromise: Promise<boolean> = isCloud
+          ? ((getAdapter() as CloudAdapter | null)?.preloadWasmShell() ?? Promise.resolve(false))
+          : Promise.resolve(false);
 
-      wasmPreloadPromise.then((ready) => {
-        if (ready) {
-          debugLog('[startup] WASM shell preloaded successfully');
-          setState((prev) => ({ ...prev, wasmReady: true, wasmLoading: false }));
+        wasmPreloadPromise.then((ready) => {
+          if (ready) {
+            debugLog('[startup] WASM shell preloaded successfully');
+            setState((prev) => ({ ...prev, wasmReady: true, wasmLoading: false }));
 
-          // Configure browser-native git with VFS access callbacks.
-          // isomorphic-git needs to read/write files from the same
-          // virtual filesystem the agent uses.
-          if (isCloud) {
-            import('../services/cloudWasmHandlers').then(({ listAllVfsFiles }) => {
-              import('../services/browserGit').then(({ configureBrowserGit }) => {
-                const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
-                if (shell) {
-                  configureBrowserGit({
-                    name: 'Browser IDE',
-                    email: 'browser-ide@sprout.dev',
-                    readVfsFiles: async () => {
-                      return listAllVfsFiles(shell);
-                    },
-                    writeVfsFiles: async (files) => {
-                      for (const f of files) {
-                        shell.writeFile(f.path, f.content);
-                      }
-                    },
-                    deleteVfsFiles: async (paths) => {
-                      for (const p of paths) {
-                        shell.deleteFile(p);
-                      }
-                    },
-                  });
-                }
-              });
-            });
-          }
-          // Register the agent git tool bridge so the WASM agent can call
-          // browser-side git tools via the setToolExecutionHook + globalThis.
-          if (isCloud) {
-            import('../services/agentGitToolBridge')
-              .then(({ registerGitToolGlobal, installGitToolBridge }) => {
-                const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
-                if (shell) {
-                  registerGitToolGlobal();
-                  // The WASM binary exposes setToolExecutionHook on SproutWasm.
-                  const wasmApi = shell.wasm?.SproutWasm as
-                    | { setToolExecutionHook?: (fn: (cmd: string) => unknown) => void }
-                    | undefined;
-                  if (wasmApi?.setToolExecutionHook) {
-                    installGitToolBridge(wasmApi);
-                    debugLog('[startup] Agent git tool bridge installed');
-                  } else {
-                    debugLog('[startup] setToolExecutionHook not found on SproutWasm — bridge sync hook not installed');
+            // Configure browser-native git with VFS access callbacks.
+            // isomorphic-git needs to read/write files from the same
+            // virtual filesystem the agent uses.
+            if (isCloud) {
+              import('../services/cloudWasmHandlers').then(({ listAllVfsFiles }) => {
+                import('../services/browserGit').then(({ configureBrowserGit }) => {
+                  const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
+                  if (shell) {
+                    configureBrowserGit({
+                      name: 'Browser IDE',
+                      email: 'browser-ide@sprout.dev',
+                      readVfsFiles: async () => {
+                        return listAllVfsFiles(shell);
+                      },
+                      writeVfsFiles: async (files) => {
+                        for (const f of files) {
+                          shell.writeFile(f.path, f.content);
+                        }
+                      },
+                      deleteVfsFiles: async (paths) => {
+                        for (const p of paths) {
+                          shell.deleteFile(p);
+                        }
+                      },
+                    });
                   }
-                }
-              })
-              .catch((err) => {
-                debugLog('[startup] agentGitToolBridge import failed:', err);
+                });
               });
-            // Back the WASM shell's `git` command with browser git (read-only
-            // subcommands) so `git status`/`diff`/`log` run in-browser instead
-            // of exiting 127 into a container txn.
-            import('../services/shellGitAdapter')
-              .then(({ registerShellGitGlobal }) => {
-                registerShellGitGlobal();
-                debugLog('[startup] Shell git adapter installed (__sproutShellGit)');
-              })
-              .catch((err) => {
-                debugLog('[startup] shellGitAdapter import failed:', err);
-              });
+            }
+            // Register the agent git tool bridge so the WASM agent can call
+            // browser-side git tools via the setToolExecutionHook + globalThis.
+            if (isCloud) {
+              import('../services/agentGitToolBridge')
+                .then(({ registerGitToolGlobal, installGitToolBridge }) => {
+                  const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
+                  if (shell) {
+                    registerGitToolGlobal();
+                    // The WASM binary exposes setToolExecutionHook on SproutWasm.
+                    const wasmApi = shell.wasm?.SproutWasm as
+                      | { setToolExecutionHook?: (fn: (cmd: string) => unknown) => void }
+                      | undefined;
+                    if (wasmApi?.setToolExecutionHook) {
+                      installGitToolBridge(wasmApi);
+                      debugLog('[startup] Agent git tool bridge installed');
+                    } else {
+                      debugLog(
+                        '[startup] setToolExecutionHook not found on SproutWasm — bridge sync hook not installed',
+                      );
+                    }
+                  }
+                })
+                .catch((err) => {
+                  debugLog('[startup] agentGitToolBridge import failed:', err);
+                });
+              // Back the WASM shell's `git` command with browser git (read-only
+              // subcommands) so `git status`/`diff`/`log` run in-browser instead
+              // of exiting 127 into a container txn.
+              import('../services/shellGitAdapter')
+                .then(({ registerShellGitGlobal }) => {
+                  registerShellGitGlobal();
+                  debugLog('[startup] Shell git adapter installed (__sproutShellGit)');
+                })
+                .catch((err) => {
+                  debugLog('[startup] shellGitAdapter import failed:', err);
+                });
+            }
+          } else if (isCloud) {
+            console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
+            setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));
           }
-        } else if (isCloud) {
-          console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
-          setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));
+        });
+        if (isCloud) {
+          setState((prev) => ({ ...prev, wasmLoading: true }));
         }
-      });
-      if (isCloud) {
-        setState((prev) => ({ ...prev, wasmLoading: true }));
       }
 
       // ── Cloud mode: wire agent events to the webui ──────────────

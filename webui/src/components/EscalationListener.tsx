@@ -261,12 +261,14 @@ export function EscalationListener() {
           }
         })
         .catch(() => {
-          // If workspace creation fails, redirect to dashboard
-          window.location.href = '/';
+          // Network failure only — an HTTP error status resolves (not
+          // rejects) and leaves the user here (pre-existing behavior).
+          // `?from=editor` tells the platform SPA not to bounce us back.
+          window.location.href = '/?from=editor';
         });
     } else {
-      // No repo context — go to dashboard
-      window.location.href = '/';
+      // No repo context — go to dashboard (not back into the editor loop)
+      window.location.href = '/?from=editor';
     }
   }, [escalation]);
 

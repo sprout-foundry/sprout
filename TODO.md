@@ -52,6 +52,36 @@ Shipped fixes:
 
 ---
 
+## R-4: chat + git webui seams (the last two reserved portions)
+
+Mirror the proven R-3 template exactly, for both remaining portions in
+one pass:
+
+- **Chat**: `--native-chat` on `scripts/build-webui-dist.mjs` (sets
+  `VITE_SPROUT_NATIVE_CHAT=1`), stub-alias the webui chat transport
+  modules (per the R-0 audit's chat section: fetch/SSE agent-turn client
+  paths) behind `nativeChatStubs/`, compile-time short-circuits so the
+  webui chat transport never initializes, manifest portion `"chat"`
+  (`seam-only` default), `--ratify-chat` (requires base flag), runtime
+  gate leaf `services/nativeChat/` (both builds, inert by default)
+  mirroring `services/nativeTerminal/`.
+- **Git**: `--native-git` / `--ratify-git` / `nativeGitStubs/` / portion
+  `"git"` / `services/nativeGit/` leaf — same shape, for the audit's git
+  modules (status/log/diff/commit client paths).
+- Flags additive with each other and with `--native-fs` /
+  `--native-terminal`; every `--ratify-*` requires its base; all
+  prohibited with `--components`. ADR-0008 flag table + seam subsections;
+  audit §2.1 rows; fail-fast validation updated.
+- Tests mirroring the native-terminal suites: flag matrix, stub no-op,
+  boot short-circuits both states, manifest entries. Default build
+  byte-identical; full webui suite green.
+- Evidence per R-3: real dist builds, absent-module marker counts,
+  fail-fast exits verified. Device verification stays batched (see
+  sprout-studio TODO R-4s).
+
+---
+
+
 ## R-3: native terminal swap
 
 Status: **ACTIVE — unblocked by user 2026-08-30 21:07** ("don't block on

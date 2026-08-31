@@ -29,6 +29,7 @@ import {
   handleWasmShellApprovalDecision,
   trackFileWrite,
 } from './cloudWasmHandlers';
+import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -73,6 +74,14 @@ export class CloudAdapter implements APIAdapter {
    * is cached so subsequent ensureWasmShell calls short-circuit).
    */
   preloadWasmShell(): Promise<boolean> {
+    // Compile-time short-circuit (R-2f): in a --native-fs dist the shell
+    // provides the POSIX shell / VFS natively, so the boot path resolves
+    // without ever touching the (hard-excluded) wasmShell module — no
+    // fetch/instantiate, no console noise. NATIVE_FS_ENABLED is a
+    // compile-time constant, so this branch is dead in the default build.
+    if (NATIVE_FS_ENABLED) {
+      return Promise.resolve(false);
+    }
     // Debug: set localStorage.setItem('sprout-debug-wasm', '1') to see logs
     if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
       console.warn('[CloudAdapter] preloadWasmShell called');
@@ -199,6 +208,13 @@ export class CloudAdapter implements APIAdapter {
     // Get method from init if not in Request object
     method = (init?.method || method).toUpperCase();
 
+    // Compile-time short-circuit (R-2f): in a --native-fs dist the wasmShell
+    // module is hard-excluded, so the WASM interception branches below never
+    // attempt ensureWasmShell() — requests fall straight through to the
+    // standard Foundry proxy (server safety-net). Dead branch in the
+    // default build (flag off → today's exact routing, byte-identical).
+    const nativeFs = NATIVE_FS_ENABLED;
+
     // Extract the pathname for matching (strip query params for lookup).
     const urlPath = this.extractPathname(url);
 
@@ -287,7 +303,7 @@ export class CloudAdapter implements APIAdapter {
     // is static-only and cannot express the dynamic {id} segment, so we
     // intercept here with a regex match before the wasm-local check.
     const editDecisionMatch = urlPath.match(/^\/api\/edits\/([^/]+)\/decision$/);
-    if (editDecisionMatch && method === 'POST') {
+    if (editDecisionMatch && method === 'POST' && !nativeFs) {
       const editId = editDecisionMatch[1];
       const requestBody = await this.extractRequestBody(input);
       const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
@@ -308,7 +324,7 @@ export class CloudAdapter implements APIAdapter {
     // registry is static-only and cannot express the dynamic {id} segment, so
     // we intercept here with a regex match before the wasm-local check.
     const shellApprovalMatch = urlPath.match(/^\/api\/shell-approvals\/([^/]+)\/decision$/);
-    if (shellApprovalMatch && method === 'POST') {
+    if (shellApprovalMatch && method === 'POST' && !nativeFs) {
       const requestId = shellApprovalMatch[1];
       const requestBody = await this.extractRequestBody(input);
       const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
@@ -329,7 +345,11 @@ export class CloudAdapter implements APIAdapter {
     // WASM shell in the browser — NOT proxied to the Foundry backend.
     // If WASM shell init fails, fall through to the standard proxy below
     // so the server's safety-net handler returns a compatible response.
-    if (isWasmLocalEndpoint(urlPath, method)) {
+    // R-2f: in a --native-fs dist (nativeFs) the wasmShell module is
+    // hard-excluded, so skip the interception entirely and fall straight
+    // through to the standard proxy (server safety-net) — no shell
+    // attempt, no console noise, request body left untouched.
+    if (isWasmLocalEndpoint(urlPath, method) && !nativeFs) {
       const requestBody = await this.extractRequestBody(input);
       const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
       try {

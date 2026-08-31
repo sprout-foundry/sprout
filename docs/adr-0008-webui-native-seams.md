@@ -182,6 +182,43 @@ existing path even in a `--native-fs` dist. They are a known limitation of
 - `listWorkspace` caps results at 5000 entries, so very wide/deep listings
   can be silently truncated (the daemon path was complete).
 
+#### Boot sequence (R-2f)
+
+R-2f closes the boot-path gap R-2w left: R-2w defers FS *operations*, but
+boot still eagerly preloaded the WASM shell, whose artifacts a ratified
+`--native-fs` dist excludes by design — so a shell-served ratified dist
+booted into the "Failed to load browser runtime" error screen. When
+`NATIVE_FS_ENABLED` (the compile-time `--native-fs` flag) the boot path
+performs **no** wasmShell fetch/instantiate (and therefore no
+ONNX/embedding chain, which hangs off the same module):
+
+- **No boot-time preload** (`useAppInitialization`): the cloud-mode
+  `preloadWasmShell()` call, its `wasmLoading`/`wasmError` state, and the
+  `wasmReady`-gated git/bridge wiring are skipped entirely. The rest of the
+  boot (stats, files, sessions, startup restore) proceeds unchanged.
+- **Chat/API over normal HTTP** (`CloudAdapter.fetch`): wasm-local
+  endpoints — plus the two dynamic decision endpoints
+  (`/api/edits/{id}/decision`, `/api/shell-approvals/{id}/decision`) —
+  skip the wasm-shell interception and route straight to the standard
+  Foundry proxy (the server safety-net); request bodies are left
+  untouched for that path.
+- **Local terminal tab**: the WASM terminal input hook never inits the
+  shell and surfaces `wasmProvidedByShell`, so `TerminalPane` renders a
+  clear "Terminal provided by the native shell" placeholder instead of a
+  loading/error line.
+- **Known limitation — `?repo=` auto-import**: `CloudAdapter.importRepo`
+  still calls `ensureWasmShell()` (it is a repo-write path, not a boot
+  path). In a `--native-fs` dist the stub fail-fasts and bootstrap
+  surfaces `sprout:repo-import-failed` — no crash, but the import is
+  unavailable: repo files are provided natively by the shell. (Routing
+  import through the R-2w bridge is future Track R work.)
+
+The default build (flag off) remains byte-identical: every R-2f check is a
+compile-time constant that is the first thing evaluated in its block, so
+it compiles out as a dead branch and the exact pre-R-2f call sequence and
+console output run. (Files: `useAppInitialization.ts`,
+`cloudAdapter.ts`, `useWasmTerminalInput.ts`, `TerminalPane.tsx`.)
+
 ## Consequences
 - Future swaps (R-3 terminal, R-4 chat, R-5 git) add a flag + a `portion`
   value + a parity audit; the manifest shape is stable.

@@ -62,7 +62,7 @@ instantiates the WASM command runtime, whose artifacts the ratified dist
 excludes by design (`--native-fs` drops the 26 MB wasm chain). The dist
 is thus correct per ADR-0008; the boot sequence is the gap.
 
-- [ ] **R-2f — conditional WASM boot**: when `NATIVE_FS_ENABLED` (the
+- [x] **R-2f — conditional WASM boot**: when `NATIVE_FS_ENABLED` (the
       compile-time `--native-fs` flag), the webui must boot WITHOUT
       instantiating any excluded WASM module: no wasmShell fetch/instantiate
       (and no ONNX/embedding chain), chat/API flows over their normal HTTP

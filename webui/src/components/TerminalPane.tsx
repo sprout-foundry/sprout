@@ -19,6 +19,32 @@ import { debugLog } from '../utils/log';
 import ReverseSearchOverlay from './ReverseSearchOverlay';
 import TerminalContextMenu from './TerminalContextMenu';
 import TerminalSearchBar from './TerminalSearchBar';
+import { NATIVE_TERMINAL_ENABLED } from '../services/nativeTerminalStubs/nativeTerminalFlag';
+import { nativeTerminalGate } from '../services/nativeTerminal';
+import { NativeTerminalConsole } from './NativeTerminalConsole';
+
+/**
+ * Track R (terminal): resolves the native terminal gate once per mount
+ * (cached resolver — one getCapabilities round-trip for the app's
+ * lifetime). When active (ratified build + bridge declares `terminal`)
+ * the pane renders the live NativeTerminalConsole instead of the inert
+ * handoff placeholder. In the default build the flag short-circuits and
+ * this stays false without touching the bridge.
+ */
+function useNativeConsoleActive(): boolean {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!NATIVE_TERMINAL_ENABLED) return;
+    void nativeTerminalGate().then((d) => {
+      if (!cancelled) setActive(d.active);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return active;
+}
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -87,6 +113,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // 1. WASM terminal input hook
     // ═══════════════════════════════════════════════════════════════════
     const wasmXtermRef = useRef<XTerm | null>(null);
+    const nativeConsoleActive = useNativeConsoleActive();
     const { wasmActive, wasmActiveRef, wasmLoading, wasmError, wasmProvidedByShell, handleWasmInput } =
       useWasmTerminalInput({
         xtermRef: wasmXtermRef,
@@ -398,12 +425,23 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             terminal natively (the WASM/PTY transport modules are hard-excluded),
             so the tab shows a clear placeholder instead of a boot failure.
             Rendered exactly once when either flag set the shell-provided bit. */}
-        {(wasmProvidedByShell || terminalProvidedByShell) && (
-          <div className="terminal-status-inline">
-            <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-            Terminal provided by the native shell
-          </div>
-        )}
+        {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell provides the
+            terminal natively (the WASM/PTY transport modules are hard-excluded).
+            When the terminal gate is ACTIVE (ratified build + bridge declares
+            `terminal`), render the live native console instead of the inert
+            handoff placeholder. The placeholder remains for seam-only / not-yet-
+            ratified dists so the handoff state is still visible. */}
+        {(wasmProvidedByShell || terminalProvidedByShell) &&
+          (nativeConsoleActive ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <NativeTerminalConsole />
+            </div>
+          ) : (
+            <div className="terminal-status-inline">
+              <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
+              Terminal provided by the native shell
+            </div>
+          ))}
         <TerminalContextMenu
           containerRef={xtermContainerRef}
           getTerminal={getXTerminal}

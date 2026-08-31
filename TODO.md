@@ -52,10 +52,12 @@ Shipped fixes:
 
 ---
 
-## R-3: native terminal swap (HOLD — do not start)
+## R-3: native terminal swap
 
-Status: **ON HOLD at user direction (2026-08-30)** — start only after R-2's
-device ratification is batched with this item's device verification.
+Status: **ACTIVE — unblocked by user 2026-08-30 21:07** ("don't block on
+waiting for a battery recharge"). Device verification for this item and
+R-2's ratification remain batched into one iPad session when the device
+is recharged; all development proceeds now.
 Contract: ADR-0008 reserves `--native-terminal` (fail-fast today); the
 `--native-fs`/R-2w/R-2f machinery (flag scaffolding, servability gate,
 capability handshake, wasm-free boot) is the proven template — mirror it

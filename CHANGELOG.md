@@ -2,6 +2,31 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.22] - 2026-08-31
+
+### CLI fixes
+
+- fix(console): repair approval flow, resize handling, and footer overwrite bugs — per-part shell picker's resume hook now balances its suspend (activity spinner restarts after approvals); the per-line readLineCtx goroutine that raced the steer reader for stdin after cancel is replaced by a single persistent reader; SelectList non-TTY fallback honors ctx instead of hanging on idle piped stdin; the filesystem approval prompt uses the approvalPicker test seam; the WebUI approval path suspends streaming like the CLI path; SelectList subscribes to resize events with height-clamped walk-backs so approval prompts no longer garble on SIGWINCH; beginTurn closes the prior resize subscriber (leak); drawFullLocked re-asserts the DECSTBM scroll region every draw so child processes (editors, pagers) that drop it no longer let output scroll over the pinned footer (5d6214eb7, c877d2a24)
+- fix(console): keep steer readLoop exitable under cooked-mode termios flips — "[steer] Stop() timed out waiting for readLoop" traced to the readLoop parked in a blocking Read when something restored cooked mode (VMIN=1) underneath (racing PauseSteer/prompt exitSteerMode); reads are now poll-gated (10ms bound regardless of termios) and PauseSteer/ResumeSteer are refcounted like SuspendStreaming so overlapping prompts can't trample each other's termios (76bf56e22)
+
+### Background-session fixes
+
+- fix(tools): stop orphan cleanup killing live background sessions; richer completion notices — orphan cleanup (run at every agent creation) killed any PID in a .pid file, so test binaries or CLI invocations sharing the config dir reaped the interactive process's still-running sessions (wakeup "exit code -1" + vanished output files); pidfiles are now owner-aware ("<child-pid> <owner-pid>", live-owner sessions skipped, 24h age gate), signal deaths report 128+N, and completion notifications embed a ≤2KB output tail (c3ee32b56)
+- fix(tools): make permission-preservation test umask-independent (3fd0a3685)
+
+### CI / test hygiene
+
+- fix(tests): deflake agent-socket TempDir teardown and daemon health recovery — the two intermittent main-branch CI failures (ubuntu "unlinkat directory not empty" from the ephemeral agent's async Shutdown racing TempDir cleanup; macos health-recovery polling a ~10ms observability window) (dd1f43b67)
+- fix(webui): apply Prettier to R-2w native-FS seam files (6af55f968); lint cleanups for upstream R-3 merge — drop manual testing-library cleanup + import order (c9cb38dc9)
+
+### Dependencies
+
+- chore(deps): remove vestigial workspace lockfiles — all 17 Dependabot alerts pointed at a pre-workspace packages/ui/package-lock.json no build path consults; removed it and the matching events lockfile, taking open alerts 17 → 0 (1519a0481)
+
+### Track R (webui decoupling, upstream)
+
+- R-0 decoupling audit + build-time feature-flag seams (e24c49dc8); R-2w manifest-driven native-FS deferral (f03d9c6ec); R-2f conditional WASM boot for ratified --native-fs dists — fixes the iOS shell boot error (92e7a76fe); R-3 native terminal swap, sprout-side seam — 43 new tests, dist builds verified both ways (d245c5595); dashboard fallbacks honor ?from=editor, dead crossTabSync dropped (a048f8c74); coordinator retargeted to zai-coding glm-5.3 (c43cea4ee); provider catalog refresh (#64), pricing and model audit (#65)
+
 ## [v0.17.21] - 2026-08-29
 
 - chore: changelog for v0.17.21 (203a8b8aa)

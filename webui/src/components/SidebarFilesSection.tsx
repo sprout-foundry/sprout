@@ -4,6 +4,8 @@ import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 're
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
+import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { debugLog } from '../utils/log';
 
 export interface FileTreeHandle {
@@ -253,6 +255,21 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             fileTreeRef.current?.refresh();
           }}
           onFetchFiles={async (path: string) => {
+            // Track R (R-2w): deferral to the shell's native files channel.
+            // The default build compiles NATIVE_FS_ENABLED to `false`, so this
+            // whole branch is a dead branch there (byte-identical behavior).
+            if (NATIVE_FS_ENABLED) {
+              const gate = await nativeFsGate();
+              if (gate.active) {
+                const bridge = detectSproutStudio();
+                if (bridge) {
+                  const result = await bridge.listWorkspace(workspaceListDepth(path));
+                  return mapWorkspaceListing(result, path);
+                }
+              }
+              // Gate active but bridge vanished (or failed): degrade to the
+              // client path below rather than crashing.
+            }
             const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
             if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
             const data = await response.json();

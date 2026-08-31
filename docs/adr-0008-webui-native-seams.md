@@ -36,16 +36,22 @@ Implemented and reserved flags on `scripts/build-webui-dist.mjs`
 | Flag | Status | Portion | Effect |
 |---|---|---|---|
 | `--native-fs` | **Implemented** | `fs` | Sets `VITE_SPROUT_NATIVE_FS=1` (enables the Vite `nativeFsStubAliases`) and emits `capabilities.json` with `fs` excluded. |
-| `--native-terminal` | **Reserved** | `terminal` | Fails fast (exit 1) before any build step: "reserved for future Track R work (R-3)". |
+| `--native-terminal` | **Implemented (R-3)** | `terminal` | Sets `VITE_SPROUT_NATIVE_TERMINAL=1` (enables the Vite `nativeTerminalStubAliases`) and emits `capabilities.json` with `terminal` excluded. |
 | `--native-chat` | **Reserved** | `chat` | Fails fast (exit 1): "reserved for future Track R work (R-4)". |
 | `--native-git` | **Reserved** | `git` | Fails fast (exit 1): "reserved for future Track R work (R-5)". |
 
 Semantics:
-- Any reserved `--native-*` flag, any unknown `--*` token, an invalid
-  `--mode`, or `--native-fs` + `--components` together → **exit 1 before any
-  build step** (no `npm ci`, no Vite run).
+- Any reserved `--native-*` flag (`--native-chat`, `--native-git`), any
+  unknown `--*` token, an invalid `--mode`, or `--native-fs` +
+  `--components` / `--native-terminal` + `--components` together → **exit 1
+  before any build step** (no `npm ci`, no Vite run).
+- `--ratify-fs` requires `--native-fs`; `--ratify-terminal` requires
+  `--native-terminal` (a lone ratify flag fails fast, exit 1, before any
+  build step).
 - A portion's flag only excludes that portion; flags are additive and each is
-  gated on its own parity audit (roadmap: one portion at a time).
+  gated on its own parity audit (roadmap: one portion at a time). A
+  `--native-fs --native-terminal` build emits both `excluded[]` entries (fs
+  first, then terminal) and enables both alias sets.
 
 ### Manifest format (`capabilities.json`)
 
@@ -117,6 +123,151 @@ migrations.
    guarantee about the module set, not a wish — and not a servability
    claim: `status: "seam-only"` entries mark dists the shell must not serve
    until the parity gate ratifies them (`status: "ratified"`).
+
+### Deferral wiring (R-2w)
+
+R-2w is the *manifest-driven* half of the FS swap: the webui's workspace FS
+ops defer to the shell's native `files` channel when the shell proves it
+provides `fs`. (The other half, the hard leaf exclusion of the four FS
+modules, is the existing `--native-fs` alias seam.)
+
+**Runtime gate.** Deferral is active IFF all four hold, in precedence order:
+
+1. the compile-time `NATIVE_FS_ENABLED` flag is true (i.e. the dist was
+   built with `--native-fs`; in the default build this short-circuits
+   before ever touching `window.SproutStudio` — a dead branch, so the
+   default build stays byte-identical),
+2. the shell bridge is present (`window.SproutStudio` with
+   `getCapabilities` / `readWorkspaceFile` / `writeWorkspaceFile` /
+   `listWorkspace`),
+3. the `bridge.capabilities` op's `capabilities.fs === true`, AND
+4. the op's `excluded[]` contains an entry `{ portion: 'fs', status:
+   'ratified' }`.
+
+Gate-fail on any step (no bridge, `getCapabilities()` rejecting or
+malformed, `seam-only`/absent manifest, shell not declaring `fs`) → the
+webui keeps its existing behavior (the `--native-fs` stubs throw). The
+gate is resolved once, cached for the app's lifetime, and never throws.
+(Leaf module: `webui/src/services/nativeFs/`; stubs:
+`webui/src/services/nativeFsStubs/fileAccess.ts`.)
+
+**Routing surface.** When the gate passes:
+- `readFileWithConsent` / `writeFileWithConsent` → `readWorkspaceFile` /
+  `writeWorkspaceFile`, with the result synthesized into a standard
+  `Response` (no call-site changes — consumers already use `.ok`, `.text()`,
+  `.blob()`).
+- file-tree open/browse (Sidebar `onFetchFiles`) → `listWorkspace(maxDepth)`.
+
+Path normalization: webui paths are converted to workspace-relative (strip
+a leading `/` or `./`; backslash → `/`); `..` segments and empty paths are
+rejected client-side before the bridge.
+
+**Error → status mapping** (bridge `{ok:false, error}` → synthesized
+Response status): `notFound` → 404; `invalidParams` / `notInWorkspace` /
+`isDirectory` → 400; `userCancelled` → 409; `workspaceNotSet` → 503;
+`ioFailed` / unknown → 500. (Exported as a pure table in
+`services/nativeFs`.)
+
+**Build flag.** `--ratify-fs` (on `scripts/build-webui-dist.mjs`) emits the
+`fs` portion of `capabilities.json` with `status: "ratified"` instead of the
+default `"seam-only"`. It **requires** `--native-fs` (a lone `--ratify-fs`
+fails fast, exit 1, before any build step) and inherits the
+`--native-fs` + `--components` prohibition. The default build (no
+`--native-fs`) still emits **no** `capabilities.json`.
+
+**Known limitation.** The `files` channel has no create / delete / rename
+ops, so `filesApi.createItem` / `deleteItem` / `renameItem` (and therefore
+file/folder create, delete, and rename in the file tree) stay on the
+existing path even in a `--native-fs` dist. They are a known limitation of
+`--native-fs` dists, to be closed when the channel gains those ops.
+
+**Operational caveats:**
+
+- The gate resolution is cached for the app's lifetime; if the shell-injected
+  bridge arrives after the first resolution, deferral stays off until reload.
+- `listWorkspace` caps results at 5000 entries, so very wide/deep listings
+  can be silently truncated (the daemon path was complete).
+
+#### Boot sequence (R-2f)
+
+R-2f closes the boot-path gap R-2w left: R-2w defers FS *operations*, but
+boot still eagerly preloaded the WASM shell, whose artifacts a ratified
+`--native-fs` dist excludes by design — so a shell-served ratified dist
+booted into the "Failed to load browser runtime" error screen. When
+`NATIVE_FS_ENABLED` (the compile-time `--native-fs` flag) the boot path
+performs **no** wasmShell fetch/instantiate (and therefore no
+ONNX/embedding chain, which hangs off the same module):
+
+- **No boot-time preload** (`useAppInitialization`): the cloud-mode
+  `preloadWasmShell()` call, its `wasmLoading`/`wasmError` state, and the
+  `wasmReady`-gated git/bridge wiring are skipped entirely. The rest of the
+  boot (stats, files, sessions, startup restore) proceeds unchanged.
+- **Chat/API over normal HTTP** (`CloudAdapter.fetch`): wasm-local
+  endpoints — plus the two dynamic decision endpoints
+  (`/api/edits/{id}/decision`, `/api/shell-approvals/{id}/decision`) —
+  skip the wasm-shell interception and route straight to the standard
+  Foundry proxy (the server safety-net); request bodies are left
+  untouched for that path.
+- **Local terminal tab**: the WASM terminal input hook never inits the
+  shell and surfaces `wasmProvidedByShell`, so `TerminalPane` renders a
+  clear "Terminal provided by the native shell" placeholder instead of a
+  loading/error line.
+- **Known limitation — `?repo=` auto-import**: `CloudAdapter.importRepo`
+  still calls `ensureWasmShell()` (it is a repo-write path, not a boot
+  path). In a `--native-fs` dist the stub fail-fasts and bootstrap
+  surfaces `sprout:repo-import-failed` — no crash, but the import is
+  unavailable: repo files are provided natively by the shell. (Routing
+  import through the R-2w bridge is future Track R work.)
+
+The default build (flag off) remains byte-identical: every R-2f check is a
+compile-time constant that is the first thing evaluated in its block, so
+it compiles out as a dead branch and the exact pre-R-2f call sequence and
+console output run. (Files: `useAppInitialization.ts`,
+`cloudAdapter.ts`, `useWasmTerminalInput.ts`, `TerminalPane.tsx`.)
+
+#### Terminal seam (R-3)
+
+R-3 is the terminal analogue of the FS seam: the WASM/PTY terminal transport
+is provided natively by the shell, so the webui's terminal module is excluded
+from the bundle. Everything below is a compile-time constant that is the
+first thing evaluated in its block, so the default build (flag off) is
+byte-identical — every R-3 check compiles out as a dead branch.
+
+- **Excluded module.** `services/terminalWebSocket` is aliased to a no-op
+  stand-in in `webui/src/services/nativeTerminalStubs/terminalWebSocket.ts`
+  (via `nativeTerminalStubAliases` in `webui/vite.config.ts`, active only
+  when `VITE_SPROUT_NATIVE_TERMINAL === '1'`). The stand-in keeps the full
+  public `TerminalWebSocketService` signature (instance + statics) but never
+  opens a WebSocket; the `@`-alias regexes cover all three import forms
+  (`@/services/terminalWebSocket`, `./terminalWebSocket`, `../services/…`)
+  with optional `.js` suffixes, mirroring `nativeFsStubAliases` exactly.
+- **Compile-time short-circuits.** `useTerminalSession` skips the
+  WS-lifecycle effect (no `TerminalWebSocketService.createInstance()`, no WS
+  connect) and exposes `terminalProvidedByShell`; `usePageVisibility` skips
+  the PTY/WASM freeze/resume visibility wiring; `TerminalPane` gates the
+  "Loading terminal..." line on `!terminalProvidedByShell` and renders the
+  SAME "Terminal provided by the native shell" placeholder for
+  `terminalProvidedByShell` that it renders for `wasmProvidedByShell` (one
+  shared block when both hold).
+- **Runtime gate leaf.** `webui/src/services/nativeTerminal/index.ts`
+  mirrors `services/nativeFs/index.ts` (narrow structural bridge type
+  `SproutStudioTerminalBridge` + detector, PURE `resolveNativeTerminalGate`
+  with the nativeFs reason set, cached `nativeTerminalGate()` resolver +
+  `__resetNativeTerminalGateForTests()`). It is the SHELL-side deferral
+  decision (terminal sessions route to the shell); the webui placeholder UI
+  is unconditional in `--native-terminal` builds. The leaf is
+  resolved-but-unused until ratification (imported by nothing yet except
+  tests) and inert in default builds.
+- **`--ratify-terminal`** (requires `--native-terminal`; a lone ratify flag
+  fails fast) emits the `terminal` entry of `capabilities.json` with
+  `status: "ratified"` instead of the default `"seam-only"` (the
+  ratification records the parity-proven swap).
+- **Additive with fs.** A `--native-fs --native-terminal` build emits BOTH
+  `excluded[]` entries (fs first, then terminal — order follows the build
+  script's code shape) and enables BOTH alias sets.
+- **Rollback.** Rebuild without `--native-terminal`: no aliases, no
+  `terminal` manifest entry, the real terminal module returns to the bundle.
+  No source changes, no migrations.
 
 ## Consequences
 - Future swaps (R-3 terminal, R-4 chat, R-5 git) add a flag + a `portion`

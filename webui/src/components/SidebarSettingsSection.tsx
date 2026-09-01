@@ -1,9 +1,10 @@
 import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
-import { Suspense, lazy, useRef, useState, useCallback } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { ApiService } from '../services/api';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
@@ -14,6 +15,135 @@ import type { AgentConfigProps } from './settings/types';
 // renders when the sidebar settings section is open, so split it into
 // its own chunk; the bundle no longer pays for it on initial load.
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
+
+/**
+ * Cloud-mode provider/model selection (BYOK). In cloud builds the full
+ * SettingsPanel (local mode) is tree-shaken away, so the status-bar
+ * chip and this section are the only provider/model surfaces. Lives
+ * directly above the API Key section — key entry and model selection
+ * are one workflow. The `provider-select` id is the focus target for
+ * the status-bar's "provider unknown" fallback routing.
+ *
+ * NOTE (platform): a second, keyless "included provider" path — where
+ * the Sprout cloud serves inference — is planned but depends on the
+ * cloud platform; only BYOK is wired here today.
+ */
+function CloudProviderModelSection({
+  selectedProvider,
+  selectedModel,
+  providers,
+  availableModels,
+  isLoadingProviders,
+  isConnected,
+  onProviderChange,
+  onModelChange,
+}: {
+  selectedProvider: string;
+  selectedModel: string;
+  providers: { id: string; name: string }[];
+  availableModels: string[];
+  isLoadingProviders: boolean;
+  isConnected: boolean;
+  onProviderChange: (provider: string) => void;
+  onModelChange: (model: string) => void;
+}): JSX.Element {
+  const [models, setModels] = useState<string[]>(availableModels);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  // Available models for the active provider. The bootstrap-loaded
+  // catalog may already carry them; otherwise fetch from the provider
+  // endpoint (natively served by the shell bridge in Studio builds).
+  useEffect(() => {
+    if (availableModels.length > 0) {
+      setModels(availableModels);
+      return;
+    }
+    if (!selectedProvider || !isConnected) return;
+    let cancelled = false;
+    setIsLoadingModels(true);
+    ApiService.getInstance()
+      .getProviderModels(selectedProvider)
+      .then((response) => {
+        if (cancelled) return;
+        // getProviderModels returns either rich ProviderModel objects
+        // or legacy plain strings depending on the backend; accept both.
+        setModels(
+          (response.models as unknown[])
+            .map((m) => (typeof m === 'string' ? m : ((m as { id?: string; name?: string }).id ?? (m as { name?: string }).name ?? '')))
+            .filter((m): m is string => !!m),
+        );
+      })
+      .catch(() => {
+        // Leave the existing list in place; the provider select is
+        // still usable and the model list can be retried by switching.
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingModels(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProvider, isConnected, availableModels]);
+
+  const handleProviderChange = useCallback(
+    (provider: string) => {
+      setModels([]);
+      onProviderChange(provider);
+    },
+    [onProviderChange],
+  );
+
+  const modelValue = models.includes(selectedModel) ? selectedModel : '';
+
+  return (
+    <>
+      <div className="config-item">
+        <label htmlFor="provider-select">Provider:</label>
+        <div className="theme-picker-row">
+          <select
+            id="provider-select"
+            value={selectedProvider || ''}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            className="styled-select theme-picker-select"
+          >
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {!selectedProvider && !isLoadingProviders && (
+          <div className="theme-picker-error">
+            No provider selected. Add an API key below, then pick a provider here.
+          </div>
+        )}
+      </div>
+      <div className="config-item">
+        <label htmlFor="model-select">Model:</label>
+        <div className="theme-picker-row">
+          <select
+            id="model-select"
+            value={modelValue}
+            onChange={(e) => onModelChange(e.target.value)}
+            className="styled-select theme-picker-select"
+            disabled={!selectedProvider || models.length === 0}
+          >
+            {models.length === 0 ? (
+              <option value="">{isLoadingModels ? 'Loading models…' : 'No models loaded'}</option>
+            ) : (
+              models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
 
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
@@ -222,14 +352,29 @@ export default function SidebarSettingsSection({
 
       {/* ─── Cloud mode: simplified settings ──────────────────── */}
       {isCloud ? (
-        <div className="section">
-          <h4>API Key</h4>
-          <p className="settings-section-desc">
-            Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely on
-            the server.
-          </p>
-          <CredentialsSettingsTab />
-        </div>
+        <>
+          <div className="section">
+            <h4>Provider &amp; Model</h4>
+            <CloudProviderModelSection
+              selectedProvider={selectedProvider}
+              selectedModel={selectedModel}
+              providers={providers}
+              availableModels={availableModels}
+              isLoadingProviders={isLoadingProviders}
+              isConnected={isConnected}
+              onProviderChange={onProviderChange}
+              onModelChange={onModelChange}
+            />
+          </div>
+          <div className="section">
+            <h4>API Key</h4>
+            <p className="settings-section-desc">
+              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely on
+              the server.
+            </p>
+            <CredentialsSettingsTab />
+          </div>
+        </>
       ) : (
         <>
           {/* Agent Config moved into SettingsPanel (Agent section body) */}

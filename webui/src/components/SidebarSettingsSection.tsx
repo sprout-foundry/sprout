@@ -49,41 +49,78 @@ function CloudProviderModelSection({
 }): JSX.Element {
   const [models, setModels] = useState<string[]>(availableModels);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [emptyReason, setEmptyReason] = useState<string | null>(null);
+  const [fetchFailed, setFetchFailed] = useState(false);
+
+  // Human copy for each machine-readable empty-reason returned by the
+  // environment shell (Studio bridge). Unrecognized values fall through
+  // to a generic line rather than silence.
+  const emptyReasonCopy: Record<string, string> = {
+    'no-key': 'No API key stored for this provider yet. Add it in the API Key section below, then tap Retry.',
+    'no-endpoint': 'This provider needs a server address that is only known while it is active.',
+    'unknown-provider': 'This provider is not available in this environment.',
+    error: 'The provider request failed. Check the API key and network, then tap Retry.',
+    unavailable: 'The provider could not be reached. Check your connection, then tap Retry.',
+  };
 
   // Available models for the active provider. The bootstrap-loaded
   // catalog may already carry them; otherwise fetch from the provider
   // endpoint (natively served by the shell bridge in Studio builds).
+  const fetchModelList = useCallback(
+    (provider: string) => {
+      if (!isConnected) return;
+      let cancelled = false;
+      setIsLoadingModels(true);
+      setEmptyReason(null);
+      setFetchFailed(false);
+      ApiService.getInstance()
+        .getProviderModels(provider)
+        .then((response) => {
+          if (cancelled) return;
+          // getProviderModels returns either rich ProviderModel objects
+          // or legacy plain strings depending on the backend; accept both.
+          const list = (response.models as unknown[])
+            .map((m) =>
+              typeof m === 'string'
+                ? m
+                : ((m as { id?: string; name?: string }).id ?? (m as { name?: string }).name ?? ''),
+            )
+            .filter((m): m is string => !!m);
+          setModels(list);
+          // Explain empty results instead of rendering a bare empty state.
+          if (list.length === 0) setEmptyReason(response.reason ?? null);
+        })
+        .catch(() => {
+          // HTTP-level failure — surface it rather than swallow it.
+          if (!cancelled) setFetchFailed(true);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingModels(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    },
+    [isConnected],
+  );
+
+  // Refetch when the provider changes; also adopts the catalog when
+  // availableModels populates later (or clears fetch state).
   useEffect(() => {
     if (availableModels.length > 0) {
       setModels(availableModels);
+      setEmptyReason(null);
+      setFetchFailed(false);
       return;
     }
-    if (!selectedProvider || !isConnected) return;
-    let cancelled = false;
-    setIsLoadingModels(true);
-    ApiService.getInstance()
-      .getProviderModels(selectedProvider)
-      .then((response) => {
-        if (cancelled) return;
-        // getProviderModels returns either rich ProviderModel objects
-        // or legacy plain strings depending on the backend; accept both.
-        setModels(
-          (response.models as unknown[])
-            .map((m) => (typeof m === 'string' ? m : ((m as { id?: string; name?: string }).id ?? (m as { name?: string }).name ?? '')))
-            .filter((m): m is string => !!m),
-        );
-      })
-      .catch(() => {
-        // Leave the existing list in place; the provider select is
-        // still usable and the model list can be retried by switching.
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingModels(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProvider, isConnected, availableModels]);
+    if (!selectedProvider) {
+      setModels([]);
+      setEmptyReason(null);
+      setFetchFailed(false);
+      return;
+    }
+    return fetchModelList(selectedProvider);
+  }, [selectedProvider, availableModels, fetchModelList]);
 
   const handleProviderChange = useCallback(
     (provider: string) => {
@@ -140,6 +177,22 @@ function CloudProviderModelSection({
             )}
           </select>
         </div>
+        {!isLoadingModels && models.length === 0 && selectedProvider && (fetchFailed || emptyReason) && (
+          <div className="theme-picker-error">
+            <span>
+              {fetchFailed
+                ? emptyReasonCopy.error
+                : (emptyReason && emptyReasonCopy[emptyReason]) || 'No models available for this provider.'}
+            </span>
+            <button
+              type="button"
+              className="settings-link-btn"
+              onClick={() => fetchModelList(selectedProvider)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

@@ -184,8 +184,8 @@ describe('Documentation files', () => {
       expect(readmeContent).toContain('utils/');
     });
 
-    it('mentions the MIT license', () => {
-      expect(readmeContent).toContain('MIT');
+    it('mentions the Apache 2.0 license', () => {
+      expect(readmeContent).toContain('Apache 2.0');
     });
 
     it('has a Contributing section that references the monorepo', () => {

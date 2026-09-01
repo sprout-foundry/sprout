@@ -15,7 +15,7 @@ class Sprout < Formula
   desc "AI-powered code editing and assistance tool"
   homepage "https://github.com/sprout-foundry/sprout"
   version "0.0.0"
-  license "MIT"
+  license "Apache-2.0"
 
   # All four binary releases ship as tar.gz from the GitHub Release. The
   # per-OS / per-arch URL + sha256 pair tells Homebrew which artifact to

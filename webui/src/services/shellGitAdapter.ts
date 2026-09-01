@@ -262,7 +262,7 @@ export function registerShellGitGlobal(): void {
       if (!fn) {
         return {
           stdout: '',
-          stderr: `git: '${subcommand}' is not available in the browser shell (read-only subcommands only)\n`,
+          stderr: `git: '${subcommand}' is not available in this shell (read-only subcommands only)\n`,
           exitCode: 127,
         };
       }

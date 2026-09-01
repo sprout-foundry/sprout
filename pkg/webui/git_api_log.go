@@ -290,7 +290,9 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 
 // gitCommitFileContents returns the full before (hash^) and after (hash)
 // versions of a file for the merge view. The third return is true when
-// either side was omitted for exceeding maxDiffFileContentBytes.
+// either side was omitted for exceeding maxDiffFileContentBytes or being
+// binary (NUL-byte heuristic — raw binary bytes would ship as garbage
+// UTF-8 into the editor).
 func (ws *ReactWebServer) gitCommitFileContents(workspaceRoot, hash, reqPath string) (string, string, bool) {
 	truncated := false
 
@@ -305,7 +307,7 @@ func (ws *ReactWebServer) gitCommitFileContents(workspaceRoot, hash, reqPath str
 			// exist at that revision — empty is correct.
 			return ""
 		}
-		if len(out) > maxDiffFileContentBytes {
+		if len(out) > maxDiffFileContentBytes || looksBinary(out) {
 			truncated = true
 			return ""
 		}

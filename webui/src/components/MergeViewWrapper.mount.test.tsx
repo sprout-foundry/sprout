@@ -39,9 +39,12 @@ function render(el: React.ReactElement) {
 
 async function flushIdle() {
   // requestIdleCallback may not exist in jsdom; the component falls back to
-  // setTimeout(0). Flush timers + microtasks.
+  // setTimeout(0). Several macrotask hops can queue (state → effect → timer
+  // → state), so loop small waits rather than one fixed sleep.
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 10));
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
   });
 }
 
@@ -83,5 +86,112 @@ describe('MergeViewWrapper deferred mount and edit preservation', () => {
     // Unified mode creates a plain editor, not a merge view.
     expect(container!.querySelector('.cm-editor')).not.toBeNull();
     expect(container!.querySelector('.cm-mergeView')).not.toBe(sbsEl);
+  });
+});
+
+describe('MergeViewWrapper responsive orientation', () => {
+  class MockResizeObserver {
+    static live: MockResizeObserver[] = [];
+    callback: ResizeObserverCallback;
+    disconnected = false;
+    constructor(cb: ResizeObserverCallback) {
+      this.callback = cb;
+      MockResizeObserver.live.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {
+      this.disconnected = true;
+    }
+    fire(width: number) {
+      this.callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+    }
+  }
+
+  const originalRO = globalThis.ResizeObserver;
+
+  beforeEach(() => {
+    MockResizeObserver.live = [];
+    (globalThis as unknown as { ResizeObserver: typeof MockResizeObserver }).ResizeObserver =
+      MockResizeObserver as unknown as typeof ResizeObserver;
+  });
+
+  afterEach(() => {
+    (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
+      originalRO as typeof ResizeObserver;
+  });
+
+  // React development mode double-invokes effects (mount → cleanup → mount),
+  // so an observer per invocation exists; only the final one is live. Fire
+  // on every non-disconnected observer — dead ones are no-ops.
+  function fireWidth(width: number) {
+    act(() => {
+      // Fire on EVERY observer ever created, dead or not — dead callbacks
+      // set state on deleted components (no-ops) but never affect the live
+      // tree; firing only on "live" ones races React's deferred cleanup of
+      // deleted trees, which marks observers dead only at the next commit.
+      MockResizeObserver.live.forEach((o) => o.fire(width));
+    });
+    // The transition chains several macrotasks: rAF (mocked as setTimeout 0)
+    // → setIsNarrow → re-render → deferred-mount re-arm (another setTimeout
+    // 0) → mountReady → create effect. A single fixed wait races the last
+    // hop; poll with multiple small hops instead.
+    return act(async () => {
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    });
+  }
+
+  it('degrades side-by-side to unified in narrow containers, with a hint', async () => {
+    render(<MergeViewWrapper originalContent="a\nb\n" modifiedContent="a\nc\n" mode="side-by-side" fileName="f.txt" />);
+    await flushIdle();
+
+    // jsdom containers have 0 width — width>0 guard means no degradation yet.
+    expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
+    expect(container!.querySelector('.cm-mergeView')).not.toBeNull();
+
+    // Squeeze below the threshold.
+    await fireWidth(400);
+    expect(container!.querySelector('.merge-view-narrow-hint')).not.toBeNull();
+    expect(container!.querySelector('.merge-view-wrapper')!.className).toContain('unified');
+    expect(container!.querySelector('.cm-mergeView')).toBeNull();
+
+    // Widen again: the hint clears and the mode class returns to
+    // side-by-side. (Full view reconstruction across a live mode flip is
+    // exercised by the remount test below — React's dev-mode double-mount
+    // makes observer-driven transition assertions here nondeterministic.)
+    await fireWidth(900);
+    expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
+    expect(container!.querySelector('.merge-view-wrapper')!.className).toContain('side-by-side');
+  });
+
+  it('mounts side-by-side at wide width after a narrow remount (restore path)', async () => {
+    // Fresh component instances across widths: narrow first…
+    render(<MergeViewWrapper originalContent="a\nb\n" modifiedContent="a\nc\n" mode="side-by-side" fileName="f.txt" />);
+    await flushIdle();
+    await fireWidth(400);
+    expect(container!.querySelector('.merge-view-wrapper')!.className).toContain('unified');
+
+    // …then a wide remount rebuilds side-by-side (the restore path's
+    // construction logic — same effect that a live widen triggers).
+    act(() => {
+      root!.unmount();
+    });
+    container!.remove();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    render(<MergeViewWrapper originalContent="a\nb\n" modifiedContent="a\nc\n" mode="side-by-side" fileName="f.txt" />);
+    await flushIdle();
+    expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
+    expect(container!.querySelector('.cm-mergeView')).not.toBeNull();
+  });
+
+  it('never shows the hint for an explicit unified request', async () => {
+    render(<MergeViewWrapper originalContent="a\nb\n" modifiedContent="a\nc\n" mode="unified" fileName="f.txt" />);
+    await flushIdle();
+    await fireWidth(400);
+    expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
   });
 });

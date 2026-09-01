@@ -18,6 +18,14 @@ interface ImportMetaEnv {
   // selects the nativeTerminalStubs/ alias set in vite.config.ts (excludes the
   // terminal transport — the shell provides it natively).
   readonly VITE_SPROUT_NATIVE_TERMINAL?: '1';
+  // Track R (R-4): set to '1' by scripts/build-webui-dist.mjs --native-chat;
+  // selects the nativeChatStubs/ alias set in vite.config.ts (excludes the
+  // fetch/SSE agent-turn chat transport — the shell provides it natively).
+  readonly VITE_SPROUT_NATIVE_CHAT?: '1';
+  // Track R (R-4): set to '1' by scripts/build-webui-dist.mjs --native-git;
+  // selects the nativeGitStubs/ alias set in vite.config.ts (excludes the git
+  // client API + boot wiring — the shell provides git natively).
+  readonly VITE_SPROUT_NATIVE_GIT?: '1';
 }
 
 interface ImportMeta {

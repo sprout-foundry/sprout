@@ -17,6 +17,7 @@ import {
 } from '../hooks/useSidebarState';
 import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
+import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
@@ -316,6 +317,20 @@ function Sidebar({
   const renderContentPane = () => {
     switch (effectiveSelectedSection) {
       case 'git':
+        // R-4: in a --native-git dist the shell provides git natively (the git
+        // client API + boot wiring are hard-excluded), so the git surface
+        // renders a clear handoff placeholder instead of the browser-git UI.
+        // Dead branch in the default build (flag off → today's exact
+        // behavior, byte-identical).
+        if (NATIVE_GIT_ENABLED) {
+          return (
+            <div className="git-sidebar-panel">
+              <div className="terminal-status-inline" style={{ margin: '8px 12px' }}>
+                Git provided by the native shell
+              </div>
+            </div>
+          );
+        }
         if (!supportsGit) {
           return (
             <div className="git-sidebar-panel">

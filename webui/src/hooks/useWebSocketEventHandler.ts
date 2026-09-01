@@ -37,6 +37,7 @@ import { appendCappedLog } from '../utils/logCap';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { parseSecurityAnalysis } from '../utils/parseSecurityAnalysis';
+import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import {
   createLogEntry,
   type EventHandlerContext,
@@ -1301,6 +1302,16 @@ export function useWebSocketEventHandler({
     (event: WsEvent) => {
       const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
       if (filteredEvents.includes(event.type)) return;
+
+      // Compile-time short-circuit (R-4): in a --native-chat dist the shell
+      // provides the chat loop natively, so the webui's chat-event streaming
+      // entry is never wired up — chat events (query_started / stream_chunk /
+      // query_completed / tool / agent / todo / error …) are not processed
+      // into React state. Dead branch in the default build (flag off →
+      // today's exact behavior, byte-identical).
+      if (NATIVE_CHAT_ENABLED) {
+        return;
+      }
 
       const perChatEvents = new Set([
         'query_started',

@@ -26,6 +26,10 @@ export { goToNextChunk, goToPreviousChunk, acceptChunk, rejectChunk };
  * highlight already carries readability. */
 const MAX_HIGHLIGHT_LINES = 5000;
 
+/** Below this container width (px) a side-by-side request renders unified —
+ * two editors narrower than this are unreadable. */
+const NARROW_PANE_PX = 560;
+
 export interface MergeViewWrapperProps {
   /** Original content (left pane in side-by-side mode) */
   originalContent: string;
@@ -101,40 +105,31 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const editorViewRef = useRef<EditorView | null>(null);
   // Track whether the side-by-side view has been created
   const sideBySideCreatedRef = useRef(false);
-  // Defer the (expensive) MergeView construction by one paint cycle so the
-  // surrounding UI — header, mode tabs, skeleton — renders first instead of
-  // the whole tab blocking on chunk computation + highlighting of both docs.
-  // Re-armed only on mode change; content updates flow through the in-place
-  // dispatch effect, NOT recreation — content deps here would tear down the
-  // view and destroy pane-B edits on every git refresh.
-  const [mountReady, setMountReady] = useState(false);
+  // ── Responsive orientation ──
+  // Side-by-side below NARROW_PANE_PX squeezes both editors to unreadable
+  // widths (e.g. half of a half-width split). Measure the wrapper and
+  // degrade the requested mode to unified in narrow containers.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
   useEffect(() => {
-    setMountReady(false);
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    let cancelled = false;
-    let start: () => void;
-    if (typeof w.requestIdleCallback === 'function') {
-      const id = w.requestIdleCallback(
-        () => {
-          if (!cancelled) setMountReady(true);
-        },
-        { timeout: 150 },
-      );
-      start = () => w.cancelIdleCallback?.(id);
-    } else {
-      const id = w.setTimeout(() => {
-        if (!cancelled) setMountReady(true);
-      }, 0);
-      start = () => w.clearTimeout(id);
-    }
+    const el = wrapperRef.current;
+    if (typeof ResizeObserver === 'undefined' || !el) return;
+    let raf = 0;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setIsNarrow(width > 0 && width < NARROW_PANE_PX);
+      });
+    });
+    ro.observe(el);
     return () => {
-      cancelled = true;
-      start();
+      cancelAnimationFrame(raf);
+      ro.disconnect();
     };
-  }, [mode]);
+  }, []);
+  const effectiveMode: 'side-by-side' | 'unified' = mode === 'side-by-side' && isNarrow ? 'unified' : mode;
+
   // Track the last prop content we synced, so we don't overwrite user edits
   const lastSyncedContentRef = useRef<{ original: string; modified: string }>({ original: '', modified: '' });
   // Keep the latest onModifiedChange in a ref so the pane-B update listener
@@ -274,7 +269,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   // ── Side-by-side hunk navigation helpers ──
 
   const updateSbsHunkInfo = useCallback(() => {
-    if (!mergeViewRef.current || mode !== 'side-by-side') return;
+    if (!mergeViewRef.current || effectiveMode !== 'side-by-side') return;
     const chunks = mergeViewRef.current.chunks;
     if (!chunks.length) {
       setHunkInfo(null);
@@ -291,7 +286,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       }
     }
     setHunkInfo({ current: current + 1, total: chunks.length });
-  }, [mode]);
+  }, [effectiveMode]);
 
   const handleSbsPrevChunk = useCallback(() => {
     if (!mergeViewRef.current?.b) {
@@ -327,91 +322,129 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     if (editorViewRef.current) redo(editorViewRef.current);
   }, []);
 
-  // Reset hunk info when mode changes
+  // Reset hunk info when the effective mode changes
   useEffect(() => {
-    if (mode !== 'side-by-side') setHunkInfo(null);
-  }, [mode]);
+    if (effectiveMode !== 'side-by-side') setHunkInfo(null);
+  }, [effectiveMode]);
 
   // ── Side-by-side mode ──
 
-  // Create the MergeView once when switching into side-by-side mode
+  // Create the MergeView once when switching into side-by-side mode.
+  // Construction is deferred one idle tick INSIDE the effect (no mountReady
+  // state) so the surrounding UI paints first; the cleanup cancels a
+  // pending construction when deps change mid-deferral. Content updates are
+  // handled by the in-place dispatch effect below, never by recreation.
   useEffect(() => {
-    if (mode !== 'side-by-side' || !mountReady || !containerRef.current) return;
-    // Clear container for fresh mount
-    containerRef.current.replaceChildren();
-    sideBySideCreatedRef.current = false;
+    if (effectiveMode !== 'side-by-side' || !containerRef.current) return;
+    const host = containerRef.current;
 
-    // Pane A: read-only (original document)
-    const aExtensions = buildBaseExtensions(false);
-    // Pane B: editable with history for revert support
-    const bExtensions = buildEditableExtensions();
+    let cancelled = false;
+    let dispose: (() => void) | undefined;
 
-    // Add hunk navigation keymaps to both panes
-    const aKeymaps = [
-      ...aExtensions,
-      keymap.of([
-        { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
-        { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
-      ]),
-    ];
-    const bKeymaps = [
-      ...bExtensions,
-      keymap.of([
-        { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
-        { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
-      ]),
-    ];
+    const build = () => {
+      if (cancelled || !host.isConnected) return;
+      // Clear container for fresh mount
+      host.replaceChildren();
+      sideBySideCreatedRef.current = false;
 
-    const mv = new MergeView({
-      a: EditorState.create({ doc: originalContent, extensions: aKeymaps }),
-      b: EditorState.create({ doc: modifiedContent, extensions: bKeymaps }),
-      parent: containerRef.current,
-      orientation: 'a-b',
-      revertControls: 'a-to-b',
-      highlightChanges,
-      gutter,
-      collapseUnchanged,
-    });
+      // Pane A: read-only (original document)
+      const aExtensions = buildBaseExtensions(false);
+      // Pane B: editable with history for revert support
+      const bExtensions = buildEditableExtensions();
 
-    mergeViewRef.current = mv;
-    sideBySideCreatedRef.current = true;
-    lastSyncedContentRef.current = { original: originalContent, modified: modifiedContent };
+      // Add hunk navigation keymaps to both panes
+      const aKeymaps = [
+        ...aExtensions,
+        keymap.of([
+          { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
+          { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
+        ]),
+      ];
+      const bKeymaps = [
+        ...bExtensions,
+        keymap.of([
+          { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
+          { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
+        ]),
+      ];
 
-    // Attach hunk tracking listeners to pane B after MergeView is created
-    let cleanupListeners: (() => void) | undefined;
-    if (sideBySideNavigation) {
-      const view = mv.b;
-      const immediateUpdate = () => updateSbsHunkInfo();
-      immediateUpdate();
+      // Content read from refs: the deferred build fires one tick after
+      // this effect ran, and props may have changed in between — the sync
+      // effect can't correct it (it early-returns until the view exists).
+      const buildOriginal = origContentRef.current;
+      const buildModified = modContentRef.current;
 
-      const handleClick = () => setTimeout(immediateUpdate, 10);
-      const handleKeyup = (e: KeyboardEvent) => {
-        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-          setTimeout(immediateUpdate, 10);
+      const mv = new MergeView({
+        a: EditorState.create({ doc: buildOriginal, extensions: aKeymaps }),
+        b: EditorState.create({ doc: buildModified, extensions: bKeymaps }),
+        parent: host,
+        orientation: 'a-b',
+        revertControls: 'a-to-b',
+        highlightChanges,
+        gutter,
+        collapseUnchanged,
+      });
+
+      mergeViewRef.current = mv;
+      sideBySideCreatedRef.current = true;
+      lastSyncedContentRef.current = { original: buildOriginal, modified: buildModified };
+
+      // Attach hunk tracking listeners to pane B after MergeView is created
+      let cleanupListeners: (() => void) | undefined;
+      if (sideBySideNavigation) {
+        const view = mv.b;
+        const immediateUpdate = () => updateSbsHunkInfo();
+        immediateUpdate();
+
+        const handleClick = () => setTimeout(immediateUpdate, 10);
+        const handleKeyup = (e: KeyboardEvent) => {
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            setTimeout(immediateUpdate, 10);
+          }
+        };
+
+        view.dom.addEventListener('click', handleClick);
+        view.dom.addEventListener('keyup', handleKeyup);
+        cleanupListeners = () => {
+          view.dom.removeEventListener('click', handleClick);
+          view.dom.removeEventListener('keyup', handleKeyup);
+        };
+      }
+
+      setIsBuilding(false);
+
+      dispose = () => {
+        cleanupListeners?.();
+        if (mergeViewRef.current) {
+          mergeViewRef.current.destroy();
+          mergeViewRef.current = null;
         }
+        sideBySideCreatedRef.current = false;
       };
+    };
 
-      view.dom.addEventListener('click', handleClick);
-      view.dom.addEventListener('keyup', handleKeyup);
-      cleanupListeners = () => {
-        view.dom.removeEventListener('click', handleClick);
-        view.dom.removeEventListener('keyup', handleKeyup);
-      };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let cancel: () => void;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(build, { timeout: 150 });
+      cancel = () => w.cancelIdleCallback?.(id);
+    } else {
+      const id = w.setTimeout(build, 0);
+      cancel = () => w.clearTimeout(id);
     }
 
     return () => {
-      cleanupListeners?.();
-      if (mergeViewRef.current) {
-        mergeViewRef.current.destroy();
-        mergeViewRef.current = null;
-      }
-      sideBySideCreatedRef.current = false;
+      cancelled = true;
+      cancel();
+      dispose?.();
     };
     // Only recreate when structural config changes; content updates handled separately
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    mode,
-    mountReady,
+    effectiveMode,
     buildBaseExtensions,
     buildEditableExtensions,
     highlightChanges,
@@ -425,7 +458,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   // (reverts) are not overwritten when the component re-renders with the same
   // prop values.
   useEffect(() => {
-    if (mode !== 'side-by-side' || !mergeViewRef.current || !sideBySideCreatedRef.current) return;
+    if (effectiveMode !== 'side-by-side' || !mergeViewRef.current || !sideBySideCreatedRef.current) return;
 
     const mv = mergeViewRef.current;
     const a = mv.a;
@@ -447,71 +480,111 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       // Update hunk info after content change
       setTimeout(updateSbsHunkInfo, 50);
     }
-  }, [mode, originalContent, modifiedContent, updateSbsHunkInfo]);
+  }, [effectiveMode, originalContent, modifiedContent, updateSbsHunkInfo]);
 
   // ── Unified mode ──
 
-  // Create/recreate unified view (full recreation required since unifiedMergeView
-  // is a StateField that captures originalContent at creation time)
+  // Create/recreate unified view (full recreation required since
+  // unifiedMergeView is a StateField that captures originalContent at
+  // creation time). Construction deferred one idle tick like side-by-side.
   useEffect(() => {
-    if (mode !== 'unified' || !mountReady || !containerRef.current) return;
-    containerRef.current.replaceChildren();
+    if (effectiveMode !== 'unified' || !containerRef.current) return;
+    const host = containerRef.current;
 
-    const extensions = buildUnifiedExtensions();
-    // Add history for undo/redo support
-    extensions.push(history());
-    extensions.push(keymap.of(historyKeymap));
-    // Add save keybinding
-    if (onSave) {
-      extensions.push(
-        keymap.of([
-          {
-            key: 'Mod-s',
-            run: (view) => {
-              onSave(view.state.doc.toString());
-              return true;
+    let cancelled = false;
+    let dispose: (() => void) | undefined;
+
+    const build = () => {
+      if (cancelled || !host.isConnected) return;
+      host.replaceChildren();
+
+      const extensions = buildUnifiedExtensions();
+      // Add history for undo/redo support
+      extensions.push(history());
+      extensions.push(keymap.of(historyKeymap));
+      // Add save keybinding
+      if (onSave) {
+        extensions.push(
+          keymap.of([
+            {
+              key: 'Mod-s',
+              run: (view) => {
+                onSave(view.state.doc.toString());
+                return true;
+              },
             },
-          },
-        ]),
-      );
-    }
-
-    const state = EditorState.create({
-      doc: modifiedContent,
-      extensions,
-    });
-
-    const view = new EditorView({ state, parent: containerRef.current });
-    editorViewRef.current = view;
-
-    return () => {
-      if (editorViewRef.current) {
-        editorViewRef.current.destroy();
-        editorViewRef.current = null;
+          ]),
+        );
       }
+
+      const state = EditorState.create({
+        doc: modContentRef.current,
+        extensions,
+      });
+
+      const view = new EditorView({ state, parent: host });
+      editorViewRef.current = view;
+
+      setIsBuilding(false);
+
+      dispose = () => {
+        if (editorViewRef.current) {
+          editorViewRef.current.destroy();
+          editorViewRef.current = null;
+        }
+      };
     };
-  }, [mode, mountReady, buildUnifiedExtensions, modifiedContent]);
+
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let cancel: () => void;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(build, { timeout: 150 });
+      cancel = () => w.cancelIdleCallback?.(id);
+    } else {
+      const id = w.setTimeout(build, 0);
+      cancel = () => w.clearTimeout(id);
+    }
+    return () => {
+      cancelled = true;
+      cancel();
+      dispose?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveMode, buildUnifiedExtensions, modifiedContent]);
+
+  // Pending indicator while a deferred construction is in flight.
+  const [isBuilding, setIsBuilding] = useState(true);
+  useEffect(() => {
+    setIsBuilding(!containerRef.current?.querySelector('.cm-editor, .cm-mergeView'));
+  }, [effectiveMode]);
 
   const wrapperClassName =
-    `merge-view-wrapper ${mode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
+    `merge-view-wrapper ${effectiveMode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
 
   return (
-    <div className={wrapperClassName} style={style}>
-      {mode === 'side-by-side' && (
+    <div className={wrapperClassName} style={style} ref={wrapperRef}>
+      {effectiveMode === 'side-by-side' && (
         <div className="merge-view-header">
           <span className="header-label header-labelOriginal">{aLabel}</span>
           <span className="header-label header-labelModified">{bLabel}</span>
         </div>
       )}
-      <div className="merge-view-container" ref={containerRef}>
-        {!mountReady && (
-          <div className="merge-view-pending" role="status" aria-label="Preparing diff view">
-            <span className="merge-view-pending-spinner" aria-hidden="true" />
-            <span>Preparing diff…</span>
-          </div>
-        )}
-      </div>
-      {mode === 'side-by-side' && sideBySideNavigation && (
+      {mode === 'side-by-side' && effectiveMode === 'unified' && (
+        <div className="merge-view-narrow-hint" role="note">
+          Pane too narrow for side-by-side — showing unified (widen the pane to restore)
+        </div>
+      )}
+      {isBuilding && (
+        <div className="merge-view-pending" role="status" aria-label="Preparing diff view">
+          <span className="merge-view-pending-spinner" aria-hidden="true" />
+          <span>Preparing diff…</span>
+        </div>
+      )}
+      <div className="merge-view-container" ref={containerRef} />
+      {effectiveMode === 'side-by-side' && sideBySideNavigation && (
         <div className="merge-view-controls sbs-navigation">
           <span className="sbs-hunk-info">
             {hunkInfo ? `${hunkInfo.current}/${hunkInfo.total} changes` : 'No changes'}
@@ -537,7 +610,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
           </div>
         </div>
       )}
-      {mode === 'unified' && mergeControls && (
+      {effectiveMode === 'unified' && mergeControls && (
         <div className="merge-view-controls">
           <button type="button" className="btn-prev" onClick={handlePrevChunk} title="Previous Change (Alt+Up)">
             Prev

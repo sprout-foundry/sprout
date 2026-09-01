@@ -1,6 +1,7 @@
 /* ── MergeViewWrapper — diff viewer component ── */
 
 .merge-view-wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -84,6 +85,16 @@
 /* Gutter markers for changed lines */
 .merge-view-container .cm-mergeView .cm-gutterElement {
   font-size: 10px;
+}
+
+/* Narrow-container notice shown when side-by-side degrades to unified */
+.merge-view-narrow-hint {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 /* Deferred-mount pending state */

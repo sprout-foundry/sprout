@@ -21,6 +21,11 @@ import './MergeViewWrapper.css';
 // Re-export utilities for consumers
 export { goToNextChunk, goToPreviousChunk, acceptChunk, rejectChunk };
 
+/** Documents above this many lines skip syntax highlighting entirely —
+ * highlighting both panes of a huge file dominates mount time and the diff
+ * highlight already carries readability. */
+const MAX_HIGHLIGHT_LINES = 5000;
+
 export interface MergeViewWrapperProps {
   /** Original content (left pane in side-by-side mode) */
   originalContent: string;
@@ -96,6 +101,40 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const editorViewRef = useRef<EditorView | null>(null);
   // Track whether the side-by-side view has been created
   const sideBySideCreatedRef = useRef(false);
+  // Defer the (expensive) MergeView construction by one paint cycle so the
+  // surrounding UI — header, mode tabs, skeleton — renders first instead of
+  // the whole tab blocking on chunk computation + highlighting of both docs.
+  // Re-armed only on mode change; content updates flow through the in-place
+  // dispatch effect, NOT recreation — content deps here would tear down the
+  // view and destroy pane-B edits on every git refresh.
+  const [mountReady, setMountReady] = useState(false);
+  useEffect(() => {
+    setMountReady(false);
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let cancelled = false;
+    let start: () => void;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(
+        () => {
+          if (!cancelled) setMountReady(true);
+        },
+        { timeout: 150 },
+      );
+      start = () => w.cancelIdleCallback?.(id);
+    } else {
+      const id = w.setTimeout(() => {
+        if (!cancelled) setMountReady(true);
+      }, 0);
+      start = () => w.clearTimeout(id);
+    }
+    return () => {
+      cancelled = true;
+      start();
+    };
+  }, [mode]);
   // Track the last prop content we synced, so we don't overwrite user edits
   const lastSyncedContentRef = useRef<{ original: string; modified: string }>({ original: '', modified: '' });
   // Keep the latest onModifiedChange in a ref so the pane-B update listener
@@ -107,7 +146,20 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  // Build base extensions shared by both panes
+  // Build base extensions shared by both panes. Language highlighting is
+  // deferred for large documents (MAX_HIGHLIGHT_LINES) — computing it for
+  // both panes dominates mount time and the diff highlight carries the
+  // structure visually.
+  //
+  // Content is read via refs (NOT deps): buildBaseExtensions sits in the
+  // create-effect dep chain — a content dep would change its identity on
+  // every content prop update, tearing down the MergeView and destroying
+  // pane-B edits. The highlight decision reads latest content at creation.
+  const origContentRef = useRef(originalContent);
+  const modContentRef = useRef(modifiedContent);
+  origContentRef.current = originalContent;
+  modContentRef.current = modifiedContent;
+
   const buildBaseExtensions = useCallback(
     (editable?: boolean) => {
       const syntaxStyle = isDark ? oneDarkHighlightStyle : defaultHighlightStyle;
@@ -116,9 +168,14 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       if (fileName) {
         const ext = fileName.split('.').pop();
         const languageId = detectLanguage(ext || '', fileName);
-        const langExtensions = getLanguageExtensions(languageId);
-        if (langExtensions.length > 0) {
-          extensions.push(...langExtensions);
+        if (languageId) {
+          const approxLines = Math.max(origContentRef.current.length, modContentRef.current.length) / 40;
+          if (approxLines <= MAX_HIGHLIGHT_LINES) {
+            const langExtensions = getLanguageExtensions(languageId);
+            if (langExtensions.length > 0) {
+              extensions.push(...langExtensions);
+            }
+          }
         }
       }
 
@@ -279,7 +336,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
 
   // Create the MergeView once when switching into side-by-side mode
   useEffect(() => {
-    if (mode !== 'side-by-side' || !containerRef.current) return;
+    if (mode !== 'side-by-side' || !mountReady || !containerRef.current) return;
     // Clear container for fresh mount
     containerRef.current.replaceChildren();
     sideBySideCreatedRef.current = false;
@@ -354,6 +411,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     mode,
+    mountReady,
     buildBaseExtensions,
     buildEditableExtensions,
     highlightChanges,
@@ -396,7 +454,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   // Create/recreate unified view (full recreation required since unifiedMergeView
   // is a StateField that captures originalContent at creation time)
   useEffect(() => {
-    if (mode !== 'unified' || !containerRef.current) return;
+    if (mode !== 'unified' || !mountReady || !containerRef.current) return;
     containerRef.current.replaceChildren();
 
     const extensions = buildUnifiedExtensions();
@@ -432,7 +490,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
         editorViewRef.current = null;
       }
     };
-  }, [mode, buildUnifiedExtensions, modifiedContent]);
+  }, [mode, mountReady, buildUnifiedExtensions, modifiedContent]);
 
   const wrapperClassName =
     `merge-view-wrapper ${mode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
@@ -445,7 +503,14 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
           <span className="header-label header-labelModified">{bLabel}</span>
         </div>
       )}
-      <div className="merge-view-container" ref={containerRef} />
+      <div className="merge-view-container" ref={containerRef}>
+        {!mountReady && (
+          <div className="merge-view-pending" role="status" aria-label="Preparing diff view">
+            <span className="merge-view-pending-spinner" aria-hidden="true" />
+            <span>Preparing diff…</span>
+          </div>
+        )}
+      </div>
       {mode === 'side-by-side' && sideBySideNavigation && (
         <div className="merge-view-controls sbs-navigation">
           <span className="sbs-hunk-info">

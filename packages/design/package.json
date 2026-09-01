@@ -2,7 +2,7 @@
   "name": "@sprout-foundry/design",
   "version": "1.0.0",
   "description": "Design tokens for Sprout — CSS custom properties for theming",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git://github.com/sprout-foundry/sprout.git",

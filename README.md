@@ -171,7 +171,7 @@ See `docs/MCP_INTEGRATION.md` for full setup, configuration, and troubleshooting
 
 ## License
 
-[MIT License](LICENSE).
+Apache 2.0 License (LICENSE).
 
 ## Support
 

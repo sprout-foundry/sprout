@@ -1,173 +1,247 @@
-/* ── DiffWorkspaceTab — view mode toggle ── */
+/* ── DiffSurface — GitHub-style unified diff renderer ── */
 
-.workspace-diff-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.workspace-diff-view-toggle {
-  display: flex;
-  background: var(--bg-tertiary, var(--inset-highlight-6));
-  border-radius: 6px;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
-}
-
-.workspace-diff-view-btn {
-  padding: 3px 10px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-}
-
-.workspace-diff-view-btn:hover {
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-}
-
-.workspace-diff-view-btn.active {
-  color: var(--accent-fg);
-  background: var(--accent-primary);
-}
-
-.workspace-diff-view-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
-/* Collapse unchanged toggle */
-.workspace-diff-merge-wrapper {
+.diff-surface {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-
-.workspace-diff-collapse-toggle {
-  display: flex;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.workspace-diff-collapse-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background,
-    color,
-    border-color,
-    box-shadow,
-    transform 0.15s var(--ease-out);
-}
-
-.workspace-diff-collapse-btn:hover {
-  background: var(--bg-surface);
-  border-color: var(--border-strong);
-  color: var(--text-primary);
-}
-
-.workspace-diff-collapse-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
-.workspace-diff-collapse-btn.active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--accent-fg);
-}
-
-/* ── DiffSurface — self-contained diff display component ── */
-/* Requires: classifyDiffLine from utils/format for line classification */
-
-.commit-detail-diff-surface {
-  flex: 1;
   width: 100%;
-  overflow: auto;
-  padding: 4px 0;
-  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
-  font-size: 11px;
-  line-height: 1.5;
-  max-height: calc(100vh - 300px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
   background: var(--bg-primary);
-}
-
-.commit-detail-diff-surface::-webkit-scrollbar {
-  width: 5px;
-}
-
-.commit-detail-diff-surface::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.commit-detail-diff-surface::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
-.commit-detail-diff-line {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  align-items: stretch;
-  width: 100%;
+.diff-surface-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.commit-detail-diff-line-number {
+.diff-surface-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diff-surface-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-tertiary);
-  padding: 0 8px 0 10px;
+  flex-shrink: 0;
+}
+
+.diff-surface-path {
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-surface-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 12px;
+  line-height: var(--diff-row-height, 20px);
+}
+
+/* ── Rows ── */
+
+.diff-row {
+  display: grid;
+  grid-template-columns: 3.5em 3.5em 1.2em minmax(max-content, 1fr);
+  align-items: stretch;
+  min-width: 100%;
+  width: max-content;
+}
+
+.diff-row-hunk > .diff-hunk-context {
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+}
+
+.diff-ln {
+  color: var(--text-muted);
   text-align: right;
+  padding: 0 6px;
   user-select: none;
   border-right: 1px solid var(--border-subtle);
   font-size: 10px;
-  line-height: 1.5;
+  line-height: var(--diff-row-height, 20px);
+}
+
+.diff-ln-new {
+  border-right: 0;
+}
+
+.diff-sign {
+  text-align: center;
+  color: var(--text-muted);
+  user-select: none;
+  line-height: var(--diff-row-height, 20px);
+}
+
+.diff-text {
+  padding: 0 8px 0 4px;
+  white-space: pre;
+  min-width: 0;
+  line-height: var(--diff-row-height, 20px);
+}
+
+.diff-hunk-context {
+  display: inline-block;
+  width: 100%;
+  padding: 0 8px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+}
+
+/* Row backgrounds fill full surface width via grid stretch. */
+.diff-row-context {
+  background: var(--bg-primary);
+}
+
+.diff-row-add .diff-text {
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+  color: var(--text-primary);
+}
+
+.diff-row-add .diff-sign {
+  color: var(--accent-success);
+}
+
+.diff-row-del .diff-text {
+  background: color-mix(in srgb, var(--accent-error) 14%, transparent);
+  color: var(--text-primary);
+}
+
+.diff-row-del .diff-sign {
+  color: var(--accent-error);
+}
+
+/* Word-level intraline highlight. */
+mark.diff-word-changed {
+  background: transparent;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.diff-row-add mark.diff-word-changed {
+  background: color-mix(in srgb, var(--accent-success) 45%, transparent);
+}
+
+.diff-row-del mark.diff-word-changed {
+  background: color-mix(in srgb, var(--accent-error) 45%, transparent);
+}
+
+/* ── Multi-file sections ── */
+
+.diff-file {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.diff-file:last-child {
+  border-bottom: none;
+}
+
+.diff-file-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-block: 1px solid var(--border-subtle);
 }
 
-.commit-detail-diff-line-text {
-  display: block;
-  width: 100%;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 0 10px;
-}
-
-.commit-detail-diff-line.file .commit-detail-diff-line-text {
+.diff-file-path {
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-secondary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-binary-note {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.diff-surface-raw {
+  margin: 0;
+  padding: 12px;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.diff-surface-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* ── Stats bar ── */
+
+.diff-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.diff-stats-num {
   font-weight: 600;
 }
 
-.commit-detail-diff-line.hunk .commit-detail-diff-line-text {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent-warning) 14%, var(--bg-secondary));
+.diff-stats-add {
+  color: var(--accent-success);
 }
 
-.commit-detail-diff-line.add .commit-detail-diff-line-text {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent-success) 14%, var(--bg-secondary));
+.diff-stats-del {
+  color: var(--accent-error);
 }
 
-.commit-detail-diff-line.del .commit-detail-diff-line-text {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent-error) 14%, var(--bg-secondary));
+.diff-stats-blocks {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.diff-stats-block {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.diff-stats-block-add {
+  background: var(--accent-success);
+}
+
+.diff-stats-block-del {
+  background: var(--accent-error);
+}
+
+.diff-stats-block-empty {
+  background: var(--bg-tertiary);
 }

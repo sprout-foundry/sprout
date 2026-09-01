@@ -69,6 +69,14 @@ export const supportsSSH: boolean = capability('supportsSSH', true, false);
  * unimplemented ops (unstage, reset, pull, discard, revert, etc.) rather than
  * faking success — but the core flow (status, add, commit, push, clone, diff)
  * is functional. See webui/src/services/browserGit.ts for the capability matrix.
+ *
+ * Track R (--native-git) seam: this is a runtime, mode-based capability (both
+ * defaults true) — NOT a compile-time branch — so the `--native-git` flag does
+ * not gate it here (doing so would change default-build behavior). In a
+ * `--native-git` build the webui does not advertise browser git as functional:
+ * the boot wiring (useAppInitialization) is short-circuited on
+ * NATIVE_GIT_ENABLED and the git UI surfaces render the "Git provided by the
+ * native shell" placeholder. The native shell provides git natively.
  */
 export const supportsGit: boolean = capability('supportsGit', true, true);
 

@@ -190,7 +190,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
             />
           </div>
         ) : (
-          <DiffSurface diffText={diffText} />
+          <DiffSurface diffText={diffText} title={title} path={diff?.path || path} />
         )
       ) : (
         <div className="workspace-tab-empty">

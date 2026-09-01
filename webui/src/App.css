@@ -7,6 +7,9 @@
 :root {
   color-scheme: dark;
   --sprout-terminal-reserved-height: 42px;
+  /* Row height for the unified diff renderer (DiffSurface). Kept as a token
+   * so CSS and the virtualization math in DiffSurface.tsx stay in sync. */
+  --diff-row-height: 20px;
 
   /* Brand tokens (design system § "Color · brand") — surfaces that want
    * the sprout *brand* color rather than an Atom-One accent should

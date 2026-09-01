@@ -62,6 +62,7 @@ export function useFileHandlers({
         ext: '.diff',
         metadata: {
           sourcePath: options.path,
+          defaultView: 'text',
           diff: {
             message: 'success',
             path: options.path,

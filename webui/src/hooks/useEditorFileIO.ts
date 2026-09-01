@@ -768,6 +768,7 @@ export function useEditorFileIO(
                 metadata: {
                   sourcePath: filePath,
                   diffType: 'external-change',
+                  defaultView: 'text',
                   // WorkspacePane's diff renderer reads metadata.diff as a
                   // GitDiffResponse; without it the tab shows
                   // "(no diff available)".

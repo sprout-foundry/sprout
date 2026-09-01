@@ -141,6 +141,8 @@ function CommitDetailPanel({
             },
             diffMode: 'combined',
             modeOptions: ['combined'],
+            // Read-only history — open in the text view by default.
+            defaultView: 'text',
             // Full before/after contents for the merge view (read-only —
             // sourcePath is virtual so WorkspacePane's canSave stays false).
             originalContent: result?.original_content,
@@ -184,6 +186,8 @@ function CommitDetailPanel({
         },
         diffMode: 'combined',
         modeOptions: ['combined'],
+        // Read-only history — open in the text view by default.
+        defaultView: 'text',
       },
     });
   }, [detail, commit, openWorkspaceBuffer, log]);

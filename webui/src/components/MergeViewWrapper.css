@@ -43,46 +43,23 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  position: relative;
 }
 
-/* ── Force CodeMirror merge view to fill full width ── */
+/* ── Width model ──
+   Previously this file forced .cm-content { width: 100% } to fake
+   full-width backgrounds — fighting @codemirror/merge's scroll model and
+   clipping long lines. Correct model: CodeMirror sizes .cm-content by
+   content and owns horizontal scrolling via .cm-scroller (overflow-x).
+   Our container only owns the vertical scroll context. Row backgrounds
+   still fill the visible width because .cm-line stretches to min-width of
+   the content column; the page background shows beyond the longest line. */
 
-/* The .cm-editor must fill its parent horizontally, but NOT vertically.
-   @codemirror/merge's design makes .cm-mergeView the vertical scroll
-   container: each pane's editor keeps its natural (content) height so the
-   scroller can measure the full document. Forcing height:100% on
-   .cm-editor/.cm-scroller here makes the percentage resolve against an
-   indefinite flex-stretched parent, so the editor grows to content height
-   while .cm-mergeViewEditor (overflow:hidden) clips it — leaving content
-   invisible and unscrollable. */
 .merge-view-container .cm-editor {
-  width: 100%;
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 13px;
 }
 
-/* .cm-scroller is the horizontal viewport. Vertical scrolling is handled
-   by .cm-mergeView; the base theme already gives the scroller overflow-x
-   handling, so only pin the width here. */
-.merge-view-container .cm-editor .cm-scroller {
-  width: 100%;
-}
-
-/* .cm-content is position:absolute inside .cm-scroller.
-   Force it to 100% of the scroller so it stretches full width. */
-.merge-view-container .cm-editor .cm-scroller .cm-content {
-  width: 100%;
-}
-
-/* Each .cm-line must also stretch to full width so backgrounds
-   and text fill the entire pane, not just the longest line. */
-.merge-view-container .cm-editor .cm-scroller .cm-content .cm-line {
-  min-width: 100%;
-}
-
-/* The merge view itself is the vertical scroll container. The base theme
-   already applies overflow-y:auto here; keep height pinned to the wrapper
-   and let the editors keep their natural height inside it. */
 .merge-view-container .cm-mergeView {
   height: 100%;
   width: 100%;
@@ -90,12 +67,18 @@
 
 .merge-view-container .cm-mergeView .cm-mergeViewEditors {
   width: 100%;
+  display: flex;
+  align-items: stretch;
 }
 
 .merge-view-container .cm-mergeView .cm-mergeViewEditor {
   flex: 1 1 0;
   min-width: 0;
-  width: 100%;
+  overflow: hidden;
+}
+
+.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeView .cm-mergeViewEditor:first-child {
+  border-right: 1px solid var(--border-subtle);
 }
 
 /* Gutter markers for changed lines */
@@ -103,19 +86,31 @@
   font-size: 10px;
 }
 
-/* Side-by-side specific styles */
-.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditors {
+/* Deferred-mount pending state */
+.merge-view-pending {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 160px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
-.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditor {
-  min-width: 0;
-  overflow: hidden;
+.merge-view-pending-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent-primary);
+  animation: merge-view-spin 0.8s linear infinite;
 }
 
-.merge-view-wrapper.side-by-side .merge-view-container .cm-mergeViewEditor:first-child {
-  border-right: 1px solid var(--border-subtle);
+@keyframes merge-view-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Unified mode specific styles */
@@ -266,45 +261,46 @@
   color: var(--accent-fg);
 }
 
-/* Theme-integrated change decoration overrides
-   Uses the same CSS variables as the diff gutter for visual consistency */
+/* Theme-integrated change decoration — same color-mix formulas as
+   DiffSurface so merge and text modes read as one product. */
 .merge-view-container .cm-changedLine,
 .merge-view-container .cm-deletedLine {
-  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.08));
+  background-color: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .merge-view-container .cm-insertedLine {
-  background-color: var(--diff-add-bg, rgba(46, 160, 67, 0.08));
+  background-color: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 /* In side-by-side mode, chunk A shows deletions; chunk B shows insertions.
    @codemirror/merge marks both with cm-changedLine. Use cm-merge-a/b context. */
 .merge-view-wrapper.side-by-side .merge-view-container .cm-merge-a .cm-changedLine {
-  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.08));
+  background-color: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .merge-view-wrapper.side-by-side .merge-view-container .cm-merge-b .cm-changedLine {
-  background-color: var(--diff-add-bg, rgba(46, 160, 67, 0.08));
+  background-color: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 .merge-view-container .cm-changedText {
-  background-color: var(--diff-mod-bg, rgba(66, 133, 244, 0.15)) !important;
+  background-color: color-mix(in srgb, var(--accent-primary) 25%, transparent) !important;
 }
 
 .merge-view-container .cm-deletedText {
-  background-color: var(--diff-del-bg, rgba(248, 81, 73, 0.15)) !important;
+  background-color: color-mix(in srgb, var(--accent-error) 30%, transparent) !important;
 }
 
-.merge-view-container .cm-changedLineGutter {
-  background-color: var(--diff-del-color, rgba(248, 81, 73, 0.5));
-}
-
+.merge-view-container .cm-changedLineGutter,
 .merge-view-container .cm-deletedLineGutter {
-  background-color: var(--diff-del-color, rgba(248, 81, 73, 0.5));
+  background-color: color-mix(in srgb, var(--accent-error) 50%, transparent);
+}
+
+.merge-view-container .cm-insertedLineGutter {
+  background-color: color-mix(in srgb, var(--accent-success) 50%, transparent);
 }
 
 .merge-view-container .cm-inlineChangedLineGutter {
-  background-color: var(--diff-mod-color, rgba(66, 133, 244, 0.5));
+  background-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
 }
 
 /* Change gutter */

@@ -1655,6 +1655,38 @@ body,
   outline-offset: 1px;
 }
 
+/* The advanced-provider <select> revealed by the toggle.
+   Font size must stay >= 16px: iOS Safari/WKWebView auto-zooms any
+   focused control rendered smaller, which jumps the whole onboarding
+   dialog and can push the revealed list off-screen on iPad. */
+#onboarding-provider {
+  font-size: 16px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+/* Label for the advanced-provider select. */
+.onboarding label[for='onboarding-provider'] {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  text-align: left;
+}
+
+/* Native iOS select rows: the control is 16px (see above), but option
+   rows inherit UA defaults — keep them readable and non-zooming. */
+#onboarding-provider option {
+  font-size: 16px;
+  padding: 6px;
+}
+
 .onboarding-provider-summary {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);

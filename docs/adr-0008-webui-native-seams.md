@@ -30,28 +30,35 @@ Two seam layers, used together:
 
 ### Flag set
 
-Implemented and reserved flags on `scripts/build-webui-dist.mjs`
+Implemented flags on `scripts/build-webui-dist.mjs`
 (`parseArgs` / `validateArgs`):
 
 | Flag | Status | Portion | Effect |
 |---|---|---|---|
 | `--native-fs` | **Implemented** | `fs` | Sets `VITE_SPROUT_NATIVE_FS=1` (enables the Vite `nativeFsStubAliases`) and emits `capabilities.json` with `fs` excluded. |
 | `--native-terminal` | **Implemented (R-3)** | `terminal` | Sets `VITE_SPROUT_NATIVE_TERMINAL=1` (enables the Vite `nativeTerminalStubAliases`) and emits `capabilities.json` with `terminal` excluded. |
-| `--native-chat` | **Reserved** | `chat` | Fails fast (exit 1): "reserved for future Track R work (R-4)". |
-| `--native-git` | **Reserved** | `git` | Fails fast (exit 1): "reserved for future Track R work (R-5)". |
+| `--native-chat` | **Implemented (R-4)** | `chat` | Sets `VITE_SPROUT_NATIVE_CHAT=1` (enables the Vite `nativeChatStubAliases`) and emits `capabilities.json` with `chat` excluded. |
+| `--native-git` | **Implemented (R-4)** | `git` | Sets `VITE_SPROUT_NATIVE_GIT=1` (enables the Vite `nativeGitStubAliases`) and emits `capabilities.json` with `git` excluded. |
 
 Semantics:
-- Any reserved `--native-*` flag (`--native-chat`, `--native-git`), any
-  unknown `--*` token, an invalid `--mode`, or `--native-fs` +
-  `--components` / `--native-terminal` + `--components` together → **exit 1
+- Any unknown `--*` token, an invalid `--mode`, or `--native-fs` +
+  `--components` / `--native-terminal` + `--components` / `--native-chat` +
+  `--components` / `--native-git` + `--components` together → **exit 1
   before any build step** (no `npm ci`, no Vite run).
 - `--ratify-fs` requires `--native-fs`; `--ratify-terminal` requires
-  `--native-terminal` (a lone ratify flag fails fast, exit 1, before any
+  `--native-terminal`; `--ratify-chat` requires
+  `--native-chat`; `--ratify-git` requires
+  `--native-git` (a lone ratify flag fails fast, exit 1, before any
   build step).
 - A portion's flag only excludes that portion; flags are additive and each is
   gated on its own parity audit (roadmap: one portion at a time). A
   `--native-fs --native-terminal` build emits both `excluded[]` entries (fs
-  first, then terminal) and enables both alias sets.
+  first, then terminal) and enables both alias sets. A
+  `--native-fs --native-terminal --native-chat` build emits all three
+  `excluded[]` entries (fs, then terminal, then chat) and enables all three
+  alias sets. A `--native-fs --native-terminal --native-chat --native-git`
+  build emits all four `excluded[]` entries (fs, then terminal, then chat,
+  then git) and enables all four alias sets.
 
 ### Manifest format (`capabilities.json`)
 
@@ -269,8 +276,140 @@ byte-identical — every R-3 check compiles out as a dead branch.
   `terminal` manifest entry, the real terminal module returns to the bundle.
   No source changes, no migrations.
 
+#### Chat seam (R-4)
+
+R-4 is the chat analogue of the FS/terminal seams: the fetch/SSE agent-turn
+chat transport is provided natively by the shell, so the webui's chat
+transport module is excluded from the bundle. Everything below is a
+compile-time constant that is the first thing evaluated in its block, so the
+default build (flag off) is byte-identical — every R-4 check compiles out as
+a dead branch.
+
+- **Excluded module.** `services/api/chatApi` is aliased to a no-op stand-in
+  in `webui/src/services/nativeChatStubs/chatApi.ts` (via
+  `nativeChatStubAliases` in `webui/vite.config.ts`, active only when
+  `VITE_SPROUT_NATIVE_CHAT === '1'`). The stand-in keeps the full public
+  `chatApi` signature (`sendQuery` / `uploadImage` / `steerQuery` /
+  `retractSteer` / `executeCommand` / `stopQuery` / `rewindQuery` + the
+  `RetractSteerResponse` / `ExecuteCommandResponse` / `RewindResponse` types)
+  but never issues a fetch; because the module lives at `services/api/` (not
+  the services root), the alias regexes cover all import forms
+  (`@/services/api/chatApi`, `./api/chatApi` from within `services/`, and
+  `(?:../)+api/chatApi` / `(?:../)+services/api/chatApi` from
+  `components/` / `hooks/`) with optional `.js` suffixes, mirroring
+  `nativeTerminalStubAliases`.
+- **Compile-time short-circuits.** `useCommandSubmit` no-ops the
+  `/api/query` submission paths (`handleSend` / `commandRef`) — no fetch, no
+  network, "chat provided by the native shell"; `useChatSessionManager`
+  short-circuits `handleSendMessage` (the webui chat session loop is never
+  wired); `useWebSocketEventHandler` short-circuits the chat-event streaming
+  entry (`handleEvent` — `query_started` / `stream_chunk` / `query_completed`
+  / tool / agent events are never processed into React state);
+  `cloudWasmHandlers` short-circuits the wasm-local `/api/query`,
+  `/api/query/stop`, and `/api/query/steer` cases (each returns a 501
+  "Chat provided by the native shell"); `ChatView` renders the
+  "Chat provided by the native shell" placeholder (mirroring the terminal
+  placeholder in `TerminalPane`) instead of the local-runtime chat UI. The
+  session-manager / state-machine hooks stay real — the seam is the transport
+  only.
+- **Runtime gate leaf.** `webui/src/services/nativeChat/index.ts`
+  mirrors `services/nativeFs/index.ts` (narrow structural bridge type
+  `SproutStudioChatBridge` + detector, PURE `resolveNativeChatGate` with the
+  `native-chat-disabled` / `no-bridge` / `malformed-capabilities` /
+  `chat-not-declared` / `chat-not-ratified` / `getCapabilities-rejected` /
+  `unexpected-error` / `active` reason set, cached `nativeChatGate()`
+  resolver + `__resetNativeChatGateForTests()`, type-only re-export of
+  `SproutStudioCapabilities`). It is the SHELL-side deferral decision (chat
+  sessions route to the shell); the webui placeholder UI is unconditional in
+  `--native-chat` builds. The leaf is resolved-but-unused until ratification
+  (imported by nothing yet except tests) and inert in default builds.
+- **`--ratify-chat`** (requires `--native-chat`; a lone ratify flag fails
+  fast) emits the `chat` entry of `capabilities.json` with
+  `status: "ratified"` instead of the default `"seam-only"` (the
+  ratification records the parity-proven swap).
+- **Additive with fs + terminal.** A `--native-fs --native-terminal
+  --native-chat` build emits all three `excluded[]` entries (fs first, then
+  terminal, then chat — order follows the build script's code shape) and
+  enables all three alias sets.
+- **Rollback.** Rebuild without `--native-chat`: no aliases, no `chat`
+  manifest entry, the real chat transport module returns to the bundle.
+  No source changes, no migrations.
+
+#### Git seam (R-4)
+
+R-4 is the git analogue of the FS/terminal/chat seams: the git client API and
+its boot wiring are provided natively by the shell, so the webui's git client
+API module is excluded from the bundle. Everything below is a compile-time
+constant that is the first thing evaluated in its block, so the default build
+(flag off) is byte-identical — every R-4 git check compiles out as a dead
+branch.
+
+- **Excluded module.** `services/api/gitApi` is aliased to a no-op stand-in
+  in `webui/src/services/nativeGitStubs/gitApi.ts` (via
+  `nativeGitStubAliases` in `webui/vite.config.ts`, active only when
+  `VITE_SPROUT_NATIVE_GIT === '1'`). The stand-in keeps the full public
+  `gitApi` signature (`getGitStatus` / `getGitBranches` / `checkoutGitBranch`
+  / `createGitBranch` / `pullGit` / `pushGit` / `stageFile` / `unstageFile` /
+  `discardChanges` / `stageAll` / `unstageAll` / `createCommit` /
+  `generateCommitMessage` / `getGitLog` / `getGitCommitDetail` /
+  `getGitCommitFileDiff` / `checkoutGitCommit` / `revertGitCommit` /
+  `getGitDiff` / `createPullRequest`) but never issues a fetch; because the
+  module lives at `services/api/` (not the services root), the alias regexes
+  cover all import forms (`@/services/api/gitApi`, `./api/gitApi` from within
+  `services/`, and `(?:../)+api/gitApi` / `(?:../)+services/api/gitApi` from
+  `components/` / `hooks/`) with optional `.js` suffixes, mirroring
+  `nativeChatStubAliases`.
+- **Client-vs-deeper-alias DECISION.** Only the client API surface
+  (`services/api/gitApi.ts`) is aliased at this layer. `services/gitClient.ts`
+  and `services/browserGit.ts` are **not** aliased here. Per the decoupling
+  audit §1.4, `browserGit`'s working tree IS the WASM VFS (via the
+  `configureBrowserGit` `readVfsFiles` / `writeVfsFiles` callbacks), and
+  `gitClient` shares the lightning-fs IndexedDB namespace with `browserGit`.
+  A deeper alias into those VFS-backed, shared modules is unsafe for a *seam*
+  (it would fight the native-FS backing the working tree). The seam therefore
+  lives at the client API surface + the compile-time short-circuits of the
+  boot wiring, matching the audit's intent for a seam (not a full swap). This
+  is documented in `webui/vite.config.ts` (the `nativeGitStubAliases` block)
+  and in the `nativeGitStubs/gitApi.ts` header.
+- **Compile-time short-circuits.** `useAppInitialization` skips its three git
+  boot blocks — (a) `configureBrowserGit` (the browser-git VFS wiring), (b)
+  `registerGitToolGlobal` + `installGitToolBridge` (the agent git tool
+  bridge), and (c) `registerShellGitGlobal` (the shell git adapter) — each
+  guarded on `NATIVE_GIT_ENABLED` (imported from
+  `../services/nativeGitStubs/nativeGitFlag`), so none of the git boot wiring
+  runs in a `--native-git` dist; `config/mode.ts` documents (as a comment
+  only — `supportsGit` is a runtime, mode-based capability, not a branch)
+  that browser git is not advertised as functional when the shell provides
+  git natively; the git UI surface renders the "Git provided by the native
+  shell" placeholder at the `Sidebar` call site (mirroring the
+  `ChatView.tsx:384` "Chat provided by the native shell" placeholder) instead
+  of `SidebarGitSection` / `GitSidebarPanel` / `GitHistoryPanel`. The panels'
+  own logic is untouched — the seam is the surface + boot wiring only.
+- **Runtime gate leaf.** `webui/src/services/nativeGit/index.ts`
+  mirrors `services/nativeChat/index.ts` (narrow structural bridge type
+  `SproutStudioGitBridge` + detector, PURE `resolveNativeGitGate` with the
+  `native-git-disabled` / `no-bridge` / `malformed-capabilities` /
+  `git-not-declared` / `git-not-ratified` / `getCapabilities-rejected` /
+  `unexpected-error` / `active` reason set, cached `nativeGitGate()`
+  resolver + `__resetNativeGitGateForTests()`, type-only re-export of
+  `SproutStudioCapabilities`). It is the SHELL-side deferral decision (git
+  operations route to the shell); the webui placeholder UI is unconditional in
+  `--native-git` builds. The leaf is resolved-but-unused until ratification
+  (imported by nothing yet except tests) and inert in default builds.
+- **`--ratify-git`** (requires `--native-git`; a lone ratify flag fails
+  fast) emits the `git` entry of `capabilities.json` with
+  `status: "ratified"` instead of the default `"seam-only"` (the
+  ratification records the parity-proven swap).
+- **Additive with fs + terminal + chat.** A `--native-fs --native-terminal
+  --native-chat --native-git` build emits all four `excluded[]` entries (fs
+  first, then terminal, then chat, then git — order follows the build
+  script's code shape) and enables all four alias sets.
+- **Rollback.** Rebuild without `--native-git`: no aliases, no `git`
+  manifest entry, the real git client API module returns to the bundle.
+  No source changes, no migrations.
+
 ## Consequences
-- Future swaps (R-3 terminal, R-4 chat, R-5 git) add a flag + a `portion`
+- Future portions (e.g. a future `--native-<x>`) add a flag + a `portion`
   value + a parity audit; the manifest shape is stable.
 - Reviewers reject a swap that (a) changes the default build, or (b) marks a
   portion `hardExclusion` without the module actually being excluded.

@@ -76,6 +76,14 @@ export interface ProviderModel {
 export interface ProviderModelsResponse {
   provider: string;
   models: ProviderModel[];
+  /**
+   * Machine-readable explanation for an empty `models` list. Populated
+   * by environment shells (e.g. the Studio bridge) so the UI can say
+   * WHY no models loaded instead of a bare empty state. Null/absent on
+   * success. Values: 'no-key' | 'no-endpoint' | 'error' |
+   * 'unavailable' | 'unknown-provider'.
+   */
+  reason?: string | null;
 }
 
 export interface LocalLLMModel {

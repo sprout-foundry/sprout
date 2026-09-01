@@ -119,7 +119,19 @@ function CommitDetailPanel({
           content,
           metadata: {
             sourcePath: `commit:${commit.hash}:${filePath}`,
-            diffContent: content,
+            // WorkspacePane's diff renderer reads metadata.diff as a
+            // GitDiffResponse object — a bare diff string here renders as
+            // "(no diff available)".
+            diff: {
+              message: 'success',
+              path: filePath,
+              has_staged: false,
+              has_unstaged: false,
+              staged_diff: '',
+              unstaged_diff: '',
+              diff: content,
+            },
+            diffMode: 'combined',
             modeOptions: ['combined'],
           },
         });
@@ -146,7 +158,18 @@ function CommitDetailPanel({
       content: detail.diff,
       metadata: {
         sourcePath: `commit:${commit.hash}`,
-        diffContent: detail.diff,
+        // GitDiffResponse shape — see handleFileClick for why a bare string
+        // here renders as "(no diff available)".
+        diff: {
+          message: 'success',
+          path: subject,
+          has_staged: false,
+          has_unstaged: false,
+          staged_diff: '',
+          unstaged_diff: '',
+          diff: detail.diff,
+        },
+        diffMode: 'combined',
         modeOptions: ['combined'],
       },
     });

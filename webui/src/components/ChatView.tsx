@@ -20,6 +20,7 @@ import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
 import { ToolTimelineBar } from './chat/ToolTimelineBar';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
+import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -375,84 +376,97 @@ function Chat(props: ChatProps): JSX.Element {
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
       data-testid="chat-shell"
     >
-      <div className="chat-main" data-testid="chat-main">
-        {isCloud && !['pro', 'team', 'runner'].includes(getBootstrapConfig().user?.tier ?? '') && (
-          <div
-            style={{
-              padding: '6px 12px',
-              background: 'var(--bg-tertiary)',
-              borderBottom: '1px solid var(--border-color)',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              textAlign: 'center',
-            }}
-          >
-            Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed
-            performance.
-          </div>
-        )}
-        {/* Export button — shown when a session is active AND export is
+      {/* R-4: in a --native-chat dist the shell provides the chat loop
+          natively (the agent-turn transport is hard-excluded), so the webui
+          chat surface renders a clear handoff placeholder instead of the
+          local-runtime chat UI. Dead branch in the default build (flag off
+          → today's exact behavior, byte-identical). */}
+      {NATIVE_CHAT_ENABLED ? (
+        <div className="terminal-status-inline" style={{ margin: '8px 12px' }}>
+          Chat provided by the native shell
+        </div>
+      ) : (
+        <>
+          <div className="chat-main" data-testid="chat-main">
+            {isCloud && !['pro', 'team', 'runner'].includes(getBootstrapConfig().user?.tier ?? '') && (
+              <div
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--bg-tertiary)',
+                  borderBottom: '1px solid var(--border-color)',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                }}
+              >
+                Auto mode — powered by shared compute. Quality may vary. Upgrade or add an API key for guaranteed
+                performance.
+              </div>
+            )}
+            {/* Export button — shown when a session is active AND export is
             supported (export requires a local filesystem; in cloud mode it
             404s, so gate it on supportsExport). */}
-        {sessionId && supportsExport && (
-          <div className="chat-toolbar">
-            <button
-              type="button"
-              className="chat-export-btn"
-              onClick={() => setIsExportDialogOpen(true)}
-              data-testid="chat-export-button"
-            >
-              <Download size={14} />
-              Export
-            </button>
-          </div>
-        )}
+            {sessionId && supportsExport && (
+              <div className="chat-toolbar">
+                <button
+                  type="button"
+                  className="chat-export-btn"
+                  onClick={() => setIsExportDialogOpen(true)}
+                  data-testid="chat-export-button"
+                >
+                  <Download size={14} />
+                  Export
+                </button>
+              </div>
+            )}
 
-        <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
-        {showOffline ? (
-          <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
-        ) : messages.length === 0 ? (
-          <EmptyChatPanel
-            ref={chatContainerRef}
-            providerAvailable={providerAvailable}
-            onRequestProviderSetup={onRequestProviderSetup}
-          />
-        ) : (
-          <div
-            ref={chatContainerRef}
-            role="log"
-            aria-label="Chat messages"
-            data-testid="chat-message-list"
-            style={{ flex: 1, minHeight: 0, position: 'relative' }}
-          >
-            <Virtuoso
-              ref={virtuosoRef}
-              data={messages}
-              followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
-              initialTopMostItemIndex={messages.length - 1}
-              increaseViewportBy={{ top: 400, bottom: 400 }}
-              atBottomStateChange={setIsAtBottom}
-              itemContent={renderMessageItem}
-              components={{ Header: VirtuosoHeader, Footer: VirtuosoFooter }}
-              className="chat-virtuoso"
-              style={{ height: '100%' }}
-            />
-            {!isAtBottom && (
-              <button
-                className="scroll-to-bottom-btn"
-                onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
-                type="button"
-                aria-label="Scroll to bottom"
-                data-testid="chat-scroll-bottom"
+            <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
+            {showOffline ? (
+              <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
+            ) : messages.length === 0 ? (
+              <EmptyChatPanel
+                ref={chatContainerRef}
+                providerAvailable={providerAvailable}
+                onRequestProviderSetup={onRequestProviderSetup}
+              />
+            ) : (
+              <div
+                ref={chatContainerRef}
+                role="log"
+                aria-label="Chat messages"
+                data-testid="chat-message-list"
+                style={{ flex: 1, minHeight: 0, position: 'relative' }}
               >
-                <ChevronDown size={18} />
-              </button>
+                <Virtuoso
+                  ref={virtuosoRef}
+                  data={messages}
+                  followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
+                  initialTopMostItemIndex={messages.length - 1}
+                  increaseViewportBy={{ top: 400, bottom: 400 }}
+                  atBottomStateChange={setIsAtBottom}
+                  itemContent={renderMessageItem}
+                  components={{ Header: VirtuosoHeader, Footer: VirtuosoFooter }}
+                  className="chat-virtuoso"
+                  style={{ height: '100%' }}
+                />
+                {!isAtBottom && (
+                  <button
+                    className="scroll-to-bottom-btn"
+                    onClick={() =>
+                      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })
+                    }
+                    type="button"
+                    aria-label="Scroll to bottom"
+                    data-testid="chat-scroll-bottom"
+                  >
+                    <ChevronDown size={18} />
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* SP-114 Phase 2d: streaming command output panel. Sits between
+          {/* SP-114 Phase 2d: streaming command output panel. Sits between
           the chat body and the input so it stays visible without
           blocking either. The Panel handles its own visibility and
           auto-hide; we feed it `commandOutputPanelVisible` to gate
@@ -461,78 +475,84 @@ function Chat(props: ChatProps): JSX.Element {
           Local commandOutputError is merged in: HTTP-level errors
           (network, 4xx/5xx, command_not_safe) flow through the
           useCallback error path above, not through the WS stream. */}
-      {commandOutputPanelVisible ? (
-        <CommandOutputPanel
-          state={{
-            ...commandOutputState,
-            error: commandOutputError ?? commandOutputState.error,
-          }}
-          onDismiss={() => setCommandOutputPanelVisible(false)}
-        />
-      ) : null}
+          {commandOutputPanelVisible ? (
+            <CommandOutputPanel
+              state={{
+                ...commandOutputState,
+                error: commandOutputError ?? commandOutputState.error,
+              }}
+              onDismiss={() => setCommandOutputPanelVisible(false)}
+            />
+          ) : null}
 
-      <div className="input-container" ref={inputContainerRef}>
-        <ToolTimelineBar toolExecutions={filteredToolExecutions} />
-        {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
-          <div className="thinking-indicator" role="status" aria-live="polite">
-            <span className="thinking-indicator-dots">
-              <span className="thinking-dot" />
-              <span className="thinking-dot" />
-              <span className="thinking-dot" />
-            </span>
-            <span className="thinking-indicator-text">{isProcessing ? 'Thinking' : 'Sending…'}</span>
+          <div className="input-container" ref={inputContainerRef}>
+            <ToolTimelineBar toolExecutions={filteredToolExecutions} />
+            {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
+              <div className="thinking-indicator" role="status" aria-live="polite">
+                <span className="thinking-indicator-dots">
+                  <span className="thinking-dot" />
+                  <span className="thinking-dot" />
+                  <span className="thinking-dot" />
+                </span>
+                <span className="thinking-indicator-text">{isProcessing ? 'Thinking' : 'Sending…'}</span>
+              </div>
+            )}
+            <CommandInput
+              value={inputValue}
+              onChange={onInputChange}
+              onSend={onSendMessage}
+              onSendCommand={handleSendCommand}
+              onQueue={onQueueMessage}
+              onStop={onStopProcessing}
+              onRetractSteer={onRetractSteer}
+              placeholder={
+                providerAvailable === false
+                  ? 'Configure a provider to start chatting...'
+                  : needsHealthCheck && backendReachable === false
+                    ? 'Waiting for server connection...'
+                    : 'Ask me anything about your code...'
+              }
+              multiline={true}
+              autoFocus={providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
+              isProcessing={isProcessing}
+              isConnected={isConnected}
+              disabled={providerAvailable === false || (needsHealthCheck && backendReachable === false)}
+              queuedCount={queuedMessagesCount}
+              queuedMessages={queuedMessages}
+              onQueueMessageRemove={onQueueMessageRemove}
+              onQueueMessageEdit={onQueueMessageEdit}
+              onQueueReorder={onQueueReorder}
+              onClearQueuedMessages={onClearQueuedMessages}
+              completionApi={completionApi}
+              isIndexEnabled={!!stats?.embedding_index_enabled}
+              isIndexBuilding={!!stats?.embedding_index_building}
+              onToggleIndex={handleToggleIndex}
+              onUploadImage={handleUploadImage}
+            />
+            {indexingError && (
+              <div
+                className="indexing-error-banner"
+                role="alert"
+                style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
+              >
+                {indexingError}
+              </div>
+            )}
           </div>
-        )}
-        <CommandInput
-          value={inputValue}
-          onChange={onInputChange}
-          onSend={onSendMessage}
-          onSendCommand={handleSendCommand}
-          onQueue={onQueueMessage}
-          onStop={onStopProcessing}
-          onRetractSteer={onRetractSteer}
-          placeholder={
-            providerAvailable === false
-              ? 'Configure a provider to start chatting...'
-              : needsHealthCheck && backendReachable === false
-                ? 'Waiting for server connection...'
-                : 'Ask me anything about your code...'
-          }
-          multiline={true}
-          autoFocus={providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
-          isProcessing={isProcessing}
-          isConnected={isConnected}
-          disabled={providerAvailable === false || (needsHealthCheck && backendReachable === false)}
-          queuedCount={queuedMessagesCount}
-          queuedMessages={queuedMessages}
-          onQueueMessageRemove={onQueueMessageRemove}
-          onQueueMessageEdit={onQueueMessageEdit}
-          onQueueReorder={onQueueReorder}
-          onClearQueuedMessages={onClearQueuedMessages}
-          completionApi={completionApi}
-          isIndexEnabled={!!stats?.embedding_index_enabled}
-          isIndexBuilding={!!stats?.embedding_index_building}
-          onToggleIndex={handleToggleIndex}
-          onUploadImage={handleUploadImage}
-        />
-        {indexingError && (
-          <div
-            className="indexing-error-banner"
-            role="alert"
-            style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
-          >
-            {indexingError}
-          </div>
-        )}
-      </div>
 
-      <ChatMessageContextMenu
-        containerRef={chatContainerRef}
-        onInsertAtCursor={handleInsertAtCursor}
-        onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
-      />
+          <ChatMessageContextMenu
+            containerRef={chatContainerRef}
+            onInsertAtCursor={handleInsertAtCursor}
+            onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
+          />
 
-      <ExportDialog isOpen={isExportDialogOpen} onClose={() => setIsExportDialogOpen(false)} sessionId={sessionId} />
+          <ExportDialog
+            isOpen={isExportDialogOpen}
+            onClose={() => setIsExportDialogOpen(false)}
+            sessionId={sessionId}
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@
  */
 
 import type { WasmShell } from './wasmShell';
+import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -73,15 +74,30 @@ export function handleWasmLocal(
 
       // ── Agent query (runs full agent loop in WASM) ──────────
       case '/api/query':
+        // Compile-time short-circuit (R-4): in a --native-chat dist the shell
+        // provides chat natively (the agent-turn transport is hard-excluded),
+        // so the wasm-local query handler is never used. Dead branch in the
+        // default build (flag off → today's exact behavior, byte-identical).
+        if (NATIVE_CHAT_ENABLED) {
+          return jsonError('Chat provided by the native shell', 501);
+        }
         return handleWasmAgentQuery(shell, bodyStr);
 
       // ── Agent stop (interrupts in-browser agent loop) ───────
       case '/api/query/stop':
+        // Compile-time short-circuit (R-4): no in-browser agent loop to stop.
+        if (NATIVE_CHAT_ENABLED) {
+          return jsonError('Chat provided by the native shell', 501);
+        }
         shell.stopAgent();
         return jsonOk({ status: 'ok', stopped: true });
 
       // ── Agent steer (injects into persistent agent) ─────────
       case '/api/query/steer':
+        // Compile-time short-circuit (R-4): no in-browser agent to steer.
+        if (NATIVE_CHAT_ENABLED) {
+          return jsonError('Chat provided by the native shell', 501);
+        }
         return handleWasmAgentSteer(shell, bodyStr);
 
       // ── Ask user response (delivers answer to WASM agent) ────

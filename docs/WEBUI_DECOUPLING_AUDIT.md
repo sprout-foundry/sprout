@@ -198,21 +198,19 @@ Implemented in `scripts/build-webui-dist.mjs` (`parseArgs`, `validateArgs`,
 ### 2.1 Flags
 
 Cross-checked against the roadmap's queue (R-2/R-3/R-4/R-5). Names match the
-roadmap's proposed `--native-fs` exactly; the reserved flags follow the same
-`--native-<portion>` pattern.
+roadmap's proposed `--native-fs` exactly; the other flags follow the same
+`--native-<portion>` pattern. No reserved `--native-*` flags remain — every
+`--native-*` portion is implemented.
 
 | Flag | Status | Effect | Exit |
 |---|---|---|---|
 | `--native-fs` | **Implemented** (R-2) | Sets `VITE_SPROUT_NATIVE_FS=1` for the Vite build (enables the `nativeFsStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `fs` portion excluded. | 0 |
 | `--native-terminal` | **Implemented (R-3)** | Sets `VITE_SPROUT_NATIVE_TERMINAL=1` for the Vite build (enables the `nativeTerminalStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `terminal` portion excluded. | 0 |
-| `--native-chat` | **Reserved** (R-4) | Fails fast before any build step. | 1 |
-| `--native-git` | **Reserved** (R-5) | Fails fast before any build step. | 1 |
+| `--native-chat` | **Implemented (R-4)** | Sets `VITE_SPROUT_NATIVE_CHAT=1` for the Vite build (enables the `nativeChatStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `chat` portion excluded. | 0 |
+| `--native-git` | **Implemented (R-4)** | Sets `VITE_SPROUT_NATIVE_GIT=1` for the Vite build (enables the `nativeGitStubAliases` in `vite.config.ts`) and emits `capabilities.json` with the `git` portion excluded. | 0 |
 
 Validation rules (all fire **before** `npm ci` / Vite run):
 
-- Any reserved `--native-*` flag (`--native-chat` R-4, `--native-git` R-5) →
-  `Error: --native-<x> is reserved for future Track R work (R-<n>) and is not
-  yet implemented. See docs/...` → **exit 1**.
 - Any unrecognized `--*` token → `Error: Unknown option '<x>'. Run with --help.`
   → **exit 1**.
 - `--native-fs` **and** `--components` together → `Error: --native-fs cannot be
@@ -221,9 +219,22 @@ Validation rules (all fire **before** `npm ci` / Vite run):
 - `--native-terminal` **and** `--components` together → `Error: --native-terminal
   cannot be combined with --components (standalone component entries are not the
   app bundle).` → **exit 1**.
+- `--native-chat` **and** `--components` together → `Error: --native-chat
+  cannot be combined with --components (standalone component entries are not
+  the app bundle).` → **exit 1**.
+- `--native-git` **and** `--components` together → `Error: --native-git
+  cannot be combined with --components (standalone component entries are not
+  the app bundle).` → **exit 1**.
 - `--ratify-fs` without `--native-fs` → `Error: --ratify-fs requires --native-fs.`
   → **exit 1**. `--ratify-terminal` without `--native-terminal` → `Error:
   --ratify-terminal requires --native-terminal.` → **exit 1**.
+  `--ratify-chat` without `--native-chat` → `Error:
+  --ratify-chat requires --native-chat.` → **exit 1**.
+  `--ratify-git` without `--native-git` → `Error:
+  --ratify-git requires --native-git.` → **exit 1**.
+- Flags are additive: a `--native-fs --native-terminal --native-chat
+  --native-git` build is valid (all four `excluded[]` entries, in that
+  order) and enables all four alias sets.
 - Invalid `--mode` (must be `cloud` | `local` | `components`) → **exit 1**.
 
 ### 2.2 `capabilities.json` — JSON Schema

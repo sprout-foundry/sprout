@@ -6,9 +6,7 @@ import path from 'path';
 // binary for the android kernel). Fall back to the Babel-based React plugin.
 const useSwc = process.platform !== 'android' && !process.env.TERMUX_VERSION;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const reactPlugin = useSwc
-  ? require('@vitejs/plugin-react-swc').default
-  : require('@vitejs/plugin-react').default;
+const reactPlugin = useSwc ? require('@vitejs/plugin-react-swc').default : require('@vitejs/plugin-react').default;
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -88,6 +86,91 @@ export default defineConfig(({ mode }) => {
       ]
     : [];
 
+  // Track R (--native-chat, R-4): set by scripts/build-webui-dist.mjs when
+  // invoked with --native-chat. When exactly '1', the chat transport module
+  // (services/api/chatApi) is aliased to its type-compatible no-op stand-in
+  // (src/services/nativeChatStubs/) so the fetch/SSE agent-turn chat
+  // transport is hard-excluded from the bundle — the native shell provides
+  // chat natively. Default builds, `vite dev`, and vitest never set the flag,
+  // so they see no aliases and no behavior change. Rollback = rebuild without
+  // the flag. (Mirrors the --native-terminal seam above; the three flag sets
+  // are additive — a --native-fs --native-terminal --native-chat build
+  // activates all three alias sets.)
+  const isNativeChat = process.env.VITE_SPROUT_NATIVE_CHAT === '1';
+  const nativeChatStubsDir = path.resolve(__dirname, './src/services/nativeChatStubs');
+  // More-specific aliases (stub regexes) are placed BEFORE the `@` alias
+  // (same ordering rule as the native-terminal set). The real module lives at
+  // services/api/chatApi (NOT at the services root), so the relative-form
+  // entries must handle BOTH `./api/chatApi` (importers inside services/) and
+  // `(?:../)+api/chatApi` / `(?:../)+services/api/chatApi` (importers in
+  // components/ and hooks/); the @/services/ entry covers alias-form
+  // specifiers.
+  const nativeChatStubAliases: { find: RegExp; replacement: string }[] = isNativeChat
+    ? [
+        {
+          find: /^@\/services\/api\/(chatApi)(?:\.js)?$/,
+          replacement: `${nativeChatStubsDir}/$1`,
+        },
+        {
+          find: /^\.\/(api\/)?(chatApi)(?:\.js)?$/,
+          replacement: `${nativeChatStubsDir}/$2`,
+        },
+        {
+          find: /^(?:\.\.\/)+(?:services\/)?api\/(chatApi)(?:\.js)?$/,
+          replacement: `${nativeChatStubsDir}/$1`,
+        },
+      ]
+    : [];
+
+  // Track R (--native-git, R-4): set by scripts/build-webui-dist.mjs when
+  // invoked with --native-git. When exactly '1', the git client API module
+  // (services/api/gitApi) is aliased to its type-compatible no-op stand-in
+  // (src/services/nativeGitStubs/) so the git client API + boot wiring is
+  // hard-excluded from the bundle — the native shell provides git natively.
+  // Default builds, `vite dev`, and vitest never set the flag, so they see
+  // no aliases and no behavior change. Rollback = rebuild without the flag.
+  // (Mirrors the --native-chat seam above; the four flag sets are additive —
+  // a --native-fs --native-terminal --native-chat --native-git build
+  // activates all four alias sets.)
+  //
+  // DECISION (documented in docs/adr-0008-webui-native-seams.md, git seam):
+  // ONLY the client API surface (services/api/gitApi.ts) is aliased at this
+  // layer. We do NOT alias services/gitClient.ts or services/browserGit.ts.
+  // Per the decoupling audit §1.4, browserGit's working tree IS the WASM VFS
+  // (via the configureBrowserGit readVfsFiles/writeVfsFiles callbacks wired in
+  // useAppInitialization), and gitClient shares the lightning-fs IndexedDB
+  // namespace with browserGit. A deeper alias into those shared, VFS-backed
+  // modules is unsafe for a *seam* (it would fight the native-FS backing the
+  // working tree). The seam therefore lives at the client API surface
+  // (services/api/gitApi) + the compile-time short-circuits of the boot
+  // wiring (useAppInitialization), matching the audit's intent for a seam
+  // (not a full swap).
+  const isNativeGit = process.env.VITE_SPROUT_NATIVE_GIT === '1';
+  const nativeGitStubsDir = path.resolve(__dirname, './src/services/nativeGitStubs');
+  // More-specific aliases (stub regexes) are placed BEFORE the `@` alias
+  // (same ordering rule as the native-chat set). The real module lives at
+  // services/api/gitApi (NOT at the services root), so the relative-form
+  // entries must handle BOTH `./api/gitApi` (importers inside services/) and
+  // `(?:../)+api/gitApi` / `(?:../)+services/api/gitApi` (importers in
+  // components/ and hooks/); the @/services/ entry covers alias-form
+  // specifiers.
+  const nativeGitStubAliases: { find: RegExp; replacement: string }[] = isNativeGit
+    ? [
+        {
+          find: /^@\/services\/api\/(gitApi)(?:\.js)?$/,
+          replacement: `${nativeGitStubsDir}/$1`,
+        },
+        {
+          find: /^\.\/(api\/)?(gitApi)(?:\.js)?$/,
+          replacement: `${nativeGitStubsDir}/$2`,
+        },
+        {
+          find: /^(?:\.\.\/)+(?:services\/)?api\/(gitApi)(?:\.js)?$/,
+          replacement: `${nativeGitStubsDir}/$1`,
+        },
+      ]
+    : [];
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -117,11 +200,11 @@ export default defineConfig(({ mode }) => {
   return {
     define: defineEntries,
     plugins: [reactPlugin()],
-    
+
     // Base URL for production builds. Cloud builds are mounted at /webui/
     // (see isCloud above); local/desktop builds are served from the root.
     base: isCloud ? '/webui/' : '/',
-    
+
     // Resolve aliases
     resolve: {
       alias: [
@@ -136,6 +219,18 @@ export default defineConfig(({ mode }) => {
         // PTY/WASM terminal transport. Empty array (no-ops) in every other
         // build — see isNativeTerminal above.
         ...nativeTerminalStubAliases,
+        // Track R (--native-chat) seam: when VITE_SPROUT_NATIVE_CHAT=1,
+        // the chat transport module (services/api/chatApi) resolves to its
+        // nativeChatStubs/ no-op stand-in instead of the real module,
+        // hard-excluding the fetch/SSE agent-turn chat transport. Empty
+        // array (no-ops) in every other build — see isNativeChat above.
+        ...nativeChatStubAliases,
+        // Track R (--native-git) seam: when VITE_SPROUT_NATIVE_GIT=1,
+        // the git client API module (services/api/gitApi) resolves to its
+        // nativeGitStubs/ no-op stand-in instead of the real module,
+        // hard-excluding the git client API + boot wiring. Empty array
+        // (no-ops) in every other build — see isNativeGit above.
+        ...nativeGitStubAliases,
         { find: '@', replacement: path.resolve(__dirname, './src') },
       ],
       // React resolves to a single version across the whole workspace: the
@@ -155,7 +250,7 @@ export default defineConfig(({ mode }) => {
         '@codemirror/lint',
       ],
     },
-    
+
     // Build configuration
     build: {
       outDir: 'dist',
@@ -205,9 +300,7 @@ export default defineConfig(({ mode }) => {
 
     // esbuild config — strip debugger from production bundles.
     // Console temporarily KEPT for cloud-mode WASM debugging.
-    esbuild: isProd
-      ? { drop: ['debugger'] }
-      : undefined,
+    esbuild: isProd ? { drop: ['debugger'] } : undefined,
 
     // Development server
     server: {
@@ -230,7 +323,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    
+
     // Test configuration (for vitest)
     test: {
       globals: true,
@@ -249,9 +342,7 @@ export default defineConfig(({ mode }) => {
       // each jsdom worker is ~1–4 GB RSS. Vitest 4 uses top-level
       // maxWorkers / execArgv (poolOptions.forks was removed).
       pool: 'forks',
-      maxWorkers: process.env.VITEST_MAX_FORKS
-        ? parseInt(process.env.VITEST_MAX_FORKS, 10)
-        : 4,
+      maxWorkers: process.env.VITEST_MAX_FORKS ? parseInt(process.env.VITEST_MAX_FORKS, 10) : 4,
       // jsdom workers accumulate RSS across the ~50 files each fork
       // runs (CodeMirror/xterm DOM state is not fully released between
       // files). Node's default 4 GB heap cap OOMs a worker mid-suite;
@@ -264,7 +355,7 @@ export default defineConfig(({ mode }) => {
         exclude: ['node_modules/', 'src/vitest.setup.ts', '**/*.d.ts'],
       },
     },
-    
+
     // Optimize dependencies
     optimizeDeps: {
       include: [
@@ -289,12 +380,7 @@ export default defineConfig(({ mode }) => {
       // CJS deps (style-to-js, debug, extend) fail Vite's on-demand
       // optimizer with "does not provide an export named 'default'".
       // The dedupe config above ensures a single React version.
-      exclude: [
-        '@codemirror/legacy-modes',
-        'lucide-react',
-        '@sprout/ui',
-        'react-virtuoso',
-      ],
+      exclude: ['@codemirror/legacy-modes', 'lucide-react', '@sprout/ui', 'react-virtuoso'],
     },
   };
 });

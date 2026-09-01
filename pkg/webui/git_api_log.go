@@ -239,7 +239,8 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	// Convert absolute paths to workspace-relative for git operations.
 	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
 
-	// Path traversal protection.
+	// Path traversal protection. Redundant after normalizeGitPath's Clean
+	// (defense-in-depth) but kept for the raw-input signal it provides.
 	if strings.Contains(reqPath, "..") {
 		writeJSONErr(w, http.StatusBadRequest, "path_must_not_contain", "path must not contain '..'")
 		return
@@ -269,12 +270,49 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	}
 	diff := truncateDiffOutput(string(showOutput), 500000)
 
+	// Full before/after contents for the merge view. Commit diffs are
+	// read-only in the UI, but the merge-style rendering still needs real
+	// documents — the hunk fragment reconstruction corrupts the view
+	// (disjoint hunks concatenated). old = parent version, new = commit
+	// version; either may be "" (new/deleted file).
+	originalContent, modifiedContent, contentsTruncated := ws.gitCommitFileContents(workspaceRoot, hash, reqPath)
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "success",
-		"hash":    hash,
-		"path":    reqPath,
-		"diff":    diff,
+		"message":            "success",
+		"hash":               hash,
+		"path":               reqPath,
+		"diff":               diff,
+		"original_content":   originalContent,
+		"modified_content":   modifiedContent,
+		"contents_truncated": contentsTruncated,
 	})
+}
+
+// gitCommitFileContents returns the full before (hash^) and after (hash)
+// versions of a file for the merge view. The third return is true when
+// either side was omitted for exceeding maxDiffFileContentBytes.
+func (ws *ReactWebServer) gitCommitFileContents(workspaceRoot, hash, reqPath string) (string, string, bool) {
+	truncated := false
+
+	showSide := func(rev string) string {
+		cmd := ws.gitCommandForWorkspace(workspaceRoot, "show", rev+":"+reqPath)
+		if cmd == nil {
+			return ""
+		}
+		out, err := cmd.Output()
+		if err != nil {
+			// File absent on this side (added/deleted) or path did not
+			// exist at that revision — empty is correct.
+			return ""
+		}
+		if len(out) > maxDiffFileContentBytes {
+			truncated = true
+			return ""
+		}
+		return string(out)
+	}
+
+	return showSide(hash + "^"), showSide(hash), truncated
 }
 
 func gitReviewShouldSkipFileForContext(filePath string) bool {

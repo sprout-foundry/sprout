@@ -99,6 +99,12 @@ export interface GitCommitFileDiffResponse {
   hash: string;
   path: string;
   diff: string;
+  /** Full parent (hash^) version of the file; empty when added/truncated. */
+  original_content?: string;
+  /** Full commit (hash) version of the file; empty when deleted/truncated. */
+  modified_content?: string;
+  /** True when either full content exceeded the size cap and was omitted. */
+  contents_truncated?: boolean;
 }
 
 export interface PullRequestResponse {
@@ -116,4 +122,10 @@ export interface GitDiffResponse {
   staged_diff: string;
   unstaged_diff: string;
   diff: string;
+  /** Full HEAD version of the file (empty string when unavailable). */
+  original_content?: string;
+  /** Full working-tree version of the file (empty string when unavailable). */
+  modified_content?: string;
+  /** True when either full content exceeded the size cap and was omitted. */
+  contents_truncated?: boolean;
 }

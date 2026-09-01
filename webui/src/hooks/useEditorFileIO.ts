@@ -765,7 +765,24 @@ export function useEditorFileIO(
                 ext: '.diff',
                 isPinned: false,
                 isClosable: true,
-                metadata: { sourcePath: filePath, diffType: 'external-change' },
+                metadata: {
+                  sourcePath: filePath,
+                  diffType: 'external-change',
+                  // WorkspacePane's diff renderer reads metadata.diff as a
+                  // GitDiffResponse; without it the tab shows
+                  // "(no diff available)".
+                  diff: {
+                    message: 'success',
+                    path: filePath,
+                    has_staged: false,
+                    has_unstaged: false,
+                    staged_diff: '',
+                    unstaged_diff: '',
+                    diff: diffText,
+                  },
+                  diffMode: 'combined',
+                  modeOptions: ['combined'],
+                },
               });
 
               const bufferRefId = bufferRef.current?.id;

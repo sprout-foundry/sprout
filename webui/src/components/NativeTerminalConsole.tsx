@@ -116,7 +116,7 @@ export function NativeTerminalConsole(): React.ReactElement {
     // Line-editor state (xterm has no line discipline here — the
     // transport is spawn-per-line, so we implement one).
     let lineBuf = '';
-    let history: string[] = [];
+    const history: string[] = [];
     let histIdx = -1; // index into `history`; length == "blank line"
     let escState = 0; // 0 = normal, 1 = saw ESC, 2 = saw CSI/SS3 introducer
 
@@ -216,12 +216,8 @@ export function NativeTerminalConsole(): React.ReactElement {
       const prompt = () => term.write(PROMPT);
 
       if (line === 'help') {
-        term.writeln(
-          'Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd.',
-        );
-        term.writeln(
-          'Pipes (|), sequences (;) and chains (&&) supported. All paths',
-        );
+        term.writeln('Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd.');
+        term.writeln('Pipes (|), sequences (;) and chains (&&) supported. All paths');
         term.writeln('resolve from the workspace root. Ctrl-C cancels input.');
         prompt();
         return;
@@ -280,10 +276,6 @@ export function NativeTerminalConsole(): React.ReactElement {
   }, [runLine]);
 
   return (
-    <div
-      ref={hostRef}
-      className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
-      style={{ padding: '6px 8px' }}
-    />
+    <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]" style={{ padding: '6px 8px' }} />
   );
 }

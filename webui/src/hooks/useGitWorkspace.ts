@@ -24,6 +24,9 @@ export interface GitDiffResponse {
   staged_diff: string;
   unstaged_diff: string;
   diff: string;
+  original_content?: string;
+  modified_content?: string;
+  contents_truncated?: boolean;
 }
 
 export interface DeepReviewResult {
@@ -294,6 +297,11 @@ export const useGitWorkspace = ({
             sourcePath: filePath,
             diff: response,
             diffMode: nextMode,
+            // Full-file contents: the editable merge view must operate on
+            // the real file, not the hunk fragment reconstruction.
+            originalContent: response.original_content,
+            modifiedContent: response.modified_content,
+            contentsTruncated: response.contents_truncated ?? false,
           },
         });
       } catch (error) {
@@ -639,6 +647,9 @@ export const useGitWorkspace = ({
           sourcePath: activeDiffPath,
           diff: activeDiff,
           diffMode: mode,
+          originalContent: activeDiff?.original_content,
+          modifiedContent: activeDiff?.modified_content,
+          contentsTruncated: activeDiff?.contents_truncated ?? false,
         },
       });
     },

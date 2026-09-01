@@ -102,13 +102,73 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		combined.WriteString("No diff available for this file.")
 	}
 
+	// Full file contents for the editable merge view. Reconstructing
+	// documents from the hunks alone produces fragments (context lines
+	// glued together) — saving such a fragment back to disk destroys the
+	// rest of the file. When extraction succeeds the frontend uses these
+	// verbatim; when it fails (size cap) the merge view degrades to
+	// read-only on the fragment reconstruction.
+	originalContent, modifiedContent, contentsTruncated := ws.gitDiffFileContents(workspaceRoot, reqPath)
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":       "success",
-		"path":          reqPath,
-		"has_staged":    strings.TrimSpace(stagedDiff) != "",
-		"has_unstaged":  strings.TrimSpace(unstagedDiff) != "",
-		"staged_diff":   stagedDiff,
-		"unstaged_diff": unstagedDiff,
-		"diff":          combined.String(),
+		"message":            "success",
+		"path":               reqPath,
+		"has_staged":         strings.TrimSpace(stagedDiff) != "",
+		"has_unstaged":       strings.TrimSpace(unstagedDiff) != "",
+		"staged_diff":        stagedDiff,
+		"unstaged_diff":      unstagedDiff,
+		"diff":               combined.String(),
+		"original_content":   originalContent,
+		"modified_content":   modifiedContent,
+		"contents_truncated": contentsTruncated,
 	})
+}
+
+// maxDiffFileContentBytes caps the full-file payloads returned for the
+// merge view. Above this, the editable view is not offered (read-only
+// fragment view instead) rather than shipping megabytes of JSON.
+const maxDiffFileContentBytes = 2 * 1024 * 1024
+
+// gitDiffFileContents returns the full before/after contents for a file in
+// the working tree, for the editable merge view.
+//
+//	old = HEAD version (or "" when the file is new/untracked)
+//	new = working-tree contents ("" when the file was deleted)
+//
+// The third return is true when either side was omitted for exceeding
+// maxDiffFileContentBytes. Git errors leave strings empty — the diff text
+// remains authoritative for display; only editability is affected.
+func (ws *ReactWebServer) gitDiffFileContents(workspaceRoot, reqPath string) (string, string, bool) {
+	truncated := false
+
+	var original string
+	if cmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "HEAD:"+reqPath); cmd != nil {
+		if out, err := cmd.Output(); err == nil {
+			if len(out) > maxDiffFileContentBytes {
+				truncated = true
+			} else {
+				original = string(out)
+			}
+		}
+		// Errors (untracked file, no HEAD yet) leave original empty —
+		// correct: a new file's "before" is the empty file.
+	}
+
+	var modified string
+	absPath := reqPath
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(workspaceRoot, reqPath)
+	}
+	if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+		if info.Size() > maxDiffFileContentBytes {
+			truncated = true
+		} else {
+			if data, readErr := os.ReadFile(absPath); readErr == nil {
+				modified = string(data)
+			}
+		}
+	}
+	// File missing from the working tree (deleted) — after-side stays empty.
+
+	return original, modified, truncated
 }

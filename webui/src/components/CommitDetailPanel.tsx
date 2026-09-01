@@ -21,7 +21,15 @@ interface CommitDetailPanelProps {
   onLoadCommitFileDiff: (
     hash: string,
     filePath: string,
-  ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+  ) => Promise<{
+    message: string;
+    hash: string;
+    path: string;
+    diff: string;
+    original_content?: string;
+    modified_content?: string;
+    contents_truncated?: boolean;
+  }>;
   commit: GitCommitSummary;
   onBack: () => void;
   /** Optional siblings for prev/next navigation. */
@@ -133,6 +141,11 @@ function CommitDetailPanel({
             },
             diffMode: 'combined',
             modeOptions: ['combined'],
+            // Full before/after contents for the merge view (read-only —
+            // sourcePath is virtual so WorkspacePane's canSave stays false).
+            originalContent: result?.original_content,
+            modifiedContent: result?.modified_content,
+            contentsTruncated: result?.contents_truncated ?? false,
           },
         });
       } catch (err) {

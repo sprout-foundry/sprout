@@ -25,6 +25,17 @@ interface DiffWorkspaceTabProps {
   onDiffModeChange: (mode: 'combined' | 'staged' | 'unstaged') => void;
   title?: string;
   modeOptions?: Array<'combined' | 'staged' | 'unstaged'>;
+  /** Full pre-image of the file (undefined when unavailable). Empty string is valid (new file). */
+  fullOriginal?: string;
+  /** Full post-image of the file (undefined when unavailable). Empty string is valid (deleted file). */
+  fullModified?: string;
+  /**
+   * Whether pane-B edits may be saved back to disk. Only true when the
+   * caller has verified full-file contents AND the buffer's path is a real
+   * filesystem path (not a commit:/revision: virtual path). Saving a
+   * fragment reconstruction would destroy the rest of the file.
+   */
+  canSave?: boolean;
 }
 
 const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'staged' | 'unstaged'): string => {
@@ -48,6 +59,9 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   onDiffModeChange,
   title = 'Git Diff',
   modeOptions,
+  fullOriginal,
+  fullModified,
+  canSave = false,
 }: DiffWorkspaceTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'merge' | 'text'>('merge');
   const [collapseUnchanged, setCollapseUnchanged] = useState(true);
@@ -67,20 +81,36 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
 
   const diffText = getDiffText(diff, diffMode);
 
-  const docs = useMemo(() => parseUnifiedDiffToDocuments(diffText), [diffText]);
+  // Merge-view documents. Full contents are authoritative when present —
+  // the fragment reconstruction (context lines glued together) is only a
+  // fallback and is never editable (canSave requires full contents).
+  // Merge-view documents. Full contents are authoritative when present —
+  // the fragment reconstruction (context lines glued together) is only a
+  // fallback and is never editable (canSave requires full contents).
+  // diffText only matters in the fragment path, so it's excluded from the
+  // deps when full contents are present (avoids re-parsing on mode switch).
+  const hasFullContents = fullOriginal !== undefined && fullModified !== undefined;
+  const docs = useMemo(
+    () =>
+      hasFullContents ? { original: fullOriginal, modified: fullModified } : parseUnifiedDiffToDocuments(diffText),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    hasFullContents ? [fullOriginal, fullModified] : [diffText],
+  );
 
-  // When the underlying diff changes (mode switch, git refresh), drop any
-  // in-progress merge edits so the view reflects the fresh content.
+  // When the underlying documents change (mode switch, git refresh, contents
+  // arriving), drop any in-progress merge edits so the view reflects the
+  // fresh content.
   useEffect(() => {
     setEditedModified(null);
-  }, [diffText]);
+  }, [docs.original, docs.modified]);
 
   // Report pane-B changes (reverts / typing) up into local state.
   const handleModifiedChange = useCallback((content: string) => {
     setEditedModified(content);
   }, []);
 
-  // Cmd+S in the merge view writes the reverted pane-B content back to disk.
+  // Cmd+S in the merge view writes pane-B content back to disk. Only wired
+  // when canSave — i.e. the view holds the full file and the path is real.
   const handleSave = useCallback(
     async (content: string) => {
       if (!path) return;
@@ -113,6 +143,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   );
 
   const modifiedContent = editedModified ?? docs.modified;
+  const mergeEditable = canSave && hasFullContents;
 
   return (
     <div className="workspace-tab workspace-diff-tab">
@@ -186,7 +217,8 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
               bLabel="After"
               collapseUnchanged={collapseConfig}
               onModifiedChange={handleModifiedChange}
-              onSave={handleSave}
+              onSave={mergeEditable ? handleSave : undefined}
+              readOnly={!mergeEditable}
             />
           </div>
         ) : (

@@ -93,6 +93,12 @@ If you can't find the information you need in the codebase or via web search,
 stop and ask the user. Don't guess or fabricate answers. A short question
 is better than a wrong change.
 
+## Style and Tone
+- Do not use corporate AI clichés or meta-verbs
+- Strict banned word list: delve, testament, tapestry, nested, landscape, navigate, pivot, spearhead, revolutionize, "earned its keep", "testament to", "it's important to remember", "in conclusion"
+- Avoid filler verbs used to sound analytical (e.g., instead of "surfacing insights" just say "showing data"; instead of "anchoring the argument" just say "supporting the argument")
+- Write with extreme economy. Use active voice, simple verbs, and concrete nouns
+
 ## AGENTS.md Maintenance
 - **Keep AGENTS.md lean** — it's injected into every request. Keep it under 2K tokens (~1K ideal).
 - **Rules and guidance only** — actionable rules, conventions, pointers. Not status reports, tracking, or architecture docs.

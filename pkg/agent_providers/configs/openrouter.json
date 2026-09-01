@@ -26,8 +26,8 @@
     "convert_tool_role_to_user": false,
     "fill_missing_array_items": true,
     "include_tool_call_id": true,
-    "reasoning_content_field": "reasoning_content",
     "preserve_reasoning_details": true,
+    "reasoning_content_field": "reasoning_content",
     "unified_reasoning_param": true
   },
   "models": {
@@ -6200,6 +6200,20 @@
         "tags": [
           "tools",
           "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 131072,
+        "description": "Granite 4.2 8B is a dense reasoning model from IBM. It is suited for mathematics, code generation, multilingual dialogue, and agentic workflows that need multi-step reasoning. It supports configurable reasoning effort (full, low, none) with a 128K context window.",
+        "id": "ibm-granite/granite-4.2-8b",
+        "input_cost": 0.1,
+        "name": "IBM: Granite 4.2 8B",
+        "output_cost": 0.15,
+        "tags": [
+          "tools",
           "reasoning",
           "structured_output"
         ]

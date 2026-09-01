@@ -16,10 +16,10 @@
  * House style: explicit vitest imports (see src/services/opfsReplica.test.ts).
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 
 type BuildScript = typeof import('../../../scripts/build-webui-dist.mjs');
 
@@ -106,8 +106,34 @@ describe('parseArgs', () => {
     expect(mod.parseArgs(['--native-terminal']).nativeTerminal).toBe(true);
   });
 
-  it('records the reserved --native-* flags on opts (validation is separate)', () => {
+  it('records --native-chat on opts.nativeChat (R-4, validated clean)', () => {
     expect(mod.parseArgs(['--native-chat']).nativeChat).toBe(true);
+    // --ratify-chat is not implied by --native-chat.
+    expect(mod.parseArgs(['--native-chat']).ratifyChat).toBe(false);
+  });
+
+  it('records --ratify-chat on opts.ratifyChat (leaves nativeChat false when alone)', () => {
+    const o = mod.parseArgs(['--ratify-chat']);
+    expect(o.ratifyChat).toBe(true);
+    expect(o.nativeChat).toBe(false);
+  });
+
+  it('sets both nativeChat and ratifyChat when both flags are passed', () => {
+    const o = mod.parseArgs(['--native-chat', '--ratify-chat']);
+    expect(o.nativeChat).toBe(true);
+    expect(o.ratifyChat).toBe(true);
+  });
+
+  it('sets ratifyChat regardless of flag order', () => {
+    const fwd = mod.parseArgs(['--native-chat', '--ratify-chat']);
+    const rev = mod.parseArgs(['--ratify-chat', '--native-chat']);
+    expect(fwd.ratifyChat).toBe(true);
+    expect(rev.ratifyChat).toBe(true);
+    expect(fwd.nativeChat).toBe(true);
+    expect(rev.nativeChat).toBe(true);
+  });
+
+  it('records --native-git on opts.nativeGit (R-4, validated clean)', () => {
     expect(mod.parseArgs(['--native-git']).nativeGit).toBe(true);
   });
 
@@ -151,20 +177,29 @@ describe('validateArgs', () => {
     expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal']))).toEqual([]);
   });
 
-  it('rejects --native-chat (R-4) with the reserved + roadmap messages', () => {
-    const [err] = mod.validateArgs(mod.parseArgs(['--native-chat']));
-    expect(err.toLowerCase()).toContain('reserved');
-    expect(err).toContain('R-4');
-    expect(err).toContain('docs/WEBUI_DECOUPLING_AUDIT.md');
-    expect(err).toContain('docs/adr-0008-webui-native-seams.md');
+  it('accepts --native-chat (R-4) with no errors', () => {
+    // R-4 is now implemented: --native-chat validates clean on its own.
+    expect(mod.validateArgs(mod.parseArgs(['--native-chat']))).toEqual([]);
   });
 
-  it('rejects --native-git (R-5) with the reserved + roadmap messages', () => {
-    const [err] = mod.validateArgs(mod.parseArgs(['--native-git']));
-    expect(err.toLowerCase()).toContain('reserved');
-    expect(err).toContain('R-5');
-    expect(err).toContain('docs/WEBUI_DECOUPLING_AUDIT.md');
-    expect(err).toContain('docs/adr-0008-webui-native-seams.md');
+  it('accepts the additive --native-fs --native-terminal --native-chat build', () => {
+    // All three native-* flags are additive: a single build may exclude fs +
+    // terminal + chat together.
+    expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal', '--native-chat']))).toEqual([]);
+  });
+
+  it('accepts --native-chat --ratify-chat (ratified R-4 build)', () => {
+    // The R-4 ratify flag validates clean alongside the exclusion flag.
+    expect(mod.validateArgs(mod.parseArgs(['--native-chat', '--ratify-chat']))).toEqual([]);
+  });
+
+  it('rejects --ratify-chat without --native-chat', () => {
+    const [err] = mod.validateArgs(mod.parseArgs(['--ratify-chat']));
+    expect(err).toContain('--native-chat');
+  });
+
+  it('accepts --native-git (R-4) with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-git']))).toEqual([]);
   });
 
   it('reports unknown --* options with an "Unknown option" message', () => {
@@ -609,15 +644,485 @@ describe('--native-terminal / --ratify-terminal (R-3)', () => {
     }
   });
 
-  it('still documents --native-chat / --native-git as Reserved', () => {
+  it('documents --native-chat / --ratify-chat and --native-git / --ratify-git as Implemented (R-4)', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       mod.printHelp();
       const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
-      expect(out).toMatch(/--native-chat\s+Reserved \(R-4\)/);
-      expect(out).toMatch(/--native-git\s+Reserved \(R-5\)/);
+      // Both R-4 chat flags are documented as implemented.
+      expect(out).toMatch(/--native-chat\s+Implemented \(R-4\)/);
+      expect(out).toMatch(/--ratify-chat\s+Implemented \(R-4\)/);
+      // --ratify-chat requires --native-chat (documented).
+      expect(out).toMatch(/Requires --native-chat/);
+      // The R-4 git flags are also documented as implemented (no reserved
+      // --native-* flag remains).
+      expect(out).toMatch(/--native-git\s+Implemented \(R-4\)/);
+      expect(out).toMatch(/--ratify-git\s+Implemented \(R-4\)/);
+      expect(out).toMatch(/Requires --native-git/);
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// ── --native-chat / --ratify-chat (R-4) ────────────────────────────
+// Focused coverage for the R-4 chat seam across parseArgs, validateArgs,
+// buildCapabilityManifest, and the help text. Pure functions only — no build.
+// Mirrors the R-3 block above; all R-4-specific assertions live here (the
+// generic parse/validate/manifest cases that already exist in the
+// parseArgs / validateArgs / buildCapabilityManifest blocks are
+// intentionally NOT duplicated).
+describe('--native-chat / --ratify-chat (R-4)', () => {
+  // ── parseArgs ──────────────────────────────────────────────────────────
+  it('records --native-chat on opts.nativeChat', () => {
+    expect(mod.parseArgs(['--native-chat']).nativeChat).toBe(true);
+  });
+
+  it('records --ratify-chat on opts.ratifyChat (leaves nativeChat false when alone)', () => {
+    const o = mod.parseArgs(['--ratify-chat']);
+    expect(o.ratifyChat).toBe(true);
+    expect(o.nativeChat).toBe(false);
+  });
+
+  it('sets both nativeChat and ratifyChat when both flags are passed', () => {
+    const o = mod.parseArgs(['--native-chat', '--ratify-chat']);
+    expect(o.nativeChat).toBe(true);
+    expect(o.ratifyChat).toBe(true);
+  });
+
+  it('leaves ratifyChat falsey when the flag is absent', () => {
+    expect(mod.parseArgs([]).ratifyChat).toBe(false);
+    expect(mod.parseArgs(['--native-chat']).ratifyChat).toBe(false);
+  });
+
+  it('sets ratifyChat regardless of flag order', () => {
+    const fwd = mod.parseArgs(['--native-chat', '--ratify-chat']);
+    const rev = mod.parseArgs(['--ratify-chat', '--native-chat']);
+    expect(fwd.ratifyChat).toBe(true);
+    expect(rev.ratifyChat).toBe(true);
+    expect(fwd.nativeChat).toBe(true);
+    expect(rev.nativeChat).toBe(true);
+  });
+
+  it('does not consume the following token and leaves unknownArgs untouched', () => {
+    const o = mod.parseArgs(['--ratify-chat', '--frobnicate', '--native-chat']);
+    expect(o.ratifyChat).toBe(true);
+    expect(o.nativeChat).toBe(true);
+    expect(o.unknownArgs).toEqual(['--frobnicate']);
+  });
+
+  it('treats --ratify-chat-typo as an unknown option (no prefix match)', () => {
+    const o = mod.parseArgs(['--ratify-chat-typo']);
+    expect(o.ratifyChat).toBe(false);
+    expect(o.unknownArgs).toEqual(['--ratify-chat-typo']);
+  });
+
+  // ── validateArgs ───────────────────────────────────────────────────────
+  it('accepts --native-chat alone with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-chat']))).toEqual([]);
+  });
+
+  it('accepts --native-chat --ratify-chat with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-chat', '--ratify-chat']))).toEqual([]);
+  });
+
+  it('accepts the additive --native-fs --native-terminal --native-chat build', () => {
+    // Flags are additive: an fs + terminal + chat build carries all three.
+    expect(mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal', '--native-chat']))).toEqual([]);
+  });
+
+  it('rejects a lone --ratify-chat with a single "requires --native-chat" error', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--ratify-chat']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe('Error: --ratify-chat requires --native-chat.');
+  });
+
+  it('still rejects --components when --native-chat --ratify-chat are combined', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-chat', '--ratify-chat', '--components']));
+    expect(errs.length).toBeGreaterThan(0);
+    // The --native-chat/--components prohibition must surface; the
+    // requires error is absent because nativeChat is set.
+    expect(errs.some((e) => e.toLowerCase().includes('cannot be combined'))).toBe(true);
+    expect(errs.some((e) => e.includes('--ratify-chat requires'))).toBe(false);
+  });
+
+  it('rejects the exact --native-chat + --components message', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-chat', '--components']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe(
+      'Error: --native-chat cannot be combined with --components (standalone component entries are not the app bundle).',
+    );
+  });
+
+  it('accepts --native-chat --native-git (R-4) as an additive build', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-chat', '--native-git']))).toEqual([]);
+  });
+
+  // ── buildCapabilityManifest ────────────────────────────────────────────
+  it('emits a single seam-only chat entry for nativeChat alone', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeChat: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.portion).toBe('chat');
+    expect(e.flag).toBe('--native-chat');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    expect(e.status).toBe('seam-only');
+    // The exact seam-only notes string (points at the decoupling audit).
+    expect(e.notes).toBe(
+      'fetch/SSE agent-turn chat transport provided natively by the shell; chat transport modules stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+    );
+  });
+
+  it('emits a ratified chat entry for nativeChat + ratifyChat', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeChat: true, ratifyChat: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.status).toBe('ratified');
+    expect(e.portion).toBe('chat');
+    expect(e.flag).toBe('--native-chat');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    // The R-4 ratified notes (parity-proven swap, points at the ADR).
+    expect(e.notes).toBe(
+      'R-4 ratified: parity-proven swap — the fetch/SSE agent-turn chat ' +
+        'transport is provided natively by the shell; the chat transport ' +
+        'module is stubbed out of the bundle (see docs/adr-0008-webui-native-seams.md, chat seam).',
+    );
+  });
+
+  it('carries fs + terminal + chat entries when all three flags are set (additive, in order)', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      nativeTerminal: true,
+      nativeChat: true,
+    });
+    expect(m.excluded).toHaveLength(3);
+    // Entry order follows the fs → terminal → chat order of the code.
+    expect(m.excluded[0].portion).toBe('fs');
+    expect(m.excluded[0].flag).toBe('--native-fs');
+    expect(m.excluded[1].portion).toBe('terminal');
+    expect(m.excluded[1].flag).toBe('--native-terminal');
+    expect(m.excluded[2].portion).toBe('chat');
+    expect(m.excluded[2].flag).toBe('--native-chat');
+    // All default to seam-only without their ratify flags.
+    expect(m.excluded[0].status).toBe('seam-only');
+    expect(m.excluded[1].status).toBe('seam-only');
+    expect(m.excluded[2].status).toBe('seam-only');
+  });
+
+  it('ratifies only the chat entry when all three flags + --ratify-chat are set', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      nativeTerminal: true,
+      nativeChat: true,
+      ratifyChat: true,
+    });
+    expect(m.excluded).toHaveLength(3);
+    expect(m.excluded[0].status).toBe('seam-only'); // fs untouched
+    expect(m.excluded[1].status).toBe('seam-only'); // terminal untouched
+    expect(m.excluded[2].status).toBe('ratified'); // chat ratified
+  });
+
+  it('still emits no chat entry when ratifyChat is set but nativeChat is not', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', ratifyChat: true });
+    expect(m.excluded).toEqual([]);
+  });
+
+  it('propagates buildMode into the R-4 manifest', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'local', nativeChat: true, ratifyChat: true });
+    expect(m.buildMode).toBe('local');
+    expect(m.excluded[0].status).toBe('ratified');
+  });
+
+  // ── help text ──────────────────────────────────────────────────────────
+  it('documents --native-chat and --ratify-chat as Implemented (R-4)', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mod.printHelp();
+      const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toContain('--native-chat');
+      expect(out).toContain('--ratify-chat');
+      // Both R-4 flags are documented as implemented.
+      expect(out).toMatch(/--native-chat\s+Implemented \(R-4\)/);
+      expect(out).toMatch(/--ratify-chat\s+Implemented \(R-4\)/);
+      // --ratify-chat requires --native-chat (documented).
+      expect(out).toMatch(/Requires --native-chat/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+// ── --native-git / --ratify-git (R-4) ─────────────────────────────────
+// Focused coverage for the R-4 git seam across parseArgs, validateArgs,
+// buildCapabilityManifest, and the help text. Pure functions only — no build.
+// Mirrors the R-4 chat block above; all R-4-git-specific assertions live
+// here (the generic parse/validate/manifest cases that already exist in the
+// parseArgs / validateArgs / buildCapabilityManifest blocks are
+// intentionally NOT duplicated).
+describe('--native-git / --ratify-git (R-4)', () => {
+  // ── parseArgs ──────────────────────────────────────────────────────────
+  it('records --native-git on opts.nativeGit', () => {
+    expect(mod.parseArgs(['--native-git']).nativeGit).toBe(true);
+  });
+
+  it('records --ratify-git on opts.ratifyGit (leaves nativeGit false when alone)', () => {
+    const o = mod.parseArgs(['--ratify-git']);
+    expect(o.ratifyGit).toBe(true);
+    expect(o.nativeGit).toBe(false);
+  });
+
+  it('sets both nativeGit and ratifyGit when both flags are passed', () => {
+    const o = mod.parseArgs(['--native-git', '--ratify-git']);
+    expect(o.nativeGit).toBe(true);
+    expect(o.ratifyGit).toBe(true);
+  });
+
+  it('leaves ratifyGit falsey when the flag is absent', () => {
+    expect(mod.parseArgs([]).ratifyGit).toBe(false);
+    expect(mod.parseArgs(['--native-git']).ratifyGit).toBe(false);
+  });
+
+  it('sets ratifyGit regardless of flag order', () => {
+    const fwd = mod.parseArgs(['--native-git', '--ratify-git']);
+    const rev = mod.parseArgs(['--ratify-git', '--native-git']);
+    expect(fwd.ratifyGit).toBe(true);
+    expect(rev.ratifyGit).toBe(true);
+    expect(fwd.nativeGit).toBe(true);
+    expect(rev.nativeGit).toBe(true);
+  });
+
+  it('does not consume the following token and leaves unknownArgs untouched', () => {
+    const o = mod.parseArgs(['--ratify-git', '--frobnicate', '--native-git']);
+    expect(o.ratifyGit).toBe(true);
+    expect(o.nativeGit).toBe(true);
+    expect(o.unknownArgs).toEqual(['--frobnicate']);
+  });
+
+  it('treats --ratify-git-typo as an unknown option (no prefix match)', () => {
+    const o = mod.parseArgs(['--ratify-git-typo']);
+    expect(o.ratifyGit).toBe(false);
+    expect(o.unknownArgs).toEqual(['--ratify-git-typo']);
+  });
+
+  // ── validateArgs ───────────────────────────────────────────────────────
+  it('accepts --native-git alone with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-git']))).toEqual([]);
+  });
+
+  it('accepts --native-git --ratify-git with no errors', () => {
+    expect(mod.validateArgs(mod.parseArgs(['--native-git', '--ratify-git']))).toEqual([]);
+  });
+
+  it('accepts the additive --native-fs --native-terminal --native-chat --native-git build', () => {
+    // Flags are additive: an fs + terminal + chat + git build carries all four.
+    expect(
+      mod.validateArgs(mod.parseArgs(['--native-fs', '--native-terminal', '--native-chat', '--native-git'])),
+    ).toEqual([]);
+  });
+
+  it('rejects a lone --ratify-git with a single "requires --native-git" error', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--ratify-git']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe('Error: --ratify-git requires --native-git.');
+  });
+
+  it('still rejects --components when --native-git --ratify-git are combined', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-git', '--ratify-git', '--components']));
+    expect(errs.length).toBeGreaterThan(0);
+    // The --native-git/--components prohibition must surface; the
+    // requires error is absent because nativeGit is set.
+    expect(errs.some((e) => e.toLowerCase().includes('cannot be combined'))).toBe(true);
+    expect(errs.some((e) => e.includes('--ratify-git requires'))).toBe(false);
+  });
+
+  it('rejects the exact --native-git + --components message', () => {
+    const errs = mod.validateArgs(mod.parseArgs(['--native-git', '--components']));
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toBe(
+      'Error: --native-git cannot be combined with --components (standalone component entries are not the app bundle).',
+    );
+  });
+
+  // ── buildCapabilityManifest ────────────────────────────────────────────
+  it('emits a single seam-only git entry for nativeGit alone', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeGit: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.portion).toBe('git');
+    expect(e.flag).toBe('--native-git');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    expect(e.status).toBe('seam-only');
+    // The exact seam-only notes string (points at the decoupling audit).
+    expect(e.notes).toBe(
+      'git client API + boot wiring provided natively by the shell; git client API module stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)',
+    );
+  });
+
+  it('emits a ratified git entry for nativeGit + ratifyGit', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', nativeGit: true, ratifyGit: true });
+    expect(m.excluded).toHaveLength(1);
+    const e = m.excluded[0];
+    expect(e.status).toBe('ratified');
+    expect(e.portion).toBe('git');
+    expect(e.flag).toBe('--native-git');
+    expect(e.replacedBy).toBe('native');
+    expect(e.hardExclusion).toBe(true);
+    // The R-4 ratified notes (parity-proven swap, points at the ADR).
+    expect(e.notes).toBe(
+      'R-4 ratified: parity-proven swap — the git client API + boot ' +
+        'wiring is provided natively by the shell; the git client API ' +
+        'module is stubbed out of the bundle (see docs/adr-0008-webui-native-seams.md, git seam).',
+    );
+  });
+
+  it('carries fs + terminal + chat + git entries when all four flags are set (additive, in order)', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      nativeTerminal: true,
+      nativeChat: true,
+      nativeGit: true,
+    });
+    expect(m.excluded).toHaveLength(4);
+    // Entry order follows the fs → terminal → chat → git order of the code.
+    expect(m.excluded[0].portion).toBe('fs');
+    expect(m.excluded[0].flag).toBe('--native-fs');
+    expect(m.excluded[1].portion).toBe('terminal');
+    expect(m.excluded[1].flag).toBe('--native-terminal');
+    expect(m.excluded[2].portion).toBe('chat');
+    expect(m.excluded[2].flag).toBe('--native-chat');
+    expect(m.excluded[3].portion).toBe('git');
+    expect(m.excluded[3].flag).toBe('--native-git');
+    // All default to seam-only without their ratify flags.
+    expect(m.excluded[0].status).toBe('seam-only');
+    expect(m.excluded[1].status).toBe('seam-only');
+    expect(m.excluded[2].status).toBe('seam-only');
+    expect(m.excluded[3].status).toBe('seam-only');
+  });
+
+  it('ratifies only the git entry when all four flags + --ratify-git are set', () => {
+    const m = mod.buildCapabilityManifest({
+      mode: 'cloud',
+      nativeFs: true,
+      nativeTerminal: true,
+      nativeChat: true,
+      nativeGit: true,
+      ratifyGit: true,
+    });
+    expect(m.excluded).toHaveLength(4);
+    expect(m.excluded[0].status).toBe('seam-only'); // fs untouched
+    expect(m.excluded[1].status).toBe('seam-only'); // terminal untouched
+    expect(m.excluded[2].status).toBe('seam-only'); // chat untouched
+    expect(m.excluded[3].status).toBe('ratified'); // git ratified
+  });
+
+  it('still emits no git entry when ratifyGit is set but nativeGit is not', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'cloud', ratifyGit: true });
+    expect(m.excluded).toEqual([]);
+  });
+
+  it('propagates buildMode into the R-4 git manifest', () => {
+    const m = mod.buildCapabilityManifest({ mode: 'local', nativeGit: true, ratifyGit: true });
+    expect(m.buildMode).toBe('local');
+    expect(m.excluded[0].status).toBe('ratified');
+  });
+
+  // ── help text ──────────────────────────────────────────────────────────
+  it('documents --native-git and --ratify-git as Implemented (R-4)', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mod.printHelp();
+      const out = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toContain('--native-git');
+      expect(out).toContain('--ratify-git');
+      // Both R-4 git flags are documented as implemented.
+      expect(out).toMatch(/--native-git\s+Implemented \(R-4\)/);
+      expect(out).toMatch(/--ratify-git\s+Implemented \(R-4\)/);
+      // --ratify-git requires --native-git (documented).
+      expect(out).toMatch(/Requires --native-git/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // ── manifest write (acceptance criteria: default build + git write case) ─
+  // Each write case gets its own fresh tempdir (the git suite does not share
+  // the "writeCapabilityManifest" block's suite-level tmp anchor — that
+  // helper is scoped to that block). Mirrors the chat/fs no-write
+  // convention (null return + file absence).
+  let gitTmp: string;
+  beforeAll(() => {
+    gitTmp = mkdtempSync(join(tmpdir(), 'caps-manifest-git-'));
+  });
+  afterAll(() => {
+    if (existsSync(gitTmp)) rmSync(gitTmp, { recursive: true, force: true });
+  });
+
+  function gitOutputDir(suffix: string): string {
+    const dir = join(gitTmp, suffix);
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  it('default build (no flags): manifest excluded:[] and writeCapabilityManifest writes NO capabilities.json', () => {
+    // No excluded portions → the manifest is empty AND no capabilities.json
+    // file is emitted (the shell only sees a manifest when something was
+    // actually excluded). Same contract the fs/chat no-write cases assert.
+    const m = mod.buildCapabilityManifest(mod.parseArgs([]));
+    expect(m.excluded).toEqual([]);
+
+    const outDir = gitOutputDir('git-default');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs([]));
+    expect(path).toBeNull();
+    expect(existsSync(join(outDir, 'capabilities.json'))).toBe(false);
+  });
+
+  it('writeCapabilityManifest writes a parseable capabilities.json for --native-git (seam-only)', () => {
+    const outDir = gitOutputDir('native-git');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--native-git']));
+    expect(path).toBe(join(outDir, 'capabilities.json'));
+    if (path === null) throw new Error('expected capabilities.json path, got null');
+    expect(existsSync(path)).toBe(true);
+
+    const raw = readFileSync(path, 'utf-8');
+    const parsed = JSON.parse(raw);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.excluded).toHaveLength(1);
+    expect(parsed.excluded[0].portion).toBe('git');
+    expect(parsed.excluded[0].flag).toBe('--native-git');
+    expect(parsed.excluded[0].replacedBy).toBe('native');
+    expect(parsed.excluded[0].hardExclusion).toBe(true);
+    expect(parsed.excluded[0].status).toBe('seam-only');
+    // 2-space JSON indentation (line 2 is "  " prefixed).
+    expect(raw.split('\n')[1].startsWith('  "')).toBe(true);
+  });
+
+  it('writeCapabilityManifest writes a ratified capabilities.json for --native-git --ratify-git', () => {
+    const outDir = gitOutputDir('ratified-git');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--native-git', '--ratify-git']));
+    expect(path).toBe(join(outDir, 'capabilities.json'));
+    if (path === null) throw new Error('expected capabilities.json path, got null');
+    expect(existsSync(path)).toBe(true);
+
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.excluded).toHaveLength(1);
+    expect(parsed.excluded[0].portion).toBe('git');
+    // The R-4 ratify-git swap: the git entry is emitted shell-servable.
+    expect(parsed.excluded[0].status).toBe('ratified');
+  });
+
+  it('writes no file when --ratify-git alone (no git portion excluded)', () => {
+    // --ratify-git without --native-git excludes nothing (validated as an
+    // error by validateArgs, but the manifest writer must still be inert).
+    const outDir = gitOutputDir('ratify-git-alone');
+    const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--ratify-git']));
+    expect(path).toBeNull();
+    expect(existsSync(join(outDir, 'capabilities.json'))).toBe(false);
   });
 });

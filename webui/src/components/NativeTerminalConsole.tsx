@@ -50,11 +50,7 @@ declare global {
   }
 }
 
-const WELCOME = [
-  'Native shell console (workspace-scoped emulated shell).',
-  'ls cat head tail wc grep find touch rm mkdir echo pwd · pipes · && ;',
-  "type 'help' for details",
-];
+const WELCOME = ['\x1b[2mtype help for commands\x1b[0m'];
 
 const PROMPT = '\x1b[32m$\x1b[0m ';
 

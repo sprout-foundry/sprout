@@ -155,6 +155,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
             fullOriginal={fullOriginal}
             fullModified={fullModified}
             canSave={canSave}
+            defaultView={buffer.metadata?.defaultView as 'merge' | 'text' | undefined}
           />
         );
       }

@@ -36,6 +36,8 @@ interface DiffWorkspaceTabProps {
    * fragment reconstruction would destroy the rest of the file.
    */
   canSave?: boolean;
+  /** Initial view mode ('merge' unless the opener marks the buffer read-only history). */
+  defaultView?: 'merge' | 'text';
 }
 
 const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'staged' | 'unstaged'): string => {
@@ -62,8 +64,9 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   fullOriginal,
   fullModified,
   canSave = false,
+  defaultView = 'merge',
 }: DiffWorkspaceTabProps): JSX.Element {
-  const [viewMode, setViewMode] = useState<'merge' | 'text'>('merge');
+  const [viewMode, setViewMode] = useState<'merge' | 'text'>(defaultView);
   const [collapseUnchanged, setCollapseUnchanged] = useState(true);
   // User-made merge-state edits (chunk reverts / typing in pane B). Lifted
   // from the CodeMirror instance so they survive view-mode toggles and
@@ -81,9 +84,6 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
 
   const diffText = getDiffText(diff, diffMode);
 
-  // Merge-view documents. Full contents are authoritative when present —
-  // the fragment reconstruction (context lines glued together) is only a
-  // fallback and is never editable (canSave requires full contents).
   // Merge-view documents. Full contents are authoritative when present —
   // the fragment reconstruction (context lines glued together) is only a
   // fallback and is never editable (canSave requires full contents).

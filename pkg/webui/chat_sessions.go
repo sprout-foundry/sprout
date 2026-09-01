@@ -832,6 +832,10 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 		}
 	}
 
-	summary["agent_state"] = string(cs.AgentState)
+	// NOTE: the raw agent_state blob is deliberately NOT included. The agent
+	// state lives server-side in cs.AgentState — the frontend only renders
+	// the decoded `messages` above, and shipping the full serialized state
+	// (which contains every message again plus reasoning) roughly doubles
+	// the payload of every chat-switch / worktree response for no consumer.
 	return summary
 }

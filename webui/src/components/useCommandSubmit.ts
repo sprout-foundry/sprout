@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { FormEvent } from 'react';
 import { showThemedConfirm } from './ThemedDialog';
 import type { AttachedImage } from './useImageUpload';
+import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 
 interface UseCommandSubmitOptions {
   draftValue: string;
@@ -69,6 +70,15 @@ export function useCommandSubmit({
   // Only falls back to onSend when no dedicated handler is wired up.
   const commandRef = useCallback(
     async (command: string) => {
+      // Compile-time short-circuit (R-4): in a --native-chat dist the shell
+      // provides chat natively, so the webui never submits a /api/query
+      // command (no network) — a no-op. Dead branch in the default build
+      // (flag off → today's exact behavior, byte-identical).
+      if (NATIVE_CHAT_ENABLED) {
+        resetAndFocus();
+        return;
+      }
+
       resetHistoryNavigation();
 
       if (onSendCommand) {
@@ -86,6 +96,15 @@ export function useCommandSubmit({
   const handleSend = async () => {
     const textareaValue = draftValue;
     if (textareaValue.trim() === '') return;
+
+    // Compile-time short-circuit (R-4): in a --native-chat dist the shell
+    // provides chat natively, so the webui never submits a /api/query
+    // (no network) — a no-op. Dead branch in the default build (flag off →
+    // today's exact behavior, byte-identical).
+    if (NATIVE_CHAT_ENABLED) {
+      resetAndFocus();
+      return;
+    }
 
     // Build query with image paths
     const commandToSend = buildCommandWithImages(textareaValue);

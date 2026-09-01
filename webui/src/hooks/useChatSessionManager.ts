@@ -13,6 +13,7 @@ import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
+import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
 function extractToolRefsFromContent(content: string): ToolRef[] {
@@ -279,6 +280,17 @@ export function useChatSessionManager({
   const handleSendMessage = useCallback(
     async (message: string, options?: { allowConcurrent?: boolean }) => {
       if (!message.trim()) return;
+
+      // Compile-time short-circuit (R-4): in a --native-chat dist the shell
+      // provides the chat loop natively, so the webui never wires up the
+      // webui chat session loop (no /api/query submission, no network). Dead
+      // branch in the default build (flag off → today's exact behavior,
+      // byte-identical).
+      if (NATIVE_CHAT_ENABLED) {
+        setState((prev) => ({ inputValue: '' }));
+        return;
+      }
+
       const trimmedMessage = message.trim();
       const isClearCommand = trimmedMessage.toLowerCase() === '/clear';
       const allowConcurrent = options?.allowConcurrent === true;

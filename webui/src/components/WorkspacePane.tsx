@@ -124,6 +124,20 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
       case 'diff': {
         const diffPath = buffer.metadata?.sourcePath as string | undefined;
         const isActiveDiff = diffState.activeDiffPath === diffPath;
+        // Full-file contents for the editable merge view. metadata carries
+        // them from useGitWorkspace; undefined = unavailable (fragment
+        // fallback). canSave additionally requires a real filesystem path —
+        // virtual buffers (commit:, __workspace/) must never save.
+        const fullOriginal = buffer.metadata?.originalContent as string | undefined;
+        const fullModified = buffer.metadata?.modifiedContent as string | undefined;
+        const contentsTruncated = (buffer.metadata?.contentsTruncated as boolean | undefined) ?? false;
+        const canSave =
+          !!diffPath &&
+          !diffPath.startsWith('commit:') &&
+          !diffPath.startsWith('__workspace/') &&
+          fullOriginal !== undefined &&
+          fullModified !== undefined &&
+          !contentsTruncated;
         return (
           <DiffWorkspaceTab
             path={diffPath || diffState.activeDiffPath || buffer.file.name}
@@ -138,6 +152,9 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
             onDiffModeChange={diffState.onDiffModeChange}
             title={buffer.metadata?.title as string | undefined}
             modeOptions={buffer.metadata?.modeOptions as ('staged' | 'combined' | 'unstaged')[] | undefined}
+            fullOriginal={fullOriginal}
+            fullModified={fullModified}
+            canSave={canSave}
           />
         );
       }

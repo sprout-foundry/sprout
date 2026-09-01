@@ -406,7 +406,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
               className="inline-block mr-1 align-text-bottom"
               style={{ animation: 'spin 1s linear infinite' }}
             />
-            Initializing browser shell (loading WebAssembly)...
+            Starting shell...
           </div>
         )}
         {wasmError && !wasmActive && (
@@ -418,7 +418,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         {wasmActive && (
           <div className="terminal-status-inline terminal-status-inline--success">
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-            Browser shell · Files persist in IndexedDB
+            Shell ready
           </div>
         )}
         {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell provides the

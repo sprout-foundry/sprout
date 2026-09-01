@@ -205,9 +205,18 @@ export function useChatSessionManager({
           };
         });
 
-        const sessionsResp = await listChatSessions();
-        if (activeChatIdRef.current !== switchId) return;
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+        // Refresh the session list (tab titles/counts) without blocking the
+        // switch — the messages are already on screen from the switch
+        // response; the list refresh is cosmetic. The session_changed WS
+        // event also updates this list, so a dropped refresh self-heals.
+        void listChatSessions()
+          .then((sessionsResp) => {
+            if (activeChatIdRef.current !== switchId) return;
+            setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+          })
+          .catch((err) => {
+            debugLog('[chat] Failed to refresh session list after switch:', err);
+          });
       } catch (error) {
         if (activeChatIdRef.current !== switchId) return;
         activeChatIdRef.current = currentId;

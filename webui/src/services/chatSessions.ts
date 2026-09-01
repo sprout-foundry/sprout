@@ -34,7 +34,6 @@ export interface ChatSessionSwitchResponseChatSession {
   total_tokens?: number;
   total_cost?: number;
   session_id?: string;
-  agent_state?: string;
   active_query: boolean;
   is_default: boolean;
   is_pinned: boolean;

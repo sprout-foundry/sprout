@@ -39,6 +39,12 @@ function createMockWindow(sessionStore: Record<string, string>, localStore: Reco
     sessionStorage: storage,
     localStorage: ls,
     crypto: { randomUUID: vi.fn(() => `mock-uuid-${Math.random().toString(36).slice(2)}`) },
+    name: '',
+    document: { cookie: '' },
+    setInterval: vi.fn(() => 0),
+    clearInterval: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   };
 }
 
@@ -135,5 +141,78 @@ describe('clientSession tab isolation', () => {
 
     persistTabWorkspacePath('');
     expect(win.localStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('second window does not adopt the first window’s client ID from the shared cookie', () => {
+    // Window A boots first — generates its own ID and claims it in the
+    // shared registry. The server-set cookie points at A's ID.
+    const sharedLocal: Record<string, string> = {};
+    const sessionA: Record<string, string> = {};
+    const winA = createMockWindow(sessionA, sharedLocal);
+    Object.defineProperty(global, 'window', { value: winA, writable: true });
+    const idA = getWebUIClientId();
+
+    // Window B boots later: empty sessionStorage, empty window.name, but the
+    // shared sprout_client_id cookie holds A's ID. B must NOT adopt it —
+    // that would fuse both windows onto one server-side context.
+    const sessionB: Record<string, string> = {};
+    const winB = createMockWindow(sessionB, sharedLocal);
+    winB.document.cookie = `sprout_client_id=${idA}`;
+    Object.defineProperty(global, 'window', { value: winB, writable: true });
+
+    const idB = getWebUIClientId();
+    expect(idB).toBeTruthy();
+    expect(idB).not.toBe(idA);
+    expect(sessionB['sprout.webuiClientId']).toBe(idB);
+  });
+
+  it('sole window still resumes its client ID from the cookie (cross-origin reload)', () => {
+    // Window A previously ran with this ID; its sessionStorage was cleared
+    // (fresh page load cross-origin) but the cookie survives and no other
+    // window claims the ID.
+    const sharedLocal: Record<string, string> = {};
+    const session: Record<string, string> = {};
+    const win = createMockWindow(session, sharedLocal);
+    win.document.cookie = 'sprout_client_id=resumed-id-123';
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+
+    const id = getWebUIClientId();
+    expect(id).toBe('resumed-id-123');
+  });
+
+  it('client ID survives a sessionStorage loss via window.name (tab discard)', () => {
+    const sharedLocal: Record<string, string> = {};
+    const sessionA: Record<string, string> = {};
+    const winA = createMockWindow(sessionA, sharedLocal);
+    Object.defineProperty(global, 'window', { value: winA, writable: true });
+    const idBefore = getWebUIClientId();
+
+    // Chrome discards the background tab: new window object, sessionStorage
+    // wiped, but window.name persists for the browsing context.
+    const sessionAfter: Record<string, string> = {};
+    const winAfter = createMockWindow(sessionAfter, sharedLocal);
+    winAfter.name = winA.name;
+    Object.defineProperty(global, 'window', { value: winAfter, writable: true });
+
+    const idAfter = getWebUIClientId();
+    expect(idAfter).toBe(idBefore);
+  });
+
+  it('workspace path persistence is scoped per window, not shared across windows', () => {
+    const sharedLocal: Record<string, string> = {};
+    const sessionA: Record<string, string> = {};
+    const winA = createMockWindow(sessionA, sharedLocal);
+    Object.defineProperty(global, 'window', { value: winA, writable: true });
+    getWebUIClientId(); // assigns window.name / claim
+    persistTabWorkspacePath('/home/user/project-a');
+    expect(getTabWorkspacePath()).toBe('/home/user/project-a');
+
+    // Window B — same origin (shared localStorage), different browsing
+    // context. It must not read A's workspace path.
+    const sessionB: Record<string, string> = {};
+    const winB = createMockWindow(sessionB, sharedLocal);
+    Object.defineProperty(global, 'window', { value: winB, writable: true });
+    getWebUIClientId();
+    expect(getTabWorkspacePath()).toBe('');
   });
 });

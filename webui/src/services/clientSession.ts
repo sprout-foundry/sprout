@@ -5,6 +5,42 @@ export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
 const WEBUI_CLIENT_ID_STORAGE_KEY = 'sprout.webuiClientId';
 const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
+const WINDOW_NAME_PREFIX = 'sproutClientId:';
+
+/**
+ * Read the per-tab client ID from window.name.
+ *
+ * window.name is scoped to the browsing context (tab/window): it survives
+ * page reloads and Chrome tab-discards (which clear sessionStorage), but is
+ * NOT shared between windows. That makes it the ideal middle tier between
+ * sessionStorage (per-tab, lost on discard) and the sprout_client_id cookie
+ * (survives everything, but shared by all windows of the origin).
+ *
+ * Returns null when window.name is unset or holds a value we did not write
+ * (some applications stash cross-navigation data in window.name — we never
+ * clobber it).
+ */
+function readClientIdFromWindowName(): string | null {
+  if (typeof window === 'undefined' || !window.name) return null;
+  if (!window.name.startsWith(WINDOW_NAME_PREFIX)) return null;
+  const id = window.name.slice(WINDOW_NAME_PREFIX.length).trim();
+  return id || null;
+}
+
+/**
+ * Persist the client ID into window.name so this tab can recover it after a
+ * sessionStorage loss (reload in a discarded tab). Skips writing when
+ * window.name holds a foreign value.
+ */
+function writeClientIdToWindowName(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  if (window.name && !window.name.startsWith(WINDOW_NAME_PREFIX)) return;
+  try {
+    window.name = WINDOW_NAME_PREFIX + id;
+  } catch (err) {
+    debugLog('[writeClientIdToWindowName] failed:', err);
+  }
+}
 
 /**
  * When the app is loaded via the SSH proxy path (e.g. /ssh/{key}/) the server
@@ -20,13 +56,31 @@ export function getProxyBase(): string {
  * Returns the localStorage key to use for persisting the workspace path.
  * For SSH proxy pages the key is scoped to the proxy base so that different
  * SSH host/path sessions do not bleed into each other or into the local UI.
+ *
+ * The key is ALSO scoped per browsing context (window): the un-suffixed
+ * `sprout.workspaceTabPath` is shared by every window of this origin, so two
+ * windows pointed at different workspaces kept overwriting each other's
+ * path — on next startup, whichever window booted last would silently
+ * restore the other's workspace. We suffix with the browsing-context token
+ * from window.name when available (stable across reloads/discards, private
+ * to the window), falling back to the shared legacy key only when window
+ * has no usable marker (first-party popups that reuse window.name for their
+ * own data, SSR, tests).
  */
 function workspacePathStorageKey(): string {
   const proxyBase = getProxyBase();
+  const suffixes: string[] = [];
   if (proxyBase) {
-    return `${WEBUI_WORKSPACE_PATH_STORAGE_KEY}:${proxyBase}`;
+    suffixes.push(proxyBase);
   }
-  return WEBUI_WORKSPACE_PATH_STORAGE_KEY;
+  const browsingContextToken = readClientIdFromWindowName();
+  if (browsingContextToken) {
+    suffixes.push(browsingContextToken);
+  }
+  if (suffixes.length === 0) {
+    return WEBUI_WORKSPACE_PATH_STORAGE_KEY;
+  }
+  return `${WEBUI_WORKSPACE_PATH_STORAGE_KEY}:${suffixes.join(':')}`;
 }
 
 /**
@@ -58,29 +112,170 @@ export function getWebUIClientId(): string {
 
   const existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
   if (existing) {
+    writeClientIdToWindowName(existing);
     return existing;
+  }
+
+  // Browsing-context recovery (window.name). This must run BEFORE the cookie
+  // fallback: the sprout_client_id cookie is shared by every window of this
+  // origin, so a second window would otherwise adopt the first window's
+  // client ID and both would share one server-side context (workspace,
+  // terminal, chats) — the "two windows pointing at different folders break
+  // each other" bug. window.name is per-window, so it can only ever point
+  // back at this window's own previous identity.
+  const windowNameId = readClientIdFromWindowName();
+  if (windowNameId) {
+    window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, windowNameId);
+    return windowNameId;
   }
 
   // Cross-origin fallback: read client ID from the server-set cookie.
   // This preserves the session across page reloads when the WebUI and API
-  // are on different origins (Cloudflare Pages + tunnel).
+  // are on different origins (Cloudflare Pages + tunnel) AND no other
+  // window has claimed that ID for a different workspace. See
+  // claimOrGenerateClientId for why a naive adoption is unsafe.
   const cookieValue = readCookie(clientIDCookieName);
   if (cookieValue && cookieValue !== 'default') {
+    const claimed = claimOrGenerateClientId(cookieValue);
+    if (claimed !== cookieValue) {
+      // Another live window owns the cookie ID — use the freshly generated
+      // one so this window gets its own server context.
+      window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
+      writeClientIdToWindowName(claimed);
+      return claimed;
+    }
     window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, cookieValue);
+    writeClientIdToWindowName(cookieValue);
     return cookieValue;
   }
 
-  // Generate a new ID — each tab gets its own unique client_id.
-  const generated =
-    typeof window.crypto?.randomUUID === 'function'
-      ? window.crypto.randomUUID()
-      : `webui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  // Generate a new ID — each tab gets its own unique client_id. Registering
+  // the claim matters even here: once this window starts sending the ID, the
+  // server sets the shared cookie to it, and without a registry entry a
+  // second window would later adopt it from the cookie.
+  const generated = generateClientId();
   window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
+  writeClientIdToWindowName(generated);
+  claimOrGenerateClientId(generated);
 
   // Clean up any stale client_id from localStorage to avoid future confusion.
   window.localStorage.removeItem(WEBUI_CLIENT_ID_STORAGE_KEY);
 
   return generated;
+}
+
+function generateClientId(): string {
+  return typeof window.crypto?.randomUUID === 'function'
+    ? window.crypto.randomUUID()
+    : `webui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ── Cross-window ownership registry ─────────────────────────────
+//
+// The sprout_client_id cookie is per-origin (all windows share it), but the
+// server-side context it addresses is per-window. claimOrGenerateClientId
+// answers: "is the cookie's ID safe for THIS window to use, or does another
+// live window own it?" A registry entry is written whenever a window adopts
+// or generates an ID, and refreshed on a 15s heartbeat so a closed window's
+// claim expires quickly. sessionStorage is never trusted for ownership —
+// the registry lives in localStorage so every window can see every claim.
+
+const CLAIM_REGISTRY_KEY = 'sprout.webuiClientId.claims';
+const CLAIM_TTL_MS = 30_000;
+
+interface ClaimEntry {
+  /** Owner window's client ID. */
+  id: string;
+  /** Last heartbeat timestamp (ms). */
+  t: number;
+}
+
+/** Parse and GC the claim registry. Returns the live entries keyed by ID. */
+function readClaimRegistry(): Map<string, ClaimEntry> {
+  const live = new Map<string, ClaimEntry>();
+  try {
+    const raw = window.localStorage.getItem(CLAIM_REGISTRY_KEY);
+    if (!raw) return live;
+    const parsed = JSON.parse(raw) as Record<string, ClaimEntry>;
+    const now = Date.now();
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (!entry || typeof entry.t !== 'number') continue;
+      if (now - entry.t > CLAIM_TTL_MS) continue;
+      live.set(id, entry);
+    }
+  } catch {
+    // Malformed registry — treat as empty.
+  }
+  return live;
+}
+
+/**
+ * Attempt to claim `cookieId` for this window. Returns the cookie ID when
+ * free (or owned by this window from an earlier visit), or a freshly
+ * generated ID when another live window has claimed it. As a side effect,
+ * registers/refreshes this window's claim on the returned ID.
+ */
+function claimOrGenerateClientId(cookieId: string): string {
+  let claimedId = cookieId;
+  const registry = readClaimRegistry();
+  const entry = registry.get(cookieId);
+  if (entry && entry.id !== '') {
+    // The ID is owned by some live window. sessionStorage/window.name for
+    // this window is empty (we would have returned earlier), so that owner
+    // is a different window — mint a new ID instead of sharing.
+    claimedId = generateClientId();
+  }
+
+  registry.set(claimedId, { id: claimedId, t: Date.now() });
+  writeClaimRegistry(registry);
+  startClaimHeartbeat();
+  return claimedId;
+}
+
+function writeClaimRegistry(registry: Map<string, ClaimEntry>): void {
+  try {
+    const obj: Record<string, ClaimEntry> = {};
+    for (const [id, entry] of registry) {
+      if (id === entry.id) obj[id] = entry;
+    }
+    window.localStorage.setItem(CLAIM_REGISTRY_KEY, JSON.stringify(obj));
+  } catch (err) {
+    debugLog('[writeClaimRegistry] failed:', err);
+  }
+}
+
+let claimHeartbeatStarted = false;
+/**
+ * Refresh this window's claim every 10s so other windows see it as live.
+ * The registry GC (CLAIM_TTL_MS) then reaps entries whose window closed.
+ */
+function startClaimHeartbeat(): void {
+  if (claimHeartbeatStarted || typeof window === 'undefined') return;
+  claimHeartbeatStarted = true;
+  const beat = () => {
+    const id = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+    if (!id) return;
+    const registry = readClaimRegistry();
+    registry.set(id, { id, t: Date.now() });
+    writeClaimRegistry(registry);
+  };
+  window.setInterval(beat, 10_000);
+  window.addEventListener('pagehide', (event) => {
+    // Only release the claim on a true unload. When persisted=true the page
+    // may return from bfcache (or a tab discard) — releasing would let
+    // another window adopt this ID while the tab is parked. The TTL
+    // backstop reaps the claim if the tab never comes back.
+    if (event.persisted) return;
+    const id = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+    if (!id) return;
+    try {
+      const registry = readClaimRegistry();
+      registry.delete(id);
+      writeClaimRegistry(registry);
+    } catch {
+      // Non-fatal.
+    }
+  });
 }
 
 // Cookie name used by the server for cross-origin session persistence.
@@ -92,8 +287,11 @@ const clientIDCookieName = 'sprout_client_id';
  * Returns the decoded value or null if not found.
  */
 function readCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const cookies = document.cookie.split(';');
+  // Read via window.document (not the ambient document) so the cookie source
+  // matches the window whose storage this module is scoping — relevant in
+  // tests and non-DOM embeddings where the two can differ.
+  if (typeof window === 'undefined' || !window.document) return null;
+  const cookies = window.document.cookie.split(';');
   for (const cookie of cookies) {
     const [key, ...rest] = cookie.trim().split('=');
     if (key.trim() === name) {
@@ -227,15 +425,30 @@ export function resolveWebUIClientId(): Promise<string> {
     // visit or from a previous syncClientIdFromResponse call during this session).
     const existing = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
     if (existing && existing !== 'default') {
+      writeClientIdToWindowName(existing);
       return existing;
     }
 
+    // Browsing-context recovery via window.name — per-window, survives tab
+    // discard. Checked before the cookie for the same reason as
+    // getWebUIClientId: the cookie is shared across windows, window.name is
+    // not.
+    const windowNameId = readClientIdFromWindowName();
+    if (windowNameId && windowNameId !== 'default') {
+      window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, windowNameId);
+      return windowNameId;
+    }
+
     // Try reading the cookie — works for same-origin deployments and when the
-    // page is served from the same origin as the API.
+    // page is served from the same origin as the API. The claim registry
+    // guards against adopting an ID another live window owns (the shared
+    // cookie would otherwise fuse two windows into one server context).
     const cookieValue = readCookie(clientIDCookieName);
     if (cookieValue && cookieValue !== 'default') {
-      window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, cookieValue);
-      return cookieValue;
+      const claimed = claimOrGenerateClientId(cookieValue);
+      window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
+      writeClientIdToWindowName(claimed);
+      return claimed;
     }
 
     // Cross-origin recovery: make a lightweight request to the server.
@@ -252,8 +465,10 @@ export function resolveWebUIClientId(): Promise<string> {
       });
       const echoedId = resp.headers.get(WEBUI_CLIENT_ID_HEADER);
       if (echoedId && echoedId !== 'default') {
-        window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, echoedId);
-        return echoedId;
+        const claimed = claimOrGenerateClientId(echoedId);
+        window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
+        writeClientIdToWindowName(claimed);
+        return claimed;
       }
     } catch {
       // Network error — fall through to generate a new ID below.
@@ -261,11 +476,10 @@ export function resolveWebUIClientId(): Promise<string> {
     }
 
     // No existing session — generate a new client ID.
-    const generated =
-      typeof window.crypto?.randomUUID === 'function'
-        ? window.crypto.randomUUID()
-        : `webui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const generated = generateClientId();
     window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, generated);
+    writeClientIdToWindowName(generated);
+    claimOrGenerateClientId(generated);
     // Clean up any stale client_id from localStorage to avoid future confusion.
     window.localStorage.removeItem(WEBUI_CLIENT_ID_STORAGE_KEY);
     return generated;

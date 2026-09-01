@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -129,6 +130,18 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 // fragment view instead) rather than shipping megabytes of JSON.
 const maxDiffFileContentBytes = 2 * 1024 * 1024
 
+// looksBinary applies git's heuristic: a NUL byte within the first 8000
+// bytes marks the content binary. Binary contents are omitted from the
+// merge view — shipping raw bytes as a string produces garbage UTF-8 and
+// an unreadable/mojibake editor buffer.
+func looksBinary(data []byte) bool {
+	scanLen := len(data)
+	if scanLen > 8000 {
+		scanLen = 8000
+	}
+	return bytes.IndexByte(data[:scanLen], 0) >= 0
+}
+
 // gitDiffFileContents returns the full before/after contents for a file in
 // the working tree, for the editable merge view.
 //
@@ -136,15 +149,16 @@ const maxDiffFileContentBytes = 2 * 1024 * 1024
 //	new = working-tree contents ("" when the file was deleted)
 //
 // The third return is true when either side was omitted for exceeding
-// maxDiffFileContentBytes. Git errors leave strings empty — the diff text
-// remains authoritative for display; only editability is affected.
+// maxDiffFileContentBytes or being binary. Git errors leave strings empty —
+// the diff text remains authoritative for display; only editability is
+// affected.
 func (ws *ReactWebServer) gitDiffFileContents(workspaceRoot, reqPath string) (string, string, bool) {
 	truncated := false
 
 	var original string
 	if cmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "HEAD:"+reqPath); cmd != nil {
 		if out, err := cmd.Output(); err == nil {
-			if len(out) > maxDiffFileContentBytes {
+			if len(out) > maxDiffFileContentBytes || looksBinary(out) {
 				truncated = true
 			} else {
 				original = string(out)
@@ -164,7 +178,11 @@ func (ws *ReactWebServer) gitDiffFileContents(workspaceRoot, reqPath string) (st
 			truncated = true
 		} else {
 			if data, readErr := os.ReadFile(absPath); readErr == nil {
-				modified = string(data)
+				if looksBinary(data) {
+					truncated = true
+				} else {
+					modified = string(data)
+				}
 			}
 		}
 	}

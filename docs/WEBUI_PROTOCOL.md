@@ -84,19 +84,15 @@ Sprout uses a **Go backend** that serves both a **REST API** and **WebSocket** e
 All REST endpoints and WebSocket connections use a **client ID** to isolate state per browser tab/connection. The client ID is:
 - Appended as a query parameter `?client_id=<uuid>` to all requests
 - Managed by the `clientSession.ts` frontend service
-- Generated as a v4 UUID on first load and persisted in `localStorage`
+- Generated as a v4 UUID on first load and persisted in **`sessionStorage`** (per-tab), with a per-window `window.name` mirror that survives tab discard
+- Cross-origin reload recovery uses the `sprout_client_id` cookie, but only after a localStorage **claim registry** confirms no other live window owns that ID — the cookie is shared per-origin, so naive adoption would fuse two windows onto one server-side client context (shared workspace, terminal, chats)
 
 ```typescript
-// webui/src/services/clientSession.ts
-export function getWebUIClientId(): string {
-  const key = 'sprout.webui.clientId';
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
+// webui/src/services/clientSession.ts (abridged)
+// Resolution order per window:
+//   1. sessionStorage            2. window.name mirror
+//   3. cookie (claim-checked)    4. fresh UUID (claimed + heartbeat)
+export function getWebUIClientId(): string { /* ... */ }
 ```
 
 The `appendClientIdToUrl()` helper ensures every API call includes the client ID.
@@ -631,22 +627,16 @@ Per `TODO.md` (SP-034-5a/5b): When `tygo` or an equivalent generator is adopted,
 
 ## Appendix B: Client ID Management
 
-Every browser tab gets a unique `client_id` persisted in `localStorage` (`sprout.webui.clientId`):
+Every browser tab/window gets a unique `client_id`. Resolution order (see `webui/src/services/clientSession.ts`):
 
-```typescript
-// webui/src/services/clientSession.ts
-export function getWebUIClientId(): string {
-  const key = 'sprout.webui.clientId';
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
-```
+1. **`sessionStorage`** (`sprout.webuiClientId`) — per-tab, survives reloads.
+2. **`window.name` mirror** (`sproutClientId:<uuid>`) — per browsing context, survives Chrome tab discard where sessionStorage is wiped.
+3. **`sprout_client_id` cookie** — cross-origin reload recovery. The cookie is shared by *all* windows of the origin, so before adopting it the client consults a localStorage **claim registry** (`sprout.webuiClientId.claims`, TTL-refreshed heartbeats); if another live window owns the ID, a fresh UUID is minted instead. This keeps two windows from fusing onto one server-side client context.
+4. **Fresh UUID** — generated, written to sessionStorage + window.name, and claimed in the registry (10s heartbeat; released on non-bfcache `pagehide`).
 
 The server uses `client_id` to isolate agent instances per tab, route WebSocket events, manage workspace roots, and track queries/sessions. When absent, defaults to `"web"`.
+
+The persisted workspace path (`sprout.workspaceTabPath…`) is likewise scoped per window (via the `window.name` token) so two windows pointed at different workspaces no longer overwrite each other's restore path.
 
 ## Appendix C: Ping/Pong Heartbeat
 

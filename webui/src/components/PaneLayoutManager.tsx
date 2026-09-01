@@ -325,6 +325,110 @@ function PaneLayoutManager({
     return map;
   }, [chatSessions]);
 
+  // ── Memoized pane prop bundles ────────────────────────────────
+  // WorkspacePane is React.memo'd, but building these objects inline in
+  // renderPaneById produced a fresh identity on every render — defeating the
+  // memo and re-rendering every pane (including full chat message lists)
+  // on each keystroke / active-pane change. One stable bundle per changing
+  // input keeps inactive panes from re-rendering at all.
+  const chatProps = useMemo(
+    () => ({
+      messages,
+      onSendMessage,
+      onQueueMessage,
+      queuedMessagesCount,
+      queuedMessages,
+      onQueueMessageRemove,
+      onQueueMessageEdit,
+      onQueueReorder,
+      onClearQueuedMessages,
+      inputValue,
+      onInputChange,
+      isProcessing,
+      lastError,
+      toolExecutions,
+      queryProgress,
+      currentTodos,
+      subagentActivities,
+      onStopProcessing,
+      chatId: activeChatId || undefined,
+      worktreePath:
+        perChatCache?.[activeChatId || '']?.worktreePath ??
+        chatSessions?.find((s) => s.id === activeChatId)?.worktree_path,
+      workspaceRoot: undefined,
+      onWorktreeChange: undefined,
+      onToolPillClick: (toolId: string) =>
+        (contextPanelRef.current as { highlightTool?: (id: string) => void } | null)?.highlightTool?.(toolId),
+      isConnected,
+      stats,
+      providerAvailable,
+      onRequestProviderSetup,
+    }),
+    [
+      messages,
+      onSendMessage,
+      onQueueMessage,
+      queuedMessagesCount,
+      queuedMessages,
+      onQueueMessageRemove,
+      onQueueMessageEdit,
+      onQueueReorder,
+      onClearQueuedMessages,
+      inputValue,
+      onInputChange,
+      isProcessing,
+      lastError,
+      toolExecutions,
+      queryProgress,
+      currentTodos,
+      subagentActivities,
+      onStopProcessing,
+      activeChatId,
+      perChatCache,
+      chatSessions,
+      contextPanelRef,
+      isConnected,
+      stats,
+      providerAvailable,
+      onRequestProviderSetup,
+    ],
+  );
+
+  const reviewProps = useMemo(
+    () => ({
+      review: deepReview,
+      reviewError,
+      reviewFixResult,
+      reviewFixLogs,
+      reviewFixSessionID,
+      isReviewLoading,
+      isReviewFixing,
+      onFixFromReview,
+    }),
+    [
+      deepReview,
+      reviewError,
+      reviewFixResult,
+      reviewFixLogs,
+      reviewFixSessionID,
+      isReviewLoading,
+      isReviewFixing,
+      onFixFromReview,
+    ],
+  );
+
+  const diffState = useMemo(
+    () => ({
+      activeDiffPath,
+      activeDiff,
+      diffMode,
+      isDiffLoading,
+      diffError,
+      onDiffModeChange,
+    }),
+    [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, onDiffModeChange],
+  );
+
   const handlePaneResize = useCallback(
     (sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) =>
       (_deltaPixels: number, totalDeltaPixels: number) => {
@@ -496,56 +600,9 @@ function PaneLayoutManager({
               onClick={() => switchPane(pane.id)}
               perChatCache={perChatCache}
               activeChatId={activeChatId}
-              chatProps={{
-                messages,
-                onSendMessage,
-                onQueueMessage,
-                queuedMessagesCount,
-                queuedMessages,
-                onQueueMessageRemove,
-                onQueueMessageEdit,
-                onQueueReorder,
-                onClearQueuedMessages,
-                inputValue,
-                onInputChange,
-                isProcessing,
-                lastError,
-                toolExecutions,
-                queryProgress,
-                currentTodos,
-                subagentActivities,
-                onStopProcessing,
-                chatId: activeChatId || undefined,
-                worktreePath:
-                  perChatCache?.[activeChatId || '']?.worktreePath ??
-                  chatSessions?.find((s) => s.id === activeChatId)?.worktree_path,
-                workspaceRoot: undefined,
-                onWorktreeChange: undefined,
-                onToolPillClick: (toolId: string) =>
-                  (contextPanelRef.current as { highlightTool?: (id: string) => void } | null)?.highlightTool?.(toolId),
-                isConnected,
-                stats,
-                providerAvailable,
-                onRequestProviderSetup,
-              }}
-              reviewProps={{
-                review: deepReview,
-                reviewError,
-                reviewFixResult,
-                reviewFixLogs,
-                reviewFixSessionID,
-                isReviewLoading,
-                isReviewFixing,
-                onFixFromReview,
-              }}
-              diffState={{
-                activeDiffPath,
-                activeDiff,
-                diffMode,
-                isDiffLoading,
-                diffError,
-                onDiffModeChange,
-              }}
+              chatProps={chatProps}
+              reviewProps={reviewProps}
+              diffState={diffState}
               onOpenCommandPalette={onOpenCommandPalette}
               onOpenTerminal={onOpenTerminal}
               onViewGit={onViewGit}

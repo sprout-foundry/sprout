@@ -54,30 +54,44 @@ Shipped fixes:
 
 ## R-4: chat + git webui seams (the last two reserved portions)
 
-Mirror the proven R-3 template exactly, for both remaining portions in
-one pass:
-
-- **Chat**: `--native-chat` on `scripts/build-webui-dist.mjs` (sets
-  `VITE_SPROUT_NATIVE_CHAT=1`), stub-alias the webui chat transport
-  modules (per the R-0 audit's chat section: fetch/SSE agent-turn client
-  paths) behind `nativeChatStubs/`, compile-time short-circuits so the
-  webui chat transport never initializes, manifest portion `"chat"`
-  (`seam-only` default), `--ratify-chat` (requires base flag), runtime
-  gate leaf `services/nativeChat/` (both builds, inert by default)
-  mirroring `services/nativeTerminal/`.
-- **Git**: `--native-git` / `--ratify-git` / `nativeGitStubs/` / portion
-  `"git"` / `services/nativeGit/` leaf — same shape, for the audit's git
-  modules (status/log/diff/commit client paths).
-- Flags additive with each other and with `--native-fs` /
-  `--native-terminal`; every `--ratify-*` requires its base; all
-  prohibited with `--components`. ADR-0008 flag table + seam subsections;
-  audit §2.1 rows; fail-fast validation updated.
-- Tests mirroring the native-terminal suites: flag matrix, stub no-op,
-  boot short-circuits both states, manifest entries. Default build
-  byte-identical; full webui suite green.
-- Evidence per R-3: real dist builds, absent-module marker counts,
-  fail-fast exits verified. Device verification stays batched (see
-  sprout-studio TODO R-4s).
+- [x] **R-4 — chat + git webui seams (the last two reserved portions)**:
+      **Evidence 2026-08-31 (main @ d565c88c6):** both portions shipped,
+      reviewer-verified (all 10 contract invariants hold; the one MUST_FIX
+      was an unrelated workflow.json model fix, committed separately in
+      def8edb01).
+      **Chat** (`--native-chat`): sets `VITE_SPROUT_NATIVE_CHAT=1`; Vite
+      `nativeChatStubAliases` swap `services/api/chatApi` → type-compatible
+      no-op stub under `nativeChatStubs/` (never fetches); compile-time
+      short-circuits (dead branch flag-off) in `useCommandSubmit`,
+      `useChatSessionManager`, `useWebSocketEventHandler`, `cloudWasmHandlers`
+      `/api/query*`; ChatView renders "Chat provided by the native shell";
+      `--ratify-chat` (requires base, emits ratified); runtime-gate leaf
+      `services/nativeChat/` mirrors `nativeFs`/`nativeTerminal` (inert
+      until ratification).
+      **Git** (`--native-git`): same shape — `nativeGitStubAliases` swap
+      `services/api/gitApi` (status/log/diff/commit client path);
+      documented seam-vs-swap decision: `gitClient`/`browserGit` deliberately
+      NOT aliased (browserGit's working tree IS the WASM VFS; both share the
+      `sprout-git` lightning-fs namespace — a deeper alias would be a swap);
+      `useAppInitialization` skips all three git boot blocks
+      (configureBrowserGit, git tool bridge, shellGitAdapter); Sidebar
+      renders "Git provided by the native shell"; `--ratify-git` requires
+      base; gate leaf `services/nativeGit/`.
+      `RESERVED_NATIVE_FLAGS` removed — zero reserved `--native-*` flags
+      remain. Flags additive with each other and with `--native-fs`/
+      `--native-terminal` (4-flag build verified); all `--ratify-*` require
+      base; all prohibited with `--components` (exit 1). ADR-0008 flag table
+      + Chat/Git seam subsections; audit §2.1 updated.
+      Verified: tsc clean; `go build ./...` clean; full webui suite
+      **6215 passed / 0 failed** across all 218 test files (34 batches ≤10,
+      `VITEST_MAX_WORKERS=2`); real dist builds — `--native-chat` cloud
+      dist emits capabilities.json (chat/seam-only) with the real chatApi
+      genuinely absent (error-literal markers default 1 → 0), `--native-git`
+      dist emits git/seam-only with real gitApi marker 1→0 and the
+      shellGitAdapter/agentGitToolBridge chunks dropped entirely (18→17 JS
+      files); default dist has NO capabilities.json and all modules present;
+      fail-fast exits verified. Device verification stays batched with
+      R-2/R-3 (iPad recharge), as filed.
 
 ---
 

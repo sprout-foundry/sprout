@@ -212,7 +212,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
                 <span className="repo-import-spinner" />
                 <div className="repo-import-text">
                   <strong>Loading {importRepoName}…</strong>
-                  <span>Cloning repo and initializing browser shell</span>
+                  <span>Cloning repo and preparing shell</span>
                 </div>
               </>
             )}

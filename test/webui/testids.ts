@@ -23,6 +23,7 @@
 const TESTIDS = {
   // Chat
   'chat-shell': 'chat-shell',
+  'diff-surface': 'diff-surface',
   'chat-main': 'chat-main',
   'chat-input': 'chat-input',
   'chat-send': 'chat-send',

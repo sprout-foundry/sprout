@@ -2,9 +2,41 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Direct child of the row-flex .editor-pane-host: without an explicit
+   * basis the tab sizes to its content, so a wide diff pane shrinks the
+   * whole tab and its width then oscillates with the diff's internal mode
+   * (side-by-side vs unified content widths differ) — feeding the
+   * ResizeObserver-driven mode-degrade loop. Always fill the host. */
+  width: 100%;
   min-width: 0;
   min-height: 0;
   background: var(--editor-pane-bg);
+}
+
+/* Flex-fill + bound the merge view: without this the wrapper sizes to its
+ * content height (the FULL document), overflowing the pane and letting the
+ * merge wrapper's measured geometry depend on diff content. Bounded here,
+ * the ResizeObserver measures pane-driven width only. */
+.workspace-diff-merge-wrapper {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-diff-collapse-toggle {
+  flex-shrink: 0;
+}
+
+.workspace-diff-merge-wrapper .merge-view-wrapper {
+  flex: 1;
+  min-height: 0;
+  /* Inside the column flex the wrapper already has the toggle sibling;
+   * height:100% would resolve against the full wrapper height and
+   * overflow. Take the remaining space instead. */
+  height: auto;
 }
 
 .workspace-tab-header {

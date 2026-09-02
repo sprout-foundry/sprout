@@ -38,6 +38,9 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.Equal(t, "glm-ocr", cfg.PDFOCRModel)
 	assert.NotEmpty(t, cfg.SubagentTypes, "SubagentTypes should contain defaults")
 	assert.NotEmpty(t, cfg.Skills, "Skills should contain defaults")
+	assert.True(t, cfg.Wakeup.Enabled, "Wakeup should default to enabled")
+	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession, "Wakeup MaxTokensPerSession should default to 5000")
+	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession, "Wakeup MaxResumesPerSession should default to 10")
 }
 
 // ---------------------------------------------------------------------------
@@ -279,4 +282,60 @@ func TestSaveLoadRoundTripExplicitFalseZshFields(t *testing.T) {
 		"EnableZshCommandDetection should survive save/load round-trip as false")
 	assert.False(t, loaded.AutoExecuteDetectedCommands,
 		"AutoExecuteDetectedCommands should survive save/load round-trip as false")
+}
+
+// ---------------------------------------------------------------------------
+// Load() applies default wakeup config when the key is omitted (SP-fix)
+// ---------------------------------------------------------------------------
+
+// TestLoadDefaultsAppliedForOmittedWakeup verifies that when a config file
+// omits the wakeup key entirely, Load() applies the DefaultWakeupConfig()
+// values instead of leaving the Go zero value (Enabled:false, budgets 0).
+func TestLoadDefaultsAppliedForOmittedWakeup(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	configPath := filepath.Join(tmpDir, ConfigFileName)
+	minimalConfig := `{
+		"version": "2.0",
+		"last_used_provider": "ollama-local"
+	}`
+	require.NoError(t, os.WriteFile(configPath, []byte(minimalConfig), 0600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.True(t, cfg.Wakeup.Enabled,
+		"Wakeup.Enabled should default to true when the key is absent from file")
+	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession,
+		"Wakeup.MaxTokensPerSession should default to 5000 when omitted")
+	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession,
+		"Wakeup.MaxResumesPerSession should default to 10 when omitted")
+}
+
+// TestLoadRespectsExplicitWakeupOptOut verifies that a config file that
+// explicitly disables wakeup preserves the opt-out, while the budget fields
+// (not present in the file) still fall back to the seeded defaults.
+func TestLoadRespectsExplicitWakeupOptOut(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	configPath := filepath.Join(tmpDir, ConfigFileName)
+	explicitOptOut := `{
+		"version": "2.0",
+		"wakeup": {"enabled": false}
+	}`
+	require.NoError(t, os.WriteFile(configPath, []byte(explicitOptOut), 0600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.False(t, cfg.Wakeup.Enabled,
+		"Wakeup.Enabled should be false when explicitly set to false in file")
+	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession,
+		"Wakeup.MaxTokensPerSession should keep its default when not in file")
+	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession,
+		"Wakeup.MaxResumesPerSession should keep its default when not in file")
 }

@@ -194,4 +194,25 @@ describe('MergeViewWrapper responsive orientation', () => {
     await fireWidth(400);
     expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
   });
+
+  it('hysteresis: widths straddling the threshold do not oscillate the mode', async () => {
+    render(<MergeViewWrapper originalContent="a\nb\n" modifiedContent="a\nc\n" mode="side-by-side" fileName="f.txt" />);
+    await flushIdle();
+
+    // Simulate the pre-fix content-dependent width: unified content
+    // measures above the degrade threshold, side-by-side below it.
+    // 519 (< 560) → degrade to unified.
+    await fireWidth(519);
+    expect(container!.querySelector('.merge-view-narrow-hint')).not.toBeNull();
+
+    // 604 (>= 560 but < 560+80) → stays unified (restore only above 640).
+    await fireWidth(604);
+    expect(container!.querySelector('.merge-view-narrow-hint')).not.toBeNull();
+    expect(container!.querySelector('.merge-view-wrapper')!.className).toContain('unified');
+
+    // Above the restore threshold → back to side-by-side.
+    await fireWidth(700);
+    expect(container!.querySelector('.merge-view-narrow-hint')).toBeNull();
+    expect(container!.querySelector('.merge-view-wrapper')!.className).toContain('side-by-side');
+  });
 });

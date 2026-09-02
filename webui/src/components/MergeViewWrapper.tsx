@@ -30,6 +30,11 @@ const MAX_HIGHLIGHT_LINES = 5000;
  * two editors narrower than this are unreadable. */
 const NARROW_PANE_PX = 560;
 
+/** Width must clear NARROW_PANE_PX + this to restore side-by-side.
+ * Prevents oscillation when the measured width sits at (or depends on the
+ * rendered content near) the threshold. */
+const NARROW_HYSTERESIS_PX = 80;
+
 export interface MergeViewWrapperProps {
   /** Original content (left pane in side-by-side mode) */
   originalContent: string;
@@ -109,6 +114,11 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   // Side-by-side below NARROW_PANE_PX squeezes both editors to unreadable
   // widths (e.g. half of a half-width split). Measure the wrapper and
   // degrade the requested mode to unified in narrow containers.
+  // Hysteresis: degrade below NARROW_PANE_PX, restore only above
+  // NARROW_PANE_PX + margin. Without the gap, a wrapper whose measured
+  // width sits at the threshold (or whose width depends on the rendered
+  // mode's content) oscillates degrade→restore→degrade forever, tearing
+  // down and rebuilding the view ~30×/sec.
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isNarrow, setIsNarrow] = useState(false);
   useEffect(() => {
@@ -119,7 +129,14 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       const width = entries[0]?.contentRect.width ?? 0;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        setIsNarrow(width > 0 && width < NARROW_PANE_PX);
+        if (width <= 0) return;
+        setIsNarrow((prev) => {
+          // Hysteresis: crossing down degrades at NARROW_PANE_PX; restore
+          // only once the width clears NARROW_PANE_PX + margin. A single
+          // threshold with content-dependent width oscillates forever.
+          if (prev) return width < NARROW_PANE_PX + NARROW_HYSTERESIS_PX;
+          return width < NARROW_PANE_PX;
+        });
       });
     });
     ro.observe(el);

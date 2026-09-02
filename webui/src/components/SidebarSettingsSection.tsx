@@ -184,11 +184,7 @@ function CloudProviderModelSection({
                 ? emptyReasonCopy.error
                 : (emptyReason && emptyReasonCopy[emptyReason]) || 'No models available for this provider.'}
             </span>
-            <button
-              type="button"
-              className="settings-link-btn"
-              onClick={() => fetchModelList(selectedProvider)}
-            >
+            <button type="button" className="settings-link-btn" onClick={() => fetchModelList(selectedProvider)}>
               Retry
             </button>
           </div>
@@ -422,8 +418,8 @@ export default function SidebarSettingsSection({
           <div className="section">
             <h4>API Key</h4>
             <p className="settings-section-desc">
-              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely on
-              the server.
+              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely
+              on the server.
             </p>
             <CredentialsSettingsTab />
           </div>

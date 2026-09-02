@@ -1607,7 +1607,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-09-01",
+    "last_verified": "2026-09-02",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4142,6 +4142,30 @@
         "input_per_mtok": 0.1,
         "output_per_mtok": 0.15,
         "cached_per_mtok": 0.05
+      },
+      {
+        "id": "anthropic/claude-fable-5.1",
+        "input_per_mtok": 10,
+        "output_per_mtok": 50,
+        "cached_per_mtok": 0.25
+      },
+      {
+        "id": "anthropic/claude-fable-5.1:batch",
+        "input_per_mtok": 5,
+        "output_per_mtok": 25,
+        "cached_per_mtok": 0.125
+      },
+      {
+        "id": "inception/mercury-2.5-preview",
+        "input_per_mtok": 0.04,
+        "output_per_mtok": 0.15,
+        "cached_per_mtok": 0.004
+      },
+      {
+        "id": "~z-ai/glm-flash-latest",
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.25,
+        "cached_per_mtok": 0.015
       }
     ]
   },

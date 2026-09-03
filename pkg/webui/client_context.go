@@ -535,7 +535,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	// NOTE: A narrow TOCTOU race exists between this config read and the
 	// config read inside agent.NewAgentWithModel. Acceptable since the worst
 	// case is a single unnecessary retry after the user configures a provider.
-	if !isProviderAvailable() {
+	if !isProviderAvailableInWorkspace(workspaceRoot) {
 		return nil, ErrNoProviderConfigured
 	}
 

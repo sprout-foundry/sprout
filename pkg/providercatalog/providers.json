@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T13:43:22Z",
+  "updated_at": "2026-09-03T13:38:19Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -397,8 +397,8 @@
           "name": "DeepSeek Chat",
           "description": "DeepSeek Chat - General purpose chat model (alias for V4 Flash non-thinking)",
           "context_length": 1000000,
-          "input_cost": 0.2574,
-          "output_cost": 1.0287
+          "input_cost": 0.32,
+          "output_cost": 0.8899999999999999
         },
         {
           "id": "deepseek-coder",
@@ -1557,8 +1557,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.2574,
-          "output_cost": 1.0287
+          "input_cost": 0.32,
+          "output_cost": 0.8899999999999999
         },
         {
           "id": "deepseek/deepseek-chat-v3-0324",
@@ -2176,8 +2176,36 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.1875,
-          "output_cost": 0.9375
+          "input_cost": 0.375,
+          "output_cost": 1.875
+        },
+        {
+          "id": "google/gemini-3.8-flash",
+          "name": "Google: Gemini 3.8 Flash",
+          "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.75,
+          "output_cost": 3.75
+        },
+        {
+          "id": "google/gemini-3.8-flash:batch",
+          "name": "Google: Gemini 3.8 Flash (batch)",
+          "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.375,
+          "output_cost": 1.875
         },
         {
           "id": "google/gemma-2-27b-it",
@@ -2590,8 +2618,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.71,
-          "output_cost": 0.71
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.32
         },
         {
           "id": "meta-llama/llama-4-maverick",
@@ -2643,7 +2671,7 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.1
         },
         {
           "id": "meta/muse-glimmer-30b:batch",
@@ -2691,6 +2719,34 @@
           "id": "meta/muse-spark-1.2-contributor",
           "name": "Meta: Muse Spark 1.2 Contributor",
           "description": "Muse Spark 1.2 contributor tier is a reasoning model from Meta designed for developers who want to start building at an even lower cost. It’s meaningfully cheaper than Muse Spark...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.19999999999999998
+        },
+        {
+          "id": "meta/muse-spark-1.3",
+          "name": "Meta: Muse Spark 1.3",
+          "description": "Muse Spark 1.3 is a multimodal reasoning model from Meta for long-running agentic, multi-agent, and coding workflows. It is designed to keep track of information across extended tasks, work through...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1.25,
+          "output_cost": 4.25
+        },
+        {
+          "id": "meta/muse-spark-1.3-contributor",
+          "name": "Meta: Muse Spark 1.3 Contributor",
+          "description": "Muse Spark 1.3 Contributor is the cost-efficient contributor tier of Meta’s multimodal reasoning model for experimentation, learning, and early-stage agentic, multi-agent, and coding workflows. It is designed to track information...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -3450,21 +3506,19 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.625,
-          "output_cost": 3.125
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:batch",
           "name": "NVIDIA: Nemotron 3 Ultra (batch)",
-          "description": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid Transformer-Mamba mixture-of-experts architecture, it...",
+          "description": "NVIDIA Nemotron 3 Ultra via the Batch API at 50% of standard pricing. Open frontier-reasoning and orchestration model.",
           "context_length": 512288,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.6,
-          "output_cost": 3.5999999999999996
+          ]
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -5022,8 +5076,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 0.75
+          "input_cost": 0.7999999999999999,
+          "output_cost": 1
         },
         {
           "id": "qwen/qwen3-14b",
@@ -5397,8 +5451,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39,
-          "output_cost": 2.34
+          "input_cost": 0.55,
+          "output_cost": 3.5
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -5495,8 +5549,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.8999999999999999
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.7
         },
         {
           "id": "qwen/qwen3.6-flash",
@@ -6195,8 +6249,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43,
-          "output_cost": 1.75
+          "input_cost": 0.55,
+          "output_cost": 2.2
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -6544,8 +6598,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.15,
-          "output_cost": 3.5
+          "input_cost": 1.1340000000000001,
+          "output_cost": 3.564
         }
       ]
     },
@@ -6815,6 +6869,19 @@
           ],
           "input_cost": 0.08,
           "output_cost": 0.18
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+          "name": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.44,
+          "output_cost": 1.32
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro",

@@ -276,7 +276,8 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var query struct {
-		Query string `json:"query"`
+		Query  string `json:"query"`
+		ChatID string `json:"chat_id"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
@@ -290,11 +291,19 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	clientID := ws.resolveClientID(r)
+	// Resolve chat_id the same way handleAPIQuery does: prefer the body
+	// parameter (the frontend always sends it), fall back to the URL query
+	// parameter and the client's active chat. Using only the active-chat
+	// fallback misrouted steers to the wrong chat's agent when a query was
+	// running in a non-active chat.
+	chatID := strings.TrimSpace(query.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
+
 	// Handle slash commands during active query
 	if strings.HasPrefix(query.Query, "/") {
-		clientID := ws.resolveClientID(r)
-		chatID := ws.resolveChatID(r, clientID)
-
 		ws.mutex.RLock()
 		ctx := ws.clientContexts[clientID]
 		hasActiveQuery := ctx != nil && ctx.hasActiveQueryForChat(chatID)
@@ -339,9 +348,6 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		writeJSONErr(w, http.StatusBadRequest, "slash_command_not_steerable", "Slash commands cannot be steered while a query is running")
 		return
 	}
-
-	clientID := ws.resolveClientID(r)
-	chatID := ws.resolveChatID(r, clientID)
 
 	ws.mutex.RLock()
 	ctx := ws.clientContexts[clientID]
@@ -431,8 +437,20 @@ func (ws *ReactWebServer) handleAPIQuerySteerRetract(w http.ResponseWriter, r *h
 		return
 	}
 
+	// The frontend sends chat_id in the body (see retractSteer in chatApi.ts);
+	// resolveChatID only reads the URL query param, so honor the body value
+	// first — otherwise retract targets the active chat instead of the chat
+	// that actually staged the steer.
+	var body struct {
+		ChatID string `json:"chat_id"`
+	}
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)).Decode(&body)
+
 	clientID := ws.resolveClientID(r)
-	chatID := ws.resolveChatID(r, clientID)
+	chatID := strings.TrimSpace(body.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
 
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {

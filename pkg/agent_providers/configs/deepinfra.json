@@ -1451,6 +1451,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.14,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Flash Vision Exp is the experimental multimodal variant of DeepSeek V4 Flash, adding vision input to the efficiency-focused Flash line with a 1M-token context window and reasoning support.",
+        "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+        "input_cost": 0.44,
+        "name": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+        "output_cost": 1.32,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

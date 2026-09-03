@@ -6276,6 +6276,66 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+        "id": "google/gemini-3.8-flash",
+        "input_cost": 0.75,
+        "name": "Google: Gemini 3.8 Flash",
+        "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 1048576,
+        "description": "Gemini 3.8 Flash via the Batch API at 50% of standard pricing. Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+        "id": "google/gemini-3.8-flash:batch",
+        "input_cost": 0.375,
+        "name": "Google: Gemini 3.8 Flash (batch)",
+        "output_cost": 1.875,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.3 is a multimodal reasoning model from Meta for long-running agentic, multi-agent, and coding workflows. It is designed to keep track of information across extended tasks, work through conflicting inputs, and request clarification or confirmation when needed, with an emphasis on concise execution.",
+        "id": "meta/muse-spark-1.3",
+        "input_cost": 1.25,
+        "name": "Meta: Muse Spark 1.3",
+        "output_cost": 4.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.002,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.3 Contributor is the cost-efficient contributor tier of Meta’s multimodal reasoning model for experimentation, learning, and early-stage agentic, multi-agent, and coding workflows. It is designed to track information across extended tasks, work through conflicting inputs, and request clarification or confirmation when needed. Prompts and outputs may be used to improve Meta’s products.",
+        "id": "meta/muse-spark-1.3-contributor",
+        "input_cost": 0.1,
+        "name": "Meta: Muse Spark 1.3 Contributor",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

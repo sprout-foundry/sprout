@@ -152,18 +152,18 @@
   font-size: 11px;
   font-weight: 500;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
-    background,
-    color,
-    border-color,
-    box-shadow,
-    transform 0.15s ease;
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
 }
 
-.merge-view-controls button:hover {
-  filter: brightness(1.1);
+.merge-view-controls button:hover:not(:disabled):not(.btn-accept):not(.btn-reject) {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
 }
 
 .merge-view-controls button:focus-visible {
@@ -171,8 +171,9 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-.merge-view-controls button:active {
-  transform: scale(0.98);
+.merge-view-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .merge-view-controls .btn-accept {
@@ -181,15 +182,23 @@
   border-color: var(--accent-success);
 }
 
+.merge-view-controls .btn-accept:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-success) 85%, var(--bg-primary));
+}
+
 .merge-view-controls .btn-reject {
   background: var(--accent-error);
   color: var(--accent-fg);
   border-color: var(--accent-error);
 }
 
+.merge-view-controls .btn-reject:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-error) 85%, var(--bg-primary));
+}
+
 .merge-view-controls .btn-undo,
 .merge-view-controls .btn-redo {
-  background: var(--bg-primary);
+  background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--border-subtle);
 }
@@ -202,7 +211,7 @@
 
 .merge-view-controls .btn-prev,
 .merge-view-controls .btn-next {
-  background: var(--bg-primary);
+  background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--border-subtle);
 }

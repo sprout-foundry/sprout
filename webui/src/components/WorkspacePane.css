@@ -107,7 +107,7 @@
 
 .workspace-diff-mode-tab.active {
   background: var(--accent-primary);
-  color: var(--accent-on-primary, #fff);
+  color: var(--accent-on-primary);
   border-color: var(--accent-primary);
 }
 
@@ -235,7 +235,7 @@
   margin-top: 12px;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(148, 163, 184, 0.04);
+  background: color-mix(in srgb, var(--text-tertiary) 4%, transparent);
   border: 1px solid var(--border-subtle);
 }
 
@@ -249,7 +249,7 @@
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  background: rgba(148, 163, 184, 0.04);
+  background: color-mix(in srgb, var(--text-tertiary) 4%, transparent);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.55;
@@ -405,17 +405,17 @@
 
 .review-guidance-section.tone-danger .review-guidance-header h4,
 .review-guidance-section.tone-danger .review-guidance-header {
-  color: var(--accent-error, #f87171);
+  color: var(--accent-error);
 }
 
 .review-guidance-section.tone-warning .review-guidance-header h4,
 .review-guidance-section.tone-warning .review-guidance-header {
-  color: var(--accent-warning, #fbbf24);
+  color: var(--accent-warning);
 }
 
 .review-guidance-section.tone-info .review-guidance-header h4,
 .review-guidance-section.tone-info .review-guidance-header {
-  color: var(--accent-info, #60a5fa);
+  color: var(--accent-info);
 }
 
 .review-guidance-section.tone-neutral .review-guidance-header h4,
@@ -491,7 +491,7 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
-  background: rgba(148, 163, 184, 0.06);
+  background: color-mix(in srgb, var(--text-tertiary) 6%, transparent);
   transition:
     border-color 0.15s ease,
     background 0.15s ease;

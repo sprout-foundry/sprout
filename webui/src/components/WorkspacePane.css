@@ -111,6 +111,90 @@
   border-color: var(--accent-primary);
 }
 
+.workspace-diff-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Merge/Text view switch — segmented control, same vocabulary as the
+   mode tabs above so the header reads as one control group. */
+.workspace-diff-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.workspace-diff-view-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: calc(var(--radius-sm) - 2px);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.workspace-diff-view-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.workspace-diff-view-btn.active {
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+}
+
+.workspace-diff-view-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* "Collapse unchanged regions" toggle shown with the merge editor. */
+.workspace-diff-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.workspace-diff-collapse-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.workspace-diff-collapse-btn.active {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  color: var(--accent-primary);
+}
+
+.workspace-diff-collapse-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .review-workspace-shell {
   height: 100%;
 }

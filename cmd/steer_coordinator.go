@@ -228,22 +228,36 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	// to the deepest running subagent.
 	if runner := c.agent.GetSubagentRunner(); runner != nil {
 		if target, ok := runner.InjectInputIntoActive(text); ok {
-			fmt.Fprintln(os.Stderr)
-			if target == "primary" {
-				console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
-			} else {
-				console.GlyphAction.Fprintf(os.Stderr, "steer → subagent (%s): %s", target, text)
+			prefix := "\n" + console.GlyphAction.Prefix() + "steer queued: "
+			if target != "primary" {
+				prefix = "\n" + console.GlyphAction.Prefix() + fmt.Sprintf("steer → subagent (%s): ", target)
 			}
+			printSteerAck(prefix + text)
 			return
 		}
 	}
 	if err := c.agent.InjectInputContext(text); err != nil {
-		fmt.Fprintln(os.Stderr)
-		console.GlyphError.Fprintf(os.Stderr, "steer dropped: %v", err)
+		printSteerAck("\n" + console.GlyphError.Prefix() + fmt.Sprintf("steer dropped: %v", err))
 		return
 	}
-	fmt.Fprintln(os.Stderr)
-	console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
+	printSteerAck("\n" + console.GlyphAction.Prefix() + "steer queued: " + text)
+}
+
+// printSteerAck prints a steer-panel acknowledgement (submit / queue /
+// reject / exec notifications) without corrupting the pinned layout.
+//
+// These fire mid-turn while the steer reader is active, so a bare
+// fmt.Fprint to stderr would land at whatever row the streaming cursor
+// last occupied — often the reserved footer rows at the bottom of the
+// screen, leaving the cursor stranded there and causing all subsequent
+// output to print on the last line. PrintExternal routes through the
+// active input/steer reader's printExternalLocked, which positions the
+// cursor at the bottom of the scroll region, writes the message inside
+// it (so \n scrolls the region normally), repositions, and re-renders
+// the pinned steer panel. That is the only path that writes mid-turn
+// without breaking the layout.
+func printSteerAck(msg string) {
+	console.PrintExternal(msg)
 }
 
 // handleSteerRetract pulls back the newest un-picked message for re-editing
@@ -319,8 +333,7 @@ func (c *SteerCoordinator) handleQueueSubmit(text string) {
 		return
 	}
 	c.agent.EnqueueDeferredMessage(text)
-	fmt.Fprintln(os.Stderr)
-	console.GlyphPaused.Fprintf(os.Stderr, "queued → runs when this turn ends: %s", text)
+	printSteerAck("\n" + console.GlyphPaused.Prefix() + fmt.Sprintf("queued → runs when this turn ends: %s", text))
 	// Refresh the footer so the new "⏸ N queued" badge appears in the
 	// same frame the user submitted. Without this nudge the badge
 	// would lag until the next tool/cost event fires.
@@ -340,11 +353,9 @@ func rejectCommandIntent(intent PromptIntent, text, mode, remedy string) {
 	if len(preview) > maxPreview {
 		preview = preview[:maxPreview-1] + "…"
 	}
-	fmt.Fprintln(os.Stderr)
-	console.GlyphWarning.Fprintf(os.Stderr,
-		"%s mode can't run a %s — %s. Dropped: %s",
-		mode, string(intent), remedy, preview,
-	)
+	printSteerAck("\n" + console.GlyphWarning.Prefix() +
+		fmt.Sprintf("%s mode can't run a %s — %s. Dropped: %s",
+			mode, string(intent), remedy, preview))
 }
 
 // executeSteerCommand tries to run a slash command mid-turn. Returns true
@@ -381,11 +392,11 @@ func (c *SteerCoordinator) executeSteerCommand(text string) bool {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				console.GlyphError.Fprintf(os.Stderr, "command /%s panicked: %v", cmdName, r)
+				printSteerAck(console.GlyphError.Prefix() + fmt.Sprintf("command /%s panicked: %v", cmdName, r))
 			}
 		}()
 		if err := cmd.Execute(parts[1:], c.agent); err != nil {
-			console.GlyphError.Fprintf(os.Stderr, "command /%s: %v", cmdName, err)
+			printSteerAck(console.GlyphError.Prefix() + fmt.Sprintf("command /%s: %v", cmdName, err))
 		}
 	}()
 	return true
@@ -408,13 +419,12 @@ func (c *SteerCoordinator) executeSteerShell(text string) bool {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				console.GlyphError.Fprintf(os.Stderr, "command failed: %v", r)
+				printSteerAck(console.GlyphError.Prefix() + fmt.Sprintf("command failed: %v", r))
 			}
 		}()
-		fmt.Fprintln(os.Stderr)
-		console.GlyphShell.Fprintf(os.Stderr, "exec (steer): %s", text)
+		printSteerAck("\n" + console.GlyphShell.Prefix() + fmt.Sprintf("exec (steer): %s", text))
 		if err := registry.Execute(text, c.agent); err != nil {
-			console.GlyphError.Fprintf(os.Stderr, "command failed: %v", err)
+			printSteerAck(console.GlyphError.Prefix() + fmt.Sprintf("command failed: %v", err))
 		}
 	}()
 	return true

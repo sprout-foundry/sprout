@@ -680,12 +680,40 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 	}
 
 	clientID := ws.resolveClientID(r)
+
+	// "Skip — use as editor" is a dismissal of the setup dialog, not a
+	// durable configuration choice. Persisting "editor" to the GLOBAL
+	// config gates agent creation for every workspace (see
+	// isProviderAvailableInWorkspace), including workspaces whose own
+	// config fully configures a provider — a workspace that never asked
+	// to be editor-only. So:
+	//
+	//   • Workspace scope available → persist "editor" to the workspace
+	//     layer only (sticky for this project, invisible elsewhere).
+	//   • No workspace scope (daemon at $HOME before workspace selection)
+	//     → session-only dismissal, persist nothing.
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if configuration.WorkspaceConfigDir(workspaceRoot) == "" {
+		ws.log().Info("onboarding skipped without a workspace scope — editor mode not persisted",
+			slog.String("client_id", clientID),
+		)
+		_ = ws.syncAgentStateForClient(clientID)
+		ws.publishProviderState(clientID)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"provider": "editor",
+			"model":    "",
+		})
+		return
+	}
+
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return
 	}
 
-	// Set last used provider to "editor" to indicate editor-only mode
+	// The manager resolved here is layered (global + workspace); UpdateConfig
+	// saves to the workspace layer, which is the intended scope.
 	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
 		cfg.LastUsedProvider = "editor"
 		return nil

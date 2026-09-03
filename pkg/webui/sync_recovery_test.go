@@ -38,12 +38,27 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 }
 
 // newNoProviderConfig sets up a temp config directory with LastUsedProvider
-// set to "editor" so that isProviderAvailable() returns false, causing
+// set to "editor" so that isProviderAvailable* returns false, causing
 // getClientAgent to return ErrNoProviderConfigured. Returns the config dir.
-func newNoProviderConfig(t *testing.T) string {
+//
+// The workspace isolation matters: the provider gate is workspace-aware, so
+// a test server running with the repo's own workspace (a dev checkout's
+// pkg/webui/.sprout may configure a real provider) would allow agent creation.
+// Pointing the server's and default client's workspace roots at a temp dir
+// keeps "no provider" semantics regardless of the checkout's local state.
+func newNoProviderConfig(t *testing.T, server *ReactWebServer) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	if server != nil {
+		server.mutex.Lock()
+		server.workspaceRoot = tmpDir
+		if ctx := server.clientContexts[defaultWebClientID]; ctx != nil {
+			ctx.WorkspaceRoot = tmpDir
+		}
+		server.mutex.Unlock()
+	}
 
 	// Write a minimal config.json with last_used_provider = "editor"
 	// (snake_case to match the JSON tag on Config.LastUsedProvider)
@@ -60,7 +75,7 @@ func newNoProviderConfig(t *testing.T) string {
 
 func TestHandleContainerRecoveryWithSeqs_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
-	newNoProviderConfig(t)
+	newNoProviderConfig(t, server)
 
 	_, err := server.HandleContainerRecoveryWithSeqs(context.Background(), "client-1", map[string]int64{
 		"foo.txt": 5,
@@ -75,7 +90,7 @@ func TestHandleContainerRecoveryWithSeqs_NoAgent(t *testing.T) {
 
 func TestHandleContainerRecovery_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
-	newNoProviderConfig(t)
+	newNoProviderConfig(t, server)
 
 	_, err := server.HandleContainerRecovery(context.Background(), "client-1", 5)
 	if err == nil {
@@ -484,7 +499,7 @@ func TestHandleSyncRecoverMessage_SeqsNotMap(t *testing.T) {
 
 func TestHandleSyncRecoverMessage_Success_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
-	newNoProviderConfig(t)
+	newNoProviderConfig(t, server)
 	pair := newTestingConnPair(t)
 
 	msg := &WebSocketMessage{

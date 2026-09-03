@@ -404,6 +404,42 @@ export function useChatSessionManager({
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
+        // query_in_progress: the backend still has a query running for this
+        // chat but our local counter says otherwise (counter desync — e.g. the
+        // WebSocket flapped mid-query, or a completion event was missed).
+        // The backend is authoritative: convert this into a steer so the
+        // input reaches the running query instead of dead-ending as an error.
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'query_in_progress') {
+          debugLog('[chat] backend reports query in progress — steering instead');
+          // Counter was already incremented before the send attempt and the
+          // backend query is still active — keep it at 1, don't double-count.
+          setState((prev) => ({ isProcessing: true, lastError: null }));
+          try {
+            await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+            lastSteerMessageRef.current = trimmedMessage;
+            setState((prev) => ({ inputValue: '' }));
+            return;
+          } catch (steerErr) {
+            if (activeRequestsRef.current > 0) {
+              activeRequestsRef.current -= 1;
+            }
+            const steerMsg = steerErr instanceof Error ? steerErr.message : String(steerErr);
+            setState((prev) => ({
+              isProcessing: false,
+              lastError: `Failed to steer active query: ${steerMsg}`,
+              messages: trimMessages([
+                ...prev.messages,
+                {
+                  id: generateMessageId(),
+                  type: 'assistant',
+                  content: `[FAIL] Error: ${steerMsg}`,
+                  timestamp: new Date(),
+                },
+              ]),
+            }));
+            return;
+          }
+        }
         console.error('[FAIL] Failed to send message:', error);
         if (activeRequestsRef.current > 0) {
           activeRequestsRef.current -= 1;

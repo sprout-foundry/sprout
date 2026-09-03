@@ -14,7 +14,11 @@ export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: s
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Query failed' }));
-    throw new Error(data.message || data.error || 'Failed to send query');
+    const error = new Error(data.message || data.error || 'Failed to send query') as Error & { code?: string };
+    // Surface the machine-readable code (e.g. "query_in_progress") so callers
+    // can recover instead of treating every failure as terminal.
+    error.code = typeof data.code === 'string' ? data.code : undefined;
+    throw error;
   }
 }
 

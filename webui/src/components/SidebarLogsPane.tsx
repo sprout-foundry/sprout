@@ -37,8 +37,15 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       }
       case 'stream_chunk':
         return `stream: ${String(d?.chunk || '').substring(0, 100)}`;
-      case 'error':
-        return `Error: ${String(d?.message || 'unknown')}`;
+      case 'error': {
+        // Error payloads carry a short label in `message` (e.g. "chat
+        // failed", "Query failed") and the actual cause in `error`. Showing
+        // only the label leaves the user with "Error: chat failed" and no
+        // way to tell a dead provider from a bad API key.
+        const label = String(d?.message || 'unknown');
+        const cause = d?.error != null ? String(d.error) : '';
+        return cause ? `Error: ${label} — ${cause}` : `Error: ${label}`;
+      }
       case 'connection_status':
         return d?.connected ? 'Connected' : 'Disconnected';
       case 'query_completed':

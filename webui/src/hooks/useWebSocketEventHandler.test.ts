@@ -632,6 +632,65 @@ describe('handleReconnect', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: error event cause surfacing
+//
+// Bug: error events pair a short label (`message`, e.g. "Query failed")
+// with the underlying cause (`error`, e.g. a provider connection failure),
+// but handleError rendered only the label. The user saw "[FAIL] Error:
+// Query failed" with no way to tell a dead provider from a bad API key.
+// ---------------------------------------------------------------------------
+
+describe('error cause surfacing', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+
+    return { stateHolder };
+  }
+
+  it('includes the cause in lastError and the [FAIL] bubble when present', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        type: 'error',
+        data: { message: 'Query failed', error: 'provider unreachable after 4 attempts' },
+      } as WsEvent);
+    });
+
+    expect(stateHolder.current.lastError).toBe('Query failed: provider unreachable after 4 attempts');
+    const messages = stateHolder.current.messages as Array<{ content: string }>;
+    expect(
+      messages.some((m) => m.content === '[FAIL] Error: Query failed: provider unreachable after 4 attempts'),
+    ).toBe(true);
+  });
+
+  it('falls back to the label alone when no cause is present', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({ type: 'error', data: { message: 'boom' } } as WsEvent);
+    });
+
+    expect(stateHolder.current.lastError).toBe('boom');
+    const messages = stateHolder.current.messages as Array<{ content: string }>;
+    expect(messages.some((m) => m.content === '[FAIL] Error: boom')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: workspace_changed handler — in-place refresh, NOT page reload
 //
 // Bug: the old handler called window.location.reload() unconditionally,

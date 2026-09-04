@@ -672,6 +672,15 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
       }
       return { logs: appendCappedLog(prev.logs, logEntry) };
     });
+  } else if (category === 'provider_retry') {
+    // Per-attempt provider failure notices from the retry loop
+    // (agent.publishRetryEvent). Log-only: the retry is transient state —
+    // bubbling it into chat would interleave "[FAIL]"-style text mid-turn,
+    // and the turn's outcome (recovery or failure) is reported by
+    // query_completed / the terminal error event.
+    logEntry.category = 'system';
+    logEntry.level = 'warning';
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
   } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
     logEntry.category = 'system';
     logEntry.level = category === 'error' ? 'error' : 'warning';
@@ -750,6 +759,11 @@ const handleError = (ctx: EventHandlerContext): void => {
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
   const data = (event.data ?? {}) as ErrorData;
   const errorMessage = String(data.message || 'Unknown error');
+  // Error payloads pair a short label (message, e.g. "Query failed") with
+  // the underlying cause (error, e.g. "dial tcp: connection refused").
+  // Surfacing only the label leaves the user with "Error: Query failed"
+  // and no way to tell a dead provider from a bad API key.
+  const displayMessage = data.error ? `${errorMessage}: ${String(data.error)}` : errorMessage;
   const errorCode = getServerErrorCode(data);
 
   if (errorCode === 'model_not_available') {
@@ -769,13 +783,13 @@ const handleError = (ctx: EventHandlerContext): void => {
     setState((prev) => ({
       isProcessing: activeRequestsRef.current > 0,
       queryProgress: null,
-      lastError: errorMessage,
+      lastError: displayMessage,
       messages: trimMessages([
         ...prev.messages,
         {
           id: generateMessageId(),
           type: 'assistant',
-          content: `[FAIL] Error: ${errorMessage}`,
+          content: `[FAIL] Error: ${displayMessage}`,
           timestamp: new Date(),
         },
       ]),
@@ -804,13 +818,13 @@ const handleError = (ctx: EventHandlerContext): void => {
     setState((prev) => ({
       isProcessing: activeRequestsRef.current > 0,
       queryProgress: null,
-      lastError: errorMessage,
+      lastError: displayMessage,
       messages: trimMessages([
         ...prev.messages,
         {
           id: generateMessageId(),
           type: 'assistant',
-          content: `[FAIL] Error: ${errorMessage}`,
+          content: `[FAIL] Error: ${displayMessage}`,
           timestamp: new Date(),
         },
       ]),

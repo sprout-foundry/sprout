@@ -1466,6 +1466,20 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 262144,
+        "description": "Ling-3.0-flash-Fin is the first finance-enhanced model in the Ant Ling family. Developed by Ant Group with leading financial institutions and domain experts, it extends Ling-3.0-flash through continued training on high-quality financial data.",
+        "id": "inclusionAI/Ling-3.0-flash-Fin",
+        "input_cost": 0.06,
+        "name": "inclusionAI/Ling-3.0-flash-Fin",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

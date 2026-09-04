@@ -159,6 +159,49 @@ func (p *LocalProvider) ensureLoadedLocked() (*llm.Model, error) {
 // see why a local model produced an unusable response inside the agent loop.
 func localDebug() bool { return os.Getenv("SPROUT_LOCAL_DEBUG") == "1" }
 
+// localBudgetModel is the inference-independent surface the output-budget
+// helper needs. *llm.Model satisfies it; tests use a fake. Keeping the
+// parameter an interface makes the budget math testable without loading
+// real weights.
+type localBudgetModel interface {
+	TokenizerEncode(text string) []int
+	ContextLength() int
+}
+
+// localMaxOutputCap bounds the output budget for local generation. A
+// runaway generation (greedy repeat loop that never emits EOS) at 20-50
+// tok/s would otherwise burn tens of minutes to an hour of GPU time on a
+// budget derived from a large context window. Real agent turns finish well
+// under this; hitting it is reported as finish_reason "length".
+const localMaxOutputCap = 16384
+
+// localMaxOutputTokens computes the MaxTokens budget for a generation.
+//
+// sinter's DefaultGenerateConfig caps MaxTokens at 512 — a test-scale
+// default that silently truncates real agent turns (long explanations,
+// multi-parameter tool calls, file edits) mid-thought. The model hits the
+// cap without emitting EOS, the provider then reports finish_reason
+// "stop", and the truncation is indistinguishable from a natural end:
+// users see the model "end at a random spot where it didn't mean to end".
+//
+// This mirrors the budgeting every network provider gets in
+// CalculateMaxTokensWithLimits: budget output against the model's real
+// context window using the exact prompt-token count (available here —
+// the tokenizer is local, no heuristic needed), floored at
+// api.MinOutputTokens so a near-full context still yields a viable turn,
+// and capped by localMaxOutputCap against runaway generation.
+func localMaxOutputTokens(model localBudgetModel, prompt string) int {
+	input := len(model.TokenizerEncode(prompt))
+	budget, ok := api.CalculateOutputBudget(model.ContextLength(), input)
+	if !ok || budget < api.MinOutputTokens {
+		return api.MinOutputTokens
+	}
+	if budget > localMaxOutputCap {
+		return localMaxOutputCap
+	}
+	return budget
+}
+
 func logLocalExchange(tag, prompt, raw string, promptTokens int, toolCalls int) {
 	if !localDebug() {
 		return
@@ -227,6 +270,10 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
 	// novel prose from wasted candidate search.
 	cfg.PromptLookupMaxDrafts = 6
+	// Real output budget against the context window — see
+	// localMaxOutputTokens. The 512 default truncated real turns
+	// mid-thought while reporting a clean "stop".
+	cfg.MaxTokens = localMaxOutputTokens(model, prompt)
 	// MaxMTPDrafts is deliberately left disabled (0). It was enabled once
 	// tonight after TestMTPParityLiveModel passed cleanly against a correct
 	// (non-pipelined) baseline on 4 short synthetic prompts — but a real
@@ -270,10 +317,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	p.recordTPS(completionTokens, elapsed)
 	logLocalTiming("chat", promptTokens, completionTokens, elapsed)
 
-	finishReason := "stop"
-	if len(toolCalls) > 0 {
-		finishReason = "tool_calls"
-	}
+	finishReason := localFinishReason(completionTokens, cfg.MaxTokens, toolCalls)
 
 	resp := &api.ChatResponse{
 		ID:     "chatcmpl-local",
@@ -312,6 +356,10 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
 	// novel prose from wasted candidate search.
 	cfg.PromptLookupMaxDrafts = 6
+	// Real output budget against the context window — see
+	// localMaxOutputTokens. The 512 default truncated real turns
+	// mid-thought while reporting a clean "stop".
+	cfg.MaxTokens = localMaxOutputTokens(model, prompt)
 	// MaxMTPDrafts is deliberately left disabled — see the matching comment
 	// in SendChatRequest (real commit-message output corrupted with leaked
 	// chat-template tokens even after fixing a real bug in the MTP decode
@@ -321,10 +369,16 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 
 	hasTools := len(tools) > 0
 	var outputBuf strings.Builder
+	// generatedTokens counts every decoded token (including filtered
+	// thinking/EOS markers) so cap exhaustion can be distinguished from a
+	// natural stop: hitting cfg.MaxTokens without EOS is a truncation and
+	// must be reported as finish_reason "length", not "stop".
+	generatedTokens := 0
 	logMLXMemory("stream-start")
 	start := time.Now()
 
 	err = model.Generate(ctx, prompt, cfg, func(tokenID int) {
+		generatedTokens++
 		tok := model.DecodeToken(tokenID)
 		if hasTools {
 			outputBuf.WriteString(tok)
@@ -349,10 +403,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		completionTokens := len(model.TokenizerEncode(outputBuf.String()))
 		p.recordTPS(completionTokens, elapsed)
 		logLocalTiming("stream", promptTokens, completionTokens, elapsed)
-		finishReason := "stop"
-		if len(toolCalls) > 0 {
-			finishReason = "tool_calls"
-		}
+		finishReason := localFinishReason(generatedTokens, cfg.MaxTokens, toolCalls)
 		resp := &api.ChatResponse{
 			ID:     "chatcmpl-local",
 			Object: "chat.completion",
@@ -374,9 +425,24 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		Model:  p.modelID,
 		Choices: []api.Choice{{
 			Index:        0,
-			FinishReason: "stop",
+			FinishReason: localFinishReason(generatedTokens, cfg.MaxTokens, nil),
 		}},
 	}, nil
+}
+
+// localFinishReason reports why generation ended. "tool_calls" when the
+// model emitted tool calls; "length" when the output hit the MaxTokens
+// budget without a natural stop (truncation — the agent loop and the user
+// deserve to know the model ran out of room, not that it "finished");
+// "stop" only for a genuine EOS termination.
+func localFinishReason(generated, maxTokens int, toolCalls []api.ToolCall) string {
+	if len(toolCalls) > 0 {
+		return "tool_calls"
+	}
+	if maxTokens > 0 && generated >= maxTokens {
+		return "length"
+	}
+	return "stop"
 }
 
 func (p *LocalProvider) CheckConnection() error {

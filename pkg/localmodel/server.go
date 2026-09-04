@@ -122,9 +122,16 @@ func spawnGoServer(port int, modelDir string) error {
 		return err
 	}
 
+	// -max-tokens 0 disables the server's request cap so the client's
+	// max_tokens is honored as-is. The server's 512 default silently
+	// truncated long completions mid-thought while reporting a clean
+	// "stop" — the same class of bug fixed for the in-process provider
+	// (localMaxOutputTokens). Sprout's provider layer does its own
+	// context-aware budgeting, so a second blind cap here only harms.
 	cmd := exec.Command(binary,
 		"-model", modelDir,
 		"-port", fmt.Sprintf("%d", port),
+		"-max-tokens", "0",
 	)
 	cmd.Stdout = nil
 	cmd.Stderr = nil

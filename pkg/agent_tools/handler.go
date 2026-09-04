@@ -164,6 +164,11 @@ type ToolEnv struct {
 	// turn. Background goroutines must use this instead of the per-turn
 	// ctx so they survive turn boundaries. Cancelled when the agent shuts down.
 	LifetimeCtx context.Context
+	// ChatID scopes shell sessions (hidden foreground PTY and background
+	// PTYs) to the conversation that created them. Empty means the caller
+	// has no chat identity (CLI mode, tests) and the shell layer falls
+	// back to its legacy "default" bucket.
+	ChatID string
 	// ToolFuncs carries the agent-dependent tool dispatch closures for the
 	// specific agent this env belongs to. When nil, ResolveToolFuncs falls
 	// back to the package-level vars (the legacy single-agent path).

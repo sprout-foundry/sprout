@@ -420,6 +420,7 @@ interface WsEvent {
 | `chat_run_restored` | Chat run recovery signal (reattach complete) | `{ "chat_id": string }` |
 | `chat_session_created` | New chat session created | `{ "session": {...} }` |
 | `chat_session_switched` | Active chat changed | `{ "chat_id": string }` |
+| `agent_session_update` | Background agent-session lifecycle (started/completed/stopped) | `{ "session_id": string, "chat_id": string, "event": "started"\|"completed"\|"stopped", "exit_code"?: number }` |
 
 ### Sequence Numbers (`__seq`)
 
@@ -431,7 +432,7 @@ The following **8 event types** are buffered (up to 5000 events per chat) for re
 
 `query_started`, `query_progress`, `query_completed`, `stream_chunk`, `tool_start`, `tool_end`, `agent_message`, `error`
 
-**Non-buffered types** (not replayed during reattach): `subagent_activity`, `todo_update`, `file_changed`, `file_content_changed`, `metrics_update`, `security_approval_request`, `security_prompt_request`, `ask_user_request`, `workspace_changed`, `terminal_session_ready`, `terminal_output`, `terminal_pty_exit`, `drift_detected`, `connection_status`, `pong`, `chat_session_created`, `chat_session_switched`, `validation`, `session_terminated`, `session_changed`, `connection_state`, `stats_update`, `session_restored`, `chat_run_restored`, `tool_execution`.
+**Non-buffered types** (not replayed during reattach): `subagent_activity`, `todo_update`, `file_changed`, `file_content_changed`, `metrics_update`, `security_approval_request`, `security_prompt_request`, `ask_user_request`, `workspace_changed`, `terminal_session_ready`, `terminal_output`, `terminal_pty_exit`, `drift_detected`, `connection_status`, `pong`, `chat_session_created`, `chat_session_switched`, `validation`, `session_terminated`, `session_changed`, `connection_state`, `stats_update`, `session_restored`, `chat_run_restored`, `tool_execution`, `agent_session_update`.
 
 ---
 

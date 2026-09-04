@@ -22,25 +22,26 @@ func (a *Agent) ExportState() ([]byte, error) {
 	taskActions := a.GetTaskActions()
 
 	state := AgentState{
-		Messages:                a.state.GetMessages(),
-		MessageTimestamps:       a.state.GetMessageTimestamps(),
-		TurnCheckpoints:         a.copyTurnCheckpoints(),
-		PreviousSummary:         a.state.GetPreviousSummary(),
-		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
-		TaskActions:             taskActions,
-		SessionID:               a.state.GetSessionID(),
-		TotalTokens:             a.state.GetTotalTokens(),
-		TotalCost:               a.state.GetTotalCost(),
-		PromptTokens:            a.state.GetPromptTokens(),
-		CompletionTokens:        a.state.GetCompletionTokens(),
-		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
-		CachedTokens:            a.state.GetCachedTokens(),
-		CacheWriteTokens:        a.state.GetCacheWriteTokens(),
-		CachedCostSavings:       a.state.GetCachedCostSavings(),
-		ChargedCostTotal:        a.state.GetChargedCostTotal(),
-		TokenCostTotal:          a.state.GetTokenCostTotal(),
-		SubscriptionTokens:      a.state.GetSubscriptionTokens(),
-		FreeTokens:              a.state.GetFreeTokens(),
+		Messages:                       a.state.GetMessages(),
+		MessageTimestamps:              a.state.GetMessageTimestamps(),
+		TurnCheckpoints:                a.copyTurnCheckpoints(),
+		PreviousSummary:                a.state.GetPreviousSummary(),
+		CompactSummary:                 compactSummary, // Store 5K-limited summary for continuity
+		TaskActions:                    taskActions,
+		SessionID:                      a.state.GetSessionID(),
+		TotalTokens:                    a.state.GetTotalTokens(),
+		TotalCost:                      a.state.GetTotalCost(),
+		PromptTokens:                   a.state.GetPromptTokens(),
+		CompletionTokens:               a.state.GetCompletionTokens(),
+		EstimatedTokenResponses:        a.state.GetEstimatedTokenResponses(),
+		CachedTokens:                   a.state.GetCachedTokens(),
+		CacheWriteTokens:               a.state.GetCacheWriteTokens(),
+		CachedCostSavings:              a.state.GetCachedCostSavings(),
+		ChargedCostTotal:               a.state.GetChargedCostTotal(),
+		TokenCostTotal:                 a.state.GetTokenCostTotal(),
+		SubscriptionTokens:             a.state.GetSubscriptionTokens(),
+		FreeTokens:                     a.state.GetFreeTokens(),
+		PendingBackgroundNotifications: a.snapshotPendingNotifications(),
 	}
 	return json.Marshal(state)
 }
@@ -76,6 +77,7 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
 	a.state.SetFreeTokens(state.FreeTokens)
+	a.restorePendingNotifications(state.PendingBackgroundNotifications)
 	return nil
 }
 

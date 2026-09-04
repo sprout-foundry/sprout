@@ -95,6 +95,13 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 		if ctx.LastSeenAt.IsZero() || now.Sub(ctx.LastSeenAt) < maxIdle {
 			continue
 		}
+		// A background command still in flight anchors this context: the
+		// eviction path would kill its PTY (breaking the 2-hour promise)
+		// and release its agent (cancelling the wakeup watcher). Re-check
+		// until the command finishes or the normal session timeout reaps it.
+		if ctx.Terminal != nil && ctx.Terminal.HasRunningBackgroundSessions() {
+			continue
+		}
 		delete(ws.clientContexts, clientID)
 		stale = append(stale, staleContext{
 			id:       clientID,

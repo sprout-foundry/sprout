@@ -20,7 +20,7 @@ interface RawSession {
  * inlined in Terminal.tsx:
  *   - immediate on-mount fetch (via fetchAttachableSessions)
  *   - 5 s polling while the terminal is expanded
- *   - re-fetch on terminal_output / pty_exit / agent_session_update WS events
+ *   - re-fetch on pty_exit / agent_session_update WS events
  *
  * The `setAttachableSessions` setter is exposed because `useTerminalPanes`
  * mutates the list directly (e.g. on session close) — the panes hook still
@@ -70,15 +70,14 @@ export function useAttachableSessions(isExpanded: boolean): UseAttachableSession
     };
   }, [isExpanded, fetchAttachableSessions]);
 
-  // Re-fetch on relevant WS events
+  // Re-fetch on relevant WS events (bridged onto the DOM as sprout:wsevent
+  // by services/websocket.ts and services/terminalWebSocket.ts).
+  // 'output' chunks are deliberately excluded — they fire on every terminal
+  // byte; the lifecycle events below are the ones that change this list.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (
-        detail?.type === 'terminal_output' ||
-        detail?.type === 'pty_exit' ||
-        detail?.type === 'agent_session_update'
-      ) {
+      if (detail?.type === 'pty_exit' || detail?.type === 'agent_session_update') {
         fetchAttachableSessions();
       }
     };

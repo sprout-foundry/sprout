@@ -119,6 +119,47 @@ func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType
 	ws.eventBus.Publish(eventType, data)
 }
 
+// publishAgentSessionUpdate fans a background-session lifecycle event out
+// to the client that owns the session's chat. Routing: the event carries
+// chat_id, so WebSocket subscribers scoped per chat receive it; the
+// fallback (unknown chat) publishes to the default client context.
+func (ws *ReactWebServer) publishAgentSessionUpdate(event map[string]interface{}) {
+	if ws.eventBus == nil {
+		return
+	}
+	clientID := defaultWebClientID
+	chatID := ""
+	if v, ok := event["chat_id"].(string); ok {
+		chatID = v
+	}
+
+	// Find the client context that owns this chat, so the event routes to
+	// the right browser tab in multi-client service mode.
+	ws.mutex.RLock()
+	for id, ctx := range ws.clientContexts {
+		if ctx == nil {
+			continue
+		}
+		if _, ok := ctx.ChatSessions[chatID]; ok {
+			clientID = id
+			break
+		}
+	}
+	ws.mutex.RUnlock()
+
+	ws.publishClientEventWithChat(clientID, chatID, "agent_session_update", event)
+}
+
+// installSessionUpdateHook wires the TerminalManager's lifecycle hook to
+// publishAgentSessionUpdate. Called wherever a client context receives a
+// TerminalManager (creation and workspace switch).
+func (ws *ReactWebServer) installSessionUpdateHook(tm *TerminalManager) {
+	if tm == nil {
+		return
+	}
+	tm.SetSessionUpdateHook(ws.publishAgentSessionUpdate)
+}
+
 // publishSessionChanged broadcasts a session_changed event for the given
 // chat. The event reaches every connection subscribed to chatID (via the
 // chatSubscribers registry — SP-034-3a/3c), so multi-tab views reconcile

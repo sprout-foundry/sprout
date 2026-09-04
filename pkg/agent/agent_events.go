@@ -17,6 +17,27 @@ func (a *Agent) publishEvent(eventType string, data interface{}) {
 	}
 }
 
+// GetChatID returns the chat session this agent is bound to (WebUI event
+// metadata "chat_id"), or "". Shell tools use it to scope hidden and
+// background PTY sessions per conversation so multi-chat daemons don't
+// share one shell. Nil-safe for bare Agents constructed in tests.
+func (a *Agent) GetChatID() string {
+	if a == nil || a.output == nil {
+		return ""
+	}
+	mu := a.output.GetEventMetadataMutex()
+	if mu == nil {
+		return ""
+	}
+	mu.RLock()
+	defer mu.RUnlock()
+	meta := a.output.GetEventMetadata()
+	if v, ok := meta["chat_id"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
 // decorateEventPayload merges event metadata into the payload if present.
 func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 	if data == nil {

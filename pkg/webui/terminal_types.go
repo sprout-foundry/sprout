@@ -119,6 +119,40 @@ type TerminalSession struct {
 	Name         string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
 	AutoClose    bool   `json:"-"` // reserved for Phase B: close automatically when inactive
 
+	// --- Background completion tracking ---
+	//
+	// Background sessions run their command inside a long-lived interactive
+	// shell. The shell outlives the command, so "session active" never meant
+	// "command running" — the wakeup watcher polled IsSessionActive and
+	// reported completion only when the whole session was reaped (2h cleanup,
+	// kill, shutdown), always claiming exit code 0.
+	//
+	// Background commands are now wrapped with the same __SPROUT_DONE__
+	// sentinel used by ExecuteCommandAndWait. The PTY reader scans output
+	// for the marker + exit code; on a match it records the code and closes
+	// bgDone exactly once. Watchers and check_background wait on bgDone,
+	// not on session liveness.
+
+	// bgDone is closed exactly once, when the sentinel is observed (or when
+	// the session dies before producing one). Guarded by mutex; never closed
+	// twice.
+	bgDone chan struct{}
+
+	// bgExitCode is the exit code parsed from the sentinel. Valid only
+	// after bgDone closes; negative sentinels (BgExitNone/BgExitStopped)
+	// mean no natural completion was observed.
+	bgExitCode int
+
+	// bgMarker is the sentinel marker this session's wrapped command echoes.
+	// Empty for sessions that never had a background command written to them
+	// (interactive terminals, foreground hidden sessions).
+	bgMarker string
+
+	// bgTail carries the last few bytes of previously-scanned output so a
+	// sentinel that straddles a chunk boundary is still detected. Only
+	// used for background sessions. Guarded by mutex.
+	bgTail []byte
+
 	// NoPTY indicates this session is running in fallback mode without a real
 	// PTY (e.g. on Alpine Linux or minimal containers where /dev/pts is
 	// unavailable). Commands are run via exec.Cmd with stdin/stdout pipes
@@ -211,13 +245,68 @@ type TerminalManager struct {
 	mutex         sync.RWMutex
 	workspaceRoot string
 	cleanupOnce   sync.Once // ensures StartCleanupWorker only launches one goroutine
+	// onSessionUpdate, when set, is invoked on background-session
+	// lifecycle changes (started / command completed / stopped) so the
+	// WebUI can push an agent_session_update event instead of relying
+	// on client polling. Optional: nil leaves the manager silent.
+	onSessionUpdate func(event map[string]interface{})
+
+	// bgExitTombstones remembers the last observed exit code of removed
+	// background sessions. The wakeup watcher and check_background read
+	// the code AFTER bgDone closes — by which point CloseSession may have
+	// removed the session from the map (stop, reap). The tombstone keeps
+	// the answer readable. Bounded by bgTombstoneMax.
+	bgExitTombstones map[string]int
+	bgTombstoneOrder []string
 }
+
+// bgTombstoneMax bounds the tombstone set. Watchers read within moments of
+// completion, so a small FIFO suffices.
+const bgTombstoneMax = 64
 
 // NewTerminalManager creates a new terminal manager.
 func NewTerminalManager(workspaceRoot string) *TerminalManager {
 	return &TerminalManager{
-		sessions:      make(map[string]*TerminalSession),
-		workspaceRoot: workspaceRoot,
+		sessions:         make(map[string]*TerminalSession),
+		workspaceRoot:    workspaceRoot,
+		bgExitTombstones: make(map[string]int),
+	}
+}
+
+// recordBgExitTombstone stores the exit code of a background session that is
+// being removed from the map. Caller must hold tm.mutex.
+func (tm *TerminalManager) recordBgExitTombstoneLocked(sessionID string, code int) {
+	if tm.bgExitTombstones == nil {
+		tm.bgExitTombstones = make(map[string]int)
+	}
+	if _, exists := tm.bgExitTombstones[sessionID]; !exists {
+		tm.bgTombstoneOrder = append(tm.bgTombstoneOrder, sessionID)
+		if len(tm.bgTombstoneOrder) > bgTombstoneMax {
+			oldest := tm.bgTombstoneOrder[0]
+			tm.bgTombstoneOrder = tm.bgTombstoneOrder[1:]
+			delete(tm.bgExitTombstones, oldest)
+		}
+	}
+	tm.bgExitTombstones[sessionID] = code
+}
+
+// SetSessionUpdateHook installs the background-session lifecycle callback.
+// Pass nil to remove. Invoked from arbitrary goroutines (PTY readers,
+// HTTP handlers) — implementations must be safe to call concurrently.
+func (tm *TerminalManager) SetSessionUpdateHook(fn func(event map[string]interface{})) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	tm.onSessionUpdate = fn
+}
+
+// notifySessionUpdate fires the lifecycle hook when installed. Never
+// blocks: a missing hook or slow callback must not stall the PTY reader.
+func (tm *TerminalManager) notifySessionUpdate(event map[string]interface{}) {
+	tm.mutex.RLock()
+	fn := tm.onSessionUpdate
+	tm.mutex.RUnlock()
+	if fn != nil {
+		fn(event)
 	}
 }
 

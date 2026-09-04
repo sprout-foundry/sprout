@@ -261,6 +261,8 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.RawArgsJSON = rawArgsJSON
 		env.Notifier = agent
 		env.LifetimeCtx = agent.LifetimeCtx()
+		// Scope shell sessions to this agent's chat (WebUI daemon mode).
+		env.ChatID = agent.GetChatID()
 		// Carry this agent's per-agent tool dispatch set so agent-dependent
 		// tools (run_subagent, run_automate, ...) route to THIS agent even
 		// when other agents exist in the process.

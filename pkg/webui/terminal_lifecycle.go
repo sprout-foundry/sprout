@@ -28,6 +28,13 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	// After we release tm.mutex, the session is effectively dead even though
 	// we haven't finished waiting on the process yet.
 	delete(tm.sessions, sessionID)
+	// Preserve the last-known background exit code for post-close readers
+	// (the wakeup watcher calls BackgroundExitCode after bgDone closes).
+	session.mutex.Lock()
+	if session.IsBackground {
+		tm.recordBgExitTombstoneLocked(sessionID, session.bgExitCode)
+	}
+	session.mutex.Unlock()
 	tm.mutex.Unlock()
 
 	// Ensure no ExecuteCommandAndWait call is in-flight. execMu is per-session,
@@ -43,6 +50,11 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	// Closing the PTY unblocks the PTY reader goroutine (runPTYReader).
 	session.mutex.Lock()
 	session.Active = false
+	// A background command whose session is closed before its sentinel
+	// arrives will never complete — release waiters with BgExitNone (or
+	// BgExitStopped when closed via StopBackgroundSession, which records
+	// that itself before calling here).
+	session.closeBackgroundDoneLocked()
 	if session.Cancel != nil {
 		session.Cancel()
 		session.Cancel = nil
@@ -119,6 +131,10 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 // CleanupInactiveSessions removes sessions that have been inactive for too long.
 // Background sessions (IsBackground=true) use a separate timeout (default 2 hours)
 // vs regular hidden sessions (30 minutes).
+//
+// A session with live WebSocket subscribers is never considered inactive —
+// an attached background session the user is actively watching must not be
+// reaped out from under them for producing no output.
 func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgroundTimeout ...time.Duration) {
 	bgTimeout := 2 * time.Hour // default 2 hours for background sessions
 	if len(backgroundTimeout) > 0 {
@@ -138,7 +154,7 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgr
 		inactive := now.Sub(session.LastUsed) > sessionTimeout
 		session.mutex.RUnlock()
 
-		if inactive {
+		if inactive && !session.hasSubscribers() {
 			toClose = append(toClose, sessionID)
 		}
 	}

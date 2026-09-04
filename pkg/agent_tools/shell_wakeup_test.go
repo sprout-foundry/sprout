@@ -15,33 +15,57 @@ import (
 // =============================================================================
 
 // fakeWakeupTerminal implements TerminalAccess with a set of sessions that can
-// be flipped from active to inactive on demand. Only IsSessionActive carries
-// state; the other five methods are no-ops because startWakeupWatcher never
-// calls them.
+// be flipped from active to inactive on demand. IsSessionActive and
+// BackgroundDoneChan carry state; the other methods are no-ops because
+// startWakeupWatcher never calls them.
 type fakeWakeupTerminal struct {
 	mu      sync.Mutex
 	active  map[string]bool
 	session string
+	done    map[string]chan struct{}
+	code    map[string]int
 }
 
 func newFakeWakeupTerminal(sessionID string) *fakeWakeupTerminal {
 	return &fakeWakeupTerminal{
 		active:  map[string]bool{sessionID: true},
 		session: sessionID,
+		done:    map[string]chan struct{}{sessionID: make(chan struct{})},
+		code:    map[string]int{sessionID: 0},
 	}
 }
 
-// markInactive flips the tracked session to inactive, simulating process exit.
+// markInactive flips the tracked session to inactive and closes its done
+// channel, simulating both the PTY death and the command-completion signal.
 func (f *fakeWakeupTerminal) markInactive() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.active[f.session] = false
+	if ch, ok := f.done[f.session]; ok {
+		close(ch)
+	}
 }
 
 func (f *fakeWakeupTerminal) IsSessionActive(sessionID string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.active[sessionID]
+}
+
+func (f *fakeWakeupTerminal) BackgroundDoneChan(sessionID string) (<-chan struct{}, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ch, ok := f.done[sessionID]
+	if !ok {
+		return nil, false
+	}
+	return ch, true
+}
+
+func (f *fakeWakeupTerminal) BackgroundExitCode(sessionID string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.code[sessionID]
 }
 
 func (f *fakeWakeupTerminal) ExecuteCommandInHidden(_ context.Context, _ string, _ string) (string, int, error) {

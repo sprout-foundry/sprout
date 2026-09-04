@@ -147,8 +147,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 		// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes, background timeout 2 hours)
 		ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
-
-		// Start heartbeat monitor to detect and cancel stale connections with active queries
+		// Wire background-session lifecycle events to the WS outbound path.
+		ws.installSessionUpdateHook(ws.terminalManager) // Start heartbeat monitor to detect and cancel stale connections with active queries
 		go ws.startHeartbeatMonitor(ctx)
 
 		// Start run-buffer subscriber so agent-published events (which bypass

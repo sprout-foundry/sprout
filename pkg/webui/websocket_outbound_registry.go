@@ -54,6 +54,11 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"connection_state":           {},
 	"session_conflict":           {}, // SP-046: sent to new device on conflict
 	"session_displaced":          {}, // SP-046: sent to old device being evicted
+	// Background agent-session lifecycle (start/complete/stop) so the
+	// BackgroundTasks badge and attachable-session lists refresh on
+	// change instead of relying on 5s polling. Emitted via
+	// ws.publishAgentSessionUpdate.
+	"agent_session_update": {},
 
 	// UI events (events.EventType*) — note: events.EventTypeError ==
 	// "error", so it's the canonical entry for the error envelope used

@@ -483,6 +483,15 @@ class WebSocketService {
 
   private notifyCallbacks(event: WsEvent) {
     this.callbacks.forEach((callback) => callback(event));
+    // Bridge server events onto the DOM so decoupled components
+    // (BackgroundTasks badge, attachable-session lists) can react without
+    // registering a direct callback with this service. Detail shape:
+    // { type: string, data: ... } — same envelope as the WS frame.
+    try {
+      window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: event }));
+    } catch {
+      // Non-browser (tests, SSR) — ignore.
+    }
   }
 
   /** Add a message to the pending queue, dropping the oldest if at capacity. */

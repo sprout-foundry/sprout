@@ -199,6 +199,8 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.RawArgsJSON = "" // seed registry doesn't have raw JSON args
 	env.Notifier = agent
 	env.LifetimeCtx = agent.LifetimeCtx()
+	// Scope shell sessions to this agent's chat (WebUI daemon mode).
+	env.ChatID = agent.GetChatID()
 	env.SubagentDepth = agent.subagentDepth
 	// Carry this agent's per-agent tool dispatch set so agent-dependent
 	// tools (run_subagent, run_automate, ...) route to THIS agent even when

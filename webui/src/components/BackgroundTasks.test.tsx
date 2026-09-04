@@ -1175,7 +1175,7 @@ describe('BackgroundTasks', () => {
   // ─────────────────────────────────────────────────────────────────────
 
   describe('WebSocket events', () => {
-    it('refreshes on terminal_output event when expanded', async () => {
+    it('refreshes on agent_session_update event when expanded', async () => {
       mockClientFetch.mockResolvedValue(makeOkResponse(mockResponse));
 
       const view = renderBackgroundTasks();
@@ -1191,11 +1191,11 @@ describe('BackgroundTasks', () => {
 
       const callCountBefore = mockClientFetch.mock.calls.length;
 
-      // Dispatch terminal_output event
+      // Dispatch agent_session_update event
       act(() => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
-            detail: { type: 'terminal_output', data: 'output' },
+            detail: { type: 'agent_session_update', session_id: 'bg-npm-install-abc123' },
           }),
         );
       });
@@ -1309,7 +1309,7 @@ describe('BackgroundTasks', () => {
       act(() => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
-            detail: { type: 'terminal_output', data: 'output' },
+            detail: { type: 'agent_session_update', session_id: 'bg-npm-install-abc123' },
           }),
         );
       });
@@ -1341,7 +1341,7 @@ describe('BackgroundTasks', () => {
       act(() => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
-            detail: { type: 'terminal_output', data: 'output' },
+            detail: { type: 'pty_exit', session_id: 'bg-npm-install-abc123' },
           }),
         );
       });

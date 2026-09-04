@@ -209,6 +209,7 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			// waiting for output that will never arrive.
 			session.mutex.Lock()
 			session.Active = false
+			session.closeBackgroundDoneLocked()
 			session.mutex.Unlock()
 			session.closeAllSubs()
 		}
@@ -236,6 +237,18 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			// The ring buffer still captures the output for scrollback replay
 			// regardless of subscriber count.
 			session.broadcast(chunk)
+			// Background sessions: scan for the completion sentinel. Closing
+			// bgDone wakes check_background waiters and the wakeup watcher.
+			// Cheap no-op for sessions without a marker.
+			if completed, code, isBg := session.checkBackgroundSentinel(chunk); completed {
+				tm.notifySessionUpdate(map[string]interface{}{
+					"session_id": session.ID,
+					"chat_id":    session.ChatID,
+					"event":      "completed",
+					"exit_code":  code,
+					"is_bg":      isBg,
+				})
+			}
 			if session.hasSubscribers() {
 				session.mutex.Lock()
 				session.LastUsed = time.Now()
@@ -246,6 +259,9 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			webuiLogger.Info("terminal session PTY closed", slog.String("session_id", session.ID), slog.Any("err", err))
 			session.mutex.Lock()
 			session.Active = false
+			// Session died before the sentinel arrived — release any waiters
+			// so check_background/wakeup watchers don't block forever.
+			session.closeBackgroundDoneLocked()
 			session.mutex.Unlock()
 			session.closeAllSubs()
 			return
@@ -335,6 +351,7 @@ func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride st
 				webuiLogger.Error("fallback terminal reader panicked", slog.String("session_id", session.ID), slog.Any("panic", r))
 				session.mutex.Lock()
 				session.Active = false
+				session.closeBackgroundDoneLocked()
 				session.mutex.Unlock()
 				session.closeAllSubs()
 			}
@@ -349,11 +366,21 @@ func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride st
 				session.LastUsed = time.Now()
 				session.mutex.Unlock()
 				session.broadcast(chunk)
+				if completed, code, isBg := session.checkBackgroundSentinel(chunk); completed {
+					tm.notifySessionUpdate(map[string]interface{}{
+						"session_id": session.ID,
+						"chat_id":    session.ChatID,
+						"event":      "completed",
+						"exit_code":  code,
+						"is_bg":      isBg,
+					})
+				}
 			}
 			if readErr != nil {
 				webuiLogger.Info("fallback terminal stdout closed", slog.String("session_id", session.ID), slog.Any("err", readErr))
 				session.mutex.Lock()
 				session.Active = false
+				session.closeBackgroundDoneLocked()
 				session.mutex.Unlock()
 				session.closeAllSubs()
 				return
@@ -450,6 +477,7 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 				webuiLogger.Error("Windows terminal reader panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
 				session.mutex.Lock()
 				session.Active = false
+				session.closeBackgroundDoneLocked()
 				session.mutex.Unlock()
 				session.closeAllSubs()
 			}
@@ -464,10 +492,20 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 				session.LastUsed = time.Now()
 				session.mutex.Unlock()
 				session.broadcast(chunk)
+				if completed, code, isBg := session.checkBackgroundSentinel(chunk); completed {
+					tm.notifySessionUpdate(map[string]interface{}{
+						"session_id": session.ID,
+						"chat_id":    session.ChatID,
+						"event":      "completed",
+						"exit_code":  code,
+						"is_bg":      isBg,
+					})
+				}
 			}
 			if err != nil {
 				session.mutex.Lock()
 				session.Active = false
+				session.closeBackgroundDoneLocked()
 				session.mutex.Unlock()
 				session.closeAllSubs()
 				return

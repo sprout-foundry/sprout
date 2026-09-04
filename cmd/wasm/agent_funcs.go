@@ -26,6 +26,35 @@ import (
 // interactive provider-resolution dance and let the JS host pick
 // provider/model directly (matching runChat's contract).
 //
+// Credential model: WASM never holds real API keys. Native hosts (Studio
+// iOS/Android) attach the real key at the same-origin proxy hop
+// (/api/proxy/llm/{provider}), replacing whatever Authorization the
+// browser sent. To satisfy GenericProvider's pre-flight auth validation
+// (GetAuthToken → buildHTTPRequestCtx), an init-time placeholder is seeded
+// for every bearer/api_key provider env var; the proxy is the real
+// credential boundary. See seedWasmCredentialPlaceholders below.
+
+func init() { seedWasmCredentialPlaceholders() }
+
+// seedWasmCredentialPlaceholders seeds non-empty placeholder values for
+// known provider API-key env vars when they are unset. This lets provider
+// config validation and per-request auth checks pass inside WASM; the
+// placeholder never reaches a real provider — the host's proxy replaces
+// the Authorization header server-side (native Keychain/Keystore lookup).
+func seedWasmCredentialPlaceholders() {
+	for _, envVar := range []string{
+		"OPENAI_API_KEY", "OPENROUTER_API_KEY", "DEEPINFRA_API_KEY",
+		"DEEPSEEK_API_KEY", "ZAI_API_KEY", "ZAI_CODING_API_KEY",
+		"OLLAMA_API_KEY", "MINIMAX_API_KEY", "CHUTES_API_KEY",
+		"MISTRAL_API_KEY", "CEREBRAS_API_KEY", "ANTHROPIC_API_KEY",
+	} {
+		if os.Getenv(envVar) == "" {
+			os.Setenv(envVar, "wasm-proxy-placeholder")
+		}
+	}
+}
+
+//
 // Tool execution under WASM is constrained: shell tools, MCP, and other
 // process-spawning tools no-op or error out. SP-045-4e tracks the work
 // to route shell-like tools through SproutWasm.executeCommand so the

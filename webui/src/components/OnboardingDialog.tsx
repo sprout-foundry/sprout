@@ -323,9 +323,7 @@ function OnboardingDialog({
             </button>
 
             {onboarding.showAllProviders && (
-              <div className="onboarding-provider-hint">
-                All providers shown above. Tap one to select it.
-              </div>
+              <div className="onboarding-provider-hint">All providers shown above. Tap one to select it.</div>
             )}
           </>
         )}

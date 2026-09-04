@@ -46,7 +46,11 @@ vi.mock('../services/clientSession', () => ({
 }));
 
 vi.mock('../services/errorCodes', () => ({
-  getServerErrorCode: vi.fn(() => null),
+  getServerErrorCode: vi.fn((payload: unknown) =>
+    payload && typeof payload === 'object' && typeof (payload as Record<string, unknown>).code === 'string'
+      ? (payload as Record<string, unknown>).code
+      : null,
+  ),
 }));
 
 vi.mock('../services/lspClientService', () => ({
@@ -476,6 +480,154 @@ describe('chat_run_restored', () => {
     });
     expect(reloads).toHaveLength(0);
     cleanup();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: per-chat cache mirrors the error lifecycle for background chats
+//
+// Symptom: once an intermittent failure showed a "chat failed" banner, it
+// never cleared even after the run recovered. Events for a non-active chat
+// were queued into perChatCache.pendingEvents but the cached lastError was
+// frozen at whatever it held when the user switched away. Recovery
+// (query_completed) for the background chat never cleared it, and inactive
+// chat panes render cached.lastError directly.
+// ---------------------------------------------------------------------------
+
+describe('per-chat cache error lifecycle (background chats)', () => {
+  function setupWithCache(chatId: string, initialCache: Record<string, unknown>) {
+    const stateHolder = {
+      current: {
+        ...createDefaultState(),
+        activeChatId: 'other-chat',
+        perChatCache: { [chatId]: initialCache },
+      },
+    };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: 'other-chat' };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    return { stateHolder, setStateMock };
+  }
+
+  it('clears cached lastError when a background chat completes a query', () => {
+    const { stateHolder } = setupWithCache('chat-1', {
+      lastError: 'chat failed: connection refused',
+      isProcessing: true,
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-1',
+        type: 'query_completed',
+        data: { chat_id: 'chat-1', response: 'done' },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBeNull();
+    // Recovery must not resurrect processing state either.
+    expect(stateHolder.current.perChatCache['chat-1'].isProcessing).toBe(true); // untouched by queue path
+    expect(stateHolder.current.perChatCache['chat-1'].pendingEvents).toHaveLength(1);
+  });
+
+  it('clears cached lastError when a background chat starts a new primary query', () => {
+    const { stateHolder } = setupWithCache('chat-1', {
+      lastError: 'chat failed: connection refused',
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-qstart',
+        type: 'query_started',
+        data: { chat_id: 'chat-1', query: 'next attempt' },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBeNull();
+  });
+
+  it('does NOT clear cached lastError for subagent query_started (subagent_depth > 0)', () => {
+    const { stateHolder } = setupWithCache('chat-1', {
+      lastError: 'chat failed: connection refused',
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sub-qstart',
+        type: 'query_started',
+        data: { chat_id: 'chat-1', query: 'subagent task', subagent_depth: 1 },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBe('chat failed: connection refused');
+  });
+
+  it('does NOT clear cached lastError for subagent query_completed (subagent_depth > 0)', () => {
+    const { stateHolder } = setupWithCache('chat-1', {
+      lastError: 'chat failed: connection refused',
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sub-qdone',
+        type: 'query_completed',
+        data: { chat_id: 'chat-1', response: 'sub done', subagent_depth: 2 },
+      });
+    });
+
+    // Only the primary's completion is a run boundary; a subagent finishing
+    // mid-run must not clear the banner (matches the active handler's guard).
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBe('chat failed: connection refused');
+  });
+
+  it('sets cached lastError when an error event arrives for a background chat', () => {
+    const { stateHolder } = setupWithCache('chat-1', { lastError: null });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-2',
+        type: 'error',
+        data: { chat_id: 'chat-1', message: 'Query failed', error: 'chat failed: dial tcp: refused' },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBe('Query failed: chat failed: dial tcp: refused');
+  });
+
+  it('keeps cached lastError null for model_not_available errors (modal owns that case)', () => {
+    const { stateHolder } = setupWithCache('chat-1', { lastError: null });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-3',
+        type: 'error',
+        data: { chat_id: 'chat-1', message: 'Model not available', code: 'model_not_available' },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['chat-1'].lastError).toBeNull();
+  });
+
+  it('does not touch cache for chats that were never cached (no existingCache)', () => {
+    const { stateHolder } = setupWithCache('chat-1', { lastError: null });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-4',
+        type: 'error',
+        data: { chat_id: 'unknown-chat', message: 'Query failed', error: 'boom' },
+      });
+    });
+
+    expect(stateHolder.current.perChatCache['unknown-chat']).toBeUndefined();
   });
 });
 

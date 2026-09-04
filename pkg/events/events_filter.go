@@ -129,8 +129,15 @@ func MetricsUpdateEvent(totalTokens, contextTokens, maxContextTokens, iteration 
 // footer can render "rate-limited, retrying…" distinct from generic
 // provider errors. The default MetricsUpdateEvent still exists for
 // callers that don't have an error context.
-func MetricsUpdateEventWithCategory(totalTokens, contextTokens, maxContextTokens, iteration int, totalCost float64, errorCategory string) map[string]interface{} {
+//
+// provider and model are carried on every metrics payload (the footer
+// and the sidebar log read them; without the keys a retry-time update
+// renders as "Model: ? | Provider: ?" even though the agent knows
+// both).
+func MetricsUpdateEventWithCategory(providerID, model string, totalTokens, contextTokens, maxContextTokens, iteration int, totalCost float64, errorCategory string) map[string]interface{} {
 	return map[string]interface{}{
+		"provider":           providerID,
+		"model":              model,
 		"total_tokens":       totalTokens,
 		"context_tokens":     contextTokens,
 		"max_context_tokens": maxContextTokens,

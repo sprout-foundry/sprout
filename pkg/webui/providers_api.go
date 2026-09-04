@@ -273,15 +273,17 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 
 	// Use the active chat's agent so each session reports its own provider/model.
 	activeChatID := ""
+	workspaceRoot := ""
 	ws.mutex.RLock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		activeChatID = ctx.getActiveChatID()
+		workspaceRoot = ctx.WorkspaceRoot
 	}
 	ws.mutex.RUnlock()
 
 	// Fast check: if no provider is configured, skip the expensive
 	// getChatAgent call and publish empty provider state immediately.
-	if !isProviderAvailable() {
+	if !isProviderAvailableInWorkspace(workspaceRoot) {
 		stats := ws.gatherStatsForClientID(clientID)
 		stats["provider"] = ""
 		stats["model"] = ""

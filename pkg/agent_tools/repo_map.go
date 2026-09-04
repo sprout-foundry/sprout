@@ -166,6 +166,10 @@ type fileEntry struct {
 func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query string, semanticPaths map[string]bool) (string, error) {
 
 	allFiles := make([]fileEntry, 0, 4096)
+	// Non-source files and subdirectories, kept for the ls-style fallback when
+	// the mapped tree contains no recognized source files at all.
+	otherFiles := make([]fileEntry, 0, 256)
+	subDirs := make([]string, 0, 64)
 	walkErr := walkDirCompat(absRoot, func(path string, d os.DirEntry, err error) error {
 		select {
 		case <-ctx.Done():
@@ -190,10 +194,19 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 			if path != absRoot && strings.HasPrefix(name, ".") {
 				return filepath.SkipDir
 			}
+			if path != absRoot {
+				if rel, relErr := filepath.Rel(absRoot, path); relErr == nil {
+					subDirs = append(subDirs, filepath.ToSlash(rel))
+				}
+			}
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(name))
 		if !sourceExtensions[ext] {
+			if rel, relErr := filepath.Rel(absRoot, path); relErr == nil {
+				relSlash := filepath.ToSlash(rel)
+				otherFiles = append(otherFiles, fileEntry{path, relSlash, ext, strings.Count(relSlash, "/")})
+			}
 			return nil
 		}
 		rel, err := filepath.Rel(absRoot, path)
@@ -237,7 +250,11 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		}
 		sb.WriteString(formatDirectoryTree(absRoot, treeFiles))
 		if len(treeFiles) == 0 {
-			sb.WriteString("\n*No source files found.*\n")
+			if ls := formatLSFallback(otherFiles, subDirs, query); ls != "" {
+				sb.WriteString(ls)
+			} else {
+				sb.WriteString("\n*No source files found.*\n")
+			}
 		}
 		return sb.String(), nil
 	}
@@ -419,6 +436,12 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 			suggestion)
 	}
 	if fileCount == 0 {
+		if totalSourceFileCount == 0 {
+			if ls := formatLSFallback(otherFiles, subDirs, query); ls != "" {
+				sb.WriteString(ls)
+				return sb.String(), nil
+			}
+		}
 		sb.WriteString("\n*No source files with symbols found.*\n")
 	}
 	return sb.String(), nil
@@ -519,6 +542,53 @@ func writeRepoMapHeader(sb *strings.Builder, absRoot string, totalFiles int, byE
 			fmt.Fprintf(sb, "- dirs omitted (file cap reached before they could be sampled): %d\n", dirsOmitted)
 		}
 	}
+}
+
+// formatLSFallback renders an ls-style listing of the non-source files and
+// subdirectories the walk collected. It is used only when the mapped tree has
+// no recognized source files, so an agent pointing repo_map at a docs-only or
+// config-only directory still sees its contents instead of an empty answer.
+// When query is non-empty, only files whose path contains it are listed.
+func formatLSFallback(otherFiles []fileEntry, subDirs []string, query string) string {
+	if query != "" {
+		otherFiles = filterByQuery(otherFiles, query, nil)
+	}
+	if len(otherFiles) == 0 && len(subDirs) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n### Contents (no source files; ls-style listing)\n")
+
+	sortedDirs := append([]string(nil), subDirs...)
+	sort.Strings(sortedDirs)
+	for _, d := range sortedDirs {
+		fmt.Fprintf(&sb, "- %s/\n", d)
+	}
+	sort.Slice(otherFiles, func(i, j int) bool { return otherFiles[i].relPath < otherFiles[j].relPath })
+	shown := otherFiles
+	if len(shown) > repoMapMaxFiles {
+		shown = shown[:repoMapMaxFiles]
+	}
+	for _, f := range shown {
+		fmt.Fprintf(&sb, "- %s\n", f.relPath)
+	}
+	if len(otherFiles) > len(shown) {
+		fmt.Fprintf(&sb, "- *... %d more files (truncated)*\n", len(otherFiles)-len(shown))
+	}
+
+	if sb.Len() > repoMapCharBudget {
+		trunc := sb.String()[:repoMapCharBudget]
+		lastNL := strings.LastIndex(trunc, "\n")
+		if lastNL > 0 {
+			trunc = trunc[:lastNL]
+		}
+		sb.Reset()
+		sb.WriteString(trunc)
+		sb.WriteString("\n- *... listing truncated at char budget*\n")
+	}
+
+	return sb.String()
 }
 
 // formatDirectoryTree produces a compact directory tree showing file counts

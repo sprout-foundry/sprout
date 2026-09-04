@@ -332,7 +332,10 @@ body {
 
 .app {
   display: flex;
-  height: 100vh;
+  /* Percentage chain (html → body → #root) instead of 100vh: some
+     Android WebViews resolve viewport units to 0 for height (see
+     index.html seed script). */
+  height: 100%;
   padding-bottom: var(--sprout-terminal-reserved-height);
   box-sizing: border-box;
   background: var(--app-shell-bg);
@@ -914,7 +917,11 @@ body {
 html,
 body,
 #root {
+  /* 100% chains off the px height seeded inline in index.html; the
+     100vh fallback below covers normal browsers where the seed is
+     redundant. Order matters: percentage first, vh as backup. */
   height: 100%;
+  min-height: 100vh;
 }
 
 /* Selection */
@@ -1262,7 +1269,12 @@ body,
 .onboarding-card {
   position: relative;
   width: min(480px, 100%);
-  max-height: calc(100vh - 48px);
+  /* Some Android WebViews compute viewport units (vh/svh) to 0 for
+     max-height (observed: S25/Android 16 — calc(100vh - 48px) → 0px).
+     A 0 clamp collapses the wizard to its padding. Percentage
+     max-height against the flex overlay resolves correctly, and the
+     overlay's 16px padding supplies the breathing room vh used to. */
+  max-height: 100%;
   overflow-y: auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -2204,4 +2216,13 @@ button.primary.success {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* "Show other providers" hint (all-providers-as-cards mode) */
+.onboarding-provider-hint {
+  margin: 0;
+  padding: 6px 2px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }

@@ -86,6 +86,10 @@ webui/node_modules/
 # Desktop build artifacts (pre-built Electron releases, cross-compiled backends)
 desktop/dist/
 
+# Studio dist staging dirs (build-webui-dist.mjs component/native outputs)
+.components-dist/
+.webui-studio-dist/
+
 # Playwright test files
 playwright-report/
 test-results/

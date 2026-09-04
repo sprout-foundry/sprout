@@ -16,7 +16,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  height: 100vh;
+  /* Fallback: inline seed script in index.html sets a px height (some
+     Android WebViews compute 100vh → 0). height:100% chains off the
+     seeded html height; the px value below is a last-resort minimum. */
+  height: 100%;
+  min-height: 100vh;
   overflow: hidden;
 }
 

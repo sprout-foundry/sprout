@@ -25,6 +25,24 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <!-- WebView viewport-unit insurance: some Android WebViews resolve
+         vh/svh to 0 for height/max-height (observed S25/Android 16:
+         body{height:100vh} → 0px), collapsing the app shell and any
+         vh-clamped dialog to nothing. The inline style seeds html and
+         body with a real pixel height from visualViewport before React
+         mounts; CSS below layers percentage fallbacks on top. -->
+    <script>
+      (function () {
+        var seed = function () {
+          var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+          document.documentElement.style.height = h + 'px';
+          document.body.style.height = h + 'px';
+        };
+        seed();
+        window.addEventListener('resize', seed);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', seed);
+      })();
+    </script>
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

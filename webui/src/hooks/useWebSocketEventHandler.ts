@@ -1356,12 +1356,36 @@ export function useWebSocketEventHandler({
           const existingCache = prev.perChatCache[eventChatId];
           if (!existingCache) return {};
           const pendingEvents = existingCache.pendingEvents ?? [];
+          // Mirror the active-chat error lifecycle into the cached entry.
+          // The active handlers clear lastError on primary run boundaries
+          // (query_started/query_completed, subagent runs excluded) and set
+          // it on error events — without mirroring, a background chat's
+          // cached banner freezes at whatever it showed when the user last
+          // viewed the chat: a recovered run keeps showing "chat failed"
+          // forever, and inactive chat panes (WorkspacePane) render the
+          // stale value directly. Ordering is safe: a failed run publishes
+          // query_completed BEFORE its terminal error event, so the error
+          // wins the race. (session_terminated/session_displaced are not
+          // mirrored: the backend sends those directly to the affected
+          // connection, never through the per-chat event routing.)
+          let cachedLastError = existingCache.lastError ?? null;
+          const subagentDepth = Number(eventData.subagent_depth ?? 0);
+          const isSubagentEvent = Number.isFinite(subagentDepth) && subagentDepth > 0;
+          if ((event.type === 'query_started' || event.type === 'query_completed') && !isSubagentEvent) {
+            cachedLastError = null;
+          } else if (event.type === 'error') {
+            if (getServerErrorCode(eventData) !== 'model_not_available') {
+              const msg = eventData.message != null ? String(eventData.message) : 'Unknown error';
+              cachedLastError = eventData.error != null ? `${msg}: ${String(eventData.error)}` : msg;
+            }
+          }
           return {
             perChatCache: {
               ...prev.perChatCache,
               [eventChatId]: {
                 ...existingCache,
                 pendingEvents: [...pendingEvents, event].slice(-200),
+                lastError: cachedLastError,
               },
             },
           };

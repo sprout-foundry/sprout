@@ -138,6 +138,78 @@ func TestGenerateRepoMapEmptyDirectory(t *testing.T) {
 	}
 }
 
+// TestGenerateRepoMapLSFallbackForNonSourceDirs verifies that mapping a
+// directory with no recognized source files (docs, configs) falls back to an
+// ls-style listing of its files and subdirectories instead of returning
+// "no source files" with no content.
+func TestGenerateRepoMapLSFallbackForNonSourceDirs(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"README.md":            "# readme",
+		"docs/architecture.md": "# arch",
+		"docs/guide.md":        "# guide",
+		"config.yaml":          "key: value",
+	})
+
+	for _, depth := range []int{1, 2, 3} {
+		result, err := GenerateRepoMap(context.Background(), dir, depth, "")
+		requireErr(t, err, "generate repo map depth=%d", depth)
+		for _, want := range []string{
+			"Contents (no source files; ls-style listing)",
+			"- docs/",
+			"- README.md",
+			"- config.yaml",
+			"- docs/architecture.md",
+			"- docs/guide.md",
+		} {
+			if !strings.Contains(result, want) {
+				t.Errorf("depth=%d: missing %q in output:\n%s", depth, want, result)
+			}
+		}
+	}
+}
+
+// TestGenerateRepoMapLSFallbackQueryFilter verifies the ls-style fallback
+// honors the query filter at every depth.
+func TestGenerateRepoMapLSFallbackQueryFilter(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"README.md": "# readme",
+		"GUIDE.md":  "# guide",
+		"notes.txt": "notes",
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "guide")
+	requireErr(t, err, "generate repo map")
+	if !strings.Contains(result, "- GUIDE.md") {
+		t.Errorf("expected GUIDE.md in filtered fallback:\n%s", result)
+	}
+	if strings.Contains(result, "- README.md") || strings.Contains(result, "- notes.txt") {
+		t.Errorf("non-matching files should be filtered out of fallback:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapSourceFilesTakePriorityOverLSFallback verifies that when
+// source files exist, the ls-style fallback is not used even if some non-source
+// files are present.
+func TestGenerateRepoMapSourceFilesTakePriorityOverLSFallback(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"main.go":    "package main\n\nfunc Run() {}\n",
+		"README.md":  "# readme",
+		"config.yml": "key: value",
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
+	requireErr(t, err, "generate repo map")
+	if !strings.Contains(result, "- func Run:3") {
+		t.Errorf("missing symbol extraction:\n%s", result)
+	}
+	if strings.Contains(result, "ls-style listing") {
+		t.Errorf("fallback should not be used when source files exist:\n%s", result)
+	}
+}
+
 // TestGenerateRepoMapBinaryFileSkipped verifies binary files are not processed.
 func TestGenerateRepoMapBinaryFileSkipped(t *testing.T) {
 	dir := t.TempDir()

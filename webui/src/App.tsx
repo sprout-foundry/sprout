@@ -32,6 +32,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
+import type { QueuedMessage } from './hooks/useChatSessionManager';
 import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
@@ -174,7 +175,7 @@ function AppInner() {
   // ── Refs ───────────────────────────────────────────────────────
 
   const activeRequestsRef = useRef(0);
-  const queuedMessagesRef = useRef<string[]>([]);
+  const queuedMessagesRef = useRef<QueuedMessage[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = state.activeChatId;
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -425,8 +426,13 @@ function AppInner() {
                         onProviderChange={handleProviderChange}
                         onSendMessage={chatManager.handleSendMessage}
                         onQueueMessage={chatManager.handleQueueMessage}
+                        onQueueMessageRemove={chatManager.handleRemoveQueuedMessage}
+                        onQueueMessageEdit={chatManager.handleEditQueuedMessage}
+                        onQueueReorder={chatManager.handleReorderQueuedMessages}
+                        onClearQueuedMessages={chatManager.handleClearQueuedMessages}
                         onStopProcessing={chatManager.handleStopProcessing}
                         onRetractSteer={chatManager.handleRetractSteer}
+                        queuedMessages={chatManager.queuedMessages}
                         queuedMessagesCount={chatManager.queuedMessagesCount}
                         onGitCommit={handleGitCommit}
                         onGitAICommit={handleGitAICommit}

@@ -32,11 +32,16 @@ function extractToolRefsFromContent(content: string): ToolRef[] {
   return refs;
 }
 
+export interface QueuedMessage {
+  message: string;
+  chatId: string | null;
+}
+
 export interface UseChatSessionManagerParams {
   setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
-  queuedMessagesRef: React.MutableRefObject<string[]>;
+  queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
 }
 
@@ -46,10 +51,16 @@ export interface UseChatSessionManagerReturn {
   handleCreateChat: () => Promise<string | null>;
   handleDeleteChat: (id: string) => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
-  handleSendMessage: (message: string, options?: { allowConcurrent?: boolean }) => Promise<void>;
+  handleSendMessage: (message: string, options?: { allowConcurrent?: boolean; chatId?: string }) => Promise<void>;
   handleQueueMessage: (message: string) => void;
+  handleRemoveQueuedMessage: (index: number) => void;
+  handleEditQueuedMessage: (index: number, newText: string) => void;
+  handleReorderQueuedMessages: (fromIndex: number, toIndex: number) => void;
+  handleClearQueuedMessages: () => void;
   handleStopProcessing: () => Promise<void>;
   handleRetractSteer: () => Promise<boolean>;
+  /** All queued entries, each tagged with the chat it was queued for. */
+  queuedMessages: QueuedMessage[];
   queuedMessagesCount: number;
   setQueuedMessagesCount: React.Dispatch<React.SetStateAction<number>>;
 }
@@ -66,6 +77,13 @@ export function useChatSessionManager({
   isProcessing,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
+  // Mirror of queuedMessagesRef for rendering. The ref is the source of
+  // truth for the drain effect (it must see through renders), but the
+  // queue panel needs the array itself — CommandInput falls back to dead
+  // no-op handlers when these props are missing, which is what the
+  // 3b516bbb5 refactor regressed: the badge counted messages but the
+  // panel rendered empty with non-functional buttons.
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const apiService = ApiService.getInstance();
 
   // Retract state: tracks the last steer message so the user can pull it
@@ -278,7 +296,7 @@ export function useChatSessionManager({
   );
 
   const handleSendMessage = useCallback(
-    async (message: string, options?: { allowConcurrent?: boolean }) => {
+    async (message: string, options?: { allowConcurrent?: boolean; chatId?: string }) => {
       if (!message.trim()) return;
 
       // Compile-time short-circuit (R-4): in a --native-chat dist the shell
@@ -294,6 +312,9 @@ export function useChatSessionManager({
       const trimmedMessage = message.trim();
       const isClearCommand = trimmedMessage.toLowerCase() === '/clear';
       const allowConcurrent = options?.allowConcurrent === true;
+      // Queue drain targets the chat the entry was queued for; the active
+      // chat's ID is only the fallback for direct (typed) sends.
+      const targetChatId = options?.chatId ?? activeChatIdRef.current ?? undefined;
 
       // Intercept the /model and /provider slash commands client-side and
       // route them to the equivalent WebUI affordances (model picker
@@ -325,6 +346,7 @@ export function useChatSessionManager({
 
         activeRequestsRef.current = 0;
         queuedMessagesRef.current = [];
+        setQueuedMessages([]);
         setQueuedMessagesCount(0);
 
         setState((prev) => ({
@@ -339,7 +361,7 @@ export function useChatSessionManager({
         }));
 
         try {
-          await apiService.sendQuery('/clear', activeChatIdRef.current ?? undefined);
+          await apiService.sendQuery('/clear', targetChatId);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Failed to send clear command';
           setState((prev) => ({
@@ -374,7 +396,7 @@ export function useChatSessionManager({
             },
           ]),
         }));
-        await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+        await apiService.steerQuery(trimmedMessage, targetChatId);
         // Remember the steer for possible retraction via Up-arrow.
         lastSteerMessageRef.current = trimmedMessage;
         lastSteerBubbleIdRef.current = bubbleId;
@@ -400,7 +422,7 @@ export function useChatSessionManager({
 
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
-        await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+        await apiService.sendQuery(trimmedMessage, targetChatId);
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
@@ -415,7 +437,7 @@ export function useChatSessionManager({
           // backend query is still active — keep it at 1, don't double-count.
           setState((prev) => ({ isProcessing: true, lastError: null }));
           try {
-            await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
+            await apiService.steerQuery(trimmedMessage, targetChatId);
             lastSteerMessageRef.current = trimmedMessage;
             setState((prev) => ({ inputValue: '' }));
             return;
@@ -463,11 +485,57 @@ export function useChatSessionManager({
     [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setQueuedMessagesCount],
   );
 
-  const handleQueueMessage = useCallback((message: string) => {
-    const trimmed = message.trim();
-    if (!trimmed) return;
-    queuedMessagesRef.current.push(trimmed);
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
+  const handleQueueMessage = useCallback(
+    (message: string) => {
+      const trimmed = message.trim();
+      if (!trimmed) return;
+      queuedMessagesRef.current.push({
+        message: trimmed,
+        // Tag with the chat the user was viewing when queueing so the
+        // drain can't fire it into a different conversation after a
+        // chat switch.
+        chatId: activeChatIdRef.current,
+      });
+      setQueuedMessages([...queuedMessagesRef.current]);
+      setQueuedMessagesCount(queuedMessagesRef.current.length);
+    },
+    [activeChatIdRef],
+  );
+
+  const handleRemoveQueuedMessage = useCallback((index: number) => {
+    const next = [...queuedMessagesRef.current];
+    if (index < 0 || index >= next.length) return;
+    next.splice(index, 1);
+    queuedMessagesRef.current = next;
+    setQueuedMessages(next);
+    setQueuedMessagesCount(next.length);
+  }, []);
+
+  const handleEditQueuedMessage = useCallback((index: number, newText: string) => {
+    const next = [...queuedMessagesRef.current];
+    const trimmed = newText.trim();
+    if (index < 0 || index >= next.length || !trimmed) return;
+    next[index] = { ...next[index], message: trimmed };
+    queuedMessagesRef.current = next;
+    setQueuedMessages(next);
+    setQueuedMessagesCount(next.length);
+  }, []);
+
+  const handleReorderQueuedMessages = useCallback((fromIndex: number, toIndex: number) => {
+    const next = [...queuedMessagesRef.current];
+    if (fromIndex < 0 || fromIndex >= next.length) return;
+    if (toIndex < 0 || toIndex >= next.length) return;
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    queuedMessagesRef.current = next;
+    setQueuedMessages(next);
+    setQueuedMessagesCount(next.length);
+  }, []);
+
+  const handleClearQueuedMessages = useCallback(() => {
+    queuedMessagesRef.current = [];
+    setQueuedMessages([]);
+    setQueuedMessagesCount(0);
   }, []);
 
   const handleStopProcessing = useCallback(async () => {
@@ -475,6 +543,7 @@ export function useChatSessionManager({
       await apiService.stopQuery();
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
+      setQueuedMessages([]);
       setQueuedMessagesCount(0);
       lastSteerMessageRef.current = '';
       lastSteerBubbleIdRef.current = '';
@@ -486,6 +555,7 @@ export function useChatSessionManager({
     } catch (error) {
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
+      setQueuedMessages([]);
       setQueuedMessagesCount(0);
       lastSteerMessageRef.current = '';
       lastSteerBubbleIdRef.current = '';
@@ -505,7 +575,7 @@ export function useChatSessionManager({
         ]),
       }));
     }
-  }, [apiService, setQueuedMessagesCount]);
+  }, [apiService, setQueuedMessages, setQueuedMessagesCount]);
 
   // Pull back the newest un-picked steer message for editing. Removes the
   // optimistic bubble and restores the text to the input. Returns false when
@@ -577,20 +647,29 @@ export function useChatSessionManager({
     return () => window.removeEventListener('sprout:session-restored', handleSessionRestored);
   }, [setState]);
 
-  // Drain queued messages when not processing
+  // Drain queued messages when not processing. Entries are tagged with the
+  // chat they were queued for; only entries for the currently-viewed (idle)
+  // chat drain — a queued-for-chat-B message must not fire into chat A after
+  // a switch (its optimistic bubble and response belong to B's transcript).
+  // Entries for other chats wait until the user switches back and that chat
+  // is idle.
   useEffect(() => {
     if (isProcessing || activeRequestsRef.current > 0) {
       return;
     }
-    if (queuedMessagesRef.current.length === 0) {
+    const activeChat = activeChatIdRef.current;
+    const headIdx = queuedMessagesRef.current.findIndex(
+      (entry) => entry.chatId === null || entry.chatId === activeChat,
+    );
+    if (headIdx < 0) {
       return;
     }
-
-    const next = queuedMessagesRef.current.shift();
+    const [entry] = queuedMessagesRef.current.splice(headIdx, 1);
+    setQueuedMessages([...queuedMessagesRef.current]);
     setQueuedMessagesCount(queuedMessagesRef.current.length);
-    if (!next) return;
+    if (!entry) return;
 
-    handleSendMessage(next).catch((error) => {
+    handleSendMessage(entry.message, { chatId: entry.chatId ?? undefined }).catch((error) => {
       const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
       setState((prev) => ({
         lastError: `Failed to send queued message: ${errorMsg}`,
@@ -605,7 +684,9 @@ export function useChatSessionManager({
         ]),
       }));
     });
-  }, [isProcessing, handleSendMessage, queuedMessagesCount]);
+    // activeChatIdRef is a ref; isProcessing/queuedMessagesCount drive re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current]);
 
   // Reload the active chat's authoritative history from the backend. Triggered
   // when a reconnect reports a gap (the server's run buffer had already evicted
@@ -665,8 +746,13 @@ export function useChatSessionManager({
     handleRenameChat,
     handleSendMessage,
     handleQueueMessage,
+    handleRemoveQueuedMessage,
+    handleEditQueuedMessage,
+    handleReorderQueuedMessages,
+    handleClearQueuedMessages,
     handleStopProcessing,
     handleRetractSteer,
+    queuedMessages,
     queuedMessagesCount,
     setQueuedMessagesCount,
   };

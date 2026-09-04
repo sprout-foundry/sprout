@@ -320,6 +320,14 @@ class TerminalWebSocketService {
     if (this.eventHandler) {
       this.eventHandler(event);
     }
+    // Bridge terminal-WS frames (output, pty_exit, session_created, ...) onto
+    // the DOM so decoupled components (BackgroundTasks badge,
+    // attachable-session lists) can refresh without polling.
+    try {
+      window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: event }));
+    } catch {
+      // Non-browser (tests) — ignore.
+    }
   }
 
   sendCommand(command: string) {

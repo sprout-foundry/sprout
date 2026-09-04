@@ -17,8 +17,16 @@ const maxCompletionTail = 2000
 // is appended when available; the check_background pointer is kept so the
 // agent can still fetch the full output.
 func formatShellBgCompletion(sessionID string, exitCode int, outputTail string) string {
-	msg := fmt.Sprintf("Background session %s completed with exit code %d.",
-		sessionID, exitCode)
+	var statusPart string
+	switch exitCode {
+	case BgExitNone:
+		statusPart = "ended without a completion report (session was closed, reaped, or the PTY died before finishing)"
+	case BgExitStopped:
+		statusPart = "was stopped"
+	default:
+		statusPart = fmt.Sprintf("completed with exit code %d", exitCode)
+	}
+	msg := fmt.Sprintf("Background session %s %s.", sessionID, statusPart)
 	if outputTail != "" {
 		msg += fmt.Sprintf("\nLast output (up to %d bytes):\n%s\n", maxCompletionTail, outputTail)
 	}

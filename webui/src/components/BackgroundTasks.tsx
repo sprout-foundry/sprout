@@ -144,15 +144,13 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     return () => clearInterval(id);
   }, [isOpen, sessions]);
 
-  // Refresh badge on terminal WS events.
+  // Refresh badge on terminal/agent-session WS events (bridged onto the DOM
+  // as sprout:wsevent). 'output' chunks are excluded — they fire per byte;
+  // lifecycle events are what change the badge count.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (
-        detail?.type === 'terminal_output' ||
-        detail?.type === 'pty_exit' ||
-        detail?.type === 'agent_session_update'
-      ) {
+      if (detail?.type === 'pty_exit' || detail?.type === 'agent_session_update') {
         fetchSessions();
       }
     };

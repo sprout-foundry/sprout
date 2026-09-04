@@ -47,6 +47,10 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	tm := a.GetTerminalManager()
 	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
+		// Scope shell sessions to this agent's chat where set (WebUI daemon).
+		if chatID := a.GetChatID(); chatID != "" {
+			ctx = tools.WithShellChatID(ctx, chatID)
+		}
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
@@ -263,6 +267,10 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, wai
 	tm := a.GetTerminalManager()
 	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
+		// Scope shell sessions to this agent's chat where set (WebUI daemon).
+		if chatID := a.GetChatID(); chatID != "" {
+			ctx = tools.WithShellChatID(ctx, chatID)
+		}
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
@@ -314,6 +322,10 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 	tm := a.GetTerminalManager()
 	if tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
+		// Scope shell sessions to this agent's chat where set (WebUI daemon).
+		if chatID := a.GetChatID(); chatID != "" {
+			ctx = tools.WithShellChatID(ctx, chatID)
+		}
 	}
 
 	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)

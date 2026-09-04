@@ -268,7 +268,7 @@ describe('useAttachableSessions', () => {
   });
 
   describe('WS event re-fetch', () => {
-    it('re-fetches on sprout:wsevent of terminal_output', async () => {
+    it('re-fetches on sprout:wsevent of pty_exit', async () => {
       mockClientFetchSessions([]);
 
       await act(async () => {
@@ -281,14 +281,14 @@ describe('useAttachableSessions', () => {
       expect(vi.mocked(clientFetch)).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: { type: 'terminal_output' } }));
+        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: { type: 'pty_exit' } }));
         await vi.advanceTimersByTimeAsync(0);
       });
 
       expect(vi.mocked(clientFetch)).toHaveBeenCalledTimes(2);
     });
 
-    it('re-fetches on sprout:wsevent of pty_exit', async () => {
+    it('re-fetches on sprout:wsevent of agent_session_update', async () => {
       mockClientFetchSessions([]);
 
       await act(async () => {
@@ -357,7 +357,7 @@ describe('useAttachableSessions', () => {
       });
 
       await act(async () => {
-        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: { type: 'terminal_output' } }));
+        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: { type: 'pty_exit' } }));
         await vi.advanceTimersByTimeAsync(0);
       });
 

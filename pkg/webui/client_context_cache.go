@@ -82,6 +82,9 @@ func (ws *ReactWebServer) startTerminalCleanupIfNeeded(tm *TerminalManager) {
 	if tm == nil {
 		return
 	}
+	// Also wire the background-session lifecycle hook so completions push
+	// agent_session_update events to the UI (see publishAgentSessionUpdate).
+	ws.installSessionUpdateHook(tm)
 	val := ws.serverCtx.Load()
 	if val == nil {
 		return

@@ -19,6 +19,8 @@ type mockTerminalAccess struct {
 	getBackgroundOutputFunc    func(sessionID string) (string, error)
 	stopBackgroundFunc         func(sessionID string) error
 	isSessionActiveFunc        func(sessionID string) bool
+	backgroundDoneFunc         func(sessionID string) (<-chan struct{}, bool)
+	backgroundExitCodeFunc     func(sessionID string) int
 }
 
 func (m *mockTerminalAccess) ExecuteCommandInHidden(ctx context.Context, sessionID, command string) (string, int, error) {
@@ -61,6 +63,20 @@ func (m *mockTerminalAccess) IsSessionActive(sessionID string) bool {
 		return m.isSessionActiveFunc(sessionID)
 	}
 	return true
+}
+
+func (m *mockTerminalAccess) BackgroundDoneChan(sessionID string) (<-chan struct{}, bool) {
+	if m.backgroundDoneFunc != nil {
+		return m.backgroundDoneFunc(sessionID)
+	}
+	return nil, false
+}
+
+func (m *mockTerminalAccess) BackgroundExitCode(sessionID string) int {
+	if m.backgroundExitCodeFunc != nil {
+		return m.backgroundExitCodeFunc(sessionID)
+	}
+	return tools.BgExitNone
 }
 
 // TestStopBackgroundSession_ValidSessionID verifies that providing a valid

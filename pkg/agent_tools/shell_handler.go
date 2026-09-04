@@ -173,6 +173,13 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
 	}
 
+	// Scope hidden/background shell sessions to this conversation so
+	// multi-chat daemons don't share one PTY (cwd pollution) and the
+	// per-chat background cap is actually per chat.
+	if env.ChatID != "" {
+		ctx = WithShellChatID(ctx, env.ChatID)
+	}
+
 	// Extract parameters
 	var command string
 	if cmdRaw, ok := lookupKey(args, "command"); ok && cmdRaw != nil {
@@ -406,6 +413,17 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 		}, agenterrors.NewTool("shell_command", fmt.Sprintf("shell_command %q: %v", command, err), err)
 	}
 
+	// A command that hit the tool deadline was promoted to a background
+	// session mid-run. Attach the same wakeup watcher the explicit
+	// background=true path uses, so the agent hears about completion
+	// instead of having to remember to poll (wakeup_timeout=0: completion
+	// notification only, no deadline heads-up).
+	if env.Notifier != nil {
+		if sessionID, promoted := ParsePromotedBackgroundSession(result); promoted {
+			h.startWakeupWatcher(ctx, env, fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID), 0)
+		}
+	}
+
 	// Write to output writer if available
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, result)
@@ -458,26 +476,35 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	}
 
 	if tm := TerminalManagerFromContext(ctx); tm != nil {
-		doneCh := make(chan struct{})
-		done = doneCh
-		go func() {
-			ticker := time.NewTicker(500 * time.Millisecond)
-			defer ticker.Stop()
-			for tm.IsSessionActive(sessionID) {
-				select {
-				case <-ticker.C:
-				case <-watchCtx.Done():
-					// Cancelled before the session finished: leave doneCh
-					// open so the completion goroutine also takes the
-					// cancellation branch instead of emitting a spurious
-					// completion notification.
-					return
+		if doneCh, ok := tm.BackgroundDoneChan(sessionID); ok {
+			// Sentinel-equipped session: the channel closes on real command
+			// completion (or session death), and the exit code is real.
+			done = doneCh
+			getExitCode = func() int { return tm.BackgroundExitCode(sessionID) }
+		} else {
+			// Session unknown (already reaped?) or a pre-sentinel background
+			// session. Fall back to liveness polling so the watcher still
+			// reports when the session dies.
+			liveCh := make(chan struct{})
+			done = liveCh
+			go func() {
+				ticker := time.NewTicker(500 * time.Millisecond)
+				defer ticker.Stop()
+				for tm.IsSessionActive(sessionID) {
+					select {
+					case <-ticker.C:
+					case <-watchCtx.Done():
+						// Cancelled before the session finished: leave liveCh
+						// open so the completion goroutine also takes the
+						// cancellation branch instead of emitting a spurious
+						// completion notification.
+						return
+					}
 				}
-			}
-			close(doneCh)
-		}()
-		// TerminalManager does not expose exit codes for PTY sessions.
-		getExitCode = func() int { return 0 }
+				close(liveCh)
+			}()
+			getExitCode = func() int { return BgExitNone }
+		}
 	} else if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
 		if proc, exists := bpm.GetProcess(sessionID); exists {
 			done = proc.Done()

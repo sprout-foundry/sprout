@@ -106,6 +106,13 @@ type AgentState struct {
 	TokenCostTotal     float64 `json:"token_cost_total,omitempty"`
 	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`
 	FreeTokens         int     `json:"free_tokens,omitempty"`
+
+	// PendingBackgroundNotifications are background-task completion notices
+	// that were queued but not yet delivered to the model. They survive
+	// agent teardown/restore (idle eviction in the daemon re-creates
+	// agents from this snapshot) so a task finishing while its chat was
+	// away still wakes the conversation later.
+	PendingBackgroundNotifications []Notification `json:"pending_background_notifications,omitempty"`
 }
 
 // DiffChange represents a change region in the diff

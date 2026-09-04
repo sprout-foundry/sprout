@@ -86,6 +86,35 @@ func (a *Agent) DrainNotifications() []Notification {
 	return out
 }
 
+// snapshotPendingNotifications returns a copy of the queued notifications
+// for persistence (ExportState). Appended to any already-queued items so a
+// re-imported agent merges, rather than replaces, pending work.
+func (a *Agent) snapshotPendingNotifications() []Notification {
+	if a == nil {
+		return nil
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	if len(a.pendingNotifications) == 0 {
+		return nil
+	}
+	out := make([]Notification, len(a.pendingNotifications))
+	copy(out, a.pendingNotifications)
+	return out
+}
+
+// restorePendingNotifications appends persisted notifications to the queue.
+// Used by ImportState so completions that arrived while the chat was away
+// (idle-evicted agent) still wake the conversation on next use.
+func (a *Agent) restorePendingNotifications(n []Notification) {
+	if a == nil || len(n) == 0 {
+		return
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	a.pendingNotifications = append(a.pendingNotifications, n...)
+}
+
 func (a *Agent) HasPendingNotifications() bool {
 	if a == nil {
 		return false
@@ -197,11 +226,19 @@ func (a *Agent) TryAutoResume() bool {
 	if a.IsWakeupDisabled() {
 		return false
 	}
-	if !a.IncrementWakeupResume(cfg.Wakeup) {
-		return false
-	}
+
+	// Drain BEFORE consuming budget: two pollers (CLI REPL + WebUI) can
+	// race here, and the loser must not burn a resume slot on an empty
+	// drain. DrainNotifications is atomic, so exactly one caller gets the
+	// batch.
 	notifications := a.DrainNotifications()
 	if len(notifications) == 0 {
+		return false
+	}
+	if !a.IncrementWakeupResume(cfg.Wakeup) {
+		// Budget exhausted — re-queue so a later enablement (new user
+		// message resets wakeupDisabled) can still deliver them.
+		a.restorePendingNotifications(notifications)
 		return false
 	}
 	msg := FormatWakeupBatch(notifications)

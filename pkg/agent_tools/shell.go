@@ -6,11 +6,30 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
+
+// resolveShellChatID returns the chat-scoped identifier shell sessions should
+// use. Preference order: the ToolEnv ChatID (per-conversation scoping, wired
+// from the agent's event metadata in WebUI mode), then an explicit sessionID
+// parameter, then the legacy "default" bucket (CLI / tests).
+//
+// Per-chat scoping matters in the daemon: without it every chat shared one
+// hidden PTY (cwd pollution across conversations) and the per-chat
+// background-session cap was really per-client.
+func resolveShellChatID(envChatID, sessionID string) string {
+	if envChatID != "" {
+		return envChatID
+	}
+	if sessionID != "" {
+		return sessionID
+	}
+	return "default"
+}
 
 // ExecuteShellCommand executes a shell command with safety checks
 func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
@@ -31,9 +50,14 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	// Check for TerminalManager in context (WebUI mode). Skipped under WASM
 	// because no terminal manager is ever installed there.
 	if tm := TerminalManagerFromContext(ctx); tm != nil && !streamOutput {
-		// Route through hidden PTY session
-		// Use sessionID as the chat identifier; generate one if not set
-		chatID := sessionID
+		// Route through hidden PTY session. The chat identifier prefers the
+		// conversation-scoped ID from the context (WebUI per-chat scoping,
+		// see WithShellChatID), then the sessionID parameter, then the
+		// legacy "default" bucket (CLI / tests).
+		chatID := ShellChatIDFromContext(ctx)
+		if chatID == "" {
+			chatID = sessionID
+		}
 		if chatID == "" {
 			chatID = "default"
 		}
@@ -104,8 +128,12 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 
 	// Try TerminalManager first (WebUI mode)
 	if tm := TerminalManagerFromContext(ctx); tm != nil {
-		// Use sessionID as the chat identifier; generate one if not set
-		chatID := sessionID
+		// Per-conversation scoping (WebUI): the context chat ID wins, then
+		// the sessionID parameter, then the legacy "default" bucket.
+		chatID := ShellChatIDFromContext(ctx)
+		if chatID == "" {
+			chatID = sessionID
+		}
 		if chatID == "" {
 			chatID = "default"
 		}
@@ -201,6 +229,9 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 	}
 
 	// snapshot returns the latest output+status as a JSON string.
+	// exited reports whether the background COMMAND has finished — for
+	// TerminalManager sessions that's the sentinel (bgDone), not session
+	// liveness, because the shell outlives the command.
 	snapshot := func() (string, bool, error) {
 		// Try TerminalManager first (WebUI mode)
 		if tm := TerminalManagerFromContext(ctx); tm != nil {
@@ -208,10 +239,22 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 			if err != nil {
 				return "", false, err
 			}
-			active := tm.IsSessionActive(sessionID)
 			status := "running"
-			if !active {
-				status = "exited"
+			exited := false
+			if done, ok := tm.BackgroundDoneChan(sessionID); ok {
+				select {
+				case <-done:
+					status = "exited"
+					exited = true
+				default:
+				}
+			} else {
+				// Unknown session or a background session from before the
+				// sentinel existed. Fall back to liveness (legacy behavior).
+				if !tm.IsSessionActive(sessionID) {
+					status = "exited"
+					exited = true
+				}
 			}
 			resultBytes, err := json.Marshal(map[string]string{
 				"session_id": sessionID,
@@ -221,7 +264,7 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 			if err != nil {
 				return "", false, fmt.Errorf("marshal check result: %w", err)
 			}
-			return string(resultBytes), !active, nil
+			return string(resultBytes), exited, nil
 		}
 
 		// Fallback to BackgroundProcessManager (CLI mode)
@@ -249,6 +292,26 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 		return out, err
 	}
 
+	// TerminalManager sessions have an explicit completion channel (the
+	// sentinel). Block on it directly instead of polling — the command's
+	// exit is signalled, not inferred from liveness. An early exit returns
+	// as soon as the command finishes instead of burning the full window.
+	if tm := TerminalManagerFromContext(ctx); tm != nil {
+		if done, ok := tm.BackgroundDoneChan(sessionID); ok {
+			deadline := time.NewTimer(time.Duration(waitSeconds) * time.Second)
+			defer deadline.Stop()
+			select {
+			case <-done:
+			case <-deadline.C:
+			case <-ctx.Done():
+			}
+			out, _, err := snapshot()
+			return out, err
+		}
+		// Unknown session — fall through to the polling loop (snapshot()
+		// will surface the not-found error on the first call).
+	}
+
 	deadline := time.Now().Add(time.Duration(waitSeconds) * time.Second)
 	ticker := time.NewTicker(backgroundWaitTick)
 	defer ticker.Stop()
@@ -274,6 +337,27 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 			// keep polling
 		}
 	}
+}
+
+// promotedSessionPattern matches the session ID in a background promotion
+// message ("... still running in background session bg-foo-1234.") produced
+// by formatBackgroundPromotionMessage — both the WebUI PTY path and the CLI
+// BPM adoption path emit this exact phrasing.
+var promotedSessionPattern = regexp.MustCompile(`still running in background session ([A-Za-z0-9_-]+)`)
+
+// ParsePromotedBackgroundSession extracts the background session ID from a
+// tool result that was promoted past the 2-minute deadline. Returns ok=false
+// for ordinary results. The shell handler uses this to attach a wakeup
+// watcher to promoted sessions, matching the explicit background=true path.
+//
+// Session IDs are [A-Za-z0-9_-]; '.' is excluded so the sentence-ending
+// period after the ID is not captured.
+func ParsePromotedBackgroundSession(output string) (string, bool) {
+	m := promotedSessionPattern.FindStringSubmatch(output)
+	if len(m) != 2 {
+		return "", false
+	}
+	return m[1], true
 }
 
 // formatBackgroundPromotionMessage creates a formatted message for commands that

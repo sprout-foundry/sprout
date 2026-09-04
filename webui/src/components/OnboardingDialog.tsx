@@ -278,7 +278,7 @@ function OnboardingDialog({
           1. Choose an inference provider
         </div>
         <div className="onboarding-provider-grid" data-testid="onboarding-provider-grid">
-          {recommendedProviders.map((providerOption) => (
+          {(onboarding.showAllProviders ? onboarding.providers : recommendedProviders).map((providerOption) => (
             <button
               key={providerOption.id}
               type="button"
@@ -323,23 +323,9 @@ function OnboardingDialog({
             </button>
 
             {onboarding.showAllProviders && (
-              <>
-                <label htmlFor="onboarding-provider">Other Providers</label>
-                <select
-                  id="onboarding-provider"
-                  value={onboarding.provider}
-                  onChange={(e) => onProviderChange(e.target.value)}
-                  disabled={onboarding.submitting || onboarding.checking}
-                >
-                  {onboarding.providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.has_credential ? ' (configured)' : ''}
-                      {!p.has_credential && p.requires_api_key ? ' (API key required)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </>
+              <div className="onboarding-provider-hint">
+                All providers shown above. Tap one to select it.
+              </div>
             )}
           </>
         )}

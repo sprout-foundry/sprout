@@ -3,6 +3,7 @@ import { Menu, PanelRightClose } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
+import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
@@ -69,8 +70,14 @@ interface AppContentProps {
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
   onQueueMessage: (message: string) => void;
+  onQueueMessageRemove: (index: number) => void;
+  onQueueMessageEdit: (index: number, newText: string) => void;
+  onQueueReorder: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages: () => void;
   onStopProcessing: () => void;
   onRetractSteer: () => boolean | Promise<boolean>;
+  /** Queue entries (message + originating chat); mapped to strings for the shared panel. */
+  queuedMessages: QueuedMessage[];
   queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
@@ -117,8 +124,13 @@ const AppContent: React.FC<AppContentProps> = ({
   onProviderChange,
   onSendMessage,
   onQueueMessage,
+  onQueueMessageRemove,
+  onQueueMessageEdit,
+  onQueueReorder,
+  onClearQueuedMessages,
   onStopProcessing,
   onRetractSteer,
+  queuedMessages,
   queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
@@ -619,6 +631,11 @@ const AppContent: React.FC<AppContentProps> = ({
       messages: state.messages,
       onSendMessage,
       onQueueMessage,
+      onQueueMessageRemove,
+      onQueueMessageEdit,
+      onQueueReorder,
+      onClearQueuedMessages,
+      queuedMessages: queuedMessages.map((entry) => entry.message),
       queuedMessagesCount,
       inputValue,
       onInputChange: setInputValue,
@@ -643,6 +660,11 @@ const AppContent: React.FC<AppContentProps> = ({
       state.messages,
       onSendMessage,
       onQueueMessage,
+      onQueueMessageRemove,
+      onQueueMessageEdit,
+      onQueueReorder,
+      onClearQueuedMessages,
+      queuedMessages,
       queuedMessagesCount,
       inputValue,
       setInputValue,

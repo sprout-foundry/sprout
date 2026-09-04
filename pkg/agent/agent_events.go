@@ -169,6 +169,8 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 	a.publishEvent(
 		events.EventTypeMetricsUpdate,
 		events.MetricsUpdateEventWithCategory(
+			provider,
+			a.GetModel(),
 			a.state.GetTotalTokens(),
 			a.state.GetCurrentContextTokens(),
 			a.getModelContextLimit(),

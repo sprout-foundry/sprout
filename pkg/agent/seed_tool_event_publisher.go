@@ -66,6 +66,50 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 		}
 		r.bus.Publish(eventType, data)
 
+	case core.EventTypeQueryStarted:
+		// Sprout's prepareQueryRun (seed_query.go) publishes query_started
+		// with provider/model/chat metadata before seed's run starts. Seed's
+		// own publication ~1s later (conversation.go runLoop) would render a
+		// duplicate "Query:" line in the sidebar log and a second user
+		// bubble. Suppress seed's copy, mirroring the query_completed
+		// suppression below.
+		return
+
+	case core.EventTypeMetricsUpdate:
+		// Seed's metrics publishes (retry.go, conversation.go, streaming.go)
+		// carry token/cost counters but not provider/model. The WebUI footer
+		// falls back to previous state, but the sidebar log renders missing
+		// keys as "Model: ? | Provider: ?". Fill them from the agent.
+		if payload, ok := data.(map[string]interface{}); ok {
+			if r.agent != nil {
+				if _, has := payload["provider"]; !has {
+					payload["provider"] = r.agent.GetProvider()
+				}
+				if _, has := payload["model"]; !has {
+					payload["model"] = r.agent.GetModel()
+				}
+			}
+		}
+		r.bus.Publish(eventType, data)
+
+	case core.EventTypeError:
+		// Seed publishes an error event with message "chat failed" both
+		// per retry attempt and when a chat call finally fails. Sprout
+		// already surfaces strictly better signals for the same failures:
+		// publishRetryEvent emits a metrics_update (with error category,
+		// provider, model) plus a visible provider_retry agent_message per
+		// attempt, and the webui's runChatQuery publishes the terminal
+		// "Query failed" with the underlying cause. Forwarding seed's copy
+		// makes the WebUI's fatal error handler fire mid-retry (spinner
+		// drops, "[FAIL] Error: chat failed" bubbles) while the backend is
+		// still retrying. Suppress it; other seed error events pass through.
+		if payload, ok := data.(map[string]interface{}); ok {
+			if msg, _ := payload["message"].(string); msg == "chat failed" {
+				return
+			}
+		}
+		r.bus.Publish(eventType, data)
+
 	case core.EventTypeQueryCompleted:
 		// Seed's finalize() publishes QueryCompleted, but sprout's
 		// finalizeConversationPostHooks also publishes it (on ALL paths

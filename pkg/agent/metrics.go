@@ -324,6 +324,8 @@ func (a *Agent) RecordErrorCategory(err error) {
 	a.publishEvent(
 		events.EventTypeMetricsUpdate,
 		events.MetricsUpdateEventWithCategory(
+			a.GetProvider(),
+			a.GetModel(),
 			a.state.GetTotalTokens(),
 			a.state.GetCurrentContextTokens(),
 			a.getModelContextLimit(),

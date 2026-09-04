@@ -26,8 +26,8 @@
     "convert_tool_role_to_user": false,
     "fill_missing_array_items": true,
     "include_tool_call_id": true,
-    "reasoning_content_field": "reasoning_content",
     "preserve_reasoning_details": true,
+    "reasoning_content_field": "reasoning_content",
     "unified_reasoning_param": true
   },
   "models": {
@@ -6197,6 +6197,79 @@
         "input_cost": 0.15,
         "name": "Z.ai: GLM 5.3 Flash (batch)",
         "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 131072,
+        "description": "Granite 4.2 8B is a dense reasoning model from IBM. It is suited for mathematics, code generation, multilingual dialogue, and agentic workflows that need multi-step reasoning. It supports configurable reasoning effort (full, low, none) with a 128K context window.",
+        "id": "ibm-granite/granite-4.2-8b",
+        "input_cost": 0.1,
+        "name": "IBM: Granite 4.2 8B",
+        "output_cost": 0.15,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.1 improves on Claude Fable 5 across the board, with the biggest gains in agentic coding, long-running agentic workflows, and knowledge work: long code refactors, front-end and visual code generation, and finance and analysis tasks in particular. It also tends to be more concise than Fable 5 in its plans and summaries.",
+        "id": "anthropic/claude-fable-5.1",
+        "input_cost": 10,
+        "name": "Anthropic: Claude Fable 5.1",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.125,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.1 via the Batch API at 50% of standard pricing. Anthropic's Mythos-class model for demanding reasoning and long-horizon agentic work.",
+        "id": "anthropic/claude-fable-5.1:batch",
+        "input_cost": 5,
+        "name": "Anthropic: Claude Fable 5.1 (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.004,
+        "context_length": 260000,
+        "description": "Mercury 2.5 is the fastest reasoning LLM, and the latest diffusion LLM (dLLM) from Inception. Instead of generating tokens sequentially, Mercury 2.5 produces and refines multiple tokens in parallel, achieving 1,107 tokens/sec on standard GPUs and delivering a 10+ point jump in intelligence over Mercury 2.",
+        "id": "inception/mercury-2.5-preview",
+        "input_cost": 0.04,
+        "name": "Inception: Mercury 2.5 Preview",
+        "output_cost": 0.15,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1310720,
+        "description": "This model always redirects to the latest model in the GLM Flash family.",
+        "id": "~z-ai/glm-flash-latest",
+        "input_cost": 0.075,
+        "name": "Z.ai: GLM Flash Latest",
+        "output_cost": 0.25,
         "tags": [
           "tools",
           "vision",

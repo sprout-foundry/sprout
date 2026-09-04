@@ -60,7 +60,7 @@ function setupHook() {
       setState,
       activeRequestsRef: { current: 1 },
       activeChatIdRef: { current: 'chat-1' },
-      queuedMessagesRef: { current: [] },
+      queuedMessagesRef: { current: [] as import('./useChatSessionManager').QueuedMessage[] },
       isProcessing: true,
     }),
   );
@@ -105,7 +105,7 @@ describe('per-chat lastError snapshot/restore', () => {
         setState,
         activeRequestsRef: { current: 0 },
         activeChatIdRef,
-        queuedMessagesRef: { current: [] },
+        queuedMessagesRef: { current: [] as import('./useChatSessionManager').QueuedMessage[] },
         isProcessing: false,
       }),
     );
@@ -268,5 +268,262 @@ describe('useChatSessionManager steer retraction', () => {
     });
 
     expect(retracted).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: queue CRUD (regression for 3b516bbb5)
+//
+// The refactor deleted the useQueuedMessages hook but kept only the bare
+// ref + count, leaving CommandInput's queue panel fed by default props
+// (empty list, no-op remove/edit/reorder/clear). These tests pin the full
+// CRUD surface: the panel's data and handlers must exist, mutate the ref
+// (the drain effect's source of truth), and keep count in sync.
+// ---------------------------------------------------------------------------
+
+describe('queued message management', () => {
+  function setupQueueHook() {
+    let state: AppState = {
+      messages: [],
+      isProcessing: true,
+      inputValue: '',
+    } as unknown as AppState;
+
+    const setState: AppStoreSetState = (updater) => {
+      const partial =
+        typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+      state = { ...state, ...partial };
+    };
+
+    const queuedMessagesRef = { current: [] as import('./useChatSessionManager').QueuedMessage[] };
+    const utils = renderHook(() =>
+      useChatSessionManager({
+        setState,
+        activeRequestsRef: { current: 1 },
+        activeChatIdRef: { current: 'chat-1' },
+        queuedMessagesRef,
+        isProcessing: true,
+      }),
+    );
+
+    return {
+      ...utils,
+      getState: () => state,
+      queuedMessagesRef,
+    };
+  }
+
+  it('exposes the queued messages array and keeps it in sync with additions', () => {
+    const hook = setupQueueHook();
+
+    act(() => {
+      hook.result.current.handleQueueMessage('first queued');
+    });
+    act(() => {
+      hook.result.current.handleQueueMessage('second queued');
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual(['first queued', 'second queued']);
+    expect(hook.result.current.queuedMessagesCount).toBe(2);
+    expect(hook.queuedMessagesRef.current.map((e) => e.message)).toEqual(['first queued', 'second queued']);
+  });
+
+  it('ignores blank queue additions', () => {
+    const hook = setupQueueHook();
+
+    act(() => {
+      hook.result.current.handleQueueMessage('   ');
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual([]);
+    expect(hook.result.current.queuedMessagesCount).toBe(0);
+  });
+
+  it('removes a queued message by index', () => {
+    const hook = setupQueueHook();
+    act(() => {
+      hook.result.current.handleQueueMessage('a');
+    });
+    act(() => {
+      hook.result.current.handleQueueMessage('b');
+    });
+    act(() => {
+      hook.result.current.handleQueueMessage('c');
+    });
+
+    act(() => {
+      hook.result.current.handleRemoveQueuedMessage(1);
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual(['a', 'c']);
+    expect(hook.queuedMessagesRef.current.map((e) => e.message)).toEqual(['a', 'c']);
+    expect(hook.result.current.queuedMessagesCount).toBe(2);
+  });
+
+  it('ignores out-of-range removals', () => {
+    const hook = setupQueueHook();
+    act(() => {
+      hook.result.current.handleQueueMessage('only');
+    });
+
+    act(() => {
+      hook.result.current.handleRemoveQueuedMessage(5);
+    });
+    act(() => {
+      hook.result.current.handleRemoveQueuedMessage(-1);
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual(['only']);
+  });
+
+  it('edits a queued message in place', () => {
+    const hook = setupQueueHook();
+    act(() => {
+      hook.result.current.handleQueueMessage('original');
+    });
+
+    act(() => {
+      hook.result.current.handleEditQueuedMessage(0, 'edited');
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual(['edited']);
+    expect(hook.queuedMessagesRef.current.map((e) => e.message)).toEqual(['edited']);
+  });
+
+  it('reorders queued messages', () => {
+    const hook = setupQueueHook();
+    for (const m of ['one', 'two', 'three']) {
+      act(() => {
+        hook.result.current.handleQueueMessage(m);
+      });
+    }
+
+    act(() => {
+      hook.result.current.handleReorderQueuedMessages(2, 0);
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual(['three', 'one', 'two']);
+    expect(hook.queuedMessagesRef.current.map((e) => e.message)).toEqual(['three', 'one', 'two']);
+  });
+
+  it('clears the whole queue', () => {
+    const hook = setupQueueHook();
+    for (const m of ['one', 'two']) {
+      act(() => {
+        hook.result.current.handleQueueMessage(m);
+      });
+    }
+
+    act(() => {
+      hook.result.current.handleClearQueuedMessages();
+    });
+
+    expect(hook.result.current.queuedMessages.map((e) => e.message)).toEqual([]);
+    expect(hook.result.current.queuedMessagesCount).toBe(0);
+    expect(hook.queuedMessagesRef.current).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: queue drain chat routing (cross-chat regression)
+//
+// A message queued while viewing chat A must not fire into chat B after a
+// switch. The drain only dispatches entries whose chatId matches the active
+// (idle) chat; entries for other chats stay queued.
+// ---------------------------------------------------------------------------
+
+describe('queue drain routing', () => {
+  it('tags entries with the active chat at queue time', () => {
+    let state: AppState = { messages: [], isProcessing: true } as unknown as AppState;
+    const setState: AppStoreSetState = (updater) => {
+      const partial =
+        typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+      state = { ...state, ...partial };
+    };
+    const queuedMessagesRef = { current: [] as import('./useChatSessionManager').QueuedMessage[] };
+    const activeChatIdRef = { current: 'chat-A' };
+
+    const hook = renderHook(() =>
+      useChatSessionManager({
+        setState,
+        activeRequestsRef: { current: 1 },
+        activeChatIdRef,
+        queuedMessagesRef,
+        isProcessing: true,
+      }),
+    );
+
+    act(() => {
+      hook.result.current.handleQueueMessage('for chat A');
+    });
+
+    expect(hook.result.current.queuedMessages[0]).toEqual({ message: 'for chat A', chatId: 'chat-A' });
+  });
+
+  it('drains only entries for the active chat', async () => {
+    let state: AppState = { messages: [], isProcessing: false } as unknown as AppState;
+    const setState: AppStoreSetState = (updater) => {
+      const partial =
+        typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+      state = { ...state, ...partial };
+    };
+    const queuedMessagesRef = {
+      current: [
+        { message: 'for B', chatId: 'chat-B' },
+        { message: 'for A', chatId: 'chat-A' },
+      ] as import('./useChatSessionManager').QueuedMessage[],
+    };
+    const activeChatIdRef = { current: 'chat-A' };
+    apiDouble.sendQuery.mockClear();
+
+    const hook = renderHook(() =>
+      useChatSessionManager({
+        setState,
+        activeRequestsRef: { current: 0 },
+        activeChatIdRef,
+        queuedMessagesRef,
+        isProcessing: false,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Only the chat-A entry fired, and it fired AT chat A.
+    expect(apiDouble.sendQuery).toHaveBeenCalledTimes(1);
+    expect(apiDouble.sendQuery).toHaveBeenCalledWith('for A', 'chat-A');
+    // The chat-B entry stays queued.
+    expect(queuedMessagesRef.current.map((e) => e.message)).toEqual(['for B']);
+  });
+
+  it('drains entries with null chatId into the active chat', async () => {
+    let state: AppState = { messages: [], isProcessing: false } as unknown as AppState;
+    const setState: AppStoreSetState = (updater) => {
+      const partial =
+        typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+      state = { ...state, ...partial };
+    };
+    const queuedMessagesRef = {
+      current: [{ message: 'untagged', chatId: null }] as import('./useChatSessionManager').QueuedMessage[],
+    };
+    const activeChatIdRef = { current: 'chat-A' };
+    apiDouble.sendQuery.mockClear();
+
+    renderHook(() =>
+      useChatSessionManager({
+        setState,
+        activeRequestsRef: { current: 0 },
+        activeChatIdRef,
+        queuedMessagesRef,
+        isProcessing: false,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(apiDouble.sendQuery).toHaveBeenCalledWith('untagged', 'chat-A');
   });
 });

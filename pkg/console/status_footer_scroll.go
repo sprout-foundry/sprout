@@ -68,7 +68,21 @@ func (f *StatusFooter) hintRowCount() int {
 // active, additional rows are reserved above the rule — one row per
 // visual line of the steer buffer. When the keymap hint is active,
 // one extra row is reserved above the rule for the shortcut hint.
+//
+// Self-locking so every caller gets a consistent snapshot: the steer
+// fields it reads are mutated under f.mu by ClearSteerLine and the
+// keystroke handlers.
 func (f *StatusFooter) reservedRows() int {
+	if f == nil {
+		return 2
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.reservedRowsLocked()
+}
+
+// reservedRowsLocked is reservedRows for callers already holding f.mu.
+func (f *StatusFooter) reservedRowsLocked() int {
 	return 2 + f.steerRowCount() + f.hintRowCount()
 }
 

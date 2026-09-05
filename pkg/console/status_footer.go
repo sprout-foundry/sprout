@@ -1001,12 +1001,13 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 	steerWrapped := f.steerWrappedActive
 	steerRows := f.steerRowCount()
 	hintRows := f.hintRowCount()
+	reserved := f.reservedRowsLocked()
 	f.mu.Unlock()
 	if !steerActive || steerRows == 0 {
 		return
 	}
 	cols, rows := f.terminalSize()
-	if rows < f.reservedRows()+1 {
+	if rows < reserved+1 {
 		return
 	}
 	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
@@ -1062,13 +1063,13 @@ func (f *StatusFooter) steerVisualLines(steerLine string, steerCursor, steerRows
 // chrome (steer rows + optional hint row + rule + content line).
 func (f *StatusFooter) drawFullLocked() {
 	cols, rows := f.terminalSize()
-	if rows < f.reservedRows()+1 {
-		return
-	}
-	line := f.composeLine(cols)
-	rule := strings.Repeat("─", cols)
-
+	// Snapshot steer/hint state (and the row budget) under f.mu in ONE
+	// critical section: steerRowCount reads steerActive/steerWrappedActive,
+	// which ClearSteerLine and the keystroke handlers mutate under the same
+	// mutex. Reading them in a separate, earlier unlocked pass let the row
+	// budget race a concurrent ClearSteerLine.
 	f.mu.Lock()
+	reserved := f.reservedRowsLocked()
 	steerActive := f.steerActive
 	steerLine := f.steerLine
 	steerCursor := f.steerCursor
@@ -1076,6 +1077,11 @@ func (f *StatusFooter) drawFullLocked() {
 	steerRows := f.steerRowCount()
 	hintRows := f.hintRowCount()
 	f.mu.Unlock()
+	if rows < reserved+1 {
+		return
+	}
+	line := f.composeLine(cols)
+	rule := strings.Repeat("─", cols)
 
 	// \0337 save cursor; draw chrome rows from top-to-bottom; \0338
 	// restore. Color codes wrap each row so the chrome reads as "system

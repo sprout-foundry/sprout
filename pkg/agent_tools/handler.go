@@ -31,6 +31,9 @@ import (
 // tool handlers don't need *Agent access.
 type BackgroundNotifier interface {
 	NotifyCompletion(sessionID, kind, content string)
+	// NotifyCompletionLabeled adds a short user-facing task name rendered
+	// in the WebUI wakeup bubble ("Looking into 'make build'…").
+	NotifyCompletionLabeled(sessionID, kind, content, label string)
 }
 
 // ToolHandler defines the interface for a tool that can be invoked by the agent.

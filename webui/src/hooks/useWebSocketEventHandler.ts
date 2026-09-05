@@ -119,6 +119,13 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   logEntry.level = 'info';
   const data = (event.data ?? {}) as QueryStartedData;
   const startedQuery = String(data.query || '');
+  // Wakeup (auto-resume) turns carry a user-facing display text — e.g.
+  // "Looking into 'make build'…" — and must never surface the internal
+  // [wakeup] batch that goes to the model.
+  const isWakeupTurn = String(data.source || '') === 'auto-resume';
+  const startedDisplay = isWakeupTurn
+    ? String(data.display || 'Checking on a background task…')
+    : String(data.display || startedQuery);
   const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
   // Subagent ProcessQuery calls publish their own query_started through the
@@ -144,7 +151,10 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
     // added it optimistically (e.g. for concurrent queries). Only add if the
     // last message is not already a user message with the same content.
     const lastMsg = prev.messages[prev.messages.length - 1];
-    const alreadyPresent = lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
+    const alreadyPresent =
+      lastMsg != null &&
+      lastMsg.type === 'user' &&
+      (lastMsg.content === startedDisplay || lastMsg.content === startedQuery);
 
     return {
       isProcessing: true,
@@ -154,7 +164,10 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
         ? prev.messages
         : alreadyPresent
           ? prev.messages
-          : [...prev.messages, { id: generateMessageId(), type: 'user', content: startedQuery, timestamp: new Date() }],
+          : [
+              ...prev.messages,
+              { id: generateMessageId(), type: 'user', content: startedDisplay, timestamp: new Date() },
+            ],
       // Preserve historical tool executions across turns. Wiping the array
       // here (the original behavior) broke two visible features: (a)
       // MessageSegments badges on past turns lost their status lookup and

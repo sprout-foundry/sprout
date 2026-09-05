@@ -35,6 +35,10 @@ export interface ConnectionStatusData {
 
 export interface QueryStartedData {
   query: string;
+  /** User-facing bubble text. Falls back to query when absent. */
+  display?: string;
+  /** Query source (e.g. 'auto-resume') — wakeup turns render differently. */
+  source?: string;
   provider?: string;
   model?: string;
   chat_id?: string;
@@ -307,8 +311,8 @@ export interface SecurityApprovalRequestData {
 export interface SecurityAnalysisData {
   summary: string;
   modifies: string;
-  risk_assessment: 'low' | 'moderate' | 'high';
-  recommendation: 'approve' | 'review' | 'reject';
+  risk_assessment: "low" | "moderate" | "high";
+  recommendation: "approve" | "review" | "reject";
 }
 
 export interface SecurityPromptRequestData {
@@ -363,7 +367,7 @@ export interface PasswordRequestData {
 
 /** A single line in a diff hunk with its change type. */
 export interface EditHunkLine {
-  type: 'context' | 'add' | 'remove';
+  type: "context" | "add" | "remove";
   content: string;
 }
 
@@ -436,47 +440,242 @@ export interface DriftDetectedData {
 // ── Discriminated Union ────────────────────────────────────────────────
 
 export type WsEvent =
-  | { type: 'connection_status'; data?: ConnectionStatusData; id?: string; timestamp?: string }
-  | { type: 'query_started'; data?: QueryStartedData; id?: string; timestamp?: string }
-  | { type: 'query_progress'; data?: QueryProgressData; id?: string; timestamp?: string }
-  | { type: 'query_completed'; data?: QueryCompletedData; id?: string; timestamp?: string }
-  | { type: 'stream_chunk'; data?: StreamChunkData; id?: string; timestamp?: string }
-  | { type: 'error'; data?: ErrorData; id?: string; timestamp?: string }
-  | { type: 'tool_start'; data?: ToolStartData; id?: string; timestamp?: string }
-  | { type: 'tool_end'; data?: ToolEndData; id?: string; timestamp?: string }
-  | { type: 'tool_execution'; data?: Record<string, unknown>; id?: string; timestamp?: string }
-  | { type: 'command_output'; data?: CommandOutputData; id?: string; timestamp?: string }
-  | { type: 'command_output_dropped'; data?: CommandOutputDroppedData; id?: string; timestamp?: string }
-  | { type: 'subagent_activity'; data?: SubagentActivityData; id?: string; timestamp?: string }
-  | { type: 'delegate_clarification_requested'; data?: DelegateClarificationRequestedData; id?: string; timestamp?: string }
-  | { type: 'delegate_clarification_responded'; data?: DelegateClarificationRespondedData; id?: string; timestamp?: string }
-  | { type: 'agent_message'; data?: AgentMessageData; id?: string; timestamp?: string }
-  | { type: 'provider_no_credential'; data?: ProviderNoCredentialData; id?: string; timestamp?: string }
-  | { type: 'todo_update'; data?: TodoUpdateData; id?: string; timestamp?: string }
-  | { type: 'file_changed'; data?: FileChangedData; id?: string; timestamp?: string }
-  | { type: 'workspace_patch'; data?: WorkspacePatchData; id?: string; timestamp?: string }
-  | { type: 'file_content_changed'; data?: FileContentChangedData; id?: string; timestamp?: string }
-  | { type: 'metrics_update'; data?: MetricsUpdateData; id?: string; timestamp?: string }
-  | { type: 'workspace_changed'; data?: WorkspaceChangedData; id?: string; timestamp?: string }
-  | { type: 'session_changed'; data?: SessionChangedData; id?: string; timestamp?: string }
-  | { type: 'context_management_diagnostic'; data?: ContextManagementDiagnosticData; id?: string; timestamp?: string }
-  | { type: 'recall_diagnostic'; data?: RecallDiagnosticData; id?: string; timestamp?: string }
-  | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
-  | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
-  | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }
-  | { type: 'input_required'; data?: InputRequiredData; id?: string; timestamp?: string }
-  | { type: 'edit_approval_request'; data?: EditApprovalRequestData; id?: string; timestamp?: string }
-  | { type: 'shell_approval_request'; data?: ShellApprovalRequestData; id?: string; timestamp?: string }
-  | { type: 'password_request'; data?: PasswordRequestData; id?: string; timestamp?: string }
-  | { type: 'validation'; data?: Record<string, unknown>; id?: string; timestamp?: string }
-  | { type: 'terminal_output'; data?: Record<string, unknown>; id?: string; timestamp?: string }
-  | { type: 'session_terminated'; data?: Record<string, unknown>; id?: string; timestamp?: string }
-  | { type: 'session_ready'; data?: TerminalSessionReadyData; id?: string; timestamp?: string }
-  | { type: 'session_restored'; data?: TerminalSessionReadyData; id?: string; timestamp?: string }
-  | { type: 'output'; data?: TerminalOutputData; id?: string; timestamp?: string }
-  | { type: 'error_output'; data?: TerminalOutputData; id?: string; timestamp?: string }
-  | { type: 'pty_exit'; data?: TerminalPtyExitData; id?: string; timestamp?: string }
-  | { type: 'drift_detected'; data?: DriftDetectedData; id?: string; timestamp?: string }
+  | {
+      type: "connection_status";
+      data?: ConnectionStatusData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "query_started";
+      data?: QueryStartedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "query_progress";
+      data?: QueryProgressData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "query_completed";
+      data?: QueryCompletedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "stream_chunk";
+      data?: StreamChunkData;
+      id?: string;
+      timestamp?: string;
+    }
+  | { type: "error"; data?: ErrorData; id?: string; timestamp?: string }
+  | {
+      type: "tool_start";
+      data?: ToolStartData;
+      id?: string;
+      timestamp?: string;
+    }
+  | { type: "tool_end"; data?: ToolEndData; id?: string; timestamp?: string }
+  | {
+      type: "tool_execution";
+      data?: Record<string, unknown>;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "command_output";
+      data?: CommandOutputData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "command_output_dropped";
+      data?: CommandOutputDroppedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "subagent_activity";
+      data?: SubagentActivityData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "delegate_clarification_requested";
+      data?: DelegateClarificationRequestedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "delegate_clarification_responded";
+      data?: DelegateClarificationRespondedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "agent_message";
+      data?: AgentMessageData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "provider_no_credential";
+      data?: ProviderNoCredentialData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "todo_update";
+      data?: TodoUpdateData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "file_changed";
+      data?: FileChangedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "workspace_patch";
+      data?: WorkspacePatchData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "file_content_changed";
+      data?: FileContentChangedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "metrics_update";
+      data?: MetricsUpdateData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "workspace_changed";
+      data?: WorkspaceChangedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "session_changed";
+      data?: SessionChangedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "context_management_diagnostic";
+      data?: ContextManagementDiagnosticData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "recall_diagnostic";
+      data?: RecallDiagnosticData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "security_approval_request";
+      data?: SecurityApprovalRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "security_prompt_request";
+      data?: SecurityPromptRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "ask_user_request";
+      data?: AskUserRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "input_required";
+      data?: InputRequiredData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "edit_approval_request";
+      data?: EditApprovalRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "shell_approval_request";
+      data?: ShellApprovalRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "password_request";
+      data?: PasswordRequestData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "validation";
+      data?: Record<string, unknown>;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "terminal_output";
+      data?: Record<string, unknown>;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "session_terminated";
+      data?: Record<string, unknown>;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "session_ready";
+      data?: TerminalSessionReadyData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "session_restored";
+      data?: TerminalSessionReadyData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "output";
+      data?: TerminalOutputData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "error_output";
+      data?: TerminalOutputData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "pty_exit";
+      data?: TerminalPtyExitData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "drift_detected";
+      data?: DriftDetectedData;
+      id?: string;
+      timestamp?: string;
+    }
   // Fallback for transport/dev-server events not represented above. Keep the
   // shape closed so excess-property checking still catches misspelled fields.
   | { type: string; data?: unknown; id?: string; timestamp?: string };

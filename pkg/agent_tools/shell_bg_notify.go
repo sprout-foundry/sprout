@@ -59,6 +59,20 @@ func tailOfSessionOutput(ctx context.Context, sessionID string) string {
 	return ""
 }
 
+// shortCommandLabel builds the user-facing task name for a background
+// command: first line only, whitespace-collapsed, capped to 48 runes.
+// Kept local to agent_tools because pkg/agent imports this package.
+func shortCommandLabel(command string) string {
+	const maxLabelRunes = 48
+	line := strings.TrimSpace(strings.SplitN(command, "\n", 2)[0])
+	line = strings.Join(strings.Fields(line), " ")
+	runes := []rune(line)
+	if len(runes) > maxLabelRunes {
+		return string(runes[:maxLabelRunes]) + "…"
+	}
+	return line
+}
+
 // tailString returns the last n bytes of s, shifted forward to the first
 // newline when the cut lands mid-line (the partial first fragment is
 // rarely useful in a preview).

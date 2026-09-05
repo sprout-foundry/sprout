@@ -1080,3 +1080,58 @@ func TestConvertMessagesMergesConsecutiveAssistantMessagesWithoutToolCalls(t *te
 		t.Fatalf("expected first reasoning preserved, got %v", merged["reasoning_content"])
 	}
 }
+
+func TestCanonicalizeModelID(t *testing.T) {
+	provider, err := NewGenericProvider(&ProviderConfig{
+		Name:     "canon-test",
+		Endpoint: "https://example.invalid",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "meta-llama/llama-3.3-70b-instruct"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "meta-llama/llama-3.3-70b-instruct",
+			ModelInfo: []ModelInfo{
+				{ID: "meta-llama/llama-3.3-70b-instruct"},
+				{ID: "openai/gpt-5"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGenericProvider failed: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "unknown id passes through",
+			input: "my-gateway/custom-model-1",
+			want:  "my-gateway/custom-model-1",
+		},
+		{
+			name:  "config catalog case-insensitive match",
+			input: "Meta-Llama/Llama-3.3-70B-Instruct",
+			want:  "meta-llama/llama-3.3-70b-instruct",
+		},
+		{
+			name:  "exact config match unchanged",
+			input: "openai/gpt-5",
+			want:  "openai/gpt-5",
+		},
+		{
+			name:  "empty id untouched",
+			input: "",
+			want:  "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := provider.canonicalizeModelID(tc.input); got != tc.want {
+				t.Fatalf("canonicalizeModelID(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}

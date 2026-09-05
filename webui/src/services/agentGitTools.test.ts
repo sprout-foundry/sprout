@@ -90,8 +90,8 @@ function findTool(name: string): AgentGitToolDefinition {
 // ── Structure tests ──────────────────────────────────────────────────
 
 describe('AGENT_GIT_TOOLS structure', () => {
-  it('has 13 tool definitions', () => {
-    expect(AGENT_GIT_TOOLS).toHaveLength(13);
+  it('has 15 tool definitions', () => {
+    expect(AGENT_GIT_TOOLS).toHaveLength(15);
   });
 
   it('each tool has required fields', () => {
@@ -114,7 +114,7 @@ describe('AGENT_GIT_TOOLS structure', () => {
   });
 
   it('AGENT_GIT_TOOL_NAMES matches all tool names', () => {
-    expect(AGENT_GIT_TOOL_NAMES.size).toBe(13);
+    expect(AGENT_GIT_TOOL_NAMES.size).toBe(15);
     for (const tool of AGENT_GIT_TOOLS) {
       expect(AGENT_GIT_TOOL_NAMES.has(tool.name)).toBe(true);
     }

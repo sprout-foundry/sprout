@@ -203,6 +203,12 @@ type Agent struct {
 	// by wakeupMu.
 	pendingWakeupResume []string
 
+	// pendingQueryDisplay carries the user-facing chat bubble text for the
+	// next turn (e.g. "Looking into 'make build'…" for auto-resume turns,
+	// or the raw user text when wakeup batches are prepended to a user
+	// query). Consumed by prepareQueryRun when publishing query_started.
+	pendingQueryDisplay string
+
 	// lifetimeCtx is a process-scoped context for background goroutines that must outlive a single turn.
 	lifetimeCtx    context.Context
 	lifetimeCancel context.CancelFunc

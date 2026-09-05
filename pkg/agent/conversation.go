@@ -37,12 +37,22 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 func (a *Agent) ProcessQueryWithContinuityAs(source, userQuery string) (string, error) {
 	if userQuery != "" {
 		a.EnableWakeupIfDisabled()
+		// A real user query re-engages the wakeup budget. Auto-resume
+		// turns (source == QuerySourceAutoResume) must not reset it or a
+		// cascading chain of resumes would never exhaust.
+		if source != QuerySourceAutoResume {
+			a.ResetWakeupBudget()
+		}
 	}
 	if notifications := a.DrainNotifications(); len(notifications) > 0 {
 		wakeupMsg := FormatWakeupBatch(notifications)
 		if userQuery != "" {
+			// The user sees only their own text in the chat bubble; the
+			// wakeup batch goes to the model, not the transcript.
+			a.setPendingQueryDisplay(userQuery)
 			userQuery = wakeupMsg + "\n\n" + userQuery
 		} else {
+			a.setPendingQueryDisplay(FormatWakeupDisplay(notifications))
 			userQuery = wakeupMsg
 		}
 	}

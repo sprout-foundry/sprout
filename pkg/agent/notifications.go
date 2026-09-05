@@ -25,6 +25,7 @@ type Notification struct {
 	Content   string           // formatted message for the agent
 	SessionID string           // bg session or automate session ID
 	Kind      NotificationKind // source of the notification
+	Label     string           // short user-facing task name (e.g. "make build")
 	Timestamp time.Time        // when the notification was queued
 }
 
@@ -58,6 +59,43 @@ func FormatWakeupBatch(notifications []Notification) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// FormatWakeupDisplay renders the chat bubble shown to the user while the
+// agent works on completed background tasks. It never exposes session IDs or
+// tool mechanics — just the task name the user saw when the command started.
+func FormatWakeupDisplay(notifications []Notification) string {
+	switch len(notifications) {
+	case 0:
+		return ""
+	case 1:
+		n := notifications[0]
+		if n.Kind == NotifShellBgTimeout && n.Label != "" {
+			return fmt.Sprintf("Still waiting on '%s'…", n.Label)
+		}
+		if n.Label != "" {
+			return fmt.Sprintf("Looking into '%s'…", n.Label)
+		}
+		if n.Kind == NotifShellBgTimeout {
+			return "Checking on a background task…"
+		}
+		return "Looking into a background task…"
+	default:
+		return fmt.Sprintf("Looking into %d background tasks…", len(notifications))
+	}
+}
+
+// ShortCommandLabel builds a user-facing task name from a shell command:
+// first line only, whitespace-collapsed, capped to maxLabelRunes.
+func ShortCommandLabel(command string) string {
+	const maxLabelRunes = 48
+	line := strings.TrimSpace(strings.SplitN(command, "\n", 2)[0])
+	line = strings.Join(strings.Fields(line), " ")
+	runes := []rune(line)
+	if len(runes) > maxLabelRunes {
+		return string(runes[:maxLabelRunes]) + "…"
+	}
+	return line
 }
 
 // --- Notification queue methods on Agent ---
@@ -153,6 +191,22 @@ func (a *Agent) EnableWakeupIfDisabled() {
 	a.wakeupDisabled = false
 }
 
+// ResetWakeupBudget clears the wakeup disable flag and both budget counters.
+// Called when a real user query arrives: budget exhaustion should pause
+// auto-resume until the user re-engages, not silence it for the rest of the
+// session — otherwise background completions sit in the queue and only show
+// up prepended to the user's next message.
+func (a *Agent) ResetWakeupBudget() {
+	if a == nil {
+		return
+	}
+	a.wakeupMu.Lock()
+	defer a.wakeupMu.Unlock()
+	a.wakeupDisabled = false
+	a.wakeupResumeCount = 0
+	a.wakeupTokensConsumed = 0
+}
+
 func (a *Agent) IncrementWakeupResume(cfg configuration.WakeupConfig) bool {
 	if a == nil {
 		return false
@@ -182,12 +236,44 @@ func (a *Agent) RecordWakeupTokens(tokens int, cfg configuration.WakeupConfig) {
 	}
 }
 
+// NotifyCompletion queues a background-task notification without a label.
+// Satisfies the agent_tools.BackgroundNotifier interface.
 func (a *Agent) NotifyCompletion(sessionID, kind, content string) {
+	a.NotifyCompletionLabeled(sessionID, kind, content, "")
+}
+
+// NotifyCompletionLabeled queues a background-task notification with a short
+// user-facing task name shown in the WebUI wakeup bubble.
+func (a *Agent) NotifyCompletionLabeled(sessionID, kind, content, label string) {
 	a.QueueNotification(Notification{
 		Content:   content,
 		SessionID: sessionID,
 		Kind:      NotificationKind(kind),
+		Label:     label,
 	})
+}
+
+// setPendingQueryDisplay stores the chat bubble text for the next
+// query_started event. Cleared by takePendingQueryDisplay.
+func (a *Agent) setPendingQueryDisplay(display string) {
+	if a == nil || display == "" {
+		return
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	a.pendingQueryDisplay = display
+}
+
+// takePendingQueryDisplay returns and clears the pending display text.
+func (a *Agent) takePendingQueryDisplay() string {
+	if a == nil {
+		return ""
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	out := a.pendingQueryDisplay
+	a.pendingQueryDisplay = ""
+	return out
 }
 
 // TryAutoResume checks whether there are pending background-task
@@ -242,10 +328,14 @@ func (a *Agent) TryAutoResume() bool {
 		return false
 	}
 	msg := FormatWakeupBatch(notifications)
+	display := FormatWakeupDisplay(notifications)
 
 	if fn := a.wakeupWakeFn.Load(); fn != nil {
 		// REPL-owned resume. Stash the batch; the wake function kicks the
 		// REPL out of ReadLine and the loop's autoQueued drain runs it.
+		// The display is stashed for the same turn — prepareQueryRun
+		// picks it up when the REPL runs the batch.
+		a.setPendingQueryDisplay(display)
 		a.wakeupMu.Lock()
 		a.pendingWakeupResume = append(a.pendingWakeupResume, msg)
 		a.wakeupMu.Unlock()
@@ -259,6 +349,7 @@ func (a *Agent) TryAutoResume() bool {
 				a.Logger().Debug("[wakeup] auto-resume panicked: %v\n", r)
 			}
 		}()
+		a.setPendingQueryDisplay(display)
 		tokensBefore := a.GetTotalTokens()
 		_, err := a.ProcessQueryWithContinuityAs(QuerySourceAutoResume, msg)
 		if err != nil {

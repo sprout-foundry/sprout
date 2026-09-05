@@ -129,6 +129,10 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 		a.turnTimestamp = time.Time{}
 		a.turnTimestampMu.Unlock()
 		a.EndQuery()
+		// Immediate wakeup check: a background task may have completed
+		// while this turn ran. Resuming here avoids waiting for the WebUI
+		// poller's next tick — or the user's next message — to act on it.
+		a.TryAutoResume()
 	}()
 
 	a.turnTimestampMu.Lock()
@@ -137,7 +141,7 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 
 	a.beginTurnJournal(userQuery)
 
-	qc, err := a.prepareQueryRun(userQuery)
+	qc, err := a.prepareQueryRun(userQuery, source)
 	if err != nil {
 		a.endTurnJournal()
 		return "", err
@@ -164,7 +168,7 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 // - core.Options assembly (compaction, callbacks, checkpoints)
 // - Seed agent creation
 // - Steer forwarder and injector goroutines
-func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
+func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, error) {
 	a.initSubManagers()
 
 	// Query admission and release are owned by processQueryWithSeed so the
@@ -178,8 +182,12 @@ func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	// Reset interrupt context so a Stop from the previous query doesn't instantly cancel this one.
 	a.resetInterruptForNewQuery()
 
-	// Publish query started event
-	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, a.GetProvider(), a.GetModel()))
+	// Publish query started event. The chat bubble shows the user-facing
+	// display text (raw user text, or "Looking into '…'…" for wakeup
+	// turns) — never the internal wakeup batch prepended for the model.
+	display := a.takePendingQueryDisplay()
+	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEventWithDisplay(
+		userQuery, display, source, a.GetProvider(), a.GetModel()))
 
 	// Reset streaming buffers for new query
 	a.output.GetStreamingBuffer().Reset()

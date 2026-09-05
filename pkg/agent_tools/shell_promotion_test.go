@@ -56,6 +56,7 @@ func TestHandleSync_AttachesWatcherOnPromotion(t *testing.T) {
 		env,
 		fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sid),
 		0,
+		"long-build",
 	)
 
 	// Session completes (sentinel observed — the fake closes done when

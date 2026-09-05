@@ -9,11 +9,27 @@ import (
 
 // QueryStartedEvent creates a query started event
 func QueryStartedEvent(query, provider, model string) map[string]interface{} {
-	return map[string]interface{}{
+	return QueryStartedEventWithDisplay(query, "", "", provider, model)
+}
+
+// QueryStartedEventWithDisplay creates a query started event with a separate
+// user-facing bubble text. display is what the WebUI renders in the chat;
+// query is the raw prompt sent to the model. Empty display falls back to
+// query. source names the caller (agent package QuerySource* constants);
+// "auto-resume" turns render as wakeup bubbles rather than user messages.
+func QueryStartedEventWithDisplay(query, display, source, provider, model string) map[string]interface{} {
+	data := map[string]interface{}{
 		"query":    query,
 		"provider": provider,
 		"model":    model,
 	}
+	if display != "" && display != query {
+		data["display"] = display
+	}
+	if source != "" {
+		data["source"] = source
+	}
+	return data
 }
 
 // QueryProgressEvent creates a query progress event

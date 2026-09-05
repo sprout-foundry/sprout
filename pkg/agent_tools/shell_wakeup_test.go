@@ -93,6 +93,7 @@ func (f *fakeWakeupTerminal) StopBackgroundSession(_ string) error {
 type wakeupNotification struct {
 	kind    string
 	content string
+	label   string
 	seq     int64
 }
 
@@ -105,10 +106,14 @@ type fakeWakeupNotifier struct {
 }
 
 func (n *fakeWakeupNotifier) NotifyCompletion(_ string, kind, content string) {
+	n.NotifyCompletionLabeled("", kind, content, "")
+}
+
+func (n *fakeWakeupNotifier) NotifyCompletionLabeled(_ string, kind, content, label string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.seq++
-	n.calls = append(n.calls, wakeupNotification{kind: kind, content: content, seq: n.seq})
+	n.calls = append(n.calls, wakeupNotification{kind: kind, content: content, label: label, seq: n.seq})
 }
 
 func (n *fakeWakeupNotifier) of(kind string) []wakeupNotification {
@@ -139,7 +144,7 @@ func startWakeupWatcherForTest(t *testing.T, sessionID string, timeoutSec int) (
 	notifier := &fakeWakeupNotifier{}
 	env := ToolEnv{Notifier: notifier, LifetimeCtx: watchCtx}
 	resultJSON := fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID)
-	new(shellCommandHandler).startWakeupWatcher(WithTerminalManager(watchCtx, tm), env, resultJSON, timeoutSec)
+	new(shellCommandHandler).startWakeupWatcher(WithTerminalManager(watchCtx, tm), env, resultJSON, timeoutSec, "make build")
 	return tm, notifier, cancel
 }
 
@@ -311,7 +316,7 @@ func TestWakeupWatcher_BPMDeadlineThenCompletion(t *testing.T) {
 	notifier := &fakeWakeupNotifier{}
 	env := ToolEnv{Notifier: notifier, LifetimeCtx: watchCtx}
 	resultJSON := fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID)
-	new(shellCommandHandler).startWakeupWatcher(WithBackgroundProcessManager(watchCtx, bpm), env, resultJSON, 1)
+	new(shellCommandHandler).startWakeupWatcher(WithBackgroundProcessManager(watchCtx, bpm), env, resultJSON, 1, "make build")
 
 	// Deadline heads-up fires at ~1s while the sleep is still running.
 	require.True(t, waitForKind(t, notifier, "shell_bg_timeout", 1, 3*time.Second),
@@ -325,6 +330,8 @@ func TestWakeupWatcher_BPMDeadlineThenCompletion(t *testing.T) {
 	require.Len(t, notifier.of("shell_bg_timeout"), 1, "exactly one heads-up expected")
 	completions := notifier.of("shell_bg")
 	require.Len(t, completions, 1, "exactly one completion expected")
+	require.Equal(t, completions[0].label, "make build",
+		"completion notification must carry the command label")
 	require.Contains(t, completions[0].content, "completed with exit code 0",
 		"BPM completion must carry the real exit code, got: %q", completions[0].content)
 	require.Less(t, notifier.of("shell_bg_timeout")[0].seq, completions[0].seq,

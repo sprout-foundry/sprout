@@ -4,7 +4,7 @@
 .PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
-       verify-dist verify-dist-local automate-run
+       verify-dist verify-dist-local automate-run studio-providers
 
 # Default target
 help:
@@ -524,6 +524,21 @@ verify-dist-local:
 # Export endpoint manifest (for Foundry Service Worker sync)
 export-endpoint-manifest:
 	@node scripts/export-endpoint-manifest.mjs
+
+# Regenerate the STUDIO_PROVIDERS snapshot in the studio bridge from the
+# provider registry (pkg/agent_providers/configs/*.json + providercatalog),
+# then re-sync the kept-identical iOS/Android mirror copies so CI's
+# check-sync gate stays green. The generator rewrites ONLY the
+# `var STUDIO_PROVIDERS = [...];` line; everything else is preserved
+# byte-for-byte. Run from the sprout repo root.
+.PHONY: studio-providers
+studio-providers:
+	@echo "Regenerating STUDIO_PROVIDERS snapshot..."
+	@go run ./cmd/generate_studio_providers -bridge ../sprout-studio/shared/studio-bridge.js
+	@echo "Syncing studio-bridge.js mirrors (iOS + Android)..."
+	@cp ../sprout-studio/shared/studio-bridge.js ../sprout-studio/ios/App/sprout-studio/Bridge/studio-bridge.js
+	@cp ../sprout-studio/shared/studio-bridge.js ../sprout-studio/android/app/src/main/assets/studio-bridge.js
+	@echo "Done. Review with: git -C ../sprout-studio diff shared/studio-bridge.js"
 
 # Full development build: UI + WASM + Go binary
 # Optimized: skips React rebuild if source files haven't changed

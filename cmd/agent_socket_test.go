@@ -485,8 +485,11 @@ func TestSharedAgentService_ExecuteTool_EndToEnd(t *testing.T) {
 	createdAgents := setEphemeralAgentSeam(t)
 	// The agent's Shutdown (async in releaseAgent) flushes config/session
 	// files under t.TempDir; wait for it before returning or TempDir's
-	// RemoveAll races those writes.
-	defer awaitAgentsShutdown(t, createdAgents())
+	// RemoveAll races those writes. The snapshot MUST be taken when the
+	// defer runs, not when it's registered — deferred-call arguments are
+	// evaluated at registration, when the agent list is still empty (the
+	// agent is created later, inside the socket round-trip below).
+	defer func() { awaitAgentsShutdown(t, createdAgents()) }()
 
 	svc := NewSharedAgentService(nil)
 	sockPath := startCmdAgentServer(t, svc)
@@ -530,7 +533,8 @@ func TestSharedAgentService_ExecuteTool_RejectsEmptyWorkDir(t *testing.T) {
 // tool name returns a ToolResult with a non-empty Error and nil RPC error.
 func TestSharedAgentService_ExecuteTool_UnknownTool(t *testing.T) {
 	createdAgents := setEphemeralAgentSeam(t)
-	defer awaitAgentsShutdown(t, createdAgents())
+	// Snapshot at defer-run time — see TestSharedAgentService_ExecuteTool_EndToEnd.
+	defer func() { awaitAgentsShutdown(t, createdAgents()) }()
 
 	svc := NewSharedAgentService(nil)
 	result, err := svc.ExecuteTool(context.Background(), "no_such_tool", map[string]any{}, t.TempDir())

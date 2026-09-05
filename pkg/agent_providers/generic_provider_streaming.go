@@ -2,6 +2,7 @@ package providers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -117,6 +118,45 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 
 // handleStreamingResponse processes the streaming response
 func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *http.Response, callback api.StreamCallback) (*api.ChatResponse, error) {
+	// Some providers answer a streaming request with a single plain JSON
+	// body instead of an SSE event stream — observed with zai coding-plan
+	// endpoints (status 200, Content-Type: application/json, zero `data:`
+	// lines). The SSE loop would find nothing to parse and silently yield
+	// an empty response. Detect via Content-Type BEFORE reading the body:
+	// peeking the stream would block a slow/hung provider forever and
+	// defeat the first-token deadline. A JSON content type means the whole
+	// body is one complete chat.completion — decode and deliver it through
+	// the same callback contract a stream would use (reasoning before
+	// content, matching natural stream order).
+	{
+		ct := strings.ToLower(resp.Header.Get("Content-Type"))
+		if strings.Contains(ct, "application/json") {
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				return nil, agenterrors.NewNetwork("failed to read non-streamed JSON response body", readErr)
+			}
+			decoded, decodeErr := decodeChatResponseWithCost(bytes.NewReader(body))
+			if decodeErr != nil {
+				return nil, decodeErr
+			}
+			if callback != nil && len(decoded.Choices) > 0 {
+				choice := decoded.Choices[0]
+				if rc := choice.Message.ReasoningContent; rc != "" {
+					callback(rc, "reasoning")
+				}
+				if c := choice.Message.Content; c != "" {
+					callback(c, "assistant_text")
+				}
+			}
+			if decoded.Model == "" {
+				p.mu.RLock()
+				decoded.Model = p.model
+				p.mu.RUnlock()
+			}
+			return decoded, nil
+		}
+	}
+
 	// Process streaming response using shared builder to support tool_calls
 	reader := bufio.NewReader(resp.Body)
 	builder := api.NewStreamingResponseBuilder(callback)

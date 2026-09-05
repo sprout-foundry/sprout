@@ -30,7 +30,7 @@ func (h *shellCommandHandler) Name() string {
 func (h *shellCommandHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`. In browser/wasm environments you can also run `gittool:<tool> <json>` commands for full git operations — e.g. `gittool:git_clone {\"url\":\"https://github.com/owner/name\"}` to clone a repo, then `gittool:git_list_repos {}`, `gittool:git_status {\"repo\":\"owner/name\"}`, `gittool:git_read_file {\"repo\":\"owner/name\",\"filepath\":\"path\"}`, `gittool:git_commit {\"repo\":\"owner/name\",\"message\":\"...\"}`, and `gittool:git_push {\"repo\":\"owner/name\"}` (push needs a token; clone of public repos does not).",
 		Parameters: []ParameterDef{
 			{
 				Name:        "command",

@@ -20,10 +20,10 @@ import GitHubRepoPicker from './GitHubRepoPicker';
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 
-const { mockGitClone } = vi.hoisted(() => ({ mockGitClone: vi.fn() }));
+const { mockCloneRepo } = vi.hoisted(() => ({ mockCloneRepo: vi.fn() }));
 
-vi.mock('../services/browserGit', () => ({
-  gitClone: (...args: unknown[]) => mockGitClone(...args),
+vi.mock('../services/workspaceFs/backendsExport', () => ({
+  cloneRepo: (...args: unknown[]) => mockCloneRepo(...args),
 }));
 
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
@@ -107,7 +107,7 @@ beforeEach(() => {
   localStorage.clear();
   fetchMock = vi.fn().mockResolvedValue(jsonResponse([sampleRepo(1, 'Hello-World'), sampleRepo(2, 'Spoon-Knife')]));
   vi.stubGlobal('fetch', fetchMock);
-  mockGitClone.mockResolvedValue({ message: 'ok' });
+  mockCloneRepo.mockResolvedValue({ repo: "octocat/Hello-World", dir: "repos/octocat/Hello-World", entries: 3, defaultBranch: "master" });
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
 });
@@ -241,7 +241,7 @@ describe('GitHubRepoPicker', () => {
       expect(state?.textContent).toMatch(/Invalid or expired GitHub token/i);
     });
 
-    it('clones through browserGit.gitClone with the token and closes on success', async () => {
+    it('clones through the workspaceFs seam with the token and closes on success', async () => {
       renderPicker();
 
       await act(async () => {
@@ -254,12 +254,12 @@ describe('GitHubRepoPicker', () => {
         await Promise.resolve();
       });
 
-      expect(mockGitClone).toHaveBeenCalledTimes(1);
-      expect(mockGitClone).toHaveBeenCalledWith('https://github.com/octocat/Hello-World.git', { token: TOKEN });
+      expect(mockCloneRepo).toHaveBeenCalledTimes(1);
+      expect(mockCloneRepo).toHaveBeenCalledWith("https://github.com/octocat/Hello-World.git", { token: TOKEN });
     });
 
     it('renders the clone error inline and stays open on failure', async () => {
-      mockGitClone.mockRejectedValue(new Error('repository not found'));
+      mockCloneRepo.mockRejectedValue(new Error('repository not found'));
 
       const { onClose } = renderPicker();
 

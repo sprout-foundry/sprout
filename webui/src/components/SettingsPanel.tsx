@@ -11,6 +11,7 @@ import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 import ComputerUseSettingsTab from './settings/ComputerUseSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
+import GitHubSettingsTab from './settings/GitHubSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
 import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
@@ -465,6 +466,9 @@ function SettingsPanel({
 
       case 'env-local-llm':
         return <LocalLLMSettingsTab />;
+
+      case 'env-github':
+        return <GitHubSettingsTab />;
 
       case 'env-advanced':
         return (

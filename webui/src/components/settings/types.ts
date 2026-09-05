@@ -93,6 +93,7 @@ export type SettingsSubsection =
   // Environment (global scope)
   | 'env-providers'
   | 'env-local-llm'
+  | 'env-github'
   | 'env-advanced'
   // Editor
   | 'editor-preferences'
@@ -141,6 +142,7 @@ export const SECTION_GROUPS: SectionDef[] = [
     subsections: [
       { id: 'env-providers', label: 'Providers' },
       { id: 'env-local-llm', label: 'Local LLM' },
+      { id: 'env-github', label: 'GitHub' },
       { id: 'env-advanced', label: 'Advanced' },
     ],
   },
@@ -191,6 +193,10 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'workspace-lsp': 'general',
     'env-providers': 'providers',
     'env-local-llm': 'general',
+    // env-github is self-contained (localStorage PAT + api.github.com fetch);
+    // it has no settings-layer state of its own, so route through 'general'
+    // like env-local-llm so any session-layer fetch still fires.
+    'env-github': 'general',
     // env-advanced is the collapsed Advanced tab (SP-091-10 / SP-017). It
     // renders Performance + Commit & Review + OCR side-by-side. Route its
     // legacy fetch effect through 'performance' as a representative

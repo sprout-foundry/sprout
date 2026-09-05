@@ -2,6 +2,31 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.24] - 2026-09-04
+
+### Background processing, attach, and wakeup — comprehensive wiring repair
+
+- fix(webui): repair background processing, attach, and wakeup wiring — WebUI background commands now emit a `__SPROUT_DONE__` sentinel so completion is observable while the shell lives (real exit codes, `bgDone` channel, honest `finish_reason`); the daemon wakeup poller reaches every live per-chat agent instead of only `ws.agent`; pending notifications survive agent eviction via AgentState; shell sessions scope per chat (chatID flows Agent → ToolEnv → context); the server emits an allowlisted `agent_session_update` event that the frontend actually receives (`sprout:wsevent` bridge); 2-minute-deadline promotions attach wakeup watchers; `TryAutoResume` drains before consuming budget; cleanup never reaps sessions with live subscribers (7dab3eee6)
+- feat(wakeup): user-facing display for auto-resume turns — the raw `[wakeup]` batch no longer surfaces as a chat bubble: query_started carries `display` + `source`, wakeup turns render "Looking into 'make build'…", labels ride notifications via `NotifyCompletionLabeled`; real user queries reset the wakeup budget (exhaustion pauses instead of silencing all session); post-turn `TryAutoResume` acts on mid-turn completions immediately; system prompt documents the [wakeup] contract (54d338549)
+
+### WebUI fixes
+
+- fix(webui): repair queued-message panel and cross-chat drain routing — the 3b516bbb5 refactor left the queue panel fed by default props (empty list, no-op remove/edit/reorder/clear); restored the full CRUD surface and wired the five missing props through App → AppContent → ChatView → CommandInput. Queue entries are tagged with their originating chat and the drain only dispatches to the matching idle chat, so a message queued for chat A can't fire into chat B after a switch (bc3e2e366)
+
+### Local model fixes
+
+- fix(localmodel): stop silent 512-token truncation of local model turns — both LocalProvider send paths inherited sinter's 512-token MaxTokens default and never overrode it, cutting long turns mid-thought while reporting a clean "stop"; output now budgets against the real context window (exact local-tokenizer count, 16384 runaway cap) and reports `finish_reason: "length"` on truncation; the standalone llm_server subprocess no longer clamps client budgets. Verified live on qwen3.6-35b-a3b (1545-token completion, natural ending) (9c1a46dcb)
+
+### Other
+
+- wasm: seed credential placeholders for proxy-attached auth (9d7630079)
+
+## [v0.17.23] - 2026-09-04
+
+### Dependencies
+
+- chore: bump seed to v1.3.20 — pulls in the FallbackParser fix for Qwen-family checkpoints that narrate tool calls as text (qwen3.8-27b via NInfer): tag-suffix parameters (<parameter=name>), bare closers (</function>), and <tool_call> wrapper variants all recover into structured calls; spawned subagents inherit the parent's seed version pin (cffb50f97)
+
 ## [v0.17.22] - 2026-08-31
 
 ### CLI fixes

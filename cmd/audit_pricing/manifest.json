@@ -1070,7 +1070,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-08-30",
+    "last_verified": "2026-09-05",
     "models": [
       {
         "id": "gpt-5",
@@ -1614,12 +1614,36 @@
         "id": "gpt-oss-20b:batch",
         "input_per_mtok": 0.05,
         "output_per_mtok": 0.2
+      },
+      {
+        "id": "gpt-6-astra",
+        "input_per_mtok": 10,
+        "output_per_mtok": 50,
+        "cached_per_mtok": 1
+      },
+      {
+        "id": "gpt-6-astra-pro",
+        "input_per_mtok": 10,
+        "output_per_mtok": 50,
+        "cached_per_mtok": 1
+      },
+      {
+        "id": "gpt-6-astra-pro:batch",
+        "input_per_mtok": 5,
+        "output_per_mtok": 25,
+        "cached_per_mtok": 0.5
+      },
+      {
+        "id": "gpt-6-astra:batch",
+        "input_per_mtok": 5,
+        "output_per_mtok": 25,
+        "cached_per_mtok": 0.5
       }
     ]
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-09-04",
+    "last_verified": "2026-09-05",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4219,6 +4243,41 @@
         "input_per_mtok": 1,
         "output_per_mtok": 2,
         "cached_per_mtok": 0.16
+      },
+      {
+        "id": "inclusionai/ling-3.0-flash-sante:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "openai/gpt-6-astra",
+        "input_per_mtok": 10,
+        "output_per_mtok": 50,
+        "cached_per_mtok": 1
+      },
+      {
+        "id": "openai/gpt-6-astra-pro",
+        "input_per_mtok": 10,
+        "output_per_mtok": 50,
+        "cached_per_mtok": 1
+      },
+      {
+        "id": "openai/gpt-6-astra-pro:batch",
+        "input_per_mtok": 5,
+        "output_per_mtok": 25,
+        "cached_per_mtok": 0.5
+      },
+      {
+        "id": "openai/gpt-6-astra:batch",
+        "input_per_mtok": 5,
+        "output_per_mtok": 25,
+        "cached_per_mtok": 0.5
+      },
+      {
+        "id": "qwen/qwen3.8-max-0902",
+        "input_per_mtok": 2,
+        "output_per_mtok": 6,
+        "cached_per_mtok": 0.25
       }
     ]
   },

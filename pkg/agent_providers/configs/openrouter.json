@@ -6378,6 +6378,93 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for medical knowledge reasoning, clinical safety, evidence-based retrieval, and long-horizon medical tasks, while retaining general capabilities in reasoning, coding, and agentic tasks.",
+        "id": "inclusionai/ling-3.0-flash-sante:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra is OpenAI's flagship model for demanding end-to-end work. It is suited for advanced analysis, software engineering, deep research, scientific work, and document creation, with particular strengths in long-horizon agentic tasks that involve computer and browser use.",
+        "id": "openai/gpt-6-astra",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-6 Astra",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro is the same underlying model as [GPT-6 Astra](https://openrouter.ai/openai/gpt-6-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "openai/gpt-6-astra-pro",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-6 Astra Pro",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode for higher-quality responses on complex tasks.",
+        "id": "openai/gpt-6-astra-pro:batch",
+        "input_cost": 5,
+        "name": "OpenAI: GPT-6 Astra Pro (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra via the Batch API at 50% of standard pricing. OpenAI's flagship model for demanding end-to-end work, with particular strengths in long-horizon agentic tasks that involve computer and browser use.",
+        "id": "openai/gpt-6-astra:batch",
+        "input_cost": 5,
+        "name": "OpenAI: GPT-6 Astra (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max 0902 is an updated snapshot of Qwen3.8 Max from Alibaba's Qwen team. It is a 2.4-trillion-parameter mixture-of-experts model that accepts text, image, and video input and returns text, with a 1M-token context window and reasoning enabled by default.\n\nThis snapshot is post-trained for coding and agentic work, including multi-step software projects, multi-tool orchestration, and long-horizon task execution. It also targets chart reasoning, document parsing, and multimodal understanding over long documents and extended video. Tool calling, structured outputs, and configurable reasoning effort are supported.",
+        "id": "qwen/qwen3.8-max-0902",
+        "input_cost": 2,
+        "name": "Qwen: Qwen3.8 Max (0902)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

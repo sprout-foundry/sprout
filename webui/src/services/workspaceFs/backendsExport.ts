@@ -7,6 +7,7 @@ export { createNativeBridgeFs, detectBridgeCall } from './nativeBridgeFs';
 export { createRestFs } from './restFs';
 export { cloneRepo, listRepos as listWorkspaceRepos, removeRepo, repoDir, parseRepoRef } from './workspaceGit';
 export type { CloneProgress, CloneOpts, CloneResult } from './workspaceGit';
+export { getWorkspaceFs } from './index';
 export {
   isWorkspaceFs,
   normalizeFsPath,

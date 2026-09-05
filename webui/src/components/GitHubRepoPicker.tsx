@@ -17,7 +17,7 @@ import { AlertTriangle, Download, GitBranch, Loader2, Lock, Search, X } from 'lu
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { cloneRepo } from '../services/workspaceFs/backendsExport';
+import { cloneRepo, type CloneResult } from '../services/workspaceFs/backendsExport';
 import { clearGitHubAccount, getStoredToken, getStoredUser, listRepos } from '../services/githubService';
 import type { GitHubRepo, GitHubUser } from '../services/githubService';
 import { debugLog } from '../utils/log';
@@ -28,7 +28,7 @@ export interface GitHubRepoPickerProps {
   isOpen: boolean;
   onClose: () => void;
   /** Called after a successful clone (parent refreshes the file tree). */
-  onCloned?: (repo: GitHubRepo) => void;
+  onCloned?: (repo: GitHubRepo, result: CloneResult) => void;
 }
 
 function formatUpdated(iso: string): string {
@@ -124,7 +124,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       // checkout. Old lightning-fs sidecar path removed.
       const result = await cloneRepo(repo.clone_url, { token: activeToken });
       debugLog(`[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`);
-      onCloned?.(repo);
+      onCloned?.(repo, result);
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

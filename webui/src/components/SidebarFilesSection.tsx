@@ -1,6 +1,7 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
+import type { FsEntry } from '../services/workspaceFs/types';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
@@ -8,11 +9,30 @@ import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { getWorkspaceFs } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 
 export interface FileTreeHandle {
   refresh: () => void;
   revealFile: (filePath: string) => void;
+}
+
+/**
+ * After a seam clone, look one level into the new checkout for a README to
+ * reveal (nicer landing spot than the bare directory). Falls back to the
+ * directory itself. Uses the native bridge when present, REST otherwise —
+ * the same resolution order the file tree itself uses.
+ */
+async function findClonedReadme(repoDir: string): Promise<string | undefined> {
+  try {
+    const fs = await getWorkspaceFs();
+    const listing = await fs.list(repoDir, 1);
+    if (!listing.ok) return undefined;
+    const readme = listing.files.find((f: FsEntry) => !f.isDir && /^readme\.(md|txt|rst)$/i.test(f.path.split('/').pop() ?? ''));
+    return readme?.path;
+  } catch {
+    return undefined;
+  }
 }
 
 interface SidebarFilesSectionProps {
@@ -260,9 +280,18 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         <GitHubRepoPicker
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}
-          onCloned={() => {
+          onCloned={(_repo, result) => {
             // Same settle-delay the ?repo= import path uses before refreshing.
-            setTimeout(() => fileTreeRef.current?.refresh(), 300);
+            setTimeout(() => {
+              fileTreeRef.current?.refresh();
+              // Open the freshly cloned repo: reveal its README (or the repo
+              // directory itself when there is no README) so it expands and
+              // scrolls into view in the tree.
+              setTimeout(async () => {
+                const readme = await findClonedReadme(result.dir);
+                fileTreeRef.current?.revealFile(readme ?? result.dir);
+              }, 700);
+            }, 300);
           }}
         />
         <FileTree

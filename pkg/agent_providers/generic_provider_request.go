@@ -25,6 +25,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	p.mu.RLock()
 	model := p.model
 	p.mu.RUnlock()
+	model = p.canonicalizeModelID(model)
 
 	// Convert messages according to provider configuration
 	convertedMessages := p.convertMessages(messages, reasoning)
@@ -528,4 +529,45 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 	}
 
 	return req, body, nil
+}
+
+// canonicalizeModelID maps a selected model ID to the provider's canonical
+// form when an exact catalog match exists case-insensitively but not
+// exactly. OpenRouter and most aggregators treat slugs as case-sensitive;
+// a persisted mixed-case ID (e.g. "meta-llama/Llama-3.3-70B-Instruct" vs
+// canonical "meta-llama/llama-3.3-70b-instruct") would otherwise 404 and,
+// being an untyped HTTP error, get retried as transient before failing.
+// Exact hits and unknown IDs pass through unchanged, so custom gateways
+// and models absent from the catalog are unaffected.
+func (p *GenericProvider) canonicalizeModelID(model string) string {
+	if model == "" {
+		return model
+	}
+	// Exact catalog hit (or exact hit via config) — nothing to fix.
+	p.mu.RLock()
+	models := p.models
+	cached := p.modelsCached
+	p.mu.RUnlock()
+	if cached {
+		for _, m := range models {
+			if m.ID == model {
+				return model
+			}
+		}
+		for _, m := range models {
+			if strings.EqualFold(m.ID, model) {
+				return m.ID
+			}
+		}
+	}
+	// Fall back to the static provider config catalog.
+	if mi := p.config.GetModelInfo(model); mi != nil {
+		return model
+	}
+	for _, mi := range p.config.Models.ModelInfo {
+		if strings.EqualFold(mi.ID, model) {
+			return mi.ID
+		}
+	}
+	return model
 }

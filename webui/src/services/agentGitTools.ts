@@ -351,6 +351,55 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
       }
     },
   },
+  {
+    name: 'git_clone',
+    description: 'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Shallow clone (depth 1, default branch). After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Repository URL (https://github.com/owner/name) or owner/name shorthand' },
+      },
+      required: ['url'],
+    },
+    execute: async (args) => {
+      try {
+        if (typeof args.url !== 'string' || !args.url.trim()) {
+          throw new Error('url must be a non-empty string');
+        }
+        let url = args.url.trim();
+        if (!/^https:\/\//.test(url)) {
+          if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(url)) {
+            url = 'https://github.com/' + url;
+          } else {
+            throw new Error('url must be https://… or "owner/name"');
+          }
+        }
+        // Derive owner/name for the /repos/<owner>/<name>/ layout
+        const m = url.replace(/\.git$/, '').match(/\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
+        if (!m) throw new Error('cannot parse owner/name from url');
+        const repo = m[1] + '/' + m[2];
+        await gitClient.clone(url, resolveRepoDir(repo), { depth: 1, singleBranch: true });
+        const entries = await gitClient.listDir(resolveRepoDir(repo), '/');
+        return 'Cloned ' + repo + ' (' + entries.length + ' top-level entries). Use repo "' + repo + '" with the other git tools.';
+      } catch (err) {
+        return 'git_clone error: ' + (err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  {
+    name: 'git_list_repos',
+    description: 'List repositories previously cloned into the workspace via git_clone.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async (args) => {
+      try {
+        const dirs = await gitClient.listDir('/repos', '/');
+        const repos = dirs.filter((d) => d.type === 'dir').map((d) => d.name);
+        return repos.length ? repos.join('\n') : 'No repos cloned yet. Use git_clone first.';
+      } catch (err) {
+        return 'git_list_repos error: ' + (err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
 ];
 
 /** Set of all registered tool names for quick lookup. */

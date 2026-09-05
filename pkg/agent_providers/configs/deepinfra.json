@@ -1451,6 +1451,35 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.14,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Flash Vision Exp is the experimental multimodal variant of DeepSeek V4 Flash, adding vision input to the efficiency-focused Flash line with a 1M-token context window and reasoning support.",
+        "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+        "input_cost": 0.44,
+        "name": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+        "output_cost": 1.32,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 262144,
+        "description": "Ling-3.0-flash-Fin is the first finance-enhanced model in the Ant Ling family. Developed by Ant Group with leading financial institutions and domain experts, it extends Ling-3.0-flash through continued training on high-quality financial data.",
+        "id": "inclusionAI/Ling-3.0-flash-Fin",
+        "input_cost": 0.06,
+        "name": "inclusionAI/Ling-3.0-flash-Fin",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

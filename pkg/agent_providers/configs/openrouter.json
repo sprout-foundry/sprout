@@ -6276,6 +6276,195 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+        "id": "google/gemini-3.8-flash",
+        "input_cost": 0.75,
+        "name": "Google: Gemini 3.8 Flash",
+        "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 1048576,
+        "description": "Gemini 3.8 Flash via the Batch API at 50% of standard pricing. Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+        "id": "google/gemini-3.8-flash:batch",
+        "input_cost": 0.375,
+        "name": "Google: Gemini 3.8 Flash (batch)",
+        "output_cost": 1.875,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.3 is a multimodal reasoning model from Meta for long-running agentic, multi-agent, and coding workflows. It is designed to keep track of information across extended tasks, work through conflicting inputs, and request clarification or confirmation when needed, with an emphasis on concise execution.",
+        "id": "meta/muse-spark-1.3",
+        "input_cost": 1.25,
+        "name": "Meta: Muse Spark 1.3",
+        "output_cost": 4.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.002,
+        "context_length": 1048576,
+        "description": "Muse Spark 1.3 Contributor is the cost-efficient contributor tier of Meta’s multimodal reasoning model for experimentation, learning, and early-stage agentic, multi-agent, and coding workflows. It is designed to track information across extended tasks, work through conflicting inputs, and request clarification or confirmation when needed. Prompts and outputs may be used to improve Meta’s products.",
+        "id": "meta/muse-spark-1.3-contributor",
+        "input_cost": 0.1,
+        "name": "Meta: Muse Spark 1.3 Contributor",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for real-world investment workflows that require complex multi-step tasks and long-horizon planning and execution, while retaining general capabilities in reasoning, coding, and mathematics.",
+        "id": "inclusionai/ling-3.0-flash-fin",
+        "input_cost": 0.06,
+        "name": "Ling 3.0 Flash Fin",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "NVIDIA Nemotron 3.5 Content Safety is a compact 4B-parameter multimodal guardrail model from NVIDIA, fine-tuned from Google Gemma-3-4B. It moderates both inputs to and responses from LLMs and VLMs, accepting text and image input and returning text output: a safe/unsafe classification for the user prompt and the response, safety category labels, and an optional reasoning trace. It covers 12 languages with a context window of up to 128K tokens. It is suited for prompt and response moderation, content classification, safety pipelines, and enterprise AI guardrails with policy enforcement, and includes a togglable reasoning mode. It is part of the NVIDIA Nemotron family of open models for agentic AI.",
+        "id": "nvidia/nemotron-3.5-content-safety",
+        "input_cost": 0.2,
+        "name": "NVIDIA: Nemotron 3.5 Content Safety",
+        "output_cost": 0.2,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.16,
+        "context_length": 1000000,
+        "description": "Grok 4.3 is a reasoning model from SpaceXAI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual accuracy. Reasoning can be configured between none/low/medium/high (default low) effort levels. It supports a 1 million token context window with no output token limit, making it well-suited for long-document analysis, deep research, and multi-step agentic tasks. Pricing is tiered: requests exceeding 200k total tokens are billed at a higher rate.",
+        "id": "x-ai/grok-4.3:batch",
+        "input_cost": 1,
+        "name": "SpaceXAI: Grok 4.3 (batch)",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for medical knowledge reasoning, clinical safety, evidence-based retrieval, and long-horizon medical tasks, while retaining general capabilities in reasoning, coding, and agentic tasks.",
+        "id": "inclusionai/ling-3.0-flash-sante:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra is OpenAI's flagship model for demanding end-to-end work. It is suited for advanced analysis, software engineering, deep research, scientific work, and document creation, with particular strengths in long-horizon agentic tasks that involve computer and browser use.",
+        "id": "openai/gpt-6-astra",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-6 Astra",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro is the same underlying model as [GPT-6 Astra](https://openrouter.ai/openai/gpt-6-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "openai/gpt-6-astra-pro",
+        "input_cost": 10,
+        "name": "OpenAI: GPT-6 Astra Pro",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode for higher-quality responses on complex tasks.",
+        "id": "openai/gpt-6-astra-pro:batch",
+        "input_cost": 5,
+        "name": "OpenAI: GPT-6 Astra Pro (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra via the Batch API at 50% of standard pricing. OpenAI's flagship model for demanding end-to-end work, with particular strengths in long-horizon agentic tasks that involve computer and browser use.",
+        "id": "openai/gpt-6-astra:batch",
+        "input_cost": 5,
+        "name": "OpenAI: GPT-6 Astra (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max 0902 is an updated snapshot of Qwen3.8 Max from Alibaba's Qwen team. It is a 2.4-trillion-parameter mixture-of-experts model that accepts text, image, and video input and returns text, with a 1M-token context window and reasoning enabled by default.\n\nThis snapshot is post-trained for coding and agentic work, including multi-step software projects, multi-tool orchestration, and long-horizon task execution. It also targets chart reasoning, document parsing, and multimodal understanding over long documents and extended video. Tool calling, structured outputs, and configurable reasoning effort are supported.",
+        "id": "qwen/qwen3.8-max-0902",
+        "input_cost": 2,
+        "name": "Qwen: Qwen3.8 Max (0902)",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

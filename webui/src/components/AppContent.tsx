@@ -1,5 +1,5 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
-import { Menu, PanelRightClose } from 'lucide-react';
+import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
@@ -832,6 +832,26 @@ const AppContent: React.FC<AppContentProps> = ({
                 >
                   <Menu size={16} />
                 </button>
+                {state.currentView !== 'chat' && (
+                  <button
+                    className="top-mobile-chat-btn"
+                    onClick={() => onViewChange('chat')}
+                    aria-label="Back to chat"
+                    title="Back to chat"
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                )}
+                {supportsLocalTerminal && (
+                  <button
+                    className="top-mobile-terminal-btn"
+                    onClick={() => onTerminalExpandedChange(!isTerminalExpanded)}
+                    aria-label={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
+                    title={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
+                  >
+                    <SquareTerminal size={16} />
+                  </button>
+                )}
                 {showContextSidebar && (
                   <button
                     className="top-mobile-context-btn"

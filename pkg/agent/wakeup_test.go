@@ -199,3 +199,102 @@ func newTestAgentWithWakeup(t *testing.T, enabled bool) *Agent {
 	}
 	return a
 }
+
+// TestFormatWakeupDisplay tests the user-facing bubble text: task labels
+// render as "Looking into '<label>'…", missing labels fall back to a
+// generic line, timeouts say "still waiting", and batches report a count.
+func TestFormatWakeupDisplay(t *testing.T) {
+	labeled := Notification{Kind: NotifShellBg, Label: "make build", SessionID: "bg-1"}
+	timeout := Notification{Kind: NotifShellBgTimeout, Label: "npm test", SessionID: "bg-2"}
+	unlabeled := Notification{Kind: NotifShellBg, SessionID: "bg-3"}
+
+	cases := []struct {
+		name  string
+		input []Notification
+		want  string
+	}{
+		{"empty", nil, ""},
+		{"labeled", []Notification{labeled}, "Looking into 'make build'…"},
+		{"timeout", []Notification{timeout}, "Still waiting on 'npm test'…"},
+		{"unlabeled", []Notification{unlabeled}, "Looking into a background task…"},
+		{"batch", []Notification{labeled, timeout}, "Looking into 2 background tasks…"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FormatWakeupDisplay(tc.input); got != tc.want {
+				t.Fatalf("FormatWakeupDisplay() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestShortCommandLabel tests label truncation: first line only,
+// whitespace-collapsed, capped at 48 runes with an ellipsis.
+func TestShortCommandLabel(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"simple", "make build", "make build"},
+		{"multiline", "make build\nmake test", "make build"},
+		{"whitespace", "  make   build  ", "make build"},
+		{"long", "docker run --rm -it -v $(pwd):/app node:20-alpine sh -c 'npm ci'", "docker run --rm -it -v $(pwd):/app node:20-alpin…"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ShortCommandLabel(tc.in); got != tc.want {
+				t.Fatalf("ShortCommandLabel(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestResetWakeupBudget tests that a user query re-arms wakeup after the
+// budget was exhausted: counters clear so later completions resume again.
+func TestResetWakeupBudget(t *testing.T) {
+	a := newTestAgentWithWakeup(t, true)
+	t.Cleanup(func() { a.Shutdown() })
+
+	// Exhaust the resume budget.
+	for i := 0; i < 10; i++ {
+		a.QueueNotification(Notification{Content: "done", SessionID: "s", Kind: NotifShellBg})
+		if !a.IncrementWakeupResume(a.GetConfig().Wakeup) {
+			t.Fatalf("resume %d should succeed within budget", i+1)
+		}
+	}
+	a.QueueNotification(Notification{Content: "done", SessionID: "s", Kind: NotifShellBg})
+	if a.IncrementWakeupResume(a.GetConfig().Wakeup) {
+		t.Fatal("resume beyond budget should fail")
+	}
+	if !a.IsWakeupDisabled() {
+		t.Fatal("wakeup should be disabled after budget exhaustion")
+	}
+
+	// A user query resets the budget.
+	a.ResetWakeupBudget()
+	if a.IsWakeupDisabled() {
+		t.Fatal("ResetWakeupBudget should clear the disabled flag")
+	}
+	if !a.IncrementWakeupResume(a.GetConfig().Wakeup) {
+		t.Fatal("resume should succeed after budget reset")
+	}
+}
+
+// TestPendingQueryDisplay tests the stash-and-take lifecycle of the
+// user-facing bubble text for the next query_started event.
+func TestPendingQueryDisplay(t *testing.T) {
+	a := newTestAgent(t)
+	t.Cleanup(func() { a.Shutdown() })
+
+	if got := a.takePendingQueryDisplay(); got != "" {
+		t.Fatalf("fresh agent should have no pending display, got %q", got)
+	}
+	a.setPendingQueryDisplay("Looking into 'make build'…")
+	if got := a.takePendingQueryDisplay(); got != "Looking into 'make build'…" {
+		t.Fatalf("takePendingQueryDisplay() = %q", got)
+	}
+	if got := a.takePendingQueryDisplay(); got != "" {
+		t.Fatalf("second take should be empty, got %q", got)
+	}
+}

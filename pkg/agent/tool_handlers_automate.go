@@ -131,6 +131,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				Content:   injectMsg,
 				SessionID: sessionID,
 				Kind:      NotifAutomate,
+				Label:     wfName,
 			})
 		}()
 
@@ -223,6 +224,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 					Content:   injectMsg,
 					SessionID: sessionID,
 					Kind:      NotifAutomate,
+					Label:     wfName,
 				})
 			case <-bgCtx.Done():
 			}

@@ -194,7 +194,7 @@ func TestStartWakeupWatcher_NotificationIncludesTail(t *testing.T) {
 
 	h := &shellCommandHandler{}
 	resultJSON := fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID)
-	h.startWakeupWatcher(ctx, ToolEnv{Notifier: notifier}, resultJSON, 0)
+	h.startWakeupWatcher(ctx, ToolEnv{Notifier: notifier}, resultJSON, 0, "make build")
 
 	deadline := time.After(5 * time.Second)
 	for {

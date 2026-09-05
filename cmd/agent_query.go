@@ -138,14 +138,27 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 		return nil
 	}
 
-	// Publish query started event
-	chatAgent.PublishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(
-		query,
-		chatAgent.GetProvider(),
-		chatAgent.GetModel(),
-	))
+	// Publish query started event. Wakeup (auto-resume) turns skip this:
+	// the agent's prepareQueryRun publishes query_started with the
+	// user-facing display text; publishing the raw [wakeup] batch here
+	// would surface machinery text as a chat bubble in the WebUI.
+	if !strings.HasPrefix(query, agent.WakeupBatchPrefix) {
+		chatAgent.PublishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(
+			query,
+			chatAgent.GetProvider(),
+			chatAgent.GetModel(),
+		))
+	}
 
 	startTime := time.Now()
+
+	// Wakeup (auto-resume) turns run as auto-queued REPL queries; marking
+	// the source keeps them from resetting the wakeup budget and enables
+	// the specialized echo line in the interactive loop.
+	querySource := agent.QuerySourceCLI
+	if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
+		querySource = agent.QuerySourceAutoResume
+	}
 
 	// Process the query
 	// Note: streaming callback is already set by SetupAgentEvents (called once at startup).
@@ -177,7 +190,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 					resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
 				}
 			}()
-			response, err := chatAgent.ProcessQueryWithContinuityAs(agent.QuerySourceCLI, query)
+			response, err := chatAgent.ProcessQueryWithContinuityAs(querySource, query)
 			resultCh <- result{response, err}
 		}()
 	}

@@ -298,7 +298,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		wakeupTimeout, _ := extractInt(args, "wakeup_timeout")
 		result, err := h.handleBackground(ctx, env, command)
 		if err == nil && env.Notifier != nil {
-			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout)
+			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout, command)
 		}
 		return result, err
 	}
@@ -420,7 +420,7 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 	// notification only, no deadline heads-up).
 	if env.Notifier != nil {
 		if sessionID, promoted := ParsePromotedBackgroundSession(result); promoted {
-			h.startWakeupWatcher(ctx, env, fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID), 0)
+			h.startWakeupWatcher(ctx, env, fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID), 0, command)
 		}
 	}
 
@@ -446,7 +446,7 @@ type bgResult struct {
 	Status    string `json:"status"`
 }
 
-func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEnv, resultJSON string, timeoutSec int) {
+func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEnv, resultJSON string, timeoutSec int, command string) {
 	var res bgResult
 	if err := json.Unmarshal([]byte(resultJSON), &res); err != nil || res.SessionID == "" {
 		return
@@ -459,6 +459,10 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	if notifier == nil {
 		return
 	}
+	// Short command prefix shown to the user in wakeup bubbles
+	// ("Looking into 'make build'…"). The full command stays in the
+	// agent-facing content.
+	label := shortCommandLabel(command)
 
 	// Cap the deadline so absurd values can't overflow time.Duration
 	// (a wrapped-negative duration fires the timer immediately).
@@ -533,9 +537,9 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 					return
 				default:
 				}
-				notifier.NotifyCompletion(sessionID, "shell_bg_timeout",
+				notifier.NotifyCompletionLabeled(sessionID, "shell_bg_timeout",
 					fmt.Sprintf("Background session %s still running after %ds (wakeup deadline reached).\nIt will be notified again when it completes.",
-						sessionID, timeoutSec))
+						sessionID, timeoutSec), label)
 			case <-done:
 				// Completed before the deadline; the completion goroutine
 				// already reported it — no heads-up needed.
@@ -548,8 +552,8 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	go func() {
 		select {
 		case <-done:
-			notifier.NotifyCompletion(sessionID, "shell_bg",
-				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)))
+			notifier.NotifyCompletionLabeled(sessionID, "shell_bg",
+				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)), label)
 		case <-watchCtx.Done():
 		}
 	}()

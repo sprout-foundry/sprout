@@ -1,9 +1,11 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
+import GitHubRepoPicker from './GitHubRepoPicker';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
+import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { debugLog } from '../utils/log';
@@ -130,7 +132,17 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }, []);
 
     // ── Clone repository handler ────────────────────────────────
+    // Signed in to GitHub → open the repo picker (authenticated clone,
+    // private repos work). Signed out → the original anonymous prompt
+    // flow, unchanged.
+    const [isRepoPickerOpen, setIsRepoPickerOpen] = useState(false);
+
     const handleCloneRepo = async () => {
+      if (getStoredToken()) {
+        setIsRepoPickerOpen(true);
+        return;
+      }
+
       const url = window.prompt(
         'Clone Repository\n\nEnter a public GitHub repository URL to clone:\nhttps://github.com/owner/repo.git',
         '',
@@ -243,6 +255,16 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             )}
           </div>
         )}
+        {/* GitHub repo picker — authenticated clone (opened when a PAT is
+            stored; see handleCloneRepo). */}
+        <GitHubRepoPicker
+          isOpen={isRepoPickerOpen}
+          onClose={() => setIsRepoPickerOpen(false)}
+          onCloned={() => {
+            // Same settle-delay the ?repo= import path uses before refreshing.
+            setTimeout(() => fileTreeRef.current?.refresh(), 300);
+          }}
+        />
         <FileTree
           ref={fileTreeRef}
           rootPath="."

@@ -278,7 +278,7 @@ export async function gitDiff(opts?: { path?: string; cached?: boolean }) {
   return changes;
 }
 
-export async function gitClone(url: string) {
+export async function gitClone(url: string, opts?: { token?: string }) {
   const fs = getFs().promises;
   // Clear existing repo contents
   try {
@@ -295,6 +295,13 @@ export async function gitClone(url: string) {
   }
 
   await ensureDir(REPO_DIR);
+  // Per-call auth (authenticated clone from the GitHub repo picker) wins over
+  // the module-level config token. The token is passed straight through to
+  // isomorphic-git as a request header — it is never stored or logged here.
+  const headers: Record<string, string> = { ...(getAuth()?.headers ?? {}) };
+  if (opts?.token) {
+    headers.Authorization = `Bearer ${opts.token}`;
+  }
   await git.clone({
     fs,
     http,
@@ -302,7 +309,7 @@ export async function gitClone(url: string) {
     url,
     depth: 1,
     singleBranch: true,
-    headers: getAuth()?.headers,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
   repoInitialized = true;
   await syncGitFsToVfs();

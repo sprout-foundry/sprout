@@ -164,6 +164,51 @@ describe('gitFs adapter', () => {
     expect(names.sort()).toEqual(['x', 'y']);
   });
 
+  it('writeBatch failures propagate instead of being swallowed', async () => {
+    // The old flush() ignored the BatchResult; failed object writes
+    // surfaced only later as isomorphic-git's
+    // "commit <hash> is not available locally" during checkout.
+    const fs = fsWithSeed();
+    const gfs = createGitFs(fs);
+    await gfs.writeFile('blocker', 'a file, so writing blocker/child must fail');
+    await gfs.writeFile('blocker/child', new Uint8Array([1]));
+    await expect(gfs.readFile('unrelated')).rejects.toThrow(/writeBatch/);
+  });
+
+  it('readdir of a nested path reaches the backend with the right path', async () => {
+    // Regression: the native-bridge backend once asked the native side for
+    // a ROOT listing and filtered by prefix, so every subdirectory listing
+    // came back empty — isomorphic-git could not see its own packfiles and
+    // clone checkout failed with "commit is not available locally".
+    const fs = fsWithSeed();
+    await fs.write('repos/o/r/.git/objects/pack/pack-abc.pack', 'P');
+    const gfs = createGitFs(fs);
+    const names = await gfs.readdir('repos/o/r/.git/objects/pack');
+    expect(names).toEqual(['pack-abc.pack']);
+  });
+
+  it('nativeBridgeFs forwards the subtree path to the bridge listWorkspace op', async () => {
+    const { createNativeBridgeFs } = await import('./nativeBridgeFs');
+    const calls: Array<Record<string, unknown>> = [];
+    const call = async (_channel: string, payload: Record<string, unknown>) => {
+      calls.push(payload);
+      const path = String(payload.path ?? '');
+      if (payload.op === 'listWorkspace') {
+        const files =
+          path === 'repos/o/r/.git/objects/pack'
+            ? [{ path: 'repos/o/r/.git/objects/pack/pack-abc.pack', size: 1, isDir: false }]
+            : [];
+        return { ok: true, files };
+      }
+      return { ok: false, error: 'notImplemented' };
+    };
+    const nfs = createNativeBridgeFs(call as never);
+    const r = await nfs.list('repos/o/r/.git/objects/pack', 1);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.files.map((f) => f.path)).toEqual(['repos/o/r/.git/objects/pack/pack-abc.pack']);
+    expect(calls[0]).toMatchObject({ op: 'listWorkspace', path: 'repos/o/r/.git/objects/pack' });
+  });
+
   it('stat distinguishes files and dirs', async () => {
     const fs = fsWithSeed();
     await fs.write('d/f.txt', 'x');

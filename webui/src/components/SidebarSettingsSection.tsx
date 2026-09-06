@@ -8,6 +8,9 @@ import { ApiService } from '../services/api';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
+import GitHubAccountPanel from './GitHubAccountPanel';
+import { getStoredUser } from '../services/githubService';
+import type { GitHubUser } from '../services/githubService';
 import type { AgentConfigProps } from './settings/types';
 
 // SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
@@ -256,6 +259,7 @@ export default function SidebarSettingsSection({
   const log = useLog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [gitHubUser, setGitHubUser] = useState<GitHubUser | null>(() => getStoredUser());
 
   const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -422,6 +426,18 @@ export default function SidebarSettingsSection({
               on the server.
             </p>
             <CredentialsSettingsTab />
+          </div>
+          <div className="section">
+            <h4>GitHub</h4>
+            <p className="settings-section-desc">
+              Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
+              agent push and pull on your behalf.
+            </p>
+            <GitHubAccountPanel
+              user={gitHubUser}
+              onSignedIn={setGitHubUser}
+              onSignedOut={() => setGitHubUser(null)}
+            />
           </div>
         </>
       ) : (

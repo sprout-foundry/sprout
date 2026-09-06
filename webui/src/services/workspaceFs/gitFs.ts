@@ -58,12 +58,58 @@ export function createGitFs(fs: WorkspaceFs): GitFs {
   // writes into one writeBatch to cut bridge round-trips ~50x.
   const pending = new Map<string, WriteEntry>();
   const MAX_PENDING = 400;
+  /**
+   * Bridge messages must stay bounded: every batch is base64-encoded into
+   * one postMessage/JSON payload. Packs regularly contain multi-MB blobs,
+   * so cap each batch by serialized size as well as entry count — an
+   * oversized single message risks blowing the bridge's transport budget
+   * or stalling past the caller's timeout.
+   */
+  const MAX_BATCH_BYTES = 8 * 1024 * 1024;
+
+  function entrySize(e: WriteEntry): number {
+    let total = e.path.length + 12;
+    if (e.content !== undefined) total += e.content.length;
+    else if (e.contentBase64 !== undefined) total += Math.ceil((e.contentBase64.length * 3) / 4);
+    return total;
+  }
 
   async function flush(): Promise<void> {
     if (pending.size === 0) return;
-    const batch = Array.from(pending.values());
+    const all = Array.from(pending.values());
     pending.clear();
-    await fs.writeBatch(batch);
+    // Split oversized batches into size-bounded chunks so no single
+    // bridge message carries more than MAX_BATCH_BYTES of payload
+    // (entries are base64-encoded into one postMessage/JSON body).
+    let chunk: WriteEntry[] = [];
+    let chunkSize = 0;
+    for (const entry of all) {
+      const size = entrySize(entry);
+      if (chunk.length > 0 && chunkSize + size > MAX_BATCH_BYTES) {
+        await writeBatchChecked(chunk);
+        chunk = [];
+        chunkSize = 0;
+      }
+      chunk.push(entry);
+      chunkSize += size;
+    }
+    if (chunk.length > 0) await writeBatchChecked(chunk);
+  }
+
+  async function writeBatchChecked(batch: WriteEntry[]): Promise<void> {
+    const r = await fs.writeBatch(batch);
+    if (!r.ok) {
+      // Swallowed batch failures here used to surface much later as
+      // "commit <hash> is not available locally" during clone checkout —
+      // isomorphic-git believed its objects were written when they were
+      // not. Fail loudly with the transport-level error.
+      throw new Error(`workspace writeBatch failed: ${r.error ?? 'unknown error'}`);
+    }
+    if (r.errors.length > 0) {
+      const failed = r.errors.map((e) => e.path).slice(0, 5).join(', ');
+      const detail = r.errors.length > 5 ? ` (+${r.errors.length - 5} more)` : '';
+      throw new Error(`workspace writeBatch: ${r.errors.length} write(s) failed: ${failed}${detail}`);
+    }
   }
 
   async function queueWrite(entry: WriteEntry): Promise<void> {

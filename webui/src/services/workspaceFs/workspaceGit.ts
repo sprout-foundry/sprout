@@ -78,18 +78,30 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
   }
 
   const gitFs = createGitFs(fs);
-  await fs.mkdir(dir);
-  await git.clone({
-    fs: gitFs as unknown as Parameters<typeof git.clone>[0]['fs'],
-    http,
-    dir,
-    url,
-    depth: opts.depth ?? 1,
-    singleBranch: true,
-    ref: opts.branch,
-    onAuth: opts.token ? () => ({ username: 'git', token: opts.token }) : undefined,
-    onProgress: opts.onProgress,
-  });
+  try {
+    await fs.mkdir(dir);
+    await git.clone({
+      fs: gitFs as unknown as Parameters<typeof git.clone>[0]['fs'],
+      http,
+      dir,
+      url,
+      depth: opts.depth ?? 1,
+      singleBranch: true,
+      ref: opts.branch,
+      onAuth: opts.token ? () => ({ username: 'git', token: opts.token }) : undefined,
+      onProgress: opts.onProgress,
+    });
+  } catch (err) {
+    // Don't leave a half-written checkout in the workspace: remove the
+    // repos/<owner>/<name> directory so a retry starts clean and the
+    // workspace never shows a broken repo.
+    try {
+      await fs.remove(dir);
+    } catch {
+      /* best-effort cleanup */
+    }
+    throw err;
+  }
 
   const listing = await fs.list(dir, 1);
   const entries = listing.ok ? listing.files.length : 0;

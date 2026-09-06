@@ -245,6 +245,15 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                 />
               </div>
 
+              {/* Clone errors first: the user's finger is on the list —
+                  a banner at the bottom of the modal goes unseen. */}
+              {cloneError && (
+                <div className="gh-picker-clone-error" role="alert" data-testid="gh-picker-clone-error">
+                  <AlertTriangle size={14} />
+                  <span>{cloneError}</span>
+                </div>
+              )}
+
               {loading && (
                 <div className="gh-picker-state" data-testid="gh-picker-loading">
                   <Loader2 size={16} className="spin" />
@@ -305,13 +314,6 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                     );
                   })}
                 </ul>
-              )}
-
-              {cloneError && (
-                <div className="gh-picker-clone-error" role="alert" data-testid="gh-picker-clone-error">
-                  <AlertTriangle size={14} />
-                  <span>{cloneError}</span>
-                </div>
               )}
             </>
           )}

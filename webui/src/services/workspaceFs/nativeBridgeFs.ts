@@ -46,7 +46,10 @@ async function filesOp(
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   try {
-    const result = await call('files', payload, 30000);
+    // 60s: batched git-clone writes (base64 packfiles) can take a while
+    // to land natively; the old 30s default made big batches time out and
+    // look like silent data loss.
+    const result = await call('files', payload, 60000);
     if (result && typeof result === 'object') return result;
     return { ok: false, error: 'ioFailed' };
   } catch {
@@ -74,7 +77,11 @@ export function createNativeBridgeFs(call: BridgeCall = requiredCall()): Workspa
     },
 
     async list(path = '', maxDepth = 3) {
-      const r = await filesOp(call, { op: 'listWorkspace', maxDepth });
+      const r = await filesOp(call, {
+        op: 'listWorkspace',
+        path: normalizeFsPath(path),
+        maxDepth,
+      });
       if (!r.ok) return { ok: false, error: String(r.error ?? 'ioFailed') } as ListResult;
       const files = Array.isArray(r.files) ? (r.files as Array<Record<string, unknown>>) : [];
       const prefix = normalizeFsPath(path);

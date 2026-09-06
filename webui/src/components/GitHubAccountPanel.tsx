@@ -12,12 +12,19 @@
  * or rendered back.
  */
 
-import { LogOut, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { LogOut, Loader2, ExternalLink, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import './GitHubAccountPanel.css';
 import { GITHUB_TOKENS_URL, clearGitHubAccount, storeToken, storeUser, validateToken } from '../services/githubService';
 import type { GitHubUser } from '../services/githubService';
+import {
+  isDeviceFlowAvailable,
+  openVerificationPage,
+  pollDeviceFlow,
+  startDeviceFlow,
+} from '../services/githubDeviceFlow';
+import type { DeviceFlowSession } from '../services/githubDeviceFlow';
 
 export interface GitHubAccountPanelProps {
   /** Signed-in user, or null. */
@@ -39,6 +46,57 @@ export default function GitHubAccountPanel({
   const [token, setToken] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [flow, setFlow] = useState<DeviceFlowSession | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [showPatForm, setShowPatForm] = useState(false);
+  const flowGeneration = useRef(0);
+  const deviceFlowAvailable = isDeviceFlowAvailable() && !showPatForm;
+
+  const handleDeviceFlowStart = async () => {
+    setFlowError(null);
+    setError(null);
+    const generation = ++flowGeneration.current;
+    try {
+      const session = await startDeviceFlow();
+      if (flowGeneration.current !== generation) return;
+      setFlow(session);
+      // Best-effort browser open; the user can also tap the link button.
+      void openVerificationPage(session.verificationUri).catch(() => undefined);
+      void pollLoop(session, generation);
+    } catch (err) {
+      if (flowGeneration.current === generation) {
+        setFlowError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
+  const pollLoop = async (session: DeviceFlowSession, generation: number) => {
+    let interval = session.interval;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      if (flowGeneration.current !== generation) return; // cancelled / unmounted
+      try {
+        const result = await pollDeviceFlow(session);
+        if (flowGeneration.current !== generation) return;
+        if (result.done && result.user) {
+          setFlow(null);
+          onSignedIn(result.user);
+          return;
+        }
+        if (result.retryInMs) interval = result.retryInMs;
+      } catch (err) {
+        setFlow(null);
+        setFlowError(err instanceof Error ? err.message : String(err));
+        return;
+      }
+    }
+  };
+
+  const handleDeviceFlowCancel = () => {
+    flowGeneration.current += 1;
+    setFlow(null);
+    setFlowError(null);
+  };
 
   const handleSignIn = async (e: FormEvent) => {
     e.preventDefault();
@@ -98,7 +156,69 @@ export default function GitHubAccountPanel({
     );
   }
 
-  /* ── Signed out: PAT form ────────────────────────────────────── */
+  /* ── Signed out: device flow (studio) or PAT form ────────────── */
+
+  if (deviceFlowAvailable) {
+    return (
+      <div className="gh-signin" data-testid="gh-signin-form">
+        {flow ? (
+          <div className="gh-device-flow" data-testid="gh-device-flow">
+            <p className="gh-signin-lead">Enter this code on github.com:</p>
+            <div className="gh-device-code" data-testid="gh-device-code">
+              {flow.userCode}
+            </div>
+            <button
+              type="button"
+              className="gh-signin-submit"
+              onClick={() => void openVerificationPage(flow.verificationUri).catch(() => undefined)}
+              data-testid="gh-device-open"
+            >
+              <ExternalLink size={14} />
+              Open github.com/login/device
+            </button>
+            <p className="gh-signin-hint" data-testid="gh-device-waiting">
+              <Loader2 size={12} className="spin" /> Waiting for authorization…
+            </p>
+            <button type="button" className="gh-account-signout" onClick={handleDeviceFlowCancel} data-testid="gh-device-cancel">
+              <X size={14} />
+              <span>Cancel</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="gh-signin-submit"
+              onClick={() => void handleDeviceFlowStart()}
+              data-testid="gh-device-signin"
+            >
+              Sign in with GitHub
+            </button>
+            <p className="gh-signin-hint">
+              Opens github.com in your browser — enter the code shown next, no token needed. You can also{' '}
+              <button
+                type="button"
+                className="gh-signin-link-btn"
+                onClick={() => {
+                  handleDeviceFlowCancel();
+                  setShowPatForm(true);
+                }}
+                data-testid="gh-use-pat"
+              >
+                paste a personal access token
+              </button>{' '}
+              instead.
+            </p>
+            {flowError && (
+              <p className="gh-signin-error" role="alert" data-testid="gh-device-error">
+                {flowError}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <form className="gh-signin" onSubmit={handleSignIn} data-testid="gh-signin-form">

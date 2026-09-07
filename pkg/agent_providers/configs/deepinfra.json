@@ -653,10 +653,11 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "DeepSeek-V4-Flash-0731 is the official release of DeepSeek-V4-Flash, superseding the preview version, with substantially enhanced agentic capabilities. DeepSeek-V4-Flash-0731 outperforms DeepSeek-V4-Pro (Preview) on benchmarks listed below despite its far smaller activated parameter count, and is broadly competitive with the strongest proprietary models available.",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
-        "input_cost": 0.09,
+        "input_cost": 0.06,
         "name": "deepseek-ai/DeepSeek-V4-Flash-0731",
         "output_cost": 0.18,
         "tags": [

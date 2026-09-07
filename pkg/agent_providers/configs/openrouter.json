@@ -754,13 +754,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.015848,
+        "cached_input_cost": 0.0177212,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.07924,
+        "input_cost": 0.088606,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 0.15848,
+        "output_cost": 0.177212,
         "tags": [
           "tools",
           "reasoning",
@@ -768,13 +768,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.016,
+        "cached_input_cost": 0.028,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.065,
+        "input_cost": 0.14,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
-        "output_cost": 0.18,
+        "output_cost": 0.28,
         "tags": [
           "tools",
           "reasoning",
@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.034771,
+        "cached_input_cost": 0.079605,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.417252,
+        "input_cost": 0.95526,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 0.834504,
+        "output_cost": 1.91052,
         "tags": [
           "tools",
           "reasoning",
@@ -4593,11 +4593,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.01,
+        "cached_input_cost": 0.013,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.03,
+        "input_cost": 0.05,
         "name": "DeepSeek V4 Flash Latest",
         "output_cost": 0.16,
         "tags": [

@@ -2109,6 +2109,73 @@ button.primary.success {
 
 /* ── Repo import loading banner ────────────────────────────────── */
 
+/* ── Working-directory selector (Files section header) ─────────── */
+
+.workspace-cwd-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 14%, transparent);
+}
+
+.workspace-cwd-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--text-secondary, #8b93a7);
+}
+
+.workspace-cwd-select {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-primary, #e6e9f0);
+  background: color-mix(in srgb, var(--bg-secondary, #141821) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 20%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.workspace-cwd-select:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.workspace-cwd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  max-width: 45%;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-secondary, #8b93a7);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.workspace-cwd-chip:hover {
+  color: var(--text-primary, #e6e9f0);
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+
+.workspace-cwd-chip-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
 .repo-import-banner {
   display: flex;
   align-items: center;

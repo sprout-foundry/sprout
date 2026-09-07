@@ -7,6 +7,7 @@
 
 import type { WasmShell } from './wasmShell';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
+import { workspaceCwdContextLine } from './workspaceCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -901,6 +902,14 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     return jsonError('Query is required', 400);
   }
 
+  // Working directory context (services/workspaceCwd.ts): when a repo is
+  // selected in the Files panel, tell the agent up front so it stops
+  // exploring from the workspace top. Appended to the string handed to the
+  // model ONLY — `query` (and thus query_started / chat history / the UI)
+  // keeps the user's original message untouched.
+  const cwdNote = workspaceCwdContextLine();
+  const agentQuery = cwdNote ? `${query}\n\n[${cwdNote}]` : query;
+
   // Dispatch helper: wraps events in the { type, data } envelope that
   // useEventHandler expects, and stamps chat_id into data for multi-chat filtering.
   const dispatch = (type: string, data: Record<string, unknown> = {}) => {
@@ -957,7 +966,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   shell
-    .runAgent('platform', '', query, (eventJson: string) => {
+    .runAgent('platform', '', agentQuery, (eventJson: string) => {
       try {
         const event = JSON.parse(eventJson);
         // Events from Go's wireAgentEventForwarding are already in

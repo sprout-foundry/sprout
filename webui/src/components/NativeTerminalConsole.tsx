@@ -7,6 +7,7 @@ import {
   getTerminalFontFamilyExport,
   FONT_SIZE_DEFAULT_EXPORT,
 } from '../hooks/useTerminalXTerm';
+import { getWorkspaceCwd, subscribeWorkspaceCwd, workspaceCwdLabel } from '../services/workspaceCwd';
 
 /**
  * Native-mode interactive console (Track R, terminal portion).
@@ -21,14 +22,20 @@ import {
  * surface in the app looks identical.
  *
  * One-shot command semantics: every line is an independent spawn (no PTY,
- * no interactive programs, no ctrl-C). The emulated shell is rooted at
- * the workspace root and has no `cd` — surfaced honestly.
+ * no interactive programs, no ctrl-C). The emulated shell resolves the
+ * command against the session working directory (services/workspaceCwd.ts;
+ * workspace root when unset — exactly the pre-cwd behavior) and has no `cd`
+ * — surfaced honestly.
  */
 
 type SpawnBridge = {
   terminalSpawn: (
     command: string,
     opts?: {
+      /** Working directory for this spawn (workspace-relative; omitted =
+       *  workspace root — exactly today's behavior). The native emulated
+       *  shell resolves the command against it; `pwd` prints it. */
+      cwd?: string;
       onChunk?: (text: string) => void;
       onExit?: (exitCode: number) => void;
       onError?: (error: string) => void;
@@ -52,13 +59,38 @@ declare global {
 
 const WELCOME = ['\x1b[2mtype help for commands\x1b[0m'];
 
-const PROMPT = '\x1b[32m$\x1b[0m ';
+/** Base prompt (workspace root): a subtle green `$ `. */
+const PROMPT_ROOT = '\x1b[32m$\x1b[0m ';
+
+/**
+ * Prompt for a working directory: the last path segment before the `$ `
+ * (e.g. `repo $ `), or `~` when the label itself is empty. Kept subtle —
+ * same green, one short segment, no full path noise.
+ */
+function makePrompt(label: string): string {
+  if (!label || label === '~') return PROMPT_ROOT;
+  return `\x1b[32m${label}\x1b[0m \x1b[32m$\x1b[0m `;
+}
 
 export function NativeTerminalConsole(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const busyRef = useRef(false);
   const runLineRef = useRef<(line: string) => void>(() => {});
+
+  // Working directory shared with Files / Git / Agent (services/workspaceCwd).
+  // Kept in a ref so the line-editor closure (created once on mount) always
+  // renders the CURRENT prompt; re-renders on cwd change are unnecessary.
+  const cwdRef = useRef(getWorkspaceCwd());
+  const promptRef = useRef(makePrompt(workspaceCwdLabel(cwdRef.current)));
+
+  useEffect(() => {
+    const unsubscribe = subscribeWorkspaceCwd((cwd) => {
+      cwdRef.current = cwd;
+      promptRef.current = makePrompt(workspaceCwdLabel(cwd));
+    });
+    return unsubscribe;
+  }, []);
 
   const println = useCallback((text: string) => {
     const term = termRef.current;
@@ -107,7 +139,7 @@ export function NativeTerminalConsole(): React.ReactElement {
     // Defer first fit one frame so the container has layout.
     const raf = requestAnimationFrame(() => fitAddon.fit());
     for (const line of WELCOME) term.writeln(line);
-    term.write(PROMPT);
+    term.write(promptRef.current);
 
     // Line-editor state (xterm has no line discipline here — the
     // transport is spawn-per-line, so we implement one).
@@ -116,8 +148,8 @@ export function NativeTerminalConsole(): React.ReactElement {
     let histIdx = -1; // index into `history`; length == "blank line"
     let escState = 0; // 0 = normal, 1 = saw ESC, 2 = saw CSI/SS3 introducer
 
-    const writePrompt = () => term.write(PROMPT);
-    const redraw = () => term.write(`\r\x1b[K${PROMPT}${lineBuf}`);
+    const writePrompt = () => term.write(promptRef.current);
+    const redraw = () => term.write(`\r\x1b[K${promptRef.current}${lineBuf}`);
 
     const recall = (delta: -1 | 1) => {
       if (history.length === 0) return;
@@ -209,20 +241,32 @@ export function NativeTerminalConsole(): React.ReactElement {
       const term = termRef.current;
       if (!term) return;
 
-      const prompt = () => term.write(PROMPT);
+      const prompt = () => term.write(promptRef.current);
+
+      // One-shot cwd semantics: read the cwd at submit time so each spawn
+      // uses what the user had selected when they pressed Enter.
+      const cwd = cwdRef.current;
 
       if (line === 'help') {
         term.writeln('Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd.');
         term.writeln('Pipes (|), sequences (;) and chains (&&) supported. All paths');
-        term.writeln('resolve from the workspace root. Ctrl-C cancels input.');
+        term.writeln(
+          cwd === ''
+            ? 'resolve from the workspace root. Ctrl-C cancels input.'
+            : `resolve from ${cwd}. Ctrl-C cancels input.`,
+        );
         prompt();
         return;
       }
 
-      // The emulated shell is rooted at the workspace root and has no
-      // `cd` builtin — say so instead of silently misbehaving.
+      // The emulated shell has no `cd` builtin — say so instead of silently
+      // misbehaving. (Pick the repo from the Files panel to change directory.)
       if (/^cd(\s|$)/.test(line)) {
-        term.writeln('cd: not supported (commands run from the workspace root)');
+        term.writeln(
+          cwd === ''
+            ? 'cd: not supported (commands run from the workspace root)'
+            : `cd: not supported (commands run from ${cwd})`,
+        );
         prompt();
         return;
       }
@@ -238,6 +282,10 @@ export function NativeTerminalConsole(): React.ReactElement {
         }
         void bridge
           .terminalSpawn(line, {
+            // Bridge contract: `cwd` is an OPTIONAL workspace-relative
+            // directory. Omitted (workspace root) → exactly today's
+            // behavior; the native side treats a missing cwd as the root.
+            ...(cwd === '' ? {} : { cwd }),
             onChunk: (text) => {
               // Emulator output arrives atomically; strip ONE final
               // newline (writeln re-adds line endings).

@@ -14,8 +14,9 @@ vi.mock('../services/notificationBus', () => ({
   notificationBus: { notify: vi.fn() },
 }));
 
-const { getAvailableShellsMock } = vi.hoisted(() => ({
+const { getAvailableShellsMock, gateMock } = vi.hoisted(() => ({
   getAvailableShellsMock: vi.fn(),
+  gateMock: vi.fn(),
 }));
 
 vi.mock('../services/api', () => ({
@@ -24,6 +25,10 @@ vi.mock('../services/api', () => ({
       getAvailableShells: getAvailableShellsMock,
     }),
   },
+}));
+
+vi.mock('../services/nativeTerminal', () => ({
+  nativeTerminalGate: gateMock,
 }));
 
 import { notificationBus } from '../services/notificationBus';
@@ -59,6 +64,8 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+  // Default: gate inactive → the fetch path (pre-existing behavior).
+  gateMock.mockResolvedValue({ active: false, reason: 'native-terminal-disabled' });
 });
 
 beforeAll(() => {
@@ -201,6 +208,41 @@ describe('useAvailableShells', () => {
       expect(lastState?.selectedShell).toBe('zsh');
       // Still called only once (initial fetch)
       expect(getAvailableShellsMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('native terminal gate active (studio shell)', () => {
+    it('never fetches shells and provides the synthetic native entry', async () => {
+      gateMock.mockResolvedValue({ active: true, reason: 'active' });
+
+      await act(async () => {
+        root.render(createElement(Harness, { onState: stateCallback }));
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(getAvailableShellsMock).not.toHaveBeenCalled();
+      expect(notificationBus.notify).not.toHaveBeenCalled();
+      expect(lastState?.shellsLoaded).toBe(true);
+      expect(lastState?.availableShells).toEqual([{ name: 'native', default: true }]);
+      expect(lastState?.selectedShell).toBe('native');
+    });
+
+    it('fetches normally when the gate rejects (getCapabilities failure)', async () => {
+      gateMock.mockResolvedValue({ active: false, reason: 'getCapabilities-rejected' });
+      const shells = [{ name: 'bash', path: '/bin/bash', default: true }];
+      getAvailableShellsMock.mockResolvedValue({ shells });
+
+      await act(async () => {
+        root.render(createElement(Harness, { onState: stateCallback }));
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(getAvailableShellsMock).toHaveBeenCalledTimes(1);
+      expect(lastState?.selectedShell).toBe('bash');
     });
   });
 });

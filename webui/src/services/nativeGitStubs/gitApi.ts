@@ -52,7 +52,7 @@ import type {
  * /api/git/status. Resolves an inert GitStatusResponse-shaped value (no
  * network, no files).
  */
-export async function getGitStatus(_fetchFn: typeof fetch): Promise<GitStatusResponse> {
+export async function getGitStatus(_fetchFn: typeof fetch, _dir?: string): Promise<GitStatusResponse> {
   return {
     message: 'Git provided by the native shell',
     in_git_repo: false,
@@ -75,7 +75,7 @@ export async function getGitStatus(_fetchFn: typeof fetch): Promise<GitStatusRes
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/branches. Resolves an inert GitBranchesResponse-shaped value.
  */
-export async function getGitBranches(_fetchFn: typeof fetch): Promise<GitBranchesResponse> {
+export async function getGitBranches(_fetchFn: typeof fetch, _dir?: string): Promise<GitBranchesResponse> {
   return {
     message: 'Git provided by the native shell',
     current: '',
@@ -87,7 +87,7 @@ export async function getGitBranches(_fetchFn: typeof fetch): Promise<GitBranche
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/checkout. Resolves an inert GitBranchResponse-shaped value.
  */
-export async function checkoutGitBranch(_fetchFn: typeof fetch, _branch: string): Promise<GitBranchResponse> {
+export async function checkoutGitBranch(_fetchFn: typeof fetch, _branch: string, _dir?: string): Promise<GitBranchResponse> {
   return {
     message: 'Git provided by the native shell',
     branch: _branch,
@@ -98,7 +98,7 @@ export async function checkoutGitBranch(_fetchFn: typeof fetch, _branch: string)
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/branch/create. Resolves an inert GitBranchResponse-shaped value.
  */
-export async function createGitBranch(_fetchFn: typeof fetch, name: string): Promise<GitBranchResponse> {
+export async function createGitBranch(_fetchFn: typeof fetch, name: string, _dir?: string): Promise<GitBranchResponse> {
   return {
     message: 'Git provided by the native shell',
     branch: name,
@@ -109,7 +109,7 @@ export async function createGitBranch(_fetchFn: typeof fetch, name: string): Pro
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/pull. Resolves an inert GitPushPullResponse-shaped value.
  */
-export async function pullGit(_fetchFn: typeof fetch): Promise<GitPushPullResponse> {
+export async function pullGit(_fetchFn: typeof fetch, _dir?: string): Promise<GitPushPullResponse> {
   return {
     message: 'Git provided by the native shell',
   };
@@ -119,7 +119,7 @@ export async function pullGit(_fetchFn: typeof fetch): Promise<GitPushPullRespon
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/push. Resolves an inert GitPushPullResponse-shaped value.
  */
-export async function pushGit(_fetchFn: typeof fetch): Promise<GitPushPullResponse> {
+export async function pushGit(_fetchFn: typeof fetch, _dir?: string): Promise<GitPushPullResponse> {
   return {
     message: 'Git provided by the native shell',
   };
@@ -129,7 +129,7 @@ export async function pushGit(_fetchFn: typeof fetch): Promise<GitPushPullRespon
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/stage. Resolves an inert GitStageResponse-shaped value.
  */
-export async function stageFile(_fetchFn: typeof fetch, path: string): Promise<GitStageResponse> {
+export async function stageFile(_fetchFn: typeof fetch, path: string, _dir?: string): Promise<GitStageResponse> {
   return {
     message: 'Git provided by the native shell',
     path,
@@ -140,7 +140,7 @@ export async function stageFile(_fetchFn: typeof fetch, path: string): Promise<G
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/unstage. Resolves an inert GitStageResponse-shaped value.
  */
-export async function unstageFile(_fetchFn: typeof fetch, path: string): Promise<GitStageResponse> {
+export async function unstageFile(_fetchFn: typeof fetch, path: string, _dir?: string): Promise<GitStageResponse> {
   return {
     message: 'Git provided by the native shell',
     path,
@@ -151,7 +151,7 @@ export async function unstageFile(_fetchFn: typeof fetch, path: string): Promise
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/discard. Resolves an inert GitStageResponse-shaped value.
  */
-export async function discardChanges(_fetchFn: typeof fetch, path: string): Promise<GitStageResponse> {
+export async function discardChanges(_fetchFn: typeof fetch, path: string, _dir?: string): Promise<GitStageResponse> {
   return {
     message: 'Git provided by the native shell',
     path,
@@ -162,7 +162,7 @@ export async function discardChanges(_fetchFn: typeof fetch, path: string): Prom
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/stage-all. Resolves an inert GitStageAllResponse-shaped value.
  */
-export async function stageAll(_fetchFn: typeof fetch): Promise<GitStageAllResponse> {
+export async function stageAll(_fetchFn: typeof fetch, _dir?: string): Promise<GitStageAllResponse> {
   return {
     message: 'Git provided by the native shell',
   };
@@ -172,7 +172,7 @@ export async function stageAll(_fetchFn: typeof fetch): Promise<GitStageAllRespo
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/unstage-all. Resolves an inert GitStageAllResponse-shaped value.
  */
-export async function unstageAll(_fetchFn: typeof fetch): Promise<GitStageAllResponse> {
+export async function unstageAll(_fetchFn: typeof fetch, _dir?: string): Promise<GitStageAllResponse> {
   return {
     message: 'Git provided by the native shell',
   };
@@ -186,6 +186,7 @@ export async function createCommit(
   _fetchFn: typeof fetch,
   _message: string,
   _files?: string[],
+  _dir?: string,
 ): Promise<GitCommitResponse> {
   return {
     message: 'Git provided by the native shell',
@@ -198,7 +199,7 @@ export async function createCommit(
  * /api/git/commit-message. Resolves an inert GitCommitMessageResponse-shaped
  * value.
  */
-export async function generateCommitMessage(_fetchFn: typeof fetch): Promise<GitCommitMessageResponse> {
+export async function generateCommitMessage(_fetchFn: typeof fetch, _dir?: string): Promise<GitCommitMessageResponse> {
   return {
     message: 'Git provided by the native shell',
     commit_message: '',
@@ -213,7 +214,7 @@ export async function getGitLog(
   _fetchFn: typeof fetch,
   limit: number,
   offset: number,
-  _opts?: { signal?: AbortSignal },
+  _opts?: { signal?: AbortSignal; dir?: string },
 ): Promise<GitLogResponse> {
   return {
     message: 'Git provided by the native shell',
@@ -229,7 +230,11 @@ export async function getGitLog(
  * /api/git/commit/show. Resolves an inert GitCommitDetailResponse-shaped
  * value.
  */
-export async function getGitCommitDetail(_fetchFn: typeof fetch, _hash: string): Promise<GitCommitDetailResponse> {
+export async function getGitCommitDetail(
+  _fetchFn: typeof fetch,
+  _hash: string,
+  _dir?: string,
+): Promise<GitCommitDetailResponse> {
   return {
     message: 'Git provided by the native shell',
     hash: _hash,
@@ -252,6 +257,7 @@ export async function getGitCommitFileDiff(
   _fetchFn: typeof fetch,
   hash: string,
   path: string,
+  _dir?: string,
 ): Promise<GitCommitFileDiffResponse> {
   return {
     message: 'Git provided by the native shell',
@@ -265,7 +271,7 @@ export async function getGitCommitFileDiff(
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/checkout for a commit. Resolves an inert message-only value.
  */
-export async function checkoutGitCommit(_fetchFn: typeof fetch, _commitHash: string): Promise<{ message: string }> {
+export async function checkoutGitCommit(_fetchFn: typeof fetch, _commitHash: string, _dir?: string): Promise<{ message: string }> {
   return { message: 'Git provided by the native shell' };
 }
 
@@ -273,7 +279,7 @@ export async function checkoutGitCommit(_fetchFn: typeof fetch, _commitHash: str
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/revert. Resolves an inert message-only value.
  */
-export async function revertGitCommit(_fetchFn: typeof fetch, _commitHash: string): Promise<{ message: string }> {
+export async function revertGitCommit(_fetchFn: typeof fetch, _commitHash: string, _dir?: string): Promise<{ message: string }> {
   return { message: 'Git provided by the native shell' };
 }
 
@@ -281,7 +287,7 @@ export async function revertGitCommit(_fetchFn: typeof fetch, _commitHash: strin
  * Track R: git is provided natively by the shell, so the webui never calls
  * /api/git/diff. Resolves an inert GitDiffResponse-shaped value.
  */
-export async function getGitDiff(_fetchFn: typeof fetch, path: string): Promise<GitDiffResponse> {
+export async function getGitDiff(_fetchFn: typeof fetch, path: string, _dir?: string): Promise<GitDiffResponse> {
   return {
     message: 'Git provided by the native shell',
     path,
@@ -300,6 +306,7 @@ export async function getGitDiff(_fetchFn: typeof fetch, path: string): Promise<
 export async function createPullRequest(
   _fetchFn: typeof fetch,
   _params: { title: string; body?: string; base?: string; head?: string; draft?: boolean },
+  _dir?: string,
 ): Promise<PullRequestResponse> {
   return {
     success: false,

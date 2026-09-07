@@ -5,6 +5,7 @@ import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
 import * as workspaceApi from '../services/api/workspaceApi';
 import { notificationBus } from '../services/notificationBus';
+import { getWorkspaceCwd, subscribeWorkspaceCwd } from '../services/workspaceCwd';
 import type { SproutEvent } from '../types/events';
 import type {
   GitStatusData,
@@ -114,10 +115,13 @@ export const useGitWorkspace = ({
 
   const loadGitStatus = useCallback(async () => {
     setIsGitLoading(true);
+    // Working directory (session cwd): when a repo is selected, git ops
+    // target that repo instead of the workspace top.
+    const cwd = getWorkspaceCwd();
     try {
       const [data, branchData] = await Promise.all([
-        gitApi.getGitStatus(fetchFn),
-        gitApi.getGitBranches(fetchFn).catch((err) => {
+        gitApi.getGitStatus(fetchFn, cwd),
+        gitApi.getGitBranches(fetchFn, cwd).catch((err) => {
           debugLog('[loadGitStatus] failed to fetch git branches:', err);
           return { current: '', branches: [] };
         }),
@@ -188,6 +192,11 @@ export const useGitWorkspace = ({
   useEffect(() => {
     loadGitStatus();
   }, [loadGitStatus, gitRefreshToken]);
+
+  // Reload status when the session working directory changes (the user
+  // picked a different repo in the Files panel) so the panel reflects the
+  // newly targeted repo immediately.
+  useEffect(() => subscribeWorkspaceCwd(() => loadGitStatus()), [loadGitStatus]);
 
   // Fetch workspace root once on mount (workspace rarely changes during a session).
   useEffect(() => {
@@ -279,7 +288,7 @@ export const useGitWorkspace = ({
       setIsDiffLoading(true);
       setDiffError(null);
       try {
-        const response = await gitApi.getGitDiff(fetchFn, filePath);
+        const response = await gitApi.getGitDiff(fetchFn, filePath, getWorkspaceCwd());
         setActiveDiff(response);
         const nextMode =
           response.has_staged && !response.has_unstaged
@@ -662,7 +671,7 @@ export const useGitWorkspace = ({
     (branch: string) => {
       if (!branch.trim() || branch === currentBranch) return;
       runGitAction(async () => {
-        await gitApi.checkoutGitBranch(fetchFn, branch);
+        await gitApi.checkoutGitBranch(fetchFn, branch, getWorkspaceCwd());
       }, `Failed to checkout ${branch}`);
     },
     [fetchFn, currentBranch, runGitAction],
@@ -673,7 +682,7 @@ export const useGitWorkspace = ({
       const trimmed = name.trim();
       if (!trimmed) return;
       runGitAction(async () => {
-        await gitApi.createGitBranch(fetchFn, trimmed);
+        await gitApi.createGitBranch(fetchFn, trimmed, getWorkspaceCwd());
       }, `Failed to create branch ${trimmed}`);
     },
     [fetchFn, runGitAction],
@@ -681,13 +690,13 @@ export const useGitWorkspace = ({
 
   const handlePull = useCallback(() => {
     runGitAction(async () => {
-      await gitApi.pullGit(fetchFn);
+      await gitApi.pullGit(fetchFn, getWorkspaceCwd());
     }, 'Failed to pull changes');
   }, [fetchFn, runGitAction]);
 
   const handlePush = useCallback(() => {
     runGitAction(async () => {
-      await gitApi.pushGit(fetchFn);
+      await gitApi.pushGit(fetchFn, getWorkspaceCwd());
     }, 'Failed to push changes');
   }, [fetchFn, runGitAction]);
 
@@ -703,7 +712,7 @@ export const useGitWorkspace = ({
       setGitActionWarning(null);
       setIsGitActing(true);
       try {
-        const result = await gitApi.createPullRequest(fetchFn, params);
+        const result = await gitApi.createPullRequest(fetchFn, params, getWorkspaceCwd());
         return result;
       } catch (error) {
         warn(`[handleCreatePullRequest] failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -719,16 +728,19 @@ export const useGitWorkspace = ({
   // Git history callbacks
   const handleLoadCommits = useCallback(
     async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
-      const res = await gitApi.getGitLog(fetchFn, limit, offset, opts);
+      const res = await gitApi.getGitLog(fetchFn, limit, offset, { ...opts, dir: getWorkspaceCwd() });
       return { commits: res.commits, total: res.total };
     },
     [fetchFn],
   );
 
-  const handleLoadCommitDetail = useCallback((hash: string) => gitApi.getGitCommitDetail(fetchFn, hash), [fetchFn]);
+  const handleLoadCommitDetail = useCallback(
+    (hash: string) => gitApi.getGitCommitDetail(fetchFn, hash, getWorkspaceCwd()),
+    [fetchFn],
+  );
 
   const handleLoadCommitFileDiff = useCallback(
-    (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path),
+    (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path, getWorkspaceCwd()),
     [fetchFn],
   );
 
@@ -738,7 +750,7 @@ export const useGitWorkspace = ({
       setGitActionWarning(null);
       setIsGitActing(true);
       try {
-        const result = await gitApi.checkoutGitCommit(fetchFn, hash);
+        const result = await gitApi.checkoutGitCommit(fetchFn, hash, getWorkspaceCwd());
         await loadGitStatus();
         setSelectedFiles(new Set());
         return result;
@@ -759,7 +771,7 @@ export const useGitWorkspace = ({
       setGitActionWarning(null);
       setIsGitActing(true);
       try {
-        const result = await gitApi.revertGitCommit(fetchFn, hash);
+        const result = await gitApi.revertGitCommit(fetchFn, hash, getWorkspaceCwd());
         await loadGitStatus();
         setSelectedFiles(new Set());
         return result;

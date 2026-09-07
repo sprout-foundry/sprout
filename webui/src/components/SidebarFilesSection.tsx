@@ -1,5 +1,5 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
-import { Check, TriangleAlert, X } from 'lucide-react';
+import { Check, FolderTree, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
 import type { FsEntry } from '../services/workspaceFs/types';
 import GitHubRepoPicker from './GitHubRepoPicker';
@@ -9,7 +9,9 @@ import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
-import { getWorkspaceFs } from '../services/workspaceFs/backendsExport';
+import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
+import { repoDir } from '../services/workspaceFs/workspaceGit';
+import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { debugLog } from '../utils/log';
 
 export interface FileTreeHandle {
@@ -68,6 +70,45 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }));
 
     const api = ApiService.getInstance();
+
+    // ── Working directory (session-level cwd) ─────────────────────
+    // Shared with the terminal / git / agent surfaces via the workspaceCwd
+    // external store. '' = workspace root → the tree roots at '.' exactly as
+    // before (byte-identical default-build behavior).
+    const cwd = useWorkspaceCwd();
+    const treeRoot = cwd === '' ? '.' : cwd;
+
+    // Repos available for the cwd selector (repos/<owner>/<name>). Fetched
+    // once per mount through the same workspaceFs seam the clone flow uses;
+    // failures degrade to an empty list (the selector still offers the root).
+    const [repos, setRepos] = useState<string[]>([]);
+    useEffect(() => {
+      let cancelled = false;
+      listWorkspaceRepos()
+        .then((list) => {
+          if (!cancelled) setRepos(list);
+        })
+        .catch(() => {
+          // No repos/ yet (or the backend is unreachable): keep [].
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+    // Keep the cwd honest: if the selected repo disappears (removed while the
+    // store still points at it), fall back to the root rather than rooting the
+    // tree at a ghost directory. Only repo-shaped cwds are managed here — the
+    // store is generic, so an arbitrary directory set by another surface is
+    // left alone.
+    useEffect(() => {
+      if (cwd === '' || !cwd.startsWith('repos/')) return;
+      if (repos.length === 0) return; // list not loaded yet — nothing to compare
+      const isKnownRepo = repos.some((repo) => repoDir(repo) === cwd);
+      if (!isKnownRepo) {
+        setWorkspaceCwd('');
+      }
+    }, [cwd, repos]);
 
     // ── Refresh file tree when a repo is imported (?repo= param) ──
     useEffect(() => {
@@ -294,9 +335,45 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             }, 300);
           }}
         />
+        {/* Working-directory selector: 'Workspace root' + one entry per
+            cloned repo. Selecting a repo sets the session cwd that Files /
+            Terminal / Git / Agent all share (services/workspaceCwd.ts). */}
+        <div className="workspace-cwd-bar" data-testid="workspace-cwd-bar">
+          <label className="workspace-cwd-select-label">
+            <FolderTree size={13} aria-hidden="true" />
+            <span className="sr-only">Working directory</span>
+            <select
+              className="workspace-cwd-select"
+              data-testid="workspace-cwd-select"
+              value={repos.some((repo) => repoDir(repo) === cwd) ? cwd : ''}
+              onChange={(e) => setWorkspaceCwd(e.target.value)}
+              title={cwd === '' ? 'Workspace root' : cwd}
+            >
+              <option value="">Workspace root</option>
+              {repos.map((repo) => (
+                <option key={repo} value={repoDir(repo)}>
+                  {repo}
+                </option>
+              ))}
+            </select>
+          </label>
+          {cwd !== '' && (
+            <button
+              type="button"
+              className="workspace-cwd-chip"
+              data-testid="workspace-cwd-chip"
+              onClick={() => setWorkspaceCwd('')}
+              title={`Return to workspace root (${cwd})`}
+            >
+              <span className="workspace-cwd-chip-path">{cwd}</span>
+              <X size={12} aria-hidden="true" />
+            </button>
+          )}
+        </div>
         <FileTree
           ref={fileTreeRef}
-          rootPath="."
+          key={treeRoot}
+          rootPath={treeRoot}
           workspaceRoot={workspaceRoot}
           onFileSelect={(file) => onFileClick?.(file.path)}
           onItemCreated={() => {

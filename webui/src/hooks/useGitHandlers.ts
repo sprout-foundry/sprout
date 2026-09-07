@@ -8,6 +8,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { clientFetch } from '../services/clientSession';
+import { getWorkspaceCwd } from '../services/workspaceCwd';
 import { debugLog } from '../utils/log';
 
 export interface UseGitHandlersOptions {
@@ -22,6 +23,16 @@ export interface UseGitHandlersReturn {
   handleGitDiscard: (files: string[]) => Promise<void>;
 }
 
+/**
+ * Merge the session working directory into a git POST body. `dir` is a
+ * workspace-relative repo directory (services/workspaceCwd.ts); omitted
+ * entirely when unset so the request stays byte-identical to today's.
+ */
+function withCwdDir(body: Record<string, unknown>): Record<string, unknown> {
+  const cwd = getWorkspaceCwd();
+  return cwd ? { ...body, dir: cwd } : body;
+}
+
 export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): UseGitHandlersReturn {
   const handleGitCommit = useCallback(
     async (message: string, files: string[]) => {
@@ -30,7 +41,7 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
         const response = await clientFetch('/api/git/commit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, files }),
+          body: JSON.stringify(withCwdDir({ message, files })),
         });
 
         if (!response.ok) {
@@ -57,6 +68,7 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
     const response = await clientFetch('/api/git/commit-message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withCwdDir({})),
     });
 
     if (!response.ok) {
@@ -85,7 +97,7 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
           const response = await clientFetch('/api/git/stage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: file }),
+            body: JSON.stringify(withCwdDir({ path: file })),
           });
           if (!response.ok) {
             throw new Error(`Failed to stage ${file}`);
@@ -108,7 +120,7 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
           const response = await clientFetch('/api/git/unstage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: file }),
+            body: JSON.stringify(withCwdDir({ path: file })),
           });
           if (!response.ok) {
             throw new Error(`Failed to unstage ${file}`);
@@ -131,7 +143,7 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
           const response = await clientFetch('/api/git/discard', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: file }),
+            body: JSON.stringify(withCwdDir({ path: file })),
           });
           if (!response.ok) {
             throw new Error(`Failed to discard ${file}`);

@@ -331,6 +331,12 @@ const TESTIDS = {
   'escalation-toast-txn-skipped': 'escalation-toast-txn-skipped',
   'escalation-toast-txn-warning': 'escalation-toast-txn-warning',
   'escalation-toast-txn-error': 'escalation-toast-txn-error',
+
+  // Session working directory (services/workspaceCwd.ts) — Files panel
+  // repo/cwd selector bar, dropdown, and the active-cwd chip.
+  'workspace-cwd-bar': 'workspace-cwd-bar',
+  'workspace-cwd-select': 'workspace-cwd-select',
+  'workspace-cwd-chip': 'workspace-cwd-chip',
 } as const;
 
 // Derived set for O(1) coverage lookups

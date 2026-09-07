@@ -225,7 +225,7 @@ describe('useAvailableShells', () => {
       expect(getAvailableShellsMock).not.toHaveBeenCalled();
       expect(notificationBus.notify).not.toHaveBeenCalled();
       expect(lastState?.shellsLoaded).toBe(true);
-      expect(lastState?.availableShells).toEqual([{ name: 'native', default: true }]);
+      expect(lastState?.availableShells).toEqual([{ name: 'native', path: '', default: true }]);
       expect(lastState?.selectedShell).toBe('native');
     });
 

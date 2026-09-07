@@ -42,7 +42,7 @@ export function useAvailableShells(): UseAvailableShellsResult {
         // Native terminal owns the pane: no daemon, no shells endpoint.
         // Provide a synthetic entry so shell-selector consumers stay
         // coherent, and mark loaded without touching the network.
-        setAvailableShells([{ name: 'native', default: true }]);
+        setAvailableShells([{ name: 'native', path: '', default: true }]);
         setSelectedShell('native');
         setShellsLoaded(true);
         return;

@@ -8,7 +8,7 @@
 
 import type { LSPClient } from '@codemirror/lsp-client';
 import type { Extension } from '@codemirror/state';
-import { LSPClientService, getFileURI } from '../services/lspClientService';
+import { LSPClientService, getFileURI, resolveEditorFilePath } from '../services/lspClientService';
 
 // ---------------------------------------------------------------------------
 // Helper Functions
@@ -72,6 +72,7 @@ export {
   getGlobalDisplayFileCallback,
   type DisplayFileCallback,
   getFileURI,
+  resolveEditorFilePath,
   uriToFilePath,
   registerEditorView,
   unregisterEditorView,

@@ -45,6 +45,7 @@ short and focused.
 - **File locations**:
   - **Transient** (screenshots, scratch): `/tmp/sprout/`
   - **Permanent** (code, tests, configs): current working directory
+- **Images & PDFs**: `analyze_image_content` (modes: `ocr`, `general`) or `read_file` — both attach for visual analysis or OCR-extract text; never dump binary, never improvise external OCR scripts
 - **Long-running commands**: use `shell_command(background=true)` to run them in the background. You'll be automatically notified when they complete. Check status with `check_background="<session_id>"`.
 
 ## Change Tracking

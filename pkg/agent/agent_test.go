@@ -2047,37 +2047,19 @@ func TestSP079_BrowseURL_AdapterPassThrough(t *testing.T) {
 }
 
 // ============================================================================
-// 4. analyze_image_content — Both paths call tools.AnalyzeImage
+// 4. analyze_image_content — handler calls tools.AnalyzeImage
 //
-// Legacy: handleAnalyzeImageContent calls tools.AnalyzeImage(ctx, path, prompt, mode).
-// New:    analyzeImageContentHandler.Execute calls tools.AnalyzeImage(ctx, path, prompt, mode).
-//
-// With a non-existent file, both paths should return the same error.
+// The legacy pkg/agent handleAnalyzeImageContent path was deleted (SP-137 B4:
+// dead code — never wired). The interface-based handler is the only path.
 // ============================================================================
 
-func TestSP079_AnalyzeImageContent_BothCallSameUnderlyingFunction(t *testing.T) {
+func TestSP079_AnalyzeImageContent_HandlerBehavior(t *testing.T) {
 	// NOTE: cannot use t.Parallel() — newIsolatedTestAgent uses t.Setenv()
 	ctx := context.Background()
 
-	// Use a non-existent file path — both paths should fail with the same
-	// underlying error from tools.AnalyzeImage.
 	imagePath := "/tmp/sp079-nonexistent-test-image-12345.png"
 
-	// --- Legacy path ---
-	a := newIsolatedTestAgent(t)
-	defer a.Shutdown()
-	legacyArgs := map[string]interface{}{
-		"image_path":      imagePath,
-		"analysis_prompt": "test prompt",
-		"analysis_mode":   "general",
-	}
-	legacyOut, legacyErr := handleAnalyzeImageContent(ctx, a, legacyArgs)
-
-	// --- New handler via registry (no VisionProcessor in env) ---
-	// The new handler does NOT use VisionProcessor — it calls
-	// tools.AnalyzeImage(ctx, path, prompt, mode) directly.
-	// So we don't need to provide a VisionProcessor.
-	env := tools.ToolEnv{} // VisionProcessor not used by the new handler
+	env := tools.ToolEnv{}
 	newHandler := fetchNewHandler(t, "analyze_image_content")
 	newArgs := map[string]any{
 		"image_path":      imagePath,
@@ -2086,65 +2068,29 @@ func TestSP079_AnalyzeImageContent_BothCallSameUnderlyingFunction(t *testing.T) 
 	}
 	newResult, newExecErr := newHandler.Execute(ctx, env, newArgs)
 
-	// Both should fail (file doesn't exist).
-	haveLegacyError := legacyErr != nil || legacyOut == ""
 	haveNewError := newExecErr != nil || newResult.IsError || newResult.Output == ""
-
-	if !haveLegacyError && !haveNewError {
-		// Both somehow succeeded — compare outputs.
-		if legacyOut != newResult.Output {
-			t.Errorf("output mismatch:\nLegacy:\n%s\n\nNew:\n%s", legacyOut, newResult.Output)
-		}
-		return
+	if !haveNewError {
+		return // unexpected success; nothing to assert
 	}
-
-	// Both failed — confirm they reference the same underlying issue.
-	if haveLegacyError && haveNewError {
-		// The exact error message may differ slightly (legacy wraps with "image analysis failed: ..."),
-		// but both should reference the non-existent file.
-		t.Log("Both paths failed for non-existent file (expected) — shared tools.AnalyzeImage confirmed")
-
-		// Verify both mention the file path or a related error.
-		legacyHasPath := strings.Contains(legacyOut, imagePath) || strings.Contains(legacyOut, "nonexistent")
-		newHasPath := strings.Contains(newResult.Output, imagePath) || strings.Contains(newResult.Output, "nonexistent")
-
-		if !legacyHasPath {
-			t.Logf("legacy output does not mention file path: %s", legacyOut)
-		}
-		if !newHasPath {
-			t.Logf("new output does not mention file path: %s", newResult.Output)
-		}
+	// The error should be about the missing file, not a missing dependency.
+	if strings.Contains(newResult.Output, "not configured") {
+		t.Errorf("handler error suggests missing dependency rather than missing file: %s", newResult.Output)
 	}
 }
 
 // ============================================================================
-// 5. analyze_ui_screenshot — Both paths call tools.AnalyzeImage
+// 5. analyze_ui_screenshot — handler calls tools.AnalyzeImage
 //
-// Legacy: handleAnalyzeUIScreenshot calls tools.AnalyzeImage(ctx, path, prompt, "frontend").
-// New:    analyzeUIScreenshotHandler.Execute calls tools.AnalyzeImage(ctx, path, prompt, visionModeFrontend).
-//
-// visionModeFrontend is "frontend" (confirmed in handler source).
-// With a non-existent file, both paths should fail.
+// Legacy pkg/agent handleAnalyzeUIScreenshot deleted with the SP-137 B4
+// dead-code pass; the interface-based handler is the only path.
 // ============================================================================
 
-func TestSP079_AnalyzeUIScreenshot_BothCallSameUnderlyingFunction(t *testing.T) {
+func TestSP079_AnalyzeUIScreenshot_HandlerBehavior(t *testing.T) {
 	// NOTE: cannot use t.Parallel() — newIsolatedTestAgent uses t.Setenv()
 	ctx := context.Background()
 
 	imagePath := "/tmp/sp079-nonexistent-test-screenshot-12345.png"
 
-	// --- Legacy path ---
-	a := newIsolatedTestAgent(t)
-	defer a.Shutdown()
-	legacyArgs := map[string]interface{}{
-		"image_path":      imagePath,
-		"analysis_prompt": "check layout",
-	}
-	legacyOut, legacyErr := handleAnalyzeUIScreenshot(ctx, a, legacyArgs)
-
-	// --- New handler via registry ---
-	// The new handler calls tools.AnalyzeImage(ctx, path, prompt, visionModeFrontend) directly.
-	// No VisionProcessor needed.
 	env := tools.ToolEnv{}
 	newHandler := fetchNewHandler(t, "analyze_ui_screenshot")
 	newArgs := map[string]any{
@@ -2153,31 +2099,11 @@ func TestSP079_AnalyzeUIScreenshot_BothCallSameUnderlyingFunction(t *testing.T) 
 	}
 	newResult, newExecErr := newHandler.Execute(ctx, env, newArgs)
 
-	// Both should fail (file doesn't exist).
-	haveLegacyError := legacyErr != nil || legacyOut == ""
 	haveNewError := newExecErr != nil || newResult.IsError || newResult.Output == ""
-
-	if !haveLegacyError && !haveNewError {
-		// Both succeeded — compare outputs.
-		if legacyOut != newResult.Output {
-			t.Errorf("output mismatch:\nLegacy:\n%s\n\nNew:\n%s", legacyOut, newResult.Output)
-		}
-		return
-	}
-
-	// Both failed — expected in test env.
-	if haveLegacyError && haveNewError {
-		t.Log("Both paths failed for non-existent file (expected) — shared tools.AnalyzeImage confirmed")
-	}
-
-	// Additional check: verify the new handler uses visionModeFrontend.
-	// The new handler source calls AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend).
-	// We can verify this by checking that the handler doesn't fail because of a missing
-	// dependency that the legacy path would also fail on.
-	if newResult.IsError {
+	if haveNewError {
 		// The error should be about the missing file, not a missing dependency.
-		if strings.Contains(newResult.Output, "not configured") || strings.Contains(newResult.Output, "not available") {
-			t.Errorf("new handler error suggests missing dependency rather than missing file: %s", newResult.Output)
+		if strings.Contains(newResult.Output, "not configured") {
+			t.Errorf("handler error suggests missing dependency rather than missing file: %s", newResult.Output)
 		}
 	}
 }

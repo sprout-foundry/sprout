@@ -260,15 +260,9 @@ func MergeConfig(base, override *Config) *Config {
 		result.ReviewModel = override.ReviewModel
 	}
 
-	// Override PDF OCR settings
-	if override.overrides("pdf_ocr_enabled", override.PDFOCREnabled) {
-		result.PDFOCREnabled = override.PDFOCREnabled
-	}
-	if override.PDFOCRProvider != "" {
-		result.PDFOCRProvider = override.PDFOCRProvider
-	}
-	if override.PDFOCRModel != "" {
-		result.PDFOCRModel = override.PDFOCRModel
+	// Override OCR fallback model (SP-137 neutral field)
+	if override.OCRFallbackModel != "" {
+		result.OCRFallbackModel = override.OCRFallbackModel
 	}
 	if override.overrides("vision_fallback_to_ocr", override.VisionFallbackToOCR) {
 		result.VisionFallbackToOCR = override.VisionFallbackToOCR

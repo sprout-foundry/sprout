@@ -278,19 +278,22 @@ func TestReadFileHandlerConformance_EventBusPublishes(t *testing.T) {
 	}
 }
 
-func TestReadFileHandlerConformance_NonTextExtension(t *testing.T) {
+func TestReadFileHandlerConformance_ImageExtension(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &readFileHandler{}
 	ctx := newTestCtx(dir)
 
+	// SP-137: images are served via the image branch — inline attachment +
+	// placeholder text, never raw binary. Non-PNG payloads (extension
+	// mismatch) error on magic-byte verification.
 	path := filepath.Join(dir, "image.png")
-	require.NoError(t, os.WriteFile(path, []byte("fake png"), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte("fake png not real"), 0o644))
 
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"path": path})
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, err.Error(), "non-text")
+	require.Contains(t, err.Error(), "unrecognized image format")
 }
 
 // ---------------------------------------------------------------------------

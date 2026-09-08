@@ -21,50 +21,26 @@ func TestConfigValidate(t *testing.T) {
 		errorMsg    string
 	}{
 		{
-			name: "PDF OCR disabled - should pass",
+			name: "OCR fallback unset - should pass",
 			config: &Config{
-				PDFOCREnabled: false,
+				OCRFallbackModel: "",
 			},
 			expectError: false,
 		},
 		{
-			name: "PDF OCR enabled with provider and model - should pass",
+			name: "OCR fallback provider-qualified - should pass",
 			config: &Config{
-				PDFOCREnabled:  true,
-				PDFOCRProvider: "ollama",
-				PDFOCRModel:    "glm-ocr",
+				OCRFallbackModel: "openai/gpt-4o",
 			},
 			expectError: false,
 		},
 		{
-			name: "PDF OCR enabled but empty provider - should fail",
+			name: "OCR fallback missing provider qualifier - should fail",
 			config: &Config{
-				PDFOCREnabled:  true,
-				PDFOCRProvider: "",
-				PDFOCRModel:    "glm-ocr",
+				OCRFallbackModel: "gpt-4o",
 			},
 			expectError: true,
-			errorMsg:    "PDF OCR provider cannot be empty when PDF OCR is enabled",
-		},
-		{
-			name: "PDF OCR enabled but empty model - should fail",
-			config: &Config{
-				PDFOCREnabled:  true,
-				PDFOCRProvider: "ollama",
-				PDFOCRModel:    "",
-			},
-			expectError: true,
-			errorMsg:    "PDF OCR model cannot be empty when PDF OCR is enabled",
-		},
-		{
-			name: "PDF OCR enabled with empty provider and model - should fail",
-			config: &Config{
-				PDFOCREnabled:  true,
-				PDFOCRProvider: "",
-				PDFOCRModel:    "",
-			},
-			expectError: true,
-			errorMsg:    "PDF OCR provider cannot be empty when PDF OCR is enabled",
+			errorMsg:    "ocr_fallback_model must be provider-qualified",
 		},
 	}
 

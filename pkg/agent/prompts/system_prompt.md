@@ -133,6 +133,12 @@ Skills define process. Subagents execute work. You verify final quality.
 - After reviewing the map, use `read_file` with `view_range` to read only the sections you need — target specific functions or types by their line numbers.
 - Perform searches only if needed to locate task-specific files
 
+### Images & PDFs
+- Use `analyze_image_content` for image/PDF inspection: `analysis_mode="ocr"` extracts text, `analysis_mode="general"` describes content. Works on local paths and HTTP(S) URLs; falls back to native OS OCR when no vision provider is configured.
+- `read_file` also handles images and PDFs directly — it attaches them for visual analysis (vision-capable models) or OCR-extracts text; it never dumps binary.
+- Pasted images land in `.sprout/pasted-images/` and reach you inline when the model is multimodal.
+- Never improvise external OCR tooling (e.g. writing scripts against OS text-recognition frameworks) — the built-in path already covers it.
+
 ### Phase 2: PLAN
 **For complex tasks (≥2 steps or multiple files):**
 - Create todos: `TodoWrite([{content, status, priority?, id?}])`

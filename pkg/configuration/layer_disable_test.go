@@ -81,11 +81,11 @@ func TestLayerCanDisableFlatBooleans(t *testing.T) {
 
 	globalDir := filepath.Join(home, ".config", "sprout")
 	writeFile(t, filepath.Join(globalDir, ConfigFileName),
-		`{"version":"2.0","skip_prompt":true,"disable_thinking":true,"pdf_ocr_enabled":true,"mcp":{"enabled":true}}`)
+		`{"version":"2.0","skip_prompt":true,"disable_thinking":true,"vision_fallback_to_ocr":true,"mcp":{"enabled":true}}`)
 
 	workspaceDir := filepath.Join(home, "proj", ".sprout")
 	writeFile(t, filepath.Join(workspaceDir, WorkspaceConfigFileName),
-		`{"skip_prompt":false,"disable_thinking":false,"pdf_ocr_enabled":false,"mcp":{"enabled":false}}`)
+		`{"skip_prompt":false,"disable_thinking":false,"vision_fallback_to_ocr":false,"mcp":{"enabled":false}}`)
 
 	cfg, err := LoadConfigWithLayers(
 		filepath.Join(globalDir, ConfigFileName),
@@ -95,7 +95,7 @@ func TestLayerCanDisableFlatBooleans(t *testing.T) {
 
 	assert.False(t, cfg.SkipPrompt, "workspace skip_prompt:false must win")
 	assert.False(t, cfg.DisableThinking, "workspace disable_thinking:false must win")
-	assert.False(t, cfg.PDFOCREnabled, "workspace pdf_ocr_enabled:false must win")
+	assert.False(t, cfg.VisionFallbackToOCR, "workspace vision_fallback_to_ocr:false must win")
 	assert.False(t, cfg.MCP.Enabled, "workspace mcp.enabled:false must win")
 }
 

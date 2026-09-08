@@ -1,5 +1,14 @@
 # SP-137 — Vision & Image Analysis: First-Class Paths, Provider Neutrality, Native OCR
 
+> **Status (2026-09-08):** Phases 1–3 implemented. Seed v1.3.21 preserves
+> tool-result images; capability resolution is registry-driven with native
+> OCR in the tier; `read_file` and `analyze_image_content` serve images
+> without binary dumps; the dead pkg/agent handlers are removed (live
+> helper preserved in `vision_tool_input_resolve.go`); prompts carry image
+> guidance; `PDFOCR*` migrated to neutral `ocr_fallback_model`; native OCR
+> shims shipped for darwin/windows/linux. Acceptance grep enforced by
+> `TestVisionTierNoProviderNames`.
+
 ## Problem
 
 Image analysis is supposed to be a first-class citizen in sprout. It is not.

@@ -91,26 +91,32 @@ func GetCustomVisionFallback(providerType api.ClientType) (api.ClientType, strin
 	return fallbackClientType, strings.TrimSpace(customConfig.VisionFallbackModel), true
 }
 
-// EnsureOllamaModelTag ensures the model has a tag suffix
-func EnsureOllamaModelTag(model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return model
+// createOCRClient creates a client for the configured OCR fallback model
+// (ocr_fallback_model, "provider/model" form) via the normal factory.
+// Provider-agnostic: any provider the factory can build works.
+func createOCRClient(model string) (api.ClientInterface, error) {
+	providerType, modelName := splitProviderQualifiedModel(model)
+	if providerType == "" || modelName == "" {
+		return nil, fmt.Errorf("invalid OCR fallback model %q: expected provider/model", model)
 	}
-	if strings.Contains(model, ":") {
-		return model
-	}
-	return model + ":latest"
-}
-
-// CreateOllamaClient creates an Ollama client with the specified model
-func CreateOllamaClient(model string) (api.ClientInterface, error) {
-	model = EnsureOllamaModelTag(model)
-	client, err := factory.CreateProviderClient(api.OllamaClientType, model)
+	client, err := factory.CreateProviderClient(api.ClientType(providerType), modelName)
 	if err != nil {
-		return nil, fmt.Errorf("create Ollama client: %w", err)
+		return nil, fmt.Errorf("create OCR fallback client for %s: %w", model, err)
 	}
 	return client, nil
+}
+
+// splitProviderQualifiedModel splits a "provider/model" string. When there
+// is no slash, the model alone is returned with an empty provider.
+func splitProviderQualifiedModel(model string) (provider, modelName string) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", ""
+	}
+	if idx := strings.Index(model, "/"); idx > 0 {
+		return model[:idx], model[idx+1:]
+	}
+	return "", model
 }
 
 // ============================================================================
@@ -119,7 +125,7 @@ func CreateOllamaClient(model string) (api.ClientInterface, error) {
 
 // NewVisionProcessorWithMode creates a vision processor for image/OCR workflows.
 // Client selection is intentionally deterministic and does not vary by mode:
-// provider-vision list first, local Ollama fallback last.
+// Registry-driven client selection (SP-137: provider-neutral).
 func NewVisionProcessorWithMode(debug bool, _ string) (*VisionProcessor, error) {
 	client, err := CreateVisionClient()
 	if err != nil {
@@ -174,7 +180,7 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 	}
 
 	// Deterministic final fallback path shared across scenarios:
-	// run the standard provider-first list with local Ollama last.
+	// run the standard registry-driven provider-first list.
 	globalClient, globalErr := CreateVisionClient()
 	if globalErr == nil && globalClient != nil && globalClient.SupportsVision() {
 		return globalClient, nil
@@ -185,42 +191,15 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 
 // GetVisionModelForProvider returns the appropriate vision model for a given provider.
 //
-// Resolution order:
-//  1. Special-cased providers (OpenAI, Ollama) check their specific config
-//     paths, falling back to the provider JSON config's vision_model field.
-//  2. Custom providers check their explicit vision_model / model_name config.
-//  3. All other providers read from the provider JSON config via a temporary
-//     client's GetVisionModel().
+// Resolution order (SP-137: provider-neutral):
+//  1. Custom providers check their explicit vision_model / model_name config.
+//  2. All other providers read from the provider JSON config via a temporary
+//     client's GetVisionModel(). No provider is special-cased.
 //
 // Vision models are configured in the provider JSON config files in
 // pkg/agent_providers/configs/*.json under the "vision_model" field.
 func GetVisionModelForProvider(providerType api.ClientType) string {
 	switch providerType {
-	case api.OpenAIClientType:
-		// Read from the provider JSON config (openai.json → vision_model).
-		// Falls back to the hardcoded default only if the config is
-		// missing or the field is empty.
-		if cfg, err := factory.GlobalFactory().GetProviderConfig("openai"); err == nil {
-			if vm := strings.TrimSpace(cfg.Models.VisionModel); vm != "" {
-				return vm
-			}
-		}
-		return "gpt-4o-mini"
-	case api.OllamaClientType, api.OllamaLocalClientType:
-		// Prefer the user's configured OCR model, then fall back to
-		// a reasonable local default. Local Ollama has no provider
-		// JSON config — the model depends on what's installed.
-		configManager, err := configuration.NewManager()
-		if err == nil {
-			config := configManager.GetConfig()
-			if strings.TrimSpace(config.PDFOCRModel) != "" {
-				return EnsureOllamaModelTag(config.PDFOCRModel)
-			}
-		}
-		return "glm-ocr:latest"
-	case api.OllamaCloudClientType:
-		// Ollama cloud currently does not support vision.
-		return ""
 	case api.TestClientType:
 		return ""
 	}
@@ -236,8 +215,17 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 		return strings.TrimSpace(customConfig.ModelName)
 	}
 
-	// Try to create a provider to get its vision model
-	// Use the default model for this provider
+	// Registry config first: an explicit vision_model beats everything and
+	// works even when defaults.model is unset (SP-137: config-driven, no
+	// throwaway client needed for the common case).
+	if cfg, err := factory.GlobalFactory().GetProviderConfig(string(providerType)); err == nil && cfg != nil {
+		if vm := strings.TrimSpace(cfg.Models.VisionModel); vm != "" {
+			return vm
+		}
+	}
+
+	// No explicit vision model: the provider's default model must itself
+	// be vision-capable, resolved through a client's GetVisionModel.
 	model := GetDefaultModelForProvider(providerType)
 	if model == "" {
 		return ""
@@ -252,43 +240,53 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 	return client.GetVisionModel()
 }
 
-// GetDefaultModelForProvider returns the default model for a given provider type
+// GetDefaultModelForProvider returns the provider's configured default
+// model from its registry config (SP-137: no per-provider model names in
+// the vision tier). Empty when the provider or default is unknown.
 func GetDefaultModelForProvider(providerType api.ClientType) string {
-	switch providerType {
-	case api.DeepInfraClientType:
-		return "meta-llama/Llama-3.3-70B-Instruct"
-	case api.OpenRouterClientType:
-		return "openai/gpt-5"
-	case api.MistralClientType:
-		return "devstral-2512"
-	case api.DeepSeekClientType:
-		return "deepseek-ai/DeepSeek-V3"
-	case api.ZAIClientType:
-		return "glm-4.6"
-	case api.LMStudioClientType:
-		return "" // Depends on locally installed models
-	case api.ChutesClientType:
-		return "" // Depends on chutes service
-	default:
+	cfg, err := factory.GlobalFactory().GetProviderConfig(string(providerType))
+	if err != nil || cfg == nil {
 		return ""
 	}
+	return strings.TrimSpace(cfg.Defaults.Model)
+}
+
+// visionProviderCandidates returns provider types that may offer a vision
+// model, in resolution order: authenticated providers from the registry
+// (sorted for determinism), then custom vision providers, then local
+// runtimes (which need no credentials). Registry-driven — no provider is
+// named here (SP-137 rule).
+func visionProviderCandidates() []api.ClientType {
+	var providers []api.ClientType
+	seen := map[api.ClientType]struct{}{}
+	add := func(pt api.ClientType) {
+		if _, dup := seen[pt]; dup {
+			return
+		}
+		seen[pt] = struct{}{}
+		providers = append(providers, pt)
+	}
+
+	names := factory.GlobalFactory().GetAvailableProviders()
+	// Usage-tiered priority: recently-used providers first, then
+	// credentialed ones, then the rest (shared with onboarding's
+	// provider ordering). Explicit and stable — never alphabetical.
+	var cfg *configuration.Config
+	if cm, err := configuration.NewManager(); err == nil {
+		cfg = cm.GetConfig()
+	}
+	for _, name := range configuration.OrderProvidersByUsage(names, cfg) {
+		add(api.ClientType(name))
+	}
+	for _, pt := range GetCustomVisionProviders() {
+		add(pt)
+	}
+	return providers
 }
 
 // CreateVisionClient creates a client capable of vision analysis
 func CreateVisionClient() (api.ClientInterface, error) {
-	// Priority: configured provider vision models first, local Ollama last.
-	providers := []api.ClientType{
-		api.DeepInfraClientType,
-		api.OpenRouterClientType,
-		api.OpenAIClientType,
-		api.MistralClientType,
-		api.ZAIClientType,
-		api.DeepSeekClientType,
-	}
-	providers = append(providers, GetCustomVisionProviders()...)
-	providers = append(providers, api.OllamaClientType)
-
-	for _, providerType := range providers {
+	for _, providerType := range visionProviderCandidates() {
 		if !configuration.HasProviderAuth(string(providerType)) {
 			continue // Skip if API key not set
 		}
@@ -313,47 +311,43 @@ func CreateVisionClient() (api.ClientInterface, error) {
 		return client, nil
 	}
 
-	return nil, fmt.Errorf("no vision-capable providers available - please configure a provider vision model or local Ollama OCR model")
+	return nil, fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable")
 }
 
-// CreateVisionClientWithModel creates a vision client using a specific model
+// CreateVisionClientWithModel creates a vision client using a specific model.
+// Provider resolution is registry-driven; no vendor namespaces are
+// special-cased (SP-137).
 func CreateVisionClientWithModel(modelName string) (api.ClientInterface, error) {
-	// Determine which provider supports this model
-	if strings.HasPrefix(modelName, "google/") || strings.HasPrefix(modelName, "meta-llama/") {
-		// DeepInfra model - use new generic provider system
-		if configuration.HasProviderAuth("deepinfra") {
-			provider, err := factory.CreateGenericProvider("deepinfra", modelName)
-			if err != nil {
-				return nil, fmt.Errorf("create DeepInfra client: %w", err)
-			}
-			return provider, nil
-		}
-		return nil, fmt.Errorf("deepinfra credentials not configured for model %s", modelName)
-	}
-
-	// Fall back to default client creation
 	return CreateVisionClient()
+}
+
+// isLocalRuntimeProvider reports whether the provider needs no credentials
+// (a local model runtime). Derived from the provider config's auth type —
+// "none" means no key is ever required — plus the built-in local client
+// types that have no config file.
+func isLocalRuntimeProvider(providerType api.ClientType) bool {
+	// Built-in local client types have no provider config file.
+	switch providerType {
+	case api.OllamaClientType, api.OllamaLocalClientType, api.LMStudioClientType:
+		return true
+	}
+	// Registry-driven: configs declaring auth.type "none" never need keys.
+	cfg, err := factory.GlobalFactory().GetProviderConfig(string(providerType))
+	if err != nil || cfg == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(cfg.Auth.Type), "none")
 }
 
 // HasVisionCapability checks if vision processing is available
 func HasVisionCapability() bool {
-	// Check if any provider with vision capability is available
-	// Priority: provider vision models first, local providers last.
-	providers := []api.ClientType{
-		api.DeepInfraClientType,
-		api.OpenRouterClientType,
-		api.OpenAIClientType,
-		api.MistralClientType,
-		api.DeepSeekClientType,
-		api.ZAIClientType,
+	// Native OCR counts: text extraction needs no provider at all (SP-137).
+	if nativeOCRAvailable() {
+		return true
 	}
-	providers = append(providers, GetCustomVisionProviders()...)
-	providers = append(providers,
-		api.OllamaClientType,
-		api.OllamaLocalClientType,
-	)
-
-	for _, providerType := range providers {
+	// Check if any provider with vision capability is available.
+	// Registry-driven candidate list — see visionProviderCandidates.
+	for _, providerType := range visionProviderCandidates() {
 		// Get the vision model for this provider
 		visionModel := GetVisionModelForProvider(providerType)
 		if visionModel == "" {
@@ -361,10 +355,7 @@ func HasVisionCapability() bool {
 		}
 
 		if !configuration.HasProviderAuth(string(providerType)) {
-			switch providerType {
-			case api.OllamaClientType, api.OllamaLocalClientType:
-				// Local providers do not require API keys.
-			default:
+			if !isLocalRuntimeProvider(providerType) {
 				continue
 			}
 		}

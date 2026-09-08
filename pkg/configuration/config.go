@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -178,11 +179,16 @@ type Config struct {
 	// the primary vision model fails after retries. Default: true.
 	VisionFallbackToOCR bool `json:"vision_fallback_to_ocr,omitempty"`
 
-	// PDF OCR Configuration
-	PDFOCREnabled    bool   `json:"pdf_ocr_enabled,omitempty"`    // Enable PDF OCR processing
-	PDFOCRProvider   string `json:"pdf_ocr_provider,omitempty"`   // Provider for PDF OCR (e.g., "ollama", "openai", "deepinfra")
-	PDFOCRModel      string `json:"pdf_ocr_model,omitempty"`      // Model for PDF OCR (e.g., "glm-ocr", "llama3.2-vision")
-	PDFOCRDownloaded bool   `json:"pdf_ocr_downloaded,omitempty"` // Whether the model has been downloaded
+	// OCRFallbackModel is the provider-qualified model ("provider/model")
+	// used for text-extraction fallback when the primary vision path fails
+	// and for OCR-only workflows. Empty = native OCR only (SP-137).
+	OCRFallbackModel string `json:"ocr_fallback_model,omitempty"`
+
+	// Legacy PDF OCR fields (pre-SP-137). Read-only compat surface: the
+	// loader migrates pdf_ocr_provider+pdf_ocr_model into ocr_fallback_model
+	// and these fields are no longer consulted by vision code.
+	PDFOCRProvider string `json:"pdf_ocr_provider,omitempty"`
+	PDFOCRModel    string `json:"pdf_ocr_model,omitempty"`
 
 	// Embedding Index Configuration
 	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
@@ -329,9 +335,7 @@ func NewConfig() *Config {
 		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
-		PDFOCREnabled:               true,
-		PDFOCRProvider:              "ollama",
-		PDFOCRModel:                 "glm-ocr",
+		OCRFallbackModel:            "",
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		Wakeup:                      DefaultWakeupConfig(),
@@ -354,14 +358,9 @@ func (c *Config) Validate() error {
 			c.OutputVerbosity, OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose)
 	}
 
-	// Validate PDF OCR settings
-	if c.PDFOCREnabled {
-		if c.PDFOCRProvider == "" {
-			return fmt.Errorf("PDF OCR provider cannot be empty when PDF OCR is enabled")
-		}
-		if c.PDFOCRModel == "" {
-			return fmt.Errorf("PDF OCR model cannot be empty when PDF OCR is enabled")
-		}
+	// Validate OCR fallback: when set it must be provider-qualified.
+	if c.OCRFallbackModel != "" && !strings.Contains(c.OCRFallbackModel, "/") {
+		return fmt.Errorf("ocr_fallback_model must be provider-qualified (provider/model), got %q", c.OCRFallbackModel)
 	}
 
 	// Validate shell config

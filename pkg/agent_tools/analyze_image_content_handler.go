@@ -4,8 +4,15 @@ package tools
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 type analyzeImageContentHandler struct{}
@@ -69,7 +76,50 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: result, IsError: true}, err
 	}
 
-	return ToolResult{Output: result}, nil
+	// Multimodal attachment (SP-137): when the request is a local image
+	// file, attach it alongside the analysis so vision-capable primary
+	// models see the raw pixels — the analyzed text alone loses spatial
+	// detail. Seed strips Images for non-vision models, so this is safe
+	// unconditionally. OCR-mode results already carry the extracted text
+	// and skip attachment to avoid doubling payload for a pure-text ask.
+	attachment := ToolResult{}
+	if analysisMode != "ocr" && !isHTTPURL(imagePath) && isImageExtension(imagePath) {
+		attachment = buildImageAttachment(ctx, imagePath)
+	}
+
+	attachment.Output = result
+	return attachment, nil
+}
+
+// buildImageAttachment reads a local image file and returns a ToolResult
+// carrying its inline data-URI (bounded by maxInlineImageBytes). Failure
+// degrades to a text-only result — analysis output is still valuable.
+func buildImageAttachment(ctx context.Context, imagePath string) ToolResult {
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, imagePath)
+	if err != nil {
+		return ToolResult{}
+	}
+	info, err := os.Stat(cleanPath)
+	if err != nil || info.IsDir() || info.Size() > maxInlineImageBytes {
+		return ToolResult{}
+	}
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return ToolResult{}
+	}
+	_, mimeType := console.DetectImageMagic(data)
+	if mimeType == "" {
+		mimeType = imageExtensions[strings.ToLower(filepath.Ext(cleanPath))]
+	}
+	if mimeType == "" {
+		return ToolResult{}
+	}
+	return ToolResult{
+		Images: []ImageData{{
+			URI:      fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)),
+			MIMEType: mimeType,
+		}},
+	}
 }
 
 func (h *analyzeImageContentHandler) Aliases() []string      { return nil }

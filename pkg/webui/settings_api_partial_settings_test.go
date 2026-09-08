@@ -49,9 +49,7 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"provider_priority":  []interface{}{"openai"},
 		"last_used_provider": "openai",
 		// applyPDFOCRSettings
-		"pdf_ocr_enabled":  true,
-		"pdf_ocr_provider": "openai",
-		"pdf_ocr_model":    "gpt-4o",
+		"ocr_fallback_model": "openai/gpt-4o",
 		// applyShellDetectionSettings
 		"enable_zsh_command_detection":   true,
 		"auto_execute_detected_commands": true,

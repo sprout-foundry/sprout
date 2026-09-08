@@ -2147,6 +2147,41 @@ button.primary.success {
   border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
+/* "+ Add repo" button on the workspace row — adds a workspace entry
+ * (clone) rather than acting on the loaded tree. */
+.workspace-add-repo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 20%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary, #8b93a7);
+  cursor: pointer;
+  transition: all 0.12s var(--ease-out);
+}
+
+.workspace-add-repo-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.workspace-add-repo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (hover: none) {
+  .workspace-add-repo-btn {
+    width: 30px;
+    height: 30px;
+  }
+}
+
 .workspace-cwd-chip {
   display: inline-flex;
   align-items: center;

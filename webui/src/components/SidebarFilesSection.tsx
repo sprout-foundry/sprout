@@ -1,5 +1,5 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
-import { Check, FolderTree, TriangleAlert, X } from 'lucide-react';
+import { Check, FolderTree, Plus, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
 import type { FsEntry } from '../services/workspaceFs/types';
 import GitHubRepoPicker from './GitHubRepoPicker';
@@ -276,6 +276,11 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       }
     };
 
+    // "Add repo" trigger for the workspace row. Only in cloud/local webui
+    // mode (matches the old tree-header gating); studio dists clone via
+    // the GitHub account panel / device-flow sign-in surface.
+    const cloneTrigger = isCloud ? handleCloneRepo : undefined;
+
     return (
       <>
         {importStatus !== 'idle' && (
@@ -369,6 +374,23 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
               <X size={12} aria-hidden="true" />
             </button>
           )}
+          {/* "Add repo" = add a workspace entry (clone), not an action on
+              the loaded tree. Lives on the workspace row — next to the
+              repo selector it feeds — instead of the tree header where it
+              read as a GitHub-branded file operation. */}
+          {cloneTrigger && (
+            <button
+              type="button"
+              className="workspace-add-repo-btn"
+              data-testid="workspace-add-repo-btn"
+              onClick={() => void cloneTrigger()}
+              disabled={importStatus === 'loading'}
+              aria-label="Add workspace from repository"
+              title="Add workspace from repository"
+            >
+              <Plus size={13} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <FileTree
           ref={fileTreeRef}
@@ -455,16 +477,13 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           onRenamePath={async (oldPath, newPath) => {
             await api.renameItem(oldPath, newPath);
           }}
-          onOpenInFileBrowser={async (path) => {
+                    onOpenInFileBrowser={async (path) => {
             await api.openInFileBrowser(path);
           }}
-          cloneRepoButton={isCloud ? handleCloneRepo : undefined}
         />
       </>
     );
   },
-);
-
-SidebarFilesSection.displayName = 'SidebarFilesSection';
+);SidebarFilesSection.displayName = 'SidebarFilesSection';
 
 export default SidebarFilesSection;

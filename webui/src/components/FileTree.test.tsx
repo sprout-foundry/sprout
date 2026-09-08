@@ -626,9 +626,15 @@ describe('FileTree filter', () => {
   it('does not show ignored files in filter results when toggle is off', async () => {
     await renderTree();
 
-    // Hide ignored files
-    const toggleBtn = container.querySelector('.toggle-ignored-btn');
-    if (!toggleBtn) throw new Error('Toggle ignored button not found');
+    // Hide ignored files (via the header overflow menu)
+    const moreBtn = container.querySelector('.more-actions-btn');
+    if (!moreBtn) throw new Error('More actions button not found');
+    await act(async () => {
+      moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const toggleBtn = Array.from(document.querySelectorAll('.context-menu-item'))
+      .find((el) => (el.textContent ?? '').includes('ignored files'));
+    if (!toggleBtn) throw new Error('Toggle ignored menu item not found');
     await act(async () => {
       toggleBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -686,11 +692,17 @@ describe('FileTree ignored files toggle', () => {
   }
 
   /**
-   * Helper: click the toggle-ignored button.
+   * Helper: open the header overflow menu and click the toggle-ignored item.
    */
   async function clickToggleIgnoredBtn() {
-    const btn = container.querySelector('.toggle-ignored-btn');
-    if (!btn) throw new Error('Toggle ignored button not found');
+    const moreBtn = container.querySelector('.more-actions-btn');
+    if (!moreBtn) throw new Error('More actions button not found');
+    await act(async () => {
+      moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const btn = Array.from(document.querySelectorAll('.context-menu-item'))
+      .find((el) => (el.textContent ?? '').includes('ignored files'));
+    if (!btn) throw new Error('Toggle ignored menu item not found');
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -766,15 +778,41 @@ describe('FileTree ignored files toggle', () => {
     localStorage.removeItem('filetree-show-ignored');
   });
 
-  it('toggle button has active class when ignored files are shown', async () => {
+  it('toggle item shows active state while ignored files are shown', async () => {
     await renderTree();
 
-    const btn = container.querySelector('.toggle-ignored-btn');
-    expect(btn).not.toBeNull();
-    expect(btn!.classList.contains('active')).toBe(true);
+    const openMenu = async () => {
+      const moreBtn = container.querySelector('.more-actions-btn');
+      expect(moreBtn).not.toBeNull();
+      await act(async () => {
+        moreBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    };
+    const findItem = () =>
+      Array.from(document.querySelectorAll('.context-menu-item')).find((el) =>
+        (el.textContent ?? '').includes('ignored files'),
+      );
 
-    await clickToggleIgnoredBtn();
-    expect(btn!.classList.contains('active')).toBe(false);
+    await openMenu();
+    const btn = findItem();
+    expect(btn).not.toBeUndefined();
+    expect(btn!.classList.contains('active')).toBe(true);
+    // Clicking the item toggles hidden-files off and closes the menu.
+    await act(async () => {
+      btn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+
+    // Re-open: the item is no longer active while ignored files are hidden.
+    await openMenu();
+    const btn2 = findItem();
+    expect(btn2).not.toBeUndefined();
+    expect(btn2!.classList.contains('active')).toBe(false);
+    // Restore the default (ignored files shown) for later tests.
+    await act(async () => {
+      btn2!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
   });
 
   it('keeps a non-ignored directory visible when it contains only ignored children', async () => {

@@ -40,7 +40,8 @@ vi.mock('../utils/log', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
-import { getFileURI, uriToFilePath, LSP_SUPPORTED_LANGUAGES, createTransport } from './lspClientService';
+import { getFileURI, uriToFilePath, LSP_SUPPORTED_LANGUAGES, createTransport, resolveEditorFilePath, LSPClientService } from './lspClientService';
+import { __resetWorkspaceCwdForTests } from './workspaceCwd';
 
 // ── getFileURI tests ──────────────────────────────────────────────────
 
@@ -67,6 +68,71 @@ describe('getFileURI', () => {
 
   it('handles paths with special characters', () => {
     expect(getFileURI('/home/user/my project')).toBe('file:///home/user/my project');
+  });
+});
+
+// ── resolveEditorFilePath / getFileURI with relative paths ────────────
+
+describe('resolveEditorFilePath', () => {
+  afterEach(() => {
+    LSPClientService.getInstance().setWorkspaceRoot('');
+  });
+
+  it('passes through absolute paths unchanged', () => {
+    expect(resolveEditorFilePath('/home/user/project/src/App.tsx')).toBe('/home/user/project/src/App.tsx');
+  });
+
+  it('passes through file:// URIs', () => {
+    expect(resolveEditorFilePath('file:///home/user/project/src/App.tsx')).toBe('/home/user/project/src/App.tsx');
+  });
+
+  it('passes through virtual workspace paths unchanged', () => {
+    expect(resolveEditorFilePath('__workspace/chat-1')).toBe('__workspace/chat-1');
+  });
+
+  it('resolves relative paths against the workspace root', () => {
+    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    expect(resolveEditorFilePath('src/App.tsx')).toBe('/home/user/project/src/App.tsx');
+  });
+
+  it('resolves relative paths when workspace root has trailing slash', () => {
+    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project/');
+    expect(resolveEditorFilePath('src/App.tsx')).toBe('/home/user/project/src/App.tsx');
+  });
+
+  it('resolves cwd-relative paths against the session cwd then workspace root', () => {
+    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    __resetWorkspaceCwdForTests();
+    window.localStorage.setItem('sprout-workspace-cwd', 'repos/owner/name');
+    try {
+      expect(resolveEditorFilePath('src/index.ts')).toBe('/home/user/project/repos/owner/name/src/index.ts');
+    } finally {
+      window.localStorage.removeItem('sprout-workspace-cwd');
+      __resetWorkspaceCwdForTests();
+    }
+  });
+
+  it('returns workspace-relative path unchanged when no workspace root is cached', () => {
+    expect(resolveEditorFilePath('src/App.tsx')).toBe('src/App.tsx');
+  });
+});
+
+describe('getFileURI with relative paths', () => {
+  afterEach(() => {
+    LSPClientService.getInstance().setWorkspaceRoot('');
+  });
+
+  it('produces a URI at the real on-disk location for a relative path', () => {
+    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    expect(getFileURI('src/App.tsx')).toBe('file:///home/user/project/src/App.tsx');
+  });
+
+  it('never produces a filesystem-root URI for a relative path', () => {
+    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    const uri = getFileURI('src/App.tsx');
+    // The old bug: 'src/App.tsx' → 'file:///src/App.tsx' (nonexistent location,
+    // breaks module resolution for every import).
+    expect(uri).not.toBe('file:///src/App.tsx');
   });
 });
 

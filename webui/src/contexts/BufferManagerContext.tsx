@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
 import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
 import { debugLog } from '../utils/log';
+import { resolveEditorFilePath } from '../services/lspClientService';
 import { writeFileWithFetch } from './fileWriteHelpers';
 import { useSproutFetch } from './SproutAdapterContext';
 
@@ -232,7 +233,11 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   // Open a file in an editor pane
   const openFile = useCallback(
     (file: EditorFileEntry) => {
-      const filePath = file.path;
+      // Normalize to an absolute path so the LSP document URI points at the
+      // real on-disk file (relative paths break module resolution) and so
+      // buffer dedup can't create duplicates for the same file opened via
+      // different entry points.
+      const filePath = resolveEditorFilePath(file.path);
 
       const currentBuffers = buffersRef.current;
       const currentActivePane = activePaneIdRef.current;
@@ -297,6 +302,9 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       isClosable?: boolean;
       metadata?: Record<string, unknown>;
     }) => {
+      if (options.kind === 'file') {
+        options = { ...options, path: resolveEditorFilePath(options.path) };
+      }
       const currentBuffers = buffersRef.current;
       const existingBufferEntry = Array.from(currentBuffers.entries()).find(
         ([_, buffer]) => buffer.file.path === options.path,

@@ -91,6 +91,11 @@ export const supportsChat: boolean = capability('supportsChat', true, true);
 export const supportsWorkspaceSwitching: boolean = capability('supportsWorkspaceSwitching', true, false);
 
 /**
+ * Native folder-picker support - studio shells only (bridge files channel).
+ */
+export const supportsFolderPicker: boolean = capability('supportsFolderPicker', false, false);
+
+/**
  * Export support - local mode only (no local filesystem to export to in cloud).
  */
 export const supportsExport: boolean = capability('supportsExport', true, false);

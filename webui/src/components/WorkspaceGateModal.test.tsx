@@ -1,16 +1,20 @@
 // @ts-nocheck
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import WorkspaceGateModal from './WorkspaceGateModal';
 
 // A hoisted, mutable flag so the mode mock factory can flip
 // supportsWorkspaceSwitching per test (cloud mode = false).
-const modeState = vi.hoisted(() => ({ cloud: false }));
+const modeState = vi.hoisted(() => ({ cloud: false, studio: false }));
 vi.mock('../config/mode', () => ({
-  // Getter reads the live flag so toggling modeState.cloud at runtime
+  // Getters read the live flags so toggling modeState at runtime
   // affects the component's next render.
   get supportsWorkspaceSwitching() {
     return !modeState.cloud;
+  },
+  get supportsFolderPicker() {
+    return modeState.studio;
   },
 }));
 // CSS import is a no-op under vitest.
@@ -20,8 +24,25 @@ vi.mock('./WorkspaceBrowser.css', () => ({}));
 // The inline browser talks to /api/workspace/browse; stub the service so the
 // modal tests stay offline.
 const browseMock = vi.hoisted(() => vi.fn());
+const setWorkspaceMock = vi.hoisted(() => vi.fn());
 vi.mock('../services/api', () => ({
-  ApiService: { getInstance: () => ({ browseDirectory: browseMock }) },
+  ApiService: {
+    getInstance: () => ({
+      browseDirectory: browseMock,
+      setWorkspace: setWorkspaceMock,
+    }),
+  },
+}));
+
+// The studio variant defers pick/create to the bridge files channel
+// (services/nativeFs). Stub the two helpers so the modal tests never touch
+// window.SproutStudio — the bridge surface itself is covered by the
+// nativeFs unit tests.
+const pickWorkspaceMock = vi.hoisted(() => vi.fn());
+const createWorkspaceMock = vi.hoisted(() => vi.fn());
+vi.mock('../services/nativeFs', () => ({
+  pickWorkspaceNative: pickWorkspaceMock,
+  createWorkspaceNative: createWorkspaceMock,
 }));
 
 // ---------------------------------------------------------------------------
@@ -57,6 +78,10 @@ let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
   modeState.cloud = false; // local mode by default
+  modeState.studio = false; // desktop variant by default
+  pickWorkspaceMock.mockReset();
+  createWorkspaceMock.mockReset();
+  setWorkspaceMock.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -96,6 +121,18 @@ function findRowByPath(path: string): HTMLButtonElement | null {
     if ((row as HTMLElement).title === path) return row as HTMLButtonElement;
   }
   return null;
+}
+
+/**
+ * Set a React controlled input's value in jsdom. React tracks the `value`
+ * property via its own prototype setter, so assigning `input.value = x`
+ * directly does NOT fire onChange — the native setter must run first, then
+ * the bubbling `input` event is what React listens for.
+ */
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 // ---------------------------------------------------------------------------
@@ -234,5 +271,145 @@ describe('WorkspaceGateModal', () => {
     modeState.cloud = true; // simulate cloud mode
     renderModal();
     expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).toBeNull();
+  });
+
+  // ── Studio variant (supportsFolderPicker = true) ────────────────────
+  //
+  // A studio shell advertises the native folder picker through
+  // capabilities.json → the adapter reports supportsFolderPicker → the
+  // gate swaps its desktop picker/browser body for the studio flow
+  // (native pick op + inline project create + the Documents consent link).
+
+  it('renders the studio variant instead of the desktop browse UI when supportsFolderPicker', () => {
+    modeState.studio = true;
+    renderModal();
+    expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
+    expect(container!.textContent).toMatch(/choose a workspace/i);
+    expect(container!.textContent).toMatch(/pick where this project lives/i);
+    expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).not.toBeNull();
+    // The desktop picker (suggested/recent lists + Browse) must NOT render.
+    expect(container!.querySelector('[data-testid="workspace-picker"]')).toBeNull();
+    expect(container!.querySelector('.workspace-picker-browse-btn')).toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
+  });
+
+  it('keeps the studio variant out of the desktop variant (desktop unaffected)', () => {
+    renderModal();
+    expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-picker"]')).not.toBeNull();
+  });
+
+  it('reloads after a successful native folder pick', async () => {
+    modeState.studio = true;
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+    pickWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myapp' });
+
+    renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.click();
+    });
+
+    expect(pickWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears pending (no reload, no error) when the native pick is cancelled', async () => {
+    modeState.studio = true;
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+    pickWorkspaceMock.mockResolvedValue({ ok: false, error: 'userCancelled' });
+
+    renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.click();
+    });
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(container!.querySelector('[data-testid="workspace-gate-error"]')).toBeNull();
+    // Pending cleared → the button is usable again.
+    expect(container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.disabled).toBe(
+      false,
+    );
+  });
+
+  it('reveals the inline create form when New Project… is clicked', () => {
+    modeState.studio = true;
+    renderModal();
+    act(() => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+    });
+    expect(container!.querySelector('[data-testid="workspace-gate-create-input"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="workspace-gate-create-submit"]')).not.toBeNull();
+  });
+
+  it('invokes createWorkspaceNative with the entered name and reloads on success', async () => {
+    modeState.studio = true;
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+    createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'fresh-project' });
+
+    renderModal();
+    act(() => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+    });
+    const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+    await act(async () => {
+      setInputValue(input, 'fresh-project');
+    });
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+    });
+
+    expect(createWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(createWorkspaceMock).toHaveBeenCalledWith('fresh-project');
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps createWorkspace error codes to friendly inline copy', async () => {
+    modeState.studio = true;
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+    createWorkspaceMock.mockResolvedValue({ ok: false, error: 'alreadyExists' });
+
+    renderModal();
+    act(() => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+    });
+    const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+    await act(async () => {
+      setInputValue(input, 'dupe');
+    });
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+    });
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    expect(err).not.toBeNull();
+    expect(err!.textContent).toMatch(/already exists/i);
+  });
+
+  it('consents through POST /api/workspace (setWorkspace with consentHome) and reloads', async () => {
+    modeState.studio = true;
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+    setWorkspaceMock.mockResolvedValue({
+      workspace_root: '/home/alice',
+      daemon_root: '/home/alice/.sprout',
+      message: 'Workspace updated',
+    });
+
+    renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
+    });
+
+    // The api-service consent path: setWorkspace(workspace_root, consentHome=true)
+    // POSTs /api/workspace with { path, consent_home: true }.
+    expect(setWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(setWorkspaceMock).toHaveBeenCalledWith('/home/alice', true);
   });
 });

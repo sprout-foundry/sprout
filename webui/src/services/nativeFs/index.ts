@@ -77,6 +77,38 @@ export type SproutStudioFsBridge = {
   listWorkspace(maxDepth?: number): Promise<{ ok: true; files: WorkspaceFileEntry[] } | { ok: false; error: string }>;
 };
 
+/**
+ * The narrow `window.SproutStudio` subset used by the workspace-gate studio
+ * variant (bridge files channel, §10.1). Same never-reject contract as above:
+ * user-cancel and failures resolve `{ ok: false, error: "<code>" }`.
+ */
+export type SproutStudioWorkspaceBridge = {
+  /** Presents the system folder picker; persists the chosen root. */
+  pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
+  /** Creates a fresh project folder and makes it the workspace root. */
+  createWorkspace(name: string): Promise<
+    | { ok: true; rootName: string }
+    | { ok: false; error: 'invalidName' | 'alreadyExists' | string }
+  >;
+};
+
+/** Result shape of the two workspace ops above (discriminated on `ok`). */
+export type NativeWorkspaceResult = { ok: true; rootName: string } | { ok: false; error: string };
+
+/**
+ * Type guard: is `obj` a usable studio workspace bridge? Checks that both
+ * workspace op methods are functions. Pure and synchronous; safe to call
+ * with `null`, `undefined`, or a plain object. Deliberately narrower than
+ * `hasSproutStudioFsBridge` — the gate must not render the studio variant
+ * against a bridge that only implements the file ops.
+ */
+export function hasSproutStudioWorkspaceBridge(obj: unknown): obj is SproutStudioWorkspaceBridge {
+  if (!obj || typeof obj !== 'object') return false;
+  const c = obj as Record<string, unknown>;
+  return typeof c.pickWorkspace === 'function' && typeof c.createWorkspace === 'function';
+}
+
+
 // ── Structural detector ───────────────────────────────────────────────────────
 
 /**
@@ -503,4 +535,61 @@ export async function nativeWriteWorkspaceFile(path: string, content: string): P
     return errorJsonResponse('ioFailed', 500);
   }
   return writeWorkspaceResponse(result);
+}
+
+// ── Workspace-gate studio helpers (bridge files channel, §10.1) ──────────────
+//
+// Used by WorkspaceGateModal's studio variant (native folder picker +
+// new-project create). Like the bridge helpers above, these NEVER reject:
+// a hard transport throw resolves the `ioFailed` result instead of crashing
+// the modal, and the caller inspects `ok`/`error` directly (no synthesized
+// `Response` — the gate renders inline UI, it does not consume Responses).
+
+/** Reusable bridge-result coercion: `{ok:true,rootName}` or a failed result. */
+function workspaceResult(result: unknown): NativeWorkspaceResult {
+  const r = result as { ok?: boolean; rootName?: unknown; error?: unknown };
+  if (r && r.ok === true) {
+    return { ok: true, rootName: typeof r.rootName === 'string' ? r.rootName : '' };
+  }
+  return { ok: false, error: typeof r?.error === 'string' && r.error !== '' ? r.error : 'ioFailed' };
+}
+
+/**
+ * Present the native folder picker and persist the chosen workspace root.
+ * Resolves `{ ok: true, rootName }` on a pick, `{ ok: false, error: 'userCancelled' }`
+ * when the user dismisses the picker, and `ioFailed` on transport failure.
+ */
+export async function pickWorkspaceNative(): Promise<NativeWorkspaceResult> {
+  const bridge = detectSproutStudio();
+  const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
+  if (!workspaceBridge) {
+    return { ok: false, error: 'ioFailed' };
+  }
+  try {
+    return workspaceResult(await workspaceBridge.pickWorkspace());
+  } catch {
+    return { ok: false, error: 'ioFailed' };
+  }
+}
+
+/**
+ * Create a new project folder through the bridge and make it the workspace
+ * root. The shell validates the name; `invalidName` / `alreadyExists` (and
+ * any other code) surface verbatim so the gate can map them to friendly copy.
+ */
+export async function createWorkspaceNative(name: string): Promise<NativeWorkspaceResult> {
+  const bridge = detectSproutStudio();
+  const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
+  if (!workspaceBridge) {
+    return { ok: false, error: 'ioFailed' };
+  }
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (trimmed === '') {
+    return { ok: false, error: 'invalidName' };
+  }
+  try {
+    return workspaceResult(await workspaceBridge.createWorkspace(trimmed));
+  } catch {
+    return { ok: false, error: 'ioFailed' };
+  }
 }

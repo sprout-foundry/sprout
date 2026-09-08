@@ -199,7 +199,7 @@ func ExportSessions(opts ExportOptions) (*ExportResult, error) {
 
 	result.SessionsExported = len(qualified)
 
-	// Scan working directories for remote usernames (e.g. /home/aprice)
+	// Scan working directories for remote usernames (e.g. /home/deva)
 	// so they can be redacted even when they appear in command output
 	// without the full home directory path.
 	var workingDirs []string

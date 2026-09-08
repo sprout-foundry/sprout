@@ -88,7 +88,7 @@ See more:
 * [SavedGraph](https://pkg.go.dev/github.com/coder/hnsw#SavedGraph)
 
 We use a fast binary encoding for the graph, so you can expect to save/load
-nearly at disk speed. On my M3 Macbook I get these benchmark results:
+nearly at disk speed. On an M3 Macbook I get these benchmark results:
 
 ```
 goos: darwin

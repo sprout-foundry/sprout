@@ -59,7 +59,7 @@ var emailRe = regexp.MustCompile(`[\w.+-]+@[\w.-]+\.\w+`)
 var anyHomeDirRe = regexp.MustCompile(`(?:/Users|/home)/[\w.-]+`)
 
 // anyHomeDirUnderscoreRe matches underscore-sanitized home directory paths
-// found in .sprout/changes/ filenames (e.g. _home_aprice_...).
+// found in .sprout/changes/ filenames (e.g. _home_deva_...).
 var anyHomeDirUnderscoreRe = regexp.MustCompile(`(?:_Users_|_home_)[\w.-]+?_`)
 
 // compilePIIRegexps builds regexps for the given config.
@@ -91,7 +91,7 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 		// No regex needed — strings.ReplaceAll is sufficient and safe.
 	}
 
-	// Replace any home directory paths (e.g. /home/aprice, /Users/alanp)
+	// Replace any home directory paths (e.g. /home/deva, /Users/deva)
 	// so data from remote machines is redacted even when the local username
 	// differs. Extract remote usernames first (before replacing paths)
 	// so they can also be redacted as standalone words later.
@@ -140,8 +140,8 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 	// Redact email addresses.
 	s = emailRe.ReplaceAllString(s, "$$EMAIL")
 
-	// Redact git author tags like "(by alanprice)" or "Author: alanprice".
-	// Matches the username as a prefix of longer words (alanprice, alan228)
+	// Redact git author tags like "(by janeprice)" or "Author: janeprice".
+	// Matches the username as a prefix of longer words (janeprice, jane228)
 	// when preceded by common git/author contexts.
 	if cfg.Username != "" {
 		escaped := regexp.QuoteMeta(cfg.Username)
@@ -155,7 +155,7 @@ func redactPII(s string, cfg PIIRedactionConfig) string {
 		s = vcsRe.ReplaceAllString(s, "$${1}/$$USER")
 		// Redact bare username-prefixed words that look like git authors.
 		// Matches lines where the username is a prefix of a longer word
-		// (eg. "alanprice" from git log --format='%an').
+		// (eg. "janeprice" from git log --format='%an').
 		bareAuthorRe := regexp.MustCompile(`(?m)^` + escaped + `\w+$`)
 		s = bareAuthorRe.ReplaceAllString(s, "$$USER")
 	}
@@ -236,7 +236,7 @@ func CollectRemoteUsernames(strings []string) []string {
 			result = append(result, user)
 		}
 	}
-	// Also scan for underscored variants (_Users_alanp → "alanp")
+	// Also scan for underscored variants (_Users_deva → "deva")
 	underscoredRe := regexp.MustCompile(`(?:_Users_|_home_)([\w.-]+?)(?:_|$)`)
 	for _, s := range strings {
 		for _, match := range underscoredRe.FindAllStringSubmatch(s, -1) {
@@ -298,7 +298,7 @@ func redactAdditionalUsernames(s string, users []string) string {
 		s = re.ReplaceAllString(s, "$$USER")
 		// Also catch usernames preceded by literal \n (backslash-n)
 		// which occurs when command output is double-escaped in
-		// session storage. Without this, \naprice has no word boundary
+		// session storage. Without this, \ndeva has no word boundary
 		// between the 'n' and 'a' characters.
 		re2 := regexp.MustCompile(`\\n` + escaped + `\b`)
 		s = re2.ReplaceAllString(s, "\\n$$USER")

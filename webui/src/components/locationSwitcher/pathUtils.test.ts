@@ -130,49 +130,49 @@ describe('collapseHomePath', () => {
 
   describe('exact match', () => {
     it('replaces exact home path with ~', () => {
-      expect(collapseHomePath('/home/alanp', '/home/alanp')).toBe('~');
+      expect(collapseHomePath('/home/deva', '/home/deva')).toBe('~');
     });
 
     it('replaces exact home path even with different whitespace', () => {
-      expect(collapseHomePath('  /home/alanp  ', '  /home/alanp  ')).toBe('~');
+      expect(collapseHomePath('  /home/deva  ', '  /home/deva  ')).toBe('~');
     });
   });
 
   describe('path starting with home', () => {
     it('replaces home prefix with ~ for subdirectory', () => {
-      expect(collapseHomePath('/home/alanp/projects', '/home/alanp')).toBe('~/projects');
+      expect(collapseHomePath('/home/deva/projects', '/home/deva')).toBe('~/projects');
     });
 
     it('replaces home prefix for nested paths', () => {
-      expect(collapseHomePath('/home/alanp/projects/sprout/src', '/home/alanp')).toBe('~/projects/sprout/src');
+      expect(collapseHomePath('/home/deva/projects/sprout/src', '/home/deva')).toBe('~/projects/sprout/src');
     });
 
     it('handles home path with trailing content', () => {
-      expect(collapseHomePath('/home/alanp/.config', '/home/alanp')).toBe('~/.config');
+      expect(collapseHomePath('/home/deva/.config', '/home/deva')).toBe('~/.config');
     });
   });
 
   describe('path not starting with home', () => {
     it('returns path unchanged for unrelated path', () => {
-      expect(collapseHomePath('/var/log', '/home/alanp')).toBe('/var/log');
+      expect(collapseHomePath('/var/log', '/home/deva')).toBe('/var/log');
     });
 
     it('returns path unchanged for root', () => {
-      expect(collapseHomePath('/', '/home/alanp')).toBe('/');
+      expect(collapseHomePath('/', '/home/deva')).toBe('/');
     });
 
     it('does not match partial directory name', () => {
-      expect(collapseHomePath('/home/alanpother/file', '/home/alanp')).toBe('/home/alanpother/file');
+      expect(collapseHomePath('/home/devaother/file', '/home/deva')).toBe('/home/devaother/file');
     });
   });
 
   describe('different home paths', () => {
     it('handles macOS-style home paths', () => {
-      expect(collapseHomePath('/Users/alanp/docs', '/Users/alanp')).toBe('~/docs');
+      expect(collapseHomePath('/Users/deva/docs', '/Users/deva')).toBe('~/docs');
     });
 
     it('handles WSL-style home paths', () => {
-      expect(collapseHomePath('/mnt/c/Users/alanp/docs', '/mnt/c/Users/alanp')).toBe('~/docs');
+      expect(collapseHomePath('/mnt/c/Users/deva/docs', '/mnt/c/Users/deva')).toBe('~/docs');
     });
   });
 });

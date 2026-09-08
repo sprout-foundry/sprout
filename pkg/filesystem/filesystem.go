@@ -628,7 +628,7 @@ func IsSensitiveSystemPath(path string) bool {
 
 // IsHomeDir reports whether path is the current user's home directory.
 // Both paths are resolved through symlinks so that, e.g., /var/folders/...
-// and /Users/alanp compare correctly on macOS.
+// and /Users/deva compare correctly on macOS.
 //
 // Symlink resolution is bounded by symlinkTimeout so a hanging network mount
 // (NFS, SMB) cannot stall index builds indefinitely.

@@ -119,7 +119,8 @@ async function fetchAndCacheConfig(filePath: string): Promise<Record<string, unk
     try {
       config = await configFetcher(filePath);
     } catch {
-      // Keep empty config on error
+      // best-effort: format without project config rather than failing the
+      // whole format request.
     }
   }
 

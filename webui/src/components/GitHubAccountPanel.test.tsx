@@ -19,10 +19,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import GitHubAccountPanel from './GitHubAccountPanel';
 
-const { mockValidate, mockStoreToken, mockStoreUser } = vi.hoisted(() => ({
+const { mockValidate, mockStoreToken, mockStoreUser, mockConfirm } = vi.hoisted(() => ({
   mockValidate: vi.fn(),
   mockStoreToken: vi.fn(),
   mockStoreUser: vi.fn(),
+  mockConfirm: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('./ThemedDialog', () => ({
+  showThemedConfirm: (...args: unknown[]) => mockConfirm(...args),
 }));
 
 vi.mock('../services/githubService', async (importOriginal) => {
@@ -205,5 +210,80 @@ describe('GitHubAccountPanel', () => {
     });
     expect(container.querySelector('[data-testid="gh-signin-input"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="gh-device-signin"]')).toBeNull();
+  });
+
+  it('shows a pending state on the device-flow start button and ignores double taps', async () => {
+    let resolveStart: (v: unknown) => void = () => {};
+    let starts = 0;
+    installBridge((channel, payload) => {
+      if (payload.op === 'deviceFlowStart') {
+        starts += 1;
+        return new Promise((r) => (resolveStart = r));
+      }
+      // openExternal + deviceFlowPoll: keep the session "pending" so the
+      // poll loop never terminates the flow under test.
+      return Promise.resolve({ ok: true, status: 'pending' });
+    });
+
+    await render();
+    const startBtn = container.querySelector('[data-testid="gh-device-signin"]') as HTMLButtonElement;
+
+    await act(async () => {
+      startBtn.click();
+      await TICK(0);
+    });
+
+    // Pending: disabled + progress label.
+    expect(startBtn.disabled).toBe(true);
+    expect(startBtn.textContent).toMatch(/connecting/i);
+    expect(starts).toBe(1);
+
+    // A second tap while pending must not start a second flow.
+    await act(async () => {
+      startBtn.click();
+      await TICK(0);
+    });
+    expect(starts).toBe(1);
+
+    await act(async () => {
+      resolveStart({
+        userCode: 'ABCD-1234',
+        verificationUri: 'https://github.com/login/device',
+        deviceCode: 'dc_foo',
+        interval: 5,
+        expiresIn: 900,
+      });
+      await TICK(20);
+    });
+    expect(container.querySelector('[data-testid="gh-device-code"]')).toBeTruthy();
+    expect(starts).toBe(1);
+  });
+
+  describe('sign out', () => {
+    it('asks for confirmation before clearing the account', async () => {
+      mockConfirm.mockResolvedValueOnce(false);
+      const onSignedOut = vi.fn();
+      await render({ user: SAMPLE_USER as never, onSignedOut });
+
+      await act(async () => {
+        (container.querySelector('[data-testid="gh-signout-btn"]') as HTMLButtonElement).click();
+        await TICK(0);
+      });
+
+      expect(mockConfirm).toHaveBeenCalled();
+      expect(onSignedOut).not.toHaveBeenCalled();
+    });
+
+    it('clears the account after confirmation', async () => {
+      const onSignedOut = vi.fn();
+      await render({ user: SAMPLE_USER as never, onSignedOut });
+
+      await act(async () => {
+        (container.querySelector('[data-testid="gh-signout-btn"]') as HTMLButtonElement).click();
+        await TICK(0);
+      });
+
+      expect(onSignedOut).toHaveBeenCalledTimes(1);
+    });
   });
 });

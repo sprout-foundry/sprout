@@ -90,7 +90,8 @@ export function clearToken(): void {
   try {
     localStorage.removeItem(GITHUB_TOKEN_KEY);
   } catch {
-    /* ignore */
+    // best-effort: a key we can't remove is orphaned storage; the in-memory
+    // session state is cleared by the caller regardless.
   }
 }
 
@@ -113,7 +114,7 @@ export function storeUser(user: GitHubUser): void {
   try {
     localStorage.setItem(GITHUB_USER_KEY, JSON.stringify(user));
   } catch {
-    /* ignore */
+    // best-effort: profile is a render-only cache; sign-in still succeeds.
   }
 }
 
@@ -124,7 +125,7 @@ export function clearGitHubAccount(): void {
     try {
       localStorage.removeItem(GITHUB_USER_KEY);
     } catch {
-      /* ignore */
+      // best-effort: same as clearToken — orphaned key at worst.
     }
   }
 }

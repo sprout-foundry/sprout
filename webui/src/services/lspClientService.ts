@@ -511,7 +511,7 @@ class LSPClientService {
         try {
           closeFn();
         } catch {
-          /* ignore */
+          // best-effort: teardown — the socket is being discarded either way.
         }
         this.transportCloseFns.delete(languageId);
       }
@@ -702,7 +702,7 @@ class LSPClientService {
       try {
         close();
       } catch {
-        /* ignore */
+        // best-effort: teardown — the socket is being discarded either way.
       }
     });
     this.transportCloseFns.clear();

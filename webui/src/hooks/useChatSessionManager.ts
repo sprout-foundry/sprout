@@ -11,6 +11,8 @@ import {
 } from '../services/chatSessions';
 import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
+import { toUserErrorMessage } from '../utils/errorMessage';
+import { notificationBus } from '../services/notificationBus';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
@@ -123,6 +125,8 @@ export function useChatSessionManager({
           prev.messages.length === 0 && initialMessages.length > 0 ? trimMessages(initialMessages) : prev.messages,
       }));
     } catch (error) {
+      // best-effort: background list refresh on connect; an empty tab bar is
+      // the visible symptom and self-heals via the session_changed WS event.
       debugLog('[chat] Failed to load chat sessions:', error);
     }
   }, [setState, activeChatIdRef]);
@@ -240,6 +244,13 @@ export function useChatSessionManager({
         if (activeChatIdRef.current !== switchId) return;
         activeChatIdRef.current = currentId;
         debugLog('[chat] Failed to switch chat session:', error);
+        // User tapped a chat tab and nothing happened — say why.
+        notificationBus.notify(
+          'error',
+          'Chat',
+          toUserErrorMessage(error, 'Could not switch to that chat session.'),
+          5000,
+        );
       }
     },
     [setState, activeRequestsRef],
@@ -277,6 +288,13 @@ export function useChatSessionManager({
         }
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
+        // The tab the user tried to delete is still there — explain it.
+        notificationBus.notify(
+          'error',
+          'Chat',
+          toUserErrorMessage(error, 'Could not delete that chat session.'),
+          5000,
+        );
       }
     },
     [handleActiveChatChange, setState],
@@ -290,6 +308,13 @@ export function useChatSessionManager({
         setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to rename chat session:', error);
+        // The old title is still showing — explain why the rename didn't take.
+        notificationBus.notify(
+          'error',
+          'Chat',
+          toUserErrorMessage(error, 'Could not rename that chat session.'),
+          5000,
+        );
       }
     },
     [setState],

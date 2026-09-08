@@ -151,7 +151,8 @@ export function useSSHData({
           const ls = await apiService.current.getSSHLaunchStatus(hostAlias, targetRemotePath);
           if (!statusPollCancelled && ls?.status) setSwitchingState((p) => ({ ...p, status: ls.status }));
         } catch {
-          /* ignore */
+          // best-effort: cosmetic progress text for the open-in-progress state;
+          // the real failure surfaces from the openSSHWorkspace call below.
         }
       };
       const statusPollTimer = window.setInterval(() => {

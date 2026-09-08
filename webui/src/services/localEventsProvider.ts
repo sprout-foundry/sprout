@@ -14,7 +14,9 @@ export class LocalEventsProvider implements EventsProvider {
   connect(): void {
     this.ws()
       .connect()
-      .catch(() => {});
+      // best-effort: connect() schedules its own reconnect loop; a rejection
+      // here is already surfaced as a DisconnectedOverlay.
+      .catch(() => undefined);
   }
 
   disconnect(): void {

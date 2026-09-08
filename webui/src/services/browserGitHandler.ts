@@ -42,7 +42,8 @@ export async function handleBrowserGitRequest(
     try {
       body = JSON.parse(bodyStr);
     } catch {
-      /* ignore */
+      // best-effort: non-JSON body (form-encoded or plain text) — leave
+      // `body` unset and let the git handler treat it as absent.
     }
   }
 

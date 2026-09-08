@@ -283,7 +283,8 @@ export function useEditorSettings(
     try {
       localStorage.removeItem('editor:indent-manual');
     } catch (_err) {
-      /* ignore */
+      // best-effort: clearing a legacy migration flag; if storage is blocked
+      // the flag simply stays and is ignored on next read.
     }
   }, []);
 

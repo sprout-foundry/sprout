@@ -23,6 +23,7 @@ import type { GitHubRepo, GitHubUser } from '../services/githubService';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
 import GitHubAccountPanel from './GitHubAccountPanel';
+import { showThemedConfirm } from './ThemedDialog';
 
 export interface GitHubRepoPickerProps {
   isOpen: boolean;
@@ -156,12 +157,25 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
     if (stored) void loadRepos(stored);
   };
 
+  // Called by GitHubAccountPanel AFTER it has already confirmed with the
+  // user — do not confirm twice.
   const handleSignedOut = () => {
     clearGitHubAccount();
     setUser(null);
     setToken(null);
     setRepos(null);
     setListError(null);
+  };
+
+  // Fallback card (token present, no cached profile): nothing else confirms
+  // for us, so confirm here.
+  const handleStoredTokenSignOut = async () => {
+    const confirmed = await showThemedConfirm(
+      'Sign out of GitHub?\n\nThe stored token will be removed from this device.',
+      { title: 'Sign out of GitHub', type: 'warning', confirmLabel: 'Sign out' },
+    );
+    if (!confirmed) return;
+    handleSignedOut();
   };
 
   /* ── Client-side filter ──────────────────────────────────────── */
@@ -224,6 +238,36 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
 
           {showRepoList && (
             <>
+              {/* Errors go at the TOP of the modal body, above everything the
+                  user is about to act on. A banner rendered below the list (or
+                  under the fold of a long list on a tablet) is effectively
+                  invisible at the moment the action fails. */}
+              {cloneError && (
+                <div className="gh-picker-clone-error" role="alert" data-testid="gh-picker-clone-error">
+                  <AlertTriangle size={14} />
+                  <span>{cloneError}</span>
+                </div>
+              )}
+
+              {!loading && listError && (
+                <div className="gh-picker-clone-error" role="alert" data-testid="gh-picker-list-error">
+                  <AlertTriangle size={14} />
+                  <span>{listError}</span>
+                  <button
+                    type="button"
+                    className="gh-picker-retry"
+                    onClick={() => {
+                      const activeToken = token ?? getStoredToken();
+                      if (activeToken) void loadRepos(activeToken);
+                    }}
+                    disabled={loading}
+                    data-testid="gh-picker-retry"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               {user ? (
                 <GitHubAccountPanel user={user} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} compact />
               ) : (
@@ -234,7 +278,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                   <button
                     type="button"
                     className="gh-account-signout"
-                    onClick={handleSignedOut}
+                    onClick={() => void handleStoredTokenSignOut()}
                     data-testid="gh-signout-btn"
                   >
                     Sign out
@@ -257,26 +301,10 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                 />
               </div>
 
-              {/* Clone errors first: the user's finger is on the list —
-                  a banner at the bottom of the modal goes unseen. */}
-              {cloneError && (
-                <div className="gh-picker-clone-error" role="alert" data-testid="gh-picker-clone-error">
-                  <AlertTriangle size={14} />
-                  <span>{cloneError}</span>
-                </div>
-              )}
-
               {loading && (
                 <div className="gh-picker-state" data-testid="gh-picker-loading">
                   <Loader2 size={16} className="spin" />
                   <span>Loading repositories…</span>
-                </div>
-              )}
-
-              {!loading && listError && (
-                <div className="gh-picker-state gh-picker-state--error" role="alert">
-                  <AlertTriangle size={16} />
-                  <span>{listError}</span>
                 </div>
               )}
 

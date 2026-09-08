@@ -82,6 +82,42 @@
   padding: 12px 0 4px;
 }
 
+/* ── Switch failure banner ───────────────────────────────────────── */
+
+.workspace-picker-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--accent-error, #e5534b) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-error, #e5534b) 12%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.workspace-picker-error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Spinner on an in-flight project row (lucide Loader2). */
+.workspace-picker .spin {
+  animation: workspace-picker-spin 1s linear infinite;
+}
+
+@keyframes workspace-picker-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Project Rows ─────────────────────────────────────────────────── */
 
 .workspace-picker-row {

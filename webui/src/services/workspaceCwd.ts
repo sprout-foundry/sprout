@@ -212,6 +212,7 @@ export function __resetWorkspaceCwdForTests(): void {
       window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
     }
   } catch {
-    /* ignore */
+    // best-effort: reset() already cleared in-memory state; a leftover
+    // storage key only restores a stale cwd on the next reload.
   }
 }

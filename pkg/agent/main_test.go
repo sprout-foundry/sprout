@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/search"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -40,6 +41,10 @@ import (
 //     building an HNSW index with 30+ GB peak allocation. We redirect the
 //     global updater to a throwaway temp dir so those writes are harmless.
 func TestMain(m *testing.M) {
+	// Agents built in tests shell out to git (tool handlers, change_tracking,
+	// PR review); redirect git config so those subprocesses never touch the
+	// developer's real ~/.gitconfig.
+	testgit.Configure()
 	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
 
 	// Isolate all agent-package tests from the real workspace config.

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
@@ -19,6 +20,10 @@ import (
 // trigger a debounced BuildIndex that walks the entire real sessions corpus
 // (~250 MB), building an HNSW index with 30+ GB peak allocation.
 func TestMain(m *testing.M) {
+	// git tests in this package (commands_test, commit_git_test, …) exec git
+	// subprocesses; redirect their config so the real ~/.gitconfig is never
+	// read or written.
+	testgit.Configure()
 	// Disable implicit embedding auto-index for the whole suite. Every agent
 	// built by a test calls RestoreEmbeddingIndex(), which otherwise
 	// auto-enables the index, lazily downloads a ~240MB ONNX model, and

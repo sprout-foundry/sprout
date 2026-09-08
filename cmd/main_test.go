@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
@@ -31,6 +32,10 @@ import (
 // is timestamp-based, so collisions don't happen and the shared dir
 // keeps the test setup cheap.
 func TestMain(m *testing.M) {
+	// Every git subprocess a cmd test spawns (agents shelling out, sync/txn
+	// helpers, review_staged) must inherit a sandboxed git config, never the
+	// developer's real ~/.gitconfig.
+	testgit.Configure()
 	// Disable implicit embedding auto-index for the whole cmd suite. Every
 	// agent built by a cmd test (createPlanningAgent, runAgentQuery, the
 	// automate/workflow paths, …) calls RestoreEmbeddingIndex(), which

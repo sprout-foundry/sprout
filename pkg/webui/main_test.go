@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/search"
@@ -31,6 +32,9 @@ import (
 // don't run under WASM, so the TestMain only fires for the native
 // build where the leak actually happens.
 func TestMain(m *testing.M) {
+	// The git_api/… suites exec git subprocesses against real temp repos;
+	// redirect git config so the developer's ~/.gitconfig is never touched.
+	testgit.Configure()
 	tmpDir, err := os.MkdirTemp("", "sprout-webui-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 )
 
@@ -172,25 +173,32 @@ func applyAPITimeoutDefaults(raw map[string]interface{}) {
 	raw["api_timeouts"] = apiTimeouts
 }
 
-// applyPDFOCRDefaults ensures PDF OCR fields have values.
-// It preserves any existing non-default values and applies defaults only if all three fields
-// are at their "unset" values (false for bool, empty string for string, nil for missing).
+// applyPDFOCRDefaults migrated the legacy provider-coupled PDF OCR config
+// into the neutral ocr_fallback_model field (SP-137). The old
+// provider+model pair is folded into "provider/model"; users who never
+// customized the old defaults (the hardcoded legacy pair) get an empty
+// fallback — native OCR or any configured vision provider serves instead.
+// The legacy keys are removed from the map so they stop round-tripping.
 func applyPDFOCRDefaults(raw map[string]interface{}) {
-	enabled, hasEnabled := raw["pdf_ocr_enabled"]
-	provider, hasProvider := raw["pdf_ocr_provider"]
-	model, hasModel := raw["pdf_ocr_model"]
+	provider, _ := raw["pdf_ocr_provider"].(string)
+	model, _ := raw["pdf_ocr_model"].(string)
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
 
-	// Check if fields are at their unset values
-	enabledUnset := !hasEnabled || enabled == nil || enabled == false
-	providerUnset := !hasProvider || provider == nil || provider == ""
-	modelUnset := !hasModel || model == nil || model == ""
+	_, hasNeutral := raw["ocr_fallback_model"]
 
-	// Only apply defaults if all three fields are unset
-	if enabledUnset && providerUnset && modelUnset {
-		raw["pdf_ocr_enabled"] = true
-		raw["pdf_ocr_provider"] = "ollama"
-		raw["pdf_ocr_model"] = "glm-ocr"
+	// The legacy default pair was written by applyPDFOCRDefaults for years;
+	// migrating it forward would silently re-couple users to a provider
+	// they never chose. Only a user-customized pair migrates.
+	legacyDefault := provider == "ollama" && model == "glm-ocr"
+
+	if provider != "" && model != "" && !legacyDefault && !hasNeutral {
+		raw["ocr_fallback_model"] = provider + "/" + model
 	}
+	delete(raw, "pdf_ocr_provider")
+	delete(raw, "pdf_ocr_model")
+	delete(raw, "pdf_ocr_enabled")
+	delete(raw, "pdf_ocr_downloaded")
 }
 
 // applyZshCommandDetectionDefaults ensures zsh command detection fields have values.

@@ -62,3 +62,11 @@ func orderProvidersByUsage(providers []string, cfg *Config) []string {
 	}
 	return out
 }
+
+// OrderProvidersByUsage is the exported seam over orderProvidersByUsage for
+// cross-package consumers (e.g. the vision tier's provider-candidate
+// ordering). Tier semantics: recently-used first, then credentialed
+// providers, then the rest; stable within tiers.
+func OrderProvidersByUsage(providers []string, cfg *Config) []string {
+	return orderProvidersByUsage(providers, cfg)
+}

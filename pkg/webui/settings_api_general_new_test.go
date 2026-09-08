@@ -196,25 +196,17 @@ func TestApplyPartialSettings_DisableThinking(t *testing.T) {
 	}
 }
 
-func TestApplyPartialSettings_PDFOCRFields(t *testing.T) {
+func TestApplyPartialSettings_OCRFallbackModel(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{
-		"pdf_ocr_enabled":  true,
-		"pdf_ocr_provider": "openai",
-		"pdf_ocr_model":    "gpt-4o",
+		"ocr_fallback_model": "openai/gpt-4o",
 	}
 	_, err := applyPartialSettings(cfg, patch)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !cfg.PDFOCREnabled {
-		t.Error("PDFOCREnabled should be true")
-	}
-	if cfg.PDFOCRProvider != "openai" {
-		t.Errorf("PDFOCRProvider = %q, want %q", cfg.PDFOCRProvider, "openai")
-	}
-	if cfg.PDFOCRModel != "gpt-4o" {
-		t.Errorf("PDFOCRModel = %q, want %q", cfg.PDFOCRModel, "gpt-4o")
+	if cfg.OCRFallbackModel != "openai/gpt-4o" {
+		t.Errorf("OCRFallbackModel = %q, want %q", cfg.OCRFallbackModel, "openai/gpt-4o")
 	}
 }
 

@@ -1,6 +1,6 @@
 /**
  * AdvancedSettingsTab — collapsible Advanced section combining the thin
- * Performance / Commit & Review / OCR tabs into one (per SP-017).
+ * Performance / Commit & Review / OCR-fallback tabs into one (per SP-017).
  *
  * Each subsection is wrapped in <Collapsible variant="flush"> so users
  * expand what they need. The same renderer hooks and config keys are
@@ -26,7 +26,7 @@ export default function AdvancedSettingsTab({
   settings,
   renderNumberInput,
   renderTextInput,
-  renderToggle,
+  renderToggle: _renderToggle,
   commitReviewProviders,
   updateSetting,
 }: AdvancedSettingsTabProps) {
@@ -174,13 +174,15 @@ export default function AdvancedSettingsTab({
         </div>
       </Collapsible>
 
-      {/* PDF OCR */}
-      <Collapsible title="PDF OCR" variant="flush">
+      {/* OCR fallback (SP-137: provider-neutral) */}
+      <Collapsible title="OCR" variant="flush">
         <div className="settings-section-spaced">
-          <h4>PDF OCR</h4>
-          {renderToggle('pdf_ocr_enabled', 'Enable PDF OCR')}
-          {renderTextInput('pdf_ocr_provider', 'Provider', 'zai, minimax, openrouter…')}
-          {renderTextInput('pdf_ocr_model', 'Model', 'GLM-4.6V, MiniMax-VL, qwen-vl…')}
+          <h4>OCR Fallback</h4>
+          {renderTextInput(
+            'ocr_fallback_model',
+            'OCR fallback model',
+            'provider/model (e.g. openai/gpt-4o). Leave empty for native OCR only.',
+          )}
         </div>
       </Collapsible>
     </div>

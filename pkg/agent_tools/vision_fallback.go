@@ -68,13 +68,22 @@ func getOCRModel() string {
 	if cfg == nil {
 		return ""
 	}
-	return strings.TrimSpace(cfg.PDFOCRModel)
+	if m := strings.TrimSpace(cfg.OCRFallbackModel); m != "" {
+		return m
+	}
+	// Legacy migration not yet applied: derive from the old provider+model pair.
+	provider := strings.TrimSpace(cfg.PDFOCRProvider)
+	model := strings.TrimSpace(cfg.PDFOCRModel)
+	if provider != "" && model != "" {
+		return provider + "/" + model
+	}
+	return ""
 }
 
 // fallbackToOCR attempts a single OCR analysis as a last resort when the
 // primary vision model has already failed after retries.
 //
-// It creates a one-off Ollama client targeting the configured OCR model,
+// It creates a one-off client targeting the configured OCR fallback model,
 // sends the image with an OCR prompt, and returns the result.
 // No further retries are performed — this is the last line of defense.
 // imageData is the base64-encoded image string (same format as returned by
@@ -97,6 +106,24 @@ func (vp *VisionProcessor) fallbackToOCR(
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w (OCR fallback skipped: PDFOCRModel not set)", lastErr)
 	}
 
+	// Native platform OCR first: free, offline, no model needed. Only
+	// when it fails (or is unavailable) do we spend a remote call.
+	if !isHTTPURL(imagePath) && nativeOCRAvailable() {
+		if text, err := nativeOCR(ctx, imagePath); err == nil {
+			vp.loggerInfo("native OCR fallback succeeded", "image", imagePath)
+			limited, truncated, _ := limitVisionOutputText(strings.TrimSpace(text))
+			desc := limited
+			if truncated {
+				desc += "\n[truncated]"
+			}
+			return VisionAnalysis{
+				ImagePath:   imagePath,
+				Description: desc,
+			}, nil
+		}
+		vp.loggerInfo("native OCR fallback failed; trying configured model", "image", imagePath)
+	}
+
 	vp.loggerInfo("vision primary failed; falling back to OCR model",
 		"image", imagePath, "ocr_model", ocrModel)
 
@@ -112,8 +139,8 @@ func (vp *VisionProcessor) fallbackToOCR(
 		},
 	}
 
-	// Create a one-off Ollama client for the OCR model
-	ocrClient, err := CreateOllamaClient(ocrModel)
+	// Create a one-off client for the OCR fallback model (provider-agnostic)
+	ocrClient, err := createOCRClient(ocrModel)
 	if err != nil {
 		vp.loggerInfo("OCR fallback client creation failed", "err", err.Error())
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w (OCR fallback client creation failed: %v)", lastErr, err)

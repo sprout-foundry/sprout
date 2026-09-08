@@ -43,10 +43,9 @@ func TestConfigMigration_Integration_WithLoad(t *testing.T) {
 	assert.Equal(t, 1800, cfg.APITimeouts.OverallTimeoutSec)
 	assert.Equal(t, 300, cfg.APITimeouts.CommitMessageTimeoutSec)
 
-	// Verify PDF OCR defaults were applied
-	assert.True(t, cfg.PDFOCREnabled)
-	assert.Equal(t, "ollama", cfg.PDFOCRProvider)
-	assert.Equal(t, "glm-ocr", cfg.PDFOCRModel)
+	// Verify the legacy PDF OCR keys were migrated away (SP-137):
+	// unset users get an empty neutral fallback, no provider coupling.
+	assert.Equal(t, "", cfg.OCRFallbackModel)
 
 	// Verify zsh command detection defaults were applied
 	assert.True(t, cfg.EnableZshCommandDetection)

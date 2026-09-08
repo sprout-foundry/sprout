@@ -350,9 +350,32 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		response.Success = false
 		response.InputResolved = false
 		response.ErrorCode = ErrCodeVisionNotAvailable
-		response.ErrorMessage = "vision analysis not available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities"
+		response.ErrorMessage = "no vision capability available: the primary model is non-visual, no configured provider offers a vision model, and native OCR is unavailable on this platform"
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
+	}
+
+	// OCR mode prefers the native platform shim when present: free,
+	// offline, instant. Remote vision models stay for general analysis
+	// and as fallback when native fails (SP-137 Phase 3).
+	if analysisMode == "ocr" && !isHTTPURL(imagePath) && nativeOCRAvailable() {
+		if text, err := nativeOCR(ctx, imagePath); err == nil {
+			limited, truncated, originalCount := limitVisionOutputText(strings.TrimSpace(text))
+			response.Success = true
+			response.InputResolved = true
+			response.OCRAttempted = true
+			response.ExtractedText = limited
+			response.OutputTruncated = truncated
+			response.OriginalChars = originalCount
+			response.ReturnedChars = len(limited)
+			response.Analysis = &VisionAnalysis{
+				ImagePath:   imagePath,
+				Description: limited,
+			}
+			respJSON, _ := json.Marshal(response)
+			return string(respJSON), nil
+		}
+		// Native failed — fall through to the remote vision path.
 	}
 
 	inputType := "unknown"

@@ -360,19 +360,10 @@ func applyProviderRoutingSettings(cfg *configuration.Config, patch map[string]in
 // ---------------------------------------------------------------------------
 
 func applyPDFOCRSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
-	if v, ok := patch["pdf_ocr_enabled"]; ok {
-		knownKeys["pdf_ocr_enabled"] = true
-		cfg.PDFOCREnabled, _ = v.(bool)
-	}
-	if v, ok := patch["pdf_ocr_provider"]; ok {
-		knownKeys["pdf_ocr_provider"] = true
+	if v, ok := patch["ocr_fallback_model"]; ok {
+		knownKeys["ocr_fallback_model"] = true
 		s, _ := v.(string)
-		cfg.PDFOCRProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["pdf_ocr_model"]; ok {
-		knownKeys["pdf_ocr_model"] = true
-		s, _ := v.(string)
-		cfg.PDFOCRModel = truncateString(s, maxSettingNameLength)
+		cfg.OCRFallbackModel = truncateString(s, maxSettingNameLength)
 	}
 	return nil
 }

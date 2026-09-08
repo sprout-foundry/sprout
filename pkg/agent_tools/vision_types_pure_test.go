@@ -110,58 +110,17 @@ func TestDetectImageMimeType(t *testing.T) {
 // EnsureOllamaModelTag tests
 // ============================================================================
 
-func TestEnsureOllamaModelTag(t *testing.T) {
-	tests := []struct {
-		name     string
-		model    string
-		expected string
-	}{
-		{"empty string", "", ""},
-		{"whitespace only", "   ", ""},
-		{"model without tag", "glm-ocr", "glm-ocr:latest"},
-		{"model with tag", "glm-ocr:1.0", "glm-ocr:1.0"},
-		{"model with latest tag", "glm-ocr:latest", "glm-ocr:latest"},
-		{"model with spaces", "  glm-ocr  ", "glm-ocr:latest"},
-		{"model with trailing colon", "glm-ocr:", "glm-ocr:"}, // already has colon
-		{"complex model name", "bfl/llava-phi-3-mini", "bfl/llava-phi-3-mini:latest"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := EnsureOllamaModelTag(tt.model)
-			if got != tt.expected {
-				t.Errorf("EnsureOllamaModelTag(%q) = %q, want %q", tt.model, got, tt.expected)
-			}
-		})
-	}
-}
-
 // ============================================================================
 // GetDefaultModelForProvider tests
 // ============================================================================
 
 func TestGetDefaultModelForProvider(t *testing.T) {
-	tests := []struct {
-		name     string
-		provider api.ClientType
-		expected string
-	}{
-		{"DeepInfra", api.DeepInfraClientType, "meta-llama/Llama-3.3-70B-Instruct"},
-		{"OpenRouter", api.OpenRouterClientType, "openai/gpt-5"},
-		{"Mistral", api.MistralClientType, "devstral-2512"},
-		{"DeepSeek", api.DeepSeekClientType, "deepseek-ai/DeepSeek-V3"},
-		{"ZAI", api.ZAIClientType, "glm-4.6"},
-		{"LMStudio", api.LMStudioClientType, ""},
-		{"Chutes", api.ChutesClientType, ""},
-		{"Unknown provider", api.ClientType("unknown"), ""},
-		{"Ollama (not in switch)", api.OllamaClientType, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GetDefaultModelForProvider(tt.provider)
-			if got != tt.expected {
-				t.Errorf("GetDefaultModelForProvider(%q) = %q, want %q", tt.provider, got, tt.expected)
-			}
-		})
+	// SP-137: defaults come from the provider registry config, not a
+	// hardcoded per-provider switch. Only structural guarantees are
+	// asserted here: unknown providers yield empty strings.
+	got := GetDefaultModelForProvider(api.ClientType("no-such-provider"))
+	if got != "" {
+		t.Errorf("GetDefaultModelForProvider(unknown) = %q, want empty", got)
 	}
 }
 

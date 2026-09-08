@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -24,7 +25,7 @@ func (h *readFileHandler) Name() string {
 func (h *readFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "read_file",
-		Description: "Read the contents of a file. Supports text files and PDFs. For large files, use view_range to read specific line ranges.",
+		Description: "Read the contents of a file. Supports text files, PDFs, and images (images are attached for visual analysis or OCR-extracted, never dumped as binary). For large files, use view_range to read specific line ranges.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
@@ -96,7 +97,11 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 			fmt.Errorf("read blocked: %s is not accessible", path)
 	}
 	// "allow"  → path is workspace/tmp/allowlisted; proceed directly.
-	// "prompt" → interactive approval; on deny fall through to the raw error.
+	// "prompt" → interactive approval; on deny fall through to the raw
+	// error. This is the pinned contract (file_access_prompt_test.go):
+	// denied and nil-prompter reads surface the underlying fs error, not
+	// a synthesized denial — the off-workspace block still holds because
+	// the bypass ctx is only set on approval.
 	if decision == "prompt" {
 		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "read_file", path, resolvedPath, "read"); approved {
 			ctx = ctx2
@@ -127,6 +132,13 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// Check if this is a PDF file
 	if strings.ToLower(filepath.Ext(path)) == ".pdf" {
 		return h.handlePDF(ctx, env, path)
+	}
+
+	// Image files: never dump binary into the context (SP-137). Vision-
+	// capable models get the image inline as multimodal content; others
+	// get OCR-extracted text.
+	if isImageExtension(path) {
+		return h.handleImage(ctx, env, path)
 	}
 
 	// Use existing read logic. Off-workspace paths will fail
@@ -218,6 +230,113 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 	return ToolResult{
 		Output:     textContent,
 		Images:     []ImageData{{URI: dataURI, MIMEType: mimeType}},
+		TokenUsage: int64(estimateTokenUsage(textContent)),
+	}, nil
+}
+
+// imageExtensions are the formats the paste pipeline recognizes
+// (console.DetectImageMagic). Keep in sync with it.
+var imageExtensions = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".bmp":  "image/bmp",
+	".avif": "image/avif",
+}
+
+// isImageExtension reports whether path has a known image extension.
+func isImageExtension(path string) bool {
+	_, ok := imageExtensions[strings.ToLower(filepath.Ext(path))]
+	return ok
+}
+
+// maxInlineImageBytes caps read_file's inline image payload (10 MB,
+// matching the pasted-image budget).
+const maxInlineImageBytes = 10 * 1024 * 1024
+
+// handleImage serves an image file without dumping binary into the model
+// context. Vision-capable primary models receive the image inline (the
+// seed registry attaches ToolResult.Images to the tool message, and seed's
+// prepareMessages strips them for non-vision models). Non-vision models
+// get OCR-extracted text via the analyze pipeline.
+func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
+	if err != nil {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, fmt.Errorf("resolve image path: %w", err)
+	}
+
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, fmt.Errorf("access image file: %w", err)
+	}
+	if info.IsDir() {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, fmt.Errorf("path is a directory, not a file: %s", cleanPath)
+	}
+	if info.Size() > maxInlineImageBytes {
+		return ToolResult{
+			Output:  fmt.Sprintf("[image file %s is %d bytes, over the %d MB inline cap; use analyze_image_content]", filepath.Base(path), info.Size(), maxInlineImageBytes/1024/1024),
+			IsError: true,
+		}, fmt.Errorf("image too large to read inline: %s", path)
+	}
+
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, fmt.Errorf("read image file: %w", err)
+	}
+
+	// Magic-byte verification is authoritative: an image extension on
+	// non-image bytes is an error (never serve garbage as base64).
+	_, mimeType := console.DetectImageMagic(data)
+	if mimeType == "" {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, fmt.Errorf("unrecognized image format: %s", path)
+	}
+
+	// Always attach the image data for vision-capable models (seed strips
+	// it for non-vision providers) and try to give everyone some text:
+	// native OCR when available, else a stub note.
+	var textContent string
+	images := []ImageData{{
+		URI:      fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)),
+		MIMEType: mimeType,
+	}}
+
+	if nativeOCRAvailable() {
+		if ocrText, ocrErr := nativeOCR(ctx, cleanPath); ocrErr == nil {
+			trimmed, truncated, _ := limitVisionOutputText(strings.TrimSpace(ocrText))
+			if truncated {
+				trimmed += "\n[truncated]"
+			}
+			if trimmed != "" {
+				textContent = fmt.Sprintf("[image: %s (%d bytes, %s)] OCR text:\n%s",
+					filepath.Base(path), info.Size(), mimeType, trimmed)
+			}
+		}
+	}
+	if textContent == "" {
+		textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached for visual analysis]",
+			filepath.Base(path), info.Size(), mimeType)
+	}
+
+	return ToolResult{
+		Output:     textContent,
+		Images:     images,
 		TokenUsage: int64(estimateTokenUsage(textContent)),
 	}, nil
 }

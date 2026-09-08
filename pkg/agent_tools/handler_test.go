@@ -1661,60 +1661,6 @@ func TestCheckPDFPython3Available(t *testing.T) {
 	})
 }
 
-func TestEnsureOllamaModelTag_ZC(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "whitespace only",
-			input: "   ",
-			want:  "",
-		},
-		{
-			name:  "no tag adds latest",
-			input: "llama3",
-			want:  "llama3:latest",
-		},
-		{
-			name:  "already has tag",
-			input: "llama3:v1",
-			want:  "llama3:v1",
-		},
-		{
-			name:  "trims spaces before adding tag",
-			input: "  glm-ocr  ",
-			want:  "glm-ocr:latest",
-		},
-		{
-			name:  "complex model name with tag",
-			input: "meta-llama/Llama-3.2:2024",
-			want:  "meta-llama/Llama-3.2:2024",
-		},
-		{
-			name:  "single word no tag",
-			input: "glm-ocr",
-			want:  "glm-ocr:latest",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := EnsureOllamaModelTag(tt.input)
-			if got != tt.want {
-				t.Errorf("EnsureOllamaModelTag(%q) = %q; want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSanitizeVisionFileComponent_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

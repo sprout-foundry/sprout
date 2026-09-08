@@ -232,7 +232,49 @@ export function NativeTerminalConsole(): React.ReactElement {
     const ro = new ResizeObserver(() => fitAddon.fit());
     ro.observe(host);
 
+    // On-screen keyboard: on iPadOS/iOS the keyboard OVERLAYS the webview
+    // (WKWebView is not resized), so the layout viewport still claims the
+    // full screen and a bottom-anchored terminal's input line lands behind
+    // the keyboard. window.visualViewport reports the UNOBSCURED region —
+    // fit xterm against it and shift the console up while the keyboard is
+    // up, so the live prompt row is always on screen.
+    let vvCleanup: (() => void) | null = null;
+    const vv = window.visualViewport;
+    if (vv) {
+      const applyVv = () => {
+        // Hidden tab: visualViewport reports stale/zero geometry — skip.
+        if (vv.height < 1) return;
+        // Keyboard compensation only while the keyboard is actually up
+        // (visible region meaningfully shorter than the layout window);
+        // otherwise clear the override so the normal flex layout and its
+        // ResizeObserver path rule — desktop never gets an inline height.
+        const keyboardUp = vv.height < window.innerHeight - 40;
+        if (keyboardUp) {
+          // Fit to the UNOBSCURED height, capped by the pane's layout box.
+          const paneHeight = host.parentElement?.clientHeight ?? vv.height;
+          const box = Math.min(vv.height, paneHeight);
+          if (box < 1) return;
+          host.style.height = `${box}px`;
+        } else {
+          host.style.height = '';
+        }
+        fitAddon.fit();
+        // Keep the live prompt row visible after the keyboard shrinks the
+        // grid (xterm keeps the old scroll position otherwise).
+        term.scrollToBottom();
+      };
+      vv.addEventListener('resize', applyVv);
+      vv.addEventListener('scroll', applyVv);
+      applyVv();
+      vvCleanup = () => {
+        vv.removeEventListener('resize', applyVv);
+        vv.removeEventListener('scroll', applyVv);
+        host.style.height = '';
+      };
+    }
+
     return () => {
+      vvCleanup?.();
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
       ro.disconnect();

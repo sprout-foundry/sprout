@@ -104,6 +104,11 @@ func (t *FooterTooltip) Show(cols, rows int) {
 	// can't smear into our rows.
 	LockOutput()
 	defer UnlockOutput()
+	// DECSC/DECRC wrap: the absolute-positioned writes below must not
+	// displace the cursor for concurrent relative-walk consumers
+	// (SelectList frame erase, input-line redraw). Same contract as
+	// StatusFooter.drawFullLocked.
+	fmt.Fprint(t.w, "\0337")
 	t.eraseBlock(cols, rows)
 	for i, line := range lines {
 		// Row index: rows-2-i (just above the footer's rule row).
@@ -117,6 +122,7 @@ func (t *FooterTooltip) Show(cols, rows int) {
 		// just-written line up so the next absolute write overwrites it.
 		fmt.Fprintf(t.w, "\033[%d;1H\033[K%s", row, line)
 	}
+	fmt.Fprint(t.w, "\0338")
 
 	// Auto-dismiss timer.
 	if timeout > 0 {
@@ -173,7 +179,11 @@ func (t *FooterTooltip) Hide() {
 	}
 	LockOutput()
 	defer UnlockOutput()
+	// DECSC/DECRC wrap — see Show. Erasing rows must not displace the
+	// cursor for relative-walk consumers.
+	fmt.Fprint(t.w, "\0337")
 	t.eraseBlock(cols, rows)
+	fmt.Fprint(t.w, "\0338")
 }
 
 // Toggle is the Alt+T handler: shows if hidden, hides if visible.

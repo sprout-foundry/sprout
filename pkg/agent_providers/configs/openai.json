@@ -1387,6 +1387,66 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra is OpenAI's flagship model for demanding end-to-end work. It is suited for advanced analysis, software engineering, deep research, scientific work, and document creation, with particular strengths in long-horizon agentic tasks that involve computer and browser use.",
+        "id": "gpt-6-astra",
+        "input_cost": 10,
+        "name": "GPT-6 Astra",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro is the same underlying model as [GPT-6 Astra](https://openrouter.ai/openai/gpt-6-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-6-astra-pro",
+        "input_cost": 10,
+        "name": "GPT-6 Astra Pro",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode for higher-quality responses on complex tasks.",
+        "id": "gpt-6-astra-pro:batch",
+        "input_cost": 5,
+        "name": "GPT-6 Astra Pro (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1050000,
+        "description": "GPT-6 Astra via the Batch API at 50% of standard pricing. Flagship model for demanding end-to-end work, with particular strengths in long-horizon agentic tasks.",
+        "id": "gpt-6-astra:batch",
+        "input_cost": 5,
+        "name": "GPT-6 Astra (batch)",
+        "output_cost": 25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -7,7 +7,7 @@ import {
   getTerminalFontFamilyExport,
   FONT_SIZE_DEFAULT_EXPORT,
 } from '../hooks/useTerminalXTerm';
-import { getWorkspaceCwd, subscribeWorkspaceCwd, workspaceCwdLabel } from '../services/workspaceCwd';
+import { getWorkspaceCwd, resolveCdTarget, subscribeWorkspaceCwd, workspaceCwdLabel } from '../services/workspaceCwd';
 
 /**
  * Native-mode interactive console (Track R, terminal portion).
@@ -22,10 +22,12 @@ import { getWorkspaceCwd, subscribeWorkspaceCwd, workspaceCwdLabel } from '../se
  * surface in the app looks identical.
  *
  * One-shot command semantics: every line is an independent spawn (no PTY,
- * no interactive programs, no ctrl-C). The emulated shell resolves the
- * command against the session working directory (services/workspaceCwd.ts;
- * workspace root when unset — exactly the pre-cwd behavior) and has no `cd`
- * — surfaced honestly.
+ * no interactive programs, no ctrl-C). `cd` is implemented console-side:
+ * the console tracks a session directory (validated against the native fs
+ * via a suppressed `pwd` spawn before committing, chrooted to the workspace
+ * root) and passes it with every spawn. Without a session `cd`, spawns use
+ * the shared workspace cwd (services/workspaceCwd.ts; workspace root when
+ * unset — exactly the pre-cwd behavior).
  */
 
 type SpawnBridge = {
@@ -83,6 +85,10 @@ export function NativeTerminalConsole(): React.ReactElement {
   // renders the CURRENT prompt; re-renders on cwd change are unnecessary.
   const cwdRef = useRef(getWorkspaceCwd());
   const promptRef = useRef(makePrompt(workspaceCwdLabel(cwdRef.current)));
+  // Session directory set by `cd` (or null = follow the shared cwd). Lives
+  // in a ref: the line-editor closure reads it at submit time, and unlike
+  // the shared cwd it must NOT be reset by Files-panel cwd changes.
+  const sessionCwdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeWorkspaceCwd((cwd) => {
@@ -244,12 +250,12 @@ export function NativeTerminalConsole(): React.ReactElement {
 
       const prompt = () => term.write(promptRef.current);
 
-      // One-shot cwd semantics: read the cwd at submit time so each spawn
-      // uses what the user had selected when they pressed Enter.
-      const cwd = cwdRef.current;
+      // One-shot cwd semantics: the session dir if the user `cd`'d, else
+      // the shared cwd read at submit time (Files/Git/Agent stay synced).
+      const cwd = sessionCwdRef.current ?? cwdRef.current;
 
       if (line === 'help') {
-        term.writeln('Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd.');
+        term.writeln('Built-ins: ls cat head tail wc grep find touch rm mkdir echo pwd cd.');
         term.writeln('Pipes (|), sequences (;) and chains (&&) supported. All paths');
         term.writeln(
           cwd === ''
@@ -260,15 +266,75 @@ export function NativeTerminalConsole(): React.ReactElement {
         return;
       }
 
-      // The emulated shell has no `cd` builtin — say so instead of silently
-      // misbehaving. (Pick the repo from the Files panel to change directory.)
-      if (/^cd(\s|$)/.test(line)) {
-        term.writeln(
-          cwd === ''
-            ? 'cd: not supported (commands run from the workspace root)'
-            : `cd: not supported (commands run from ${cwd})`,
-        );
+      // ── pwd — where this session is (may differ from the shared cwd) ──
+      if (line === 'pwd') {
+        term.writeln(cwd === '' ? '/' : `/${cwd}`);
         prompt();
+        return;
+      }
+
+      // ── cd — session-scoped, chrooted to the workspace root ────────────
+      // The native emulator is one-shot per line (no process to hold a
+      // directory), so the console tracks the session dir here and passes
+      // it with every spawn. Bare `cd` returns to following the shared
+      // cwd. The native side still validates each spawn's cwd, so a
+      // directory deleted mid-session exits honestly instead of lying.
+      if (/^cd(\s|$)/.test(line)) {
+        const arg = line.replace(/^cd\s*/, '').trim();
+        if (arg === '') {
+          sessionCwdRef.current = null; // follow the shared cwd again
+          cwdRef.current = getWorkspaceCwd();
+          promptRef.current = makePrompt(workspaceCwdLabel(cwdRef.current));
+          prompt();
+          return;
+        }
+        const target = resolveCdTarget(arg, cwdRef.current);
+        if (target === null) {
+          term.writeln(`cd: unsupported path: ${arg} (relative to ${cwd === '' ? '/' : `/${cwd}`})`);
+          prompt();
+          return;
+        }
+        // Validate by spawning pwd with the target cwd — the native side
+        // rejects missing dirs with exit 1, so this can't lie. Output is
+        // suppressed (own onChunk): only the exit code matters here.
+        busyRef.current = true;
+        const bridge = window.SproutStudio;
+        if (!hasSpawnBridge(bridge)) {
+          busyRef.current = false;
+          term.writeln('sprout-studio: bridge unavailable');
+          prompt();
+          return;
+        }
+        void new Promise<void>((resolve) => {
+          void bridge
+            .terminalSpawn('pwd', {
+              ...(target === '' ? {} : { cwd: target }),
+              onChunk: () => {},
+              onExit: (code: number) => {
+                if (code === 0) {
+                  sessionCwdRef.current = target;
+                  cwdRef.current = target;
+                  promptRef.current = makePrompt(workspaceCwdLabel(target));
+                  term.writeln(`(session dir: ${target === '' ? '/' : `/${target}`})`);
+                } else {
+                  term.writeln(`cd: no such directory: ${target === '' ? '/' : `/${target}`}`);
+                }
+                resolve();
+              },
+              onError: (err: string) => {
+                term.writeln(`\x1b[31mcd: ${err}\x1b[0m`);
+                resolve();
+              },
+            })
+            .catch((err: unknown) => {
+              const reason = err instanceof Error ? err.message : err ? String(err) : 'unknown error';
+              term.writeln(`\x1b[31mcd: ${reason}\x1b[0m`);
+              resolve();
+            });
+        }).finally(() => {
+          busyRef.current = false;
+          prompt();
+        });
         return;
       }
 

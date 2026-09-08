@@ -191,6 +191,40 @@ export function resolveWorkspacePath(path: string, cwd: string = getWorkspaceCwd
   return `${normalizedCwd}/${normalizedPath}`;
 }
 
+/**
+ * Resolve a `cd` argument against the session directory (pure; the native
+ * terminal console uses this to track its own session directory).
+ *
+ * Chroot semantics: the workspace root is the hard ceiling — `..` past it
+ * stays at the root, and the result can never escape the workspace.
+ * Supported inputs: relative names, `.`/`./x`, `..`/`../x`, `a/../b`,
+ * trailing slashes, `~` and `~/x` (root-relative home). Returns `null`
+ * only for unsupported input: absolute paths (`/…`) and non-strings —
+ * callers should surface that as "unsupported path", not silently ignore.
+ *
+ * Returns the new workspace-relative directory ('' = workspace root).
+ */
+export function resolveCdTarget(arg: string, sessionCwd: string): string | null {
+  if (typeof arg !== 'string') return null;
+  const trimmed = arg.trim();
+  // Absolute paths point outside the workspace grant — unsupported.
+  if (trimmed.startsWith('/')) return null;
+  // `~` / `~/…` resolve against the workspace root (the chroot home).
+  const fromRoot = trimmed === '~' || trimmed.startsWith('~/');
+  const base = fromRoot ? '' : normalizeWorkspaceCwd(sessionCwd) ?? '';
+  const body = fromRoot ? trimmed.replace(/^~\/?/, '') : trimmed;
+  const segments: string[] = base === '' ? [] : base.split('/');
+  for (const seg of body.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      if (segments.length > 0) segments.pop(); // chroot: '..' at root stays
+      continue;
+    }
+    segments.push(seg);
+  }
+  return segments.join('/');
+}
+
 // ── React binding ───────────────────────────────────────────────────────────
 
 /**

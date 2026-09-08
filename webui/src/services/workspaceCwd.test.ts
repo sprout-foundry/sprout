@@ -17,6 +17,7 @@ import {
   workspaceCwdLabel,
   workspaceCwdContextLine,
   resolveWorkspacePath,
+  resolveCdTarget,
   useWorkspaceCwd,
   __resetWorkspaceCwdForTests,
 } from './workspaceCwd';
@@ -171,5 +172,40 @@ describe('useWorkspaceCwd (React binding)', () => {
       root.unmount();
     });
     container.remove();
+  });
+});
+
+describe('resolveCdTarget (terminal session cd)', () => {
+  it('resolves plain names against the session dir', () => {
+    expect(resolveCdTarget('repos', '')).toBe('repos');
+    expect(resolveCdTarget('api', 'repos/acme')).toBe('repos/acme/api');
+  });
+
+  it('handles dot segments and trailing slashes', () => {
+    expect(resolveCdTarget('.', 'repos/acme')).toBe('repos/acme');
+    expect(resolveCdTarget('./api/', 'repos/acme')).toBe('repos/acme/api');
+  });
+
+  it('resolves .. with chroot semantics', () => {
+    expect(resolveCdTarget('..', 'repos/acme')).toBe('repos');
+    expect(resolveCdTarget('..', '')).toBe(''); // root is the ceiling
+    expect(resolveCdTarget('../../..', 'repos/acme')).toBe(''); // clamps at root
+    expect(resolveCdTarget('api/../..', 'repos/acme')).toBe('repos');
+  });
+
+  it('supports ~ and ~/… as root-relative home', () => {
+    expect(resolveCdTarget('~', 'repos/acme')).toBe('');
+    expect(resolveCdTarget('~/repos/x', 'repos/acme')).toBe('repos/x');
+  });
+
+  it('bare-ish inputs keep the session dir', () => {
+    expect(resolveCdTarget('', 'repos/acme')).toBe('repos/acme');
+    expect(resolveCdTarget('   ', 'repos/acme')).toBe('repos/acme');
+  });
+
+  it('rejects absolute paths and non-strings with null', () => {
+    expect(resolveCdTarget('/etc', 'repos')).toBe(null);
+    expect(resolveCdTarget('/', '')).toBe(null);
+    expect(resolveCdTarget(undefined as unknown as string, '')).toBe(null);
   });
 });

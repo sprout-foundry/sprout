@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supportsSettings } from '../config/mode';
 import { ApiService, type ProviderOption } from '../services/api';
 import { debugLog } from '../utils/log';
+import { toUserErrorMessage } from '../utils/errorMessage';
+import { notificationBus } from '../services/notificationBus';
 
 interface ProviderCatalogContextValue {
   providers: ProviderOption[];
@@ -80,6 +82,9 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
   // persistent disconnect clears it.
   const disconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Suppresses repeat provider-load failure toasts until a load succeeds.
+  const loadFailedRef = useRef(false);
+
   const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
 
   // Bump the tick only when connected, the catalog is empty, and no fetch is
@@ -125,6 +130,7 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
       .getProviders()
       .then((data) => {
         if (cancelled) return;
+        loadFailedRef.current = false;
         setProviders(data.providers ?? EMPTY_PROVIDERS);
         setCurrentProvider(data.current_provider ?? '');
         setCurrentModel(data.current_model ?? '');
@@ -132,6 +138,18 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
       .catch((err) => {
         if (cancelled) return;
         debugLog('[ProviderCatalog] failed to load providers:', err);
+        // The provider/model dropdowns render empty when this fetch fails —
+        // surface it instead of leaving the user to guess. One toast per
+        // failure run; a successful load re-arms it.
+        if (!loadFailedRef.current) {
+          loadFailedRef.current = true;
+          notificationBus.notify(
+            'error',
+            'Providers',
+            toUserErrorMessage(err, 'Could not load providers and models.'),
+            5000,
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

@@ -445,3 +445,58 @@ describe('respondToAskUser', () => {
     expect(mockRespond).toHaveBeenCalledWith('req-2', 'yes');
   });
 });
+
+describe('malformed bridge output', () => {
+  // The Go side returns JSON strings; a version-skewed or panicking binary can
+  // emit something unparseable. Every accessor must degrade to a typed
+  // fallback instead of throwing into the terminal line editor.
+  function installBrokenWasm() {
+    (window as unknown as Record<string, unknown>).Go = function Go() {
+      return {
+        run: () => {
+          (window as unknown as Record<string, unknown>).SproutWasm = {
+            init: (_cfg?: string) => '',
+            executeCommand: (_input: string) => 'panic: runtime error',
+            autoComplete: (_input: string) => 'not json',
+            getCwd: () => '/home/user',
+            changeDir: (_dir: string) => '',
+            writeFile: (_path: string, _content: string) => '',
+            readFile: (_path: string) => '',
+            listDir: (_path: string) => 'undefined',
+            deleteFile: (_path: string) => '',
+          };
+        },
+        importObject: {},
+      };
+    };
+  }
+
+  it('executeCommand degrades to a stderr result instead of throwing', async () => {
+    installBrokenWasm();
+    const shell = await initWasmShell();
+    const result = shell.executeCommand('ls');
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('unreadable response');
+    expect(result.stderr).toContain('panic: runtime error');
+  });
+
+  it('autoComplete degrades to no completions instead of throwing', async () => {
+    installBrokenWasm();
+    const shell = await initWasmShell();
+    expect(shell.autoComplete('ec')).toEqual({ completions: [] });
+  });
+
+  it('readFile degrades to an error result instead of throwing', async () => {
+    installBrokenWasm();
+    const shell = await initWasmShell();
+    expect(shell.readFile('/a.txt')).toEqual({ content: '', error: 'unreadable response' });
+  });
+
+  it('listDir still reports the raw payload as the error', async () => {
+    installBrokenWasm();
+    const shell = await initWasmShell();
+    expect(shell.listDir('/')).toEqual({ entries: [], error: 'undefined' });
+  });
+});
+

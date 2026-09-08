@@ -25,6 +25,7 @@ import {
   startDeviceFlow,
 } from '../services/githubDeviceFlow';
 import type { DeviceFlowSession } from '../services/githubDeviceFlow';
+import { showThemedConfirm } from './ThemedDialog';
 
 export interface GitHubAccountPanelProps {
   /** Signed-in user, or null. */
@@ -49,12 +50,16 @@ export default function GitHubAccountPanel({
   const [flow, setFlow] = useState<DeviceFlowSession | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [showPatForm, setShowPatForm] = useState(false);
+  const [startingFlow, setStartingFlow] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const flowGeneration = useRef(0);
   const deviceFlowAvailable = isDeviceFlowAvailable() && !showPatForm;
 
   const handleDeviceFlowStart = async () => {
+    if (startingFlow) return;
     setFlowError(null);
     setError(null);
+    setStartingFlow(true);
     const generation = ++flowGeneration.current;
     try {
       const session = await startDeviceFlow();
@@ -67,6 +72,8 @@ export default function GitHubAccountPanel({
       if (flowGeneration.current === generation) {
         setFlowError(err instanceof Error ? err.message : String(err));
       }
+    } finally {
+      setStartingFlow(false);
     }
   };
 
@@ -117,11 +124,25 @@ export default function GitHubAccountPanel({
     }
   };
 
-  const handleSignOut = () => {
-    clearGitHubAccount();
-    setToken('');
-    setError(null);
-    onSignedOut();
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    // Destructive: this removes the stored PAT, which also revokes the agent's
+    // git_push / git_pull credentials (agentGitTools reads the same key).
+    const confirmed = await showThemedConfirm(
+      'Sign out of GitHub?\n\nThe stored token will be removed from this device. Cloning private repositories and agent git push/pull will stop working until you sign in again.',
+      { title: 'Sign out of GitHub', type: 'warning', confirmLabel: 'Sign out' },
+    );
+    if (!confirmed) return;
+
+    setSigningOut(true);
+    try {
+      clearGitHubAccount();
+      setToken('');
+      setError(null);
+      onSignedOut();
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   /* ── Signed in: account card ─────────────────────────────────── */
@@ -145,12 +166,13 @@ export default function GitHubAccountPanel({
         <button
           type="button"
           className="gh-account-signout"
-          onClick={handleSignOut}
+          onClick={() => void handleSignOut()}
           title="Sign out (removes the stored GitHub token)"
+          disabled={signingOut}
           data-testid="gh-signout-btn"
         >
-          <LogOut size={14} />
-          <span>Sign out</span>
+          {signingOut ? <Loader2 size={14} className="spin" /> : <LogOut size={14} />}
+          <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
         </button>
       </div>
     );
@@ -190,9 +212,11 @@ export default function GitHubAccountPanel({
               type="button"
               className="gh-signin-submit"
               onClick={() => void handleDeviceFlowStart()}
+              disabled={startingFlow}
               data-testid="gh-device-signin"
             >
-              Sign in with GitHub
+              {startingFlow ? <Loader2 size={14} className="spin" /> : null}
+              {startingFlow ? 'Connecting…' : 'Sign in with GitHub'}
             </button>
             <p className="gh-signin-hint">
               Opens github.com in your browser — enter the code shown next, no token needed. You can also{' '}

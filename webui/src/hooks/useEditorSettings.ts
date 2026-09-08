@@ -257,6 +257,7 @@ export function useEditorSettings(
       const stored = localStorage.getItem('editor:tab-size');
       return stored === '0';
     } catch (err) {
+      // best-effort: unreadable preference falls back to spaces.
       return false;
     }
   });
@@ -283,7 +284,8 @@ export function useEditorSettings(
     try {
       localStorage.removeItem('editor:indent-manual');
     } catch (_err) {
-      /* ignore */
+      // best-effort: clearing a legacy migration flag; if storage is blocked
+      // the flag simply stays and is ignored on next read.
     }
   }, []);
 

@@ -96,6 +96,7 @@ export default function SidebarGitSection({
           id="git-tab-current-changes"
           aria-controls="git-panel-current-changes"
           aria-selected={gitSubTab === 'changes'}
+          tabIndex={gitSubTab === 'changes' ? 0 : -1}
           className={`git-sidebar-tab ${gitSubTab === 'changes' ? 'active' : ''}`}
           onClick={() => setGitSubTab('changes')}
         >
@@ -109,6 +110,7 @@ export default function SidebarGitSection({
           id="git-tab-commit-history"
           aria-controls="git-panel-commit-history"
           aria-selected={gitSubTab === 'history'}
+          tabIndex={gitSubTab === 'history' ? 0 : -1}
           className={`git-sidebar-tab ${gitSubTab === 'history' ? 'active' : ''}`}
           onClick={() => setGitSubTab('history')}
         >
@@ -122,6 +124,7 @@ export default function SidebarGitSection({
           id="git-tab-worktrees"
           aria-controls="git-panel-worktrees"
           aria-selected={gitSubTab === 'worktrees'}
+          tabIndex={gitSubTab === 'worktrees' ? 0 : -1}
           className={`git-sidebar-tab ${gitSubTab === 'worktrees' ? 'active' : ''}`}
           onClick={() => setGitSubTab('worktrees')}
         >

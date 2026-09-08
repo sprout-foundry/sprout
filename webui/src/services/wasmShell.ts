@@ -9,6 +9,7 @@
 
 import { installSproutONNXBridge, installJinaBridge } from './sproutONNXBridge';
 import { installEmbeddingBackendController } from './embeddingBackendController';
+import { safeJsonParse } from '../utils/json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,15 +387,24 @@ export async function initWasmShell(config?: {
     }
 
     // 6. Create the shell interface.
+    //
+    // Every bridge call returns a JSON string produced by the Go side. If the
+    // binary ever emits malformed (or non-JSON) output — version skew, a panic
+    // string, a truncated frame — `safeJsonParse` degrades to a typed fallback
+    // instead of throwing into the caller's line editor or render path.
     const shell: WasmShell = {
       executeCommand(input: string): WasmShellResult {
         const json = wasm.executeCommand(input);
-        return JSON.parse(json);
+        return safeJsonParse<WasmShellResult>(json, {
+          stdout: '',
+          stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
+          exitCode: 1,
+        });
       },
 
       autoComplete(input: string): WasmCompletionResult {
         const json = wasm.autoComplete(input);
-        return JSON.parse(json);
+        return safeJsonParse<WasmCompletionResult>(json, { completions: [] });
       },
 
       getCwd(): string {
@@ -403,7 +413,10 @@ export async function initWasmShell(config?: {
 
       changeDir(dir: string): WasmChangeDirResult {
         const json = wasm.changeDir(dir);
-        return JSON.parse(json);
+        return safeJsonParse<WasmChangeDirResult>(json, {
+          cwd: '',
+          error: 'shell returned an unreadable response',
+        });
       },
 
       writeFile(path: string, content: string): string {
@@ -412,16 +425,13 @@ export async function initWasmShell(config?: {
 
       readFile(path: string): WasmReadFileResult {
         const json = wasm.readFile(path);
-        return JSON.parse(json);
+        return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
       },
 
       listDir(path: string): WasmListDirResult {
         const json = wasm.listDir(path);
-        try {
-          return JSON.parse(json);
-        } catch {
-          return { entries: [], error: json };
-        }
+        const parsed = safeJsonParse<WasmListDirResult | null>(json, null);
+        return parsed ?? { entries: [], error: json };
       },
 
       deleteFile(path: string): string {

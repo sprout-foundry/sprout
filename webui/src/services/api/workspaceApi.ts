@@ -84,6 +84,7 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResp
     try {
       return JSON.parse(trimmed);
     } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
       return { message: trimmed };
     }
   };
@@ -134,6 +135,7 @@ export async function setWorkspace(
     try {
       return JSON.parse(trimmed);
     } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
       return { message: trimmed };
     }
   })();
@@ -195,6 +197,7 @@ export async function browseDirectory(fetchFn: typeof fetch, path?: string): Pro
     try {
       return JSON.parse(trimmed) as Record<string, unknown>;
     } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
       return { message: trimmed } as Record<string, unknown>;
     }
   })();

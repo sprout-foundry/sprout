@@ -20,10 +20,17 @@ import GitHubRepoPicker from './GitHubRepoPicker';
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 
-const { mockCloneRepo } = vi.hoisted(() => ({ mockCloneRepo: vi.fn() }));
+const { mockCloneRepo, mockConfirm } = vi.hoisted(() => ({
+  mockCloneRepo: vi.fn(),
+  mockConfirm: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock('../services/workspaceFs/backendsExport', () => ({
   cloneRepo: (...args: unknown[]) => mockCloneRepo(...args),
+}));
+
+vi.mock('./ThemedDialog', () => ({
+  showThemedConfirm: (...args: unknown[]) => mockConfirm(...args),
 }));
 
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
@@ -228,7 +235,7 @@ describe('GitHubRepoPicker', () => {
       expect(document.querySelector('[data-testid="gh-picker-empty"]')).not.toBeNull();
     });
 
-    it('shows an inline error state when listing fails', async () => {
+    it('shows the list error at the top of the modal body, with a retry action', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ message: 'Bad credentials' }, 401));
 
       renderPicker();
@@ -237,8 +244,40 @@ describe('GitHubRepoPicker', () => {
         await Promise.resolve();
       });
 
-      const state = document.querySelector('.gh-picker-state--error');
+      const state = document.querySelector('[data-testid="gh-picker-list-error"]');
       expect(state?.textContent).toMatch(/Invalid or expired GitHub token/i);
+      expect(document.querySelector('[data-testid="gh-picker-retry"]')).not.toBeNull();
+
+      // The banner renders BEFORE the search input and repo list — the user's
+      // eye is already at the top of the modal when the failure lands.
+      const body = document.querySelector('.gh-picker-body');
+      const children = Array.from(body?.children ?? []);
+      expect(children[0]).toBe(state);
+      expect(children.indexOf(document.querySelector('.gh-picker-search'))).toBeGreaterThan(
+        children.indexOf(state as NonNullable<typeof state>),
+      );
+    });
+
+    it('retry re-issues the repo listing', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'Bad credentials' }, 401));
+      fetchMock.mockResolvedValueOnce(jsonResponse([sampleRepo(1, 'Hello-World')]));
+
+      renderPicker();
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(document.querySelector('[data-testid="gh-picker-list-error"]')).not.toBeNull();
+
+      click('[data-testid="gh-picker-retry"]');
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(document.querySelector('[data-testid="gh-picker-list-error"]')).toBeNull();
+      expect(document.querySelector('[data-testid="gh-repo-octocat/Hello-World"]')).not.toBeNull();
     });
 
     it('clones through the workspaceFs seam with the token and closes on success', async () => {
@@ -275,10 +314,13 @@ describe('GitHubRepoPicker', () => {
 
       const err = document.querySelector('[data-testid="gh-picker-clone-error"]');
       expect(err?.textContent).toMatch(/Could not clone octocat\/Hello-World.*repository not found/);
+      // The banner is the FIRST child of the modal body — above the account
+      // card, the search box, and the list.
+      expect(Array.from(document.querySelector('.gh-picker-body')?.children ?? [])[0]).toBe(err);
       expect(onClose).not.toHaveBeenCalled();
     });
 
-    it('logout clears both localStorage keys and returns to the sign-in view', async () => {
+    it('logout asks for confirmation, then clears both keys and returns to the sign-in view', async () => {
       renderPicker();
 
       await act(async () => {
@@ -287,10 +329,35 @@ describe('GitHubRepoPicker', () => {
 
       click('[data-testid="gh-signout-btn"]');
 
+      // The sign-out is destructive (drops the stored PAT) — it must confirm.
+      expect(mockConfirm).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
       expect(localStorage.getItem('github_pat')).toBeNull();
       expect(localStorage.getItem('github_user')).toBeNull();
       expect(document.querySelector('[data-testid="gh-signin-form"]')).not.toBeNull();
       expect(document.querySelector('[data-testid="gh-picker-list"]')).toBeNull();
+    });
+
+    it('logout cancelled keeps the session intact', async () => {
+      mockConfirm.mockResolvedValueOnce(false);
+      renderPicker();
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      click('[data-testid="gh-signout-btn"]');
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(localStorage.getItem('github_pat')).toBe(TOKEN);
+      expect(document.querySelector('[data-testid="gh-account-card"]')).not.toBeNull();
     });
   });
 });

@@ -153,6 +153,38 @@ describe('CommandOutputPanel', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/network unreachable/);
   });
 
+  it('strips the "Error: " prefix and stack frames from the error message', () => {
+    const err = new Error('Error: permission denied');
+    err.message = 'Error: permission denied\n    at executeCommand (chatApi.ts:97:15)';
+    render(
+      <CommandOutputPanel
+        state={makeState({
+          command: 'foo',
+          isRunning: false,
+          error: err,
+        })}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/permission denied/);
+    // No stack frames, no raw prefix.
+    expect(alert.textContent).not.toMatch(/at executeCommand/);
+    expect(alert.textContent).not.toMatch(/Error: /);
+  });
+
+  it('falls back to a human message when the error has no message', () => {
+    render(
+      <CommandOutputPanel
+        state={makeState({
+          error: new Error(''),
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toMatch(/command failed to run/i);
+  });
+
   it('dismiss button fires onDismiss callback', () => {
     const onDismiss = vi.fn();
     render(

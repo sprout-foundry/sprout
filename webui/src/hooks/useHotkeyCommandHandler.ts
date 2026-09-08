@@ -360,7 +360,8 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
             try {
               localStorage.removeItem(key);
             } catch {
-              // Ignore storage errors (quota, security policy, etc.)
+              // best-effort: reset clears preferences; a key storage can't
+              // remove is left behind and ignored.
             }
           }
           window.location.reload();

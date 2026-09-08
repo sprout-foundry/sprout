@@ -29,6 +29,7 @@ export async function checkHealth(fetchFn: typeof fetch): Promise<boolean> {
     const response = await fetchFn('/health');
     return response.ok;
   } catch {
+    // best-effort: unreachable backend reports as not healthy.
     return false;
   }
 }

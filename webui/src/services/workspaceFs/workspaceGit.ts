@@ -113,7 +113,7 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
     });
     defaultBranch = currentBranch ?? null;
   } catch {
-    /* detached or missing HEAD — non-fatal */
+    // best-effort: detached or missing HEAD — report no default branch.
   }
   return { repo: `${owner}/${name}`, dir, entries, defaultBranch };
 }

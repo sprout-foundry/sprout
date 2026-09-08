@@ -1,4 +1,7 @@
-import { FolderOpen, Folder, FolderSearch } from 'lucide-react';
+import { FolderOpen, Folder, FolderSearch, Loader2, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import type { ReactElement } from 'react';
+import { toUserErrorMessage } from '../utils/errorMessage';
 import './WorkspacePicker.css';
 
 /* ── Types ────────────────────────────────────────────────────────── */
@@ -70,23 +73,31 @@ function ProjectRow({
   markers,
   timeAgo,
   onClick,
+  pending,
+  disabled,
 }: {
-  icon: JSX.Element;
+  icon: ReactElement;
   name: string;
   path: string;
   markers: string[];
   timeAgo?: string;
   onClick: () => void;
-}): JSX.Element {
+  pending?: boolean;
+  disabled?: boolean;
+}): ReactElement {
   return (
     <button
       className="workspace-picker-row"
       type="button"
       onClick={onClick}
       title={path}
+      disabled={disabled}
+      aria-busy={pending || undefined}
       data-testid="workspace-picker-option"
     >
-      <div className="workspace-picker-row-icon">{icon}</div>
+      <div className="workspace-picker-row-icon">
+        {pending ? <Loader2 size={18} className="spin" aria-hidden="true" /> : icon}
+      </div>
       <div className="workspace-picker-row-info">
         <span className="workspace-picker-row-name">{name}</span>
         <MarkerBadges markers={markers} />
@@ -106,6 +117,13 @@ function WorkspacePicker({
   onSelect,
   onBrowse,
 }: WorkspacePickerProps): JSX.Element {
+  // Switching a workspace is a user-initiated action that can fail (backend
+  // unreachable, permission denied on the target). Track the in-flight row so
+  // the button shows progress, and surface failures inline instead of
+  // leaving an unhandled rejection.
+  const [switchingPath, setSwitchingPath] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
   // Derive home directory from daemon root (e.g. /home/user/.sprout → /home/user)
   const homeDir = (() => {
     if (!daemonRoot) return '';
@@ -116,6 +134,20 @@ function WorkspacePicker({
   })();
 
   const displayWorkspace = expandHomePath(currentWorkspace, homeDir) || '/';
+  const isSwitching = switchingPath !== null;
+
+  const handleSelect = (path: string) => {
+    if (isSwitching) return;
+    setSwitchingPath(path);
+    setSwitchError(null);
+    // onSelect is allowed to be synchronous; only treat rejections as errors.
+    Promise.resolve(onSelect(path)).catch((err: unknown) => {
+      setSwitchError(toUserErrorMessage(err, 'Could not switch to that workspace.'));
+      // Release the lock so the user can retry or pick a different project.
+      // The success path never lands here — the page reloads instead.
+      setSwitchingPath(null);
+    });
+  };
 
   return (
     <div className="workspace-picker" data-testid="workspace-picker">
@@ -132,6 +164,15 @@ function WorkspacePicker({
         </div>
       </div>
 
+      {/* Switch failure — first thing in the body, above the lists the user
+          just acted on, so it can't land below the fold on a tablet. */}
+      {switchError && (
+        <div className="workspace-picker-error" role="alert" data-testid="workspace-picker-error">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <span>{switchError}</span>
+        </div>
+      )}
+
       {/* ── Recent Projects ─────────────────────────────────────── */}
       <section className="workspace-picker-section">
         <h3 className="workspace-picker-section-title">Recent Projects</h3>
@@ -144,7 +185,9 @@ function WorkspacePicker({
               path={expandHomePath(ws.path, homeDir)}
               markers={ws.markers}
               timeAgo={formatTimeAgo(ws.last_used)}
-              onClick={() => onSelect(ws.path)}
+              onClick={() => handleSelect(ws.path)}
+              pending={switchingPath === ws.path}
+              disabled={isSwitching}
             />
           ))
         ) : (
@@ -163,7 +206,9 @@ function WorkspacePicker({
               name={proj.name || proj.path.split('/').filter(Boolean).pop() || proj.path}
               path={expandHomePath(proj.path, homeDir)}
               markers={proj.markers}
-              onClick={() => onSelect(proj.path)}
+              onClick={() => handleSelect(proj.path)}
+              pending={switchingPath === proj.path}
+              disabled={isSwitching}
             />
           ))
         ) : (
@@ -172,8 +217,14 @@ function WorkspacePicker({
       </section>
 
       {/* ── Browse Button ───────────────────────────────────────── */}
-      <button className="workspace-picker-browse-btn" type="button" onClick={onBrowse}>
-        Browse&hellip;
+      <button
+        className="workspace-picker-browse-btn"
+        type="button"
+        onClick={onBrowse}
+        disabled={isSwitching}
+        aria-busy={isSwitching || undefined}
+      >
+        {isSwitching ? 'Switching…' : 'Browse…'}
       </button>
     </div>
   );

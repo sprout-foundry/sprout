@@ -39,6 +39,7 @@ function decode(bytes: Uint8Array): { content?: string; contentBase64?: string }
   try {
     return { content: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
   } catch {
+    // best-effort: non-UTF-8 bytes fall back to base64 storage.
     let bin = '';
     for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
     return { contentBase64: btoa(bin) };

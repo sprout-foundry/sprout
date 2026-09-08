@@ -204,7 +204,7 @@ function readClaimRegistry(): Map<string, ClaimEntry> {
       live.set(id, entry);
     }
   } catch {
-    // Malformed registry — treat as empty.
+    // best-effort: malformed registry — treat as empty.
   }
   return live;
 }
@@ -273,7 +273,7 @@ function startClaimHeartbeat(): void {
       registry.delete(id);
       writeClaimRegistry(registry);
     } catch {
-      // Non-fatal.
+      // best-effort: pagehide cleanup; the claim TTL reaps this entry anyway.
     }
   });
 }
@@ -300,6 +300,7 @@ function readCookie(name: string): string | null {
       try {
         return decodeURIComponent(value);
       } catch {
+        // best-effort: undecodable cookie value used verbatim.
         return value;
       }
     }

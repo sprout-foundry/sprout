@@ -300,7 +300,8 @@ function evictOldest(keepSessionId: string, count: number): void {
     try {
       ls.removeItem(sessionKey(m.session_id));
     } catch {
-      /* best effort */
+      // best-effort: evicting one more session than intended is harmless —
+      // the index below no longer references it either way.
     }
   }
   const evictIds = new Set(toEvict.map((s) => s.session_id));
@@ -365,13 +366,13 @@ export function clearAllSessions(): void {
     try {
       ls.removeItem(sessionKey(m.session_id));
     } catch {
-      /* best effort */
+      // best-effort: a key we can't remove is simply orphaned storage.
     }
   }
   try {
     ls.removeItem(INDEX_KEY);
   } catch {
-    /* best effort */
+    // best-effort: same — the index will be rewritten on the next write.
   }
 }
 
@@ -382,7 +383,7 @@ function generateSessionId(): string {
     try {
       return g.crypto.randomUUID();
     } catch {
-      /* fall through */
+      // best-effort: some WebViews reject randomUUID in insecure contexts.
     }
   }
   return `cloud-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

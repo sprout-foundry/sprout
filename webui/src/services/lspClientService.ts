@@ -11,6 +11,7 @@ import type { EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { ApiService } from './api';
 import { clientFetch } from './clientSession';
+import { getWorkspaceCwd, normalizeWorkspaceCwd, resolveWorkspacePath } from './workspaceCwd';
 
 // Types from @codemirror/lsp-client
 
@@ -385,6 +386,15 @@ class LSPClientService {
    */
   getWorkspacePathSync(): string {
     return this.workspacePath;
+  }
+
+  /**
+   * Seed the cached workspace path without a network round-trip.
+   * Callers that already have the workspace root (e.g. layout restore)
+   * use this so path resolution works before the first LSP connect.
+   */
+  setWorkspaceRoot(path: string): void {
+    this.workspacePath = path;
   }
 
   /**
@@ -804,14 +814,62 @@ class LSPClientService {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve a path that may be workspace-relative (or session-cwd-relative)
+ * to an absolute filesystem path.
+ *
+ * Buffer paths arrive from many entry points (file tree, chat links,
+ * terminal links, deep links, semantic go-to-definition) and not all of
+ * them produce absolute paths. The LSP document URI must point at the real
+ * on-disk location or the language server cannot resolve node_modules /
+ * module paths, so every import shows "Cannot find module …".
+ *
+ * Passes through absolute paths, file:// URIs, and virtual paths
+ * (`__workspace/…`) unchanged; resolves relative paths against the session
+ * cwd (when one is set) and then the workspace root. When the workspace
+ * root is not yet cached the path is returned as-is rather than guessed.
+ */
+export function resolveEditorFilePath(path: string): string {
+  if (!path) return path;
+  if (path.startsWith('file://')) return uriToFilePath(path);
+
+  const normalized = path.replace(/\\/g, '/');
+  if (normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)) {
+    return normalized;
+  }
+
+  // Resolve cwd-relative paths (terminal links, agent output under a
+  // session cwd) to workspace-relative first.
+  let workspaceRelative = normalized;
+  const cwdNormalized = normalizeWorkspaceCwd(normalized);
+  if (cwdNormalized !== null && cwdNormalized !== '') {
+    const cwd = getWorkspaceCwd();
+    if (cwd) {
+      workspaceRelative = resolveWorkspacePath(normalized, cwd);
+    }
+  }
+
+  const root = LSPClientService.getInstance().getWorkspacePathSync();
+  if (!root) return workspaceRelative;
+  return `${root.replace(/\/+$/, '')}/${workspaceRelative.replace(/^\//, '')}`;
+}
+
+/**
  * Convert a workspace path to a file:// URI.
- * Exported for use in other modules (e.g., lspExtensions.ts).
+ *
+ * Relative paths are resolved against the workspace root first (see
+ * resolveEditorFilePath) so the resulting URI always points at the real
+ * on-disk location.
+ *
+ * @param filePath - The file path (absolute preferred)
+ * @returns file:// URI string
  */
 export function getFileURI(filePath: string): string {
   if (!filePath) return '';
 
+  const resolved = resolveEditorFilePath(filePath);
+
   // Normalize path: ensure forward slashes, leading slash on Windows
-  let normalized = filePath.replace(/\\/g, '/');
+  let normalized = resolved.replace(/\\/g, '/');
   if (!normalized.startsWith('/')) {
     // Windows path - add leading slash
     normalized = '/' + normalized;

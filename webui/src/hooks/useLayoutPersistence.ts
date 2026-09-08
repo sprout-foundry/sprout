@@ -16,6 +16,7 @@ import {
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
 import type { EditorBuffer, EditorPane } from '../types/editor';
+import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
 
 interface UseLayoutPersistenceParams {
@@ -83,7 +84,7 @@ export function useLayoutPersistence({
     const pathToBufferId = new Map<string, string>();
 
     const createBuffer = (entry: BufferLayoutEntry, index: number): EditorBuffer | null => {
-      const filePath = entry.filePath;
+      const filePath = resolveEditorFilePath(entry.filePath);
       if (filePath.startsWith('__workspace/')) return null;
       const name = filePath.split('/').pop() || filePath;
       const dotIndex = name.lastIndexOf('.');
@@ -152,6 +153,9 @@ export function useLayoutPersistence({
       .then((ws) => {
         if (!cancelled && ws.workspace_root) {
           persistTabWorkspacePath(ws.workspace_root);
+          // Seed the LSP client service's cached workspace root so path
+          // resolution (relative → absolute) works before any LSP client connects.
+          getLSPClientService().setWorkspaceRoot(ws.workspace_root);
         }
       })
       .catch((err) => {

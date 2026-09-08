@@ -46,7 +46,8 @@ export interface GitFs {
   stat(path: string): Promise<GitStats>;
   lstat(path: string): Promise<GitStats>;
   readlink?(path: string): Promise<string>;
-  symlink?(): never;
+  /** core.symlinks=false: writes the link target as file content (isomorphic-git forwards symlink(target, path)). */
+  symlink?(target: string, path: string): Promise<void>;
 }
 
 const SEAM_ENCODING = 'utf8';
@@ -145,6 +146,20 @@ export function createGitFs(fs: WorkspaceFs): GitFs {
       return decode(bytes, opts);
     },
 
+    /**
+     * core.symlinks=false semantics: the seam has no symlink support, so a
+     * git symlink entry (mode 120000) is materialized as a plain file whose
+     * content is the link target. readlink() returns that content — exactly
+     * how git behaves on filesystems without symlink support.
+     * (Throwing here made every clone of a repo that tracks a symlink —
+     * e.g. sprout's CLAUDE.md → AGENTS.md — abort with MultipleGitError:
+     * checkout calls this via FileSystem.writelink → _symlink.)
+     * NOTE arg order: isomorphic-git forwards symlink(target, path).
+     */
+    async symlink(target: string, path: string) {
+      await adapter.writeFile(path, target);
+    },
+
     async writeFile(path: string, data: GitFsFile) {
       const p = normalizeFsPath(path);
       let content: string | undefined;
@@ -212,15 +227,16 @@ export function createGitFs(fs: WorkspaceFs): GitFs {
       throw codeError('EACCES', r.error);
     },
     lstat: undefined, // replaced just below with the stat implementation
-    async readlink() {
-      throw codeError('ENOSYS', 'unsupported');
+    async readlink(path: string): Promise<string> {
+      // core.symlinks=false semantics: symlink entries were written as plain
+      // files containing the target (see writelink). Return that content so
+      // isomorphic-git can compare the entry faithfully on later status/diff.
+      const data = (await adapter.readFile(path)) as GitFsFile;
+      return typeof data === 'string' ? data : new TextDecoder().decode(data);
     },
     // isomorphic-git's FileSystem wrapper binds every command in its list,
-    // including symlink — it must EXIST even though the seam has no symlink
-    // support (git worktrees/submodules would need it; clones don't).
-    async symlink() {
-      throw codeError('ENOSYS', 'unsupported');
-    },
+    // including symlink — it must EXIST. It IS implemented above with
+    // core.symlinks=false semantics (writes the target as file content).
   } as unknown as GitFs & { __drain: () => Promise<void>; lstat: GitFs['stat'] };
   // isomorphic-git's FileSystem wrapper uses lstat for symlink checks and
   // falls back to stat only when lstat is absent — provide it explicitly.

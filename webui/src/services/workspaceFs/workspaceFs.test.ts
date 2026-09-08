@@ -272,4 +272,51 @@ describe('workspaceGit', () => {
     const log = await git.log({ fs: gfs as never, dir: 'wt', depth: 1 });
     expect(log[0].commit.message).toBe('init\n');
   });
+
+  it('checkout of a commit containing a symlink entry succeeds (core.symlinks=false)', async () => {
+    // Device regression: sprout tracks CLAUDE.md as a symlink (mode 120000).
+    // The adapter used to throw ENOSYS from symlink/readlink, checkout
+    // rejected that file's task, and isomorphic-git aborted the whole clone
+    // with MultipleGitError ("There are multiple errors that were thrown…").
+    // core.symlinks=false semantics: the link is written as a plain file
+    // whose content is the target; readlink returns that content.
+    const fs = fsWithSeed();
+    const gfs = bindGitFs(createGitFs(fs));
+    await fs.mkdir('wt');
+    await git.init({ fs: gfs as never, dir: 'wt' });
+
+    // Build a tree with a symlink entry without an OS-level symlink:
+    // the blob content is the link target, grafted in via writeTree.
+    const agentsOid = await git.writeBlob({
+      fs: gfs as never,
+      dir: 'wt',
+      blob: new TextEncoder().encode('agent instructions'),
+    });
+    const linkOid = await git.writeBlob({
+      fs: gfs as never,
+      dir: 'wt',
+      blob: new TextEncoder().encode('AGENTS.md'),
+    });
+    const treeOid = await git.writeTree({
+      fs: gfs as never,
+      dir: 'wt',
+      tree: [
+        { mode: '100644', path: 'AGENTS.md', oid: agentsOid },
+        { mode: '120000', path: 'CLAUDE.md', oid: linkOid },
+      ],
+    });
+    await git.commit({
+      fs: gfs as never,
+      dir: 'wt',
+      tree: treeOid as never,
+      message: 'tree with symlink',
+      author: { name: 't', email: 't@t' },
+    });
+    await git.branch({ fs: gfs as never, dir: 'wt', ref: 'main', checkout: false });
+    await git.checkout({ fs: gfs as never, dir: 'wt', ref: 'main' });
+
+    const read = await fs.read('wt/CLAUDE.md');
+    expect(read.ok && 'content' in read ? read.content : undefined).toBe('AGENTS.md');
+    expect(await gfs.readlink!('wt/CLAUDE.md')).toBe('AGENTS.md');
+  });
 });

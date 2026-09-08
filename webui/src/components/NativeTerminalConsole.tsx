@@ -105,13 +105,14 @@ export function NativeTerminalConsole(): React.ReactElement {
     try {
       sessionStorage.setItem('sprout-native-terminal', '1');
     } catch {
-      /* private mode: toast suppression is cosmetic, ignore */
+      // best-effort: private mode blocks storage; losing the toast-suppression
+      // flag only means one avoidable warning toast this session.
     }
     return () => {
       try {
         sessionStorage.removeItem('sprout-native-terminal');
       } catch {
-        /* ignore */
+        // best-effort: cleanup only — the flag is rewritten on next mount.
       }
     };
   }, []);
@@ -302,8 +303,11 @@ export function NativeTerminalConsole(): React.ReactElement {
               resolve();
             },
           })
-          .catch(() => {
-            term.writeln('terminalSpawn: bridge call failed');
+          .catch((err: unknown) => {
+            // The bridge promise itself rejected (channel missing, native
+            // side threw before spawning). Show the reason when there is one.
+            const reason = err instanceof Error ? err.message : err ? String(err) : 'unknown error';
+            term.writeln(`\x1b[31mterminal error:\x1b[0m ${reason}`);
             resolve();
           });
       }).finally(() => {
@@ -320,6 +324,14 @@ export function NativeTerminalConsole(): React.ReactElement {
   }, [runLine]);
 
   return (
-    <div ref={hostRef} className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]" style={{ padding: '6px 8px' }} />
+    <div
+      ref={hostRef}
+      className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
+      style={{ padding: '6px 8px' }}
+      // xterm renders its own focusable textarea; this labels the region for
+      // screen readers without stealing the terminal's focus target.
+      role="region"
+      aria-label="Terminal console"
+    />
   );
 }

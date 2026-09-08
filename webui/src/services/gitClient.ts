@@ -116,10 +116,10 @@ class GitClient {
    */
   async clone(url: string, dir: string, opts: CloneOptions = {}): Promise<void> {
     return this.withLock(dir, async () => {
-      // Ensure parent directory exists
+      // Ensure parent directory exists (EEXIST from an existing parent is fine)
       const parent = dir.substring(0, dir.lastIndexOf('/'));
       if (parent) {
-        await this.pfs.mkdir(parent).catch(() => {});
+        await this.pfs.mkdir(parent).catch(() => undefined);
       }
 
       await git.clone({
@@ -368,7 +368,8 @@ class GitClient {
     for (let i = 1; i < parts.length - 1; i++) {
       const parentPath = parts.slice(0, i + 1).join('/');
       if (parentPath) {
-        await this.pfs.mkdir(parentPath).catch(() => {});
+        // best-effort: parent may already exist (EEXIST)
+        await this.pfs.mkdir(parentPath).catch(() => undefined);
       }
     }
     await this.pfs.writeFile(fullPath, content, 'utf8');
@@ -402,12 +403,14 @@ class GitClient {
       const entries = await this.listAllFiles(dir);
       for (const entry of entries.reverse()) {
         if (entry.type === 'dir') {
-          await this.pfs.rmdir(`${dir}${entry.path}`).catch(() => {});
+          await this.pfs.rmdir(`${dir}${entry.path}`).catch(() => undefined);
         } else {
-          await this.pfs.unlink(`${dir}${entry.path}`).catch(() => {});
+          await this.pfs.unlink(`${dir}${entry.path}`).catch(() => undefined);
         }
       }
-      await this.pfs.rmdir(dir).catch(() => {});
+      // best-effort: rmdir can fail on a non-empty dir; the workspaceFs layer
+      // surfaces delete failures from the unlink loop above.
+      await this.pfs.rmdir(dir).catch(() => undefined);
     });
   }
 

@@ -2133,18 +2133,24 @@ button.primary.success {
   min-width: 0;
   max-width: 100%;
   flex: 1 1 auto;
+  height: 26px;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   color: var(--text-primary, #e6e9f0);
   background: color-mix(in srgb, var(--bg-secondary, #141821) 80%, transparent);
   border: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 20%, transparent);
   border-radius: var(--radius-sm);
-  padding: 2px 4px;
+  padding: 0 4px;
   cursor: pointer;
 }
 
 .workspace-cwd-select:hover {
   border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.workspace-cwd-select:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 1px;
 }
 
 /* "+ Add repo" button on the workspace row — adds a workspace entry
@@ -2154,8 +2160,8 @@ button.primary.success {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 20%, transparent);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -2175,40 +2181,30 @@ button.primary.success {
   cursor: not-allowed;
 }
 
+/* Touch: raise BOTH controls to a comfortable target — the select gets a
+ * taller hit area too, not just the button. */
 @media (hover: none) {
+  .workspace-cwd-select {
+    height: 32px;
+    padding: 0 6px;
+  }
+
   .workspace-add-repo-btn {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
   }
 }
 
-.workspace-cwd-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  max-width: 45%;
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono);
-  color: var(--text-secondary, #8b93a7);
-  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
-  border-radius: var(--radius-md);
-  padding: 2px 6px;
-  cursor: pointer;
+/* Very narrow rows (small phones, iPad split view): the row is a container,
+ * so the icon drops out based on the ROW's width — not the viewport's. */
+.workspace-cwd-bar {
+  container-type: inline-size;
 }
 
-.workspace-cwd-chip:hover {
-  color: var(--text-primary, #e6e9f0);
-  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
-}
-
-.workspace-cwd-chip-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
+@container (max-width: 300px) {
+  .workspace-cwd-select-label > svg {
+    display: none;
+  }
 }
 
 .repo-import-banner {

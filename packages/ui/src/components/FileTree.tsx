@@ -80,9 +80,6 @@ export interface FileTreeProps {
   onRenamePath?: (oldPath: string, newPath: string) => Promise<void>;
   /** Optional callback for opening path in system file browser */
   onOpenInFileBrowser?: (path: string) => Promise<void>;
-  /** Optional callback for the "Clone Repository" button (cloud mode only).
-   *  When provided, a clone button is rendered in the header. */
-  cloneRepoButton?: () => Promise<void>;
 }
 
 type DraftMode = 'create-file' | 'create-folder' | 'rename';
@@ -116,7 +113,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       onDeletePath,
       onRenamePath,
       onOpenInFileBrowser,
-      cloneRepoButton,
     },
     ref,
   ) => {
@@ -1391,19 +1387,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             <RefreshCw size={14} />
             <span>Refresh</span>
           </button>
-          {cloneRepoButton && (
-            <button
-              type="button"
-              className="context-menu-item"
-              onClick={() => {
-                setMoreMenu(null);
-                void cloneRepoButton();
-              }}
-            >
-              <FolderPlus size={14} />
-              <span>Add workspace from repo…</span>
-            </button>
-          )}
         </ContextMenu>
 
         {draftError ? (

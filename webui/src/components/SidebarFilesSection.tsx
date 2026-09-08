@@ -1,8 +1,9 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
-import { Check, FolderTree, Plus, TriangleAlert, X } from 'lucide-react';
-import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
+import { Check, TriangleAlert, X } from 'lucide-react';
+import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import type { FsEntry } from '../services/workspaceFs/types';
 import GitHubRepoPicker from './GitHubRepoPicker';
+import WorkspaceCwdBar from './WorkspaceCwdBar';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
@@ -79,22 +80,21 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const treeRoot = cwd === '' ? '.' : cwd;
 
     // Repos available for the cwd selector (repos/<owner>/<name>). Fetched
-    // once per mount through the same workspaceFs seam the clone flow uses;
-    // failures degrade to an empty list (the selector still offers the root).
+    // through the same workspaceFs seam the clone flow uses; failures degrade
+    // to an empty list (the selector still offers the root). Re-fetchable via
+    // refreshRepos so a freshly cloned repo appears in the selector without a
+    // remount.
     const [repos, setRepos] = useState<string[]>([]);
-    useEffect(() => {
-      let cancelled = false;
+    const refreshRepos = useCallback(() => {
       listWorkspaceRepos()
-        .then((list) => {
-          if (!cancelled) setRepos(list);
-        })
+        .then((list) => setRepos(list))
         .catch(() => {
           // No repos/ yet (or the backend is unreachable): keep [].
         });
-      return () => {
-        cancelled = true;
-      };
     }, []);
+    useEffect(() => {
+      refreshRepos();
+    }, [refreshRepos]);
 
     // Keep the cwd honest: if the selected repo disappears (removed while the
     // store still points at it), fall back to the root rather than rooting the
@@ -267,8 +267,10 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           }
         }
 
-        // Refresh the file tree to show imported files
+        // Refresh the file tree and the workspace selector's repo list to
+        // show imported files.
         fileTreeRef.current?.refresh();
+        refreshRepos();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // Show error via browser alert as a fallback
@@ -327,6 +329,9 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}
           onCloned={(_repo, result) => {
+            // Re-pull the repo list so the new clone appears in the cwd
+            // selector immediately (no remount needed).
+            refreshRepos();
             // Same settle-delay the ?repo= import path uses before refreshing.
             setTimeout(() => {
               fileTreeRef.current?.refresh();
@@ -340,58 +345,18 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             }, 300);
           }}
         />
-        {/* Working-directory selector: 'Workspace root' + one entry per
-            cloned repo. Selecting a repo sets the session cwd that Files /
-            Terminal / Git / Agent all share (services/workspaceCwd.ts). */}
-        <div className="workspace-cwd-bar" data-testid="workspace-cwd-bar">
-          <label className="workspace-cwd-select-label">
-            <FolderTree size={13} aria-hidden="true" />
-            <span className="sr-only">Working directory</span>
-            <select
-              className="workspace-cwd-select"
-              data-testid="workspace-cwd-select"
-              value={repos.some((repo) => repoDir(repo) === cwd) ? cwd : ''}
-              onChange={(e) => setWorkspaceCwd(e.target.value)}
-              title={cwd === '' ? 'Workspace root' : cwd}
-            >
-              <option value="">Workspace root</option>
-              {repos.map((repo) => (
-                <option key={repo} value={repoDir(repo)}>
-                  {repo}
-                </option>
-              ))}
-            </select>
-          </label>
-          {cwd !== '' && (
-            <button
-              type="button"
-              className="workspace-cwd-chip"
-              data-testid="workspace-cwd-chip"
-              onClick={() => setWorkspaceCwd('')}
-              title={`Return to workspace root (${cwd})`}
-            >
-              <span className="workspace-cwd-chip-path">{cwd}</span>
-              <X size={12} aria-hidden="true" />
-            </button>
-          )}
-          {/* "Add repo" = add a workspace entry (clone), not an action on
-              the loaded tree. Lives on the workspace row — next to the
-              repo selector it feeds — instead of the tree header where it
-              read as a GitHub-branded file operation. */}
-          {cloneTrigger && (
-            <button
-              type="button"
-              className="workspace-add-repo-btn"
-              data-testid="workspace-add-repo-btn"
-              onClick={() => void cloneTrigger()}
-              disabled={importStatus === 'loading'}
-              aria-label="Add workspace from repository"
-              title="Add workspace from repository"
-            >
-              <Plus size={13} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+        {/* Working-directory row: ONE select is the single source of truth
+            for the session cwd (Files / Terminal / Git / Agent share it via
+            services/workspaceCwd.ts). No companion chip repeating the value;
+            a cwd inside a repo shows as a dynamic "owner/name › sub/path"
+            option instead of the select silently claiming the root. */}
+        <WorkspaceCwdBar
+          cwd={cwd}
+          repos={repos}
+          onChange={setWorkspaceCwd}
+          onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
+          addRepoDisabled={importStatus === 'loading'}
+        />
         <FileTree
           ref={fileTreeRef}
           key={treeRoot}

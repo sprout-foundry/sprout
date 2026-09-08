@@ -41,6 +41,13 @@ Details, hermetic test requirements, and platform workarounds: `docs/internal/ci
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`).
 - Read `CONTRIBUTING.md`, `docs/TESTING.md`, `docs/ARCHITECTURE.md` before major changes.
 
+## Incident / User-Data Hygiene (public repo)
+
+- **NEVER commit incident writeups, debugging narratives, or references to specific incidents** (no `INCIDENT-YYYY-MM-DD` files/ids) — this is a public repo.
+- **NEVER commit user-identifying data**: session IDs, workspace/host paths, customer domains, infra identifiers (pool/tenant IDs), credentials, transcripts, or tool-output excerpts from real sessions. Test fixtures must be synthetic.
+- Comments and commit messages describe the *mechanism*, never the *incident*: "a JWT inside a serialized JSON string", not "session X's token dump".
+- If debugging requires real session data, keep it out of the tree entirely (read from state dirs at runtime in throwaway local tests, delete before commit).
+
 ## Design System
 
 No raw hex/rgba in CSS. Use design tokens from `App.css`. Full rules: `docs/internal/design-system.md`.

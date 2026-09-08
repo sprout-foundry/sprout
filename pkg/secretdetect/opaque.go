@@ -64,6 +64,18 @@ func redactReplace(content string, tokenFor func(Match) string) string {
 		if n == "" {
 			continue
 		}
+		// Boundary-safe needle: gitleaks capture groups can swallow the
+		// backslash of an escaped JSON quote when a secret sits inside a
+		// serialized JSON string. Replacing a
+		// needle that starts/ends with a backslash deletes the escape and
+		// orphans the quote, corrupting the payload. No valid secret of the
+		// rules in use has a boundary backslash — when gitleaks captures one
+		// it is a JSON escape, not credential material. Re-evaluate if adding
+		// a custom rule whose valid secrets can start/end with a backslash.
+		n = strings.Trim(n, "\\")
+		if n == "" {
+			continue
+		}
 		if _, ok := seen[n]; ok {
 			continue
 		}

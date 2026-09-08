@@ -115,6 +115,16 @@ func Redact(content string, matches []Match) string {
 		if needle == "" {
 			continue
 		}
+		// Same boundary-safe trimming as redactReplace: a captured secret
+		// may swallow the backslash of an escaped JSON quote (e.g. a JWT
+		// embedded in a serialized request body) and ReplaceAll would then
+		// delete the escape, orphaning
+		// the quote. A captured boundary backslash is a JSON escape, not
+		// credential material.
+		needle = strings.Trim(needle, "\\")
+		if needle == "" {
+			continue
+		}
 		if _, ok := seen[needle]; ok {
 			continue
 		}

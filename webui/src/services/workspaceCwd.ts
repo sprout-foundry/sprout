@@ -28,6 +28,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { debugLog } from '../utils/log';
 
 /** localStorage key holding the workspace-relative cwd ('' = workspace root). */
 export const WORKSPACE_CWD_STORAGE_KEY = 'sprout-workspace-cwd';
@@ -73,6 +74,7 @@ function readPersistedCwd(): string {
     const normalized = normalizeWorkspaceCwd(raw);
     return normalized ?? '';
   } catch {
+    // best-effort: unreadable storage reads as the workspace root.
     return '';
   }
 }
@@ -82,8 +84,9 @@ function persistCwd(cwd: string): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, cwd);
-  } catch {
+  } catch (err) {
     // Private mode / quota: the session still works, just not across reloads.
+    debugLog('[workspaceCwd] failed to persist cwd:', err);
   }
 }
 

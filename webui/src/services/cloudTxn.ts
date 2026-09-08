@@ -154,6 +154,7 @@ export function base64ToBytes(b64: string): Uint8Array | null {
     for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
     return out;
   } catch {
+    // best-effort: invalid base64 reads as null (caller treats as absent).
     return null;
   }
 }

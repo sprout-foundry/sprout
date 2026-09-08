@@ -56,7 +56,7 @@ async function ensureDir(path: string) {
   try {
     await fs.mkdir(path);
   } catch {
-    // may already exist
+    // best-effort: may already exist.
   }
 }
 
@@ -70,7 +70,7 @@ async function ensureInitialized() {
     repoInitialized = true;
     return;
   } catch {
-    // not initialized
+    // best-effort: not initialized — fall through to git.init.
   }
 
   await git.init({ fs: getFs().promises, dir: REPO_DIR });
@@ -91,6 +91,7 @@ async function readdirRecursive(dir: string, prefix = ''): Promise<string[]> {
   try {
     entries = await fs.readdir(dir);
   } catch {
+    // best-effort: unreadable directory contributes no entries.
     return results;
   }
   for (const entry of entries) {
@@ -104,7 +105,7 @@ async function readdirRecursive(dir: string, prefix = ''): Promise<string[]> {
         results.push(relPath);
       }
     } catch {
-      // skip
+      // best-effort: skip entries that can't be stat'd.
     }
   }
   return results;
@@ -123,12 +124,12 @@ async function syncVfsToGitFs() {
         try {
           await fs.unlink(`${REPO_DIR}/${relPath}`);
         } catch {
-          /* gone */
+          // best-effort: already gone.
         }
       }
     }
   } catch {
-    // fresh repo
+    // best-effort: fresh repo (nothing to clear).
   }
 
   // Write VFS files
@@ -152,7 +153,7 @@ async function syncGitFsToVfs() {
       const content = await getFs().promises.readFile(`${REPO_DIR}/${relPath}`, 'utf8');
       files.push({ path: relPath, content: String(content) });
     } catch {
-      // skip binary/unreadable
+      // best-effort: skip binary/unreadable files.
     }
   }
   await config.writeVfsFiles(files);
@@ -230,7 +231,7 @@ export async function gitLog(count = 50) {
       });
     }
   } catch {
-    // no commits yet
+    // best-effort: no commits yet.
   }
   return commits;
 }
@@ -287,11 +288,11 @@ export async function gitClone(url: string, opts?: { token?: string }) {
       try {
         await fs.unlink(`${REPO_DIR}/${relPath}`);
       } catch {
-        /* gone */
+        // best-effort: already gone.
       }
     }
   } catch {
-    /* fresh */
+    // best-effort: nothing to clear yet (fresh repo dir).
   }
 
   await ensureDir(REPO_DIR);

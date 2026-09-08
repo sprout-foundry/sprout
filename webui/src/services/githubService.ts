@@ -19,6 +19,8 @@
  * The token is never logged, thrown, or echoed into error messages.
  */
 
+import { debugLog } from '../utils/log';
+
 export const GITHUB_API_BASE = 'https://api.github.com';
 export const GITHUB_API_VERSION = '2022-11-28';
 export const GITHUB_TOKENS_URL = 'https://github.com/settings/tokens';
@@ -59,6 +61,8 @@ function hasLocalStorage(): boolean {
   try {
     return typeof localStorage !== 'undefined';
   } catch {
+    // best-effort: feature detection — localStorage can throw on access in
+    // sandboxed contexts.
     return false;
   }
 }
@@ -69,6 +73,7 @@ export function getStoredToken(): string | null {
   try {
     return localStorage.getItem(GITHUB_TOKEN_KEY) || null;
   } catch {
+    // best-effort: unreadable storage reads as "signed out".
     return null;
   }
 }
@@ -78,9 +83,10 @@ export function storeToken(token: string): void {
   if (!hasLocalStorage()) return;
   try {
     localStorage.setItem(GITHUB_TOKEN_KEY, token);
-  } catch {
+  } catch (err) {
     // storage unavailable (privacy mode / quota) — sign-in still works for
     // this session; nothing we can durably do here.
+    debugLog('[githubService] failed to persist GitHub token:', err);
   }
 }
 
@@ -102,11 +108,11 @@ export function getStoredUser(): GitHubUser | null {
     const raw = localStorage.getItem(GITHUB_USER_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GitHubUser;
-    return parsed && typeof parsed.login === 'string' ? parsed : null;
-  } catch {
-    return null;
-  }
-}
+          return parsed && typeof parsed.login === 'string' ? parsed : null;
+    } catch {
+      // best-effort: unreadable/corrupt cache reads as "no cached profile".
+      return null;
+    }}
 
 /** Cache the signed-in profile for offline rendering. */
 export function storeUser(user: GitHubUser): void {
@@ -156,7 +162,7 @@ async function responseErrorMessage(response: Response): Promise<string> {
     const body = (await response.json()) as { message?: string };
     detail = typeof body?.message === 'string' ? body.message : '';
   } catch {
-    /* non-JSON body */
+    // best-effort: non-JSON body — keep the status-derived message.
   }
   return detail ? `GitHub error (${response.status}): ${detail}` : `GitHub request failed (${response.status})`;
 }

@@ -108,7 +108,7 @@ export function handleCloudSessionDelete(urlPath: string, bodyStr?: string): Res
       const parsed = JSON.parse(bodyStr) as { session_id?: string };
       sessionId = typeof parsed?.session_id === 'string' ? parsed.session_id : '';
     } catch {
-      /* ignore — leave sessionId empty, return 400 below */
+      // best-effort: non-JSON body — leave sessionId empty and return 400 below.
     }
   }
 

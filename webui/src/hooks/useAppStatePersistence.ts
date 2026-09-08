@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
 import type { AppState } from '../types/app';
+import { debugLog } from '../utils/log';
 
 export interface UseAppStatePersistenceOptions {
   state: AppState;
@@ -43,8 +44,9 @@ export function useAppStatePersistence({ state }: UseAppStatePersistenceOptions)
 
     try {
       window.localStorage.setItem(storageKey, persistPayload);
-    } catch {
+    } catch (err) {
       // QuotaExceededError: retry with fewer messages, then give up gracefully.
+      debugLog('[useAppStatePersistence] failed to persist app state (20 messages), retrying with fewer:', err);
       try {
         window.localStorage.setItem(
           storageKey,
@@ -58,7 +60,8 @@ export function useAppStatePersistence({ state }: UseAppStatePersistenceOptions)
             fileEdits: state.fileEdits.slice(-20),
           }),
         );
-      } catch {
+      } catch (err2) {
+        debugLog('[useAppStatePersistence] failed to persist app state (5 messages), retrying with none:', err2);
         try {
           window.localStorage.setItem(
             storageKey,
@@ -72,11 +75,14 @@ export function useAppStatePersistence({ state }: UseAppStatePersistenceOptions)
               fileEdits: state.fileEdits.slice(-20),
             }),
           );
-        } catch {
+        } catch (err3) {
+          debugLog('[useAppStatePersistence] failed to persist app state, clearing stored state:', err3);
           try {
             window.localStorage.removeItem(storageKey);
-          } catch {
-            /* nothing more we can do */
+          } catch (err4) {
+            // best-effort: storage is unusable (private mode / quota) — state
+            // stays in memory for this session only.
+            debugLog('[useAppStatePersistence] failed to remove persisted app state:', err4);
           }
         }
       }

@@ -106,6 +106,7 @@ function proxyToFoundry(
       targetPath = parsed.pathname;
       if (parsed.search) targetPath += parsed.search;
     } catch {
+      // best-effort: unparseable URL path used verbatim.
       targetPath = rewrittenPath;
     }
   }
@@ -258,6 +259,7 @@ export function proxySettingsRequest(
       const pathname = parsed.pathname.replace('/api/settings', '/api/proxy/settings');
       rewrittenPath = pathname + (parsed.search || '');
     } catch {
+      // best-effort: unparseable URL passed through unrewritten.
       rewrittenPath = url;
     }
   }

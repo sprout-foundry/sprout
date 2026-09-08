@@ -257,6 +257,7 @@ export function useEditorSettings(
       const stored = localStorage.getItem('editor:tab-size');
       return stored === '0';
     } catch (err) {
+      // best-effort: unreadable preference falls back to spaces.
       return false;
     }
   });

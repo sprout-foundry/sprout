@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -21,7 +22,7 @@ func mem() string {
 }
 
 func main() {
-	modelDir := "/Users/alanp/.cache/sprout/models/qwen3-0.6b"
+	modelDir := os.Getenv("HOME") + "/.cache/sprout/models/qwen3-0.6b"
 	model, err := llm.NewModel(modelDir)
 	if err != nil {
 		panic(err)

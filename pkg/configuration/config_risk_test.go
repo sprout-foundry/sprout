@@ -1226,7 +1226,7 @@ func TestContainsForceFlag_Property(t *testing.T) {
 // another command like `timeout`. The original command that triggered
 // the crash was:
 //
-//	cd /home/alanp/dev/inicion/OfferSpotter/platform &&
+//	cd /home/deva/work/acme-portal/web &&
 //	timeout 110 git checkout -b fix/415-sidebar-super-admin-request-flood
 //
 // This was classified as High risk because the `git_checkout` pattern

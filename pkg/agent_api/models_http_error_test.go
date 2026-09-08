@@ -11,7 +11,7 @@ func TestFormatHTTPResponseError_SummarizesCloudflareHTML(t *testing.T) {
 	headers.Set("Content-Type", "text/html; charset=utf-8")
 	body := []byte(`<!DOCTYPE html>
 <html>
-<head><title>local-aprice.dev | 524: A timeout occurred</title></head>
+<head><title>local.example.com | 524: A timeout occurred</title></head>
 <body>
 <div>Cloudflare</div>
 <div>Error code 524</div>

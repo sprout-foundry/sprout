@@ -608,7 +608,7 @@ func TestGenericProviderSummarizesCloudflareHTMLTimeouts(t *testing.T) {
 		w.WriteHeader(524)
 		_, _ = w.Write([]byte(`<!DOCTYPE html>
 <html lang="en-US">
-<head><title>local-aprice.dev | 524: A timeout occurred</title></head>
+<head><title>local.example.com | 524: A timeout occurred</title></head>
 <body>
 <div>Cloudflare</div>
 <div>Error code 524</div>

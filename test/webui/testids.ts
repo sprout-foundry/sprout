@@ -236,6 +236,12 @@ const TESTIDS = {
   'workspace-gate-modal': 'workspace-gate-modal',
   'workspace-gate-error': 'workspace-gate-error',
   'workspace-gate-home-btn': 'workspace-gate-home-btn',
+  // Studio workspace-gate variant (native folder picker / new-project)
+  'workspace-gate-pick-btn': 'workspace-gate-pick-btn',
+  'workspace-gate-new-btn': 'workspace-gate-new-btn',
+  'workspace-gate-create-input': 'workspace-gate-create-input',
+  'workspace-gate-create-cancel': 'workspace-gate-create-cancel',
+  'workspace-gate-create-submit': 'workspace-gate-create-submit',
 
   // Command output
   'command-output-panel': 'command-output-panel',

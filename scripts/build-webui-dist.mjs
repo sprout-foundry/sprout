@@ -494,6 +494,15 @@ export function validateArgs(opts) {
  * entry (flags are additive; entry order follows the fs → terminal → chat →
  * git order of the code). `opts.ratifyGit` flips its status to "ratified".
  *
+ * Studio workspace gate: a `--native-fs` dist also declares a top-level
+ * `capabilities` map with the workspace gate flags. Truthful because the
+ * native fs exclusion means the shell provides the workspace ops the gate
+ * needs (`pickWorkspace` / `createWorkspace` on the bridge files channel) —
+ * a studio shell reading this manifest may report these flags so the webui
+ * renders the studio gate variant (native folder picker + project create)
+ * instead of the desktop picker. Absent (no `capabilities` key) in any other
+ * build — the shell-declares / webui-defers handshake keeps default dists
+ * 100% webui.
  */
 export function buildCapabilityManifest(opts) {
   const excluded = [];
@@ -557,10 +566,20 @@ export function buildCapabilityManifest(opts) {
         : "git client API + boot wiring provided natively by the shell; git client API module stubbed out of the bundle (see docs/WEBUI_DECOUPLING_AUDIT.md)",
     });
   }
+  // Studio workspace gate: the fs-portion dist declares the workspace
+  // capability flags the shell may truthfully report (the native
+  // pickWorkspace/createWorkspace ops ship with the fs exclusion). Any
+  // other combination emits no `capabilities` key at all.
+  const capabilities =
+    opts.nativeFs
+      ? { supportsWorkspaceSwitching: true, supportsFolderPicker: true }
+      : undefined;
+
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     buildMode: opts.mode,
+    ...(capabilities ? { capabilities } : {}),
     excluded,
   };
 }
@@ -585,6 +604,12 @@ export function writeCapabilityManifest(outputDir, opts) {
   for (const entry of manifest.excluded) {
     console.log(
       `    excluded: ${entry.portion} (replaced by ${entry.replacedBy})`,
+    );
+  }
+  if (manifest.capabilities) {
+    const flags = Object.keys(manifest.capabilities).sort().join(", ");
+    console.log(
+      `    workspace capabilities: ${flags} (studio workspace-gate variant)`,
     );
   }
   return path;
@@ -1200,6 +1225,14 @@ function main(opts) {
   console.log("  sw.js           - Service worker");
   if (capabilityPath) {
     console.log("  capabilities.json - Track R native capability manifest");
+    // Truthful for the fs-portion dist: the shell ships the native
+    // workspace ops the studio gate variant needs (pickWorkspace /
+    // createWorkspace on the bridge files channel).
+    if (opts.nativeFs) {
+      console.log(
+        "    ↳ declares supportsWorkspaceSwitching + supportsFolderPicker (studio workspace gate)",
+      );
+    }
   }
   console.log("");
   console.log("See docs/DIST_BUNDLE_LAYOUT.md for the canonical layout spec.");

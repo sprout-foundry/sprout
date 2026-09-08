@@ -37,6 +37,12 @@ export interface APIAdapter {
   readonly supportsChat: boolean;
   /** Whether workspace switcher/selection is available */
   readonly supportsWorkspaceSwitching: boolean;
+  /**
+   * Whether the shell provides a native folder picker + project-create flow
+   * (studio shells, bridge `files` channel). Optional: omitted by adapters
+   * that never offer it, so `capability()` falls back to its mode default.
+   */
+  readonly supportsFolderPicker?: boolean;
   /** Whether "Export all" button should be shown */
   readonly supportsExport: boolean;
   /** Whether instance management is supported */

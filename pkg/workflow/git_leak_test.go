@@ -8,9 +8,14 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/internal/testgit"
 )
 
 func TestMain(m *testing.M) {
+	// Workflow tests can spawn agents that shell out to git; redirect git
+	// config so the developer's real ~/.gitconfig is never read or written.
+	testgit.Configure()
 	if os.Getenv("SPROUT_SKIP_GIT_LEAK_CHECK") != "" {
 		os.Exit(m.Run())
 	}

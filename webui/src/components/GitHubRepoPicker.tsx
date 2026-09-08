@@ -127,7 +127,19 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       onCloned?.(repo, result);
       onClose();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // Unwrap isomorphic-git's MultipleGitError: its `.message` alone is an
+      // opaque "refer to the errors property" — show the real per-file
+      // failures instead of burying them (user-visible error contract).
+      let message = err instanceof Error ? err.message : String(err);
+      const inner = (err as { errors?: unknown[] }).errors;
+      if (Array.isArray(inner) && inner.length > 0) {
+        const details = inner
+          .slice(0, 5)
+          .map((e) => (e instanceof Error ? e.message : String(e)))
+          .join(' · ');
+        const more = inner.length > 5 ? ` (+${inner.length - 5} more)` : '';
+        message = `${message} [${details}${more}]`;
+      }
       debugLog(`[github-picker] clone failed for ${repo.full_name}: ${message}`);
       setCloneError(`Could not clone ${repo.full_name}: ${message}`);
     } finally {

@@ -32,6 +32,8 @@ import {
   Trash2,
   FolderInput,
   ClipboardCopy,
+  MoreHorizontal,
+  RefreshCw,
 } from 'lucide-react';
 import './FileTree.css';
 import { copyToClipboard } from '../utils/clipboard';
@@ -136,6 +138,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
     const [filterQuery, setFilterQuery] = useState('');
     const [isFilterFocused, setIsFilterFocused] = useState(false);
+    // Overflow menu for the Files header (show-ignored / refresh live here
+    // on narrow sidebars; new file/folder stay inline as frequent actions).
+    const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
+    const moreBtnRef = useRef<HTMLButtonElement>(null);
     const [showIgnoredFiles, setShowIgnoredFiles] = useState<boolean>(() => {
       try {
         return localStorage.getItem('filetree-show-ignored') !== 'false';
@@ -204,6 +210,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     );
 
     const refreshTree = useCallback(async () => {
+      setMoreMenu(null);
       setLoading(true);
       setError(null);
 
@@ -1312,14 +1319,6 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           </div>
           <div className="header-actions">
             <button
-              className={`action-button toggle-ignored-btn ${showIgnoredFiles ? 'active' : ''}`}
-              onClick={() => setShowIgnoredFiles((prev) => !prev)}
-              aria-label={showIgnoredFiles ? 'Hide ignored files' : 'Show ignored files'}
-              title={showIgnoredFiles ? 'Hide ignored files' : 'Show ignored files'}
-            >
-              {showIgnoredFiles ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-            <button
               className="action-button create-file-btn"
               onClick={() => handleCreateItem('file')}
               disabled={loading}
@@ -1337,29 +1336,75 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             >
               <FolderPlus size={14} />
             </button>
-            {cloneRepoButton && (
-              <button
-                className="action-button clone-repo-btn"
-                onClick={cloneRepoButton}
-                disabled={loading}
-                aria-label="Clone repository"
-                title="Clone repository from GitHub"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-                </svg>
-              </button>
-            )}
-            <button className="refresh-button" onClick={refreshTree} disabled={loading} aria-label="Refresh">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                <path d="M16 21h5v-5" />
-              </svg>
+            <button
+              ref={moreBtnRef}
+              className={`action-button more-actions-btn ${moreMenu ? 'active' : ''}`}
+              onClick={(e) => {
+                if (moreMenu) {
+                  setMoreMenu(null);
+                } else {
+                  const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  setMoreMenu({ x: r.left, y: r.bottom + 4 });
+                }
+              }}
+              disabled={loading}
+              aria-label="More file actions"
+              aria-expanded={moreMenu ? 'true' : 'false'}
+              aria-haspopup="menu"
+              title="More actions"
+            >
+              <MoreHorizontal size={14} />
             </button>
           </div>
         </div>
+
+        {/* Overflow menu for header actions that don't earn inline space:
+            toggle-ignored, refresh, and (cloud/local webui) "Add workspace",
+            which lives here instead of a GitHub-branded header button —
+            cloning creates a new workspace entry rather than acting on the
+            loaded tree, and stays provider-neutral in its labeling. */}
+        <ContextMenu
+          isOpen={moreMenu !== null}
+          x={moreMenu?.x ?? 0}
+          y={moreMenu?.y ?? 0}
+          onClose={() => setMoreMenu(null)}
+        >
+          <button
+            type="button"
+            className={`context-menu-item ${showIgnoredFiles ? 'active' : ''}`}
+            onClick={() => {
+              setShowIgnoredFiles((prev) => !prev);
+              setMoreMenu(null);
+            }}
+          >
+            {showIgnoredFiles ? <EyeOff size={14} /> : <Eye size={14} />}
+            <span>{showIgnoredFiles ? 'Hide ignored files' : 'Show ignored files'}</span>
+          </button>
+          <button
+            type="button"
+            className="context-menu-item"
+            onClick={() => {
+              setMoreMenu(null);
+              void refreshTree();
+            }}
+          >
+            <RefreshCw size={14} />
+            <span>Refresh</span>
+          </button>
+          {cloneRepoButton && (
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => {
+                setMoreMenu(null);
+                void cloneRepoButton();
+              }}
+            >
+              <FolderPlus size={14} />
+              <span>Add workspace from repo…</span>
+            </button>
+          )}
+        </ContextMenu>
 
         {draftError ? (
           <div className="create-error-message">

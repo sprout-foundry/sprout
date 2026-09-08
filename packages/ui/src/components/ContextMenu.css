@@ -50,6 +50,12 @@
   color: var(--accent-error);
 }
 
+/* Active-state highlight (e.g. "Show ignored files" while ignored files
+ * are visible — mirrors the old inline toggle button's .active style). */
+.context-menu-item.active {
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--text-primary);
+}
 .context-menu-item.danger:hover {
   background: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }

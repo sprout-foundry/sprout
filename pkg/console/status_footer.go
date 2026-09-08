@@ -424,10 +424,20 @@ func (f *StatusFooter) Resize() {
 		// ceil(oldCols/newCols) rows at the new width.
 		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
 
-		// Clear from (newRows - reserved - overflow) to end of screen.
-		// This catches the footer's current rows AND any wrapped overflow
-		// from the old wider content that the terminal reflowed upward.
-		clearTop := newRows - reserved - overflow
+		// The stale footer rows sit at OLD-geometry positions (they were
+		// drawn for the old height). On a shrink they wrap upward past
+		// newRows; on a GROW they land mid-screen at oldRows-reserved..oldRows
+		// while the new footer renders at newRows-reserved..newRows. Clearing
+		// only the new-geometry window leaves the old rows stranded on every
+		// grow (duplicate hint/rule/content rows smeared up the screen).
+		// Union both windows: clear from the HIGHER of the two tops,
+		// downward to the end of the screen.
+		oldTop := oldRows - reserved - overflow
+		newTop := newRows - reserved - overflow
+		clearTop := newTop
+		if oldTop < clearTop {
+			clearTop = oldTop
+		}
 		if clearTop < 1 {
 			clearTop = 1
 		}
@@ -1011,6 +1021,14 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 		return
 	}
 	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
+	// Wrap the absolute-positioned writes in DECSC/DECRC. Without the
+	// save/restore, every mid-stream steer echo relocates the cursor to
+	// the steer row and leaves it there. Concurrent consumers that erase
+	// their previous frame with a RELATIVE walk-back (SelectList's
+	// "\r\033[K\033[A", refreshInputLine's MoveCursorUpSeq) then start
+	// from the wrong row, miss their own rows, and stack duplicate
+	// frames on every keystroke.
+	fmt.Fprint(f.w, "\0337")
 	for i, lineText := range lines {
 		withCursor := false
 		col := -1
@@ -1025,6 +1043,7 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 		rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, hintRows, i), steerColor, rendered, footerResetAll)
 	}
+	fmt.Fprint(f.w, "\0338")
 }
 
 // steerVisualLines computes the visual steer rows and cursor placement

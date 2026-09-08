@@ -217,3 +217,19 @@
 .gh-signin-link-btn:hover {
   color: var(--accent-color-hover, #6fa8dd);
 }
+
+/* Spinning state icon (lucide-react Loader2). Self-contained so the panel
+   works in the Settings tab without depending on another component's CSS. */
+.gh-account-card .spin,
+.gh-signin .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

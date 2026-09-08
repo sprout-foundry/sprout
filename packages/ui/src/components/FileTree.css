@@ -37,6 +37,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  /* Never let the action cluster shrink: before the overflow menu,
+   * buttons here were silently squeezed out of view on narrow
+   * sidebars. Shrink room belongs to the filter, not the actions. */
+  flex-shrink: 0;
 }
 
 .file-tree .file-tree-header .action-button {
@@ -59,6 +63,21 @@
   background: var(--bg-surface);
   border-color: var(--border-strong);
   color: var(--text-primary);
+}
+
+/* Overflow (⋯) button: accent highlight while its menu is open. */
+.file-tree .file-tree-header .action-button.more-actions-btn.active {
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* Finger-sized targets on touch devices (mobile sidebar widths, tablets). */
+@media (hover: none) {
+  .file-tree .file-tree-header .action-button {
+    min-width: 28px;
+    min-height: 28px;
+  }
 }
 
 .file-tree .file-tree-header .action-button:disabled {
@@ -562,6 +581,9 @@
   padding: 2px 6px;
   transition: all 0.15s var(--ease-out);
   max-width: 200px;
+  /* Yield space first on narrow sidebars: the filter can compress (its
+   * input has min-width 0), while .header-actions never shrinks. */
+  min-width: 0;
 }
 
 .file-tree .file-tree-filter-wrapper.focused {

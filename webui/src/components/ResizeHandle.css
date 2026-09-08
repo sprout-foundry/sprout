@@ -5,6 +5,25 @@
   flex-shrink: 0;
   background-color: var(--bg-elevated);
   transition: background-color 0.2s ease;
+  /* Tell iPadOS/Android this element never wants scroll/pan gestures —
+   * without it the browser claims touch drags for scrolling and the
+   * pointer stream dies mid-drag. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.resize-handle::before {
+  content: '';
+  /* Invisible expansion around the 4px rail: brings the effective touch
+   * target to ~24px without moving the visible rail or shifting layout.
+   * (Pseudo-element boxes participate in the parent's hit testing.) */
+  position: absolute;
+  top: -10px;
+  bottom: -10px;
+  left: -10px;
+  right: -10px;
 }
 
 .resize-handle:hover {
@@ -69,8 +88,8 @@
 /* Touch device support */
 @media (hover: none) {
   .resize-handle {
-    min-width: 8px;
-    min-height: 8px;
+    min-width: 12px;
+    min-height: 12px;
   }
 
   .resize-handle-horizontal .resize-handle-indicator,

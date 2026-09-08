@@ -102,7 +102,9 @@ export function useWorkspace(): UseWorkspaceResult {
       setWorkspaceInfo(info);
       setHomeDir(info.home_dir);
     } catch {
-      // swallow – the caller handles empty state
+      // best-effort: initial metadata fetch. An empty picker (no recents, no
+      // suggestions) is the visible symptom; `refresh()` can be re-invoked.
+      // The switch path is separate and DOES surface its failure to the user.
     } finally {
       setIsLoading(false);
     }

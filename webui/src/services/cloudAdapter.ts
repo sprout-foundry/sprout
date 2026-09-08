@@ -408,7 +408,7 @@ export class CloudAdapter implements APIAdapter {
       const cloned = input.clone();
       return await cloned.text();
     } catch {
-      // Body may already be consumed or not readable
+      // best-effort: body may already be consumed or not readable.
       return null;
     }
   }
@@ -427,6 +427,7 @@ export class CloudAdapter implements APIAdapter {
     try {
       return new URL(url).pathname;
     } catch {
+      // best-effort: unparseable URL used verbatim.
       return url;
     }
   }

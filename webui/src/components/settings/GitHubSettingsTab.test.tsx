@@ -13,6 +13,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import GitHubSettingsTab from './GitHubSettingsTab';
 
+// Sign-out is destructive (drops the stored PAT), so the panel confirms first.
+const { mockConfirm } = vi.hoisted(() => ({ mockConfirm: vi.fn().mockResolvedValue(true) }));
+
+vi.mock('../ThemedDialog', () => ({
+  showThemedConfirm: (...args: unknown[]) => mockConfirm(...args),
+}));
+
 const TOKEN = 'ghp_settings_token';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -150,15 +157,37 @@ describe('GitHubSettingsTab', () => {
     expect(document.querySelector('[data-testid="gh-signin-form"]')).toBeNull();
   });
 
-  it('sign-out clears both storage keys and returns to the form', () => {
+  it('sign-out asks for confirmation, then clears both storage keys and returns to the form', async () => {
     localStorage.setItem('github_pat', TOKEN);
     localStorage.setItem('github_user', JSON.stringify(SAMPLE_USER));
 
     renderTab();
     click('[data-testid="gh-signout-btn"]');
 
+    expect(mockConfirm).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(localStorage.getItem('github_pat')).toBeNull();
     expect(localStorage.getItem('github_user')).toBeNull();
     expect(document.querySelector('[data-testid="gh-signin-form"]')).not.toBeNull();
+  });
+
+  it('sign-out cancelled keeps the stored token', async () => {
+    mockConfirm.mockResolvedValueOnce(false);
+    localStorage.setItem('github_pat', TOKEN);
+    localStorage.setItem('github_user', JSON.stringify(SAMPLE_USER));
+
+    renderTab();
+    click('[data-testid="gh-signout-btn"]');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(localStorage.getItem('github_pat')).toBe(TOKEN);
+    expect(document.querySelector('[data-testid="gh-account-card"]')).not.toBeNull();
   });
 });

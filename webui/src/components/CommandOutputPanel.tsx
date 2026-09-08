@@ -21,6 +21,7 @@
 import { AlertCircle, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef } from 'react';
 import type { CommandOutputState } from '../hooks/useCommandOutput';
+import { toUserErrorMessage } from '../utils/errorMessage';
 import './CommandOutputPanel.css';
 
 export interface CommandOutputPanelProps {
@@ -100,7 +101,11 @@ export function CommandOutputPanel({ state, onDismiss }: CommandOutputPanelProps
   // changes whenever the parent re-renders (cheap).
   const hasOutput = state.output !== '';
   const error = state.error;
-  const hasError = error !== null;
+  // Error presentation matches the other panes (GitHistoryPanel, ImageViewer,
+  // ModelSelectionModal): one short human sentence, no raw exception text,
+  // stack frames, or `Error: ` prefixes.
+  const errorText = error ? toUserErrorMessage(error, 'The command failed to run.') : null;
+  const hasError = errorText !== null;
   const isVisible = state.command !== null || state.isRunning || hasOutput || hasError;
   if (!isVisible) return null;
 
@@ -150,10 +155,10 @@ export function CommandOutputPanel({ state, onDismiss }: CommandOutputPanelProps
           </span>
         </div>
       ) : null}
-      {hasError && error ? (
+      {hasError && errorText ? (
         <div className="command-output-panel-error" role="alert">
           <AlertCircle size={14} aria-hidden="true" />
-          <span>{error.message}</span>
+          <span>{errorText}</span>
         </div>
       ) : null}
       {hasOutput ? (

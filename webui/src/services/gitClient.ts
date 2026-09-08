@@ -116,10 +116,10 @@ class GitClient {
    */
   async clone(url: string, dir: string, opts: CloneOptions = {}): Promise<void> {
     return this.withLock(dir, async () => {
-      // Ensure parent directory exists
+      // Ensure parent directory exists (EEXIST from an existing parent is fine)
       const parent = dir.substring(0, dir.lastIndexOf('/'));
       if (parent) {
-        await this.pfs.mkdir(parent).catch(() => {});
+        await this.pfs.mkdir(parent).catch(() => undefined);
       }
 
       await git.clone({
@@ -255,6 +255,7 @@ class GitClient {
       const branch = await git.currentBranch({ fs: this.fs, dir });
       return branch ?? undefined;
     } catch {
+      // best-effort: unborn/invalid HEAD reports as "no branch".
       return undefined;
     }
   }
@@ -313,6 +314,7 @@ class GitClient {
       try {
         entries = await pfs.readdir(path);
       } catch {
+        // best-effort: unreadable directory is skipped.
         return;
       }
       for (const name of entries) {
@@ -322,6 +324,7 @@ class GitClient {
         try {
           stats = await pfs.stat(fullPath);
         } catch {
+          // best-effort: entries that can't be stat'd are skipped.
           continue;
         }
         if (stats.isDirectory()) {
@@ -368,7 +371,8 @@ class GitClient {
     for (let i = 1; i < parts.length - 1; i++) {
       const parentPath = parts.slice(0, i + 1).join('/');
       if (parentPath) {
-        await this.pfs.mkdir(parentPath).catch(() => {});
+        // best-effort: parent may already exist (EEXIST)
+        await this.pfs.mkdir(parentPath).catch(() => undefined);
       }
     }
     await this.pfs.writeFile(fullPath, content, 'utf8');
@@ -392,6 +396,7 @@ class GitClient {
       await this.pfs.stat(`${dir}/.git`);
       return true;
     } catch {
+      // best-effort: absent .git simply means "not a repo".
       return false;
     }
   }
@@ -402,12 +407,14 @@ class GitClient {
       const entries = await this.listAllFiles(dir);
       for (const entry of entries.reverse()) {
         if (entry.type === 'dir') {
-          await this.pfs.rmdir(`${dir}${entry.path}`).catch(() => {});
+          await this.pfs.rmdir(`${dir}${entry.path}`).catch(() => undefined);
         } else {
-          await this.pfs.unlink(`${dir}${entry.path}`).catch(() => {});
+          await this.pfs.unlink(`${dir}${entry.path}`).catch(() => undefined);
         }
       }
-      await this.pfs.rmdir(dir).catch(() => {});
+      // best-effort: rmdir can fail on a non-empty dir; the workspaceFs layer
+      // surfaces delete failures from the unlink loop above.
+      await this.pfs.rmdir(dir).catch(() => undefined);
     });
   }
 
@@ -433,6 +440,7 @@ class GitClient {
             });
             patch = `-${new TextDecoder().decode(oid.blob)}`;
           } catch {
+            // best-effort: blob unreadable at this commit — label as deleted.
             patch = '(file deleted)';
           }
         } else {
@@ -471,6 +479,7 @@ class GitClient {
       });
       return new TextDecoder().decode(blob.blob);
     } catch {
+      // best-effort: file absent at that commit reads as null.
       return null;
     }
   }
@@ -491,6 +500,7 @@ class GitClient {
       try {
         parentTree = await git.readTree({ fs: this.fs, dir, oid: parentSha });
       } catch {
+        // best-effort: a root commit has no parent tree.
         parentTree = null;
       }
     }

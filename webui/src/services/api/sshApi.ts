@@ -77,7 +77,7 @@ export async function openSSHWorkspace(
     try {
       status = await getSSHLaunchStatus(fetchFn, hostAlias, remoteWorkspacePath);
     } catch {
-      // Transient network error — keep polling.
+      // best-effort: transient network error — keep polling.
       continue;
     }
 

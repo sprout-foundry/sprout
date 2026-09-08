@@ -151,6 +151,7 @@ export function nativeChatGate(): Promise<NativeChatGateDecision> {
       }
       return resolveNativeChatGate(NATIVE_CHAT_ENABLED, bridge, caps);
     } catch {
+      // best-effort: gate errors report the feature as inactive, never crash.
       return { active: false, reason: 'unexpected-error' };
     }
   })();

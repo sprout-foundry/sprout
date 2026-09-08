@@ -138,7 +138,28 @@ describe('FileTree', () => {
     expect(header?.querySelector('.header-title')?.textContent).toBe('Files');
     expect(container.querySelector('.create-file-btn')).not.toBeNull();
     expect(container.querySelector('.create-folder-btn')).not.toBeNull();
-    expect(container.querySelector('.refresh-button')).not.toBeNull();
+    expect(container.querySelector('.more-actions-btn')).not.toBeNull();
+  });
+
+  it('overflow menu contains toggle-ignored, refresh, and add-workspace actions', () => {
+    const ref: { current: FileTreeHandle | null } = { current: null };
+    act(() => {
+      root.render(createElement(FileTree, {
+        ref,
+        ...baseProps,
+        cloneRepoButton: vi.fn().mockResolvedValue(undefined),
+      }));
+    });
+    // Open the overflow menu (portal renders into document.body).
+    const moreBtn = container.querySelector('.more-actions-btn')!;
+    act(() => {
+      moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const menuItems = Array.from(document.querySelectorAll('.context-menu-item'));
+    const labels = menuItems.map((el) => el.textContent ?? '');
+    expect(labels.some((t) => t.includes('ignored files'))).toBe(true);
+    expect(labels.some((t) => t === 'Refresh')).toBe(true);
+    expect(labels.some((t) => t.includes('Add workspace from repo'))).toBe(true);
   });
 
   it('renders files from provided files prop', () => {
@@ -473,9 +494,15 @@ describe('FileTree', () => {
         files: makeFiles(),
       }));
     });
-    const refreshBtn = container.querySelector('.refresh-button')!;
+    const refreshBtn = container.querySelector('.more-actions-btn')!;
     act(() => {
       refreshBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const refreshItem = Array.from(document.querySelectorAll('.context-menu-item'))
+      .find((el) => el.textContent === 'Refresh')!;
+    expect(refreshItem).toBeDefined();
+    act(() => {
+      refreshItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
       await new Promise(r => setTimeout(r, 50));
@@ -498,8 +525,14 @@ describe('FileTree', () => {
         files,
       }));
     });
-    const toggleBtn = container.querySelector('.toggle-ignored-btn')!;
-    expect(toggleBtn).not.toBeNull();
+    // Open the overflow menu, then toggle via its item (portal: document).
+    const moreBtn = container.querySelector('.more-actions-btn')!;
+    act(() => {
+      moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const toggleBtn = Array.from(document.querySelectorAll('.context-menu-item'))
+      .find((el) => (el.textContent ?? '').includes('ignored files'))!;
+    expect(toggleBtn).not.toBeUndefined();
     // By default, showIgnoredFiles is true (from localStorage mock), so ignored files are visible
     const ignoredItems = container.querySelectorAll('[data-git-status="ignored"]');
     expect(ignoredItems.length).toBeGreaterThanOrEqual(1);

@@ -238,7 +238,8 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
             }
           }
         } catch {
-          /* continue */
+          // best-effort: the terminal-session count only refines the confirm
+          // wording; if it can't be read, switch without the warning.
         }
         const response = await apiService.current.setWorkspace(normalizedTarget);
         const nextWS = normalizePath(response.workspace_root || normalizedTarget);

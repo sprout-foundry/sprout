@@ -211,7 +211,7 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
         files.push({ path: relPath, content: result.content });
       }
     } catch {
-      // skip unreadable
+      // best-effort: skip unreadable entries.
     }
   }
   return files;
@@ -387,6 +387,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
     const parsed = JSON.parse(bodyStr);
     content = typeof parsed.content === 'string' ? parsed.content : bodyStr;
   } catch {
+    // best-effort: non-JSON write body is stored as raw content.
     content = bodyStr;
   }
   const err = shell.writeFile(safePath, content);
@@ -707,6 +708,7 @@ export function getQueryParam(url: string, name: string): string | null {
     const params = new URLSearchParams(search);
     return params.get(name);
   } catch {
+    // best-effort: absent/unparseable query param reads as null.
     return null;
   }
 }
@@ -718,6 +720,7 @@ export function safeParseJson(str: string): Record<string, unknown> | null {
   try {
     return JSON.parse(str);
   } catch {
+    // best-effort: unparseable payload reads as null by contract.
     return null;
   }
 }
@@ -961,7 +964,8 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   try {
     shell.writeFile('/home/user/.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
   } catch {
-    // May already exist — ignore
+    // best-effort: a config that already exists is fine — the agent falls
+    // back to the previously-written platform config.
   }
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
@@ -988,7 +992,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
           agentEventDispatcher(event);
         }
       } catch {
-        // Ignore unparseable events
+        // best-effort: unparseable agent events are dropped; the loop continues.
       }
     })
     .then((result) => {

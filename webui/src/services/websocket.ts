@@ -461,7 +461,7 @@ class WebSocketService {
     this.intentionalClose = false;
     // Connect immediately (fire-and-forget — errors are handled by connect()
     // itself and by the reconnect loop)
-    this.connect().catch(() => {});
+    this.connect().catch(() => undefined);
   }
 
   onEvent(callback: EventCallback) {

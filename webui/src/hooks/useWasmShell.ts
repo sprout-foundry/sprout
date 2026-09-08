@@ -163,6 +163,7 @@ export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellRet
       const result = shellRef.current.autoComplete(input);
       return result.completions;
     } catch {
+      // best-effort: a throwing completer yields no completions.
       return [];
     }
   }, []);

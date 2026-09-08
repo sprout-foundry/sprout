@@ -40,16 +40,8 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 		"request":   json.RawMessage(payload),
 	}
 
-	data, err := json.MarshalIndent(entry, "", "  ")
-	if err != nil {
-		return
-	}
-
-	filename := fmt.Sprintf("api_request_%s.json", time.Now().Format("20060102_150405.000000000"))
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
-		return
-	}
-	WriteLocalCopyRequest(filename, data)
+	filename := fmt.Sprintf("api_request_%s", time.Now().Format("20060102_150405.000000000"))
+	writeEnvelopeFile(dir, filename+".json", filename+".raw", entry, payload, nil)
 }
 
 // LogRequestPayloadOnError saves the JSON payload only when an error occurs.
@@ -82,19 +74,43 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 		"request":       json.RawMessage(payload),
 	}
 
-	data, err := json.MarshalIndent(entry, "", "  ")
-	if err != nil {
-		return
-	}
-
-	filename := fmt.Sprintf("error_request_%s_%s.json", errorType, time.Now().Format("20060102_150405.000000000"))
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
-		return
-	}
-	WriteLocalCopyRequest(filename, data)
+	filename := fmt.Sprintf("error_request_%s_%s", errorType, time.Now().Format("20060102_150405.000000000"))
+	writeEnvelopeFile(dir, filename+".json", filename+".raw", entry, payload, err)
 
 	// Rotate old error logs to prevent unbounded growth
 	cleanupOldErrorLogs(dir)
+}
+
+// writeEnvelopeFile persists the diagnostic envelope as indented JSON. When
+// the payload inside is invalid JSON the envelope marshal fails; rather than
+// dropping the evidence, the raw payload is written to a .raw sibling so
+// operators still get the bytes — previously such payloads vanished here
+// because the envelope marshal failed silently.
+func writeEnvelopeFile(dir, jsonName, rawName string, entry map[string]interface{}, payload []byte, contextErr error) {
+	data, err := json.MarshalIndent(entry, "", "  ")
+	if err != nil {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "diagnostic envelope marshal failed: %v\n", err)
+		if contextErr != nil {
+			fmt.Fprintf(&sb, "original error: %v\n", contextErr)
+		}
+		for _, key := range []string{"provider", "model", "streaming", "error_type"} {
+			if v, ok := entry[key]; ok {
+				fmt.Fprintf(&sb, "%s: %v\n", key, v)
+			}
+		}
+		sb.WriteString("raw payload follows (may be invalid JSON):\n")
+		content := append([]byte(sb.String()), payload...)
+		if err := os.WriteFile(filepath.Join(dir, rawName), content, 0600); err != nil {
+			return
+		}
+		WriteLocalCopyRequest(rawName, content)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, jsonName), data, 0600); err != nil {
+		return
+	}
+	WriteLocalCopyRequest(jsonName, data)
 }
 
 // getDiagnosticLogDir returns the diagnostics directory under the cache root,

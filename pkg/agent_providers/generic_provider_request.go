@@ -472,9 +472,19 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 	// [REDACTED] tokens. Skipped for local providers since the threat model
 	// — third-party logging/training — only applies to remote endpoints.
 	if !isLocalInstance && len(body) > 0 {
+		original := body
 		if redacted := secretdetect.RedactOpaque(string(body)); redacted != string(body) {
 			utils.GetLogger(false).Logf("[security] egress backstop redacted secrets from outbound LLM request payload (per-tool redaction missed something — investigate if frequent)")
 			body = []byte(redacted)
+			// Defense in depth: RedactOpaque is now
+			// boundary-safe, but if any future rule still turns a valid
+			// payload into invalid JSON, refuse to send rather than emit
+			// corrupt bytes (the provider rejects them with a hard 400
+			// anyway) or leak the original secret by reverting.
+			if json.Valid(original) && !json.Valid(body) {
+				utils.GetLogger(false).Logf("[security] egress redaction corrupted JSON body (secret boundary spans escape sequence); refusing to send")
+				return nil, body, agenterrors.NewValidation("egress redaction produced invalid JSON; refusing to send (rule boundary bug)", nil)
+			}
 		}
 	}
 

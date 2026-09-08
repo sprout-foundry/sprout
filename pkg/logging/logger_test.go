@@ -500,3 +500,86 @@ func TestLogRequestPayloadJSONFormat(t *testing.T) {
 		}
 	}
 }
+
+// TestLogRequestPayloadOnError_FallbackWriteOnInvalidJSON: when the request
+// payload is invalid JSON the diagnostic envelope marshal fails, and the raw
+// payload used to be silently dropped. It must now land in a .raw sibling file.
+func TestLogRequestPayloadOnError_FallbackWriteOnInvalidJSON(t *testing.T) {
+	cacheDir := t.TempDir()
+	t.Setenv("SPROUT_CACHE_DIR", cacheDir)
+	t.Setenv("SPROUT_COPY_LOGS_TO_CWD", "")
+
+	payload := []byte(`{"broken": `) // invalid JSON
+	LogRequestPayloadOnError(payload, "openrouter", "test-model", false, "api_error_400", fmt.Errorf("test boom"))
+
+	diagDir := filepath.Join(cacheDir, "diagnostics")
+
+	// lastRequest.json behavior is unchanged: raw payload still written.
+	lastData, err := os.ReadFile(filepath.Join(diagDir, "lastRequest.json"))
+	if err != nil {
+		t.Fatalf("Failed to read lastRequest.json: %v", err)
+	}
+	if string(lastData) != string(payload) {
+		t.Errorf("Expected lastRequest.json payload %q, got %q", string(payload), string(lastData))
+	}
+
+	entries, err := os.ReadDir(diagDir)
+	if err != nil {
+		t.Fatalf("Failed to read diagnostics directory: %v", err)
+	}
+	foundRaw := false
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "error_request_api_error_400_") && strings.HasSuffix(entry.Name(), ".raw") {
+			foundRaw = true
+			data, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
+			if err != nil {
+				t.Fatalf("Failed to read raw fallback file: %v", err)
+			}
+			if !strings.Contains(string(data), "marshal failed") {
+				t.Errorf("Expected marshal-failure context in raw fallback, got: %s", data)
+			}
+			if !strings.Contains(string(data), "test boom") {
+				t.Errorf("Expected original error context in raw fallback, got: %s", data)
+			}
+			if !strings.Contains(string(data), string(payload)) {
+				t.Errorf("Expected raw payload %q in fallback file, got: %s", string(payload), data)
+			}
+		}
+	}
+	if !foundRaw {
+		t.Error("Expected error_request_api_error_400_*.raw fallback file to be written")
+	}
+}
+
+// TestLogRequestPayload_FallbackWriteOnInvalidJSON covers the same fallback
+// for the non-error api_request_*.raw path.
+func TestLogRequestPayload_FallbackWriteOnInvalidJSON(t *testing.T) {
+	cacheDir := t.TempDir()
+	t.Setenv("SPROUT_CACHE_DIR", cacheDir)
+	t.Setenv("SPROUT_COPY_LOGS_TO_CWD", "")
+
+	payload := []byte(`{"messages": [`) // invalid JSON
+	LogRequestPayload(payload, "openrouter", "test-model", true)
+
+	diagDir := filepath.Join(cacheDir, "diagnostics")
+	entries, err := os.ReadDir(diagDir)
+	if err != nil {
+		t.Fatalf("Failed to read diagnostics directory: %v", err)
+	}
+	foundRaw := false
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "api_request_") && strings.HasSuffix(entry.Name(), ".raw") {
+			foundRaw = true
+			data, err := os.ReadFile(filepath.Join(diagDir, entry.Name()))
+			if err != nil {
+				t.Fatalf("Failed to read raw fallback file: %v", err)
+			}
+			if !strings.Contains(string(data), string(payload)) {
+				t.Errorf("Expected raw payload %q in fallback file, got: %s", string(payload), data)
+			}
+		}
+	}
+	if !foundRaw {
+		t.Error("Expected api_request_*.raw fallback file to be written")
+	}
+}

@@ -181,6 +181,7 @@ export class OPFSReplicaService {
       await this.loadMetadataIndex();
       this.initialized = true;
     } catch {
+      // best-effort: OPFS unusable — the replica reports itself unavailable.
       this.unavailable = true;
       this.initialized = true;
     }
@@ -280,6 +281,7 @@ export class OPFSReplicaService {
         metadata: this.metadataIndex.get(path) ?? null,
       };
     } catch {
+      // best-effort: unreadable replica entry reports as absent.
       return { exists: false, content: null, metadata: null };
     }
   }
@@ -390,7 +392,7 @@ export class OPFSReplicaService {
       const serialized: SerializedMetadataIndex = JSON.parse(content);
       this.metadataIndex = new Map(Object.entries(serialized).map(([path, meta]) => [path, meta]));
     } catch {
-      // Corrupt or missing index — start fresh
+      // best-effort: corrupt or missing index — start fresh.
       this.metadataIndex = new Map();
     }
   }
@@ -422,6 +424,7 @@ export class OPFSReplicaService {
       const file = await handle.getFile();
       return await file.text();
     } catch {
+      // best-effort: missing/unreadable file reads as null.
       return null;
     }
   }
@@ -437,7 +440,7 @@ export class OPFSReplicaService {
       const { dir, fileName } = await this.getDirectoryForPath(path);
       await dir.removeEntry(fileName);
     } catch {
-      // File may not exist — ignore
+      // best-effort: the file may not exist — delete is idempotent.
     }
   }
 

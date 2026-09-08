@@ -74,7 +74,7 @@ export function parseGitToolCommand(command: string): { toolName: string; args: 
         args = parsed;
       }
     } catch {
-      // Invalid JSON — leave args as empty object; the tool's execute()
+      // best-effort: invalid JSON — leave args as empty object; the tool's execute()
       // will validate required parameters and return an error message.
     }
   }

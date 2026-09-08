@@ -90,6 +90,7 @@ export async function collectTxnPushFiles(): Promise<{ inputs: TxnPushInput[]; d
     const commits = await gitLog(1);
     return { inputs: commits.length > 0 ? [] : all, deletes: [] };
   } catch {
+    // best-effort: when status can't be read, send everything.
     return { inputs: all, deletes: [] };
   }
 }

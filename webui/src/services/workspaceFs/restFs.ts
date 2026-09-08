@@ -30,6 +30,7 @@ async function toResult(resp: Response): Promise<{ ok: true; data: Record<string
       const data = (await resp.json()) as Record<string, unknown>;
       return { ok: true, data };
     } catch {
+      // best-effort: empty/non-JSON success body reads as empty data.
       return { ok: true, data: {} };
     }
   }
@@ -41,7 +42,7 @@ async function toResult(resp: Response): Promise<{ ok: true; data: Record<string
     const body = (await resp.json()) as { error?: string; message?: string };
     if (body && typeof body.error === 'string') code = body.error;
   } catch {
-    /* keep mapped code */
+    // best-effort: non-JSON error body keeps the status-mapped code.
   }
   return { ok: false, error: code };
 }

@@ -255,6 +255,7 @@ class GitClient {
       const branch = await git.currentBranch({ fs: this.fs, dir });
       return branch ?? undefined;
     } catch {
+      // best-effort: unborn/invalid HEAD reports as "no branch".
       return undefined;
     }
   }
@@ -313,6 +314,7 @@ class GitClient {
       try {
         entries = await pfs.readdir(path);
       } catch {
+        // best-effort: unreadable directory is skipped.
         return;
       }
       for (const name of entries) {
@@ -322,6 +324,7 @@ class GitClient {
         try {
           stats = await pfs.stat(fullPath);
         } catch {
+          // best-effort: entries that can't be stat'd are skipped.
           continue;
         }
         if (stats.isDirectory()) {
@@ -393,6 +396,7 @@ class GitClient {
       await this.pfs.stat(`${dir}/.git`);
       return true;
     } catch {
+      // best-effort: absent .git simply means "not a repo".
       return false;
     }
   }
@@ -436,6 +440,7 @@ class GitClient {
             });
             patch = `-${new TextDecoder().decode(oid.blob)}`;
           } catch {
+            // best-effort: blob unreadable at this commit — label as deleted.
             patch = '(file deleted)';
           }
         } else {
@@ -474,6 +479,7 @@ class GitClient {
       });
       return new TextDecoder().decode(blob.blob);
     } catch {
+      // best-effort: file absent at that commit reads as null.
       return null;
     }
   }
@@ -494,6 +500,7 @@ class GitClient {
       try {
         parentTree = await git.readTree({ fs: this.fs, dir, oid: parentSha });
       } catch {
+        // best-effort: a root commit has no parent tree.
         parentTree = null;
       }
     }

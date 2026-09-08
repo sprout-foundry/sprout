@@ -206,8 +206,8 @@ func TestConvertMessages_AssistantWithContentAndToolCallsPreservesContent(t *tes
 
 // TestBuildChatRequest_EmptyContentAssistantSerializesAsNull is an end-to-end
 // test that verifies the actual JSON request body has null content for empty
-// assistant+tool_calls messages, simulating the real Z.AI request that
-// triggered HTTP 400 "messages parameter is illegal".
+// assistant+tool_calls messages, which strict providers reject with
+// HTTP 400 "messages parameter is illegal" when serialized as "".
 func TestBuildChatRequest_EmptyContentAssistantSerializesAsNull(t *testing.T) {
 	config := &ProviderConfig{
 		Name:     "zai-coding",
@@ -230,8 +230,8 @@ func TestBuildChatRequest_EmptyContentAssistantSerializesAsNull(t *testing.T) {
 	}
 
 	// Simulate a realistic conversation with multiple empty-content
-	// assistant messages (the exact pattern from the 86-minute turn that
-	// triggered the 400 error).
+	// assistant messages — the pattern long agentic turns hit when every
+	// assistant message carries only tool_calls.
 	messages := []api.Message{
 		{Role: "system", Content: "You are a coding assistant."},
 		{Role: "user", Content: "Do the task"},

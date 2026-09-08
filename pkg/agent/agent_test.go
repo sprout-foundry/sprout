@@ -696,8 +696,7 @@ func TestAgent_EnableChangeTracking_CreatesTracker(t *testing.T) {
 // the whole session, not just the current turn.
 //
 // Previously EnableChangeTracking called Reset() on re-enable, which
-// wiped prior turns' edits — a cross-turn footgun. See
-// memory: off-rails-revert-detection for the incident that surfaced it.
+// wiped prior turns' edits — a cross-turn footgun.
 func TestAgent_EnableChangeTracking_PreservesExistingTracker(t *testing.T) {
 	ws := t.TempDir()
 	a := &Agent{

@@ -11,8 +11,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// TestSubagentCancellationPropagates is the regression test for the
-// deadlock described in the 2026-06-25 session: a subagent's interruptCtx
+// TestSubagentCancellationPropagates is the regression test for a
+// deadlock: a subagent's interruptCtx
 // was derived from context.Background() inside createSubagent, so
 // cancelling the parent's runCtx (Ctrl+C, timeout) had no effect on the
 // subagent's in-flight LLM call. The subagent kept running, the 5-second

@@ -119,8 +119,7 @@ func AssertNoStateLeak(realDir string, before map[string]time.Time) int {
 // Backstory: tests in cmd/ build real Agent instances to exercise the
 // chat/plan loop. Each Agent runs autoSaveState() on a timer, which
 // writes to whatever GetStateDir() returns. Without this helper that's
-// the developer's real ~/.sprout/sessions/, and ~90 mock-provider
-// session JSONs accumulated there before we caught it on 2026-06-08.
+// the developer's real ~/.sprout/sessions/ until we caught it.
 // See the `cleanup` body below for the Layer-5 detector that fails any
 // future test that bypasses this isolation.
 //

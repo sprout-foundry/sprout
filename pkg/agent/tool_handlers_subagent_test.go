@@ -513,7 +513,7 @@ func setupTestSubagentRunner(agent *Agent) {
 }
 
 // TestBuildSubagentReturn_PrependsFilesModifiedHeader verifies the fix for
-// the failure mode observed 2026-05-27: a primary agent receiving a
+// a failure mode: a primary agent receiving a
 // subagent's result couldn't tell which files the subagent edited and
 // ended up reverting "unfamiliar" diff. The structured FilesModified
 // field WAS populated, but the primary's LLM didn't latch onto it. Fix:

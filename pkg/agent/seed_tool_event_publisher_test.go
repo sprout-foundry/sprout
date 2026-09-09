@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -93,5 +95,82 @@ func TestRichEventPublisherFillsMetricsProviderModel(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected metrics_update event to be forwarded")
+	}
+}
+
+// TestRichEventPublisherTruncatesOversizedToolStartArgs verifies that
+// seed-origin tool_start events with whole-file arguments (write_file /
+// edit_file) are capped before they reach the bus — the arguments would
+// otherwise fan out to every connected tab and sit in the reattach replay
+// buffer. The head of the arguments string survives so consumers can still
+// extract the target path.
+func TestRichEventPublisherTruncatesOversizedToolStartArgs(t *testing.T) {
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("rich-publisher-trunc-test")
+	defer bus.Unsubscribe("rich-publisher-trunc-test")
+
+	a := &Agent{state: NewAgentStateManager(false)}
+	a.initSubManagers()
+	a.SetEventBus(bus)
+
+	pub := newRichEventPublisher(bus, a)
+
+	bigArgs := `{"path":"/tmp/big.txt","content":"` + strings.Repeat("x", events.MaxToolEventArgsLength*2) + `"}`
+	pub.Publish(core.EventTypeToolStart, map[string]interface{}{
+		"tool_name":    "write_file",
+		"tool_call_id": "call-1",
+		"arguments":    bigArgs,
+		"tool_index":   0,
+	})
+
+	// enrichEventData also emits a tool_log agent_message alongside each
+	// tool_start — drain it and wait for the tool_start itself.
+	data := waitForToolStart(t, ch)
+
+	args, _ := data["arguments"].(string)
+	if len(args) > events.MaxToolEventArgsLength+len("\n... (truncated)") {
+		t.Errorf("arguments not truncated: %d bytes", len(args))
+	}
+	if data["arguments_truncated"] != true {
+		t.Error("arguments_truncated marker missing")
+	}
+	if !strings.HasPrefix(args, `{"path":"/tmp/big.txt"`) {
+		t.Error("truncation must keep the head of the arguments (path extraction)")
+	}
+
+	// Under the cap: passed through unchanged, no marker.
+	pub.Publish(core.EventTypeToolStart, map[string]interface{}{
+		"tool_name":    "read_file",
+		"tool_call_id": "call-2",
+		"arguments":    `{"path":"/tmp/small.txt"}`,
+		"tool_index":   1,
+	})
+	data = waitForToolStart(t, ch)
+	if data["arguments"] != `{"path":"/tmp/small.txt"}` {
+		t.Errorf("small arguments modified: %v", data["arguments"])
+	}
+	if _, has := data["arguments_truncated"]; has {
+		t.Error("arguments_truncated must be absent for small arguments")
+	}
+}
+
+// waitForToolStart reads from ch, discarding the CLI tool_log agent_message
+// side-emissions, until the next tool_start arrives.
+func waitForToolStart(t *testing.T, ch <-chan events.UIEvent) map[string]interface{} {
+	t.Helper()
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != events.EventTypeToolStart {
+				continue
+			}
+			data, ok := ev.Data.(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected map payload, got %T", ev.Data)
+			}
+			return data
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for tool_start event")
+		}
 	}
 }

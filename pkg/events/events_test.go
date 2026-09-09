@@ -2,6 +2,7 @@ package events
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,9 +18,10 @@ func TestWorkspacePatchEvent_NoConflictInfo(t *testing.T) {
 	data := WorkspacePatchEvent("/path/to/file.txt", "content", "write", 42)
 
 	assert.Equal(t, "/path/to/file.txt", data["file_path"])
-	assert.Equal(t, "content", data["content"])
+	assert.Equal(t, len("content"), data["size"], "size reflects the dropped content length")
 	assert.Equal(t, "write", data["action"])
 	assert.Equal(t, int64(42), data["seq"])
+	assert.NotContains(t, data, "content", "content must not be shipped in workspace_patch events")
 
 	// Must NOT contain conflict or theirs_path keys
 	assert.NotContains(t, data, "conflict", "no conflict key when called without conflict info")
@@ -36,9 +38,10 @@ func TestWorkspacePatchEvent_ConflictFalse(t *testing.T) {
 	)
 
 	assert.Equal(t, "/path/to/file.txt", data["file_path"])
-	assert.Equal(t, "content", data["content"])
+	assert.Equal(t, len("content"), data["size"])
 	assert.Equal(t, "edit", data["action"])
 	assert.Equal(t, int64(10), data["seq"])
+	assert.NotContains(t, data, "content")
 
 	// Conflict=false must NOT add conflict or theirs_path keys
 	assert.NotContains(t, data, "conflict", "no conflict key when Conflict is false")
@@ -57,9 +60,10 @@ func TestWorkspacePatchEvent_ConflictTrue(t *testing.T) {
 	)
 
 	assert.Equal(t, "/path/to/file.txt", data["file_path"])
-	assert.Equal(t, "content", data["content"])
+	assert.Equal(t, len("content"), data["size"])
 	assert.Equal(t, "write", data["action"])
 	assert.Equal(t, int64(55), data["seq"])
+	assert.NotContains(t, data, "content")
 
 	// Conflict=true MUST include conflict and theirs_path keys
 	assert.Contains(t, data, "conflict", "conflict key must be present when Conflict is true")
@@ -75,14 +79,15 @@ func TestWorkspacePatchEvent_BackwardCompatibilityWithFourArgs(t *testing.T) {
 	data := WorkspacePatchEvent("foo.txt", "bar", "edit", 1)
 
 	require.Contains(t, data, "file_path")
-	require.Contains(t, data, "content")
+	require.Contains(t, data, "size")
 	require.Contains(t, data, "action")
 	require.Contains(t, data, "seq")
 
 	assert.Equal(t, "foo.txt", data["file_path"])
-	assert.Equal(t, "bar", data["content"])
+	assert.Equal(t, len("bar"), data["size"])
 	assert.Equal(t, "edit", data["action"])
 	assert.Equal(t, int64(1), data["seq"])
+	assert.NotContains(t, data, "content")
 	assert.NotContains(t, data, "conflict")
 	assert.NotContains(t, data, "theirs_path")
 }
@@ -675,4 +680,22 @@ func TestConcurrentPublishersDoNotOverlap(t *testing.T) {
 			t.Fatalf("timed out waiting for msg-%d", i)
 		}
 	}
+}
+
+// TestToolStartEvent_ArgumentsCapped verifies that oversized tool arguments
+// (write_file / edit_file embed whole files) are truncated in the event
+// payload, with an explicit marker, and that the head of the arguments
+// survives so consumers can still extract the target path.
+func TestToolStartEvent_ArgumentsCapped(t *testing.T) {
+	big := `{"path":"/tmp/x.txt","content":"` + strings.Repeat("a", MaxToolEventArgsLength*2) + `"}`
+	data := ToolStartEvent("write_file", "call-1", big, "write", "", false, "", 0)
+
+	args, _ := data["arguments"].(string)
+	assert.LessOrEqual(t, len(args), MaxToolEventArgsLength+len("\n... (truncated)"))
+	assert.Equal(t, true, data["arguments_truncated"])
+	assert.True(t, strings.HasPrefix(args, `{"path":"/tmp/x.txt"`), "head must survive for path extraction")
+
+	small := ToolStartEvent("read_file", "call-2", `{"path":"/tmp/y.txt"}`, "read", "", false, "", 0)
+	assert.Equal(t, `{"path":"/tmp/y.txt"}`, small["arguments"])
+	assert.NotContains(t, small, "arguments_truncated")
 }

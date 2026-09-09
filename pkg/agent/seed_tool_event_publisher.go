@@ -49,6 +49,18 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 			r.agent.state.IncrementTotalToolCalls()
 		}
 		enriched := r.enrichEventData(data, eventType)
+		// Cap oversized arguments (write_file/edit_file embed whole files).
+		// seed builds the tool_start payload inline with raw arguments, so
+		// this is the single choke point shared by both the seed path and
+		// Agent.PublishToolStart (whose ToolStartEvent applies the same cap).
+		if payload, ok := enriched.(map[string]interface{}); ok {
+			if eventType == core.EventTypeToolStart {
+				if args, _ := payload["arguments"].(string); len(args) > events.MaxToolEventArgsLength {
+					payload["arguments"] = events.TruncateEventString(args, events.MaxToolEventArgsLength)
+					payload["arguments_truncated"] = true
+				}
+			}
+		}
 		r.bus.Publish(eventType, enriched)
 	case "agent_message":
 		// The seed core's finalize() publishes the full final response as an

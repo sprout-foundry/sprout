@@ -104,13 +104,19 @@ func FileContentChangedEvent(filePath string, modTime int64, size int64) map[str
 }
 
 // WorkspacePatchEvent creates a workspace_patch event payload for real-time
-// file content synchronization from the agent to the browser.
-// The optional conflictInfo parameter enriches the event with conflict
-// metadata when the container patch conflicts with unsynced browser edits.
+// WorkspacePatchEvent creates a workspace_patch event payload for real-time
+// file change notification from the agent to the browser.
+//
+// The payload intentionally carries NO file content. The only in-tree consumer
+// (the WebUI's handleWorkspacePatch) logs path/action/seq, and shipping whole
+// files on every write/edit flooded every connected tab's main thread with
+// multi-hundred-KB JSON.parse work. Consumers needing content must fetch the
+// file via /api/files. size is computed from content before it is dropped so
+// the UI can still show change magnitude.
 func WorkspacePatchEvent(filePath, content, action string, seqNum int64, conflictInfo ...PatchConflictInfo) map[string]interface{} {
 	payload := map[string]interface{}{
 		"file_path": filePath,
-		"content":   content,
+		"size":      len(content),
 		"action":    action, // "write", "edit"
 		"seq":       seqNum,
 	}
@@ -173,12 +179,35 @@ func ValidationEvent(filePath string, diagnostics []map[string]interface{}) map[
 }
 
 // ToolStartEvent creates a tool start event with rich metadata
+// MaxToolEventArgsLength bounds the arguments string shipped in tool_start
+// events. write_file / edit_file arguments embed the entire file payload,
+// which otherwise fans out to every connected tab (and sits in the reattach
+// replay buffer) only to be re-JSON.parsed and discarded by the UI. The head
+// of the string is kept so leading keys like {"path": "..."} survive for
+// consumers that extract the target path.
+const MaxToolEventArgsLength = 8192
+
+// TruncateEventString returns s unchanged when within limit, otherwise the
+// first limit bytes plus a truncation marker.
+func TruncateEventString(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "\n... (truncated)"
+}
+
 func ToolStartEvent(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string, toolIndex int) map[string]interface{} {
 	data := map[string]interface{}{
 		"tool_name":    toolName,
 		"tool_call_id": toolCallID,
-		"arguments":    arguments,
+		"arguments":    TruncateEventString(arguments, MaxToolEventArgsLength),
 		"display_name": displayName,
+	}
+	if len(arguments) > MaxToolEventArgsLength {
+		// write_file / edit_file carry whole file contents in arguments; the
+		// UI only renders them (and extracts .path for stats). Mark truncation
+		// the same way tool_end marks results.
+		data["arguments_truncated"] = true
 	}
 	if persona != "" {
 		data["persona"] = persona

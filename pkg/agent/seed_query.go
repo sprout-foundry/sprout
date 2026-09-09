@@ -558,6 +558,25 @@ func (a *Agent) finalizeConversationPostHooks(result string, processedQuery stri
 		completedEvent["status"] = reason
 	}
 	a.publishEvent(events.EventTypeQueryCompleted, completedEvent)
+
+	// Turn-end metrics push: the WebUI status bar's cost/context segments
+	// only refresh on metrics_update events, which otherwise fire solely on
+	// errors, chat switches, and reconnects — so spend tracking appeared
+	// frozen between turns. Publishing the fresh totals here gives the
+	// footer a per-turn update cadence (SP-113/SP-053-3 follow-up).
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.GetProvider(),
+			a.GetModel(),
+			a.GetTotalTokens(),
+			a.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.GetTotalCost(),
+			"",
+		),
+	)
 }
 
 // maybeCheckpointCompletedTurn checks if a turn checkpoint should be recorded

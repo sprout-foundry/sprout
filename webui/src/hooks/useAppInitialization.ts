@@ -236,7 +236,12 @@ export function useAppInitialization({
               // frontend already knows (persisted state, WS event…).
               provider: stats.provider || prev.provider,
               model: stats.model || prev.model,
-              stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : { ...stats },
+              // Merge, not replace: a poll response without cost/token
+              // fields (nil-agent window during lazy recreation) must not
+              // erase the last-known values — that was the status bar's
+              // "flashes to $0.00 then back" flicker. Absent keys keep the
+              // previous value; present keys are authoritative.
+              stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : { ...prev.stats, ...stats },
             }));
           })
           .catch((err) =>

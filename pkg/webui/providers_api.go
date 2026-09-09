@@ -283,11 +283,16 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 
 	// Fast check: if no provider is configured, skip the expensive
 	// getChatAgent call and publish empty provider state immediately.
+	// Cost/token keys are dropped for the same reason as the nil-agent
+	// path below: zeroed/stale totals flash the status bar.
 	if !isProviderAvailableInWorkspace(workspaceRoot) {
 		stats := ws.gatherStatsForClientID(clientID)
 		stats["provider"] = ""
 		stats["model"] = ""
 		stats["client_id"] = clientID
+		for _, k := range []string{"total_cost", "total_tokens", "prompt_tokens", "completion_tokens", "cached_tokens", "cached_cost_savings"} {
+			delete(stats, k)
+		}
 		ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 		return
 	}
@@ -296,11 +301,17 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	if err != nil || agentInst == nil {
 		// If no provider is configured, publish an empty provider state so
 		// the frontend can immediately show the degraded UI instead of
-		// waiting for the next stats poll.
+		// waiting for the next stats poll. Drop the cost/token keys: a
+		// gather with a nil agent can carry a zeroed or stale snapshot
+		// total, and merging that would flash the status bar to $0.00
+		// until the next real event restores it.
 		stats := ws.gatherStatsForClientID(clientID)
 		stats["provider"] = ""
 		stats["model"] = ""
 		stats["client_id"] = clientID
+		for _, k := range []string{"total_cost", "total_tokens", "prompt_tokens", "completion_tokens", "cached_tokens", "cached_cost_savings"} {
+			delete(stats, k)
+		}
 		ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 		return
 	}

@@ -1461,7 +1461,9 @@ func TestWorkspacePatchEventCreation(t *testing.T) {
 	data := events.WorkspacePatchEvent("/path/to/file.txt", "content", "write", 42)
 
 	assert.Equal(t, "/path/to/file.txt", data["file_path"])
-	assert.Equal(t, "content", data["content"])
+	// Content is intentionally not shipped (see WorkspacePatchEvent) — size
+	// stands in for it so consumers can gauge change magnitude.
+	assert.Equal(t, len("content"), data["size"])
 	assert.Equal(t, "write", data["action"])
 	assert.Equal(t, int64(42), data["seq"])
 }
@@ -1487,8 +1489,8 @@ func TestWriteFileEmitsWorkspacePatchEvent(t *testing.T) {
 	// Expect the workspace_patch event (helper drains file_changed first)
 	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
 
-	// Verify content matches
-	assert.Equal(t, content, data["content"], "event content should match written content")
+	// Content is no longer shipped; size reflects the written payload.
+	assert.Equal(t, len(content), data["size"], "event size should match written content length")
 }
 
 // TestEditFileEmitsWorkspacePatchEvent verifies that handleEditFile
@@ -1518,8 +1520,11 @@ func TestEditFileEmitsWorkspacePatchEvent(t *testing.T) {
 	// Expect the workspace_patch event (helper drains file_changed first)
 	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
 
-	// Verify content reflects the edit
-	assert.Contains(t, data["content"], "key = new_value", "event content should reflect the edit")
+	// Content is no longer shipped; assert the size grew past the initial
+	// file (the edit replaced a short value with a longer one).
+	size, ok := data["size"].(int)
+	require.True(t, ok, "size should be int")
+	assert.Greater(t, size, len("key = old_value"), "event size should reflect the post-edit file")
 }
 
 // TestWriteStructuredFileEmitsWorkspacePatchEvent verifies that
@@ -1549,8 +1554,10 @@ func TestWriteStructuredFileEmitsWorkspacePatchEvent(t *testing.T) {
 	// Expect the workspace_patch event
 	eventData := expectWorkspacePatchEvent(t, ch, filePath, "write")
 
-	// The content should contain the serialized JSON
-	assert.Contains(t, eventData["content"], "sprout", "event content should contain the JSON data")
+	// Content is no longer shipped; size reflects the serialized JSON.
+	size, ok := eventData["size"].(int)
+	require.True(t, ok, "size should be int")
+	assert.Greater(t, size, 0, "event size should reflect the serialized JSON")
 }
 
 // TestPatchStructuredFileEmitsWorkspacePatchEvent verifies that
@@ -1600,8 +1607,10 @@ func TestPatchStructuredFileEmitsWorkspacePatchEvent(t *testing.T) {
 	// through writeFileContent)
 	eventData := expectWorkspacePatchEvent(t, ch, filePath, "write")
 
-	// The content should contain the patched data
-	assert.Contains(t, eventData["content"], "new-name", "event content should contain patched data")
+	// Content is no longer shipped; size reflects the patched file.
+	size, ok := eventData["size"].(int)
+	require.True(t, ok, "size should be int")
+	assert.Greater(t, size, 0, "event size should reflect the patched file")
 }
 
 // TestWorkspacePatchSeqIncrement verifies that when multiple files are
@@ -1762,7 +1771,7 @@ func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	require.True(t, ok, "workspace_patch data should be a map")
 	assert.Equal(t, filePath, data2["file_path"])
 	assert.Equal(t, "write", data2["action"])
-	assert.Equal(t, content, data2["content"])
+	assert.Equal(t, len(content), data2["size"])
 }
 
 // expectWorkspacePatchConflict checks the workspace_patch event data for

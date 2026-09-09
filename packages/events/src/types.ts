@@ -77,6 +77,8 @@ export interface ToolStartData {
   tool_name: string;
   tool_call_id?: string;
   arguments?: string;
+  /** True when arguments exceeded the server's event-size cap and were truncated. */
+  arguments_truncated?: boolean;
   display_name?: string;
   persona?: string;
   is_subagent?: boolean;
@@ -186,10 +188,17 @@ export interface FileContentChangedData {
   size?: number;
 }
 
-/** Real-time file content synchronization payload from WorkspacePatchEvent. */
+/** File-change notification payload from WorkspacePatchEvent (no content — see WorkspacePatchEvent). */
 export interface WorkspacePatchData {
   file_path: string;
-  content: string;
+  /**
+   * @deprecated No longer transmitted — the event never carried content the
+   * UI rendered, and shipping whole files made every tab JSON.parse them.
+   * Use `size` for the byte count; fetch content via /api/files.
+   */
+  content?: string;
+  /** Byte length of the changed content (whole-file content is not sent). */
+  size: number;
   action: string;
   seq: number;
   conflict?: boolean;

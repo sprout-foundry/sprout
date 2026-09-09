@@ -559,6 +559,16 @@ Forwarding happens from a worker goroutine; the JS callback is invoked
 synchronously (Go-WASM doesn't have async JS calls), so heavy work
 should be deferred to a microtask on the JS side.
 
+Payload size contracts (see `pkg/events/events_filter.go`):
+- `tool_start.data.arguments` is capped at `MaxToolEventArgsLength`
+  (8 KB) with an `arguments_truncated: true` marker; the head of the
+  string is preserved so `path` extraction still works.
+- `tool_end.data.result` is capped at 2000 chars with
+  `result_truncated: true` / `result_length`.
+- `workspace_patch` carries `file_path`, `action`, `seq`, `size`
+  (and `conflict` / `theirs_path` on conflict) — never file content.
+  Fetch content via the file API.
+
 Timeout: 10 minutes per call. Agent loops with many tool calls can
 approach this — file an issue if it bites and we'll make it configurable.
 

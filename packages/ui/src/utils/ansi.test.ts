@@ -107,6 +107,35 @@ describe('stripAnsiCodes', () => {
     });
   });
 
+  // The fast path (packages/ui/src/utils/ansi.ts) skips the regex passes
+  // when no strip-worthy char is present. These tests pin the gate: text
+  // that trips NONE of the gate conditions must come back byte-identical,
+  // and each gate condition alone must still route through the slow path.
+  describe('fast path equivalence', () => {
+    it('returns plain text unchanged (fast path)', () => {
+      const input = 'plain text with symbols !@#$%^&*() and unicode ✓ é 漢字';
+      expect(stripAnsiCodes(input)).toBe(input);
+    });
+
+    it('fast path does not corrupt lone CR (slow path gate)', () => {
+      const input = 'progress 25%\r50%\r100%';
+      expect(stripAnsiCodes(input)).toBe('progress 25%\n50%\n100%');
+    });
+
+    it('fast path does not corrupt C0 controls (slow path gate)', () => {
+      const input = 'A\x01B\x07C';
+      expect(stripAnsiCodes(input)).toBe('ABC');
+    });
+
+    it('fast path triggers on C1 range chars (slow path gate)', () => {
+      // \u009B is CSI in the C1 range — the gate routes to the slow path,
+      // which consumes the whole \u009B[31m as a CSI sequence (identical
+      // to the ESC[31m form minus the leading char).
+      const input = 'A\u009B[31mred';
+      expect(stripAnsiCodes(input)).toBe('A31mred');
+    });
+  });
+
   describe('complex inputs', () => {
     it('handles real terminal output', () => {
       const input = '\x1B[32m✓\x1B[0m Success\x1B[31m✕\x1B[0m Error';

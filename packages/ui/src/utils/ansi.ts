@@ -16,6 +16,28 @@ export function stripAnsiCodes(text: unknown): string {
           ? JSON.stringify(text, null, 2)
           : String(text);
 
+  // Fast path: if the text contains nothing this function would strip
+  // (ESC, C1, CR, or C0 controls other than \n and \t), every regex below
+  // is a no-op — skip the eight full-text passes. This runs per stream
+  // chunk and per tool-detail render, so the scan must stay cheap: a
+  // single pass with an early exit on the first strip-worthy byte.
+  //
+  // The gate must cover ALL strip targets, not just ESC: \r normalization
+  // and C0 control stripping are also this function's job, and bailing on
+  // ESC alone would corrupt spinner-style output ("...\r25%" without any
+  // escape codes).
+  let needsWork = false;
+  for (let i = 0; i < normalized.length; i++) {
+    const c = normalized.charCodeAt(i);
+    if (c === 0x1b || c === 0x0d || (c < 0x20 && c !== 0x09 && c !== 0x0a) || (c >= 0x80 && c <= 0x9f)) {
+      needsWork = true;
+      break;
+    }
+  }
+  if (!needsWork) {
+    return normalized;
+  }
+
   // Normalize common line endings first.
   // Keep lone CR as line breaks so carriage-return updates don't smash text together.
   let cleaned = normalized.replace(/\r\n/g, '\n').replace(/\r(?!\n)/g, '\n');

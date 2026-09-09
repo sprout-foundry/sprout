@@ -141,14 +141,10 @@ describe('FileTree', () => {
     expect(container.querySelector('.more-actions-btn')).not.toBeNull();
   });
 
-  it('overflow menu contains toggle-ignored, refresh, and add-workspace actions', () => {
+  it('overflow menu contains toggle-ignored and refresh actions', () => {
     const ref: { current: FileTreeHandle | null } = { current: null };
     act(() => {
-      root.render(createElement(FileTree, {
-        ref,
-        ...baseProps,
-        cloneRepoButton: vi.fn().mockResolvedValue(undefined),
-      }));
+      root.render(createElement(FileTree, { ref, ...baseProps }));
     });
     // Open the overflow menu (portal renders into document.body).
     const moreBtn = container.querySelector('.more-actions-btn')!;
@@ -159,7 +155,9 @@ describe('FileTree', () => {
     const labels = menuItems.map((el) => el.textContent ?? '');
     expect(labels.some((t) => t.includes('ignored files'))).toBe(true);
     expect(labels.some((t) => t === 'Refresh')).toBe(true);
-    expect(labels.some((t) => t.includes('Add workspace from repo'))).toBe(true);
+    // The "Add workspace from repo…" clone item moved to the Files workspace
+    // row (WorkspaceCwdBar) — it must NOT appear in the tree's overflow menu.
+    expect(labels.some((t) => t.includes('Add workspace from repo'))).toBe(false);
   });
 
   it('renders files from provided files prop', () => {

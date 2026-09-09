@@ -208,20 +208,13 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     // Add history so reverts can be undone/redone
     extensions.push(history());
     extensions.push(keymap.of(historyKeymap));
-    // Add save keybinding
-    if (onSave) {
-      extensions.push(
-        keymap.of([
-          {
-            key: 'Mod-s',
-            run: (view) => {
-              onSave(view.state.doc.toString());
-              return true;
-            },
-          },
-        ]),
-      );
-    }
+    // NOTE: save is NOT bound via keymap here. CM6 keymaps do not fire
+    // inside @codemirror/merge panes (verified empirically against
+    // 6.12.1 — bindings in pane A/B extensions never run, though the same
+    // bindings on a plain EditorView work). The save shortcut is a DOM
+    // keydown listener on the wrapper container instead (see the save-key
+    // effect below), which works regardless of the merge lib's internal
+    // event routing.
     // Report pane-B content changes (reverts, typing) up to the parent so
     // edits survive re-renders / view toggles instead of living only inside
     // the CodeMirror instance. Also mark the content as "synced" so the
@@ -236,7 +229,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       }),
     );
     return extensions;
-  }, [buildBaseExtensions, onSave]);
+  }, [buildBaseExtensions]);
 
   // Build unified mode extensions (closure captures originalContent)
   const buildUnifiedExtensions = useCallback(() => {
@@ -499,6 +492,32 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     }
   }, [effectiveMode, originalContent, modifiedContent, updateSbsHunkInfo]);
 
+  // ── Save shortcut (DOM level) ──
+  // CM6 keymaps do not fire inside @codemirror/merge panes (see the note
+  // in buildEditableExtensions), so Mod-S is handled with a container-level
+  // keydown listener. Fires only when focus is inside this wrapper and the
+  // active editor is pane B (side-by-side) or the unified editor — never
+  // when focus is elsewhere in the app.
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || !onSave) return;
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key.toLowerCase() !== 's') return;
+      const view =
+        (effectiveMode === 'side-by-side' && mergeViewRef.current ? mergeViewRef.current.b : editorViewRef.current) ||
+        (effectiveMode === 'side-by-side' ? mergeViewRef.current?.b : null);
+      if (!view) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onSaveRef.current?.(view.state.doc.toString());
+    };
+    el.addEventListener('keydown', handler);
+    return () => el.removeEventListener('keydown', handler);
+  }, [onSave, effectiveMode]);
+
   // ── Unified mode ──
 
   // Create/recreate unified view (full recreation required since
@@ -519,20 +538,6 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       // Add history for undo/redo support
       extensions.push(history());
       extensions.push(keymap.of(historyKeymap));
-      // Add save keybinding
-      if (onSave) {
-        extensions.push(
-          keymap.of([
-            {
-              key: 'Mod-s',
-              run: (view) => {
-                onSave(view.state.doc.toString());
-                return true;
-              },
-            },
-          ]),
-        );
-      }
 
       const state = EditorState.create({
         doc: modContentRef.current,

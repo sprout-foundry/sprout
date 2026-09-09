@@ -217,6 +217,21 @@ summary:focus-visible {
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* ── Phone form-factor track (slice 1: kill desktop split chrome) ──
+   *
+   * A phone canvas cannot host side-by-side panes: the desktop IDE
+   * topology squeezed into ~360×800dp scrunches each pane illegibly.
+   * Split surfaces open full-screen (sheet behavior lands in the next
+   * slice); until then the panes simply stack one-per-viewport. Hiding
+   * the resize handles here is the load-bearing piece: pointer-based
+   * drag targets are unusable on touch and waste divider pixels.
+   */
+  .resize-handle,
+  .resize-handle-horizontal,
+  .resize-handle-vertical {
+    display: none !important;
+  }
 }
 
 @media (min-width: 769px) {

@@ -194,14 +194,14 @@ test.describe('Section expand/collapse and subsection tabs', () => {
     expect(labels.map((l) => l.trim())).toEqual(['Embeddings', 'MCP Servers', 'Language Servers']);
   });
 
-  test('Environment section expands to show 3 subsection tabs', async () => {
+  test('Environment section expands to show 4 subsection tabs', async () => {
     await expandSection('Environment');
     const section = sectionByLabel('Environment');
     const tabs = section.locator('.settings-subsection-btn');
-    await expect(tabs).toHaveCount(3);
+    await expect(tabs).toHaveCount(4);
 
     const labels = await tabs.allTextContents();
-    expect(labels.map((l) => l.trim())).toEqual(['Providers', 'Local LLM', 'Advanced']);
+    expect(labels.map((l) => l.trim())).toEqual(['Providers', 'Local LLM', 'GitHub', 'Advanced']);
   });
 
   test('Editor section expands to show 2 subsection tabs', async () => {

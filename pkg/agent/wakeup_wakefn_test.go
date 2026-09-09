@@ -95,17 +95,38 @@ func TestSetWakeupWakeFn_NilReverts(t *testing.T) {
 	waitQuerySettled(t, a)
 }
 
-// waitQuerySettled blocks until the agent's query guard is released (or
-// a timeout fires). Used by goroutine-path TryAutoResume tests so the
-// background resume finishes BEFORE the test's state-dir teardown — a
-// query that outlives NewTestStateDir's cleanup writes its journal /
-// auto-save into the real state dir (the "[state-leak]" CI failure).
+// waitQuerySettled blocks until every in-flight auto-resume goroutine
+// has fully finished (query guard released AND the turn-boundary
+// auto-save written). Used by goroutine-path TryAutoResume tests so
+// the background resume is DONE BEFORE the test's state-dir teardown —
+// a query that outlives NewTestStateDir's cleanup writes its journal /
+// auto-save into the real state dir (the "[state-leak]" CI failure),
+// or into the t.TempDir mid-cleanup ("TempDir RemoveAll cleanup:
+// directory not empty").
+//
+// Polling IsQueryInProgress() alone is NOT sufficient: the resume's
+// deferred auto-save runs AFTER EndQuery (defer LIFO across
+// ProcessQueryWithContinuityAs and processQueryWithSeed), and the
+// goroutine can miss the guard acquisition entirely if the first poll
+// lands before it starts. WaitWakeupGoroutines covers both — it only
+// returns once the goroutine body (query + auto-save) has exited — and
+// the 20ms poll bridges the gap before the goroutine starts (the Add(1)
+// happens synchronously inside TryAutoResume).
 func waitQuerySettled(t *testing.T, a *Agent) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
-	for a.IsQueryInProgress() {
+	for {
 		if time.Now().After(deadline) {
-			t.Log("waitQuerySettled: query still in progress after 10s; continuing")
+			t.Log("waitQuerySettled: timed out after 10s; continuing")
+			return
+		}
+		a.WaitWakeupGoroutines()
+		if !a.IsQueryInProgress() {
+			// Final drain: settles a cascade resume (the end-of-turn
+			// immediate wakeup check) spawned between the Wait and the
+			// guard check above.
+			time.Sleep(20 * time.Millisecond)
+			a.WaitWakeupGoroutines()
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

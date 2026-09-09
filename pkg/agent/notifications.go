@@ -343,7 +343,9 @@ func (a *Agent) TryAutoResume() bool {
 		return true
 	}
 
+	a.wakeupInFlight.Add(1)
 	go func() {
+		defer a.wakeupInFlight.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				a.Logger().Debug("[wakeup] auto-resume panicked: %v\n", r)
@@ -363,6 +365,24 @@ func (a *Agent) TryAutoResume() bool {
 		}
 	}()
 	return true
+}
+
+// WaitWakeupGoroutines blocks until every auto-resume goroutine
+// spawned by TryAutoResume's headless path has finished.
+//
+// The query guard is NOT a teardown boundary for these turns: the
+// resume's deferred auto-save runs AFTER EndQuery (defer LIFO across
+// ProcessQueryWithContinuityAs and processQueryWithSeed), so session
+// state can be written while IsQueryInProgress() already reports
+// false. Callers that tear down the agent's state dir — test cleanup
+// above all, but also Shutdown mid-flight — must wait on this
+// instead, or the save lands in the temp dir mid-cleanup ("TempDir
+// cleanup: directory not empty" / the [state-leak] CI failure).
+func (a *Agent) WaitWakeupGoroutines() {
+	if a == nil {
+		return
+	}
+	a.wakeupInFlight.Wait()
 }
 
 // WakeupBatchPrefix marks formatted wakeup batches. The REPL uses it to

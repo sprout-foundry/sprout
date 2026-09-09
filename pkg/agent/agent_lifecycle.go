@@ -59,6 +59,25 @@ func (a *Agent) shutdownLocked() {
 		cancel()
 	}
 
+	// Wait for in-flight auto-resume goroutines (TryAutoResume's
+	// headless path). Their deferred auto-save outlives the query
+	// guard (defer LIFO across the two query entry points), so a state
+	// write can land AFTER this Shutdown returns — into a test's temp
+	// state dir mid-cleanup ("TempDir cleanup: directory not empty").
+	// The interrupt cancel above aborts any in-flight provider request,
+	// so this converges quickly. Bounded: a tool that ignores the
+	// interrupt context must not hold Shutdown hostage.
+	doneCh := make(chan struct{})
+	go func() {
+		a.wakeupInFlight.Wait()
+		close(doneCh)
+	}()
+	select {
+	case <-doneCh:
+	case <-time.After(10 * time.Second):
+		a.Logger().Debug("[shutdown] auto-resume goroutines still in flight after 10s; proceeding with teardown\n")
+	}
+
 	// Stop background process manager (CLI-mode background shells)
 	if a.backgroundProcessManager != nil {
 		a.backgroundProcessManager.Close()

@@ -41,6 +41,58 @@ export const collapseHomePath = (path: string, homePath?: string): string => {
   return trimmedPath;
 };
 
+export interface BrowseTarget {
+  /** Directory to request from the browse endpoint (always within the daemon root). */
+  browsePath: string;
+  /** In-progress last segment used to filter suggestions; empty for whole-directory browsing. */
+  prefix: string;
+}
+
+/**
+ * Compute the directory the workspace switcher should browse for suggestions,
+ * clamped to the daemon root.
+ *
+ * The switcher pre-fills its input with the current workspace root. When the
+ * workspace IS the home directory (and the daemon root is home), the natural
+ * "browse the parent of the input" targets a directory ABOVE the daemon root,
+ * which the backend rejects with `directory_outside_daemon_root`. The clamp
+ * makes a home-workspace input browse the daemon root itself instead.
+ *
+ * When `daemonRoot` is empty (not yet loaded) the natural parent is returned
+ * unchanged, preserving prior behavior. Returns null for empty input.
+ */
+export function getBrowseTarget(rawInput: string, daemonRoot: string): BrowseTarget | null {
+  const normalizedInput = normalizePath(rawInput);
+  if (!normalizedInput) return null;
+
+  let browsePath: string;
+  let prefix: string;
+  if (rawInput.trim().endsWith('/')) {
+    browsePath = normalizedInput;
+    prefix = '';
+  } else {
+    const segments = normalizedInput.split('/');
+    prefix = segments.filter(Boolean).pop() ?? '';
+    browsePath = normalizePath(segments.slice(0, -1).join('/')) || '/';
+  }
+
+  const root = daemonRoot ? normalizePath(daemonRoot) : '';
+  if (root && !isWithinOrEqual(browsePath, root)) {
+    browsePath = root;
+    // The input points above the allowed area; show the root's contents
+    // unfiltered instead of filtering root entries by a foreign segment.
+    prefix = '';
+  }
+
+  return { browsePath, prefix };
+}
+
+function isWithinOrEqual(path: string, root: string): boolean {
+  if (path === root) return true;
+  const rootPrefix = root === '/' ? '/' : `${root}/`;
+  return path.startsWith(rootPrefix);
+}
+
 export const getSSHBrowseQuery = (rawPath: string): SSHBrowseQuery => {
   const trimmed = rawPath.trim();
   if (!trimmed) {

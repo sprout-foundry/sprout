@@ -77,7 +77,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-09-08",
+    "last_verified": "2026-09-09",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -643,6 +643,12 @@
       },
       {
         "id": "inclusionAI/Ling-3.0-flash-Fin",
+        "input_per_mtok": 0.06,
+        "output_per_mtok": 0.18,
+        "cached_per_mtok": 0.012
+      },
+      {
+        "id": "inclusionAI/Ling-3.0-flash-VL",
         "input_per_mtok": 0.06,
         "output_per_mtok": 0.18,
         "cached_per_mtok": 0.012
@@ -1643,7 +1649,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-09-08",
+    "last_verified": "2026-09-09",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4278,12 +4284,40 @@
         "input_per_mtok": 1,
         "output_per_mtok": 2,
         "cached_per_mtok": 0.16
+      },
+      {
+        "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+        "input_per_mtok": 0.11,
+        "output_per_mtok": 0.33,
+        "cached_per_mtok": 0.0035
+      },
+      {
+        "id": "inception/mercury-2.5",
+        "input_per_mtok": 0.04,
+        "output_per_mtok": 0.15,
+        "cached_per_mtok": 0.004
+      },
+      {
+        "id": "nex-agi/nex-n2.5-mini:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "nex-agi/nex-n2.5-pro:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "z-ai/glm-5.3:batch",
+        "input_per_mtok": 0.7,
+        "output_per_mtok": 2.2,
+        "cached_per_mtok": 0.13
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-30",
+    "last_verified": "2026-09-09",
     "models": [
       {
         "id": "glm-4.5v",
@@ -4376,12 +4410,18 @@
         "input_per_mtok": 0.15,
         "output_per_mtok": 0.5,
         "cached_per_mtok": 0.03
+      },
+      {
+        "id": "glm-5.3:batch",
+        "input_per_mtok": 0.7,
+        "output_per_mtok": 2.2,
+        "cached_per_mtok": 0.13
       }
     ]
   },
   "zai-coding": {
     "source": "https://docs.z.ai/devpack/overview",
-    "last_verified": "2026-08-30",
+    "last_verified": "2026-09-09",
     "models": [
       {
         "id": "glm-4.5",
@@ -4483,6 +4523,12 @@
         "input_per_mtok": 0.15,
         "output_per_mtok": 0.5,
         "cached_per_mtok": 0.03
+      },
+      {
+        "id": "glm-5.3:batch",
+        "input_per_mtok": 0.7,
+        "output_per_mtok": 2.2,
+        "cached_per_mtok": 0.13
       }
     ]
   }

@@ -38,7 +38,8 @@
       "glm-5.2:batch",
       "glm-5.2:free",
       "glm-5.3-flash",
-      "glm-5.3-flash:batch"
+      "glm-5.3-flash:batch",
+      "glm-5.3:batch"
     ],
     "default_context_limit": 200000,
     "default_model": "glm-5",
@@ -271,6 +272,20 @@
         "tags": [
           "tools",
           "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.13,
+        "context_length": 1048576,
+        "description": "GLM-5.3 via the Batch API at 50% of standard pricing. Large-scale reasoning model from Z.ai with a 1M-token context window, built for complex software engineering and long-horizon agent tasks.",
+        "id": "glm-5.3:batch",
+        "input_cost": 0.7,
+        "name": "GLM-5.3 (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
           "reasoning",
           "structured_output"
         ]

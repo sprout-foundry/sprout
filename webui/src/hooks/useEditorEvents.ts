@@ -37,6 +37,10 @@ export interface UseEditorEventsOptions {
   viewRef: React.MutableRefObject<EditorView | null>;
   bufferRef: React.MutableRefObject<EditorBuffer | null | undefined>;
   handleGoToLine: (line: number) => void;
+  /** Save the pane's current buffer to disk. Backs the global
+   *  editor-save-current event (the save_file hotkey's dispatch —
+   *  previously fired into the void with no listener). */
+  handleSave?: () => Promise<void>;
   onToggleWordWrap: () => void;
   onToggleMinimap: () => void;
   onToggleRelativeLineNumbers: () => void;
@@ -89,6 +93,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         viewRef,
         bufferRef,
         handleGoToLine,
+        handleSave,
         onToggleWordWrap,
         onToggleMinimap,
         onToggleRelativeLineNumbers,
@@ -105,7 +110,9 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       // goto-line, etc. would fire across all panes simultaneously.
       if (!isActiveRef.current) return;
 
-      if (e.type === 'editor-goto-line') {
+      if (e.type === 'editor-save-current') {
+        handleSave?.();
+      } else if (e.type === 'editor-goto-line') {
         const customEvent = e as CustomEvent;
         if (customEvent.detail?.line) {
           handleGoToLine(customEvent.detail.line);
@@ -215,6 +222,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
 
   useEffect(() => {
     const events = [
+      'editor-save-current',
       'editor-goto-line',
       'editor-toggle-word-wrap',
       'editor-toggle-linked-scroll',

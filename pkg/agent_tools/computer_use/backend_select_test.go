@@ -1,11 +1,24 @@
 package computer_use
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
 
+// requireDarwin skips on non-macOS: CheckPermissions gates the TCC checks
+// (Accessibility via cliclick, Screen Recording via screencapture) behind
+// runtime.GOOS == "darwin" and returns a single generic "no TCC permissions
+// required" check elsewhere — the Accessibility assertions below are
+// darwin-only by construction.
+func requireDarwin(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skipf("TCC permission checks are macOS-only; GOOS=%s returns the generic check", runtime.GOOS)
+	}
+}
+
 func TestCheckPermissions_AllGranted(t *testing.T) {
+	requireDarwin(t)
 	prevRun := commandRunner
 	commandRunner = func(name string, args ...string) ([]byte, error) {
 		if name == "cliclick" {
@@ -34,6 +47,7 @@ func TestCheckPermissions_AllGranted(t *testing.T) {
 }
 
 func TestCheckPermissions_AccessibilityDenied(t *testing.T) {
+	requireDarwin(t)
 	prevRun := commandRunner
 	commandRunner = func(name string, args ...string) ([]byte, error) {
 		if name == "cliclick" {
@@ -65,6 +79,7 @@ func TestCheckPermissions_AccessibilityDenied(t *testing.T) {
 }
 
 func TestCheckPermissions_CliclickError(t *testing.T) {
+	requireDarwin(t)
 	prevRun := commandRunner
 	commandRunner = func(name string, args ...string) ([]byte, error) {
 		if name == "cliclick" {

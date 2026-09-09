@@ -101,6 +101,14 @@ func (b *subprocessBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 		return nil, Size{}, fmt.Errorf("no screenshot tool available")
 	}
 	if err := b.runWithCtx(context.Background(), b.capTool, args...); err != nil {
+		// macOS TCC: when Screen Recording is denied, screencapture exits 1
+		// with this stderr message. Append an actionable hint.
+		if strings.Contains(err.Error(), "could not create image from display") {
+			return nil, Size{}, fmt.Errorf(
+				"%w — screen capture permission is likely denied; grant Screen Recording access "+
+					"in System Settings → Privacy & Security → Screen Recording (macOS), then retry",
+				err)
+		}
 		return nil, Size{}, err
 	}
 
@@ -109,11 +117,24 @@ func (b *subprocessBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 		return nil, Size{}, fmt.Errorf("read screenshot: %w", err)
 	}
 
+	cfg, derr := png.DecodeConfig(bytes.NewReader(data))
+	if derr != nil {
+		return nil, Size{}, fmt.Errorf("decode screenshot dims: %w", derr)
+	}
+
+	// TCC guard: with Screen Recording denied, some macOS versions have
+	// screencapture exit 0 but write a 1x1 placeholder PNG. No real display
+	// is 1xN, so treat a degenerate capture as a permission failure instead
+	// of silently feeding the model a blank image.
+	if cfg.Width <= 1 || cfg.Height <= 1 {
+		return nil, Size{}, fmt.Errorf(
+			"%s captured only a %dx%d image — screen capture permission is likely denied; "+
+				"grant Screen Recording access in System Settings → Privacy & Security → "+
+				"Screen Recording (macOS), or verify DISPLAY is set (Linux)",
+			b.capTool, cfg.Width, cfg.Height)
+	}
+
 	if region == nil {
-		cfg, derr := png.DecodeConfig(bytes.NewReader(data))
-		if derr != nil {
-			return nil, Size{}, fmt.Errorf("decode screenshot dims: %w", derr)
-		}
 		return data, Size{Width: cfg.Width, Height: cfg.Height}, nil
 	}
 

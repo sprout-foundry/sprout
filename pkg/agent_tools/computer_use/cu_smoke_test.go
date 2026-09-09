@@ -57,10 +57,18 @@ func TestSmokeRealBackendInput(t *testing.T) {
 	}
 	t.Log("mouse_click OK")
 
-	// 5. Verify the screenshot path still works post-input.
+	// 5. Verify the screenshot path still works post-input. Screen capture
+	// requires the Screen Recording TCC grant — CI runners and un-granted
+	// dev machines don't have it, and 9aa6f1565 turned the silent blank
+	// into an explicit error. Treat that as a skip, not a failure: the
+	// input-sequence assertions above are the point of this smoke test.
 	var m map[string]any
 	out, err := find("take_screenshot").Execute(ctx, env, nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "screen capture permission") ||
+			strings.Contains(err.Error(), "could not create image from display") {
+			t.Skipf("screen capture permission unavailable; skipping screenshot assertion: %v", err)
+		}
 		t.Fatalf("take_screenshot: %v", err)
 	}
 	if err := json.Unmarshal([]byte(out.Output), &m); err != nil {

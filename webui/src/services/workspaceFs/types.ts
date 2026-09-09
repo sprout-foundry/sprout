@@ -44,9 +44,7 @@ export interface WriteEntry {
 }
 
 /** Discriminated result. `ok: false` carries an error CODE, not prose. */
-export type FsResult<T = undefined> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type FsResult<T = undefined> = ({ ok: true } & T) | { ok: false; error: string };
 
 export type FsOk = FsResult<{ path?: string }>;
 export type ReadResult = FsResult<{ path: string; content?: string; contentBase64?: string }>;

@@ -499,4 +499,3 @@ describe('malformed bridge output', () => {
     expect(shell.listDir('/')).toEqual({ entries: [], error: 'undefined' });
   });
 });
-

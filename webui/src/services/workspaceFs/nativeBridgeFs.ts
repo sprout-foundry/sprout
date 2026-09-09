@@ -12,15 +12,7 @@
  * every result uniformly.
  */
 
-import type {
-  BatchResult,
-  FsOk,
-  ListResult,
-  ReadResult,
-  StatResult,
-  WorkspaceFs,
-  WriteEntry,
-} from './types';
+import type { BatchResult, FsOk, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 /** Minimal shape of the bridge the shell injects (studio-bridge.js). */
@@ -41,10 +33,7 @@ export function detectBridgeCall(): BridgeCall | null {
 }
 
 /** Internal: run one files-channel op, normalizing transport failure. */
-async function filesOp(
-  call: BridgeCall,
-  payload: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+async function filesOp(call: BridgeCall, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   try {
     // 60s: batched git-clone writes (base64 packfiles) can take a while
     // to land natively; the old 30s default made big batches time out and
@@ -62,9 +51,16 @@ export function createNativeBridgeFs(call: BridgeCall = requiredCall()): Workspa
   return {
     async read(path) {
       const r = await filesOp(call, { op: 'readWorkspaceFile', path: normalizeFsPath(path) });
-      return (r.ok
-        ? { ok: true, path: String(r.path ?? path), content: r.content as string | undefined, contentBase64: r.contentBase64 as string | undefined }
-        : { ok: false, error: String(r.error ?? 'ioFailed') }) as ReadResult;
+      return (
+        r.ok
+          ? {
+              ok: true,
+              path: String(r.path ?? path),
+              content: r.content as string | undefined,
+              contentBase64: r.contentBase64 as string | undefined,
+            }
+          : { ok: false, error: String(r.error ?? 'ioFailed') }
+      ) as ReadResult;
     },
 
     async write(path, payload) {

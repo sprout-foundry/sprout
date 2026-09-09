@@ -76,7 +76,9 @@ describe('GitHubAccountPanel', () => {
 
   const render = async (props: Record<string, unknown> = {}) => {
     await act(async () => {
-      root.render(<GitHubAccountPanel user={null} onSignedIn={() => undefined} onSignedOut={() => undefined} {...props} />);
+      root.render(
+        <GitHubAccountPanel user={null} onSignedIn={() => undefined} onSignedOut={() => undefined} {...props} />,
+      );
     });
   };
 

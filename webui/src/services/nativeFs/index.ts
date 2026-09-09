@@ -86,10 +86,9 @@ export type SproutStudioWorkspaceBridge = {
   /** Presents the system folder picker; persists the chosen root. */
   pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
   /** Creates a fresh project folder and makes it the workspace root. */
-  createWorkspace(name: string): Promise<
-    | { ok: true; rootName: string }
-    | { ok: false; error: 'invalidName' | 'alreadyExists' | string }
-  >;
+  createWorkspace(
+    name: string,
+  ): Promise<{ ok: true; rootName: string } | { ok: false; error: 'invalidName' | 'alreadyExists' | string }>;
 };
 
 /** Result shape of the two workspace ops above (discriminated on `ok`). */
@@ -107,7 +106,6 @@ export function hasSproutStudioWorkspaceBridge(obj: unknown): obj is SproutStudi
   const c = obj as Record<string, unknown>;
   return typeof c.pickWorkspace === 'function' && typeof c.createWorkspace === 'function';
 }
-
 
 // ── Structural detector ───────────────────────────────────────────────────────
 

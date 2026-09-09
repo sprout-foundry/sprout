@@ -211,7 +211,7 @@ export function resolveCdTarget(arg: string, sessionCwd: string): string | null 
   if (trimmed.startsWith('/')) return null;
   // `~` / `~/…` resolve against the workspace root (the chroot home).
   const fromRoot = trimmed === '~' || trimmed.startsWith('~/');
-  const base = fromRoot ? '' : normalizeWorkspaceCwd(sessionCwd) ?? '';
+  const base = fromRoot ? '' : (normalizeWorkspaceCwd(sessionCwd) ?? '');
   const body = fromRoot ? trimmed.replace(/^~\/?/, '') : trimmed;
   const segments: string[] = base === '' ? [] : base.split('/');
   for (const seg of body.split('/')) {

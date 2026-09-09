@@ -114,7 +114,12 @@ beforeEach(() => {
   localStorage.clear();
   fetchMock = vi.fn().mockResolvedValue(jsonResponse([sampleRepo(1, 'Hello-World'), sampleRepo(2, 'Spoon-Knife')]));
   vi.stubGlobal('fetch', fetchMock);
-  mockCloneRepo.mockResolvedValue({ repo: "octocat/Hello-World", dir: "repos/octocat/Hello-World", entries: 3, defaultBranch: "master" });
+  mockCloneRepo.mockResolvedValue({
+    repo: 'octocat/Hello-World',
+    dir: 'repos/octocat/Hello-World',
+    entries: 3,
+    defaultBranch: 'master',
+  });
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
 });
@@ -294,7 +299,7 @@ describe('GitHubRepoPicker', () => {
       });
 
       expect(mockCloneRepo).toHaveBeenCalledTimes(1);
-      expect(mockCloneRepo).toHaveBeenCalledWith("https://github.com/octocat/Hello-World.git", { token: TOKEN });
+      expect(mockCloneRepo).toHaveBeenCalledWith('https://github.com/octocat/Hello-World.git', { token: TOKEN });
     });
 
     it('renders the clone error inline and stays open on failure', async () => {

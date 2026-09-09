@@ -166,9 +166,7 @@ function ResizeHandle({
     };
   }, [handleMove, handleDragEnd, supportsPointer]);
 
-  const dragProps = supportsPointer
-    ? { onPointerDown: handlePointerDown }
-    : { onMouseDown: handleMouseDown };
+  const dragProps = supportsPointer ? { onPointerDown: handlePointerDown } : { onMouseDown: handleMouseDown };
 
   return (
     <div

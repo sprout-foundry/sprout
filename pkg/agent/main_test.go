@@ -82,6 +82,13 @@ func TestMain(m *testing.M) {
 	// installing the override so we can catch tests that bypass isolation.
 	realDir, beforeSnapshot := SnapshotRealStateDir()
 
+	// Redirect session persistence to the temp dir. Without this,
+	// getStateDirFunc still returns the real ~/.local/state/sprout/
+	// sessions and every test-built Agent's autoSave leaks session
+	// JSONs and turn journals into the developer's real state dir.
+	restoreStateDir := SetTestStateDirHook(sessionsDir)
+	defer restoreStateDir()
+
 	// Re-aim the search index updater at the temp sessions dir so
 	// SaveStateScoped → MarkSessionDirty writes go to a throwaway
 	// corpus instead of the developer's real ~/.sprout/sessions/.

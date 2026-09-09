@@ -7,6 +7,10 @@ const WEBUI_CLIENT_ID_STORAGE_KEY = 'sprout.webuiClientId';
 const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
 const WINDOW_NAME_PREFIX = 'sproutClientId:';
 
+// Cookie name used by the server for cross-origin session persistence.
+// Must match the server's clientIDCookieName constant.
+const clientIDCookieName = 'sprout_client_id';
+
 /**
  * Read the per-tab client ID from window.name.
  *
@@ -83,6 +87,164 @@ function workspacePathStorageKey(): string {
   return `${WEBUI_WORKSPACE_PATH_STORAGE_KEY}:${suffixes.join(':')}`;
 }
 
+// ── Live-window ownership oracle (BroadcastChannel) ────────────────
+//
+// sessionStorage AND window.name are CLONED into popups opened via
+// window.open() (Chromium behavior), so a second window boots with the
+// first window's client ID already in every storage tier — the claim
+// registry in localStorage cannot distinguish "reloaded tab" (keep the
+// ID) from "cloned popup" (must mint its own): both see a live claim.
+//
+// The only reliable oracle is liveness itself: broadcast "who owns id X?"
+// and wait briefly for a response. A window mid-reload has no live page,
+// so nobody answers and the reloading tab keeps its ID. A popup's opener
+// IS live and answers, so the popup mints a fresh ID.
+
+const OWNERSHIP_CHANNEL = 'sprout.webuiClientId.ownership';
+const OWNERSHIP_AWAIT_MS = 120;
+
+interface OwnershipReply {
+  type: 'who-owns';
+  id: string;
+  nonce: string;
+}
+interface OwnershipAnswer {
+  type: 'i-own';
+  id: string;
+  nonce: string;
+}
+
+let ownershipChannel: BroadcastChannel | null = null;
+let ownershipResponderStarted = false;
+
+function getOwnershipChannel(): BroadcastChannel | null {
+  if (typeof window === 'undefined') return null;
+  const Ctor = (window as unknown as { BroadcastChannel?: typeof BroadcastChannel }).BroadcastChannel;
+  if (!Ctor) return null;
+  if (!ownershipChannel) {
+    try {
+      ownershipChannel = new Ctor(OWNERSHIP_CHANNEL);
+    } catch {
+      return null;
+    }
+  }
+  return ownershipChannel;
+}
+
+/** Answer who-owns probes for OUR id. Idempotent; one listener per window. */
+function startOwnershipResponder(): void {
+  if (ownershipResponderStarted) return;
+  const ch = getOwnershipChannel();
+  if (!ch) return;
+  ownershipResponderStarted = true;
+  ch.addEventListener('message', (ev) => {
+    const msg = ev.data as OwnershipReply;
+    if (!msg || msg.type !== 'who-owns') return;
+    const mine = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+    if (mine && mine === msg.id) {
+      const answer: OwnershipAnswer = { type: 'i-own', id: mine, nonce: msg.nonce };
+      ch.postMessage(answer);
+    }
+  });
+}
+
+/**
+ * Returns true when a live window answers for `id` within the await window.
+ * Must be called BEFORE this window adopts/announces the id itself.
+ */
+function isIdOwnedByLiveWindow(id: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const ch = getOwnershipChannel();
+    if (!ch) {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const finish = (owned: boolean): void => {
+      if (settled) return;
+      settled = true;
+      ch.removeEventListener('message', onAnswerRef.current!);
+      resolve(owned);
+    };
+    const onAnswer = (ev: MessageEvent): void => {
+      const msg = ev.data as OwnershipAnswer;
+      if (msg && msg.type === 'i-own' && msg.id === id) finish(true);
+    };
+    const onAnswerRef = { current: onAnswer as ((ev: MessageEvent) => void) | null };
+    ch.addEventListener('message', onAnswer);
+    const nonce = generateClientId();
+    const probe: OwnershipReply = { type: 'who-owns', id, nonce };
+    try {
+      ch.postMessage(probe);
+    } catch {
+      finish(false);
+      return;
+    }
+    window.setTimeout(() => finish(false), OWNERSHIP_AWAIT_MS);
+  });
+}
+
+/**
+ * One-shot boot-time identity resolution. Guards against popups opened via
+ * window.open(), which inherit the OPENER's sessionStorage and window.name
+ * (Chromium clones both into the new browsing context). Storage tiers
+ * alone cannot distinguish that popup from a legit reload of the same tab
+ * — the claim registry also looks identical (both see a live heartbeat).
+ *
+ * The BroadcastChannel oracle resolves it: ask "who owns this id?" and a
+ * LIVE window answers. A reloading tab has no live page → keeps its id.
+ * A cloned popup's opener answers → the popup mints its own id before
+ * the app renders.
+ *
+ * Idempotent: the first caller runs the oracle; later calls are free.
+ */
+let identityResolved: Promise<void> | null = null;
+
+export function resolveClientIdentity(): Promise<void> {
+  if (identityResolved) return identityResolved;
+  identityResolved = (async () => {
+    if (typeof window === 'undefined') return;
+    // NOTE: the ownership responder starts AFTER the probe below — starting
+    // it first would make this window answer its own who-owns question
+    // (our stored id matches the probe target), breaking reload persistence.
+
+    const stored = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+    if (!stored) {
+      // Nothing adopted yet; getWebUIClientId's normal minting path runs
+      // later (first real caller). Bring the responder online for it.
+      startOwnershipResponder();
+      startClaimHeartbeat();
+      return;
+    }
+
+    // The oracle: does a live window answer for our stored id? Only the
+    // opener of a cloned popup does — a reloading tab has no live page.
+    const owned = await isIdOwnedByLiveWindow(stored);
+    startOwnershipResponder();
+    startClaimHeartbeat();
+
+    if (!owned) {
+      // Ours alone (reload/discard recovery). Reassert the claim.
+      try {
+        const registry = readClaimRegistry();
+        registry.set(stored, { id: stored, t: Date.now() });
+        writeClaimRegistry(registry);
+      } catch {
+        // best-effort
+      }
+      return;
+    }
+
+    // A live window owns this id — we are a cloned popup. Mint our own.
+    const fresh = generateClientId();
+    window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, fresh);
+    writeClientIdToWindowName(fresh);
+    claimOrGenerateClientId(fresh);
+    debugLog('[clientSession] inherited client id from opener; minted fresh id', fresh);
+  })();
+  return identityResolved;
+}
+
 /**
  * Returns the per-tab client ID used to isolate server-side state (workspace,
  * agent session, terminal sessions, WebSocket events) between browser tabs.
@@ -116,13 +278,13 @@ export function getWebUIClientId(): string {
     return existing;
   }
 
-  // Browsing-context recovery (window.name). This must run BEFORE the cookie
-  // fallback: the sprout_client_id cookie is shared by every window of this
-  // origin, so a second window would otherwise adopt the first window's
-  // client ID and both would share one server-side context (workspace,
-  // terminal, chats) — the "two windows pointing at different folders break
-  // each other" bug. window.name is per-window, so it can only ever point
-  // back at this window's own previous identity.
+  // Browsing-context recovery (window.name). Ownership is NOT re-checked
+  // here: a synchronous registry lookup cannot distinguish "my previous
+  // page's claim" from "the opener's claim" (window.open popups inherit
+  // BOTH sessionStorage and window.name from the opener in Chromium).
+  // The async ownership oracle at boot (resolveClientIdentity, wired in
+  // index.tsx) is the layer that detects a live owner and mints a fresh
+  // id for cloned popups before the app renders.
   const windowNameId = readClientIdFromWindowName();
   if (windowNameId) {
     window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, windowNameId);
@@ -277,10 +439,6 @@ function startClaimHeartbeat(): void {
     }
   });
 }
-
-// Cookie name used by the server for cross-origin session persistence.
-// Must match the server's clientIDCookieName constant.
-const clientIDCookieName = 'sprout_client_id';
 
 /**
  * Read a cookie value by name from document.cookie.

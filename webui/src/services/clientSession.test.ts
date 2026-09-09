@@ -216,3 +216,69 @@ describe('clientSession tab isolation', () => {
     expect(getTabWorkspacePath()).toBe('');
   });
 });
+
+// ── Cloned-popup ownership oracle ────────────────────────────────────────
+// window.open() popups inherit the opener's sessionStorage AND window.name
+// (Chromium). Storage tiers alone can't tell a cloned popup from a reloaded
+// tab — the BroadcastChannel oracle in resolveClientIdentity() is the layer
+// that separates them. These tests exercise that function directly with a
+// mock channel.
+
+describe('resolveClientIdentity — cloned popup oracle', () => {
+  const originalWindow = global.window;
+
+  afterEach(() => {
+    Object.defineProperty(global, 'window', { value: originalWindow, writable: true });
+    vi.resetModules();
+  });
+
+  function mockWindowWithChannel(answerProbes: boolean) {
+    const session: Record<string, string> = { 'sprout.webuiClientId': 'inherited-id' };
+    const local: Record<string, string> = {};
+    const listeners: Array<(ev: { data: unknown }) => void> = [];
+    const fakeChannel = {
+      postMessage: vi.fn((msg: { type: string; id: string }) => {
+        // A live owner answers who-owns probes for its id.
+        if (answerProbes && msg.type === 'who-owns' && msg.id === 'inherited-id') {
+          queueMicrotask(() => {
+            listeners.forEach((l) => l({ data: { type: 'i-own', id: 'inherited-id', nonce: msg.nonce } }));
+          });
+        }
+      }),
+      addEventListener: vi.fn((_, cb) => listeners.push(cb)),
+      removeEventListener: vi.fn(),
+      close: vi.fn(),
+    };
+    const win = createMockWindow(session, local);
+    // `new Ctor()` must return the fake channel: a class whose constructor
+    // returns an object overrides `new` semantics (vi.fn with an arrow impl
+    // would yield an empty object instead).
+    (win as any).BroadcastChannel = class {
+      constructor() {
+        return fakeChannel;
+      }
+    };
+    (win as any).setTimeout = (fn: () => void, _ms: number) => {
+      queueMicrotask(fn); // resolve promptly in tests
+      return 0;
+    };
+    return { win, session };
+  }
+
+  it('mints a fresh client id when a live window owns the inherited id (cloned popup)', async () => {
+    const { win, session } = mockWindowWithChannel(true);
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+    const { resolveClientIdentity } = await import('./clientSession');
+    await resolveClientIdentity();
+    expect(session['sprout.webuiClientId']).not.toBe('inherited-id');
+    expect(session['sprout.webuiClientId']).toBeTruthy();
+  });
+
+  it('keeps the client id when no live window answers (reload / tab discard)', async () => {
+    const { win, session } = mockWindowWithChannel(false);
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+    const { resolveClientIdentity } = await import('./clientSession');
+    await resolveClientIdentity();
+    expect(session['sprout.webuiClientId']).toBe('inherited-id');
+  });
+});

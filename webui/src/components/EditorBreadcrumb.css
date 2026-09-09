@@ -1,11 +1,13 @@
 .editor-breadcrumb {
   display: flex;
   align-items: center;
-  height: 22px;
   min-height: 22px;
-  padding: 0 12px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0;
+  /* No background/border of its own: inside the editor toolbar the
+   * breadcrumb is inline chrome, not a bar. A tinted background here
+   * made it read as a second (and theme-inconsistent) breadcrumb bar
+   * stacked under the tab strip. */
+  background: transparent;
   font-size: 12px;
   color: var(--text-tertiary);
   overflow: hidden;
@@ -71,6 +73,13 @@
 
 .breadcrumb-segment-current:hover {
   background: transparent;
+}
+
+/* Collapsed middle segment — decorative, never interactive. */
+.breadcrumb-segment-ellipsis {
+  cursor: default;
+  color: var(--text-muted);
+  user-select: none;
 }
 
 .breadcrumb-separator {

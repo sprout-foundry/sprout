@@ -45,9 +45,9 @@ func CheckPlatformSupport() PlatformSupport {
 
 // PermissionCheck reports the status of one OS permission computer use needs.
 type PermissionCheck struct {
-	Name    string `json:"name"`    // e.g. "Screen Recording", "Accessibility"
-	OK      bool   `json:"ok"`      // true when granted
-	Detail  string `json:"detail"`  // how it was probed / what happened
+	Name    string `json:"name"`   // e.g. "Screen Recording", "Accessibility"
+	OK      bool   `json:"ok"`     // true when granted
+	Detail  string `json:"detail"` // how it was probed / what happened
 	FixHint string `json:"fix_hint,omitempty"`
 }
 

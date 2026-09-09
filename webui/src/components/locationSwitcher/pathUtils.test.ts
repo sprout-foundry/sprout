@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePath, getPathDisplayName, collapseHomePath, getSSHBrowseQuery } from './pathUtils';
+import { normalizePath, getPathDisplayName, collapseHomePath, getSSHBrowseQuery, getBrowseTarget } from './pathUtils';
 
 describe('normalizePath', () => {
   describe('empty / trivial input', () => {
@@ -341,6 +341,110 @@ describe('getSSHBrowseQuery', () => {
       const result = getSSHBrowseQuery('/var//log');
       expect(result.browsePath).toBe('/var');
       expect(result.prefix).toBe('log');
+    });
+  });
+});
+
+describe('getBrowseTarget', () => {
+  const HOME = '/Users/alanp';
+
+  describe('empty input', () => {
+    it('returns null for empty input', () => {
+      expect(getBrowseTarget('', HOME)).toBeNull();
+    });
+
+    it('returns null for whitespace-only input', () => {
+      expect(getBrowseTarget('   ', HOME)).toBeNull();
+    });
+  });
+
+  describe('home workspace (the directory_outside_daemon_root case)', () => {
+    it('clamps to the daemon root when the input IS the home/daemon root', () => {
+      const result = getBrowseTarget(HOME, HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+      expect(result!.prefix).toBe('');
+    });
+
+    it('clamps to the daemon root when the input is ABOVE the daemon root', () => {
+      const result = getBrowseTarget('/Users', HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+    });
+
+    it('clamps to the daemon root for the filesystem root', () => {
+      const result = getBrowseTarget('/', HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+    });
+  });
+
+  describe('subpaths of the daemon root', () => {
+    it('browses the parent of a subpath and keeps the last segment as prefix', () => {
+      const result = getBrowseTarget(`${HOME}/dev`, HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+      expect(result!.prefix).toBe('dev');
+    });
+
+    it('browses the parent of a deep path', () => {
+      const result = getBrowseTarget(`${HOME}/dev/sprout-foundry/sprout`, HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(`${HOME}/dev/sprout-foundry`);
+      expect(result!.prefix).toBe('sprout');
+    });
+
+    it('browses the path itself with an empty prefix when it ends with a slash', () => {
+      const result = getBrowseTarget(`${HOME}/dev/`, HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(`${HOME}/dev`);
+      expect(result!.prefix).toBe('');
+    });
+
+    it('clears the prefix when the parent is above the daemon root', () => {
+      const result = getBrowseTarget('dev/sprout', HOME);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+      expect(result!.prefix).toBe('');
+    });
+  });
+
+  describe('empty daemon root (not yet loaded) — legacy behavior', () => {
+    it('returns the natural parent without clamping', () => {
+      const result = getBrowseTarget(`${HOME}/dev`, '');
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(HOME);
+      expect(result!.prefix).toBe('dev');
+    });
+
+    it('returns the natural parent even above the (unknown) root', () => {
+      const result = getBrowseTarget('/Users', '');
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe('/');
+      expect(result!.prefix).toBe('Users');
+    });
+  });
+
+  describe('daemon root is a subpath of home', () => {
+    const ROOT = '/mnt/projects';
+
+    it('clamps to the subpath root, not home, when input equals home', () => {
+      const result = getBrowseTarget(HOME, ROOT);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(ROOT);
+    });
+
+    it('does not clamp paths inside the subpath root', () => {
+      const result = getBrowseTarget(`${ROOT}/a/b`, ROOT);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(`${ROOT}/a`);
+      expect(result!.prefix).toBe('b');
+    });
+
+    it('does not treat a sibling with a shared prefix as inside the root', () => {
+      const result = getBrowseTarget('/mnt/projectsX/y', ROOT);
+      expect(result).not.toBeNull();
+      expect(result!.browsePath).toBe(ROOT);
     });
   });
 });

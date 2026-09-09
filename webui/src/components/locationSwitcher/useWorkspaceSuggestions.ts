@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supportsWorkspaceSwitching } from '../../config/mode';
 import { clientFetch } from '../../services/clientSession';
-import { normalizePath } from './pathUtils';
+import { getBrowseTarget, normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
 import { MAX_RECENT_WORKSPACES, MAX_SUGGESTIONS } from './types';
 
@@ -53,7 +53,7 @@ export interface UseWorkspaceSuggestionsResult {
 export function useWorkspaceSuggestions({
   isConnected,
   workspaceRoot,
-  daemonRoot: _daemonRoot,
+  daemonRoot,
   remoteContext,
   switchingState: _switchingState,
   sshFailure: _sshFailure,
@@ -112,20 +112,26 @@ export function useWorkspaceSuggestions({
       setSuggestionsLoading(false);
       return;
     }
-    const endsWithSlash = inputValue.trim().endsWith('/');
-    const parentPath = endsWithSlash
-      ? normalizedInput
-      : normalizePath(normalizedInput.split('/').slice(0, -1).join('/')) || '/';
-    const prefix = endsWithSlash ? '' : normalizedInput.split('/').filter(Boolean).pop() || '';
+    const target = getBrowseTarget(inputValue, daemonRoot);
+    if (!target) {
+      setSuggestions([]);
+      setSuggestionsError(null);
+      setSuggestionsLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setSuggestionsLoading(true);
       setSuggestionsError(null);
       try {
-        const response = await clientFetch(`/api/workspace/browse?path=${encodeURIComponent(parentPath)}`);
+        const response = await clientFetch(`/api/workspace/browse?path=${encodeURIComponent(target.browsePath)}`);
         if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || 'Failed to fetch matching folders');
+          const body = await response.json().catch(() => null);
+          const message =
+            body && typeof body === 'object'
+              ? String((body as Record<string, unknown>).error ?? (body as Record<string, unknown>).message ?? '')
+              : '';
+          throw new Error(message || 'Failed to fetch matching folders');
         }
         const ct = response.headers.get('Content-Type') || '';
         if (!ct.includes('application/json')) {
@@ -144,7 +150,7 @@ export function useWorkspaceSuggestions({
             name: String(f.name),
             path: normalizePath(String(f.path)),
           }))
-          .filter((e: WorkspaceDirectory) => !prefix || e.name.toLowerCase().startsWith(prefix.toLowerCase()))
+          .filter((e: WorkspaceDirectory) => !target.prefix || e.name.toLowerCase().startsWith(target.prefix.toLowerCase()))
           .sort((a: WorkspaceDirectory, b: WorkspaceDirectory) => a.name.localeCompare(b.name))
           .slice(0, MAX_SUGGESTIONS);
         setSuggestions(next);
@@ -159,7 +165,7 @@ export function useWorkspaceSuggestions({
     return () => {
       cancelled = true;
     };
-  }, [inputValue, isConnected, isOpen]);
+  }, [inputValue, daemonRoot, isConnected, isOpen]);
 
   // Clamp selected index
   useEffect(() => {

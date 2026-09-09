@@ -379,6 +379,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     bufferRef,
     isActiveRef,
     handleGoToLine: semantic.handleGoToLine,
+    handleSave: () => handleSaveRef.current(),
     onToggleWordWrap: settings.onToggleWordWrap,
     onToggleMinimap: settings.onToggleMinimap,
     onToggleRelativeLineNumbers: settings.onToggleRelativeLineNumbers,

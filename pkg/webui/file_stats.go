@@ -182,16 +182,24 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 	// When no agent exists yet, the caller fills provider/model from user
 	// config OUTSIDE ws.mutex — configuration.Load does disk I/O and would
 	// extend the exclusive-lock window on every /api/stats poll.
+	//
+	// The snapshot path only fills COST/TOKEN fields when there is NO live
+	// agent. With a live agent, populateAgentStats above already wrote
+	// fresher numbers; overwriting them with the (older) snapshot made the
+	// status bar's cost regress mid-session — the "flashes backward" half
+	// of the spend-tracking flicker.
 	if clientCtx != nil && len(clientCtx.AgentState) > 0 {
 		var clientState agent.AgentState
 		if err := json.Unmarshal(clientCtx.AgentState, &clientState); err == nil {
 			stats["session_id"] = clientState.SessionID
-			stats["total_tokens"] = clientState.TotalTokens
-			stats["prompt_tokens"] = clientState.PromptTokens
-			stats["completion_tokens"] = clientState.CompletionTokens
-			stats["cached_tokens"] = clientState.CachedTokens
-			stats["cached_cost_savings"] = clientState.CachedCostSavings
-			stats["total_cost"] = clientState.TotalCost
+			if agentInst == nil {
+				stats["total_tokens"] = clientState.TotalTokens
+				stats["prompt_tokens"] = clientState.PromptTokens
+				stats["completion_tokens"] = clientState.CompletionTokens
+				stats["cached_tokens"] = clientState.CachedTokens
+				stats["cached_cost_savings"] = clientState.CachedCostSavings
+				stats["total_cost"] = clientState.TotalCost
+			}
 		}
 	}
 

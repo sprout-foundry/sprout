@@ -150,7 +150,9 @@ export function useWorkspaceSuggestions({
             name: String(f.name),
             path: normalizePath(String(f.path)),
           }))
-          .filter((e: WorkspaceDirectory) => !target.prefix || e.name.toLowerCase().startsWith(target.prefix.toLowerCase()))
+          .filter(
+            (e: WorkspaceDirectory) => !target.prefix || e.name.toLowerCase().startsWith(target.prefix.toLowerCase()),
+          )
           .sort((a: WorkspaceDirectory, b: WorkspaceDirectory) => a.name.localeCompare(b.name))
           .slice(0, MAX_SUGGESTIONS);
         setSuggestions(next);

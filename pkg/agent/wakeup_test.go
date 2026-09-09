@@ -146,8 +146,11 @@ func TestTryAutoResume_BudgetExhausted(t *testing.T) {
 		t.Fatal("first TryAutoResume should succeed with budget remaining")
 	}
 
-	// Give the goroutine a moment to run.
-	time.Sleep(200 * time.Millisecond)
+	// Settle the first resume before asserting the budget. A fixed
+	// sleep races the background goroutine on a loaded runner (the
+	// CI flake: the first turn still held the budget counter when the
+	// second TryAutoResume read it).
+	waitQuerySettled(t, a)
 
 	// Second notification — should NOT resume (budget exhausted).
 	a.QueueNotification(Notification{

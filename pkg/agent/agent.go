@@ -203,6 +203,16 @@ type Agent struct {
 	// by wakeupMu.
 	pendingWakeupResume []string
 
+	// wakeupInFlight tracks auto-resume goroutines spawned by
+	// TryAutoResume's headless path. The query guard is NOT a teardown
+	// boundary: the resume's deferred auto-save runs AFTER EndQuery
+	// (defer LIFO across the two functions), so state writes can outlive
+	// IsQueryInProgress()==false and land in a test's temp state dir
+	// mid-cleanup ("TempDir cleanup: directory not empty" — the
+	// [state-leak] CI failure). Shutdown and WaitWakeupGoroutines wait
+	// on this instead.
+	wakeupInFlight sync.WaitGroup
+
 	// pendingQueryDisplay carries the user-facing chat bubble text for the
 	// next turn (e.g. "Looking into 'make build'…" for auto-resume turns,
 	// or the raw user text when wakeup batches are prepended to a user

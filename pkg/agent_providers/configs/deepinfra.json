@@ -1480,6 +1480,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 131072,
+        "description": "The multimodal version built on Ling-3.0-flash — 124B total / ~5.5B active per token, with native text, image, and video understanding. It’s mainly designed for multimodal agentic workflows, long-context understanding, and multi-step reasoning.",
+        "id": "inclusionAI/Ling-3.0-flash-VL",
+        "input_cost": 0.06,
+        "name": "inclusionAI/Ling-3.0-flash-VL",
+        "output_cost": 0.18,
+        "cached_input_cost": 0.012,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -40,7 +40,14 @@ vi.mock('../utils/log', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
-import { getFileURI, uriToFilePath, LSP_SUPPORTED_LANGUAGES, createTransport, resolveEditorFilePath, LSPClientService } from './lspClientService';
+import {
+  getFileURI,
+  uriToFilePath,
+  LSP_SUPPORTED_LANGUAGES,
+  createTransport,
+  resolveEditorFilePath,
+  LSPClientService,
+} from './lspClientService';
 import { __resetWorkspaceCwdForTests } from './workspaceCwd';
 
 // ── getFileURI tests ──────────────────────────────────────────────────

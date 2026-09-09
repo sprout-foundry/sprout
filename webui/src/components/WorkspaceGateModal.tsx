@@ -103,9 +103,7 @@ function WorkspaceGateModal({
             </div>
             <div>
               <h2 className="workspace-gate-title">Choose a workspace</h2>
-              <p className="workspace-gate-subtitle">
-                Pick where this project lives — or create a new project folder.
-              </p>
+              <p className="workspace-gate-subtitle">Pick where this project lives — or create a new project folder.</p>
             </div>
           </div>
 

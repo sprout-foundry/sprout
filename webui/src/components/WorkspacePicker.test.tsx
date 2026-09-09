@@ -14,11 +14,15 @@ import WorkspacePicker from './WorkspacePicker';
 const PROPS = {
   daemonRoot: '/home/user/.sprout',
   currentWorkspace: '/home/user',
-  suggestedProjects: [
-    { path: '/home/user/work/nearby-app', name: 'nearby-app', markers: ['go.mod'] },
-  ],
+  suggestedProjects: [{ path: '/home/user/work/nearby-app', name: 'nearby-app', markers: ['go.mod'] }],
   recentWorkspaces: [
-    { path: '/home/user/work/api', name: 'api', last_used: new Date().toISOString(), markers: ['package.json'], session_count: 1 },
+    {
+      path: '/home/user/work/api',
+      name: 'api',
+      last_used: new Date().toISOString(),
+      markers: ['package.json'],
+      session_count: 1,
+    },
   ],
   onBrowse: vi.fn(),
 };
@@ -34,9 +38,7 @@ describe('WorkspacePicker', () => {
 
   it('disables every row and shows a spinner on the in-flight one', () => {
     let resolveSwitch: (v: void) => void = () => {};
-    const onSelect = vi.fn(
-      () => new Promise<void>((r) => (resolveSwitch = r)),
-    );
+    const onSelect = vi.fn(() => new Promise<void>((r) => (resolveSwitch = r)));
     render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
@@ -55,9 +57,7 @@ describe('WorkspacePicker', () => {
 
   it('ignores extra taps while a switch is in flight', async () => {
     let resolveSwitch: (v: void) => void = () => {};
-    const onSelect = vi.fn(
-      () => new Promise<void>((r) => (resolveSwitch = r)),
-    );
+    const onSelect = vi.fn(() => new Promise<void>((r) => (resolveSwitch = r)));
     render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));

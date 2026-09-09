@@ -74,11 +74,7 @@ export async function checkoutGitBranch(
   return response.json();
 }
 
-export async function createGitBranch(
-  fetchFn: typeof fetch,
-  name: string,
-  dir?: string,
-): Promise<GitBranchResponse> {
+export async function createGitBranch(fetchFn: typeof fetch, name: string, dir?: string): Promise<GitBranchResponse> {
   const response = await fetchFn('/api/git/branch/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -117,11 +113,7 @@ export async function pushGit(fetchFn: typeof fetch, dir?: string): Promise<GitP
   return response.json();
 }
 
-export async function stageFile(
-  fetchFn: typeof fetch,
-  path: string,
-  dir?: string,
-): Promise<GitStageResponse> {
+export async function stageFile(fetchFn: typeof fetch, path: string, dir?: string): Promise<GitStageResponse> {
   const response = await fetchFn('/api/git/stage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -134,11 +126,7 @@ export async function stageFile(
   return response.json();
 }
 
-export async function unstageFile(
-  fetchFn: typeof fetch,
-  path: string,
-  dir?: string,
-): Promise<GitStageResponse> {
+export async function unstageFile(fetchFn: typeof fetch, path: string, dir?: string): Promise<GitStageResponse> {
   const response = await fetchFn('/api/git/unstage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -151,11 +139,7 @@ export async function unstageFile(
   return response.json();
 }
 
-export async function discardChanges(
-  fetchFn: typeof fetch,
-  path: string,
-  dir?: string,
-): Promise<GitStageResponse> {
+export async function discardChanges(fetchFn: typeof fetch, path: string, dir?: string): Promise<GitStageResponse> {
   const response = await fetchFn('/api/git/discard', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -216,10 +200,7 @@ export async function createCommit(
   return response.json();
 }
 
-export async function generateCommitMessage(
-  fetchFn: typeof fetch,
-  dir?: string,
-): Promise<GitCommitMessageResponse> {
+export async function generateCommitMessage(fetchFn: typeof fetch, dir?: string): Promise<GitCommitMessageResponse> {
   const response = await fetchFn('/api/git/commit-message', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,12 +219,9 @@ export async function getGitLog(
   offset: number,
   opts?: { signal?: AbortSignal; dir?: string },
 ): Promise<GitLogResponse> {
-  const response = await fetchFn(
-    withDirQuery(`/api/git/log?limit=${limit}&offset=${offset}`, opts?.dir),
-    {
-      signal: opts?.signal,
-    },
-  );
+  const response = await fetchFn(withDirQuery(`/api/git/log?limit=${limit}&offset=${offset}`, opts?.dir), {
+    signal: opts?.signal,
+  });
   if (!response.ok) throw new Error('Failed to fetch git log');
   return response.json();
 }
@@ -265,10 +243,7 @@ export async function getGitCommitFileDiff(
   dir?: string,
 ): Promise<GitCommitFileDiffResponse> {
   const response = await fetchFn(
-    withDirQuery(
-      `/api/git/commit/show/file?hash=${encodeURIComponent(hash)}&path=${encodeURIComponent(path)}`,
-      dir,
-    ),
+    withDirQuery(`/api/git/commit/show/file?hash=${encodeURIComponent(hash)}&path=${encodeURIComponent(path)}`, dir),
   );
   if (!response.ok) throw new Error('Failed to fetch commit file diff');
   return response.json();
@@ -308,11 +283,7 @@ export async function revertGitCommit(
   return response.json();
 }
 
-export async function getGitDiff(
-  fetchFn: typeof fetch,
-  path: string,
-  dir?: string,
-): Promise<GitDiffResponse> {
+export async function getGitDiff(fetchFn: typeof fetch, path: string, dir?: string): Promise<GitDiffResponse> {
   const response = await fetchFn(withDirQuery(`/api/git/diff?path=${encodeURIComponent(path)}`, dir));
   if (!response.ok) throw new Error('Failed to fetch git diff');
   return response.json();

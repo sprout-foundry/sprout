@@ -632,8 +632,9 @@ describe('FileTree filter', () => {
     await act(async () => {
       moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const toggleBtn = Array.from(document.querySelectorAll('.context-menu-item'))
-      .find((el) => (el.textContent ?? '').includes('ignored files'));
+    const toggleBtn = Array.from(document.querySelectorAll('.context-menu-item')).find((el) =>
+      (el.textContent ?? '').includes('ignored files'),
+    );
     if (!toggleBtn) throw new Error('Toggle ignored menu item not found');
     await act(async () => {
       toggleBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -700,8 +701,9 @@ describe('FileTree ignored files toggle', () => {
     await act(async () => {
       moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const btn = Array.from(document.querySelectorAll('.context-menu-item'))
-      .find((el) => (el.textContent ?? '').includes('ignored files'));
+    const btn = Array.from(document.querySelectorAll('.context-menu-item')).find((el) =>
+      (el.textContent ?? '').includes('ignored files'),
+    );
     if (!btn) throw new Error('Toggle ignored menu item not found');
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));

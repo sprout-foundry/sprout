@@ -107,7 +107,10 @@ export function createGitFs(fs: WorkspaceFs): GitFs {
       throw new Error(`workspace writeBatch failed: ${r.error ?? 'unknown error'}`);
     }
     if (r.errors.length > 0) {
-      const failed = r.errors.map((e) => e.path).slice(0, 5).join(', ');
+      const failed = r.errors
+        .map((e) => e.path)
+        .slice(0, 5)
+        .join(', ');
       const detail = r.errors.length > 5 ? ` (+${r.errors.length - 5} more)` : '';
       throw new Error(`workspace writeBatch: ${r.errors.length} write(s) failed: ${failed}${detail}`);
     }
@@ -217,9 +220,7 @@ export function createGitFs(fs: WorkspaceFs): GitFs {
         const listing = await fs.list(parent, 1);
         if (listing.ok) {
           const leaf = leafOf(p);
-          const hit = listing.files.find(
-            (f) => (parent === '' ? f.path : f.path.slice(parent.length + 1)) === leaf,
-          );
+          const hit = listing.files.find((f) => (parent === '' ? f.path : f.path.slice(parent.length + 1)) === leaf);
           if (hit) return toStats(hit.isDir, hit.size);
         }
         throw codeError('ENOENT', 'notFound');

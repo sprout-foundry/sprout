@@ -201,7 +201,12 @@ export default function GitHubAccountPanel({
             <p className="gh-signin-hint" data-testid="gh-device-waiting">
               <Loader2 size={12} className="spin" /> Waiting for authorization…
             </p>
-            <button type="button" className="gh-account-signout" onClick={handleDeviceFlowCancel} data-testid="gh-device-cancel">
+            <button
+              type="button"
+              className="gh-account-signout"
+              onClick={handleDeviceFlowCancel}
+              data-testid="gh-device-cancel"
+            >
               <X size={14} />
               <span>Cancel</span>
             </button>

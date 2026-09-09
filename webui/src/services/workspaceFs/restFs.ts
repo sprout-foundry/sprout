@@ -9,22 +9,15 @@
  * backend is what runs on desktop/web where the shell bridge is absent.
  */
 
-import type {
-  BatchResult,
-  FsOk,
-  FsEntry,
-  ListResult,
-  ReadResult,
-  StatResult,
-  WorkspaceFs,
-  WriteEntry,
-} from './types';
+import type { BatchResult, FsOk, FsEntry, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 export type FetchFn = typeof fetch;
 
 /** Map HTTP failure to the seam's error-code vocabulary. */
-async function toResult(resp: Response): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+async function toResult(
+  resp: Response,
+): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
   if (resp.ok) {
     try {
       const data = (await resp.json()) as Record<string, unknown>;
@@ -81,7 +74,7 @@ export function createRestFs(fetchFn: FetchFn = fetch): WorkspaceFs {
       const r = await toResult(resp);
       if (!r.ok) return { ok: false, error: r.error } as ListResult;
       const files = Array.isArray((r.data as { files?: unknown }).files)
-        ? ((r.data as { files: Array<Record<string, unknown>> }).files)
+        ? (r.data as { files: Array<Record<string, unknown>> }).files
         : [];
       const prefix = normalizeFsPath(path);
       const mapped: FsEntry[] = files
@@ -115,7 +108,10 @@ export function createRestFs(fetchFn: FetchFn = fetch): WorkspaceFs {
     },
 
     async rename(from, to) {
-      const resp = await fetchFn('/api/rename', json(JSON.stringify({ oldPath: normalizeFsPath(from), newPath: normalizeFsPath(to) })));
+      const resp = await fetchFn(
+        '/api/rename',
+        json(JSON.stringify({ oldPath: normalizeFsPath(from), newPath: normalizeFsPath(to) })),
+      );
       const r = await toResult(resp);
       return r.ok ? { ok: true } : { ok: false, error: r.error };
     },

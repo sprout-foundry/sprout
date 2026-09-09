@@ -353,7 +353,8 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
   },
   {
     name: 'git_clone',
-    description: 'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Shallow clone (depth 1, default branch). After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
+    description:
+      'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Shallow clone (depth 1, default branch). After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
     parameters: {
       type: 'object',
       properties: {
@@ -380,7 +381,15 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
         const repo = m[1] + '/' + m[2];
         await gitClient.clone(url, resolveRepoDir(repo), { depth: 1, singleBranch: true });
         const entries = await gitClient.listDir(resolveRepoDir(repo), '/');
-        return 'Cloned ' + repo + ' (' + entries.length + ' top-level entries). Use repo "' + repo + '" with the other git tools.';
+        return (
+          'Cloned ' +
+          repo +
+          ' (' +
+          entries.length +
+          ' top-level entries). Use repo "' +
+          repo +
+          '" with the other git tools.'
+        );
       } catch (err) {
         return 'git_clone error: ' + (err instanceof Error ? err.message : String(err));
       }

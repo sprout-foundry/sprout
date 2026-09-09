@@ -124,7 +124,9 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       // same layout the agent's git tools use, so UI and agent share one
       // checkout. Old lightning-fs sidecar path removed.
       const result = await cloneRepo(repo.clone_url, { token: activeToken });
-      debugLog(`[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`);
+      debugLog(
+        `[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`,
+      );
       onCloned?.(repo, result);
       onClose();
     } catch (err) {

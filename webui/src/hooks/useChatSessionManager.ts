@@ -289,12 +289,7 @@ export function useChatSessionManager({
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
         // The tab the user tried to delete is still there — explain it.
-        notificationBus.notify(
-          'error',
-          'Chat',
-          toUserErrorMessage(error, 'Could not delete that chat session.'),
-          5000,
-        );
+        notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not delete that chat session.'), 5000);
       }
     },
     [handleActiveChatChange, setState],
@@ -309,12 +304,7 @@ export function useChatSessionManager({
       } catch (error) {
         debugLog('[chat] Failed to rename chat session:', error);
         // The old title is still showing — explain why the rename didn't take.
-        notificationBus.notify(
-          'error',
-          'Chat',
-          toUserErrorMessage(error, 'Could not rename that chat session.'),
-          5000,
-        );
+        notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not rename that chat session.'), 5000);
       }
     },
     [setState],

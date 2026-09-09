@@ -433,11 +433,7 @@ export default function SidebarSettingsSection({
               Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
               agent push and pull on your behalf.
             </p>
-            <GitHubAccountPanel
-              user={gitHubUser}
-              onSignedIn={setGitHubUser}
-              onSignedOut={() => setGitHubUser(null)}
-            />
+            <GitHubAccountPanel user={gitHubUser} onSignedIn={setGitHubUser} onSignedOut={() => setGitHubUser(null)} />
           </div>
         </>
       ) : (

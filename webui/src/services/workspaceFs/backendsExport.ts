@@ -8,11 +8,7 @@ export { createRestFs } from './restFs';
 export { cloneRepo, listRepos as listWorkspaceRepos, removeRepo, repoDir, parseRepoRef } from './workspaceGit';
 export type { CloneProgress, CloneOpts, CloneResult } from './workspaceGit';
 export { getWorkspaceFs } from './index';
-export {
-  isWorkspaceFs,
-  normalizeFsPath,
-  WRITE_BATCH_CAP,
-} from './types';
+export { isWorkspaceFs, normalizeFsPath, WRITE_BATCH_CAP } from './types';
 export type {
   BatchResult,
   FsEntry,

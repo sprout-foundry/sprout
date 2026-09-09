@@ -31,7 +31,9 @@ async function findClonedReadme(repoDir: string): Promise<string | undefined> {
     const fs = await getWorkspaceFs();
     const listing = await fs.list(repoDir, 1);
     if (!listing.ok) return undefined;
-    const readme = listing.files.find((f: FsEntry) => !f.isDir && /^readme\.(md|txt|rst)$/i.test(f.path.split('/').pop() ?? ''));
+    const readme = listing.files.find(
+      (f: FsEntry) => !f.isDir && /^readme\.(md|txt|rst)$/i.test(f.path.split('/').pop() ?? ''),
+    );
     return readme?.path;
   } catch {
     return undefined;
@@ -442,13 +444,14 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           onRenamePath={async (oldPath, newPath) => {
             await api.renameItem(oldPath, newPath);
           }}
-                    onOpenInFileBrowser={async (path) => {
+          onOpenInFileBrowser={async (path) => {
             await api.openInFileBrowser(path);
           }}
         />
       </>
     );
   },
-);SidebarFilesSection.displayName = 'SidebarFilesSection';
+);
+SidebarFilesSection.displayName = 'SidebarFilesSection';
 
 export default SidebarFilesSection;

@@ -54,8 +54,7 @@ export function buildCwdOptions(cwd: string, repos: string[]): CwdOption[] {
     // Label a cwd inside a repo relative to that repo: repos/o/n/src/a →
     // "o/n › src/a". Anything else shows the raw path.
     const inRepo = cwd.startsWith('repos/') ? cwd.slice('repos/'.length).split('/') : null;
-    const label =
-      inRepo && inRepo.length >= 3 ? `${inRepo[0]}/${inRepo[1]} › ${inRepo.slice(2).join('/')}` : cwd;
+    const label = inRepo && inRepo.length >= 3 ? `${inRepo[0]}/${inRepo[1]} › ${inRepo.slice(2).join('/')}` : cwd;
     options.push({ value: cwd, label });
   }
   return options;

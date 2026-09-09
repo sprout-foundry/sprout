@@ -45,12 +45,20 @@ export interface DeviceFlowSession {
 }
 
 export function isDeviceFlowAvailable(): boolean {
-  const bridge = (window as unknown as { SproutStudioBridge?: { call: (channel: string, payload: unknown, timeout?: number) => Promise<BridgeResult> } }).SproutStudioBridge;
+  const bridge = (
+    window as unknown as {
+      SproutStudioBridge?: { call: (channel: string, payload: unknown, timeout?: number) => Promise<BridgeResult> };
+    }
+  ).SproutStudioBridge;
   return !!bridge && typeof bridge.call === 'function';
 }
 
 async function bridgeGithub(payload: Record<string, unknown>): Promise<BridgeResult> {
-  const bridge = (window as unknown as { SproutStudioBridge: { call: (channel: string, payload: unknown, timeout?: number) => Promise<BridgeResult> } }).SproutStudioBridge;
+  const bridge = (
+    window as unknown as {
+      SproutStudioBridge: { call: (channel: string, payload: unknown, timeout?: number) => Promise<BridgeResult> };
+    }
+  ).SproutStudioBridge;
   return bridge.call('github', payload, 20000);
 }
 

@@ -108,11 +108,12 @@ export function getStoredUser(): GitHubUser | null {
     const raw = localStorage.getItem(GITHUB_USER_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GitHubUser;
-          return parsed && typeof parsed.login === 'string' ? parsed : null;
-    } catch {
-      // best-effort: unreadable/corrupt cache reads as "no cached profile".
-      return null;
-    }}
+    return parsed && typeof parsed.login === 'string' ? parsed : null;
+  } catch {
+    // best-effort: unreadable/corrupt cache reads as "no cached profile".
+    return null;
+  }
+}
 
 /** Cache the signed-in profile for offline rendering. */
 export function storeUser(user: GitHubUser): void {

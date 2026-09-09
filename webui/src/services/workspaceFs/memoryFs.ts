@@ -7,16 +7,7 @@
  * behavior, not backend quirks.
  */
 
-import type {
-  BatchResult,
-  FsOk,
-  FsEntry,
-  ListResult,
-  ReadResult,
-  StatResult,
-  WorkspaceFs,
-  WriteEntry,
-} from './types';
+import type { BatchResult, FsOk, FsEntry, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 /** Serialized entry stored under its normalized path. */

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -180,19 +181,24 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
-	// Resolve path to absolute
-	absPath, err := filepathAbsEval(req.Path)
+	// Resolve path relative to the WORKSPACE ROOT (the UI documents
+	// "../feature-x" as sibling-of-repo). filepathAbsEval resolved against
+	// the daemon's process CWD, so a daemon started in $HOME rejected or
+	// misplaced every relative worktree path.
+	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
-	// Validate the resolved worktree path stays within daemon root
+	// Boundary: daemon root OR the workspace's parent directory (git's
+	// conventional sibling-worktree location, which ../ paths target and
+	// which the checkout handler already trusts via git worktree list).
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+	if !worktreePathAllowed(absPath, daemonRoot, workspaceRoot) {
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
 		return
 	}
 
@@ -258,14 +264,14 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Resolve path to absolute
-	absPath, err := filepathAbsEval(req.Path)
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	// Resolve relative to the workspace root (see the create handler).
+	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
-
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Prevent removing the current worktree
 	if absPath == workspaceRoot {
@@ -273,12 +279,11 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Validate the resolved path stays within daemon root
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+	if !worktreePathAllowed(absPath, daemonRoot, workspaceRoot) {
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
 		return
 	}
 
@@ -320,14 +325,14 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
-	// Resolve path to absolute
-	absPath, err := filepathAbsEval(req.Path)
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+
+	// Resolve relative to the workspace root (see the create handler).
+	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
-
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	// Check if the path exists and is a valid worktree
 	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "list", "--porcelain")
@@ -407,4 +412,21 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 // IsZero checks if WorktreeInfo is zero value (for filtering)
 func (wt WorktreeInfo) IsZero() bool {
 	return wt.Path == ""
+}
+
+// worktreePathAllowed reports whether a worktree path is creatable from
+// this workspace: inside the daemon root, the workspace itself, or the
+// workspace's PARENT directory (git's conventional sibling-worktree
+// location — "../feature-x"). The checkout handler already trusts sibling
+// worktrees validated by git worktree list; this extends the same trust to
+// creation and removal so the ../ form the UI documents actually works.
+func worktreePathAllowed(absPath, daemonRoot, workspaceRoot string) bool {
+	if isWithinWorkspace(absPath, daemonRoot) || absPath == daemonRoot {
+		return true
+	}
+	if workspaceRoot == "" {
+		return false
+	}
+	parent := filepath.Dir(workspaceRoot)
+	return absPath == parent || isWithinWorkspace(absPath, parent)
 }

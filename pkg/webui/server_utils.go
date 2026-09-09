@@ -123,6 +123,53 @@ func filepathAbsEval(path string) (string, error) {
 	return resolved, nil
 }
 
+// filepathAbsEvalFrom anchors relative-path resolution at `base` instead
+// of the process working directory. Worktree paths typed in the WebUI are
+// documented as "relative to workspace root" (e.g. "../feature-x"), but
+// filepathAbsEval resolves against the daemon's startup CWD — a daemon
+// started in $HOME turned "../feature-x" into /Users/feature-x, which the
+// daemon-root boundary then rejected (path_outside_workspace) or, worse,
+// created the worktree in the wrong place. Absolute paths and ~/ expansion
+// behave exactly as before.
+func filepathAbsEvalFrom(path, base string) (string, error) {
+	expanded := expandHomeVar(path)
+	if strings.HasPrefix(expanded, "~/") || expanded == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home directory: %w", err)
+		}
+		if expanded == "~" {
+			expanded = home
+		} else {
+			expanded = filepath.Join(home, expanded[2:])
+		}
+	}
+
+	if !filepath.IsAbs(expanded) {
+		if strings.TrimSpace(base) == "" {
+			// No anchor available — fall back to process CWD semantics so
+			// callers without a workspace keep their prior behavior.
+			return filepathAbsEval(expanded)
+		}
+		expanded = filepath.Join(base, expanded)
+	}
+
+	abs, err := filepath.Abs(expanded)
+	if err != nil {
+		return "", fmt.Errorf("resolve absolute path: %w", err)
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Fallback to unresolved absolute path. Callers validate the
+			// path is within the workspace boundary before use.
+			return abs, nil
+		}
+		return "", fmt.Errorf("resolve symlinks: %w", err)
+	}
+	return resolved, nil
+}
+
 func isExpectedServerCloseError(err error) bool {
 	if err == nil {
 		return false

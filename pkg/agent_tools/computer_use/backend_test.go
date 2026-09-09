@@ -2,6 +2,7 @@ package computer_use
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -105,6 +106,82 @@ func TestNormalizeKeyXdotool(t *testing.T) {
 		if got := normalizeKeyXdotool(in); got != want {
 			t.Errorf("normalizeKeyXdotool(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestSubprocessBackend_ScreenshotTCCExitCode(t *testing.T) {
+	// macOS TCC: screencapture exits 1 with "could not create image from
+	// display" when Screen Recording is denied. The error must carry the
+	// permission hint.
+	prevRun, prevHave := commandRunner, haveExec
+	commandRunner = func(string, ...string) ([]byte, error) {
+		return []byte("could not create image from display"), fmt.Errorf("exit status 1")
+	}
+	haveExec = func(string) bool { return true }
+	t.Cleanup(func() { commandRunner, haveExec = prevRun, prevHave })
+
+	b := &subprocessBackend{os: "darwin", cliTool: "cliclick", capTool: "screencapture", tmpDir: t.TempDir()}
+	_, _, err := b.Screenshot(nil)
+	if err == nil {
+		t.Fatal("expected error for TCC-denied capture, got nil")
+	}
+	if !strings.Contains(err.Error(), "Screen Recording") {
+		t.Errorf("error should mention Screen Recording permission, got: %v", err)
+	}
+}
+
+func TestSubprocessBackend_ScreenshotTCCOnePixel(t *testing.T) {
+	// Some macOS versions: screencapture exits 0 but writes a 1x1 placeholder
+	// PNG when Screen Recording is denied. Must error, not return a blank image.
+	onePixel := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, onePixel); err != nil {
+		t.Fatal(err)
+	}
+	prevRun, prevHave := commandRunner, haveExec
+	commandRunner = func(name string, args ...string) ([]byte, error) {
+		path := args[len(args)-1]
+		return nil, os.WriteFile(path, buf.Bytes(), 0o600)
+	}
+	haveExec = func(string) bool { return true }
+	t.Cleanup(func() { commandRunner, haveExec = prevRun, prevHave })
+
+	b := &subprocessBackend{os: "darwin", cliTool: "cliclick", capTool: "screencapture", tmpDir: t.TempDir()}
+	_, dims, err := b.Screenshot(nil)
+	if err == nil {
+		t.Fatalf("expected permission error for 1x1 capture, got dims=%+v", dims)
+	}
+	if !strings.Contains(err.Error(), "Screen Recording") {
+		t.Errorf("error should mention Screen Recording permission, got: %v", err)
+	}
+}
+
+func TestSubprocessBackend_ScreenshotValidSizeStillWorks(t *testing.T) {
+	// Sanity: the TCC guard must not false-positive on legitimate small
+	// captures — 2x2 is the smallest real region, so it must pass.
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	prevRun, prevHave := commandRunner, haveExec
+	commandRunner = func(name string, args ...string) ([]byte, error) {
+		path := args[len(args)-1]
+		return nil, os.WriteFile(path, buf.Bytes(), 0o600)
+	}
+	haveExec = func(string) bool { return true }
+	t.Cleanup(func() { commandRunner, haveExec = prevRun, prevHave })
+
+	b := &subprocessBackend{os: "darwin", cliTool: "cliclick", capTool: "screencapture", tmpDir: t.TempDir()}
+	data, dims, err := b.Screenshot(nil)
+	if err != nil {
+		t.Fatalf("unexpected error for 2x2 capture: %v", err)
+	}
+	if dims.Width != 2 || dims.Height != 2 {
+		t.Errorf("dims = %+v, want 2x2", dims)
+	}
+	if len(data) == 0 {
+		t.Error("expected non-empty PNG data")
 	}
 }
 

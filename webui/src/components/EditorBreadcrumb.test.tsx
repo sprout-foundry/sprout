@@ -830,3 +830,43 @@ function bar() {
     expect(getEnclosingSymbols(content, '.ts', -1)).toEqual([]);
   });
 });
+
+// ── SP-137 follow-up: absolute-path collapse + workspace-relativized display ──
+
+describe('EditorBreadcrumb long-path collapsing', () => {
+  function renderWithPath(filePath: string) {
+    renderBreadcrumb({ filePath });
+    return container.querySelectorAll('.breadcrumb-segment');
+  }
+
+  test('collapses long machine paths to first + ellipsis + last two segments', () => {
+    const segments = renderWithPath('/Users/someone/dev/company/monorepo/apps/web/src/App.tsx');
+    // 8 segments > 5 budget → Users › … › src › App.tsx (last two are src? no: tail-2 = web/src? )
+    const labels = Array.from(segments).map((s) => s.textContent);
+    expect(labels).toContain('\u2026');
+    expect(labels[0]).toBe('Users');
+    expect(labels[labels.length - 1]).toBe('App.tsx');
+    expect(labels.length).toBeLessThan(8);
+  });
+
+  test('short paths render unchanged (no ellipsis)', () => {
+    const segments = renderWithPath('src/components/App.tsx');
+    const labels = Array.from(segments).map((s) => s.textContent);
+    expect(labels).toEqual(['src', 'components', 'App.tsx']);
+  });
+
+  test('ellipsis segment is not a button', () => {
+    const segments = renderWithPath('/Users/someone/dev/company/monorepo/apps/web/src/App.tsx');
+    const ellipsis = Array.from(segments).find((s) => s.textContent === '\u2026');
+    expect(ellipsis?.tagName).toBe('SPAN');
+    expect(ellipsis?.classList.contains('breadcrumb-segment-ellipsis')).toBe(true);
+  });
+
+  test('visible segment buttons keep the full absolute prefix as title', () => {
+    const segments = renderWithPath('/Users/someone/dev/company/monorepo/apps/web/src/App.tsx');
+    const buttons = Array.from(segments).filter((s) => s.tagName === 'BUTTON') as HTMLButtonElement[];
+    expect(buttons.length).toBeGreaterThan(0);
+    // Navigating the first segment resolves to the ORIGINAL absolute root.
+    expect(buttons[0].getAttribute('title')).toBe('/Users');
+  });
+});

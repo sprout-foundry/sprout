@@ -36,6 +36,7 @@ import { clearDiagnostics } from '../extensions/lintDiagnostics';
 import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { readFileWithConsent } from '../services/fileAccess';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { notificationBus } from '../services/notificationBus';
 import type { EditorBuffer } from '../types/editor';
 import { useLog, debugLog, warn } from '../utils/log';
@@ -341,8 +342,13 @@ export function useEditorFileIO(
         // indicator clears as soon as the content is visible. Awaiting it here
         // kept the spinner up (and keystroke attribution gated) for the whole
         // git round-trip on every file open, which made loads feel blocking.
+        //
+        // Compile-time short-circuit (native-fs dists): browser-git is never
+        // configured there (no wasm VFS to sync from — see useAppInitialization),
+        // so the diff fetch always 500s and this toast fired on EVERY file
+        // load. The gutter markers are decorative; skip the fetch entirely.
         const viewForDiff = cmViewApiRef.current?.view ?? null;
-        if (filePath && viewForDiff) {
+        if (filePath && viewForDiff && !NATIVE_FS_ENABLED) {
           void (async () => {
             try {
               const diffResponse = await apiService.getGitDiff(filePath);

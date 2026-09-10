@@ -434,7 +434,7 @@ export function NativeTerminalConsole(): React.ReactElement {
   return (
     <div
       ref={hostRef}
-      className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
+      className="native-terminal-console-host"
       // FitAddon measures THIS element's client box (excludes padding),
       // so the inset keeps the text grid clear of the edges while the
       // black background runs flush. The bottom padding includes the

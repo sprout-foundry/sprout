@@ -344,6 +344,18 @@ body {
   transition: padding-bottom 200ms var(--ease-out);
 }
 
+/* P4.5 (user request 2026-09-10): on the touch-large band (tablets —
+ * coarse pointer wider than the phone breakpoint), give the app shell
+ * breathing room at the top so the first row of chrome doesn't sit
+ * jammed against the screen edge / status bar area. ~50px logical;
+ * desktop (pointer-fine) is untouched. Applies inside #root's scaled
+ * coordinate space, so it scales with the UI tier. */
+@media (hover: none) and (min-width: 769px) {
+  .app {
+    padding-top: 50px;
+  }
+}
+
 .main-content {
   flex: 1;
   display: flex;

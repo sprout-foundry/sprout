@@ -67,6 +67,35 @@
   min-height: 0;
 }
 
+/* ── Native console host (studio dist) ─────────────────────────────
+ * REAL CSS, not utility classes: the shipped dist contains NO Tailwind
+ * utilities (verified 2026-09-10: zero .flex-1/.min-h-0/.h-full rules
+ * in the built css) — the previous `flex min-h-0 flex-1 flex-col` and
+ * `h-full w-full bg-[#05070d]` class strings compiled in DEV but were
+ * INERT in the app, leaving the console host transparent: its 6/8px
+ * padding showed the container's gray through as a ~5px frame around
+ * the black canvas ("margin around the terminal", physical device). */
+.terminal-native-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.native-terminal-console-host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  /* The console's own near-black — MUST match TERMINAL_THEME.background
+   * (#05070d, useTerminalXTerm.ts) so host padding and canvas are one
+   * continuous surface. */
+  background: #05070d;
+}
+
 .terminal-container.collapsed {
   /* No height here: the container always fills .terminal-portal, whose
    * height IS the collapsed height when collapsed (--terminal-height

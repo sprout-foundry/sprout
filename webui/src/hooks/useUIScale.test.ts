@@ -17,10 +17,11 @@ describe('useUIScale', () => {
     vi.restoreAllMocks();
   });
 
-  it('isUIScale accepts the three canonical values and rejects others', () => {
+  it('isUIScale accepts the canonical values and rejects others', () => {
     expect(isUIScale('compact')).toBe(true);
     expect(isUIScale('default')).toBe(true);
     expect(isUIScale('large')).toBe(true);
+    expect(isUIScale('xlarge')).toBe(true);
     expect(isUIScale('huge')).toBe(false);
     expect(isUIScale(null)).toBe(false);
     expect(isUIScale(2)).toBe(false);

@@ -3,12 +3,21 @@ import { useCallback, useEffect, useState } from 'react';
 /**
  * UI Size (P4.5 option C) — a persisted, user-facing density control.
  *
- * Scales the entire webui by setting `data-ui-scale` on <html>; CSS
- * (index.css) multiplies the text and spacing tokens per scale:
+ * Scales the entire webui two ways at once:
+ *  1. CSS `zoom` on <html> — multiplies EVERYTHING (all px values,
+ *     including the ~858 hardcoded font sizes that never adopted the
+ *     tokens; token-only scaling moved just 30% of on-screen text and
+ *     read as "barely larger" on device).
+ *  2. Token bumps in App.css (the --text-... and --space-... custom
+ *     properties) — adds extra weight on the tokenized majority so text
+ *     outgrows chrome, not just scales with it.
  *
- *   compact  ~0.92x  (laptop-docked, desktop default feel)
- *   default  1.00x  (current sizing, the historical default)
- *   large    1.08x  (tablet/touch distance reading)
+ * zoom is Safari/WebKit-origin, reflow-aware (media queries and JS
+ * layout see the zoomed geometry), supported in WKWebView, Android
+ * WebView and all current browsers. Fixed-position layers zoom too —
+ * which is exactly the point.
+ *
+ * Tiers: compact 0.90x, default 1x, large 1.12x, xlarge 1.30x.
  *
  * Scale is chosen explicitly via the Appearance settings section, or
  * implicitly on first run by the touch-large heuristic (see
@@ -19,9 +28,9 @@ import { useCallback, useEffect, useState } from 'react';
  */
 export const UI_SCALE_STORAGE_KEY = 'sprout.ui-scale';
 
-export type UIScale = 'compact' | 'default' | 'large';
+export type UIScale = 'compact' | 'default' | 'large' | 'xlarge';
 
-const VALID: readonly UIScale[] = ['compact', 'default', 'large'];
+const VALID: readonly UIScale[] = ['compact', 'default', 'large', 'xlarge'];
 
 export function isUIScale(v: unknown): v is UIScale {
   return typeof v === 'string' && (VALID as readonly string[]).includes(v);

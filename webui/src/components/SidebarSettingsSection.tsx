@@ -392,6 +392,7 @@ export default function SidebarSettingsSection({
             <option value="compact">Compact</option>
             <option value="default">Default</option>
             <option value="large">Large</option>
+            <option value="xlarge">Extra Large</option>
           </select>
         </div>
         <div className="config-item">

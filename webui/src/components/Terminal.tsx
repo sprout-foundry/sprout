@@ -292,7 +292,10 @@ function Terminal({
   // scale via --ui-scale so the terminal still reads at the UI size,
   // and the app's reserved-height var accounts for it (see Terminal.css).
   return createPortal(
-    <div className="terminal-portal" style={{ ['--terminal-height' as string]: `${isExpanded ? terminalHeight : collapsedHeight}px` }}>
+    <div
+      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}`}
+      style={{ ['--terminal-height' as string]: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
+    >
     <div
       className={[
         'terminal-container',

@@ -385,7 +385,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             the working native console (2026-09-10 device report). Hide
             the webui terminal chrome entirely in that mode. */}
         {nativeConsoleActive ? (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="terminal-native-wrapper">
             <NativeTerminalConsole />
           </div>
         ) : (

@@ -58,10 +58,16 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
-	// DisableCoordinatorAutoActivate opts out of the automatic activation of the
-	// coordinator persona (formerly Executive Assistant) when sprout starts in
-	// the user's $HOME directory. When true, no persona is auto-activated and
-	// the user must select one explicitly. Default false (auto-activate).
+	// CoordinatorAutoActivate opts IN to automatic activation of the
+	// coordinator persona when sprout starts in the user's $HOME directory.
+	// Default false — coordinator is opt-in via '/persona coordinator'.
+	// (Historical note: 'disable_coordinator_auto_activate: true' had the
+	// same effect and is still honored as a no-op for config compatibility.)
+	CoordinatorAutoActivate bool `json:"coordinator_auto_activate,omitempty"`
+
+	// DisableCoordinatorAutoActivate is the legacy opt-out flag, kept as a
+	// no-op for config compatibility. Coordinator activation is now opt-in
+	// via CoordinatorAutoActivate.
 	DisableCoordinatorAutoActivate bool `json:"disable_coordinator_auto_activate,omitempty"`
 
 	// AllowGitHistoryRewrite allows history-rewriting git commands

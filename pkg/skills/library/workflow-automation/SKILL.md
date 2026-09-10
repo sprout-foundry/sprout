@@ -20,8 +20,8 @@ These four persona names appear throughout this skill. Don't confuse them:
 | Persona | Role in a workflow |
 |---|---|
 | `coordinator` | Owns the entire workflow run. Reads TODO.md, decides which item to process next, kicks off the orchestrator for each item, commits results, moves on. The `initial.persona` in the workflow JSON. |
-| `orchestrator` (alias: `repo_orchestrator`) | Owns ONE TODO item end-to-end. Delegates to coder/tester/reviewer/debugger. Reports back to the coordinator. Spawned via `run_subagent`. |
-| `coder` / `tester` / `reviewer` / `debugger` | Leaf workers. Do focused, well-scoped work and return. Spawned by the orchestrator via `run_subagent`. |
+| `orchestrator` (alias: `repo_orchestrator`) | Owns ONE TODO item end-to-end. Delegates to coder/tester/reviewer. Reports back to the coordinator. Spawned via `run_subagent`. |
+| `coder` / `tester` / `reviewer` | Leaf workers. Do focused, well-scoped work and return. Spawned by the orchestrator via `run_subagent`. (`debugger` resolves as an alias of `coder`.) |
 
 Mental model: **coordinator → orchestrator (per TODO item) → leaf workers (per sub-task)**. Three layers, each delegating down the chain.
 
@@ -34,7 +34,7 @@ Mental model: **coordinator → orchestrator (per TODO item) → leaf workers (p
 The canonical flow needs **three** decisions, nothing more:
 
 1. **Primary model** for the coordinator + orchestrator (the brain of the workflow). Accept whatever the user named in their initial message.
-2. **Subagent model** for coder/tester/reviewer/debugger (the bulk of the work). Accept whatever the user named.
+2. **Subagent model** for coder/tester/reviewer (the bulk of the work). Accept whatever the user named.
 3. **Budget cap** in USD. If the user didn't volunteer one, ask for it specifically — autonomous runs without a budget are a footgun.
 
 Then generate the workflow JSON using the **Full Autonomous Workflow template** below and skip directly to Phase 4. Everything else in this skill (Phase 1 provider interview, Phase 2 type picker, Phase 3 property walkthrough) is for cases where the user is exploring or building something non-canonical.
@@ -168,7 +168,7 @@ When you run a full autonomous TODO workflow, the work flows through **three lay
                        ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 3: Leaf workers (coder / tester /                │
-│  reviewer / debugger)                                   │
+│  reviewer)                                              │
 │  Focused, well-scoped work. Return results and exit.    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -468,7 +468,7 @@ When you DO run the interview (because the user hasn't supplied models): the goa
 | **Subagent (coder)** | Writes production code | Good coding ability, follows specs | $$ |
 | **Subagent (tester)** | Writes and runs tests | Good at edge cases, follows test patterns | $$ |
 | **Subagent (reviewer)** | Reviews code for quality/security | Strong analysis, attention to detail | $$ |
-| **Subagent (debugger)** | Investigates and fixes bugs | Good at root cause analysis | $$ |
+| **Subagent (coder, debug task)** | Investigates and fixes bugs | Good at root cause analysis | $$ |
 
 **Key insight for the user**: You can use an expensive, high-quality model for the primary agent (which makes the important decisions) and cheaper models for subagents (which do focused, well-scoped work). This can reduce costs by 5-10x while maintaining quality, because:
 

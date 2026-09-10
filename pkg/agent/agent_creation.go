@@ -241,9 +241,12 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// Restore embedding index if previously enabled for this workspace
 	agent.RestoreEmbeddingIndex()
 
-	// Auto-activate Executive Assistant persona when started from home directory
+	// Coordinator persona is opt-in ('/persona coordinator', or
+	// 'coordinator_auto_activate' in config). It no longer auto-fires
+	// for $HOME workspaces: a capable orchestrator handles multi-project
+	// triage directly, and the swap surprised more users than it helped.
 	if params.isProduction {
-		agent.autoActivateCoordinatorPersona()
+		agent.maybeAutoActivateCoordinatorPersona()
 	}
 
 	// Wire tool function pointers so handlers in pkg/agent_tools can dispatch back into this agent's handler methods.
@@ -632,15 +635,20 @@ func isHomeDirPath(dir string) bool {
 	return resolvedDir == resolvedHome
 }
 
-// autoActivateCoordinatorPersona auto-activates the Coordinator persona if the workspace is the user's home directory.
-func (a *Agent) autoActivateCoordinatorPersona() {
+// maybeAutoActivateCoordinatorPersona activates the Coordinator persona when
+// the user has explicitly opted in via 'coordinator_auto_activate' in config
+// and the workspace is the user's home directory. Coordinator used to
+// auto-activate for $HOME workspaces unconditionally; that default was
+// removed — the orchestrator handles multi-project triage directly, and the
+// silent persona swap surprised more users than it helped.
+func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 	// Don't override an already-set persona
 	if a.state.GetActivePersona() != "" {
 		return
 	}
 
-	// Honor the user's opt-out flag
-	if cfg := a.GetConfig(); cfg != nil && cfg.DisableCoordinatorAutoActivate {
+	// Opt-in only.
+	if cfg := a.GetConfig(); cfg == nil || !cfg.CoordinatorAutoActivate {
 		return
 	}
 

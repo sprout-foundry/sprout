@@ -4,27 +4,21 @@ This directory contains the system prompts for each specialized subagent persona
 
 ## Available Personas
 
-1. **[Coder](coder.md)** - Implementation and feature development
-2. **[Refactor](refactor.md)** - Behavior-preserving refactoring and risk reduction
-3. **[Tester](tester.md)** - Unit test writing and test coverage
-4. **[Reviewer](reviewer.md)** - Diff-focused code review: correctness, security, quality
-5. **[Debugger](debugger.md)** - Bug investigation, root cause analysis, and fixes
-6. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid)
-7. **[Web_Scraper](web_scraper.md)** - Web scraping and content extraction
-8. **[Coordinator](coordinator.md)** - Cross-project coordination and delegation
-9. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
+1. **[Coder](coder.md)** - Implementation, feature development, debugging, refactoring (aliases: `refactor`, `debugger`)
+2. **[Tester](tester.md)** - Unit test writing and test coverage
+3. **[Reviewer](reviewer.md)** - Diff-focused code review: correctness, security, quality
+4. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid; alias: `web_scraper`)
+5. **[Coordinator](coordinator.md)** - Cross-project coordination and delegation
+6. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
 
 ## Quick Reference
 
 | Persona | Best For | Primary Tools |
 |---------|----------|---------------|
-| Coder | Writing production code | read_file, write_file, edit_file |
-| Refactor | Low-risk code cleanup | read_file, edit_file, search_files |
+| Coder | Writing production code, debugging, refactoring | read_file, write_file, edit_file, shell_command |
 | Tester | Writing unit tests | read_file, write_file, edit_file |
-| Reviewer | Security, code quality | read_file, search_files |
-| Debugger | Bug fixing, root cause | read_file, write_file, edit_file, search_files, shell_command |
-| Researcher | Local + web research | read_file, search_files, web_search, fetch_url |
-| Web_Scraper | Scraping web content | web_search, fetch_url, browse_url |
+| Reviewer | Diff review: security, correctness, quality | read_file, search, shell_command |
+| Researcher | Local + web research, content extraction | read_file, search, web_search, fetch_url, browse_url |
 | Coordinator | Cross-project coordination | run_subagent |
 | General | Anything not specialized | all defaults |
 
@@ -34,18 +28,15 @@ These prompts are loaded automatically when a subagent is spawned with a specifi
 
 ## Persona Selection
 
-When delegating tasks to subagents, choose the persona that best matches the task:
-
-- **Implement a feature** → `coder`
-- **Refactor with minimal risk** → `refactor`
+- **Implement a feature / fix a bug / refactor** → `coder`
 - **Write tests for code** → `tester`
 - **Review a diff for real issues** → `reviewer`
-- **Fix a bug** → `debugger`
-- **Investigate codebase + find best practices** → `researcher`
-- **Scrape web content** → `web_scraper`
+- **Investigate codebase / web research / scrape content** → `researcher`
 - **Coordinate cross-project work** → `coordinator`
 - **Hands-on shell / sysadmin** → `coder` or `general` (use `shell_command` directly)
 - **General-purpose task** → `general`
+
+`refactor`, `debugger`, and `web_scraper` were consolidated into `coder` and `researcher` (2026-09); those IDs resolve as aliases.
 
 For complex workflows, use multiple personas in sequence or parallel as appropriate.
 

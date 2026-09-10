@@ -57,21 +57,13 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
-func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
+// TestNewConfig_CorePersonasAndRetiredAliases verifies the default config
+// carries the core personas and that the retired persona IDs (refactor,
+// debugger, web_scraper — consolidated 2026-09) resolve via alias lookup to
+// their merge targets.
+func TestNewConfig_CorePersonasAndRetiredAliases(t *testing.T) {
 	cfg := NewConfig()
 	assert.NotNil(t, cfg.SubagentTypes)
-
-	persona, ok := cfg.SubagentTypes["web_scraper"]
-	assert.True(t, ok, "expected web_scraper persona in defaults")
-	assert.True(t, persona.Enabled)
-	assert.NotEmpty(t, persona.SystemPrompt)
-	assert.NotEmpty(t, persona.AllowedTools)
-	assert.Contains(t, persona.AllowedTools, "web_search")
-	assert.Contains(t, persona.AllowedTools, "fetch_url")
-	assert.Contains(t, persona.AllowedTools, "edit_file")
-	assert.Contains(t, persona.AllowedTools, "shell_command")
-	assert.Contains(t, persona.AllowedTools, "write_structured_file")
-	assert.Contains(t, persona.AllowedTools, "patch_structured_file")
 
 	orchestrator, ok := cfg.SubagentTypes["orchestrator"]
 	assert.True(t, ok, "expected orchestrator persona in defaults")
@@ -80,26 +72,26 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	coderPersona, ok := cfg.SubagentTypes["coder"]
 	assert.True(t, ok, "expected coder persona in defaults")
 	assert.True(t, coderPersona.Enabled)
+	assert.NotEmpty(t, coderPersona.SystemPrompt)
 	assert.Contains(t, coderPersona.AllowedTools, "write_structured_file")
 	assert.Contains(t, coderPersona.AllowedTools, "patch_structured_file")
 	assert.Contains(t, coderPersona.AllowedTools, "browse_url")
 
-	debuggerPersona, ok := cfg.SubagentTypes["debugger"]
-	assert.True(t, ok, "expected debugger persona in defaults")
-	assert.True(t, debuggerPersona.Enabled)
-	assert.Contains(t, debuggerPersona.AllowedTools, "browse_url")
+	// Retired IDs resolve to the merge targets via alias.
+	for _, retired := range []string{"refactor", "debugger"} {
+		resolved := cfg.GetSubagentType(retired)
+		assert.NotNil(t, resolved, "retired persona %s should resolve via alias", retired)
+		assert.Equal(t, "coder", resolved.ID, "retired %s should resolve to coder", retired)
+	}
+	resolved := cfg.GetSubagentType("web_scraper")
+	assert.NotNil(t, resolved, "retired persona web_scraper should resolve via alias")
+	assert.Equal(t, "researcher", resolved.ID, "retired web_scraper should resolve to researcher")
 
-	assert.Contains(t, persona.AllowedTools, "browse_url")
-
-	refactorPersona, ok := cfg.SubagentTypes["refactor"]
-	assert.True(t, ok, "expected refactor persona in defaults")
-	assert.True(t, refactorPersona.Enabled)
-	assert.NotEmpty(t, refactorPersona.SystemPrompt)
-	assert.NotEmpty(t, refactorPersona.AllowedTools)
-	assert.Contains(t, refactorPersona.AllowedTools, "edit_file")
-	assert.Contains(t, refactorPersona.AllowedTools, "write_structured_file")
-	assert.Contains(t, refactorPersona.AllowedTools, "patch_structured_file")
-	assert.Contains(t, refactorPersona.AllowedTools, "search")
+	researcher, ok := cfg.SubagentTypes["researcher"]
+	assert.True(t, ok, "expected researcher persona in defaults")
+	assert.Contains(t, researcher.AllowedTools, "web_search")
+	assert.Contains(t, researcher.AllowedTools, "fetch_url")
+	assert.Contains(t, researcher.AllowedTools, "browse_url")
 }
 
 func TestGetSubagentType_AllowedToolsFromCatalog(t *testing.T) {

@@ -290,10 +290,23 @@
 }
 
 /* ── Popover Content ──────────────────────────────────────────── */
+/* Single scroll surface (P-fix 2026-09-10, "double scrollbar in
+ * desktop webui"): the content is a flex column capped relative to
+ * the VIEWPORT (not a fixed 420px), so short windows never clip the
+ * footer, and there is exactly one scroller — this one. Inner lists
+ * (recent/suggestions) deliberately have NO max-height of their own:
+ * a nested scroller here is what produced the second scrollbar. */
 .location-switcher-content {
-  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  /* 260px = popover top offset (~56) + section headers/input (~130) +
+   * footer (~44) + margin. Keeps the WHOLE popover inside the viewport
+   * at any height, so the footer (Refresh/Esc) never clips — verified
+   * the clip at 620px with the previous 220px budget. */
+  max-height: calc(100vh - 260px);
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .location-switcher-content::-webkit-scrollbar {

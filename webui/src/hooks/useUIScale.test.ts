@@ -1,12 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import {
-  isUIScale,
-  touchLargeEligible,
-  resolveInitialUIScale,
-  useUIScale,
-  UI_SCALE_STORAGE_KEY,
-} from './useUIScale';
+import { isUIScale, touchLargeEligible, resolveInitialUIScale, useUIScale, UI_SCALE_STORAGE_KEY } from './useUIScale';
 
 describe('useUIScale', () => {
   beforeEach(() => {

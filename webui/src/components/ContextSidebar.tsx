@@ -63,8 +63,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     // when tapped instead of permanently consuming ~a quarter of the
     // canvas. Explicit choices always win over this heuristic.
     try {
-      const coarse =
-        window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
+      const coarse = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
       if (coarse && window.innerWidth > 768) return true;
     } catch {
       /* matchMedia unavailable — desktop default */

@@ -1494,7 +1494,9 @@ describe('Terminal exit-pane cleanup paths', () => {
       act(() => {
         vi.advanceTimersByTime(1400);
       });
-      expect(document.body.querySelector('[data-instance-key]')?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
+      expect(document.body.querySelector('[data-instance-key]')?.getAttribute('data-instance-key')).toBe(
+        firstInstanceKey,
+      );
 
       // Advance past 1.5s — fresh session should be created
       act(() => {

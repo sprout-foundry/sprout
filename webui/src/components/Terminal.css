@@ -47,12 +47,14 @@
   transform: scale(var(--ui-scale, 1));
   transform-origin: 0 100%;
   pointer-events: none; /* only the terminal inside accepts input */
-  /* Home-indicator / gesture bar: the portal extends INTO the bottom
-   * inset (its background reaches the physical edge) while the console
-   * content stops above it — no dead band under the terminal. */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* NOTE: no safe-area padding here — a bottom inset on the PORTAL shows
+   * as a dark band under the console on devices without a home indicator
+   * (simulator/older iPads), reported as "the terminal has a slight
+   * margin" (2026-09-10). Home-indicator overlap is acceptable: the
+   * console's last row sits above it via the host's own padding, and the
+   * strip is chrome, not content. */
   background: var(--bg-secondary);
-  box-sizing: content-box; /* height stays logical; inset adds on top */
+  box-sizing: border-box;
 }
 
 .terminal-portal > .terminal-container {

@@ -32,6 +32,17 @@ export type UIScale = 'compact' | 'default' | 'large' | 'xlarge';
 
 const VALID: readonly UIScale[] = ['compact', 'default', 'large', 'xlarge'];
 
+/** Paint factor per tier — MUST mirror the transform: scale() values on
+ * #root in App.css. Exposed as --ui-scale for portal overlays (they
+ * render to document.body, OUTSIDE #root's transform, so each portal
+ * root applies the same scale itself; see .portal-scale in App.css). */
+export const UI_SCALE_FACTOR: Record<UIScale, number> = {
+  compact: 0.9,
+  default: 1,
+  large: 1.12,
+  xlarge: 1.3,
+};
+
 export function isUIScale(v: unknown): v is UIScale {
   return typeof v === 'string' && (VALID as readonly string[]).includes(v);
 }
@@ -78,9 +89,11 @@ export function useUIScale(): {
   );
 
   // Apply to <html> (and keep it applied on changes). CSS does the scaling;
-  // this attribute is the single seam (mirrors data-theme).
+  // this attribute is the single seam (mirrors data-theme). The numeric
+  // factor is ALSO exposed as --ui-scale for portal overlays (below).
   useEffect(() => {
     document.documentElement.setAttribute('data-ui-scale', uiScale);
+    document.documentElement.style.setProperty('--ui-scale', UI_SCALE_FACTOR[uiScale].toString());
   }, [uiScale]);
 
   const setUIScale = useCallback((scale: UIScale) => {

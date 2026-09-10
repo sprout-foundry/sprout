@@ -2393,37 +2393,63 @@ button.primary.success {
   --space-12: 34px;
 }
 
-/* ── Zoom application (P4.5) ──────────────────────────────────────
+/* Portal overlays (render to document.body via createPortal) live
+ * OUTSIDE #root's transform: they inherit the bigger text tokens from
+ * <html> but position against the untransformed viewport, so their
+ * content overflows unreachable at large scales. Each portal root uses
+ * .portal-scale: same factor (via --ui-scale, kept in sync by
+ * hooks/useUIScale.ts), same origin, same compensation math as #root.
+ */
+.portal-scale {
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: 0 0;
+  width: calc(100% / var(--ui-scale, 1));
+  height: calc(100% / var(--ui-scale, 1));
+}
+
+/* ── Scale application (P4.5) ─────────────────────────────────────
  *
- * zoom lives on #root — NOT on <html>. On the root element, zoom
- * scales the initial containing block: media queries AND JS viewport
- * reads (innerWidth) both shrink (1194px iPad landscape at 1.3x reads
- * as ~918px), flipping the whole app into the tablet/mobile layout
- * bands — verified broken on device ("much bigger, but the layout is
- * broken"). On #root the viewport stays the real device width: the
- * desktop layout is preserved at every tier and only the app surface
- * scales. Fixed-position layers inside #root zoom with it.
+ * transform: scale() on #root — NOT zoom. Two zoom attempts failed
+ * empirically (verified by headless-browser screenshot 2026-09-10):
+ *  - zoom on <html> scales the initial containing block → media
+ *    queries + innerWidth shrink → the app flips into tablet/mobile
+ *    layout bands ("much bigger but layout broken").
+ *  - zoom on #root + width compensation (100%/z) renders as a shrunken
+ *    app with a dead band on the right in Chromium; zoom/percentage
+ *    interaction is engine-divergent (WebKit disagreed differently).
  *
- * Size compensation: a zoomed element's percentage heights resolve
- * against the UNZOOMED parent box, so #root at 1.3x would be 130% of
- * the viewport height and overflow. width/height here divide back:
- * 100% / z. Derived per tier (1 / 0.9 = 111.1%, 1 / 1.12 = 89.3%,
- * 1 / 1.3 = 76.9%).
+ * transform semantics are identical everywhere: layout NEVER changes;
+ * only paint scales. #root lays out at 100%/z (children get the
+ * proportionally larger coordinate space) and the transform scales the
+ * paint back to exactly fill the viewport. Text re-rasters crisply at
+ * any scale. Fixed-position layers inside a transformed ancestor use
+ * it as their containing block, so overlays scale and track with the
+ * app (desired).
+ *
+ * min-height override: the base #root rule uses 100vh; vh is
+ * untransformed, so it must be divided by z or the scaled box
+ * overflows the viewport bottom.
  */
 [data-ui-scale='compact'] #root {
-  zoom: 0.9;
-  width: 111.1%;
-  height: 111.1%;
+  transform: scale(0.9);
+  transform-origin: 0 0;
+  width: calc(100% / 0.9);
+  height: calc(100% / 0.9);
+  min-height: calc(100vh / 0.9);
 }
 [data-ui-scale='large'] #root {
-  zoom: 1.12;
-  width: 89.3%;
-  height: 89.3%;
+  transform: scale(1.12);
+  transform-origin: 0 0;
+  width: calc(100% / 1.12);
+  height: calc(100% / 1.12);
+  min-height: calc(100vh / 1.12);
 }
 [data-ui-scale='xlarge'] #root {
-  zoom: 1.3;
-  width: 76.9%;
-  height: 76.9%;
+  transform: scale(1.3);
+  transform-origin: 0 0;
+  width: calc(100% / 1.3);
+  height: calc(100% / 1.3);
+  min-height: calc(100vh / 1.3);
 }
 
 @media (min-width: 769px) {

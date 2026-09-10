@@ -123,6 +123,10 @@ Configures timeouts for API requests:
 
 Separate provider/model configuration for subagents. Leave empty to use the main provider/model.
 
+#### `coordinator_auto_activate`
+
+Opt in to automatic activation of the `coordinator` persona when sprout starts in the user's `$HOME` directory. Default: `false` — activate explicitly with `/persona coordinator`. The legacy `disable_coordinator_auto_activate` flag is still parsed but does nothing.
+
 #### `pdf_ocr_enabled`, `pdf_ocr_provider`, `pdf_ocr_model`
 
 PDF analysis settings for OCR processing. When enabled, uses the specified provider and model for PDF text extraction.

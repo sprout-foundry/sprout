@@ -9,6 +9,8 @@ import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
+import Chat from './ChatView';
+import { useIsMobileViewport } from '../hooks/useMobileSheets';
 
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
@@ -119,6 +121,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   onSessionRestore,
   onViewChange,
 }) => {
+  // P4.2: phone form factor — peer-buffer keep-alive topology (see
+  // the mobile branch below). Desktop keeps the panes topology
+  // unchanged.
+  const isMobileViewport = useIsMobileViewport();
   const {
     panes,
     paneLayout,
@@ -551,6 +557,16 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
   const { pluginViews } = usePlugins();
 
+  // ── P4.2 mobile helpers ──────────────────────────────────────────
+  // activePaneHasChat: is the active buffer the chat? (Peer topology:
+  // chat surface is visible iff the chat buffer is active; the editor
+  // surface renders otherwise.) currentBuffer is the manager-level
+  // active buffer — exactly what the mobile toggle keys on.
+  const activePaneHasChat = useCallback(
+    () => currentBuffer?.kind === 'chat' || currentBuffer === null,
+    [currentBuffer],
+  );
+
   const activePluginView = pluginViews.find((v) => v.id === currentView);
   if (activePluginView) {
     const Component = activePluginView.component;
@@ -570,6 +586,37 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           <CostsPage onSessionClick={onSessionRestore} onBack={onViewChange ? () => onViewChange('chat') : undefined} />
         </Suspense>
       </ErrorBoundary>
+    );
+  }
+
+  // ── P4.2 mobile branch: peer-buffer keep-alive topology ─────────
+  // Phone IDE placement (user doctrine 2026-09-10): the editor is not
+  // a sheet over chat and chat is not a sheet over the editor — the
+  // two are PEER surfaces. Both stay MOUNTED; the active buffer
+  // toggles visibility. This kills the remount state-loss in BOTH
+  // directions (chat draft/scroll/streaming view survived file opens,
+  // editor cursor/scroll survived chat hops) while keeping P4.1's
+  // single-column layout. No hierarchy, no sheets-over-anything.
+  if (isMobileViewport) {
+    const chatBufferOpen = activePaneHasChat();
+    return (
+      <div className="mobile-peer-surfaces" data-testid="mobile-peer-surfaces">
+        <div className="mobile-peer-surface" data-active={chatBufferOpen} data-testid="mobile-chat-surface">
+          <Chat {...chatProps} />
+        </div>
+        {!chatBufferOpen && (
+          <div className="mobile-peer-surface" data-active={true} data-testid="mobile-editor-surface">
+            <WorkspacePane
+              paneId={activePaneId ?? panes[0]?.id ?? ''}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
+              chatProps={chatProps}
+              reviewProps={reviewProps}
+              diffState={diffState}
+            />
+          </div>
+        )}
+      </div>
     );
   }
 

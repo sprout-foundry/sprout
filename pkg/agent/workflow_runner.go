@@ -192,7 +192,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	}
 
 	// Build system prompt.
-	systemPrompt := "You are a helpful coding assistant executing a TODO-based workflow."
+	systemPrompt := appendSubagentPreamble("You are a helpful coding assistant executing a TODO-based workflow.")
 
 	// Determine effective workspace root.
 	effectiveWorkspaceRoot := parentAgent.workspaceRoot

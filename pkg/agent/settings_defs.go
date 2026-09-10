@@ -161,7 +161,7 @@ var settingDefs = []settingDef{
 	{
 		Key:         "disabled_personas",
 		Description: "Comma-separated persona IDs hidden from /persona list and subagent spawning",
-		ValidValues: "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
+		ValidValues: "comma-separated persona IDs (e.g. researcher,coder) or empty to enable all",
 		GetValue: func(cfg *configuration.Config) string {
 			return strings.Join(cfg.DisabledPersonas, ",")
 		},

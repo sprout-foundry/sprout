@@ -76,7 +76,7 @@ Upon approval, execute in order:
      - **Development Non-Negotiables:**
        - **Testing:** Tests must cover all functionality, including both unit tests and E2E functional tests.
        - **Coding Rules:** Adhere to the Single Responsibility Principle (SRP). Maintain small file sizes (under 400 lines). Write self-documenting code; use comments only when absolutely necessary.
-       - **Spec Compliance Review:** Before any change can be considered done, it must be reviewed by a code review subagent to ensure it aligns with the project direction and does not break existing functionality or processes.
+       - **Spec Compliance Review:** Before any change can be considered done, the diff must be reviewed against the spec — self-review for small/medium changes, or a code review subagent for large or risk-class changes.
    - **CLAUDE.md:** Create a symbolic link to `AGENTS.md` (`ln -s AGENTS.md CLAUDE.md`). If symlinks aren't supported, duplicate the content.
 
 ## Tone & Style

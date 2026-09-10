@@ -10,14 +10,27 @@ const (
 	IDOrchestrator = "orchestrator"
 	IDGeneral      = "general"
 	IDCoder        = "coder"
-	IDRefactor     = "refactor"
-	IDDebugger     = "debugger"
 	IDTester       = "tester"
 	IDReviewer     = "reviewer"
 	IDResearcher   = "researcher"
-	IDWebScraper   = "web_scraper"
 	IDCoordinator  = "coordinator"
 	IDComputerUser = "computer_user"
+)
+
+// Retired persona IDs. These personas were consolidated in 2026-09 when the
+// minimum capable model made narrow specialists redundant:
+//   - refactor → coder (behavior-preservation is a task constraint, not a
+//     tool profile)
+//   - debugger → coder (debugging is a workflow; tool set was a near-superset)
+//   - web_scraper → researcher (researcher already carries the web toolset)
+//
+// The IDs survive as ALIASES on their merge targets (default_personas.json)
+// so old configs, workflow files, and muscle memory keep resolving. Do not
+// reuse them as canonical IDs.
+const (
+	IDRefactor   = "refactor"    // alias of IDCoder
+	IDDebugger   = "debugger"    // alias of IDCoder
+	IDWebScraper = "web_scraper" // alias of IDResearcher
 )
 
 // Canonical persona capability names. A capability is an explicit grant of

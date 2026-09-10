@@ -279,7 +279,9 @@ func TestPersonaCommandSmoke(t *testing.T) {
 	if err := cmd.Execute([]string{"web-scraper"}, chatAgent); err != nil {
 		t.Fatalf("persona apply failed: %v", err)
 	}
-	if got := chatAgent.GetActivePersona(); got != "web_scraper" {
-		t.Fatalf("expected active persona web_scraper, got %q", got)
+	// web-scraper is a retired alias (2026-09 consolidation): it must
+	// resolve to the canonical researcher persona on apply.
+	if got := chatAgent.GetActivePersona(); got != "researcher" {
+		t.Fatalf("expected active persona researcher (web-scraper alias target), got %q", got)
 	}
 }

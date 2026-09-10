@@ -218,7 +218,7 @@ summary:focus-visible {
     min-height: 44px;
   }
 
-  /* ── Phone form-factor track (slice 1: kill desktop split chrome) ──
+  /* Phone form-factor track (slice 1: kill desktop split chrome) ──
    *
    * A phone canvas cannot host side-by-side panes: the desktop IDE
    * topology squeezed into ~360×800dp scrunches each pane illegibly.
@@ -232,46 +232,4 @@ summary:focus-visible {
   .resize-handle-vertical {
     display: none !important;
   }
-}
-
-@media (min-width: 769px) {
-  .show-mobile {
-    display: none !important;
-  }
-}
-
-/* ── Screen reader only (sr-only) ────────────────────────────── */
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-/* ── Settings Skeleton ───────────────────────────────────────────── */
-
-.settings-skeleton {
-  padding: var(--space-4) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.settings-skeleton-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin-top: var(--space-2);
-}
-
-.settings-skeleton-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }

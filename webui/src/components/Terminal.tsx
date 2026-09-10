@@ -20,8 +20,10 @@ import { isCloud } from '../config/mode';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
 import { useAvailableShells } from '../hooks/useAvailableShells';
+import { UI_SCALE_FACTOR, type UIScale } from '../hooks/useUIScale';
 import { useAttachableSessions } from '../hooks/useAttachableSessions';
 import { useVerticalDragResize } from '../hooks/useVerticalDragResize';
+import { createPortal } from 'react-dom';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
 import {
@@ -68,6 +70,19 @@ function Terminal({
   );
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
+
+  // Current UI tier factor (kept in a ref so the reserved-height effect
+  // reads the live value without re-running on tier change — the CSS var
+  // update on tier change is handled by the useUIScale effect's cascade).
+  const uiScaleRef = useRef<UIScale>('default');
+  useEffect(() => {
+    try {
+      const v = document.documentElement.getAttribute('data-ui-scale');
+      if (v === 'compact' || v === 'large' || v === 'xlarge' || v === 'default') uiScaleRef.current = v;
+    } catch {
+      /* attribute read is safe everywhere */
+    }
+  }, []);
 
   // Shell selection state (extracted)
   const { availableShells, shellsLoaded, selectedShell, setSelectedShell } = useAvailableShells();
@@ -144,8 +159,15 @@ function Terminal({
 
   // CSS custom property for reserved height
   useEffect(() => {
-    const reservedHeight = isExpanded ? terminalHeight : collapsedHeight;
-    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${reservedHeight}px`);
+    // LOGICAL px, not scaled: the consumer (.app padding-bottom) lives
+    // INSIDE #root's scaled coordinate space — its padding is painted
+    // by #root's transform. Emitting logical×scale here made the paint
+    // scale² (a growing dead band between editor bottom and terminal
+    // top). The terminal portal (outside #root, real viewport) reads
+    // this too — it wants the LOGICAL value for its wrapper height and
+    // applies the factor itself.
+    const logical = isExpanded ? terminalHeight : collapsedHeight;
+    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${logical}px`);
     return () => {
       document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
     };
@@ -260,7 +282,21 @@ function Terminal({
   const totalSessions = panes.reduce((acc, p) => acc + p.sessions.length, 0);
 
   /* ---- Render ---- */
-  return (
+  // Portaled to document.body: the terminal is VIEWPORT chrome (fixed to
+  // the real viewport bottom), and must live OUTSIDE #root's UI-Size
+  // transform (P4.5). Inside it, three classes of breakage: fixed
+  // positioning resolves against the scaled box (ghost offset from the
+  // real viewport bottom), JS-set px heights mix logical/real numbers,
+  // and xterm.js mis-measures char cells under ancestor transforms
+  // (dead bands inside the console). Outside, the container pins to the
+  // true viewport; the .terminal-portal wrapper applies the same paint
+  // scale via --ui-scale so the terminal still reads at the UI size,
+  // and the app's reserved-height var accounts for it (see Terminal.css).
+  return createPortal(
+    <div
+      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}`}
+      style={{ ['--terminal-height' as string]: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
+    >
     <div
       className={[
         'terminal-container',
@@ -270,13 +306,12 @@ function Terminal({
       ]
         .filter(Boolean)
         .join(' ')}
-      style={{ height: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
       data-testid="terminal-container"
     >
       {isExpanded && (
         <div
           className="terminal-resize-handle"
-          onMouseDown={handleVerticalResizeStart}
+          onPointerDown={handleVerticalResizeStart}
           title="Drag to resize terminal"
         />
       )}
@@ -575,6 +610,8 @@ function Terminal({
         </div>
       </div>
     </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -72,7 +72,7 @@ function renderTerminal(props: Record<string, any> = {}) {
 }
 
 function expandTerminal(container: HTMLElement) {
-  const expandBtn = container.querySelector('[title="Expand terminal"]');
+  const expandBtn = document.body.querySelector('[title="Expand terminal"]');
   if (expandBtn) {
     act(() => {
       expandBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -81,7 +81,7 @@ function expandTerminal(container: HTMLElement) {
 }
 
 function collapseTerminal(container: HTMLElement) {
-  const collapseBtn = container.querySelector('[title="Collapse terminal"]');
+  const collapseBtn = document.body.querySelector('[title="Collapse terminal"]');
   if (collapseBtn) {
     act(() => {
       collapseBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -98,7 +98,7 @@ function collapseTerminal(container: HTMLElement) {
  * so any captured element ref goes stale after a state change.
  */
 function getSplitButtons(container: HTMLElement) {
-  return Array.from(container.querySelectorAll('.split-btn'));
+  return Array.from(document.body.querySelectorAll('.split-btn'));
 }
 
 function getVerticalBtn(container: HTMLElement): HTMLElement {
@@ -110,22 +110,22 @@ function getHorizontalBtn(container: HTMLElement): HTMLElement {
 }
 
 function getPanesContainer(container: HTMLElement) {
-  return container.querySelector('.terminal-panes-container');
+  return document.body.querySelector('.terminal-panes-container');
 }
 
 function getSplitDivider(container: HTMLElement) {
-  return container.querySelector('.terminal-split-divider');
+  return document.body.querySelector('.terminal-split-divider');
 }
 
 function getSecondaryPane(container: HTMLElement) {
   // Secondary pane wrapper is the second .terminal-pane-wrapper
-  const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
+  const wrappers = document.body.querySelectorAll('.terminal-pane-wrapper');
   return wrappers.length > 1 ? wrappers[1] : null;
 }
 
 /** Get all per-pane close buttons (.pane-close-btn). */
 function getPaneCloseButtons(container: HTMLElement) {
-  return Array.from(container.querySelectorAll('.pane-close-btn'));
+  return Array.from(document.body.querySelectorAll('.pane-close-btn'));
 }
 
 function dispatchTerminalAction(action: string) {
@@ -149,7 +149,7 @@ const _flushPromises = async () => {
 function triggerProcessExit(container: HTMLElement) {
   // The mock TerminalPane renders with data-instance-key inside the wrapper
   // (which itself has data-testid="terminal-pane"). Query the inner mock pane.
-  const pane = container.querySelector('[data-instance-key]');
+  const pane = document.body.querySelector('[data-instance-key]');
   if (!pane) return;
   const key = pane.getAttribute('data-instance-key');
   const cb = _processExitCallbacks.get(key);
@@ -165,7 +165,7 @@ function triggerProcessExit(container: HTMLElement) {
  * Useful when testing split panes where we want to exit the secondary pane.
  */
 function triggerProcessExitForPane(container: HTMLElement, paneIndex: number) {
-  const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
+  const wrappers = document.body.querySelectorAll('.terminal-pane-wrapper');
   if (paneIndex < 0 || paneIndex >= wrappers.length) return;
   const pane = wrappers[paneIndex];
   const mockPane = pane.querySelector('[data-instance-key]');
@@ -180,7 +180,7 @@ function triggerProcessExitForPane(container: HTMLElement, paneIndex: number) {
 }
 
 function getDividers(container: HTMLElement) {
-  return container.querySelectorAll('.terminal-split-divider');
+  return document.body.querySelectorAll('.terminal-split-divider');
 }
 
 // ---------------------------------------------------------------------------
@@ -369,13 +369,13 @@ describe('Terminal split functionality', () => {
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Second click → 3 panes (always-add, never toggle off)
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
   });
 
   // ── 7. Switch between splits ─────────────────────────────
@@ -397,7 +397,7 @@ describe('Terminal split functionality', () => {
 
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   it('switching from vertical to horizontal replaces (not stacks) the split', () => {
@@ -417,7 +417,7 @@ describe('Terminal split functionality', () => {
 
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(true);
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   it('switching split direction updates CSS classes correctly (expanded)', () => {
@@ -452,7 +452,7 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // Before split: one pane wrapper (primary)
-    const wrappersBefore = container.querySelectorAll('.terminal-pane-wrapper');
+    const wrappersBefore = document.body.querySelectorAll('.terminal-pane-wrapper');
     expect(wrappersBefore.length).toBe(1);
 
     // Activate vertical split
@@ -461,7 +461,7 @@ describe('Terminal split functionality', () => {
     });
 
     // After split: two pane wrappers
-    const wrappersAfter = container.querySelectorAll('.terminal-pane-wrapper');
+    const wrappersAfter = document.body.querySelectorAll('.terminal-pane-wrapper');
     expect(wrappersAfter.length).toBe(2);
   });
 
@@ -470,7 +470,7 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const wrappersBefore = container.querySelectorAll('.terminal-pane-wrapper');
+    const wrappersBefore = document.body.querySelectorAll('.terminal-pane-wrapper');
     expect(wrappersBefore.length).toBe(1);
 
     // Activate horizontal split
@@ -478,7 +478,7 @@ describe('Terminal split functionality', () => {
       getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const wrappersAfter = container.querySelectorAll('.terminal-pane-wrapper');
+    const wrappersAfter = document.body.querySelectorAll('.terminal-pane-wrapper');
     expect(wrappersAfter.length).toBe(2);
   });
 
@@ -493,13 +493,13 @@ describe('Terminal split functionality', () => {
     act(() => {
       splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Switch to horizontal — should still be 2 panes, not 3
     act(() => {
       splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   // ── 9. Per-pane close button ──────────────────────────────
@@ -533,7 +533,7 @@ describe('Terminal split functionality', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Close the secondary pane (last close button in DOM order)
     const closeBtns = getPaneCloseButtons(container);
@@ -542,7 +542,7 @@ describe('Terminal split functionality', () => {
     });
 
     // Back to 1 pane, close button hidden, split collapsed
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
     expect(getPaneCloseButtons(container).length).toBe(0);
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
@@ -556,7 +556,7 @@ describe('Terminal split functionality', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Close the primary pane (first close button)
     const closeBtns = getPaneCloseButtons(container);
@@ -564,7 +564,7 @@ describe('Terminal split functionality', () => {
       closeBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
   });
 
   // ── 10. Split CSS classes ────────────────────────────────
@@ -690,7 +690,7 @@ describe('Terminal split functionality', () => {
       dispatchTerminalAction('split_vertical');
     });
 
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
     expect(getSplitDivider(container)).toBeTruthy();
   });
 
@@ -798,7 +798,7 @@ describe('Terminal split functionality', () => {
     // Split should still be active
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   it('split state persists through clear button click', () => {
@@ -812,7 +812,7 @@ describe('Terminal split functionality', () => {
     });
 
     // Click the clear button (Trash2 icon)
-    const clearBtn = container.querySelector('.clear-btn') as HTMLElement;
+    const clearBtn = document.body.querySelector('.clear-btn') as HTMLElement;
     expect(clearBtn).toBeTruthy();
 
     act(() => {
@@ -822,7 +822,7 @@ describe('Terminal split functionality', () => {
     // Split should still be active
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   // ── 15. Split button accessibility ───────────────────────
@@ -832,8 +832,8 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    expect(container.querySelector('[aria-label="Split terminal vertically"]')).toBeTruthy();
-    expect(container.querySelector('[aria-label="Split terminal horizontally"]')).toBeTruthy();
+    expect(document.body.querySelector('[aria-label="Split terminal vertically"]')).toBeTruthy();
+    expect(document.body.querySelector('[aria-label="Split terminal horizontally"]')).toBeTruthy();
   });
 
   it('split buttons do not have aria-pressed attribute (action buttons)', () => {
@@ -886,20 +886,20 @@ describe('Terminal split lifecycle and edge cases', () => {
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Close via pane close button
     const closeBtns = getPaneCloseButtons(container);
     act(() => {
       closeBtns[closeBtns.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
 
     // Re-split should create a new secondary session (not reuse old)
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   it('splitting multiple times in the same direction adds multiple panes', () => {
@@ -915,19 +915,19 @@ describe('Terminal split lifecycle and edge cases', () => {
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Click again (same direction) should add a 3rd pane
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
 
     // Click again should add a 4th pane
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(4);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(4);
   });
 
   it('terminal remains functional (1 pane) after closing split pane', () => {
@@ -939,7 +939,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Close via pane close button
     const closeBtns = getPaneCloseButtons(container);
@@ -948,7 +948,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     });
 
     // Should have exactly 1 pane wrapper, no divider, no secondary
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
     expect(getSplitDivider(container)).toBeNull();
     expect(getSecondaryPane(container)).toBeNull();
 
@@ -961,7 +961,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     act(() => {
       dispatchTerminalAction('split_horizontal');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
 
   it('no crash when splitting and switching direction rapidly', () => {
@@ -985,7 +985,7 @@ describe('Terminal split lifecycle and edge cases', () => {
 
     // We added vertical 5 times; pane count should be capped at the hard
     // cap (8) but never 0.
-    const paneCount = container.querySelectorAll('.terminal-pane-wrapper').length;
+    const paneCount = document.body.querySelectorAll('.terminal-pane-wrapper').length;
     expect(paneCount).toBeGreaterThanOrEqual(1);
     expect(paneCount).toBeLessThanOrEqual(8);
   });
@@ -999,7 +999,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Unmount should not throw
     act(() => {
@@ -1049,8 +1049,8 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
-    expect(terminalEl.style.height).toBe('400px');
+    const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
 
     // localStorage should NOT have been written just from mounting
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
@@ -1063,8 +1063,8 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
-    expect(terminalEl.style.height).toBe('250px');
+    const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe('250px');
   });
 
   it('clamps persisted value below minimum to minimum (120px)', () => {
@@ -1074,8 +1074,8 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
-    expect(terminalEl.style.height).toBe('120px');
+    const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe('120px');
   });
 
   it('clamps persisted invalid value to default (400px)', () => {
@@ -1085,8 +1085,8 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
-    expect(terminalEl.style.height).toBe('400px');
+    const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
   });
 
   it('persists height to localStorage after resize drag completes', () => {
@@ -1095,7 +1095,7 @@ describe('Terminal height persistence', () => {
     root = view.root;
 
     // Simulate a resize drag via the resize handle
-    const resizeHandle = container.querySelector('.terminal-resize-handle') as HTMLElement;
+    const resizeHandle = document.body.querySelector('.terminal-resize-handle') as HTMLElement;
     expect(resizeHandle).toBeTruthy();
 
     // We can't easily simulate full drag in jsdom withoutMouseMove on document,
@@ -1104,29 +1104,26 @@ describe('Terminal height persistence', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
 
     // Verify initial height
-    const terminalEl = container.querySelector('.terminal-container') as HTMLElement;
-    expect(terminalEl.style.height).toBe('400px');
+    const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
 
-    // Simulate mousedown on resize handle and immediately mouseup
-    // This simulates a "resize" that doesn't move, so height stays at 400
+    // Simulate pointerdown on resize handle and immediately pointerup
+    // (pointer events: the handle is touch-enabled via pointer capture).
+    // jsdom has no PointerEvent constructor — a MouseEvent carries every
+    // field the handler reads (clientY, pointerId-less capture is
+    // best-effort in the hook).
+    const pointerEvent = (type: string, y: number): Event => {
+      const ev = new MouseEvent(type, { bubbles: true, clientX: 0, clientY: y });
+      Object.defineProperty(ev, 'pointerId', { value: 1 });
+      return ev as unknown as Event;
+    };
     act(() => {
-      resizeHandle.dispatchEvent(
-        new MouseEvent('mousedown', {
-          bubbles: true,
-          clientX: 0,
-          clientY: 600,
-        }),
-      );
+      resizeHandle.dispatchEvent(pointerEvent('pointerdown', 600));
     });
 
-    // The resize sets isResizingVertical, now trigger mouseup
+    // The resize sets isResizingVertical, now trigger pointerup
     act(() => {
-      document.dispatchEvent(
-        new MouseEvent('mouseup', {
-          clientX: 0,
-          clientY: 600,
-        }),
-      );
+      document.dispatchEvent(pointerEvent('pointerup', 600));
     });
 
     // After drag completes, height should be persisted
@@ -1204,7 +1201,7 @@ describe('Terminal flat N-pane splits', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
     expect(getDividers(container).length).toBe(1);
 
     // Second click adds a 3rd pane
@@ -1212,7 +1209,7 @@ describe('Terminal flat N-pane splits', () => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
     // N panes → N-1 dividers.
     expect(getDividers(container).length).toBe(2);
   });
@@ -1231,7 +1228,7 @@ describe('Terminal flat N-pane splits', () => {
       });
     }
 
-    const paneCount = container.querySelectorAll('.terminal-pane-wrapper').length;
+    const paneCount = document.body.querySelectorAll('.terminal-pane-wrapper').length;
     expect(paneCount).toBe(8);
     expect(getDividers(container).length).toBe(7);
 
@@ -1252,13 +1249,13 @@ describe('Terminal flat N-pane splits', () => {
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
 
     // Clicking the matching split button adds a 4th pane.
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(4);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(4);
   });
 
   it('switching direction at 3 panes keeps all 3 and flips the axis', () => {
@@ -1279,7 +1276,7 @@ describe('Terminal flat N-pane splits', () => {
       splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(true);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
@@ -1296,7 +1293,7 @@ describe('Terminal flat N-pane splits', () => {
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
 
     // Close one pane via its close button (last one).
     const closeBtns = getPaneCloseButtons(container);
@@ -1305,7 +1302,7 @@ describe('Terminal flat N-pane splits', () => {
     });
 
     // Down to 2 panes, still split.
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
   });
@@ -1318,14 +1315,14 @@ describe('Terminal flat N-pane splits', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Focused pane is the secondary; killing it should collapse the split.
     act(() => {
       dispatchTerminalAction('kill');
     });
 
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(false);
@@ -1443,13 +1440,13 @@ describe('Terminal exit-pane cleanup paths', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Exit the secondary pane (index 1) — should close immediately
     triggerProcessExitForPane(container, 1);
 
     // Path 1 is immediate — no timer advance needed
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
     expect(getSplitDivider(container)).toBeNull();
@@ -1463,13 +1460,13 @@ describe('Terminal exit-pane cleanup paths', () => {
     act(() => {
       dispatchTerminalAction('split_vertical');
     });
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Exit the primary pane (index 0) — should close immediately
     triggerProcessExitForPane(container, 0);
 
     // Path 1 is immediate — no timer advance needed
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
   });
 
   /* Path 2: Auto-create fresh session after 1.5s delay */
@@ -1481,23 +1478,23 @@ describe('Terminal exit-pane cleanup paths', () => {
       root = view.root;
 
       // Initially 1 pane, 1 session
-      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
-      const firstPane = container.querySelector('[data-instance-key]');
+      expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+      const firstPane = document.body.querySelector('[data-instance-key]');
       const firstInstanceKey = firstPane?.getAttribute('data-instance-key');
 
       // Exit the only session
       triggerProcessExit(container);
 
       // Immediately after exit, the old pane should still exist (not replaced yet)
-      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
-      const stillSamePane = container.querySelector('[data-instance-key]');
+      expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+      const stillSamePane = document.body.querySelector('[data-instance-key]');
       expect(stillSamePane?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
 
       // Advance time by 1.4s — session should NOT have been replaced yet
       act(() => {
         vi.advanceTimersByTime(1400);
       });
-      expect(container.querySelector('[data-instance-key]')?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
+      expect(document.body.querySelector('[data-instance-key]')?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
 
       // Advance past 1.5s — fresh session should be created
       act(() => {
@@ -1505,11 +1502,11 @@ describe('Terminal exit-pane cleanup paths', () => {
       });
 
       // Still 1 pane (the new session replaced the old one in the same pane)
-      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+      expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
 
       // Verify the session was actually replaced: the new instance key must differ
       // from the original because the mock assigns a fresh key on every render.
-      const newPane = container.querySelector('[data-instance-key]');
+      const newPane = document.body.querySelector('[data-instance-key]');
       const newInstanceKey = newPane?.getAttribute('data-instance-key');
       expect(newInstanceKey).toBeTruthy();
       expect(newInstanceKey).not.toBe(firstInstanceKey);
@@ -1525,7 +1522,7 @@ describe('Terminal exit-pane cleanup paths', () => {
     root = view.root;
 
     // Create a second session via the + button (shell picker)
-    const newSessionBtn = container.querySelector('.shell-picker-btn') as HTMLButtonElement;
+    const newSessionBtn = document.body.querySelector('.shell-picker-btn') as HTMLButtonElement;
     expect(newSessionBtn).toBeTruthy();
 
     act(() => {
@@ -1533,10 +1530,10 @@ describe('Terminal exit-pane cleanup paths', () => {
     });
 
     // We now have 1 pane with 2 sessions (only the active tab's pane is rendered)
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
 
     // Capture the currently-active session's instance key before exit.
-    const activePaneBefore = container.querySelector('[data-instance-key]');
+    const activePaneBefore = document.body.querySelector('[data-instance-key]');
     const exitedInstanceKey = activePaneBefore?.getAttribute('data-instance-key');
     expect(exitedInstanceKey).toBeTruthy();
 
@@ -1544,13 +1541,13 @@ describe('Terminal exit-pane cleanup paths', () => {
     triggerProcessExit(container);
 
     // Should still have 1 pane (the other tab remains)
-    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    expect(document.body.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
     // No split should be active
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
 
     // Verify the exited tab was actually closed: its instance key is gone from DOM.
-    const panesAfter = container.querySelectorAll('[data-instance-key]');
+    const panesAfter = document.body.querySelectorAll('[data-instance-key]');
     expect(panesAfter.length).toBe(1);
 
     const survivedInstanceKey = panesAfter[0]?.getAttribute('data-instance-key');

@@ -315,6 +315,35 @@ describe('useSidebarState', () => {
       expect(localStorage.getItem('sprout-sidebar-width')).toBe(String(SIDEBAR_DEFAULT_WIDTH));
     });
 
+    // ── P4.5-B: snap presets ───────────────────────────────────────────
+
+    it('cycleSidebarSnap advances through presets in order and wraps', () => {
+      localStorage.setItem('sprout-sidebar-width', '232'); // narrow
+      renderHook();
+      act(() => {
+        result.cycleSidebarSnap();
+      });
+      expect(result.sidebarWidth).toBe(288); // → standard
+      act(() => {
+        result.cycleSidebarSnap();
+      });
+      expect(result.sidebarWidth).toBe(384); // → wide
+      act(() => {
+        result.cycleSidebarSnap();
+      });
+      expect(result.sidebarWidth).toBe(232); // wraps to narrow
+      expect(localStorage.getItem('sprout-sidebar-width')).toBe('232');
+    });
+
+    it('cycleSidebarSnap enters the cycle at the nearest preset from an arbitrary width', () => {
+      localStorage.setItem('sprout-sidebar-width', '370'); // nearest = wide (384)
+      renderHook();
+      act(() => {
+        result.cycleSidebarSnap();
+      });
+      expect(result.sidebarWidth).toBe(232); // wide → wraps to narrow
+    });
+
     it('width survives page reload after persist', () => {
       renderHook();
       act(() => {

@@ -56,26 +56,37 @@ afterEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function dispatchMouseEvent(target: EventTarget, type: string, clientY: number): Event {
+function dispatchPointerEvent(target: EventTarget, type: string, clientY: number): Event {
+  // jsdom has no PointerEvent constructor; MouseEvent carries every field
+  // the handler reads (clientY). pointerId is defined for the capture
+  // call (best-effort in the hook).
   const event = new MouseEvent(type, {
     bubbles: true,
     cancelable: true,
     clientY,
   });
+  Object.defineProperty(event, 'pointerId', { value: 1 });
   act(() => {
     target.dispatchEvent(event);
   });
   return event;
 }
 
-function drag(handle: (e: React.MouseEvent) => void, fromY: number, toY: number, delta: number) {
-  handle({ preventDefault: vi.fn(), clientY: fromY } as unknown as React.MouseEvent);
+function drag(handle: (e: React.PointerEvent) => void, fromY: number, toY: number, delta: number) {
+  handle({
+    preventDefault: vi.fn(),
+    clientY: fromY,
+    currentTarget: {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    },
+  } as unknown as React.PointerEvent);
 
-  // mousemove
-  dispatchMouseEvent(document, 'mousemove', toY);
+  // pointermove
+  dispatchPointerEvent(document, 'pointermove', toY);
 
-  // mouseup
-  dispatchMouseEvent(document, 'mouseup', 0);
+  // pointerup
+  dispatchPointerEvent(document, 'pointerup', 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,8 +116,8 @@ describe('useVerticalDragResize', () => {
       act(() => {
         handle!({ preventDefault: vi.fn(), clientY: 300 } as unknown as React.MouseEvent);
       });
-      dispatchMouseEvent(document, 'mousemove', 200);
-      dispatchMouseEvent(document, 'mouseup', 0);
+      dispatchPointerEvent(document, 'pointermove', 200);
+      dispatchPointerEvent(document, 'pointerup', 0);
 
       expect(lastValue).toBe(500);
     });
@@ -132,8 +143,8 @@ describe('useVerticalDragResize', () => {
       act(() => {
         handle!({ preventDefault: vi.fn(), clientY: 100 } as unknown as React.MouseEvent);
       });
-      dispatchMouseEvent(document, 'mousemove', 800);
-      dispatchMouseEvent(document, 'mouseup', 0);
+      dispatchPointerEvent(document, 'pointermove', 800);
+      dispatchPointerEvent(document, 'pointerup', 0);
 
       expect(lastValue).toBeGreaterThanOrEqual(0);
     });
@@ -158,8 +169,8 @@ describe('useVerticalDragResize', () => {
       act(() => {
         handle!({ preventDefault: vi.fn(), clientY: 300 } as unknown as React.MouseEvent);
       });
-      dispatchMouseEvent(document, 'mousemove', 250);
-      dispatchMouseEvent(document, 'mouseup', 0);
+      dispatchPointerEvent(document, 'pointermove', 250);
+      dispatchPointerEvent(document, 'pointerup', 0);
 
       // Without rounding, delta=50 → 450, would be the "in-progress" value
       // With clamping, must be integer ≥ 120
@@ -191,8 +202,8 @@ describe('useVerticalDragResize', () => {
       expect(document.body.style.userSelect).toBe('none');
       expect(document.body.style.cursor).toBe('row-resize');
 
-      dispatchMouseEvent(document, 'mousemove', 150);
-      dispatchMouseEvent(document, 'mouseup', 0);
+      dispatchPointerEvent(document, 'pointermove', 150);
+      dispatchPointerEvent(document, 'pointerup', 0);
 
       expect(document.body.style.userSelect).toBe('');
       expect(document.body.style.cursor).toBe('');
@@ -217,11 +228,11 @@ describe('useVerticalDragResize', () => {
       act(() => {
         handle!({ preventDefault: vi.fn(), clientY: 300 } as unknown as React.MouseEvent);
       });
-      dispatchMouseEvent(document, 'mousemove', 200);
-      dispatchMouseEvent(document, 'mouseup', 0);
+      dispatchPointerEvent(document, 'pointermove', 200);
+      dispatchPointerEvent(document, 'pointerup', 0);
 
-      expect(removeSpy).toHaveBeenCalledWith('mousemove', expect.any(Function));
-      expect(removeSpy).toHaveBeenCalledWith('mouseup', expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function));
 
       removeSpy.mockRestore();
     });

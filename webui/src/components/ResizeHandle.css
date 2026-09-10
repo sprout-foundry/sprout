@@ -26,6 +26,47 @@
   right: -10px;
 }
 
+/* ── Touch-large handles (P4.5 option A) ──────────────────────────
+ *
+ * On coarse-pointer viewports wider than the phone breakpoint (iPad
+ * band), resize strips get a real grip: 28px hit area with a visible
+ * indicator. The 8px/4px desktop geometry stays untouched for
+ * pointer-fine screens. `hover: none` = finger is the primary input;
+ * pairing it with min-width: 769px keeps phones out (they hide handles
+ * entirely — see index.css mobile block).
+ */
+@media (hover: none) and (min-width: 769px) {
+  .resize-handle,
+  .resize-handle-horizontal,
+  .resize-handle-vertical,
+  .sidebar-resize-handle {
+    width: 28px;
+    min-width: 28px;
+  }
+
+  .resize-handle.resize-handle-horizontal,
+  .sidebar-resize-handle {
+    margin-left: -12px; /* keep visual seam thin; hit area bleeds into neighbors */
+    margin-right: -12px;
+    z-index: 101;
+  }
+
+  /* Always-visible grip — opacity-0 hover reveals are meaningless on
+     touch. Shorter than the strip so it reads as a grip, not a border. */
+  .resize-handle-horizontal .resize-handle-indicator,
+  .sidebar-resize-handle .resize-handle-indicator {
+    opacity: 0.55;
+    width: 4px;
+    height: 44px;
+    border-radius: 2px;
+  }
+
+  .resize-handle.resizing {
+    opacity: 0.85;
+    background-color: color-mix(in srgb, var(--accent-primary) 26%, transparent);
+  }
+}
+
 .resize-handle:hover {
   background-color: var(--border-default);
 }

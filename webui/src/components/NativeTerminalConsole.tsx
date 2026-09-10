@@ -435,9 +435,10 @@ export function NativeTerminalConsole(): React.ReactElement {
     <div
       ref={hostRef}
       className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
+      // FitAddon measures THIS element's client box (excludes padding),
+      // so the inset keeps the text grid clear of the edges while the
+      // black background runs flush. Keep padding here.
       style={{ padding: '6px 8px' }}
-      // xterm renders its own focusable textarea; this labels the region for
-      // screen readers without stealing the terminal's focus target.
       role="region"
       aria-label="Terminal console"
     />

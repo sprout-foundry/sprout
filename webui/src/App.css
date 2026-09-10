@@ -2328,45 +2328,49 @@ button.primary.success {
  * The scale multiplies the --text-* and --space-* tokens defined on
  * :root above. Pixel-quantized (+/- 1px) so text stays crisp and
  * layout shifts stay predictable.
+ *
+ * Spread widened 2026-09-10 after on-device feedback: the original
+ * ~8% Large step "didn't feel very large". Compact ~0.86x, Large
+ * ~1.21x — each step is now clearly visible at arm's length.
  */
 [data-ui-scale='compact'] {
   --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
-  --text-xl: 17px;
-  --text-2xl: 18px;
-  --text-3xl: 26px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 17px;
+  --text-3xl: 24px;
   --space-1: 2px;
   --space-2: 4px;
-  --space-3: 6px;
-  --space-4: 7px;
-  --space-5: 9px;
-  --space-6: 11px;
-  --space-8: 15px;
-  --space-10: 18px;
-  --space-12: 22px;
+  --space-3: 5px;
+  --space-4: 6px;
+  --space-5: 8px;
+  --space-6: 10px;
+  --space-8: 13px;
+  --space-10: 17px;
+  --space-12: 20px;
 }
 
 [data-ui-scale='large'] {
-  --text-xs: 13px;
-  --text-sm: 14px;
-  --text-base: 15px;
-  --text-md: 16px;
-  --text-lg: 17px;
-  --text-xl: 19px;
-  --text-2xl: 22px;
-  --text-3xl: 30px;
-  --space-1: 2px;
+  --text-xs: 14px;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-md: 18px;
+  --text-lg: 19px;
+  --text-xl: 22px;
+  --text-2xl: 24px;
+  --text-3xl: 34px;
+  --space-1: 3px;
   --space-2: 5px;
   --space-3: 7px;
-  --space-4: 9px;
-  --space-5: 11px;
-  --space-6: 13px;
-  --space-8: 17px;
-  --space-10: 22px;
-  --space-12: 26px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 15px;
+  --space-8: 19px;
+  --space-10: 24px;
+  --space-12: 29px;
 }
 
 @media (min-width: 769px) {

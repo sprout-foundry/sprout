@@ -1107,26 +1107,23 @@ describe('Terminal height persistence', () => {
     const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
     expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
 
-    // Simulate mousedown on resize handle and immediately mouseup
-    // This simulates a "resize" that doesn't move, so height stays at 400
+    // Simulate pointerdown on resize handle and immediately pointerup
+    // (pointer events: the handle is touch-enabled via pointer capture).
+    // jsdom has no PointerEvent constructor — a MouseEvent carries every
+    // field the handler reads (clientY, pointerId-less capture is
+    // best-effort in the hook).
+    const pointerEvent = (type: string, y: number): Event => {
+      const ev = new MouseEvent(type, { bubbles: true, clientX: 0, clientY: y });
+      Object.defineProperty(ev, 'pointerId', { value: 1 });
+      return ev as unknown as Event;
+    };
     act(() => {
-      resizeHandle.dispatchEvent(
-        new MouseEvent('mousedown', {
-          bubbles: true,
-          clientX: 0,
-          clientY: 600,
-        }),
-      );
+      resizeHandle.dispatchEvent(pointerEvent('pointerdown', 600));
     });
 
-    // The resize sets isResizingVertical, now trigger mouseup
+    // The resize sets isResizingVertical, now trigger pointerup
     act(() => {
-      document.dispatchEvent(
-        new MouseEvent('mouseup', {
-          clientX: 0,
-          clientY: 600,
-        }),
-      );
+      document.dispatchEvent(pointerEvent('pointerup', 600));
     });
 
     // After drag completes, height should be persisted

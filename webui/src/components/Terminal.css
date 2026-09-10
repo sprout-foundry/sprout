@@ -47,14 +47,15 @@
   transform: scale(var(--ui-scale, 1));
   transform-origin: 0 100%;
   pointer-events: none; /* only the terminal inside accepts input */
-  /* Home-indicator clearance WITH viewport-fit=cover: the portal reaches
-   * the PHYSICAL screen bottom; the console content stays above the
-   * gesture zone via this inset — painted black through it (the portal's
-   * own background fills the inset), so unlike an inset on a
-   * transparent wrapper it cannot read as a band. */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* NO safe-area padding on the portal: any inset band paints in
+   * --bg-secondary (lighter gray) under the console's near-black
+   * (#05070d) — that color seam is the persistent "slight margin
+   * around the terminal" (2026-09-10, physical iPad; the simulator's
+   * rendering hid it twice). The home-indicator clearance lives INSIDE
+   * the console host's own black surface instead — see
+   * NativeTerminalConsole's padding, which includes the inset. */
   background: var(--bg-secondary);
-  box-sizing: border-box; /* padding included in the logical height */
+  box-sizing: border-box;
 }
 
 .terminal-portal > .terminal-container {

@@ -218,7 +218,7 @@ summary:focus-visible {
     min-height: 44px;
   }
 
-  /* ── Phone form-factor track (slice 1: kill desktop split chrome) ──
+  /* Phone form-factor track (slice 1: kill desktop split chrome) ──
    *
    * A phone canvas cannot host side-by-side panes: the desktop IDE
    * topology squeezed into ~360×800dp scrunches each pane illegibly.
@@ -232,95 +232,4 @@ summary:focus-visible {
   .resize-handle-vertical {
     display: none !important;
   }
-}
-
-/* ── UI Size (P4.5 option C) — density control ────────────────────
- *
- * data-ui-scale is set on <html> by hooks/useUIScale.ts (persisted in
- * localStorage; first-run heuristic defaults tablets to large). The
- * scale multiplies the --text-* and --space-* tokens defined on :root
- * in App.css. Pixel-quantized (+/- 1px) so text stays crisp and layout
- * shifts stay predictable; only the two tokens that commonly fall
- * between quantization steps are left exact.
- */
-[data-ui-scale='compact'] {
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
-  --text-xl: 17px;
-  --text-2xl: 18px;
-  --text-3xl: 26px;
-  --space-1: 2px;
-  --space-2: 4px;
-  --space-3: 6px;
-  --space-4: 7px;
-  --space-5: 9px;
-  --space-6: 11px;
-  --space-8: 15px;
-  --space-10: 18px;
-  --space-12: 22px;
-}
-
-[data-ui-scale='large'] {
-  --text-xs: 13px;
-  --text-sm: 14px;
-  --text-base: 15px;
-  --text-md: 16px;
-  --text-lg: 17px;
-  --text-xl: 19px;
-  --text-2xl: 22px;
-  --text-3xl: 30px;
-  --space-1: 2px;
-  --space-2: 5px;
-  --space-3: 7px;
-  --space-4: 9px;
-  --space-5: 11px;
-  --space-6: 13px;
-  --space-8: 17px;
-  --space-10: 22px;
-  --space-12: 26px;
-}
-
-@media (min-width: 769px) {
-  .show-mobile {
-    display: none !important;
-  }
-}
-
-/* ── Screen reader only (sr-only) ────────────────────────────── */
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-/* ── Settings Skeleton ───────────────────────────────────────────── */
-
-.settings-skeleton {
-  padding: var(--space-4) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.settings-skeleton-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin-top: var(--space-2);
-}
-
-.settings-skeleton-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }

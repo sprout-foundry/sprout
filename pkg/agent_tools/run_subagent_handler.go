@@ -51,6 +51,15 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 			"**REQUIRED**: You MUST specify a persona parameter. " +
 			"Personas are configured from JSON defaults plus user config " +
 			"(for example: general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper).\n\n" +
+			"Persona selection guide: `coder` — new features, production code, algorithms; " +
+			"`refactor` — behavior-preserving refactors, duplication removal; " +
+			"`tester` — unit tests, coverage; " +
+			"`reviewer` — diff review (security, correctness, quality); " +
+			"`debugger` — bug investigation, root cause; " +
+			"`researcher` — local code investigation and/or external research; " +
+			"`web_scraper` — structured web extraction; " +
+			"`general` — anything else. Pick the closest match; use `general` when nothing fits. " +
+			"Run /persona list for the live set.\n\n" +
 			"Subagents use focused per-persona tool subsets from configuration for more deterministic behavior. " +
 			"NO TIMEOUT - runs until completion. " +
 			"Subagent provider and model are configured via config settings (subagent_provider and subagent_model).\n\n" +

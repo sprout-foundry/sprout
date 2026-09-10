@@ -7,7 +7,7 @@ This directory contains the system prompts for each specialized subagent persona
 1. **[Coder](coder.md)** - Implementation and feature development
 2. **[Refactor](refactor.md)** - Behavior-preserving refactoring and risk reduction
 3. **[Tester](tester.md)** - Unit test writing and test coverage
-4. **[Reviewer](reviewer.md)** - Code review, security, and best practices
+4. **[Reviewer](reviewer.md)** - Diff-focused code review: correctness, security, quality
 5. **[Debugger](debugger.md)** - Bug investigation, root cause analysis, and fixes
 6. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid)
 7. **[Web_Scraper](web_scraper.md)** - Web scraping and content extraction
@@ -39,7 +39,7 @@ When delegating tasks to subagents, choose the persona that best matches the tas
 - **Implement a feature** → `coder`
 - **Refactor with minimal risk** → `refactor`
 - **Write tests for code** → `tester`
-- **Review PR for security** → `reviewer`
+- **Review a diff for real issues** → `reviewer`
 - **Fix a bug** → `debugger`
 - **Investigate codebase + find best practices** → `researcher`
 - **Scrape web content** → `web_scraper`

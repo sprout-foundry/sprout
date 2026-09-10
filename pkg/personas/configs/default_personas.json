@@ -270,7 +270,7 @@
         "request_clarification"
       ],
       "delegatable": true,
-      "description": "Code review, security review, and best-practices specialist",
+      "description": "Diff-focused code review: correctness, security, and quality",
       "enabled": true,
       "id": "reviewer",
       "_rules_source": "inherit:DefaultAutoApproveRules",

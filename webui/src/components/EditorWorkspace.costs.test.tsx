@@ -80,9 +80,15 @@ vi.mock('./CostsPage', () => {
   return { default: CostsPage };
 });
 
-// Mock @sprout/ui
+// Mock @sprout/ui — must include everything the mounted tree pulls in.
+// P4.2: the mobile branch renders ChatView directly inside
+// EditorWorkspace, so its @sprout/ui imports (CommandInput et al.)
+// resolve here too when jsdom is treated as a mobile viewport.
 vi.mock('@sprout/ui', () => ({
   SkeletonText: () => <div className="mock-skeleton" />,
+  CommandInput: () => <div className="mock-command-input" />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Sidebar: () => <div className="mock-sidebar" />,
 }));
 
 // ---------------------------------------------------------------------------

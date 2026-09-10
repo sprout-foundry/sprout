@@ -11,15 +11,12 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 | ID | Description | Delegatable | Notes |
 |----|-------------|-------------|-------|
 | `orchestrator` | Planning and delegation; classify → activate skill → delegate → verify | No | Carries `git_write` capability. Aliases: `orchestration`, `repo_orchestrator`, `repo_operator`, `git_orchestrator` |
-| `coordinator` | Cross-project orchestration; manages a persistent task queue, delegates to orchestrator subagents | No | Carries `git_write` unconditionally. Lists `orchestrator` in `can_spawn_non_delegatable`. Aliases: `executive_assistant`, `ea`, `assistant` |
+| `coordinator` | Cross-project coordination; delegates to orchestrator subagents | No | Carries `git_write` unconditionally. Lists `orchestrator` in `can_spawn_non_delegatable`. Aliases: `executive_assistant`, `ea`, `assistant` |
 | `general` | General-purpose persona for tasks that don't need deep specialization | Yes | Alias: `default` |
-| `coder` | Feature implementation and production code writing | Yes | |
-| `refactor` | Behavior-preserving refactoring, low-risk and incremental | Yes | |
-| `debugger` | Bug investigation, root cause analysis, targeted fixes | Yes | |
+| `coder` | Feature implementation, production code, debugging, and refactoring | Yes | Aliases: `refactor`, `debugger` (retired personas, consolidated 2026-09) |
 | `tester` | Unit-test authoring and coverage | Yes | |
 | `reviewer` | Diff-focused code review: correctness, security, quality | Yes | Alias: `code_reviewer` |
-| `researcher` | Codebase analysis combined with external research | Yes | |
-| `web_scraper` | Web extraction and structured content collection | Yes | Aliases: `web-scraper`, `scraper` |
+| `researcher` | Codebase analysis combined with external research and web extraction | Yes | Aliases: `web_scraper`, `web-scraper`, `scraper` (retired persona, consolidated 2026-09) |
 | `computer_user` | Desktop automation with screenshots, mouse, and keyboard | No | Carries `computer_use` capability |
 
 Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`.
@@ -62,11 +59,11 @@ Git-write authorization is governed solely by the persona's `CapabilityGitWrite`
 
 Implementation: `pkg/agent/persona.go` (`isGitWriteAllowed`), `pkg/agent/tool_handlers_shell.go`.
 
-### `disable_coordinator_auto_activate` — opt out of coordinator activation in $HOME
+### `coordinator_auto_activate` — opt in to coordinator activation in $HOME
 
-Coordinator auto-activates when sprout starts with the workspace root resolving to the user's home directory. Set this to `true` to skip auto-activation; the user then picks a persona explicitly.
+Coordinator no longer auto-activates. To restore the old $HOME behavior, set `coordinator_auto_activate: true`; the coordinator persona then activates on startup when the workspace resolves to the home directory. Otherwise activate it explicitly with `/persona coordinator`.
 
-Implementation: `pkg/agent/agent_creation.go:504-553` (`autoActivateCoordinatorPersona`).
+Implementation: `pkg/agent/agent_creation.go` (`maybeAutoActivateCoordinatorPersona`). The legacy `disable_coordinator_auto_activate` flag is still accepted as a no-op for config compatibility.
 
 ### `subagent_max_depth` — cap nesting depth
 
@@ -286,7 +283,7 @@ If a workflow needs a different combination of tools or a tailored system prompt
 | Persona ID + capability constants | `pkg/personas/ids.go` |
 | Config integration | `pkg/configuration/config.go` (`SubagentType`, `GetSubagentType`, `IsPersonaDisabled`, `DefaultSubagentPersona`) |
 | Persona activation | `pkg/agent/persona.go` (`ApplyPersona`, `isGitWriteAllowed`, `canSpawnNonDelegatable`, `GetAvailablePersonaIDs`) |
-| Coordinator auto-activate | `pkg/agent/agent_creation.go::autoActivateCoordinatorPersona` |
+| Coordinator auto-activate | `pkg/agent/agent_creation.go::maybeAutoActivateCoordinatorPersona` |
 | Subagent spawn gate | `pkg/agent/tool_handlers_subagent.go::handleRunSubagent` |
 | Depth limits | `pkg/agent/agent_getters.go::MaxSubagentDepth` |
 | Git-write gating | `pkg/agent/tool_handlers_shell.go` |

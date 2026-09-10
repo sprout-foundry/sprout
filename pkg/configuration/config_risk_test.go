@@ -962,7 +962,7 @@ func TestNewConfig_NonEAPersonas_NoAutoApproveRules(t *testing.T) {
 
 	// Personas without explicit auto_approve_rules in their JSON should have nil,
 	// but GetAutoApproveRules should still return the defaults.
-	for _, id := range []string{"general", "coder", "tester", "debugger", "orchestrator", "web_scraper", "refactor"} {
+	for _, id := range []string{"general", "coder", "tester", "orchestrator", "reviewer", "researcher"} {
 		t.Run(id, func(t *testing.T) {
 			persona, ok := cfg.SubagentTypes[id]
 			if !ok {

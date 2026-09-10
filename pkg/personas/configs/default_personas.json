@@ -133,78 +133,11 @@
       "id": "coder",
       "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Coder",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/coder.md"
-    },
-    {
-      "allowed_tools": [
-        "shell_command",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "write_structured_file",
-        "patch_structured_file",
-        "search",
-        "analyze_ui_screenshot",
-        "analyze_image_content",
-        "browse_url",
-        "todo_write",
-        "todo_read",
-        "list_skills",
-        "activate_skill",
-        "list_changes",
-        "recover_file",
-        "revert_my_changes",
-        "repo_map",
-        "get_callers",
-        "get_callees",
-        "find_dead_code",
-        "list_directory",
-        "request_clarification"
-      ],
-      "delegatable": true,
-      "description": "Behavior-preserving refactoring specialist focused on low-risk, incremental improvements",
-      "enabled": true,
-      "id": "refactor",
-      "_rules_source": "inherit:DefaultAutoApproveRules",
-      "name": "Refactor",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/refactor.md"
-    },
-    {
-      "allowed_tools": [
-        "shell_command",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "write_structured_file",
-        "patch_structured_file",
-        "search",
-        "analyze_ui_screenshot",
-        "analyze_image_content",
-        "browse_url",
-        "run_subagent",
-        "run_parallel_subagents",
-        "mcp_tools",
-        "todo_write",
-        "todo_read",
-        "list_skills",
-        "activate_skill",
-        "list_changes",
-        "recover_file",
-        "revert_my_changes",
-        "repo_map",
-        "get_callers",
-        "get_callees",
-        "list_directory",
-        "request_clarification",
-        "register_preview_port"
-      ],
-      "delegatable": true,
-      "description": "Bug investigation, root cause analysis, and targeted fixes specialist",
-      "enabled": true,
-      "id": "debugger",
-      "_rules_source": "inherit:DefaultAutoApproveRules",
-      "name": "Debugger",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/debugger.md"
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/coder.md",
+      "aliases": [
+        "refactor",
+        "debugger"
+      ]
     },
     {
       "allowed_tools": [
@@ -302,41 +235,11 @@
       "id": "researcher",
       "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Researcher",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/researcher.md"
-    },
-    {
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/researcher.md",
       "aliases": [
-        "web-scraper",
+        "web_scraper",
         "scraper"
-      ],
-      "allowed_tools": [
-        "shell_command",
-        "web_search",
-        "fetch_url",
-        "browse_url",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "write_structured_file",
-        "patch_structured_file",
-        "search",
-        "analyze_ui_screenshot",
-        "analyze_image_content",
-        "todo_write",
-        "todo_read",
-        "list_changes",
-        "recover_file",
-        "revert_my_changes",
-        "list_directory",
-        "request_clarification"
-      ],
-      "delegatable": true,
-      "description": "Web extraction and structured content collection specialist",
-      "enabled": true,
-      "id": "web_scraper",
-      "_rules_source": "inherit:DefaultAutoApproveRules",
-      "name": "Web Scraper",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/web_scraper.md"
+      ]
     }
   ]
 }

@@ -1,4 +1,16 @@
 import { useCallback, useRef } from 'react';
+import { UI_SCALE_FACTOR, type UIScale } from './useUIScale';
+
+/** Read the live UI tier from <html> (falls back to default off-DOM). */
+function readUIScale(): UIScale {
+  try {
+    const v = document.documentElement.getAttribute('data-ui-scale');
+    if (v === 'compact' || v === 'large' || v === 'xlarge' || v === 'default') return v;
+  } catch {
+    /* SSR/tests */
+  }
+  return 'default';
+}
 
 export interface UseVerticalDragResizeArgs {
   currentHeight: number;
@@ -28,9 +40,15 @@ export function useVerticalDragResize(args: UseVerticalDragResizeArgs): (e: Reac
 
   const handleMove = useCallback(
     (ev: MouseEvent, startY: number, startHeight: number) => {
-      const delta = startY - ev.clientY;
+      // P4.5: the terminal's drag handle receives SCREEN px, but the
+      // persisted height is LOGICAL (painted = logical x ui-scale when
+      // the terminal portal carries the paint scale). Divide the delta
+      // by the live factor so drags track the pointer 1:1 and stored
+      // values stay tier-independent.
+      const scale = UI_SCALE_FACTOR[readUIScale()];
+      const delta = (startY - ev.clientY) / scale;
       const next = startHeight + delta;
-      const windowedMax = typeof window === 'undefined' ? Infinity : window.innerHeight - maxFactor;
+      const windowedMax = typeof window === 'undefined' ? Infinity : window.innerHeight / scale - maxFactor;
       const clamped = Math.max(0, Math.min(windowedMax, next));
       latestRef.current = clamped;
       onResize(clamped);

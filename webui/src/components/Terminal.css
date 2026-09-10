@@ -13,6 +13,37 @@
   transition: height 200ms var(--ease-out);
 }
 
+/* P4.5: the terminal portals to document.body (outside #root's UI-Size
+ * transform — see Terminal.tsx) but must still PAINT at the UI size.
+ * The wrapper here carries the same paint scale as #root via --ui-scale
+ * (kept in sync by hooks/useUIScale.ts). #root's transform-origin is
+ * 0 0 and the terminal pins to the viewport bottom-left, so scaling
+ * this box with origin 0 0 keeps it flush: the scaled box's height
+ * grows upward from the bottom-pinned origin.
+ *
+ * The inline height set by Terminal.tsx (terminalHeight/collapsedHeight
+ * px, persisted LOGICAL px) is multiplied here via calc so the painted
+ * height matches the tier. Drag math divides screen px by the factor,
+ * keeping persisted values logical across tier changes.
+ */
+.terminal-portal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: 0 100%;
+  pointer-events: none; /* only the terminal inside accepts input */
+}
+
+.terminal-portal .terminal-container {
+  position: static;
+  pointer-events: auto;
+  height: auto;
+  min-height: calc(var(--terminal-height, 42px) * var(--ui-scale, 1));
+}
+
 .terminal-container.collapsed {
   height: 42px;
   pointer-events: none;

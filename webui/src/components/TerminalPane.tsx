@@ -377,71 +377,73 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         role="application"
         aria-label="Terminal"
       >
-        <TerminalSearchBar
-          ref={searchBarRef}
-          visible={searchVisible}
-          onSearch={handleSearch}
-          onClose={handleCloseSearch}
-          matchIndex={matchIndex}
-          matchCount={matchCount}
-          searchError={searchError}
-          onSearchError={handleSearchError}
-          initialQuery={searchInitialQueryRef.current}
-        />
-        <div className="terminal-pane-content" onClick={() => xtermRef.current?.focus()}>
-          <div ref={xtermContainerRef} className="terminal-xterm" />
-          {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
-        </div>
-        {isExited && <div className="terminal-status-inline terminal-status-inline--exited">Session ended.</div>}
-        {!paneConnected && !wasmActive && !wasmLoading && !wasmProvidedByShell && !terminalProvidedByShell && (
-          <div className="terminal-status-inline">
-            <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
-            Loading terminal...
+        {/* When the native console is active (studio --native-terminal
+            dist), the NativeTerminalConsole below IS the terminal: the
+            webui xterm container stays empty forever (no transport
+            connects), and rendering it + the "Loading..." placeholders
+            painted an unloaded terminal surface visibly stacked UNDER
+            the working native console (2026-09-10 device report). Hide
+            the webui terminal chrome entirely in that mode. */}
+        {nativeConsoleActive ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <NativeTerminalConsole />
           </div>
-        )}
-        {wasmLoading && (
-          <div className="terminal-status-inline">
-            <Terminal
-              size={14}
-              className="inline-block mr-1 align-text-bottom"
-              style={{ animation: 'spin 1s linear infinite' }}
+        ) : (
+          <>
+            <TerminalSearchBar
+              ref={searchBarRef}
+              visible={searchVisible}
+              onSearch={handleSearch}
+              onClose={handleCloseSearch}
+              matchIndex={matchIndex}
+              matchCount={matchCount}
+              searchError={searchError}
+              onSearchError={handleSearchError}
+              initialQuery={searchInitialQueryRef.current}
             />
-            Starting shell...
-          </div>
+            <div className="terminal-pane-content" onClick={() => xtermRef.current?.focus()}>
+              <div ref={xtermContainerRef} className="terminal-xterm" />
+              {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
+            </div>
+            {isExited && <div className="terminal-status-inline terminal-status-inline--exited">Session ended.</div>}
+            {!paneConnected && !wasmActive && !wasmLoading && !wasmProvidedByShell && !terminalProvidedByShell && (
+              <div className="terminal-status-inline">
+                <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
+                Loading terminal...
+              </div>
+            )}
+            {wasmLoading && (
+              <div className="terminal-status-inline">
+                <Terminal size={14} className="inline-block mr-1 align-text-bottom" style={{ animation: 'spin 1s linear infinite' }} />
+                Starting shell...
+              </div>
+            )}
+            {wasmError && !wasmActive && (
+              <div className="terminal-status-inline terminal-status-inline--error">
+                <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
+                WASM shell failed: {wasmError}
+              </div>
+            )}
+            {wasmActive && (
+              <div className="terminal-status-inline terminal-status-inline--success">
+                <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
+                Shell ready
+              </div>
+            )}
+          </>
         )}
-        {wasmError && !wasmActive && (
-          <div className="terminal-status-inline terminal-status-inline--error">
-            <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
-            WASM shell failed: {wasmError}
-          </div>
-        )}
-        {wasmActive && (
-          <div className="terminal-status-inline terminal-status-inline--success">
+        {(wasmProvidedByShell || terminalProvidedByShell) && !nativeConsoleActive && (
+          <div className="terminal-status-inline">
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-            Shell ready
+            Terminal provided by the native shell
           </div>
         )}
-        {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell provides the
-            terminal natively (the WASM/PTY transport modules are hard-excluded),
-            so the tab shows a clear placeholder instead of a boot failure.
-            Rendered exactly once when either flag set the shell-provided bit. */}
-        {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell provides the
-            terminal natively (the WASM/PTY transport modules are hard-excluded).
-            When the terminal gate is ACTIVE (ratified build + bridge declares
-            `terminal`), render the live native console instead of the inert
-            handoff placeholder. The placeholder remains for seam-only / not-yet-
-            ratified dists so the handoff state is still visible. */}
-        {(wasmProvidedByShell || terminalProvidedByShell) &&
-          (nativeConsoleActive ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <NativeTerminalConsole />
-            </div>
-          ) : (
-            <div className="terminal-status-inline">
-              <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-              Terminal provided by the native shell
-            </div>
-          ))}
+        {/* R-2f / R-3: in a --native-fs or --native-terminal dist the shell
+            provides the terminal natively. All webui terminal surfaces
+            (xterm container, search bar, WASM status rows) render ONLY in
+            the non-native branch above — an earlier layout kept them and
+            painted an empty terminal surface stacked under the live
+            native console. */}
         <TerminalContextMenu
           containerRef={xtermContainerRef}
           getTerminal={getXTerminal}

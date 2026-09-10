@@ -309,6 +309,7 @@ const TESTIDS = {
   'workspace-picker-option': 'workspace-picker-option',
   'workspace-picker-error': 'workspace-picker-error',
   'theme-toggle': 'theme-toggle',
+  'ui-scale-select': 'ui-scale-select',
   'disconnected-overlay': 'disconnected-overlay',
 
   // Notifications

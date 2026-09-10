@@ -122,9 +122,25 @@
   top: 0;
   left: 0;
   right: 0;
+  /* Touch-large hit area (P4.5): 6px is a mouse target; fingers need a
+   * real grab zone. 28px on coarse pointers, centered on the seam
+   * (bleeds into both neighbors; terminal content scrolls under it).
+   * touch-action:none is REQUIRED for pointer-drag on touch — without
+   * it the browser claims the gesture for scrolling and the drag never
+   * starts. */
   height: 6px;
   cursor: row-resize;
   z-index: 10;
+  touch-action: none;
+}
+
+@media (hover: none) and (min-width: 769px) {
+  .terminal-resize-handle {
+    height: 28px;
+    /* Keep the visual grip centered on the seam while the hit area
+     * grows upward and downward symmetrically. */
+    top: -11px;
+  }
 }
 
 .terminal-resize-handle::after {

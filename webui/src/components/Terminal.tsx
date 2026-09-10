@@ -159,16 +159,17 @@ function Terminal({
 
   // CSS custom property for reserved height
   useEffect(() => {
+    // LOGICAL px, not scaled: the consumer (.app padding-bottom) lives
+    // INSIDE #root's scaled coordinate space — its padding is painted
+    // by #root's transform. Emitting logical×scale here made the paint
+    // scale² (a growing dead band between editor bottom and terminal
+    // top). The terminal portal (outside #root, real viewport) reads
+    // this too — it wants the LOGICAL value for its wrapper height and
+    // applies the factor itself.
     const logical = isExpanded ? terminalHeight : collapsedHeight;
-    // Reserved height must be in REAL (unpainted) px because .app pads
-    // against the scaled #root's coordinate space... no — #root lays out
-    // at 100%/scale, so its children measure in LOGICAL px; the paint
-    // scale happens above them. The app's padding and the terminal's
-    // painted height must agree in real px, so expose the scaled value.
-    const scale = UI_SCALE_FACTOR[uiScaleRef.current];
-    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${Math.round(logical * scale)}px`);
+    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${logical}px`);
     return () => {
-      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${Math.round(collapsedHeight * (UI_SCALE_FACTOR[uiScaleRef.current]))}px`);
+      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
     };
   }, [collapsedHeight, isExpanded, terminalHeight]);
 
@@ -310,7 +311,7 @@ function Terminal({
       {isExpanded && (
         <div
           className="terminal-resize-handle"
-          onMouseDown={handleVerticalResizeStart}
+          onPointerDown={handleVerticalResizeStart}
           title="Drag to resize terminal"
         />
       )}

@@ -12,6 +12,7 @@ import GitHubAccountPanel from './GitHubAccountPanel';
 import { getStoredUser } from '../services/githubService';
 import type { GitHubUser } from '../services/githubService';
 import type { AgentConfigProps } from './settings/types';
+import type { UIScale } from '../hooks/useUIScale';
 
 // SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
 // onnxEmbeddingProvider, and a few other heavy dependencies. It only
@@ -203,6 +204,9 @@ interface SidebarSettingsSectionProps {
   setThemePack: (id: string) => void;
   importTheme: (text: string) => { success: boolean; warnings?: string[] };
   removeTheme: (id: string) => void;
+  /** UI Size (P4.5-C): compact | default | large, applied to <html>. */
+  uiScale: UIScale;
+  setUIScale: (scale: UIScale) => void;
   applyPreset: (preset: string) => Promise<void>;
   autoSaveEnabled: boolean;
   whitespaceRenderingMode: WhitespaceRenderingMode;
@@ -233,6 +237,8 @@ export default function SidebarSettingsSection({
   setThemePack,
   importTheme,
   removeTheme,
+  uiScale,
+  setUIScale,
   applyPreset,
   autoSaveEnabled,
   whitespaceRenderingMode,
@@ -371,6 +377,22 @@ export default function SidebarSettingsSection({
             onChange={handleImportTheme}
           />
           {importError && <div className="theme-picker-error">{importError}</div>}
+        </div>
+        {/* UI Size (P4.5-C): density control — scales text+spacing tokens via
+            data-ui-scale on <html>. Tablet first run defaults to Large. */}
+        <div className="config-item">
+          <label htmlFor="ui-scale-select">UI Size:</label>
+          <select
+            id="ui-scale-select"
+            value={uiScale}
+            onChange={(e) => setUIScale(e.target.value as UIScale)}
+            className="styled-select"
+            data-testid="ui-scale-select"
+          >
+            <option value="compact">Compact</option>
+            <option value="default">Default</option>
+            <option value="large">Large</option>
+          </select>
         </div>
         <div className="config-item">
           <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>

@@ -31,21 +31,34 @@
   bottom: 0;
   left: 0;
   right: 0;
+  /* Explicit painted height — NEVER auto: the console's scrollback sizes
+   * an auto wrapper from the bottom up and swallows the whole screen
+   * ("the whole UI is just a terminal", 2026-09-10). Height comes from
+   * the logical px set by Terminal.tsx (expanded height or collapsed
+   * strip) multiplied by the live paint factor; hard-capped by the
+   * viewport as a belt-and-braces bound. */
+  height: calc(var(--terminal-height, 42px) * var(--ui-scale, 1));
+  max-height: 100vh;
   z-index: 100;
   transform: scale(var(--ui-scale, 1));
   transform-origin: 0 100%;
   pointer-events: none; /* only the terminal inside accepts input */
 }
 
-.terminal-portal .terminal-container {
+.terminal-portal > .terminal-container {
   position: static;
   pointer-events: auto;
-  height: auto;
-  min-height: calc(var(--terminal-height, 42px) * var(--ui-scale, 1));
+  /* Fill the wrapper's explicit height — must beat the .collapsed /
+   * .expanded height rules (hence the child combinator bump). */
+  height: 100%;
+  min-height: 0;
 }
 
 .terminal-container.collapsed {
-  height: 42px;
+  /* No height here: the container always fills .terminal-portal, whose
+   * height IS the collapsed height when collapsed (--terminal-height
+   * carries collapsedHeight in Terminal.tsx). A hardcoded 42px fought
+   * the portal's scale-multiplied height and left a band. */
   pointer-events: none;
 }
 
@@ -620,14 +633,18 @@
 }
 
 @media (max-width: 768px) {
-  .terminal-container.expanded {
-    position: fixed;
+  /* Mobile: the PORTAL owns full-screen expansion (the container just
+   * fills it). The old container-level fixed/fullscreen rule fought the
+   * portal's transform — a transformed ancestor becomes the containing
+   * block for fixed descendants, confining the "fullscreen" to the
+   * terminal box instead of the screen. */
+  .terminal-portal--expanded {
     top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 100vh !important;
+    height: 100vh;
     z-index: 1100;
+  }
+
+  .terminal-portal--expanded > .terminal-container {
     border-top: none;
     border-radius: 0;
   }

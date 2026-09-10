@@ -53,7 +53,23 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     if (typeof window === 'undefined') {
       return false;
     }
-    return window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY) === '1';
+    const stored = window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY);
+    if (stored !== null) {
+      return stored === '1';
+    }
+    // P4.5-B: first run (no stored choice) on the touch-large band —
+    // coarse pointer wider than the phone breakpoint (iPad) — defaults
+    // the inline context panel to collapsed: it opens as an overlay
+    // when tapped instead of permanently consuming ~a quarter of the
+    // canvas. Explicit choices always win over this heuristic.
+    try {
+      const coarse =
+        window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
+      if (coarse && window.innerWidth > 768) return true;
+    } catch {
+      /* matchMedia unavailable — desktop default */
+    }
+    return false;
   });
 
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = React.useState(false);

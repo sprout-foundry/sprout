@@ -218,7 +218,7 @@ function LanguageSwitcher({ currentLanguageId, isAutoDetected, onLanguageChange 
       {isOpen &&
         createPortal(
           <div
-            className="language-switcher-popup"
+            className="language-switcher-popup portal-scale"
             style={popupStyle}
             ref={popupRef}
             role="listbox"

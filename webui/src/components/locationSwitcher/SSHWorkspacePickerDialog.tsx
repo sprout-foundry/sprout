@@ -28,7 +28,7 @@ export const SSHWorkspacePickerDialog: React.FC<SSHWorkspacePickerDialogProps> =
   if (!show) return null;
 
   return createPortal(
-    <div className="ssh-workspace-picker-overlay" role="dialog" aria-modal="true" aria-label="Select SSH workspace">
+    <div className="ssh-workspace-picker-overlay portal-scale" role="dialog" aria-modal="true" aria-label="Select SSH workspace">
       <div className="ssh-workspace-picker-dialog">
         <div className="ssh-workspace-picker-header">
           <Server size={14} />

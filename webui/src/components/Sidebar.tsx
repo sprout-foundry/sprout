@@ -51,6 +51,7 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
+import { useUIScale } from '../hooks/useUIScale';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -193,6 +194,9 @@ function Sidebar({
   onViewChange,
 }: SidebarProps): JSX.Element {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
+  // UI Size (P4.5-C): hook mount applies data-ui-scale to <html> on boot
+  // (persisted choice, tablet heuristic on first run) and re-applies on change.
+  const { uiScale, setUIScale } = useUIScale();
   const { applyPreset } = useHotkeys();
   const {
     isAutoSaveEnabled: autoSaveEnabled,
@@ -364,6 +368,8 @@ function Sidebar({
             setThemePack={setThemePack}
             importTheme={importTheme}
             removeTheme={removeTheme}
+            uiScale={uiScale}
+            setUIScale={setUIScale}
             applyPreset={applyPreset}
             autoSaveEnabled={!!autoSaveEnabled}
             whitespaceRenderingMode={whitespaceRenderingMode}

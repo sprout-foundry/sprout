@@ -206,7 +206,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
   // repositioned by transformed/overflow-hidden sidebar ancestors.
   return createPortal(
     <div
-      className="gh-picker-overlay"
+      className="gh-picker-overlay portal-scale"
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"

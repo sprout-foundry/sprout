@@ -589,3 +589,31 @@
     width: auto;
   }
 }
+
+/* ── P4.2: mobile peer-buffer keep-alive topology ──────────────────
+ * The phone form factor's two peer surfaces. The CHAT surface stays
+ * mounted always; the EDITOR surface (single pane, per P4.1) mounts
+ * when the active buffer is not chat. Only one is visible; visibility
+ * toggling (not unmount) is the load-bearing choice — it preserves
+ * chat draft/scroll/streaming view across file opens AND editor
+ * cursor/scroll across chat hops. No hierarchy: neither surface is a
+ * sheet over the other (phone-IDE placement doctrine, 2026-09-10). */
+.mobile-peer-surfaces {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mobile-peer-surface {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: none; /* only the active surface is visible */
+}
+
+.mobile-peer-surface[data-active='true'] {
+  display: flex;
+  flex-direction: column;
+}

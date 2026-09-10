@@ -15,6 +15,30 @@ export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'aut
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 288;
+
+/**
+ * Sidebar width snap presets (P4.5-B). Double-tap/double-click on the
+ * resize grip cycles through these instead of precision-dragging —
+ * coarse-pointer users get real targets, pointer users get a quick
+ * toggle. Ordered narrow → standard → wide; cycling wraps. Any manually
+ * dragged width snaps to the NEAREST preset first, so the cycle always
+ * starts from a predictable point.
+ */
+export const SIDEBAR_SNAP_PRESETS: readonly number[] = [232, 288, 384];
+
+/** Nearest preset index for an arbitrary width (used to enter the cycle). */
+export function nearestSidebarSnapIndex(width: number): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < SIDEBAR_SNAP_PRESETS.length; i++) {
+    const d = Math.abs(SIDEBAR_SNAP_PRESETS[i] - width);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
 /** Width of the icon-rail-only collapsed sidebar (px). Must match .sidebar.collapsed width in Sidebar.css. */
 export const SIDEBAR_COLLAPSED_WIDTH = 48;
 
@@ -43,6 +67,8 @@ export interface UseSidebarStateReturn {
   setSidebarWidth: (width: number) => void;
   persistSidebarWidth: () => void;
   resetSidebarWidth: () => void;
+  /** Cycle the sidebar width through snap presets (P4.5-B). */
+  cycleSidebarSnap: () => void;
 }
 
 function loadPersistedBoolean(key: string, fallback: boolean): boolean {
@@ -149,6 +175,21 @@ export function useSidebarState(): UseSidebarStateReturn {
     }
   }, []);
 
+  /**
+   * Cycle to the next snap preset (P4.5-B). Enters the cycle at the
+   * nearest preset to the current width, then advances; wraps wide→narrow.
+   */
+  const cycleSidebarSnap = useCallback(() => {
+    const current = sidebarWidthRef.current;
+    const next = SIDEBAR_SNAP_PRESETS[(nearestSidebarSnapIndex(current) + 1) % SIDEBAR_SNAP_PRESETS.length];
+    try {
+      window.localStorage.setItem('sprout-sidebar-width', String(next));
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist sidebar width snap:', err);
+    }
+    setSidebarWidthRaw(next);
+  }, []);
+
   const resetSidebarWidth = useCallback(() => {
     try {
       window.localStorage.setItem('sprout-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
@@ -203,5 +244,6 @@ export function useSidebarState(): UseSidebarStateReturn {
     setSidebarWidth,
     persistSidebarWidth,
     resetSidebarWidth,
+    cycleSidebarSnap,
   };
 }

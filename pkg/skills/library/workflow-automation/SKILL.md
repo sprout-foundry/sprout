@@ -203,7 +203,7 @@ exact sequence using run_subagent (serialized, NOT parallel):
   d) Write tests: Delegate to tester persona.
   e) Run tests: Execute the test suite. Iterate if needed.
   f) Code review: Delegate to reviewer persona.
-  g) Fix review findings: Delegate to coder for MUST_FIX / SHOULD_FIX.
+  g) Fix review findings: Delegate to coder for MUST_FIX findings.
   h) Final verification: Run build and tests.
   i) Report back: List all files changed, test results, concerns.
 
@@ -868,7 +868,7 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
    d) Write tests: Delegate to `tester` persona. Wait for completion.
    e) Run tests: Execute the test suite. If tests fail, delegate fixes. Iterate.
    f) Code review: Delegate to `reviewer` persona. Wait for results.
-   g) Fix review findings: For MUST_FIX and SHOULD_FIX, delegate to `coder`. Re-run tests.
+   g) Fix review findings: For MUST_FIX findings, delegate to `coder`. Re-run tests.
    h) Final verification: Run build and tests. Confirm everything passes.
    i) Report back: List all files changed, test results, and open concerns.
 

@@ -86,8 +86,8 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 	}
 
 	// Start with a 200K-context client → full-context profile → the
-	// orchestrator prompt (~6.6K tokens, contains "Orchestrator" and
-	// "Persona Selection Guide" markers). 200K is above the 132K
+	// orchestrator prompt (~6.6K tokens, contains the "Orchestrator"
+	// identity marker). 200K is above the 132K
 	// subagentContextThreshold so LCM does not auto-activate.
 	agent, err := NewAgentWithClient(
 		NewMockLLMProviderWithLimit(200_000),

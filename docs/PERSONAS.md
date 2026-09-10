@@ -17,7 +17,7 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 | `refactor` | Behavior-preserving refactoring, low-risk and incremental | Yes | |
 | `debugger` | Bug investigation, root cause analysis, targeted fixes | Yes | |
 | `tester` | Unit-test authoring and coverage | Yes | |
-| `reviewer` | Code review, security review, best-practices | Yes | Alias: `code_reviewer` |
+| `reviewer` | Diff-focused code review: correctness, security, quality | Yes | Alias: `code_reviewer` |
 | `researcher` | Codebase analysis combined with external research | Yes | |
 | `web_scraper` | Web extraction and structured content collection | Yes | Aliases: `web-scraper`, `scraper` |
 | `computer_user` | Desktop automation with screenshots, mouse, and keyboard | No | Carries `computer_use` capability |

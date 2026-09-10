@@ -30,7 +30,13 @@
   position: fixed;
   bottom: 0;
   left: 0;
-  right: 0;
+  /* Width compensation (same math as #root): the box lays out in the
+   * app's logical coordinate space (viewport / scale) so the transform
+   * paints it back to EXACTLY the viewport width. An earlier version
+   * used left:0 + right:0 (box = full viewport) — scaled from the left
+   * origin it painted ~12% past the RIGHT edge, pushing the terminal's
+   * right-side controls off-screen ("overlapping on the edge"). */
+  width: calc(100% / var(--ui-scale, 1));
   /* Logical height ONLY — the transform below multiplies by the factor
    * at paint time. An earlier version multiplied here TOO (calc × scale
    * AND transform × scale = painted scale²), oversizing the terminal

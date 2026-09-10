@@ -30,19 +30,32 @@
   position: fixed;
   bottom: 0;
   left: 0;
-  right: 0;
-  /* Explicit painted height — NEVER auto: the console's scrollback sizes
-   * an auto wrapper from the bottom up and swallows the whole screen
-   * ("the whole UI is just a terminal", 2026-09-10). Height comes from
-   * the logical px set by Terminal.tsx (expanded height or collapsed
-   * strip) multiplied by the live paint factor; hard-capped by the
-   * viewport as a belt-and-braces bound. */
-  height: calc(var(--terminal-height, 42px) * var(--ui-scale, 1));
+  /* Width compensation (same math as #root): the box lays out in the
+   * app's logical coordinate space (viewport / scale) so the transform
+   * paints it back to EXACTLY the viewport width. An earlier version
+   * used left:0 + right:0 (box = full viewport) — scaled from the left
+   * origin it painted ~12% past the RIGHT edge, pushing the terminal's
+   * right-side controls off-screen ("overlapping on the edge"). */
+  width: calc(100% / var(--ui-scale, 1));
+  /* Logical height ONLY — the transform below multiplies by the factor
+   * at paint time. An earlier version multiplied here TOO (calc × scale
+   * AND transform × scale = painted scale²), oversizing the terminal
+   * ~25% at 1.12 and skewing every seam against it. */
+  height: var(--terminal-height, 42px);
   max-height: 100vh;
   z-index: 100;
   transform: scale(var(--ui-scale, 1));
   transform-origin: 0 100%;
   pointer-events: none; /* only the terminal inside accepts input */
+  /* NO safe-area padding on the portal: any inset band paints in
+   * --bg-secondary (lighter gray) under the console's near-black
+   * (#05070d) — that color seam is the persistent "slight margin
+   * around the terminal" (2026-09-10, physical iPad; the simulator's
+   * rendering hid it twice). The home-indicator clearance lives INSIDE
+   * the console host's own black surface instead — see
+   * NativeTerminalConsole's padding, which includes the inset. */
+  background: var(--bg-secondary);
+  box-sizing: border-box;
 }
 
 .terminal-portal > .terminal-container {
@@ -52,6 +65,35 @@
    * .expanded height rules (hence the child combinator bump). */
   height: 100%;
   min-height: 0;
+}
+
+/* ── Native console host (studio dist) ─────────────────────────────
+ * REAL CSS, not utility classes: the shipped dist contains NO Tailwind
+ * utilities (verified 2026-09-10: zero .flex-1/.min-h-0/.h-full rules
+ * in the built css) — the previous `flex min-h-0 flex-1 flex-col` and
+ * `h-full w-full bg-[#05070d]` class strings compiled in DEV but were
+ * INERT in the app, leaving the console host transparent: its 6/8px
+ * padding showed the container's gray through as a ~5px frame around
+ * the black canvas ("margin around the terminal", physical device). */
+.terminal-native-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.native-terminal-console-host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  /* The console's own near-black — MUST match TERMINAL_THEME.background
+   * (#05070d, useTerminalXTerm.ts) so host padding and canvas are one
+   * continuous surface. */
+  background: #05070d;
 }
 
 .terminal-container.collapsed {
@@ -80,9 +122,25 @@
   top: 0;
   left: 0;
   right: 0;
+  /* Touch-large hit area (P4.5): 6px is a mouse target; fingers need a
+   * real grab zone. 28px on coarse pointers, centered on the seam
+   * (bleeds into both neighbors; terminal content scrolls under it).
+   * touch-action:none is REQUIRED for pointer-drag on touch — without
+   * it the browser claims the gesture for scrolling and the drag never
+   * starts. */
   height: 6px;
   cursor: row-resize;
   z-index: 10;
+  touch-action: none;
+}
+
+@media (hover: none) and (min-width: 769px) {
+  .terminal-resize-handle {
+    height: 28px;
+    /* Keep the visual grip centered on the seam while the hit area
+     * grows upward and downward symmetrically. */
+    top: -11px;
+  }
 }
 
 .terminal-resize-handle::after {

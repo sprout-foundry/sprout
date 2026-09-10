@@ -99,7 +99,7 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 }
 
 func TestReadEmbeddedPromptFileWithRepoRelativePath(t *testing.T) {
-	content, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/web_scraper.md")
+	content, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/researcher.md")
 	if err != nil {
 		t.Fatalf("expected embedded prompt lookup to succeed, got: %v", err)
 	}

@@ -434,10 +434,18 @@ export function NativeTerminalConsole(): React.ReactElement {
   return (
     <div
       ref={hostRef}
-      className="h-full min-h-0 w-full overflow-hidden bg-[#05070d]"
-      style={{ padding: '6px 8px' }}
-      // xterm renders its own focusable textarea; this labels the region for
-      // screen readers without stealing the terminal's focus target.
+      className="native-terminal-console-host"
+      // FitAddon measures THIS element's client box (excludes padding),
+      // so the inset keeps the text grid clear of the edges while the
+      // black background runs flush. The bottom padding includes the
+      // home-indicator inset (viewport-fit=cover): the clearance lives
+      // INSIDE the console's black surface — a portal-level inset band
+      // painted --bg-secondary under this near-black and read as "a
+      // slight margin around the terminal" on device.
+      style={{
+        padding: '6px 8px',
+        paddingBottom: 'calc(6px + env(safe-area-inset-bottom, 0px))',
+      }}
       role="region"
       aria-label="Terminal console"
     />

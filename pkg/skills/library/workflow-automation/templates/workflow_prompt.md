@@ -24,7 +24,7 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
 
    f) **Code review:** Delegate to `reviewer` persona to review all changed files. Wait for the review results.
 
-   g) **Fix review findings:** For every MUST_FIX and SHOULD_FIX finding, delegate to `coder` to fix them. Re-run tests after fixes.
+   g) **Fix review findings:** For every MUST_FIX finding, delegate to `coder` to fix them. Re-run tests after fixes.
 
    h) **Final verification:** Run build and tests one more time. Confirm everything passes.
 

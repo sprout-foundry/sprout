@@ -348,6 +348,13 @@ const TESTIDS = {
   'workspace-cwd-bar': 'workspace-cwd-bar',
   'workspace-cwd-select': 'workspace-cwd-select',
   'workspace-add-repo-btn': 'workspace-add-repo-btn',
+
+  // P4.2 mobile peer-buffer keep-alive topology (phone form factor):
+  // chat and editor are PEER surfaces — both mounted, visibility
+  // toggled by the active buffer kind. No sheet hierarchy.
+  'mobile-peer-surfaces': 'mobile-peer-surfaces',
+  'mobile-chat-surface': 'mobile-chat-surface',
+  'mobile-editor-surface': 'mobile-editor-surface',
 } as const;
 
 // Derived set for O(1) coverage lookups

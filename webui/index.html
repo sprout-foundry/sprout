@@ -5,8 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/logo-mark.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <!-- Allow user pinch-zoom for accessibility. Lighthouse a11y flags
-         maximum-scale=1/user-scalable=no as a WCAG violation. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+         maximum-scale=1/user-scalable=no as a WCAG violation.
+         viewport-fit=cover (P4.5 terminal edge): extends the layout
+         viewport INTO the notch/home-indicator zone so fixed-position
+         chrome (the terminal portal) anchors to the PHYSICAL bottom.
+         Without it, iOS confines the viewport to the safe area and the
+         strip's bottom:0 lands above the home indicator — the page
+         background shows as a persistent dark band under the terminal
+         on physical devices (simulator renders it flush, so the bug was
+         device-only). Surfaces that must avoid the notch use
+         env(safe-area-inset-*) themselves. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#14b8c8" />
     <meta name="description" content="AI-powered code editing and assistance tool with file browser and CodeMirror integration" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

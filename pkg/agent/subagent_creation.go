@@ -66,6 +66,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		// Use a minimal default for subagents
 		systemPrompt = "You are a helpful coding assistant that can execute tools to complete tasks."
 	}
+	systemPrompt = appendSubagentPreamble(systemPrompt)
 
 	// Determine effective workspace root
 	effectiveWorkspaceRoot := r.shared.WorkspaceRoot

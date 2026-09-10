@@ -562,7 +562,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // chat surface is visible iff the chat buffer is active; the editor
   // surface renders otherwise.) currentBuffer is the manager-level
   // active buffer — exactly what the mobile toggle keys on.
-  const activePaneHasChat = useCallback(() => currentBuffer?.kind === 'chat' || currentBuffer === null, [currentBuffer]);
+  const activePaneHasChat = useCallback(
+    () => currentBuffer?.kind === 'chat' || currentBuffer === null,
+    [currentBuffer],
+  );
 
   const activePluginView = pluginViews.find((v) => v.id === currentView);
   if (activePluginView) {

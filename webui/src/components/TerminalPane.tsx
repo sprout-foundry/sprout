@@ -414,7 +414,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             )}
             {wasmLoading && (
               <div className="terminal-status-inline">
-                <Terminal size={14} className="inline-block mr-1 align-text-bottom" style={{ animation: 'spin 1s linear infinite' }} />
+                <Terminal
+                  size={14}
+                  className="inline-block mr-1 align-text-bottom"
+                  style={{ animation: 'spin 1s linear infinite' }}
+                />
                 Starting shell...
               </div>
             )}

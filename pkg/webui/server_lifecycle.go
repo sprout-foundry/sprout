@@ -15,7 +15,6 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
@@ -165,7 +164,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		// (browser sessions without any interactive CLI run). Throttled
 		// internally; respects the disable knob when the agent has config.
 		if !ws.updateCheckSkipped() {
-			go updatecheck.RefreshMaybe(ctx, buildinfo.Version, time.Now())
+			go updatecheck.RefreshMaybe(ctx, time.Now())
 		}
 	})
 

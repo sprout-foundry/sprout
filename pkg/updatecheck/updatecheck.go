@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -76,7 +77,7 @@ func Skipped(current string, disabled bool) bool {
 	if current == "" || current == "dev" {
 		return true
 	}
-	if os.Getenv("SPROUT_NO_UPDATE_CHECK") != "" {
+	if os.Getenv("SPROUT_NO_UPDATE_CHECK") == "1" {
 		return true
 	}
 	if os.Getenv("CI") != "" {
@@ -123,11 +124,24 @@ func NeedsCheck(s State, now time.Time) bool {
 	return now.Sub(s.LastCheck) >= CheckInterval
 }
 
+// stateMu serializes the read-modify-write cycles below. The CLI refresh
+// goroutine, the daemon refresh goroutine, and the notice renderer can
+// run in one process; without the lock, a refresh persisting its pre-fetch
+// snapshot would wipe a notice marker the main goroutine just saved,
+// re-triggering the notice on the next start.
+var (
+	stateMu  sync.Mutex
+	fetching bool
+)
+
 // NoticeFor returns the cached newer version when a notice is due: the
 // cached LatestRelease must be a strict semver upgrade over current and
 // not already shown for that version within NoticeInterval. When ok, the
 // shown-marker is persisted so the caller can print unconditionally.
 func NoticeFor(current string, now time.Time) (latest string, ok bool) {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+
 	s := LoadState()
 	if s.LatestRelease == "" || !IsNewer(current, s.LatestRelease) {
 		return "", false
@@ -144,6 +158,9 @@ func NoticeFor(current string, now time.Time) (latest string, ok bool) {
 // CachedNewer is NoticeFor without the side effect, for read-only
 // consumers like the WebUI bootstrap payload.
 func CachedNewer(current string, now time.Time) (latest string, ok bool) {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+
 	s := LoadState()
 	if s.LatestRelease == "" || !IsNewer(current, s.LatestRelease) {
 		return "", false
@@ -154,23 +171,51 @@ func CachedNewer(current string, now time.Time) (latest string, ok bool) {
 // RefreshMaybe runs a release lookup when the cached state is stale and
 // persists the outcome. It is synchronous but bounded by fetchTimeout;
 // callers invoke it from a goroutine so startup never waits on it.
-func RefreshMaybe(ctx context.Context, current string, now time.Time) {
+//
+// The in-flight flag dedupes concurrent launches in one process (the
+// interactive CLI and the in-process web server both call this). The lock
+// is released during the network call so notice rendering and bootstrap
+// reads never block on the fetch, and the merge re-reads state afterward
+// so a marker persisted meanwhile survives.
+func RefreshMaybe(ctx context.Context, now time.Time) {
+	stateMu.Lock()
 	s := LoadState()
-	if !NeedsCheck(s, now) {
+	if fetching || !NeedsCheck(s, now) {
+		stateMu.Unlock()
 		return
 	}
+	fetching = true
+	stateMu.Unlock()
+
 	latest, err := FetchLatestTag(ctx)
-	s.LastCheck = now
+
+	stateMu.Lock()
+	fetching = false
+	fresh := LoadState()
+	fresh.LastCheck = now
 	if err == nil {
-		s.LatestRelease = NormalizeVersion(latest)
+		fresh.LatestRelease = NormalizeVersion(latest)
 	}
-	saveState(s)
+	saveState(fresh)
+	stateMu.Unlock()
 }
 
 // FetchLatestTag returns the most recent non-draft, non-prerelease
 // release tag from GitHub. Bounded by fetchTimeout.
 func FetchLatestTag(ctx context.Context) (string, error) {
-	fetchCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	return fetchLatestTagBounded(ctx, fetchTimeout)
+}
+
+// FetchLatestTagLongTimeout is FetchLatestTag with the upgrade command's
+// generous 5-minute budget: the user explicitly asked for a version
+// lookup, so a slow or proxied link gets the same patience the old
+// inline implementation had.
+func FetchLatestTagLongTimeout(ctx context.Context) (string, error) {
+	return fetchLatestTagBounded(ctx, 5*time.Minute)
+}
+
+func fetchLatestTagBounded(ctx context.Context, timeout time.Duration) (string, error) {
+	fetchCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, releasesURL, nil)
@@ -180,7 +225,7 @@ func FetchLatestTag(ctx context.Context) (string, error) {
 	req.Header.Set("User-Agent", "sprout-upgrade")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := (&http.Client{Timeout: fetchTimeout}).Do(req)
+	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -231,7 +276,27 @@ func saveState(s State) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, b, 0o600)
+	// Write-then-rename keeps concurrent readers (CLI notice, daemon
+	// bootstrap) from ever seeing a truncated or half-written file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), stateFile+".tmp-*")
+	if err != nil {
+		return
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return
+	}
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		os.Remove(tmpPath)
+		return
+	}
+	_ = os.Rename(tmpPath, path)
 }
 
 func statePath() (string, error) {

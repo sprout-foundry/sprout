@@ -12,22 +12,51 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
+// ShellCommandLabel extracts the literal command from a shell tool's
+// preview so the line reads "$ go test ./..." instead of
+// "shell_command (go test…)". The preview wrapper (" (cmd)") comes from
+// FormatToolArgPreview; trim it. Returns ok=false for non-shell tools
+// or an empty command, leaving the caller on the default rendering.
+func ShellCommandLabel(toolName, preview string) (string, bool) {
+	if toolName != "shell_command" && toolName != "exec" {
+		return "", false
+	}
+	cmd := strings.TrimSpace(preview)
+	cmd = strings.TrimSuffix(strings.TrimPrefix(cmd, "("), ")")
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		return "", false
+	}
+	return cmd, true
+}
+
 // FormatToolStartLine builds the activity-indicator line for a ToolStart
 // event. At depth 0 it's byte-identical to the pre-SP-051 format
 // ("  tool_name(preview)") so primary-agent tool calls render unchanged.
 // At depth >= 1 it adds a depth indent and a colored "[persona]" badge.
+// Shell commands render the literal command in place of the tool name.
 func FormatToolStartLine(depth int, persona, toolName, preview string) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
+	if cmd, ok := ShellCommandLabel(toolName, preview); ok {
+		return fmt.Sprintf("%s  %s%s %s", indent, badge, console.GlyphShell.Prefix(), cmd)
+	}
 	return fmt.Sprintf("%s  %s%s%s", indent, badge, toolName, preview)
 }
 
 // FormatToolEndLine builds the activity-indicator replacement line for a
-// ToolEnd event. Same depth/badge logic as FormatToolStartLine.
+// ToolEnd event. Same depth/badge logic as FormatToolStartLine. The duration
+// suffix is dimmed so glyph + tool name carry the visual weight. Shell
+// commands render the literal command in place of the tool name.
 func FormatToolEndLine(depth int, persona, icon, toolName, preview string, durationSec float64) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
-	return fmt.Sprintf("%s  %s %s%s%s · %.1fs", indent, icon, badge, toolName, preview, durationSec)
+	if cmd, ok := ShellCommandLabel(toolName, preview); ok {
+		return fmt.Sprintf("%s  %s %s%s %s· %.1fs%s",
+			indent, icon, badge, cmd, console.ColorDim, durationSec, console.ColorReset)
+	}
+	return fmt.Sprintf("%s  %s %s%s%s %s· %.1fs%s",
+		indent, icon, badge, toolName, preview, console.ColorDim, durationSec, console.ColorReset)
 }
 
 // FormatToolRunLine renders a collapsed line for repeated calls of the
@@ -39,7 +68,8 @@ func FormatToolEndLine(depth int, persona, icon, toolName, preview string, durat
 // still see what was touched without scrolling through identical
 // entries. totalSec is the cumulative duration across all N calls so
 // the line still surfaces "this batch took a moment" even when each
-// individual call was quick.
+// individual call was quick. Shell runs render with the shell glyph
+// but keep the args trail so distinct commands stay visible.
 func FormatToolRunLine(depth int, persona, icon, toolName string, count int, argsTrail []string, totalSec float64) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
@@ -47,8 +77,24 @@ func FormatToolRunLine(depth int, persona, icon, toolName string, count int, arg
 	if len(argsTrail) > 0 {
 		preview = " (" + strings.Join(argsTrail, ", ") + ")"
 	}
-	return fmt.Sprintf("%s  %s%s%s × %d%s · %.1fs",
-		indent, icon, badge, toolName, count, preview, totalSec)
+	return fmt.Sprintf("%s  %s%s%s × %d%s %s· %.1fs%s",
+		indent, icon, badge, toolName, count, preview, console.ColorDim, totalSec, console.ColorReset)
+}
+
+// ToolEndGlyph picks the end-of-call glyph per the CLI display grammar:
+// shell commands close with the shell prompt glyph, other completed tools
+// close with the action arrow, and failures always close with the error
+// cross. GlyphSuccess (✓) is reserved for outcomes — turn complete, todo
+// completed, subagent results — so scanning for ✓ surfaces results, not
+// routine activity.
+func ToolEndGlyph(toolName, status string) console.Glyph {
+	if status != "completed" {
+		return console.GlyphError
+	}
+	if toolName == "shell_command" || toolName == "exec" {
+		return console.GlyphShell
+	}
+	return console.GlyphAction
 }
 
 // ComputeDiffStat produces a dim "+N -M" diffstat suffix for file-editing

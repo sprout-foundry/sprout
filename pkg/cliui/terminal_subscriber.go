@@ -306,10 +306,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	case float64:
 		durationMs = int64(v)
 	}
-	icon := console.GlyphSuccess.Prefix()
-	if status != "completed" {
-		icon = console.GlyphError.Prefix()
-	}
+	icon := ToolEndGlyph(name, status).Prefix()
 	// ToolEnd doesn't carry arguments; recover them from
 	// the ToolStart cache so the collapse-line preview
 	// shows real paths instead of empty parens.

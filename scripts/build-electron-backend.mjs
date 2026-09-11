@@ -74,10 +74,10 @@ function resolveVersionInfo() {
 
 const { version: pkgVersion, commit, date } = resolveVersionInfo();
 const ldflags = [
-  `-X 'github.com/sprout-foundry/sprout/cmd.version=${pkgVersion}'`,
-  `-X 'github.com/sprout-foundry/sprout/cmd.gitCommit=${commit}'`,
-  `-X 'github.com/sprout-foundry/sprout/cmd.buildDate=${date}'`,
-  `-X 'github.com/sprout-foundry/sprout/cmd.gitTag=${pkgVersion}'`,
+  `-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=${pkgVersion}'`,
+  `-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=${commit}'`,
+  `-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Date=${date}'`,
+  `-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Tag=${pkgVersion}'`,
 ].join(' ');
 
 // pkg/ast/grammars_embed.go unconditionally //go:embed's five tree-sitter

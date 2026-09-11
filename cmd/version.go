@@ -9,6 +9,8 @@ import (
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 )
 
 // versionCmd represents the version command
@@ -30,11 +32,12 @@ This command supports both --version and -v flags as well as the standalone vers
 
 // versionInfo holds the build-time version information
 var (
-	// These variables are set at build time using -ldflags
-	version   = "dev"     // Semantic version (e.g., "v1.0.0")
-	buildDate = "unknown" // Build timestamp
-	gitCommit = ""        // Git commit hash
-	gitTag    = ""        // Git tag (if building from tag)
+	// Set at build time via -ldflags into pkg/buildinfo (shared with the
+	// WebUI bootstrap payload and the update checker).
+	version   = buildinfo.Version // Semantic version (e.g., "v1.0.0")
+	buildDate = buildinfo.Date    // Build timestamp
+	gitCommit = buildinfo.Commit  // Git commit hash
+	gitTag    = buildinfo.Tag     // Git tag (if building from tag)
 	goVersion = runtime.Version()
 )
 

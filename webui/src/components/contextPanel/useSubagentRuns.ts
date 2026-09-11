@@ -1,10 +1,6 @@
 import { useMemo } from 'react';
 import { isSubagentTool, getSubagentPrompt } from './helpers';
-import type {
-  ChatContextPanelProps,
-  ContextSubagentRun,
-  SubagentResourceCounts,
-} from './types';
+import type { ChatContextPanelProps, ContextSubagentRun, SubagentResourceCounts } from './types';
 
 export interface UseSubagentRunsResult {
   subagentRuns: ContextSubagentRun[];

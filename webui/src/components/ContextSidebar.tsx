@@ -76,12 +76,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
 
   return (
     <ErrorBoundary panelName="Context Panel">
-      <ContextPanel
-        ref={contextPanelRef}
-        {...panelProps}
-        isMobileLayout={isMobile}
-        isTabletLayout={isTablet}
-      />
+      <ContextPanel ref={contextPanelRef} {...panelProps} isMobileLayout={isMobile} isTabletLayout={isTablet} />
     </ErrorBoundary>
   );
 };

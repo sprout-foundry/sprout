@@ -53,6 +53,23 @@ func TestMain(m *testing.M) {
 		os.Setenv("SPROUT_CACHE_DIR", origCacheDir)
 		os.Setenv("SPROUT_DATA_DIR", origDataDir)
 	}()
+
+	// Neutralize daemon-mode env vars. Tests must be hermetic regardless of
+	// how the developer runs them — including "sprout developing itself"
+	// inside a running daemon, which exports SPROUT_SERVICE=1/SPROUT_DAEMON=1
+	// into every child shell. resolveHomeDir and NewReactWebServer consult
+	// SPROUT_SERVICE at call time, so leaving it set silently flips
+	// home-gate and health-endpoint behavior (daemon-mode tests assert the
+	// non-service defaults). Tests that need service mode set it explicitly
+	// via t.Setenv("SPROUT_SERVICE", "1") (see trusted_user_header_test.go).
+	origService := os.Getenv("SPROUT_SERVICE")
+	origDaemon := os.Getenv("SPROUT_DAEMON")
+	os.Unsetenv("SPROUT_SERVICE")
+	os.Unsetenv("SPROUT_DAEMON")
+	defer func() {
+		os.Setenv("SPROUT_SERVICE", origService)
+		os.Setenv("SPROUT_DAEMON", origDaemon)
+	}()
 	sessionsDir := filepath.Join(tmpDir, "state", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: mkdir sessions: %v\n", err)

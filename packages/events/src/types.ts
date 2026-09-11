@@ -155,6 +155,37 @@ export interface SessionChangedData {
   chat_id?: string;
 }
 
+/** Payload for rate_limited — the approval broker's backoff notice. */
+export interface RateLimitedData {
+  provider: string;
+  attempt: number;
+  max_attempts: number;
+  retry_after_ms: number;
+  message: string;
+  session_id?: string;
+}
+
+/** Payload for compact_started (seed structural compaction / manual /compact). */
+export interface CompactStartedData {
+  source: string;
+  message_count: number;
+  checkpoint_count: number;
+  timestamp: string;
+  chat_id?: string;
+}
+
+/** Payload for compact_completed. success=false carries the failure reason. */
+export interface CompactCompletedData {
+  source: string;
+  before_message_count: number;
+  after_message_count: number;
+  summary_chars: number;
+  success: boolean;
+  error?: string;
+  timestamp: string;
+  chat_id?: string;
+}
+
 export interface ProviderNoCredentialData {
   provider: string;
   message: string;
@@ -574,6 +605,24 @@ export type WsEvent =
   | {
       type: "session_changed";
       data?: SessionChangedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "rate_limited";
+      data?: RateLimitedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "compact_started";
+      data?: CompactStartedData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "compact_completed";
+      data?: CompactCompletedData;
       id?: string;
       timestamp?: string;
     }

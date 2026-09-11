@@ -18,6 +18,11 @@ import type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   PasswordRequestData,
+  ProviderNoCredentialData,
+  RateLimitedData,
+  CompactStartedData,
+  CompactCompletedData,
+  SessionChangedData,
   AskUserRequestData,
   EditApprovalRequestData,
   ShellApprovalRequestData,
@@ -30,7 +35,8 @@ import { getWebUIClientId } from '../services/clientSession';
 import { notifyIfHidden } from '../services/desktopNotify';
 import { getServerErrorCode } from '../services/errorCodes';
 import { LSPClientService } from '../services/lspClientService';
-import { switchChatSession } from '../services/chatSessions';
+import { switchChatSession, listChatSessions } from '../services/chatSessions';
+import { notificationBus } from '../services/notificationBus';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog } from '../utils/log';
@@ -1181,6 +1187,139 @@ const handlePasswordRequest = (ctx: EventHandlerContext): void => {
   debugLog('[password] Prompt request:', data.command);
 };
 
+// Handle provider_no_credential. The backend switched to a provider whose
+// API key is missing; without this toast the failure is silent until the
+// model errors out. The action jumps to Settings → Providers.
+const handleProviderNoCredential = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'error';
+  const data = (event.data ?? {}) as ProviderNoCredentialData;
+  setState((prev) => ({
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  notificationBus.notify(
+    'error',
+    'Provider credential missing',
+    data.message || `Provider "${data.provider}" has no API key configured.`,
+    8000,
+    {
+      label: 'Open settings',
+      onClick: () => {
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
+      },
+    },
+  );
+};
+
+// Handle rate_limited (approval broker backoff). Informs the user why the
+// stream stalled and that a retry is scheduled — without it a mid-turn
+// backoff looks like a hang.
+const handleRateLimited = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as RateLimitedData;
+  setState((prev) => ({
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  const retrySecs = Math.max(1, Math.round((data.retry_after_ms ?? 0) / 1000));
+  notificationBus.notify(
+    'warning',
+    'Rate limited',
+    `${data.provider || 'Provider'} rate limit hit (attempt ${data.attempt ?? '?'}/${data.max_attempts ?? '?'}) — retrying in ~${retrySecs}s.`,
+    Math.min(10000, retrySecs * 1000 + 2000),
+  );
+  notifyIfHidden('Sprout', 'Rate limited — retrying');
+};
+
+// Handle compact lifecycle events. Compaction rewrites the middle of the
+// conversation; surfacing start/complete keeps the transcript gap from
+// looking like lost messages. Failures are toasts, successes are log-only
+// (the compaction summary itself arrives as a chat message).
+const handleCompactStarted = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as CompactStartedData;
+  setState((prev) => ({
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[compact] started:', data.source, data.message_count, 'messages');
+};
+
+const handleCompactCompleted = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  const data = (event.data ?? {}) as CompactCompletedData;
+  if (data.success) {
+    logEntry.level = 'info';
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    return;
+  }
+  logEntry.level = 'error';
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  notificationBus.notify(
+    'error',
+    'Compaction failed',
+    data.error || 'Context compaction did not complete; the conversation is unchanged.',
+    8000,
+  );
+};
+
+// Handle session_changed (SP-034-3e). Rename/pin/unpin/switch mutations can
+// come from another client (CLI, second tab); reconcile the local chat list
+// so both views converge on the canonical server payload. A "switch" for
+// the chat we're viewing means someone moved us — reload that chat's
+// transcript; other changes only refresh the tab titles/metadata.
+const handleSessionChanged = (ctx: EventHandlerContext): void => {
+  const { event, setState, activeChatIdRef } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+  const data = (event.data ?? {}) as SessionChangedData;
+  const summary = (data.summary ?? {}) as { id?: string };
+  const chatId = typeof summary.id === 'string' ? summary.id : data.chat_id;
+
+  setState((prev) => ({
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+
+  if (!chatId) return;
+  debugLog('[session_changed]', data.change, chatId);
+
+  if (data.change === 'switch' && activeChatIdRef.current && chatId === activeChatIdRef.current) {
+    // Another client switched this chat's session — reload the transcript.
+    switchChatSession(chatId)
+      .then((response) => {
+        if (activeChatIdRef.current !== chatId) return;
+        const backendMessages: Message[] = (response.chat_session.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m, i) => ({
+            id: `chat-${chatId}-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(),
+          }));
+        setState((prev) => ({ activeChatId: chatId, messages: backendMessages }));
+      })
+      .catch((err) => debugLog('[session_changed] switch reload failed:', err));
+    return;
+  }
+
+  // rename/pin/unpin (and switch for non-active chats): refresh the session
+  // list so titles and metadata stay canonical. Fire-and-forget.
+  listChatSessions()
+    .then((sessionsResp) => {
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? prev.chatSessions }));
+    })
+    .catch((err) => debugLog('[session_changed] list refresh failed:', err));
+};
+
 // Handle the chat_run_restored control frame that leads a reattach replay.
 // When the server sets gap=true it had already evicted events this client
 // missed, so the partial replay that follows would splice onto a stale
@@ -1486,6 +1625,16 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'password_request':
           return handlePasswordRequest(ctx);
+        case 'provider_no_credential':
+          return handleProviderNoCredential(ctx);
+        case 'rate_limited':
+          return handleRateLimited(ctx);
+        case 'compact_started':
+          return handleCompactStarted(ctx);
+        case 'compact_completed':
+          return handleCompactCompleted(ctx);
+        case 'session_changed':
+          return handleSessionChanged(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
         case 'edit_approval_request':

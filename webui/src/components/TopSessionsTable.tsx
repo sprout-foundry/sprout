@@ -113,6 +113,7 @@ export default function TopSessionsTable({
   if (error) {
     return (
       <div className="top-sessions-table top-sessions-table--error" data-testid="top-sessions-table" role="alert">
+        <div className="costs-section-title">Top Sessions</div>
         Error loading sessions: {error}
       </div>
     );
@@ -127,6 +128,7 @@ export default function TopSessionsTable({
         role="region"
         aria-label="Top sessions by cost"
       >
+        <div className="costs-section-title">Top Sessions</div>
         <table>
           <thead>
             <tr>
@@ -165,6 +167,7 @@ export default function TopSessionsTable({
         role="region"
         aria-label="Top sessions by cost"
       >
+        <div className="costs-section-title">Top Sessions</div>
         <table>
           <thead>
             <tr>
@@ -194,6 +197,7 @@ export default function TopSessionsTable({
       role="region"
       aria-label="Top sessions by cost"
     >
+      <div className="costs-section-title">Top Sessions</div>
       <table>
         <thead>
           <tr>

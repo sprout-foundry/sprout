@@ -213,7 +213,7 @@ describe('CostsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('costs-summary-total')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('costs-summary-total')).toHaveTextContent('Total: $1.2345');
+    expect(screen.getByTestId('costs-summary-total')).toHaveTextContent('$1.2345');
     expect(screen.getByTestId('cost-summary-cards')).toBeInTheDocument();
     expect(screen.getByTestId('cost-card-today')).toBeInTheDocument();
     expect(screen.getByTestId('cost-card-week')).toBeInTheDocument();
@@ -298,7 +298,7 @@ describe('CostsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('costs-summary-total')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('costs-summary-total')).toHaveTextContent('Total: $1.1000');
+    expect(screen.getByTestId('costs-summary-total')).toHaveTextContent('$1.1000');
   });
 
   it('renders ByModelChart with model rows from summary', async () => {

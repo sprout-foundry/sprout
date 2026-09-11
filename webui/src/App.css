@@ -684,11 +684,12 @@ body {
     flex-direction: column;
   }
 
-  /* Context panel container collapses to zero width when not shown */
+  /* Context panel container: the panel is always mounted on desktop and
+   * owns its own width; on tablet it renders as an overlay drawer when
+   * open, so the container must not reserve or animate width. */
   .main-view-content > .context-panel-container {
     width: 0;
     overflow: hidden;
-    transition: width 200ms var(--ease-out);
   }
 
   .header-bar {

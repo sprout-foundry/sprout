@@ -199,6 +199,18 @@ type ToolFuncSet struct {
 	MCPRefresh           func(ctx context.Context, args map[string]any) (string, error)
 	RunAutomate          func(ctx context.Context, args map[string]any) (string, error)
 	CreatePullRequest    func(ctx context.Context, args map[string]any) (string, error)
+	// TrackFileWrite records a full-file write (write_file, and the
+	// write-through path of write_structured_file) with the agent's
+	// ChangeTracker. Nil when no tracker is available (standalone tools).
+	TrackFileWrite func(filePath string, content string) error
+	// TrackFileEdit records an old→new replacement (edit_file) with the
+	// agent's ChangeTracker. Nil when no tracker is available.
+	TrackFileEdit func(filePath string, originalContent string, newContent string) error
+	// TrackShellCommand records filesystem mutations caused by a shell
+	// command (workspace diff — captures writes AND deletes made outside
+	// the file tools). The closure owns read-only classification, cwd
+	// resolution, and destructive detection. Nil when no tracker.
+	TrackShellCommand func(command string) error
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers
@@ -223,6 +235,9 @@ func (e ToolEnv) ResolveToolFuncs() *ToolFuncSet {
 		MCPRefresh:           MCPRefreshFunc,
 		RunAutomate:          RunAutomateFunc,
 		CreatePullRequest:    CreatePullRequestFunc,
+		// Track* funcs are per-agent by design (the ChangeTracker lives on
+		// the Agent); the package-level fallback has no tracker, so leaving
+		// them nil here is correct — handlers skip tracking when nil.
 	}
 }
 

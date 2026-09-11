@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { ChatTabId, ContextPanelProps, ContextPanelBaseProps } from './types';
-import { PANEL_COLLAPSED_KEY, PANEL_TAB_KEY, PANEL_MIN, PANEL_MAX, MOBILE_LAYOUT_MAX_WIDTH } from './types';
+import {
+  PANEL_COLLAPSED_KEY,
+  PANEL_TAB_KEY,
+  PANEL_MIN,
+  PANEL_MAX,
+  PANEL_DEFAULT_WIDTH,
+  MOBILE_LAYOUT_MAX_WIDTH,
+} from './types';
 
 interface UseContextPanelStateReturn {
   panelCollapsed: boolean;
   setPanelCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void;
   panelWidth: number;
+  setPanelWidth: (width: number) => void;
   panelContainerRef: React.RefObject<HTMLDivElement>;
   chatTab: ChatTabId;
   setChatTab: (v: ChatTabId) => void;
@@ -18,7 +26,7 @@ interface UseContextPanelStateReturn {
   setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
   setExpandedQueries: React.Dispatch<React.SetStateAction<Set<number>>>;
   setExpandedSubagents: React.Dispatch<React.SetStateAction<Set<string>>>;
-  toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  toolRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
   startResize: (e: ReactMouseEvent<HTMLDivElement>) => void;
   isResizing: boolean;
   toggleToolExpansion: (toolId: string) => void;
@@ -27,9 +35,21 @@ interface UseContextPanelStateReturn {
   isChat: boolean;
 }
 
+function loadPersistedWidth(): number {
+  if (typeof window === 'undefined') return PANEL_DEFAULT_WIDTH;
+  try {
+    const stored = Number(window.localStorage.getItem('sprout.contextPanel.width'));
+    if (Number.isFinite(stored) && stored >= PANEL_MIN && stored <= PANEL_MAX) {
+      return stored;
+    }
+  } catch {
+    // localStorage unavailable — default width
+  }
+  return PANEL_DEFAULT_WIDTH;
+}
+
 export function useContextPanelState(props: ContextPanelProps): UseContextPanelStateReturn {
   const base = props as ContextPanelBaseProps;
-  const { onPanelWidthChange, onMobileOpenChange, onCollapsedChange, panelWidth: requestedPanelWidth } = base;
 
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH) {
@@ -37,16 +57,19 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     }
     return false;
   });
-  const panelWidth = typeof requestedPanelWidth === 'number' ? requestedPanelWidth : 360;
+  // Width is owned here: loaded from localStorage once, persisted on every
+  // change. (Previously lifted through ContextSidebar as prop plumbing —
+  // two owners for one value.)
+  const [panelWidth, setPanelWidthRaw] = useState(loadPersistedWidth);
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
-  const [chatTab, setChatTab] = useState<ChatTabId>('subagents');
+  const [chatTab, setChatTab] = useState<ChatTabId>('activity');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
-  const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const toolRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const isChat = props.context === 'chat';
 
@@ -60,8 +83,18 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      if (['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
-        setChatTab(storedTab as ChatTabId);
+      // Migration: pre-merge tab ids map onto their Phase-1 successors
+      // ('subagents'/'tools' → 'activity'; 'tasks'/'status' tabs removed —
+      // fall back to the default).
+      const legacy = storedTab as string;
+      const migrated =
+        legacy === 'subagents' || legacy === 'tools'
+          ? 'activity'
+          : legacy === 'changes' || legacy === 'sessions'
+            ? legacy
+            : null;
+      if (migrated) {
+        setChatTab(migrated as ChatTabId);
       }
     }
   }, [props.context]);
@@ -71,16 +104,16 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     window.localStorage.setItem(PANEL_COLLAPSED_KEY, panelCollapsed ? '1' : '0');
   }, [panelCollapsed]);
 
+  // Persist width on change (single owner — no prop round-trip).
   useEffect(() => {
-    onCollapsedChange?.(panelCollapsed);
-  }, [onCollapsedChange, panelCollapsed]);
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('sprout.contextPanel.width', String(Math.round(panelWidth)));
+  }, [panelWidth]);
 
-  useEffect(() => {
-    if (!props.isMobileLayout) {
-      return;
-    }
-    onMobileOpenChange?.(!panelCollapsed);
-  }, [panelCollapsed, props.isMobileLayout, onMobileOpenChange]);
+  const setPanelWidth = useCallback((width: number) => {
+    const clamped = Math.max(PANEL_MIN, Math.min(PANEL_MAX, width));
+    setPanelWidthRaw(clamped);
+  }, []);
 
   // Persist active tab
   useEffect(() => {
@@ -111,7 +144,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
         const rawWidth = startWidth + (startX - moveEvent.clientX);
         const maxByLayout = parentWidth - 260;
         const clamped = Math.max(PANEL_MIN, Math.min(Math.min(PANEL_MAX, maxByLayout), rawWidth));
-        onPanelWidthChange?.(clamped);
+        setPanelWidthRaw(clamped);
       };
 
       const onMouseUp = () => {
@@ -127,7 +160,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     },
-    [onPanelWidthChange, panelWidth],
+    [panelWidth],
   );
 
   const toggleToolExpansion = (toolId: string) => {
@@ -161,6 +194,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     panelCollapsed,
     setPanelCollapsed,
     panelWidth,
+    setPanelWidth,
     panelContainerRef,
     chatTab,
     setChatTab,

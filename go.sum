@@ -257,6 +257,8 @@ github.com/sprout-foundry/seed v1.3.20 h1:JR7wLN/ZtT7gxdPH4t4Xkb8SocJ0nbhmBdnyhi
 github.com/sprout-foundry/seed v1.3.20/go.mod h1:pmi/FFipp9juUY2LnHwhuejGtwbiQa581u/6wTFIxCU=
 github.com/sprout-foundry/seed v1.3.21 h1:A6QQDhUeSKp+x318eYqOJlS73rcFHE+cCipRwC3HgeE=
 github.com/sprout-foundry/seed v1.3.21/go.mod h1:pmi/FFipp9juUY2LnHwhuejGtwbiQa581u/6wTFIxCU=
+github.com/sprout-foundry/seed v1.4.0 h1:3LuLfsCqCtxLHdFISSHz8PlI3AQ0iQ0I7TUt2Kga23o=
+github.com/sprout-foundry/seed v1.4.0/go.mod h1:pmi/FFipp9juUY2LnHwhuejGtwbiQa581u/6wTFIxCU=
 github.com/sprout-foundry/sinter v0.1.2 h1:Wk5zPDAoabQ8wz3C4/beyhOX0JONXwph/gF/gFnP0gQ=
 github.com/sprout-foundry/sinter v0.1.2/go.mod h1:ahP12ZpBCR1Htvjzo2S9RXlWmI+CZeZje6EzHXA45q4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

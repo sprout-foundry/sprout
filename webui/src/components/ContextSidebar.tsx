@@ -1,11 +1,9 @@
-import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
-import React, { useEffect } from 'react';
+import type { ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
+import React from 'react';
 import { ApiService } from '../services/api';
 import type { QueryProgress, ViewType } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
-
-const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 
 export interface ContextSidebarProps {
   isMobile: boolean;
@@ -14,16 +12,26 @@ export interface ContextSidebarProps {
   contextPanelRef: React.RefObject<ContextPanelHandle>;
   currentView: ViewType;
   toolExecutions: ToolExecution[];
-  fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: TodoItem[];
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
   queryProgress: QueryProgress | null;
 }
 
+/**
+ * Layout wrapper for the right-hand context panel.
+ *
+ * Desktop: ALWAYS mounted so the main-content column never reflows when
+ * the user moves between chat and file buffers. When `showContextSidebar`
+ * is false (file buffer focused, costs view) the panel renders in idle
+ * mode — rail visible but disabled, empty body. The user can still
+ * collapse it to the 52px rail (persisted) whenever they want the space.
+ *
+ * Mobile/tablet: the panel is an overlay, so the old behavior of
+ * unmounting when no chat is focused is preserved.
+ */
 const ContextSidebar: React.FC<ContextSidebarProps> = ({
   isMobile,
   isTablet,
@@ -31,117 +39,44 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   contextPanelRef,
   currentView,
   toolExecutions,
-  fileEdits,
   logs,
   subagentActivities,
-  currentTodos,
   messages,
   isProcessing,
   lastError,
   queryProgress,
 }) => {
-  const [panelWidth, setPanelWidth] = React.useState(() => {
-    if (typeof window === 'undefined') return 360;
-    const storedWidth = Number(window.localStorage.getItem('sprout.contextPanel.width'));
-    if (Number.isFinite(storedWidth) && storedWidth >= 260 && storedWidth <= 600) {
-      return storedWidth;
-    }
-    return 360;
-  });
+  const overlayHidden = !showContextSidebar || currentView === 'costs';
+  const panelProps = {
+    context: 'chat' as const,
+    toolExecutions,
+    logs,
+    subagentActivities,
+    messages,
+    isProcessing,
+    lastError,
+    queryProgress,
+    onLoadSessions: () => ApiService.getInstance().getSessions(),
+    onRestoreSession: (sessionId: string) => ApiService.getInstance().restoreSession(sessionId),
+  };
 
-  const [isContextPanelCollapsed, setIsContextPanelCollapsed] = React.useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    const stored = window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY);
-    if (stored !== null) {
-      return stored === '1';
-    }
-    // P4.5-B: first run (no stored choice) on the touch-large band —
-    // coarse pointer wider than the phone breakpoint (iPad) — defaults
-    // the inline context panel to collapsed: it opens as an overlay
-    // when tapped instead of permanently consuming ~a quarter of the
-    // canvas. Explicit choices always win over this heuristic.
-    try {
-      const coarse = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
-      if (coarse && window.innerWidth > 768) return true;
-    } catch {
-      /* matchMedia unavailable — desktop default */
-    }
-    return false;
-  });
+  // Desktop keeps the panel mounted (idle when no chat is focused);
+  // overlay layouts unmount when hidden.
+  if (!isMobile && !isTablet && overlayHidden) {
+    return (
+      <ErrorBoundary panelName="Context Panel">
+        <ContextPanel ref={contextPanelRef} {...panelProps} isIdle />
+      </ErrorBoundary>
+    );
+  }
 
-  const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = React.useState(false);
-
-  // Persist panel width to localStorage
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('sprout.contextPanel.width', String(Math.round(panelWidth)));
-  }, [panelWidth]);
-
-  // Persist collapsed state to localStorage
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(CONTEXT_PANEL_COLLAPSED_KEY, isContextPanelCollapsed ? '1' : '0');
-  }, [isContextPanelCollapsed]);
-
-  // Auto-close mobile context panel when not needed
-  React.useEffect(() => {
-    if (!isMobile || !showContextSidebar) {
-      setIsContextPanelMobileOpen(false);
-    }
-  }, [isMobile, showContextSidebar]);
-
-  const apiService = ApiService.getInstance();
-
-  const handleToggleContextPanel = React.useCallback(() => {
-    setIsContextPanelCollapsed((prev) => {
-      if (prev) {
-        contextPanelRef.current?.openTab('subagents');
-      } else {
-        contextPanelRef.current?.closePanel();
-      }
-      return !prev;
-    });
-  }, [contextPanelRef]);
-
-  // Listen for toggle event from parent/hotkeys
-  useEffect(() => {
-    const handleToggleEvent = () => handleToggleContextPanel();
-    window.addEventListener('toggle-context-panel', handleToggleEvent);
-    return () => window.removeEventListener('toggle-context-panel', handleToggleEvent);
-  }, [handleToggleContextPanel]);
-
-  if (!showContextSidebar || currentView === 'costs') {
+  if (overlayHidden) {
     return null;
   }
 
   return (
     <ErrorBoundary panelName="Context Panel">
-      {isTablet && !isContextPanelCollapsed && (
-        <div className="context-panel-backdrop" onClick={() => contextPanelRef.current?.closePanel()} />
-      )}
-      <ContextPanel
-        ref={contextPanelRef}
-        context="chat"
-        toolExecutions={toolExecutions}
-        fileEdits={fileEdits}
-        logs={logs}
-        subagentActivities={subagentActivities}
-        currentTodos={currentTodos}
-        messages={messages}
-        isProcessing={isProcessing}
-        lastError={lastError}
-        queryProgress={queryProgress}
-        isMobileLayout={isMobile}
-        isTabletLayout={isTablet}
-        onMobileOpenChange={setIsContextPanelMobileOpen}
-        onCollapsedChange={setIsContextPanelCollapsed}
-        panelWidth={panelWidth}
-        onPanelWidthChange={setPanelWidth}
-        onLoadSessions={() => apiService.getSessions()}
-        onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
-      />
+      <ContextPanel ref={contextPanelRef} {...panelProps} isMobileLayout={isMobile} isTabletLayout={isTablet} />
     </ErrorBoundary>
   );
 };

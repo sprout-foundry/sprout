@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -117,12 +119,35 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// Capture pre-edit content for change tracking (must happen before
+	// EditFile mutates the file). Only read when a tracker is present.
+	var originalContent string
+	trackFn := env.ResolveToolFuncs().TrackFileEdit
+	if trackFn != nil {
+		if b, readErr := os.ReadFile(path); readErr == nil {
+			originalContent = string(b)
+		}
+	}
+
 	result, err := EditFile(ctx, path, oldStr, newStr)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("edit_file", fmt.Sprintf("edit file %q: %v", path, err), err)
+	}
+
+	// Session change tracking: record the mutation with the agent's
+	// ChangeTracker (powers the Agent Changes panel, /api/changes/*, and
+	// revert tooling). Best-effort; nil func = no tracker. The new content
+	// is re-read post-edit so the tracker stores the exact on-disk state.
+	if trackFn != nil && originalContent != "" {
+		newContent, readErr := os.ReadFile(path)
+		if readErr != nil {
+			log.Printf("[edit_file] change tracking: re-read failed for %q: %v", path, readErr)
+		} else if trackErr := trackFn(path, originalContent, string(newContent)); trackErr != nil {
+			log.Printf("[edit_file] change tracking failed for %q: %v", path, trackErr)
+		}
 	}
 
 	// Write to output writer if available

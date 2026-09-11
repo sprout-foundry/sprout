@@ -70,6 +70,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
   if (error) {
     return (
       <div className="provider-table provider-table--error" data-testid="provider-table" role="alert">
+        <div className="costs-section-title">Cost by Provider</div>
         Error loading table: {error}
       </div>
     );
@@ -79,6 +80,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
   if (loading) {
     return (
       <div className="provider-table" data-testid="provider-table">
+        <div className="costs-section-title">Cost by Provider</div>
         <table>
           <thead>
             <tr>
@@ -123,6 +125,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
   if (rows.length === 0) {
     return (
       <div className="provider-table" data-testid="provider-table">
+        <div className="costs-section-title">Cost by Provider</div>
         <table>
           <thead>
             <tr>
@@ -157,6 +160,7 @@ export default function ProviderTable({ summary, loading = false, error = null }
 
   return (
     <div className="provider-table" data-testid="provider-table">
+      <div className="costs-section-title">Cost by Provider</div>
       <table>
         <thead>
           <tr>

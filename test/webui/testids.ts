@@ -117,11 +117,10 @@ const TESTIDS = {
   'context-panel-collapse': 'context-panel-collapse',
   'context-panel-tab': 'context-panel-tab',
   'context-panel-sessions': 'context-panel-sessions',
-  'context-panel-tools': 'context-panel-tools',
   'context-panel-subagents': 'context-panel-subagents',
+  'context-panel-activity': 'context-panel-activity',
   'context-panel-changes': 'context-panel-changes',
   'context-panel-tasks': 'context-panel-tasks',
-  'context-panel-status': 'context-panel-status',
 
   // Status bar
   'status-bar': 'status-bar',

@@ -6550,6 +6550,124 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 131072,
+        "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+        "id": "inclusionai/ling-3.0-flash-vl",
+        "input_cost": 0.06,
+        "name": "inclusionAI: Ling 3.0 Flash VL",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+        "id": "inclusionai/ling-3.0-flash-vl:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Fugu Max is the cost-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
+        "id": "sakana/fugu-max",
+        "input_cost": 2,
+        "name": "Sakana: Fugu Max",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1000000,
+        "description": "Fugu Ultra v2 is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to...",
+        "id": "sakana/fugu-ultra-v2",
+        "input_cost": 5,
+        "name": "Sakana: Fugu Ultra v2",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Astra family.",
+        "id": "~openai/gpt-astra-latest",
+        "input_cost": 10,
+        "name": "OpenAI GPT Astra Latest",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Luna family.",
+        "id": "~openai/gpt-luna-latest",
+        "input_cost": 0.2,
+        "name": "OpenAI GPT Luna Latest",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Sol family.",
+        "id": "~openai/gpt-sol-latest",
+        "input_cost": 2,
+        "name": "OpenAI GPT Sol Latest",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Terra family.",
+        "id": "~openai/gpt-terra-latest",
+        "input_cost": 2,
+        "name": "OpenAI GPT Terra Latest",
+        "output_cost": 12,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -346,3 +346,153 @@ func TestShouldForwardEventToConnection_NoClientID_NoSubscribe(t *testing.T) {
 		t.Error("chat-only event should be dropped when connection is NOT subscribed to chat-B")
 	}
 }
+
+// ── Stale connInfo.ChatID fallback (live active chat) ────────────────
+//
+// Regression: ask_user_request (and the other security-scoped events) were
+// silently dropped when the connection's connect-time ChatID snapshot
+// (chat_id / reattach query param) disagreed with the event's chat_id —
+// e.g. the socket reattached to chat-X mid-query, the user then switched
+// to chat-Y, and the next query's dialog was discarded. connInfo.ChatID
+// is never refreshed on chat switch, so the dialog never appeared and the
+// agent blocked until timeout. The filter now falls back to the client
+// context's live active chat before dropping.
+
+// Stale snapshot, but the client's live active chat IS the event's chat →
+// forward. This is the ask_user-dropped-after-chat-switch scenario.
+func TestShouldForwardEventToConnection_SecurityEventStaleChatIDLiveChatMatch(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+		clientContexts: map[string]*webClientContext{
+			"client-A": {DefaultChatID: "chat-Y"},
+		},
+	}
+	connInfo := &ConnectionInfo{
+		ClientID: "client-A",
+		ChatID:   "chat-X", // stale connect-time snapshot (reattach to chat-X)
+	}
+	ev := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-A",
+			"chat_id":    "chat-Y", // current active chat
+			"request_id": "ask_1",
+			"question":   "Proceed?",
+		},
+	}
+
+	if !ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("ask_user_request for the live active chat must not be dropped by a stale connect-time ChatID")
+	}
+}
+
+// Stale snapshot AND the live active chat differs → still dropped (the
+// dialog belongs to another chat's pane).
+func TestShouldForwardEventToConnection_SecurityEventStaleChatIDLiveChatMiss(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+		clientContexts: map[string]*webClientContext{
+			"client-A": {DefaultChatID: "chat-Z"},
+		},
+	}
+	connInfo := &ConnectionInfo{
+		ClientID: "client-A",
+		ChatID:   "chat-X",
+	}
+	ev := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-A",
+			"chat_id":    "chat-Y",
+			"request_id": "ask_2",
+			"question":   "Proceed?",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("ask_user_request for a chat that is neither the snapshot nor the live active chat must stay dropped")
+	}
+}
+
+// The live-chat fallback must NOT reopen cross-client fan-out: a
+// security-scoped event from client-A is still dropped on client-B's
+// connection even if both point at the same live chat.
+func TestShouldForwardEventToConnection_SecurityEventLiveChatFallbackNoCrossClient(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+		clientContexts: map[string]*webClientContext{
+			"client-B": {DefaultChatID: "chat-Y"},
+		},
+	}
+	connInfo := &ConnectionInfo{
+		ClientID: "client-B",
+		ChatID:   "chat-X",
+	}
+	ev := events.UIEvent{
+		Type: events.EventTypeSecurityApprovalRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-A",
+			"chat_id":    "chat-Y",
+			"request_id": "sec_1",
+			"tool_name":  "shell_command",
+			"risk_level": "CAUTION",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("security-scoped event from another client must stay dropped even when the live active chat matches")
+	}
+}
+
+// No client context for the connection's client → fallback finds nothing →
+// behavior matches the old strict rule (drop).
+func TestShouldForwardEventToConnection_SecurityEventStaleChatIDNoContext(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+		clientContexts:  map[string]*webClientContext{},
+	}
+	connInfo := &ConnectionInfo{
+		ClientID: "client-A",
+		ChatID:   "chat-X",
+	}
+	ev := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-A",
+			"chat_id":    "chat-Y",
+			"request_id": "ask_3",
+			"question":   "Proceed?",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("stale-snapshot mismatch with no client context must keep dropping the event")
+	}
+}
+
+// chat_id-only security event (no client_id) takes the same fallback:
+// stale snapshot + live chat match → forward.
+func TestShouldForwardEventToConnection_SecurityEventNoClientIDStaleChatIDLiveChatMatch(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+		clientContexts: map[string]*webClientContext{
+			"client-A": {DefaultChatID: "chat-Y"},
+		},
+	}
+	connInfo := &ConnectionInfo{
+		ClientID: "client-A",
+		ChatID:   "chat-X",
+	}
+	ev := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{
+			"chat_id":    "chat-Y",
+			"request_id": "ask_4",
+			"question":   "Proceed?",
+		},
+	}
+
+	if !ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("client-less ask_user_request for the live active chat must not be dropped by a stale ChatID")
+	}
+}

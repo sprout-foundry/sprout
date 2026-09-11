@@ -892,7 +892,6 @@ const AppContent: React.FC<AppContentProps> = ({
               fileEdits={state.fileEdits}
               logs={state.logs}
               subagentActivities={state.subagentActivities}
-              currentTodos={currentTodos}
               messages={state.messages}
               isProcessing={state.isProcessing}
               lastError={state.lastError}

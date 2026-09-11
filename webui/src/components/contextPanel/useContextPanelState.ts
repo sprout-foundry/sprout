@@ -26,7 +26,7 @@ interface UseContextPanelStateReturn {
   setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
   setExpandedQueries: React.Dispatch<React.SetStateAction<Set<number>>>;
   setExpandedSubagents: React.Dispatch<React.SetStateAction<Set<string>>>;
-  toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  toolRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
   startResize: (e: ReactMouseEvent<HTMLDivElement>) => void;
   isResizing: boolean;
   toggleToolExpansion: (toolId: string) => void;
@@ -63,13 +63,13 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
   const [panelWidth, setPanelWidthRaw] = useState(loadPersistedWidth);
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
-  const [chatTab, setChatTab] = useState<ChatTabId>('subagents');
+  const [chatTab, setChatTab] = useState<ChatTabId>('activity');
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
-  const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const toolRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const isChat = props.context === 'chat';
 
@@ -83,8 +83,14 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      if (['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'].includes(storedTab)) {
-        setChatTab(storedTab as ChatTabId);
+      // Migration: pre-merge tab ids map onto their Phase-1 successors
+      // ('subagents'/'tools' → 'activity'; 'tasks'/'status' tabs removed —
+      // fall back to the default).
+      const legacy = storedTab as string;
+      const migrated =
+        legacy === 'subagents' || legacy === 'tools' ? 'activity' : legacy === 'changes' || legacy === 'sessions' ? legacy : null;
+      if (migrated) {
+        setChatTab(migrated as ChatTabId);
       }
     }
   }, [props.context]);

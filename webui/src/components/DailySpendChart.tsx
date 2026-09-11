@@ -64,6 +64,7 @@ export default function DailySpendChart({ dailyCosts, loading = false, error = n
     }
     return (
       <div className="daily-spend-chart" data-testid="daily-spend-chart">
+        <div className="costs-section-title">Daily Spend</div>
         <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} role="img" aria-label="Daily spend chart loading">
           {placeholderBars}
         </svg>
@@ -75,6 +76,7 @@ export default function DailySpendChart({ dailyCosts, loading = false, error = n
   if (dailyCosts.length === 0) {
     return (
       <div className="daily-spend-chart" data-testid="daily-spend-chart">
+        <div className="costs-section-title">Daily Spend</div>
         <div className="daily-spend-empty" data-testid="daily-spend-empty">
           No daily cost data available.
         </div>
@@ -122,6 +124,7 @@ export default function DailySpendChart({ dailyCosts, loading = false, error = n
 
   return (
     <div className="daily-spend-chart" data-testid="daily-spend-chart">
+      <div className="costs-section-title">Daily Spend</div>
       <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} role="img" aria-label="Daily spend chart">
         {/* Y-axis labels */}
         {yLabels.map((label) => (

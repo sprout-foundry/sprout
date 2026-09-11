@@ -178,3 +178,5 @@ docs/embed.md
 # Compiled WASM binary build artifact (produced by make build-wasm/build-all)
 /wasm
 .scratch
+# Local audit working notes (not for the public repo)
+webui/docs/WEBUI-AUDIT-2026-09-11.md

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -106,6 +107,16 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("write_file", fmt.Sprintf("write file %q: %v", path, err), err)
+	}
+
+	// Session change tracking: record the mutation with the agent's
+	// ChangeTracker (powers the Agent Changes panel, /api/changes/*, and
+	// revert tooling). Best-effort — a tracking failure must not fail the
+	// write itself. Nil func = no tracker (standalone handler use).
+	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
+		if trackErr := fn(path, content); trackErr != nil {
+			log.Printf("[write_file] change tracking failed for %q: %v", path, trackErr)
+		}
 	}
 
 	// Write to output writer if available

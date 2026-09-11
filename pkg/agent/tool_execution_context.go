@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	core "github.com/sprout-foundry/seed/core"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -34,6 +35,16 @@ func toolExecutionMetadataFromContext(ctx context.Context) (toolCallID, toolName
 	}
 	if v, ok := ctx.Value(toolExecutionContextKeyToolName).(string); ok {
 		toolName = v
+	}
+	// Seed v1.4.0 attaches call metadata to handler contexts; read it as a
+	// fallback so publishers see the real call ID even when sprout's own
+	// metadata was never injected (the common case — seed's ToolRegistry
+	// builds the handler context).
+	if toolCallID == "" {
+		toolCallID = core.ToolCallIDFromContext(ctx)
+	}
+	if toolName == "" {
+		toolName = core.ToolNameFromContext(ctx)
 	}
 	return toolCallID, toolName
 }

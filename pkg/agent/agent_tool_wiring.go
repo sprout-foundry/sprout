@@ -52,6 +52,14 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		MCPRefresh: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleMCPRefresh(ctx, agent, args)
 		},
+		// ChangeTracker hooks: keep session file-mutation tracking working
+		// now that write/edit execution lives in pkg/agent_tools. Without
+		// these the Agent Changes panel and revert tooling see nothing.
+		TrackFileWrite: agent.TrackFileWrite,
+		TrackFileEdit:  agent.TrackFileEdit,
+		TrackShellCommand: func(command string) error {
+			return agent.TrackShellCommand(command)
+		},
 	}
 
 	tools.ToolFuncMu.Lock()

@@ -52,6 +52,8 @@ func (r *SubagentRunner) monitorProgress(ctx context.Context, agent *Agent, task
 	if r == nil || r.shared == nil || r.shared.EventBus == nil || agent == nil {
 		return
 	}
+	// Parent tool-call correlation (seed v1.4.0 handler ctx value).
+	parentCallID, _ := toolExecutionMetadataFromContext(ctx)
 
 	// Emit one event immediately so the CLI has the subagent's max
 	// context budget on hand for the spawn line. Without this, the
@@ -74,6 +76,9 @@ func (r *SubagentRunner) monitorProgress(ctx context.Context, agent *Agent, task
 			"context_used":       ctxTokens,
 			"max_context_tokens": ctxLimit,
 			"iteration":          iteration,
+		}
+		if parentCallID != "" {
+			data["tool_call_id"] = parentCallID
 		}
 		if cost > 0 {
 			data["cost"] = cost

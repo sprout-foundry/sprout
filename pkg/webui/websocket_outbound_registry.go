@@ -67,7 +67,11 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeQueryProgress:                  {},
 	events.EventTypeQueryCompleted:                 {},
 	events.EventTypeError:                          {},
-	events.EventTypeToolExecution:                  {},
+	// tool_execution and validation were dropped from the registry:
+	// tool_execution had no publisher left (superseded by
+	// tool_start/tool_end), and validation has no consumer on any
+	// surface — its diagnostics remain on the event bus for internal
+	// subscribers, but they were never rendered in the WebUI.
 	events.EventTypeToolStart:                      {},
 	events.EventTypeToolEnd:                        {},
 	events.EventTypeSubagentActivity:               {},
@@ -79,7 +83,6 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeFileContentChanged:             {},
 	events.EventTypeStreamChunk:                    {},
 	events.EventTypeMetricsUpdate:                  {},
-	events.EventTypeValidation:                     {},
 	events.EventTypeSecurityApprovalRequest:        {},
 	events.EventTypeSecurityPromptRequest:          {},
 	events.EventTypeAskUserRequest:                 {},

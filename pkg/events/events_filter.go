@@ -63,18 +63,6 @@ func ErrorEvent(message string, err error) map[string]interface{} {
 	return data
 }
 
-// ToolExecutionEvent creates a tool execution event
-func ToolExecutionEvent(toolName, action string, details map[string]interface{}) map[string]interface{} {
-	data := map[string]interface{}{
-		"tool_name": toolName,
-		"action":    action,
-	}
-	for k, v := range details {
-		data[k] = v
-	}
-	return data
-}
-
 // FileChangedEvent creates a file changed event.
 //
 // The full file content is deliberately NOT transmitted. No consumer reads it —

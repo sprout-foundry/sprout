@@ -12,15 +12,7 @@ import type { SessionEntry } from '../../services/api/types';
 import type { QueryProgress } from '../../types/app';
 
 // Re-export shared types from @sprout/ui for convenience
-export type {
-  ToolExecution,
-  LogEntry,
-  SubagentActivity,
-  LiveLogLine,
-  RevisionFile,
-  Revision,
-  RevisionDetailFile,
-};
+export type { ToolExecution, LogEntry, SubagentActivity, LiveLogLine, RevisionFile, Revision, RevisionDetailFile };
 
 // Re-export SessionEntry from services/api/types for convenience
 export type { SessionEntry };

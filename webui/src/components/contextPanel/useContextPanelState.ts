@@ -88,7 +88,11 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       // fall back to the default).
       const legacy = storedTab as string;
       const migrated =
-        legacy === 'subagents' || legacy === 'tools' ? 'activity' : legacy === 'changes' || legacy === 'sessions' ? legacy : null;
+        legacy === 'subagents' || legacy === 'tools'
+          ? 'activity'
+          : legacy === 'changes' || legacy === 'sessions'
+            ? legacy
+            : null;
       if (migrated) {
         setChatTab(migrated as ChatTabId);
       }

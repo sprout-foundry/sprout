@@ -57,10 +57,7 @@ export function ActivityTab({
 }: ActivityTabProps) {
   // Subagent executions are rendered by SubagentsTab's cards; showing them
   // again in the tool rows would duplicate every delegation event.
-  const plainToolExecutions = useMemo(
-    () => toolExecutions.filter((t) => !isSubagentTool(t)),
-    [toolExecutions],
-  );
+  const plainToolExecutions = useMemo(() => toolExecutions.filter((t) => !isSubagentTool(t)), [toolExecutions]);
 
   const plainGroupedByQuery = useMemo(() => {
     const groups = new Map<number, ToolExecution[]>();

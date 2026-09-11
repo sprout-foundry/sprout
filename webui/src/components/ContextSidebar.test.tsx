@@ -63,26 +63,56 @@ function panel(): HTMLElement | null {
 
 describe('ContextSidebar desktop stability', () => {
   it('desktop: panel stays mounted when focus moves chat → file', async () => {
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: false, showContextSidebar: true, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: false,
+      showContextSidebar: true,
+      currentView: 'chat',
+    });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.idle).toBe('false');
 
     // Open a plain file buffer → chat no longer active
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: false, showContextSidebar: false, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: false,
+      showContextSidebar: false,
+      currentView: 'chat',
+    });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.idle).toBe('true');
   });
 
   it('desktop: costs view also keeps the mounted panel (idle)', async () => {
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: false, showContextSidebar: true, currentView: 'costs' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: false,
+      showContextSidebar: true,
+      currentView: 'costs',
+    });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.idle).toBe('true');
   });
 
   it('desktop: same wrapper element across the switch (no remount)', async () => {
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: false, showContextSidebar: true, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: false,
+      showContextSidebar: true,
+      currentView: 'chat',
+    });
     const before = panel();
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: false, showContextSidebar: false, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: false,
+      showContextSidebar: false,
+      currentView: 'chat',
+    });
     const after = panel();
     // React reconciliation keeps the same DOM node because ContextSidebar
     // renders the same <aside> in both states.
@@ -90,20 +120,44 @@ describe('ContextSidebar desktop stability', () => {
   });
 
   it('mobile: panel unmounts when no chat is focused (overlay behavior preserved)', async () => {
-    await renderSidebar({ ...BASE_PROPS, isMobile: true, isTablet: false, showContextSidebar: true, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: true,
+      isTablet: false,
+      showContextSidebar: true,
+      currentView: 'chat',
+    });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.mobile).toBe('true');
 
-    await renderSidebar({ ...BASE_PROPS, isMobile: true, isTablet: false, showContextSidebar: false, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: true,
+      isTablet: false,
+      showContextSidebar: false,
+      currentView: 'chat',
+    });
     expect(panel()).toBeNull();
   });
 
   it('tablet: panel unmounts when no chat is focused (overlay behavior preserved)', async () => {
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: true, showContextSidebar: true, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: true,
+      showContextSidebar: true,
+      currentView: 'chat',
+    });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.tablet).toBe('true');
 
-    await renderSidebar({ ...BASE_PROPS, isMobile: false, isTablet: true, showContextSidebar: false, currentView: 'chat' });
+    await renderSidebar({
+      ...BASE_PROPS,
+      isMobile: false,
+      isTablet: true,
+      showContextSidebar: false,
+      currentView: 'chat',
+    });
     expect(panel()).toBeNull();
   });
 });

@@ -89,7 +89,12 @@ function activityRoot(): HTMLElement | null {
 
 describe('ActivityTab', () => {
   it('shows the empty state when there are no tools or subagents', async () => {
-    await render({ ...BASE, toolExecutions: [], subagentRuns: [], resourceCounts: { active: 0, queued: 0, completed: 0, failed: 0, cancelled: 0 } });
+    await render({
+      ...BASE,
+      toolExecutions: [],
+      subagentRuns: [],
+      resourceCounts: { active: 0, queued: 0, completed: 0, failed: 0, cancelled: 0 },
+    });
     expect(activityRoot()).not.toBeNull();
     expect(container.textContent).toContain('will appear here');
   });

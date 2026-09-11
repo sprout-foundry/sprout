@@ -12,6 +12,14 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// shouldForwardEventToConnection decides whether an event reaches one WS
+// connection. Security-scoped events (approval/ask_user dialogs) have the
+// strictest rules, with one corrective path: if the connection's connect-time
+// ChatID snapshot disagrees with the event's chat, the client's LIVE active
+// chat (client context) is consulted before dropping — a chat switch via
+// POST /api/chat-sessions/switch updates the context but nothing refreshes
+// connInfo.ChatID, and without this fallback the dialog would be silently
+// dropped (agent blocks for the full ask_user timeout).
 func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, connInfo *ConnectionInfo) bool {
 	data, _ := event.Data.(map[string]interface{})
 
@@ -45,6 +53,25 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// Extract target client_id and chat_id from event
 	targetClientID, _ := data["client_id"].(string)
 	targetChatID, _ := data["chat_id"].(string)
+
+	// connectionMatchesLiveChat reports whether the event's chat matches the
+	// connection's client context's ACTIVE chat right now. Used as a
+	// corrective fallback for security-scoped events when the connect-time
+	// connInfo.ChatID snapshot is stale (chat switched on the same socket).
+	// Read-locked and only invoked on the rare security-scoped mismatch
+	// path, so the per-event hot path pays nothing.
+	connectionMatchesLiveChat := func(eventChat string) bool {
+		if ws.clientContexts == nil {
+			return false
+		}
+		ws.mutex.RLock()
+		ctx := ws.clientContexts[connInfo.ClientID]
+		ws.mutex.RUnlock()
+		if ctx == nil {
+			return false
+		}
+		return ctx.getActiveChatID() == eventChat
+	}
 
 	// Check if event has client_id targeting
 	if strings.TrimSpace(targetClientID) != "" {
@@ -80,8 +107,17 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 			// Security-scoped events are strict: they only allow when the connection's
 			// primary chat_id matches (or is unfiltered), NOT via chatSubscribers.
 			if isSecurityScopedEvent(event.Type) {
-				if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != targetChat {
-					return false
+				staleChat := strings.TrimSpace(connInfo.ChatID)
+				if staleChat != "" && staleChat != targetChat {
+					// connInfo.ChatID is a connect-time snapshot (chat_id /
+					// reattach query param) and is never refreshed on chat
+					// switch — the switch API only updates the client
+					// context. Consult the live active chat before dropping,
+					// or a dialog for the chat the user is actually viewing
+					// gets silently discarded (agent blocks until timeout).
+					if !connectionMatchesLiveChat(targetChat) {
+						return false
+					}
 				}
 			} else {
 				// For normal events: allow if connection has no specific chat,
@@ -102,7 +138,13 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		targetChat := strings.TrimSpace(targetChatID)
 		// Event has chat_id but no client_id
 		// Forward if connection has matching chat_id, no specific chat, or is subscribed.
-		if strings.TrimSpace(connInfo.ChatID) != "" &&
+		if isSecurityScopedEvent(event.Type) {
+			// Same stale-snapshot fallback as the client-match branch above.
+			staleChat := strings.TrimSpace(connInfo.ChatID)
+			if staleChat != "" && staleChat != targetChat && !connectionMatchesLiveChat(targetChat) {
+				return false
+			}
+		} else if strings.TrimSpace(connInfo.ChatID) != "" &&
 			strings.TrimSpace(connInfo.ChatID) != targetChat &&
 			!ws.connectionSubscribedToChat(connInfo, targetChat) {
 			return false

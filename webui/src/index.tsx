@@ -7,6 +7,7 @@ import * as JSXRuntime from 'react/jsx-runtime';
 import * as ReactDOMClient from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
 import { resolveClientIdentity } from './services/clientSession';
 
 // External plugins (e.g. the platform IIFE bundle) externalize 'react' and
@@ -25,6 +26,16 @@ import { resolveClientIdentity } from './services/clientSession';
 // oracle detects a live owner and mints a fresh id so two windows on
 // different workspaces get isolated server contexts. Wrapped in an async
 // IIFE — the esbuild target (safari14) rejects top-level await.
+//
+// Shell identity starts SYNCHRONOUSLY (bridge presence → data-shell on
+// <html> before first paint; studio CSS keys off it, so no layout flash)
+// and the capabilities handshake refines it async. In the default build
+// resolveShellIdentity skips the bridge read entirely (compile-time
+// short-circuit) and pins "webui"; the sync check here only touches
+// window in a studio dist.
+applyShellAttribute(isStudioShellSync() ? 'studio' : 'webui');
+void resolveShellIdentity();
+
 (async () => {
   await resolveClientIdentity();
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);

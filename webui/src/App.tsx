@@ -8,6 +8,7 @@ import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
+import SyncStatusBanner from './components/SyncStatusBanner';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
@@ -18,7 +19,8 @@ import ShellApprovalPanel from './components/ShellApprovalPanel';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
 import UIManager from './components/UIManager';
 import UpdateAvailableBanner from './components/UpdateAvailableBanner';
-import UpdateNotification from './components/UpdateNotification';import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
+import UpdateNotification from './components/UpdateNotification';
+import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
@@ -451,6 +453,7 @@ function AppInner() {
                         onActiveChatChange={chatManager.handleActiveChatChange}
                         onCreateChat={chatManager.handleCreateChat}
                         onDeleteChat={chatManager.handleDeleteChat}
+                        onDeleteAllChats={chatManager.handleDeleteAllChats}
                         onRenameChat={chatManager.handleRenameChat}
                         perChatCache={state.perChatCache}
                       />
@@ -458,6 +461,7 @@ function AppInner() {
                       <UpdateAvailableBanner />
                       <EscalationListener />
                       <InstallPromptBanner />
+                      <SyncStatusBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />
                       {state.securityApprovalRequest && (
                         <SecurityApprovalDialog

@@ -401,10 +401,10 @@ func (f *StatusFooter) Resize() {
 	//
 	// Footer content is padded to the terminal width at draw time. When
 	// the terminal shrinks, those padded rows wrap across multiple
-	// physical rows. The terminal reflows everything, making precise
-	// row calculations unreliable. Instead, we clear a generous region
-	// at the bottom of the screen (footer rows × max wrap ratio + slack)
-	// to guarantee all stale copies are wiped before redrawing.
+	// physical rows. The stale footer block is exactly reserved+overflow
+	// rows tall, so the clear starts at its computed top (see the
+	// oldTop/newTop derivation below) — no slack row, so no live
+	// content row is ever erased.
 	if oldRows > 1 {
 		// Reset the scroll region first so we can address the full screen.
 		fmt.Fprint(f.w, "\033[r")
@@ -425,15 +425,25 @@ func (f *StatusFooter) Resize() {
 		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
 
 		// The stale footer rows sit at OLD-geometry positions (they were
-		// drawn for the old height). On a shrink they wrap upward past
-		// newRows; on a GROW they land mid-screen at oldRows-reserved..oldRows
-		// while the new footer renders at newRows-reserved..newRows. Clearing
-		// only the new-geometry window leaves the old rows stranded on every
-		// grow (duplicate hint/rule/content rows smeared up the screen).
-		// Union both windows: clear from the HIGHER of the two tops,
-		// downward to the end of the screen.
-		oldTop := oldRows - reserved - overflow
-		newTop := newRows - reserved - overflow
+		// drawn for the old height). On a GROW rows keep their absolute
+		// positions: the old footer block (hint+steer+rule+content =
+		// `reserved` rows) starts at oldRows-reserved+1, and any
+		// width-change wrap extends it DOWNWARD into the fresh rows. On a
+		// SHRINK the region reset reflows content and the wrapped old
+		// footer settles at the bottom, spanning
+		// newRows-(reserved+overflow)+1 .. newRows.
+		//
+		// Both block tops are exact: the row immediately above each is
+		// conversation content and must NOT be erased. Starting one row
+		// higher (the old rows-reserved-overflow formula) wiped a live
+		// output line on every resize — on Termux the soft keyboard
+		// fires a resize per message, so blank lines accumulated in the
+		// visible history. Union both tops: clear from the HIGHER of the
+		// two, downward to the end of the screen. The union still wipes
+		// the stranded old rows on a grow, which a new-geometry-only
+		// window misses (the pre-fix macOS symptom).
+		oldTop := oldRows - reserved + 1
+		newTop := newRows - reserved - overflow + 1
 		clearTop := newTop
 		if oldTop < clearTop {
 			clearTop = oldTop
@@ -449,13 +459,16 @@ func (f *StatusFooter) Resize() {
 }
 
 // computeOverflowRows calculates how many extra physical rows the footer's
-// old content occupies after a terminal width change. When the terminal
-// shrinks, each footer row that was padded to the old width wraps across
-// ceil(oldCols/newCols) physical rows. The extra rows (beyond the 1 row
-// per footer line) appear ABOVE the footer's known row positions and must
-// be cleared to avoid stale duplicates.
+// old content occupies after a terminal width change. Each footer row padded
+// to the old width wraps across ceil(oldCols/newCols) physical rows at the
+// new width. On a SHRINK the reflowed block settles at the screen bottom, so
+// the extra rows appear ABOVE the footer's known row positions; on a GROW
+// the rows keep their positions and the extra rows extend DOWNWARD into the
+// fresh rows. Either way they must fall inside the cleared window to avoid
+// stale duplicates.
 //
-// Returns the number of additional rows to clear above the topmost footer row.
+// Returns the number of additional rows the wrapped block adds beyond one
+// physical row per footer line.
 func (f *StatusFooter) computeOverflowRows(oldCols, newCols, footerRows int) int {
 	if oldCols <= 0 || newCols <= 0 || oldCols <= newCols {
 		return 0
@@ -552,9 +565,19 @@ func (f *StatusFooter) Stop() {
 	LockOutput()
 	if rows > 1 {
 		reserved := 2 + lastSteerSnap + lastHintSnap
-		topRow := rows - reserved
+		// +1: the pinned block starts at rows-reserved+1; the row
+		// above is content and the wipe must not eat it (same exact-top
+		// rule as Resize).
+		topRow := rows - reserved + 1
 
 		newCols, _ := f.terminalSize()
+		// NOTE: this overflow math assumes a reflow at the current width
+		// already happened (via a prior Resize for the width change). Stop
+		// itself does not reflow — if the last width change was deferred
+		// (pendingResize during prose streaming) and the process exits
+		// before the deferred resize runs, the window may be off by a row
+		// and a stale fragment can survive on exit. Harmless: the session
+		// is ending.
 		overflow := f.computeOverflowRows(oldColsSnap, newCols, reserved)
 		topRow -= overflow
 		if topRow < 1 {

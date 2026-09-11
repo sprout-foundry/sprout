@@ -17,6 +17,7 @@ import type {
   WorkspaceChangedData,
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
+  PasswordRequestData,
   AskUserRequestData,
   EditApprovalRequestData,
   ShellApprovalRequestData,
@@ -1156,6 +1157,30 @@ const handleInputRequired = (ctx: EventHandlerContext): void => {
   debugLog('[input_required] Input required event received');
 };
 
+// Handle password_request event (SP-089-3). The backend's WebUI password
+// prompter blocks until the user responds (or the timeout fires), so this
+// handler must surface the dialog immediately. Response flows back through
+// handlePasswordResponse in useSecurityHandlers (WS password_response).
+const handlePasswordRequest = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as PasswordRequestData;
+  if (data.status === 'responded') return;
+  if (!data.request_id) return;
+  setState((prev) => ({
+    passwordRequest: {
+      requestId: String(data.request_id),
+      command: String(data.command || ''),
+      prompt: String(data.prompt || ''),
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  notifyIfHidden('Sprout', `Password required: ${data.command || 'shell command'}`);
+  debugLog('[password] Prompt request:', data.command);
+};
+
 // Handle the chat_run_restored control frame that leads a reattach replay.
 // When the server sets gap=true it had already evicted events this client
 // missed, so the partial replay that follows would splice onto a stale
@@ -1459,6 +1484,8 @@ export function useWebSocketEventHandler({
           return handleSecurityApprovalRequest(ctx);
         case 'security_prompt_request':
           return handleSecurityPromptRequest(ctx);
+        case 'password_request':
+          return handlePasswordRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
         case 'edit_approval_request':

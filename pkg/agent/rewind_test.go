@@ -264,7 +264,7 @@ func TestRewind_WithoutFileRevert(t *testing.T) {
 	}
 
 	a.EnableChangeTracking("rewind no-revert test")
-	_ = a.TrackFileWrite(path, "modified")
+	_ = a.TrackFileWrite(path, "", "modified")
 	if err := os.WriteFile(path, []byte("modified"), 0o644); err != nil {
 		t.Fatal(err)
 	}

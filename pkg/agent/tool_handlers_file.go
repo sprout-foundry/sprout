@@ -471,7 +471,13 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 
 	a.Logger().Debug("Writing file: %s\n", path)
 
-	if trackErr := a.TrackFileWrite(path, content); trackErr != nil {
+	// Pre-write read: the tracker stores this as OriginalCode for
+	// recovery. Must happen before tools.WriteFile mutates the file.
+	var preWriteOriginal string
+	if preData, preErr := os.ReadFile(path); preErr == nil {
+		preWriteOriginal = string(preData)
+	}
+	if trackErr := a.TrackFileWrite(path, preWriteOriginal, content); trackErr != nil {
 		a.Logger().Debug("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
@@ -571,8 +577,9 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			return "", agenterrors.NewApproval("edit-approval failed", map[string]any{"path": path}).WithDetail("cause", appErr.Error())
 		}
 		if approved != proposedContent {
+			a.Logger().Debug("edit-approval: %s\n", summary)
 			a.Logger().Debug("edit-approval modified content for %s: %s\n", path, summary)
-			if trackErr := a.TrackFileWrite(path, approved); trackErr != nil {
+			if trackErr := a.TrackFileWrite(path, originalContent, approved); trackErr != nil {
 				a.Logger().Debug("Warning: Failed to track approved write: %v\n", trackErr)
 			}
 			writeResult, writeErr := tools.WriteFile(ctx, path, approved)

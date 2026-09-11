@@ -18,12 +18,13 @@ func TestWriteHandler_InvokesTrackFileWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tracked.txt")
 
-	var trackedPath, trackedContent string
+	var trackedPath, trackedOriginal, trackedContent string
 	env := ToolEnv{
 		WorkspaceRoot: dir,
 		ToolFuncs: &ToolFuncSet{
-			TrackFileWrite: func(filePath string, content string) error {
+			TrackFileWrite: func(filePath string, originalContent string, content string) error {
 				trackedPath = filePath
+				trackedOriginal = originalContent
 				trackedContent = content
 				return nil
 			},
@@ -44,6 +45,11 @@ func TestWriteHandler_InvokesTrackFileWrite(t *testing.T) {
 
 	if trackedPath != path {
 		t.Errorf("tracked path: want %q, got %q", path, trackedPath)
+	}
+	// The file did not exist before this write, so the tracked original
+	// must be empty (a create) — not the post-write content.
+	if trackedOriginal != "" {
+		t.Errorf("tracked original for create: want empty, got %q", trackedOriginal)
 	}
 	if trackedContent != "hello tracked world" {
 		t.Errorf("tracked content: got %q", trackedContent)

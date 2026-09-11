@@ -121,11 +121,15 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 
 	// Capture pre-edit content for change tracking (must happen before
 	// EditFile mutates the file). Only read when a tracker is present.
+	// readOK distinguishes "file was empty" from "read failed" — an
+	// empty file's edit must still be tracked.
 	var originalContent string
+	readOK := false
 	trackFn := env.ResolveToolFuncs().TrackFileEdit
 	if trackFn != nil {
 		if b, readErr := os.ReadFile(path); readErr == nil {
 			originalContent = string(b)
+			readOK = true
 		}
 	}
 
@@ -141,7 +145,8 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// ChangeTracker (powers the Agent Changes panel, /api/changes/*, and
 	// revert tooling). Best-effort; nil func = no tracker. The new content
 	// is re-read post-edit so the tracker stores the exact on-disk state.
-	if trackFn != nil && originalContent != "" {
+	// Skipped only when the pre-edit read failed (no baseline to record).
+	if trackFn != nil && readOK {
 		newContent, readErr := os.ReadFile(path)
 		if readErr != nil {
 			log.Printf("[edit_file] change tracking: re-read failed for %q: %v", path, readErr)

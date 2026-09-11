@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -101,6 +102,18 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// Capture pre-write content for change tracking. Must happen BEFORE
+	// WriteFile mutates the file: reading afterwards would store the
+	// post-write bytes as the "original" and make recovery a no-op.
+	// Only read when a tracker is present. A read miss (file does not
+	// exist yet) is the create case: original stays empty.
+	var preWriteOriginal string
+	if env.ResolveToolFuncs().TrackFileWrite != nil {
+		if data, readErr := os.ReadFile(path); readErr == nil {
+			preWriteOriginal = string(data)
+		}
+	}
+
 	result, err := WriteFile(ctx, path, content)
 	if err != nil {
 		return ToolResult{
@@ -114,7 +127,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// revert tooling). Best-effort — a tracking failure must not fail the
 	// write itself. Nil func = no tracker (standalone handler use).
 	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
-		if trackErr := fn(path, content); trackErr != nil {
+		if trackErr := fn(path, preWriteOriginal, content); trackErr != nil {
 			log.Printf("[write_file] change tracking failed for %q: %v", path, trackErr)
 		}
 	}

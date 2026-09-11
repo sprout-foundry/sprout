@@ -37,7 +37,7 @@ func TestRecoverFile_SkipsStaleFile(t *testing.T) {
 
 	// 2. Track the edit: original="v1", new="v2".
 	newContent := "v2\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestRecoverFile_ProceedsWhenNotStale(t *testing.T) {
 
 	// 2. Track the edit: original="v1", new="v2".
 	newContent := "v2\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, originalContent, newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestRevertMyChanges_SkipsStaleFile(t *testing.T) {
 
 	// 2. Track the edit: original="v1", new="v2".
 	newContent := "v2\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, originalContent, newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -236,7 +236,7 @@ func TestRevertMyChanges_ProceedsWhenNotStale(t *testing.T) {
 
 	// 2. Track the edit: original="v1", new="v2".
 	newContent := "v2\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, originalContent, newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -297,7 +297,7 @@ func TestRecoverFile_CreateOp_SkipsStaleFile(t *testing.T) {
 	//    so OriginalCode will be "" and NewCode will be "v1".
 	filePath := filepath.Join(ws, "newfile.go")
 	newContent := "v1\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 

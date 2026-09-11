@@ -707,7 +707,7 @@ func TestAgent_EnableChangeTracking_PreservesExistingTracker(t *testing.T) {
 	firstID := a.GetRevisionID()
 
 	// Record a change after first enable.
-	a.TrackFileWrite(filepath.Join(ws, "a.go"), "content")
+	a.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
 	if got := a.GetChangeCount(); got != 1 {
 		t.Fatalf("expected 1 change after first enable, got %d", got)
 	}
@@ -801,7 +801,7 @@ func TestHandleListChanges_IncludeCrossSession(t *testing.T) {
 	if tracker == nil {
 		t.Fatal("expected tracker to be non-nil")
 	}
-	err := tracker.TrackFileWrite("test.txt", "content")
+	err := tracker.TrackFileWrite("test.txt", "", "content")
 	if err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -133,22 +132,18 @@ func (ct *ChangeTracker) GetRevisionID() string {
 	return ct.revisionID
 }
 
-// TrackFileWrite tracks a write operation (WriteFile tool)
-func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) error {
+// TrackFileWrite tracks a write operation (WriteFile tool).
+// originalContent is the file's pre-write state, captured by the
+// handler before the write. Empty means the file did not exist (a
+// create). Never re-read filePath here: the write has already happened,
+// so a re-read returns new content and recovery becomes a no-op.
+func (ct *ChangeTracker) TrackFileWrite(filePath string, originalContent string, newContent string) error {
 	if !ct.IsEnabled() {
 		return nil
 	}
 	// Normalize to absolute at track time so stored FilePath is
 	// independent of the process's CWD.
 	filePath = ct.resolveAbsPath(filePath)
-
-	// Get original content (if file exists)
-	originalContent := ""
-	if _, err := os.Stat(filePath); err == nil {
-		if content, readErr := os.ReadFile(filePath); readErr == nil {
-			originalContent = string(content)
-		}
-	}
 
 	// Redact content if file is outside the workspace root
 	if ct.isOutsideWorkspace(filePath) {

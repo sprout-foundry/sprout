@@ -2,7 +2,9 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -220,11 +222,55 @@ func (a *Agent) ListChanges(args map[string]interface{}) (string, error) {
 }
 
 // ShowMyChange returns a unified diff JSON envelope for `path`.
+// Shape matches the frontend's ChangeDiffResponse: {found, path, op,
+// tool, diff}. The diff is computed from the in-memory session buffer
+// when the path was touched this session; otherwise it falls back to
+// the persisted history store so previous-session entries in the
+// timeline tab still render a diff.
 func (a *Agent) ShowMyChange(path string) (string, error) {
-	return handleListChanges(nil, a, map[string]interface{}{
-		"path_pattern": path,
-		"include_diff": true,
-	})
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+
+	type diffEnvelope struct {
+		Found bool   `json:"found"`
+		Path  string `json:"path"`
+		Op    string `json:"op,omitempty"`
+		Tool  string `json:"tool,omitempty"`
+		Diff  string `json:"diff,omitempty"`
+	}
+
+	render := func(original, latest, op, tool string) (string, error) {
+		out := diffEnvelope{Found: true, Path: abs, Op: op, Tool: tool, Diff: buildUnifiedDiff(abs, original, latest)}
+		b, marshalErr := json.MarshalIndent(out, "", "  ")
+		if marshalErr != nil {
+			return "", marshalErr
+		}
+		return string(b), nil
+	}
+
+	if tracker := a.GetChangeTracker(); tracker != nil && tracker.IsEnabled() {
+		if original, latest, op, tool, found := collectFileChangeSpan(tracker.GetChanges(), abs); found {
+			return render(original, latest, op, tool)
+		}
+	}
+
+	// Session-buffer miss: try the persisted history store.
+	if rec, found, histErr := history.FindPersistedOriginal(abs); histErr == nil && found {
+		op := "edit"
+		if rec.Original == "" {
+			op = "create"
+		}
+		return render(rec.Original, rec.New, op, "(persisted)")
+	}
+
+	out := diffEnvelope{Found: false, Path: abs}
+	b, marshalErr := json.MarshalIndent(out, "", "  ")
+	if marshalErr != nil {
+		return "", marshalErr
+	}
+	return string(b), nil
 }
 
 // RevertMyChanges performs a bulk revert.

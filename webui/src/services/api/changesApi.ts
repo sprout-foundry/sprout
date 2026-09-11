@@ -59,6 +59,8 @@ export interface TimelineItem {
   revision_id?: string;
   timestamp: string;
   tier?: string;
+  /** Whether original content survived (persisted entries can be pruned). */
+  recoverable?: boolean;
 }
 
 export interface TimelineResponse {

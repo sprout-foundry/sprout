@@ -741,8 +741,9 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
   logEntry.category = 'file';
   logEntry.level = 'info';
   const data = (event.data ?? {}) as FileChangedData;
+  const path = String(data.path || data.file_path || 'Unknown');
   const newFileEdit = {
-    path: String(data.path || data.file_path || 'Unknown'),
+    path,
     action: String(data.action || data.operation || 'edited'),
     timestamp: new Date(),
     linesAdded: typeof data.lines_added === 'number' ? data.lines_added : undefined,
@@ -752,7 +753,11 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
     logs: appendCappedLog(prev.logs, logEntry),
     fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
   }));
-  debugLog('[edit] File changed:', data.path);
+  debugLog('[edit] File changed:', path);
+  // Bridge for window-level listeners: the Agent Changes panel listens
+  // on this CustomEvent to flash the changed row and refresh its
+  // manifest without prop-threading through every parent.
+  window.dispatchEvent(new CustomEvent('agent-file-changed', { detail: { path } }));
 };
 
 // Handle error event

@@ -9,7 +9,10 @@
 package history
 
 import (
+	"fmt"
 	"path/filepath"
+
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 // PersistedOriginal holds the pre-change content of one file from the
@@ -71,4 +74,25 @@ func FindPersistedOriginal(filename string) (PersistedOriginal, bool, error) {
 // means the content was withheld.
 func isRecoverableStoredContent(original string) bool {
 	return original != "" && original != RedactedContentMarker
+}
+
+// UnifiedDiffFor renders a unified diff from stored before/after
+// content. Kept next to PersistedOriginal so consumers of the
+// persisted-diff fallback don't need their own diff plumbing.
+func UnifiedDiffFor(path, before, after string) string {
+	if before == after {
+		return "(no textual difference)"
+	}
+	d := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(before),
+		B:        difflib.SplitLines(after),
+		FromFile: path + " (before change)",
+		ToFile:   path + " (after change)",
+		Context:  3,
+	}
+	out, err := difflib.GetUnifiedDiffString(d)
+	if err != nil {
+		return fmt.Sprintf("(diff failed: %v)", err)
+	}
+	return out
 }

@@ -247,8 +247,21 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		return ctx
 	}
 
-	// Determine workspace root for the new client context.
+	// Determine workspace root for the new client context. A context that
+	// selects a workspace and is later evicted (or whose daemon restarted)
+	// must come back in that workspace, not the daemon's launch directory —
+	// the recreated context owns every new terminal session's cwd, and the
+	// client has no way to know the switch happened.
 	workspaceRoot := ws.workspaceRoot
+	if clientID != defaultWebClientID {
+		if remembered := strings.TrimSpace(ws.clientWorkspaces[clientID]); remembered != "" {
+			if info, err := os.Stat(remembered); err == nil && info.IsDir() {
+				workspaceRoot = remembered
+			} else {
+				delete(ws.clientWorkspaces, clientID)
+			}
+		}
+	}
 
 	var ctx *webClientContext
 	if clientID == defaultWebClientID {
@@ -274,7 +287,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		}
 		ctx.ensureDefaultChatSession()
 	} else {
-		ctx = newWebClientContext(ws.workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
+		ctx = newWebClientContext(workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
 		ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	}
 
@@ -317,6 +330,30 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 			ws.sshSessionKey = ""
 			ws.sshLauncherURL = ""
 			ws.sshHomePath = ""
+		}
+	}
+}
+
+// rememberClientWorkspacesLocked snapshots every client context's current
+// workspace root into ws.clientWorkspaces. Called while holding ws.mutex —
+// from setClientWorkspaceRoot (after a selection changes) and from the idle
+// eviction worker (before it deletes contexts). Default-client entries are
+// skipped: that client already follows ws.workspaceRoot.
+//
+// The map is bounded: it only ever holds one entry per client ID that has
+// had a context in this process's lifetime. Stale entries for tabs that
+// never return are replaced (same ID reuse) or pruned lazily when the
+// remembered path no longer exists.
+func (ws *ReactWebServer) rememberClientWorkspacesLocked() {
+	if ws.clientWorkspaces == nil {
+		ws.clientWorkspaces = make(map[string]string)
+	}
+	for clientID, ctx := range ws.clientContexts {
+		if clientID == defaultWebClientID || ctx == nil {
+			continue
+		}
+		if root := strings.TrimSpace(ctx.WorkspaceRoot); root != "" {
+			ws.clientWorkspaces[clientID] = root
 		}
 	}
 }
@@ -412,6 +449,13 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		ws.sshHomePath = ""
 		ws.terminalManager = ctx.Terminal
 		ws.fileConsents = ctx.FileConsents
+	} else {
+		// Remember non-default selections so an evicted context is recreated
+		// in the workspace the user actually chose (see clientWorkspaces).
+		if ws.clientWorkspaces == nil {
+			ws.clientWorkspaces = make(map[string]string)
+		}
+		ws.clientWorkspaces[clientID] = workspaceRoot
 	}
 
 	// Non-blocking: hands each agent to its own goroutine, so this is safe

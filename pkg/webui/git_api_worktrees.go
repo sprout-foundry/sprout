@@ -373,6 +373,9 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	// explicit user action and should always update the server-level root
 	// so that post-reload re-initialization picks up the correct workspace.
 	ws.workspaceRoot = absPath
+	if clientID != defaultWebClientID {
+		ws.rememberClientWorkspacesLocked()
+	}
 
 	// Update chat session worktree paths: follow the switch for all sessions
 	// whose WorktreePath is empty or matches the previous workspace root.

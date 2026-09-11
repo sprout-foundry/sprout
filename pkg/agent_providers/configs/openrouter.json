@@ -6465,6 +6465,209 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.0035,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
+        "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+        "input_cost": 0.11,
+        "name": "DeepSeek: DeepSeek V4 Flash Vision Exp (batch)",
+        "output_cost": 0.33,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.004,
+        "context_length": 260000,
+        "description": "Mercury 2.5 is the fastest reasoning LLM, and the latest diffusion LLM (dLLM) from Inception. Instead of generating tokens sequentially, Mercury 2.5 produces and refines multiple tokens in parallel, achieving 1,107 tokens/sec on standard GPUs and delivering a 10+ point jump in intelligence over Mercury 2.",
+        "id": "inception/mercury-2.5",
+        "input_cost": 0.04,
+        "name": "Inception: Mercury 2.5",
+        "output_cost": 0.15,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can explore codebases, implement multi-file...",
+        "id": "nex-agi/nex-n2.5-mini:free",
+        "input_cost": 0,
+        "name": "Nex AGI: Nex-N2.5-Mini (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can explore codebases, implement multi-file...",
+        "id": "nex-agi/nex-n2.5-pro:free",
+        "input_cost": 0,
+        "name": "Nex AGI: Nex-N2.5-Pro (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.13,
+        "context_length": 1048576,
+        "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
+        "id": "z-ai/glm-5.3:batch",
+        "input_cost": 0.7,
+        "name": "Z.ai: GLM 5.3 (batch)",
+        "output_cost": 2.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
+        "id": "deepseek/deepseek-v4.1-flash",
+        "input_cost": 0.15,
+        "name": "DeepSeek: DeepSeek V4.1 Flash",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 131072,
+        "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+        "id": "inclusionai/ling-3.0-flash-vl",
+        "input_cost": 0.06,
+        "name": "inclusionAI: Ling 3.0 Flash VL",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+        "id": "inclusionai/ling-3.0-flash-vl:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Fugu Max is the cost-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
+        "id": "sakana/fugu-max",
+        "input_cost": 2,
+        "name": "Sakana: Fugu Max",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1000000,
+        "description": "Fugu Ultra v2 is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to...",
+        "id": "sakana/fugu-ultra-v2",
+        "input_cost": 5,
+        "name": "Sakana: Fugu Ultra v2",
+        "output_cost": 30,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 1,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Astra family.",
+        "id": "~openai/gpt-astra-latest",
+        "input_cost": 10,
+        "name": "OpenAI GPT Astra Latest",
+        "output_cost": 50,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Luna family.",
+        "id": "~openai/gpt-luna-latest",
+        "input_cost": 0.2,
+        "name": "OpenAI GPT Luna Latest",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Sol family.",
+        "id": "~openai/gpt-sol-latest",
+        "input_cost": 2,
+        "name": "OpenAI GPT Sol Latest",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "This model always redirects to the latest model in the OpenAI GPT Terra family.",
+        "id": "~openai/gpt-terra-latest",
+        "input_cost": 2,
+        "name": "OpenAI GPT Terra Latest",
+        "output_cost": 12,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

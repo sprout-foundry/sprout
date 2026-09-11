@@ -211,9 +211,9 @@
         "context_length": 262144,
         "description": "Qwen3.8 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.8-27B-TEE",
-        "input_cost": 0.35,
+        "input_cost": 0.32,
         "name": "Qwen3.8 27B (TEE)",
-        "output_cost": 2.75,
+        "output_cost": 2.5,
         "tags": [
           "vision",
           "tools",

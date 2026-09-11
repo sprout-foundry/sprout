@@ -130,6 +130,62 @@
   color: var(--text-primary);
 }
 
+/* ── Summary band: all-time total + billing-type pills on one row ── */
+
+.costs-summary-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.costs-summary-band-total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.costs-summary-band-label {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.costs-summary-band-value {
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── Shared section title (used by charts + tables on this page) ── */
+
+.costs-section-title {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+/* Card treatment for the section blocks so they read as a set. */
+.daily-spend-chart,
+.provider-table,
+.top-sessions-table,
+.by-model-chart {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
 .costs-token-value {
   font-size: var(--text-sm, 0.875rem);
   font-weight: 400;

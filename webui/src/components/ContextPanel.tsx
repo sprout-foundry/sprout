@@ -1,12 +1,11 @@
-import { Bot, Wrench, History, ListTodo, Clock, Activity, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Bot, Wrench, History, Clock, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
+import { ActivityTab } from './contextPanel/ActivityTab';
 import AgentChangesPanel from './AgentChangesPanel';
 import { SessionsTab } from './contextPanel/SessionsTab';
-import { StatusTab } from './contextPanel/StatusTab';
 import { SubagentsTab } from './contextPanel/SubagentsTab';
-import { ToolsTab } from './contextPanel/ToolsTab';
 import type {
   ContextPanelProps,
   ContextPanelHandle,
@@ -18,22 +17,24 @@ import type {
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useSessionManager } from './contextPanel/useSessionManager';
-import { useStatusMetrics } from './contextPanel/useStatusMetrics';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
-import TodoPanel from './TodoPanel';
 
-const TAB_IDS = ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'] as const;
+const TAB_IDS = ['activity', 'changes', 'sessions'] as const;
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
   const isChat = props.context === 'chat';
   const chatProps = isChat ? (props as ChatContextPanelProps) : null;
   const isMobileLayout = props.isMobileLayout ?? false;
   const isTabletLayout = props.isTabletLayout ?? false;
+  // Idle mode: the panel stays mounted on desktop even when no chat buffer
+  // is focused (e.g. the user is reading a file). The rail renders disabled
+  // and the body shows an idle note — the layout column never appears or
+  // disappears as the user moves between chat and files.
+  const isIdle = props.isIdle ?? false;
 
   // ── Hooks ──────────────────────────────────────────────────────────
 
   const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
-  const currentTodos = chatProps?.currentTodos ?? [];
 
   const groupedByQuery = useMemo(() => {
     const groups = new Map<number, ToolExecution[]>();
@@ -59,33 +60,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // from /api/changes/* so there's no revision manager to thread here.
   const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
 
-  const statusMetrics = useStatusMetrics(chatProps, toolExecutions, maxQueryId);
   const { subagentRuns, resourceCounts } = useSubagentRuns(chatProps);
-
-  // ── Live duration timer ───────────────────────────────────────────
-
-  const [liveDurationMs, setLiveDurationMs] = useState<number | null>(null);
-  const isProcessing = isChat ? (chatProps?.isProcessing ?? false) : false;
-
-  const msgArr: Array<{ timestamp: Date }> = chatProps ? chatProps.messages : [];
-  const messageCount = msgArr.length;
-  const firstMessageTs =
-    messageCount > 0
-      ? msgArr[0].timestamp instanceof Date
-        ? msgArr[0].timestamp.getTime()
-        : new Date(msgArr[0].timestamp).getTime()
-      : 0;
-
-  useEffect(() => {
-    if (!isProcessing || messageCount === 0) return undefined;
-    const tick = () => setLiveDurationMs(Date.now() - firstMessageTs);
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => {
-      clearInterval(id);
-      setLiveDurationMs(null);
-    };
-  }, [isProcessing, messageCount, firstMessageTs]);
 
   // ── Imperative handle ─────────────────────────────────────────────
 
@@ -108,7 +83,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     highlightTool: (toolId: string) => {
       if (!isChat || !chatProps) return;
       state.setPanelCollapsed(false);
-      state.setChatTab('tools');
+      state.setChatTab('activity');
       state.setActiveToolId(toolId);
       const tool = chatProps.toolExecutions.find((t) => t.id === toolId);
       if (tool) {
@@ -143,6 +118,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     closePanel: () => {
       state.setPanelCollapsed(true);
     },
+    togglePanel: () => {
+      state.setPanelCollapsed((prev) => !prev);
+    },
   };
 
   useImperativeHandle(
@@ -165,45 +143,24 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const chatPanelTabs: PanelTab[] = useMemo(
     () => [
       {
-        id: 'subagents',
-        label: 'Subagents',
+        id: 'activity',
+        label: 'Activity',
         icon: <Bot size={14} />,
-        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total`,
-      },
-      {
-        id: 'tools',
-        label: 'Tool Executions',
-        icon: <Wrench size={14} />,
-        count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`,
+        count:
+          activeSubagentCount > 0
+            ? `${activeSubagentCount} active`
+            : activeToolCount > 0
+              ? `${activeToolCount} active`
+              : `${toolExecutions.length} total`,
       },
       {
         id: 'changes',
         label: 'Agent Changes',
         icon: <History size={14} />,
       },
-      {
-        id: 'tasks',
-        label: 'Tasks',
-        icon: <ListTodo size={14} />,
-        count: `${currentTodos.filter((t) => t.status === 'in_progress').length || 0} active`,
-      },
       { id: 'sessions', label: 'Sessions', icon: <Clock size={14} />, count: `${sessionManager.sessionsCount}` },
-      {
-        id: 'status',
-        label: 'Status',
-        icon: <Activity size={14} />,
-        count: `${statusMetrics.totalMsgs} msgs`,
-      },
     ],
-    [
-      activeSubagentCount,
-      subagentRuns.length,
-      activeToolCount,
-      toolExecutions.length,
-      currentTodos,
-      sessionManager.sessionsCount,
-      statusMetrics.totalMsgs,
-    ],
+    [activeSubagentCount, activeToolCount, toolExecutions.length, sessionManager.sessionsCount],
   );
 
   const activeTab = chatPanelTabs.find((t) => t.id === state.chatTab) || chatPanelTabs[0];
@@ -212,44 +169,29 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const renderTabContent = () => {
     switch (state.chatTab) {
-      case 'subagents':
+      case 'activity':
         return (
-          <SubagentsTab
+          <ActivityTab
+            toolExecutions={toolExecutions}
             subagentRuns={subagentRuns}
             resourceCounts={resourceCounts}
-            expandedSubagents={state.expandedSubagents}
-            toolRefs={state.toolRefs}
-            expandedTools={state.expandedTools}
-            expandedQueries={state.expandedQueries}
-            setActiveToolId={state.setActiveToolId}
-            setChatTab={state.setChatTab}
-            setExpandedTools={state.setExpandedTools}
-            setExpandedQueries={state.setExpandedQueries}
-            toggleSubagentExpansion={state.toggleSubagentExpansion}
-          />
-        );
-      case 'tools':
-        return (
-          <ToolsTab
-            toolExecutions={toolExecutions}
             groupedByQuery={groupedByQuery}
             maxQueryId={maxQueryId}
             expandedQueries={state.expandedQueries}
             expandedTools={state.expandedTools}
+            expandedSubagents={state.expandedSubagents}
             activeToolId={state.activeToolId}
             toolRefs={state.toolRefs}
             toggleQueryGroup={state.toggleQueryGroup}
             toggleToolExpansion={state.toggleToolExpansion}
+            toggleSubagentExpansion={state.toggleSubagentExpansion}
+            setActiveToolId={state.setActiveToolId}
+            setExpandedTools={state.setExpandedTools}
+            setExpandedQueries={state.setExpandedQueries}
           />
         );
       case 'changes':
         return <AgentChangesPanel />;
-      case 'tasks':
-        return (
-          <div className="side-panel-tasks">
-            <TodoPanel todos={currentTodos || []} isLoading={isProcessing && currentTodos.length === 0} />
-          </div>
-        );
       case 'sessions':
         return (
           <SessionsTab
@@ -274,31 +216,45 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             handleExportAllSessions={sessionManager.handleExportAllSessions}
           />
         );
-      case 'status':
-        return <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />;
       default:
-        return (
-          <SubagentsTab
-            subagentRuns={subagentRuns}
-            resourceCounts={resourceCounts}
-            expandedSubagents={state.expandedSubagents}
-            toolRefs={state.toolRefs}
-            expandedTools={state.expandedTools}
-            expandedQueries={state.expandedQueries}
-            setActiveToolId={state.setActiveToolId}
-            setChatTab={state.setChatTab}
-            setExpandedTools={state.setExpandedTools}
-            setExpandedQueries={state.setExpandedQueries}
-            toggleSubagentExpansion={state.toggleSubagentExpansion}
-          />
-        );
+        return null;
     }
   };
 
   // ── Main render ───────────────────────────────────────────────────
 
+  // Tablet overlay needs a backdrop to dismiss; on desktop the panel is a
+  // permanent column (idle mode when no chat is focused) — no backdrop.
+  const tabletBackdrop =
+    isTabletLayout && !state.panelCollapsed ? (
+      <div className="context-panel-backdrop" onClick={() => state.setPanelCollapsed(true)} />
+    ) : null;
+
+  // Desktop idle: rail rendered (stable layout, visible but disabled) with
+  // an inert body. The idle note lives in the body slot so the aside keeps
+  // its exact collapsed/expanded geometry.
+  const bodyContent = isIdle ? (
+    <div className="side-panel-body">
+      <div className="context-panel-empty">Chat context — focus a chat to see activity.</div>
+    </div>
+  ) : (
+    <>
+      <div className="side-panel-header">
+        <div className="side-panel-title">
+          {activeTab.icon}
+          <h4>{activeTab.label}</h4>
+        </div>
+        <div className="side-panel-header-actions">
+          <span className="tool-count">{activeTab.count}</span>
+        </div>
+      </div>
+      <div className="side-panel-body">{renderTabContent()}</div>
+    </>
+  );
+
   return (
     <>
+      {tabletBackdrop}
       {!state.panelCollapsed && !isMobileLayout && !isTabletLayout && (
         <div
           className="context-panel-resizer"
@@ -310,7 +266,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       )}
       {(isMobileLayout && state.panelCollapsed) || (isTabletLayout && state.panelCollapsed) ? null : (
         <aside
-          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${state.isResizing ? ' resizing' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}`}
+          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${state.isResizing ? ' resizing' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}${isIdle ? ' context-panel-idle' : ''}`}
           aria-label="Context panel"
           style={
             isMobileLayout || isTabletLayout
@@ -326,6 +282,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 key={tab.id}
                 className={`side-rail-btn ${state.chatTab === tab.id ? 'active' : ''}`}
                 onClick={() => handleTabClick(tab.id)}
+                disabled={isIdle}
                 title={tab.label}
                 aria-label={tab.label}
                 aria-pressed={state.chatTab === tab.id}
@@ -346,16 +303,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
           {/* Content — always rendered; CSS handles fade-out on collapse */}
           <div className="side-panel-content" {...(state.panelCollapsed ? { inert: true, 'aria-hidden': true } : {})}>
-            <div className="side-panel-header">
-              <div className="side-panel-title">
-                {activeTab.icon}
-                <h4>{activeTab.label}</h4>
-              </div>
-              <div className="side-panel-header-actions">
-                <span className="tool-count">{activeTab.count}</span>
-              </div>
-            </div>
-            <div className="side-panel-body">{renderTabContent()}</div>
+            {bodyContent}
           </div>
         </aside>
       )}

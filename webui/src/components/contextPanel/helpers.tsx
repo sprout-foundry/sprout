@@ -108,23 +108,3 @@ export const formatRelativeTime = (value: string) => {
 export const formatTime = (value: Date) => {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
-
-export const formatDurationMs = (ms: number): string => {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`;
-  const mins = Math.floor(ms / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  return `${mins}m ${secs}s`;
-};
-
-export const formatTokens = (tokens: number): string => {
-  if (!Number.isFinite(tokens) || tokens < 0) return '—';
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-  return tokens.toString();
-};
-
-export const formatCost = (cost: number): string => {
-  if (!Number.isFinite(cost)) return '—';
-  return `$${cost.toFixed(4)}`;
-};

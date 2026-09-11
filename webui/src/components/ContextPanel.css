@@ -19,6 +19,19 @@
   width: 52px;
 }
 
+/* ── Idle mode (desktop, no chat buffer focused) ──
+ * The panel stays mounted so the layout column never appears/disappears
+ * when moving between chat and files. Rail buttons render disabled; the
+ * collapse button stays active so the user can always reclaim the space. */
+.context-panel-idle .side-rail-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.context-panel-idle .side-panel-content {
+  opacity: 0.65;
+}
+
 .context-panel-resizer {
   width: 6px;
   min-height: 0;
@@ -62,6 +75,28 @@
   border-left: 2px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);
   margin-left: -2px;
   padding-left: 4px;
+}
+
+/* ── Activity tab section labels ── */
+
+.activity-section-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary, #8b949e);
+}
+
+/* Deep-link highlight: highlightTool() sets activeToolId, briefly marking
+ * the targeted tool card / subagent card so the scroll target is visible. */
+.tool-highlighted {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 4px);
 }
 
 .tool-query-header {

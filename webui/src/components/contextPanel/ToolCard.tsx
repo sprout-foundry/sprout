@@ -40,7 +40,7 @@ interface ToolCardProps {
   tool: ToolExecution;
   expandedTools: Set<string>;
   activeToolId: string | null;
-  toolRef: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  toolRef: React.MutableRefObject<Record<string, HTMLElement | null>>;
   onToggleExpansion: (toolId: string) => void;
 }
 

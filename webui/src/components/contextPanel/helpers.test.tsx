@@ -3,7 +3,7 @@
  *
  * Tests isSubagentTool, getSubagentPrompt, getToolIcon, getPersonaColor,
  * getStatusIcon, formatDuration, formatRelativeTime, formatTime,
- * formatDurationMs, formatTokens, formatCost.
+ * (formatDurationMs, formatTokens and formatCost were removed with the Status tab)
  */
 
 import { render } from '@testing-library/react';
@@ -56,9 +56,6 @@ import {
   formatDuration,
   formatRelativeTime,
   formatTime,
-  formatDurationMs,
-  formatTokens,
-  formatCost,
 } from './helpers';
 
 // ── isSubagentTool ───────────────────────────────────────────────────
@@ -485,141 +482,5 @@ describe('formatTime', () => {
     const result = formatTime(new Date('invalid'));
     // Should return "Invalid Date" or similar (locale dependent)
     expect(typeof result).toBe('string');
-  });
-});
-
-// ── formatDurationMs ─────────────────────────────────────────────────
-
-describe('formatDurationMs', () => {
-  it('returns "0ms" for 0', () => {
-    expect(formatDurationMs(0)).toBe('0ms');
-  });
-
-  it('returns "500ms" for 500', () => {
-    expect(formatDurationMs(500)).toBe('500ms');
-  });
-
-  it('returns "999ms" for 999', () => {
-    expect(formatDurationMs(999)).toBe('999ms');
-  });
-
-  it('returns "1s" for 1000', () => {
-    expect(formatDurationMs(1000)).toBe('1s');
-  });
-
-  it('returns "5s" for 5000', () => {
-    expect(formatDurationMs(5000)).toBe('5s');
-  });
-
-  it('returns "59s" for 59000', () => {
-    expect(formatDurationMs(59000)).toBe('59s');
-  });
-
-  it('returns "1m 0s" for 60000', () => {
-    expect(formatDurationMs(60000)).toBe('1m 0s');
-  });
-
-  it('returns "1m 5s" for 65000', () => {
-    expect(formatDurationMs(65000)).toBe('1m 5s');
-  });
-
-  it('returns "61m 1s" for 3661000 (61m 1s)', () => {
-    expect(formatDurationMs(3661000)).toBe('61m 1s');
-  });
-
-  it('returns ms format for negative values (less than 1000)', () => {
-    expect(formatDurationMs(-100)).toBe('-100ms');
-  });
-
-  it('returns ms format for negative values (-1000 < 1000)', () => {
-    expect(formatDurationMs(-1000)).toBe('-1000ms');
-  });
-
-  it('returns "2m 30s" for 150000', () => {
-    expect(formatDurationMs(150000)).toBe('2m 30s');
-  });
-});
-
-// ── formatTokens ─────────────────────────────────────────────────────
-
-describe('formatTokens', () => {
-  it('returns "0" for 0', () => {
-    expect(formatTokens(0)).toBe('0');
-  });
-
-  it('returns "42" for 42', () => {
-    expect(formatTokens(42)).toBe('42');
-  });
-
-  it('returns "999" for 999', () => {
-    expect(formatTokens(999)).toBe('999');
-  });
-
-  it('returns "1.0K" for 1000', () => {
-    expect(formatTokens(1000)).toBe('1.0K');
-  });
-
-  it('returns "1.5K" for 1500', () => {
-    expect(formatTokens(1500)).toBe('1.5K');
-  });
-
-  it('returns "10.0K" for 10000', () => {
-    expect(formatTokens(10000)).toBe('10.0K');
-  });
-
-  it('returns "1.0M" for 1000000', () => {
-    expect(formatTokens(1000000)).toBe('1.0M');
-  });
-
-  it('returns "1.5M" for 1500000', () => {
-    expect(formatTokens(1500000)).toBe('1.5M');
-  });
-
-  it('returns "—" for Infinity', () => {
-    expect(formatTokens(Infinity)).toBe('—');
-  });
-
-  it('returns "—" for NaN', () => {
-    expect(formatTokens(NaN)).toBe('—');
-  });
-
-  it('returns "—" for negative number', () => {
-    expect(formatTokens(-100)).toBe('—');
-  });
-});
-
-// ── formatCost ───────────────────────────────────────────────────────
-
-describe('formatCost', () => {
-  it('returns "$0.0000" for 0', () => {
-    expect(formatCost(0)).toBe('$0.0000');
-  });
-
-  it('returns "$0.1235" for 0.12345 (rounds to 4 decimals)', () => {
-    expect(formatCost(0.12345)).toBe('$0.1235');
-  });
-
-  it('returns "$1.0000" for 1', () => {
-    expect(formatCost(1)).toBe('$1.0000');
-  });
-
-  it('returns "$0.0001" for 0.00005 (rounds up)', () => {
-    expect(formatCost(0.00005)).toBe('$0.0001');
-  });
-
-  it('returns "—" for Infinity', () => {
-    expect(formatCost(Infinity)).toBe('—');
-  });
-
-  it('returns "—" for NaN', () => {
-    expect(formatCost(NaN)).toBe('—');
-  });
-
-  it('formats negative costs', () => {
-    expect(formatCost(-0.1234)).toBe('$-0.1234');
-  });
-
-  it('returns "$10.5000" for 10.5', () => {
-    expect(formatCost(10.5)).toBe('$10.5000');
   });
 });

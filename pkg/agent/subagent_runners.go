@@ -27,6 +27,10 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 	results := make([]*SubagentResult, len(tasks))
 	var wg sync.WaitGroup
 
+	// seed v1.4.0: the run_parallel_subagents handler ctx carries the parent
+	// call ID; attach it to every lifecycle event for these tasks.
+	parentCallID, _ := toolExecutionMetadataFromContext(ctx)
+
 	// Create a derived context so we can cancel remaining subagents
 	// when the parent context is cancelled or when we detect early
 	// termination is needed.
@@ -55,7 +59,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			queueStart := time.Now()
 
 			// Emit: queued
-			r.publishLifecycleEvent(t.ID, persona, "queued", "", 0, 0)
+			r.publishLifecycleEvent(parentCallID, t.ID, persona, "queued", "", 0, 0)
 
 			// Acquire semaphore (if limited), respecting context cancellation
 			if sem != nil {
@@ -65,7 +69,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				case <-parallelCtx.Done():
 					r.metricQueued.Add(-1)
 					r.metricCancelled.Add(1)
-					r.publishLifecycleEvent(t.ID, persona, "cancelled", "context_cancelled", 0, 0)
+					r.publishLifecycleEvent(parentCallID, t.ID, persona, "cancelled", "context_cancelled", 0, 0)
 					defer wg.Done()
 					results[idx] = &SubagentResult{
 						ID:        t.ID,
@@ -85,7 +89,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if opts.FleetTokenBudget > 0 && cumulativeTokens.Load() >= int64(opts.FleetTokenBudget) {
 				r.metricActive.Add(-1)
 				r.metricCancelled.Add(1)
-				r.publishLifecycleEvent(t.ID, persona, "cancelled", "budget_exceeded", 0, 0)
+				r.publishLifecycleEvent(parentCallID, t.ID, persona, "cancelled", "budget_exceeded", 0, 0)
 				defer wg.Done()
 				results[idx] = &SubagentResult{
 					ID:             t.ID,
@@ -96,7 +100,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			}
 
 			// Emit: started
-			r.publishLifecycleEvent(t.ID, persona, "started", "", 0, 0)
+			r.publishLifecycleEvent(parentCallID, t.ID, persona, "started", "", 0, 0)
 
 			defer wg.Done()
 			taskOpts := opts
@@ -140,7 +144,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 					completedReason = "budget_exceeded"
 				}
 				r.publishLifecycleEventWithCost(
-					t.ID, persona, completedStatus, completedReason,
+					parentCallID, t.ID, persona, completedStatus, completedReason,
 					result.TokensUsed, result.Elapsed.Milliseconds(), result.Cost,
 				)
 			}

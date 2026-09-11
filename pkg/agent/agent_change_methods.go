@@ -295,6 +295,23 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	return nil
 }
 
+// TrackShellCommand is called by the shell_command tool to capture filesystem
+// mutations made outside the file tools (scripts, rm, git checkout, ...). It
+// skips commands the read-only classifier can prove change nothing, then
+// diffs the workspace — which records both writes and deletes. Best-effort:
+// callers treat this as fire-and-forget.
+func (a *Agent) TrackShellCommand(command string) error {
+	tracker := a.GetChangeTracker()
+	if tracker == nil || !tracker.IsEnabled() {
+		return nil
+	}
+	if shellLooksReadOnly(command) {
+		return nil
+	}
+	tracker.TrackShellTurn(a.effectiveCwd(), "shell_command", shellIsDestructive(command))
+	return nil
+}
+
 // Standalone (no-agent) query functions.
 
 // ListChangesPersistedOnly returns a session manifest from the persisted history store.

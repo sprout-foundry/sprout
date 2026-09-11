@@ -2,8 +2,6 @@ import type {
   ToolExecution,
   LogEntry,
   SubagentActivity,
-  TodoItem,
-  FileEdit,
   LiveLogLine,
   RevisionFile,
   Revision,
@@ -14,17 +12,7 @@ import type { SessionEntry } from '../../services/api/types';
 import type { QueryProgress } from '../../types/app';
 
 // Re-export shared types from @sprout/ui for convenience
-export type {
-  ToolExecution,
-  LogEntry,
-  SubagentActivity,
-  TodoItem,
-  FileEdit,
-  LiveLogLine,
-  RevisionFile,
-  Revision,
-  RevisionDetailFile,
-};
+export type { ToolExecution, LogEntry, SubagentActivity, LiveLogLine, RevisionFile, Revision, RevisionDetailFile };
 
 // Re-export SessionEntry from services/api/types for convenience
 export type { SessionEntry };
@@ -105,19 +93,20 @@ export interface ContextPanelBaseProps {
   style?: CSSProperties;
   isMobileLayout?: boolean;
   isTabletLayout?: boolean;
-  panelWidth?: number;
-  onPanelWidthChange?: (width: number) => void;
-  onMobileOpenChange?: (open: boolean) => void;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  /**
+   * Idle mode: no active chat buffer behind the panel (e.g. the user is
+   * viewing a plain file). Desktop keeps the panel mounted with its rail
+   * visible but disabled and an empty body — the layout column never
+   * appears/disappears as the user moves between chat and files.
+   */
+  isIdle?: boolean;
 }
 
 export interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
-  fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: TodoItem[];
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
@@ -157,6 +146,8 @@ export interface ContextPanelHandle {
   openTab: (tab: string) => void;
   highlightTool: (toolId: string) => void;
   closePanel: () => void;
+  /** Expand when collapsed, collapse when expanded. */
+  togglePanel: () => void;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -165,11 +156,12 @@ export const PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 export const PANEL_TAB_KEY = 'sprout.contextPanel.tab';
 export const PANEL_MIN = 280;
 export const PANEL_MAX = 760;
+export const PANEL_DEFAULT_WIDTH = 360;
 /** Width of the side-rail-only collapsed context panel (px). Must match .context-panel.collapsed width in ContextPanel.css. */
 export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
-export type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+export type ChatTabId = 'activity' | 'changes' | 'sessions';
 
 export interface PanelTab {
   id: ChatTabId;

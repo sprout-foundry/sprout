@@ -232,6 +232,10 @@ func (r *SubagentRunner) setupSubagentRun(
 	// Capture task metadata for publishing subagent_activity events.
 	subPersona := opts.Persona
 	subTaskID := taskID
+	// Parent correlation: llm_output events reference the run_subagent tool
+	// call that spawned this task. seed v1.4.0 provides the parent handler's
+	// call ID in this ctx; empty when invoked outside a tool call.
+	subParentCallID, _ := toolExecutionMetadataFromContext(ctx)
 	subEventBus := eventBus
 	subIsParallel := !strings.HasPrefix(taskID, "subagent-")
 	subAgent.EnableStreaming(func(chunk string) {
@@ -268,7 +272,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		if subEventBus != nil {
 			for _, raw := range rawLines {
 				subEventBus.Publish(events.EventTypeSubagentActivity, events.SubagentActivityEvent(
-					subTaskID, "llm_output", "output", raw,
+					subParentCallID, "llm_output", "output", raw,
 					map[string]interface{}{
 						"task_id":     subTaskID,
 						"persona":     subPersona,
@@ -449,7 +453,6 @@ func (r *SubagentRunner) runTask(
 	fleetBudgetLimit int64,
 ) *SubagentResult {
 	startTime := time.Now()
-
 	// Apply a default timeout when the caller didn't set one explicitly.
 	// Without this, a hung subagent blocks the primary indefinitely — no
 	// caller in subagent_runners.go sets opts.Timeout. 30 minutes for most

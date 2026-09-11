@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -158,6 +159,13 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("write_structured_file", fmt.Sprintf("write structured file %q: %v", path, err), err)
+	}
+
+	// Session change tracking (same contract as write_file). Best-effort.
+	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
+		if trackErr := fn(path, content); trackErr != nil {
+			log.Printf("[write_structured_file] change tracking failed for %q: %v", path, trackErr)
+		}
 	}
 
 	// Write to output writer if available

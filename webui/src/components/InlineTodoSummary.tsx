@@ -7,7 +7,6 @@ import './InlineTodoSummary.css';
 interface InlineTodoSummaryProps {
   todos: TodoItem[];
   isLoading?: boolean;
-  onOpenTasksTab?: () => void;
 }
 
 function findActiveTask(todos: TodoItem[]): TodoItem | undefined {
@@ -23,7 +22,7 @@ function todoListFingerprint(todos: TodoItem[]): string {
   return todos.map((t) => `${t.id}:${t.status}:${t.content}:${t.activeForm ?? ''}`).join('|');
 }
 
-function InlineTodoSummary({ todos, isLoading = false, onOpenTasksTab }: InlineTodoSummaryProps): JSX.Element | null {
+function InlineTodoSummary({ todos, isLoading = false }: InlineTodoSummaryProps): JSX.Element | null {
   const [expanded, setExpanded] = useState(false);
   const [flashing, setFlashing] = useState(false);
   const fingerprint = useMemo(() => todoListFingerprint(todos), [todos]);
@@ -83,11 +82,6 @@ function InlineTodoSummary({ todos, isLoading = false, onOpenTasksTab }: InlineT
       {expanded && (
         <div className="inline-todo-summary-body">
           <TodoPanel todos={todos} isLoading={isLoading} />
-          {onOpenTasksTab && (
-            <button type="button" className="inline-todo-summary-open" onClick={onOpenTasksTab}>
-              Open in side panel
-            </button>
-          )}
         </div>
       )}
     </div>

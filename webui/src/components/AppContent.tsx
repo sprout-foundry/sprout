@@ -28,7 +28,7 @@ import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
-import { VISIBLE_COMMANDS } from './CommandPalette/constants';
+import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
@@ -342,7 +342,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // Mac vs non-Mac modifier substitution (Cmd ↔ Ctrl).
   const { hotkeyForCommand } = useHotkeys();
   const paletteCommands = useMemo(
-    () => VISIBLE_COMMANDS.map((cmd) => ({ ...cmd, shortcut: hotkeyForCommand(cmd.id) ?? undefined })),
+    () => visibleCommands().map((cmd) => ({ ...cmd, shortcut: hotkeyForCommand(cmd.id) ?? undefined })),
     [hotkeyForCommand],
   );
   const { allFiles: paletteAllFiles, isLoadingFiles: paletteIsLoading } = useFileIndex({

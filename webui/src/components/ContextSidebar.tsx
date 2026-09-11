@@ -1,4 +1,4 @@
-import type { ToolExecution, LogEntry, SubagentActivity, FileEdit } from '@sprout/ui';
+import type { ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import React from 'react';
 import { ApiService } from '../services/api';
 import type { QueryProgress, ViewType } from '../types/app';
@@ -12,7 +12,6 @@ export interface ContextSidebarProps {
   contextPanelRef: React.RefObject<ContextPanelHandle>;
   currentView: ViewType;
   toolExecutions: ToolExecution[];
-  fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
   messages: Array<{ type: string; timestamp: Date }>;
@@ -40,7 +39,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   contextPanelRef,
   currentView,
   toolExecutions,
-  fileEdits,
   logs,
   subagentActivities,
   messages,
@@ -52,7 +50,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   const panelProps = {
     context: 'chat' as const,
     toolExecutions,
-    fileEdits,
     logs,
     subagentActivities,
     messages,

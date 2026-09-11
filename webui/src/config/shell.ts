@@ -35,6 +35,10 @@ const listeners = new Set<(identity: ShellIdentity) => void>();
  * Synchronous shell check: does the host page carry the studio bridge?
  * True for a studio shell even before its capabilities handshake
  * completes; false everywhere else (plain webui, cloud, tests, SSR).
+ *
+ * NOTE: unlike resolveShellIdentity, this reads `window` in every build
+ * (a single property lookup — harmless, and needed to paint the right
+ * chrome before the async handshake lands).
  */
 export function isStudioShellSync(): boolean {
   return detectSproutStudio() !== null;
@@ -54,8 +58,8 @@ export function applyShellAttribute(identity: ShellIdentity): void {
  * Async boot resolution. In a studio dist (--native-fs) this waits for
  * the ratified capabilities handshake before declaring "studio" — a
  * bridge that fails the gate is NOT granted shell-scoped UI. In the
- * default build it short-circuits to "webui" (dead branch, never
- * touches `window`).
+ * default build it short-circuits to "webui" WITHOUT touching `window`
+ * (NATIVE_FS_ENABLED is a compile-time constant, dead branch).
  *
  * Resolves once per page load; later calls return the same identity.
  * Subscribers registered via onShellIdentityChange fire when the

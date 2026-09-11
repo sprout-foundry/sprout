@@ -28,6 +28,9 @@ vi.mock('./clientSession', () => ({
 
 vi.mock('./apiAdapter', () => ({
   getAdapter: vi.fn(() => null),
+  // config/mode.ts reads this constant at module scope (adapter-installed
+  // refresh listener); the mock must declare it or the import fails.
+  ADAPTER_INSTALLED_EVENT: 'sprout:adapter-installed',
 }));
 
 vi.mock('./notificationBus', () => ({

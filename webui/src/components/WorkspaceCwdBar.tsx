@@ -23,6 +23,16 @@ export interface WorkspaceCwdBarProps {
   repos: string[];
   /** Called with the newly selected cwd ('' = workspace root). */
   onChange: (cwd: string) => void;
+  /**
+   * Whether the cwd SELECT renders. Studio shells are single-workspace
+   * (the gate modal picked the root; the shell owns it) and still show
+   * the full row; the plain webui hides the selector — the root is fixed
+   * for the daemon's lifetime and LocationSwitcher already names it —
+   * but KEEPS the "+ add repo" button when onAddRepo is provided, since
+   * this row is the only clone affordance in the Files panel.
+   * Default: true.
+   */
+  showSelector?: boolean;
   /** Optional add-workspace trigger (cloud/local webui only; undefined hides the button). */
   onAddRepo?: () => void;
   /** Disables the add button while a clone is in flight. */
@@ -64,6 +74,7 @@ export default function WorkspaceCwdBar({
   cwd,
   repos,
   onChange,
+  showSelector = true,
   onAddRepo,
   addRepoDisabled,
 }: WorkspaceCwdBarProps): ReactElement {
@@ -72,24 +83,26 @@ export default function WorkspaceCwdBar({
 
   return (
     <div className="workspace-cwd-bar" data-testid="workspace-cwd-bar">
-      <label className="workspace-cwd-select-label">
-        <FolderTree size={13} aria-hidden="true" />
-        <select
-          className="workspace-cwd-select"
-          data-testid="workspace-cwd-select"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          title={cwd === '' ? 'Workspace root' : cwd}
-          aria-label="Working directory"
-        >
-          <option value="">Workspace root</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showSelector && (
+        <label className="workspace-cwd-select-label">
+          <FolderTree size={13} aria-hidden="true" />
+          <select
+            className="workspace-cwd-select"
+            data-testid="workspace-cwd-select"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            title={cwd === '' ? 'Workspace root' : cwd}
+            aria-label="Working directory"
+          >
+            <option value="">Workspace root</option>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {/* "+ Add" = add a workspace entry (clone), not an action on the
           loaded tree. Lives on the workspace row — next to the selector it
           feeds — instead of the tree header where it read as a GitHub-branded

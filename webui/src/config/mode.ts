@@ -5,7 +5,7 @@
  * Controlled via VITE_SPROUT_MODE environment variable at build time.
  */
 
-import { getAdapter, type APIAdapter } from '../services/apiAdapter';
+import { getAdapter, ADAPTER_INSTALLED_EVENT, type APIAdapter } from '../services/apiAdapter';
 
 export type SproutMode = 'local' | 'cloud';
 
@@ -30,14 +30,10 @@ export const isCloud: boolean = mode === 'cloud';
  * falling back to a mode-aware default.
  *
  * The adapter is installed asynchronously (after /api/bootstrap fetch),
- * so getAdapter() is null at module load time. Because capability exports
- * are `const` (frozen once evaluated), the fallback default must be correct
- * for BOTH modes during that async-installation window. The localDefault
- * is used in local mode; the cloudDefault is used in cloud mode.
- *
- * Once the adapter is installed, its capability value takes precedence.
- * In local mode, the adapter is typically null (local mode IS the "no
- * adapter installed" state), so the localDefault is what sticks.
+ * so getAdapter() is null at module load time. The exported flags are
+ * computed from the fallback defaults first and RE-EVALUATED when
+ * ADAPTER_INSTALLED_EVENT fires (see "Live capability flags" below) —
+ * at which point the adapter's capability value takes precedence.
  *
  * This helper replaces the previous inline `isCloud ? X : (getAdapter()?.Y ?? Z)`
  * pattern that was duplicated across every export — the logic is identical,
@@ -55,10 +51,22 @@ function capability<K extends keyof APIAdapter>(
   return isCloud ? cloudDefault : localDefault;
 }
 
-/**
- * SSH access support - available in local mode only (requires host access).
- */
-export const supportsSSH: boolean = capability('supportsSSH', true, false);
+// ── Live capability flags ─────────────────────────────────────────────────
+//
+// These are `export let`, not `const`: the adapter installs ASYNCHRONOUSLY
+// (bootstrapAdapter.ts awaits /api/bootstrap after this module has loaded),
+// so the mode-aware fallback defaults are computed first and the adapter's
+// own values replace them when ADAPTER_INSTALLED_EVENT fires. ESM live
+// bindings propagate the reassignment to every importer that reads the
+// binding at render/use time (module-scope snapshots in consuming modules
+// would still freeze — don't cache these at import scope).
+//
+// Components that need to RE-RENDER on the transition (rare: the install
+// usually lands before the tree mounts) listen for ADAPTER_INSTALLED_EVENT
+// directly — the established seam used by PlatformNavContext and
+// SproutAdapterContext.
+
+export let supportsSSH: boolean = capability('supportsSSH', true, false);
 
 /**
  * Git support - available in both modes.
@@ -78,39 +86,88 @@ export const supportsSSH: boolean = capability('supportsSSH', true, false);
  * NATIVE_GIT_ENABLED and the git UI surfaces render the "Git provided by the
  * native shell" placeholder. The native shell provides git natively.
  */
-export const supportsGit: boolean = capability('supportsGit', true, true);
+export let supportsGit: boolean = capability('supportsGit', true, true);
 
 /**
  * Chat support - available in both modes (BYOK proxy in cloud, local LLM in desktop).
  */
-export const supportsChat: boolean = capability('supportsChat', true, true);
+export let supportsChat: boolean = capability('supportsChat', true, true);
 
 /**
  * Workspace switching support - local mode only (single virtual FS in cloud).
  */
-export const supportsWorkspaceSwitching: boolean = capability('supportsWorkspaceSwitching', true, false);
+export let supportsWorkspaceSwitching: boolean = capability('supportsWorkspaceSwitching', true, false);
 
 /**
  * Native folder-picker support - studio shells only (bridge files channel).
  */
-export const supportsFolderPicker: boolean = capability('supportsFolderPicker', false, false);
+export let supportsFolderPicker: boolean = capability('supportsFolderPicker', false, false);
 
 /**
  * Export support - local mode only (no local filesystem to export to in cloud).
  */
-export const supportsExport: boolean = capability('supportsExport', true, false);
+export let supportsExport: boolean = capability('supportsExport', true, false);
 
 /**
  * Instance management support - cloud mode only (platform instances API).
  */
-export const supportsInstances: boolean = capability('supportsInstances', false, true);
+export let supportsInstances: boolean = capability('supportsInstances', false, true);
 
 /**
  * Local PTY terminal support - local mode only (WASM terminal in cloud).
  */
-export const supportsLocalTerminal: boolean = capability('supportsLocalTerminal', true, false);
+export let supportsLocalTerminal: boolean = capability('supportsLocalTerminal', true, false);
 
 /**
  * Settings panel support - available in both modes (BYOK settings in cloud).
  */
-export const supportsSettings: boolean = capability('supportsSettings', true, true);
+export let supportsSettings: boolean = capability('supportsSettings', true, true);
+
+// Adapter-installed refresh: re-read every capability against the newly
+// installed adapter. The defaults table mirrors the initializers above — a
+// per-key map of [localDefault, cloudDefault] and the matching binding, so a
+// new flag needs exactly one row here plus its `export let`.
+const CAPABILITY_REFRESH: Array<{
+  key:
+    | 'supportsSSH'
+    | 'supportsGit'
+    | 'supportsChat'
+    | 'supportsWorkspaceSwitching'
+    | 'supportsFolderPicker'
+    | 'supportsExport'
+    | 'supportsInstances'
+    | 'supportsLocalTerminal'
+    | 'supportsSettings';
+  local: boolean;
+  cloud: boolean;
+  set: (v: boolean) => void;
+}> = [
+  { key: 'supportsSSH', local: true, cloud: false, set: (v) => (supportsSSH = v) },
+  { key: 'supportsGit', local: true, cloud: true, set: (v) => (supportsGit = v) },
+  { key: 'supportsChat', local: true, cloud: true, set: (v) => (supportsChat = v) },
+  { key: 'supportsWorkspaceSwitching', local: true, cloud: false, set: (v) => (supportsWorkspaceSwitching = v) },
+  { key: 'supportsFolderPicker', local: false, cloud: false, set: (v) => (supportsFolderPicker = v) },
+  { key: 'supportsExport', local: true, cloud: false, set: (v) => (supportsExport = v) },
+  { key: 'supportsInstances', local: false, cloud: true, set: (v) => (supportsInstances = v) },
+  { key: 'supportsLocalTerminal', local: true, cloud: false, set: (v) => (supportsLocalTerminal = v) },
+  { key: 'supportsSettings', local: true, cloud: true, set: (v) => (supportsSettings = v) },
+];
+
+function refreshCapabilities(): void {
+  for (const { key, local, cloud, set } of CAPABILITY_REFRESH) {
+    set(capability(key, local, cloud));
+  }
+}
+
+// Idempotent: the install is once per page load, and re-reading with the same
+// adapter yields the same values. A malformed adapter must not take the app
+// down, so the refresh is guarded — defaults stay on any throw.
+if (typeof window !== 'undefined') {
+  window.addEventListener(ADAPTER_INSTALLED_EVENT, () => {
+    try {
+      refreshCapabilities();
+    } catch {
+      // keep mode defaults
+    }
+  });
+}

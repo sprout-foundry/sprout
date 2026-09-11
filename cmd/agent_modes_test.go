@@ -495,7 +495,7 @@ func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
 
 func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
 	got := cliui.FormatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
-	want := "  [OK] read_file (foo.go) · 0.1s"
+	want := "  [OK] read_file (foo.go) \x1b[2m· 0.1s\x1b[0m"
 	if got != want {
 		t.Errorf("FormatToolEndLine(0, ...) = %q, want %q", got, want)
 	}
@@ -507,7 +507,7 @@ func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
 	if !strings.Contains(got, "[coder]") {
 		t.Errorf("depth-1 end line should include persona badge, got %q", got)
 	}
-	if !strings.HasSuffix(got, " · 0.2s") {
+	if !strings.Contains(got, "· 0.2s") {
 		t.Errorf("end line should preserve duration suffix, got %q", got)
 	}
 }
@@ -524,7 +524,7 @@ func TestFormatToolRunLine_IncludesCountAndArgsTrail(t *testing.T) {
 	if !strings.Contains(got, "(foo.go), (bar.go), (baz.go)") {
 		t.Errorf("collapsed line should join args trail, got %q", got)
 	}
-	if !strings.HasSuffix(got, " · 0.4s") {
+	if !strings.Contains(got, "· 0.4s") {
 		t.Errorf("collapsed line should keep total duration suffix, got %q", got)
 	}
 }

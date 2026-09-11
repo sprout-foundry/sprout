@@ -47,11 +47,7 @@ const UpdateAvailableBanner: React.FC = () => {
       <span className="update-banner-text">
         Sprout {update.latest} is available (running {update.current}).
       </span>
-      <button
-        className="update-banner-dismiss"
-        onClick={handleDismiss}
-        aria-label="Dismiss update notification"
-      >
+      <button className="update-banner-dismiss" onClick={handleDismiss} aria-label="Dismiss update notification">
         <X size={14} />
       </button>
     </div>

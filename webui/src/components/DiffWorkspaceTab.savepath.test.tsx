@@ -73,6 +73,7 @@ const baseProps = {
   isLoading: false,
   error: null,
   onDiffModeChange: () => {},
+  defaultView: 'merge' as const,
   fullOriginal: 'a\n',
   fullModified: 'b\n',
   canSave: true,

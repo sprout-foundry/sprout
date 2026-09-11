@@ -95,6 +95,12 @@ type Config struct {
 	// DisableThinking disables thinking/reasoning mode for thinking-capable models.
 	DisableThinking bool `json:"disable_thinking,omitempty"`
 
+	// DisableUpdateCheck opts out of the passive "new release available"
+	// check (GitHub releases lookup at most once per day, notice at most
+	// once per day). Default: false. SPROUT_NO_UPDATE_CHECK=1 and CI
+	// environments also opt out.
+	DisableUpdateCheck bool `json:"disable_update_check,omitempty"`
+
 	// SystemPromptText overrides the main agent system prompt inline.
 	// Empty means use the embedded default prompt.
 	SystemPromptText string `json:"system_prompt_text,omitempty"`

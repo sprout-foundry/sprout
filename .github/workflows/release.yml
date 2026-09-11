@@ -222,10 +222,10 @@ jobs:
         DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         
         # Build ldflags
-        LDFLAGS="-X 'github.com/sprout-foundry/sprout/cmd.version=$VERSION'"
-        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/cmd.gitCommit=$COMMIT'"
-        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/cmd.buildDate=$DATE'"
-        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/cmd.gitTag=$VERSION'"
+        LDFLAGS="-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=$VERSION'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=$COMMIT'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Date=$DATE'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Tag=$VERSION'"
         
         echo "Using ldflags: $LDFLAGS"
         

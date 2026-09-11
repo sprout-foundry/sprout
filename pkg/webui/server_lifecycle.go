@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
 const (
@@ -157,6 +159,13 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 		// SP-108: Start wakeup poller for auto-resume on background completions.
 		go ws.startWakeupPoller(ctx, 2*time.Second)
+
+		// Keep the shared update-check cache fresh for daemon-only usage
+		// (browser sessions without any interactive CLI run). Throttled
+		// internally; respects the disable knob when the agent has config.
+		if !ws.updateCheckSkipped() {
+			go updatecheck.RefreshMaybe(ctx, time.Now())
+		}
 	})
 
 	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.

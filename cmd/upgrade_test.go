@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
 func TestNormalizeVersion(t *testing.T) {
@@ -22,8 +24,8 @@ func TestNormalizeVersion(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
-			if got := normalizeVersion(c.in); got != c.want {
-				t.Fatalf("normalizeVersion(%q) = %q, want %q", c.in, got, c.want)
+			if got := updatecheck.NormalizeVersion(c.in); got != c.want {
+				t.Fatalf("NormalizeVersion(%q) = %q, want %q", c.in, got, c.want)
 			}
 		})
 	}

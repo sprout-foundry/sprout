@@ -17,8 +17,8 @@ import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import ShellApprovalPanel from './components/ShellApprovalPanel';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
 import UIManager from './components/UIManager';
-import UpdateNotification from './components/UpdateNotification';
-import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
+import UpdateAvailableBanner from './components/UpdateAvailableBanner';
+import UpdateNotification from './components/UpdateNotification';import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
@@ -455,6 +455,7 @@ function AppInner() {
                         perChatCache={state.perChatCache}
                       />
                       <UpdateNotification />
+                      <UpdateAvailableBanner />
                       <EscalationListener />
                       <InstallPromptBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />

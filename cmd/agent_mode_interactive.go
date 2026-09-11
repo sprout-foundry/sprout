@@ -108,6 +108,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// per workspace in ~/.sprout/state.json so it never repeats.
 	maybeShowFirstRunHint()
 
+	// Passive "new release available" check: background fetch on a 24h
+	// throttle, stderr notice from the cache at most once per day. Silent
+	// on every failure path.
+	maybeStartUpdateCheck(chatAgent)
+	maybeRenderUpdateNotice(chatAgent)
+
 	// Embeddings are opt-in (they load a ~380MB model); recommend turning them
 	// on once per workspace so the feature stays discoverable without nagging.
 	maybeRecommendEmbeddingIndex(chatAgent)

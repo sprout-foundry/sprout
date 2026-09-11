@@ -1,0 +1,38 @@
+.update-banner {
+  position: fixed;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-secondary, #2c313a);
+  border: 1px solid var(--border-color, #3e4451);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 900;
+  max-width: 520px;
+}
+
+.update-banner-text {
+  font-size: 13px;
+  color: var(--text-secondary, #abb2bf);
+}
+
+.update-banner-dismiss {
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 6px;
+  background: transparent;
+  color: var(--text-muted, #5c6370);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.update-banner-dismiss:hover {
+  color: var(--text-primary, #abb2bf);
+}

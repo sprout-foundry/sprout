@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	gitops "github.com/sprout-foundry/sprout/pkg/git"
+	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
 // bootstrapSyncBudget bounds the total time spent computing the boot-time git
@@ -35,6 +37,12 @@ type RuntimeConfig struct {
 	// BuildVersion is the version string embedded at build time.
 	BuildVersion string `json:"buildVersion"`
 
+	// Update is non-nil when the cached release check (shared with the
+	// CLI, at most one GitHub lookup per day) has a newer stable version
+	// than the running binary. The frontend renders a banner from it; nil
+	// means "nothing to show" and is omitted in JSON.
+	Update *UpdateInfo `json:"update,omitempty"`
+
 	// SharedMode is true when the server shares the CLI's agent instance
 	// (non-daemon interactive mode). The frontend uses this to hide
 	// multi-chat UI and show "coupled with terminal" messaging.
@@ -47,6 +55,13 @@ type RuntimeConfig struct {
 	// as "sync": null) when git state could not be determined; it never
 	// fails the bootstrap response.
 	Sync *gitops.SyncReport `json:"sync"`
+}
+
+// UpdateInfo tells the frontend a newer release is available. It is a
+// wire contract — field names are pinned by webui/src/types/runtimeConfig.ts.
+type UpdateInfo struct {
+	Current string `json:"current"`
+	Latest  string `json:"latest"`
 }
 
 func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -79,11 +94,23 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		WSURL:        wsScheme + "://" + host + "/ws",
 		AuthMode:     authMode,
 		AppMode:      appMode,
-		BuildVersion: "dev",
+		BuildVersion: buildinfo.Version,
+		Update:       updatePayload(),
 		SharedMode:   ws.IsSharedMode(),
 		Sync:         computeBootstrapSync(r.Context(), ws.getWorkspaceRootForRequest(r)),
 	}
 	writeJSON(w, http.StatusOK, config)
+}
+
+// updatePayload reports the cached newer release, if any. The lookup has
+// no side effects and never triggers a network call — the fetch only
+// happens via the background refresh hooks.
+func updatePayload() *UpdateInfo {
+	latest, ok := updatecheck.CachedNewer(buildinfo.Version, time.Now())
+	if !ok {
+		return nil
+	}
+	return &UpdateInfo{Current: buildinfo.Version, Latest: latest}
 }
 
 // computeBootstrapSync builds the boot-time git snapshot via the same

@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,10 +22,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
 const (
-	githubAPIURL        = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
 	githubAPIListURL    = "https://api.github.com/repos/sprout-foundry/sprout/releases?per_page=20"
 	releaseBaseURL      = "https://github.com/sprout-foundry/sprout/releases/download"
 	upgradeBackupSuffix = ".previous"
@@ -91,7 +93,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	current := normalizeVersion(version)
+	current := updatecheck.NormalizeVersion(version)
 	if target == current && !upgradeCheckOnly && upgradeVersion == "" {
 		fmt.Printf("sprout is already at %s — nothing to do.\n", current)
 		return nil
@@ -127,7 +129,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 // and pick the newest tag including pre-releases.
 func resolveTargetVersion() (string, error) {
 	if upgradeVersion != "" {
-		return normalizeVersion(upgradeVersion), nil
+		return updatecheck.NormalizeVersion(upgradeVersion), nil
 	}
 
 	var (
@@ -137,43 +139,12 @@ func resolveTargetVersion() (string, error) {
 	if upgradePreRelease {
 		tag, err = fetchLatestIncludingPreRelease()
 	} else {
-		tag, err = fetchLatestTag()
+		tag, err = updatecheck.FetchLatestTag(context.Background())
 	}
 	if err != nil {
 		return "", fmt.Errorf("look up latest version: %w\n\nPin a tag explicitly with --version vX.Y.Z if you're behind a proxy or hitting GitHub's 60 req/hr unauthenticated rate limit", err)
 	}
-	return normalizeVersion(tag), nil
-}
-
-// fetchLatestTag hits /releases/latest, which GitHub defines as "the most
-// recent non-draft, non-prerelease release."
-func fetchLatestTag() (string, error) {
-	req, err := http.NewRequest(http.MethodGet, githubAPIURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "sprout-upgrade")
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := httpClient().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", fmt.Errorf("decode API response: %w", err)
-	}
-	if payload.TagName == "" {
-		return "", errors.New("GitHub API returned an empty tag_name")
-	}
-	return payload.TagName, nil
+	return updatecheck.NormalizeVersion(tag), nil
 }
 
 // fetchLatestIncludingPreRelease lists recent releases and returns the
@@ -722,14 +693,7 @@ func confirm(prompt string) bool {
 // compare equal. We re-add the 'v' before constructing release URLs because
 // the upstream tags carry it.
 func normalizeVersion(v string) string {
-	v = strings.TrimSpace(v)
-	if len(v) > 0 && (v[0] == 'v' || v[0] == 'V') {
-		return "v" + v[1:]
-	}
-	if v == "dev" {
-		return v
-	}
-	return "v" + v
+	return updatecheck.NormalizeVersion(v)
 }
 
 func httpClient() *http.Client {

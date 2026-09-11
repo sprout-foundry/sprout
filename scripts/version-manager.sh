@@ -40,10 +40,10 @@ build_with_version() {
         tag="dev-$commit"
     fi
     
-    local ldflags="-X 'github.com/sprout-foundry/sprout/cmd.version=$tag'"
-    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.gitCommit=$commit'"
-    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.buildDate=$date'"
-    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.gitTag=$tag'"
+    local ldflags="-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=$tag'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=$commit'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Date=$date'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Tag=$tag'"
 
     echo -e "${GREEN}Using ldflags: $ldflags${NC}"
 
@@ -73,10 +73,10 @@ generate_ldflags() {
         tag="dev"
     fi
     
-    echo "-X 'github.com/sprout-foundry/sprout/cmd.version=$tag'"
-    echo "-X 'github.com/sprout-foundry/sprout/cmd.gitCommit=$commit'"
-    echo "-X 'github.com/sprout-foundry/sprout/cmd.buildDate=$date'"
-    echo "-X 'github.com/sprout-foundry/sprout/cmd.gitTag=$tag'"
+    echo "-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=$tag'"
+    echo "-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=$commit'"
+    echo "-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Date=$date'"
+    echo "-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Tag=$tag'"
 }
 
 # Print usage information

@@ -61,6 +61,14 @@ export interface RuntimeConfig {
   /** Version string embedded at build time */
   buildVersion: string;
 
+  /** Newer release available (from the daemon's cached, at-most-daily
+   * GitHub release check). Undefined when the running build is current,
+   * a dev build, or the check is disabled. */
+  update?: {
+    current: string;
+    latest: string;
+  };
+
   /** True when the server shares the CLI's agent (non-daemon interactive mode).
    * The frontend hides multi-chat UI and shows "coupled with terminal" messaging. */
   sharedMode?: boolean;

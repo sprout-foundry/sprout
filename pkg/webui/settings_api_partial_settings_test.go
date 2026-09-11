@@ -78,6 +78,33 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		// risk_profiles and security_policy live in applyRiskAndSafetySettings
 		"risk_profiles":   map[string]interface{}{},
 		"security_policy": map[string]interface{}{},
+		// applyMiscAgentSettings
+		"context_mode":                          "low_context",
+		"show_tool_invocations":                 true,
+		"disable_update_check":                  true,
+		"refresh_system_prompt_on_model_change": true,
+		"allow_git_history_rewrite":             true,
+		"unified_risk_resolver":                 true,
+		"daemon_multi_session":                  true,
+		"coordinator_auto_activate":             true,
+		"disable_coordinator_auto_activate":     true,
+		"completion_provider":                   "openai",
+		"completion_model":                      "gpt-4",
+		// applyPDFOCRProviderSettings
+		"pdf_ocr_provider": "openai",
+		"pdf_ocr_model":    "gpt-4o",
+		// applyShellAllowlistSettings
+		"approved_shell_command_patterns": []interface{}{"git *"},
+		// applyVisionPipelineSettings
+		"vision": map[string]interface{}{},
+		// applyNotificationsAgentSettings
+		"notifications": map[string]interface{}{},
+		// applyEditApprovalSettings
+		"edit_approval": map[string]interface{}{},
+		// applyChangeTrackingSettings
+		"change_tracking": map[string]interface{}{},
+		// applyTrainingSettings
+		"training": map[string]interface{}{},
 		// unknown — should be reported back
 		"definitely_not_a_real_key": "x",
 	}
@@ -87,6 +114,83 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 	}
 	if len(unknown) != 1 || unknown[0] != "definitely_not_a_real_key" {
 		t.Errorf("expected exactly [definitely_not_a_real_key] in unknown, got %v", unknown)
+	}
+}
+
+// TestApplyPartialSettings_MiscAgent_Patch pins the new misc-agent appliers:
+// value plumbing, context_mode validation, and the empty-object no-op contract
+// for the section structs.
+func TestApplyPartialSettings_MiscAgent_Patch(t *testing.T) {
+	cfg := configuration.NewConfig()
+	patch := map[string]interface{}{
+		"context_mode":                    "low_context",
+		"show_tool_invocations":           true,
+		"disable_update_check":            true,
+		"allow_git_history_rewrite":       true,
+		"completion_provider":             "openai",
+		"completion_model":                "gpt-4",
+		"pdf_ocr_provider":                "openai",
+		"pdf_ocr_model":                   "gpt-4o",
+		"approved_shell_command_patterns": []interface{}{"git *", "  ", "npm test"},
+		"notifications":                   map[string]interface{}{"cli_bell": true, "min_seconds": float64(5)},
+		"edit_approval":                   map[string]interface{}{"mode": "gate"},
+	}
+	unknown, err := applyPartialSettings(cfg, patch)
+	if err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	if len(unknown) != 0 {
+		t.Errorf("unexpected unknown keys: %v", unknown)
+	}
+	if cfg.ContextMode != configuration.ContextModeLowContext {
+		t.Errorf("ContextMode = %q, want low_context", cfg.ContextMode)
+	}
+	if !cfg.ShowToolInvocations || !cfg.DisableUpdateCheck || !cfg.AllowGitHistoryRewrite {
+		t.Error("expected toggles to be true")
+	}
+	if cfg.CompletionProvider != "openai" || cfg.CompletionModel != "gpt-4" {
+		t.Errorf("completion routing = %q/%q, want openai/gpt-4", cfg.CompletionProvider, cfg.CompletionModel)
+	}
+	if cfg.PDFOCRProvider != "openai" || cfg.PDFOCRModel != "gpt-4o" {
+		t.Errorf("pdf ocr = %q/%q, want openai/gpt-4o", cfg.PDFOCRProvider, cfg.PDFOCRModel)
+	}
+	if len(cfg.ApprovedShellCommandPatterns) != 2 {
+		t.Errorf("ApprovedShellCommandPatterns = %v, want 2 entries (blank dropped)", cfg.ApprovedShellCommandPatterns)
+	}
+	if cfg.Notifications == nil || !cfg.Notifications.CLIBell || cfg.Notifications.MinSeconds != 5 {
+		t.Errorf("Notifications not applied: %+v", cfg.Notifications)
+	}
+	if cfg.EditApproval == nil || cfg.EditApproval.Mode != "gate" {
+		t.Errorf("EditApproval not applied: %+v", cfg.EditApproval)
+	}
+}
+
+// TestApplyPartialSettings_ContextMode_RejectsUnknown asserts the context_mode
+// enum gate — a typo must surface as a 400, not a silently-inert config value.
+func TestApplyPartialSettings_ContextMode_RejectsUnknown(t *testing.T) {
+	cfg := configuration.NewConfig()
+	patch := map[string]interface{}{"context_mode": "turbo"}
+	_, err := applyPartialSettings(cfg, patch)
+	if err == nil {
+		t.Fatal("expected error for invalid context_mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "context_mode") {
+		t.Errorf("error should mention context_mode, got: %v", err)
+	}
+}
+
+// TestApplyPartialSettings_ChangeTracking_NilClearsSection asserts section-null
+// handling parity with command_policies.
+func TestApplyPartialSettings_ChangeTracking_NilClearsSection(t *testing.T) {
+	enabled := true
+	cfg := configuration.NewConfig()
+	cfg.ChangeTracking = &configuration.ChangeTrackingConfig{Enabled: &enabled}
+	patch := map[string]interface{}{"change_tracking": nil}
+	if _, err := applyPartialSettings(cfg, patch); err != nil {
+		t.Fatalf("applyPartialSettings: %v", err)
+	}
+	if cfg.ChangeTracking != nil {
+		t.Error("ChangeTracking should be nil after null patch")
 	}
 }
 
@@ -390,6 +494,14 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applySkillsSettings",
 		"applyWakeupSettings",
 		"applyCommandPoliciesSettings",
+		"applyMiscAgentSettings",
+		"applyPDFOCRProviderSettings",
+		"applyShellAllowlistSettings",
+		"applyVisionPipelineSettings",
+		"applyNotificationsAgentSettings",
+		"applyEditApprovalSettings",
+		"applyChangeTrackingSettings",
+		"applyTrainingSettings",
 	}
 	if len(partialSettingsAppliers) != len(want) {
 		t.Fatalf("applier count = %d, want %d (refactor may have added/dropped one)",

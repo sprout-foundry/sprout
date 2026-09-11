@@ -24,6 +24,7 @@ const chatSessionsDouble = vi.hoisted(() => ({
   listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [], active_chat_id: null }),
   createChatSession: vi.fn().mockResolvedValue({ chat_session: { id: 'chat-1' } }),
   deleteChatSession: vi.fn().mockResolvedValue(undefined),
+  deleteAllChatSessions: vi.fn().mockResolvedValue({ deleted_count: 3, active_chat_id: 'chat-default' }),
   renameChatSession: vi.fn().mockResolvedValue(undefined),
   switchChatSession: vi.fn().mockResolvedValue({
     active_chat_id: 'chat-1',
@@ -43,11 +44,22 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
+vi.mock('../services/notificationBus', () => ({
+  notificationBus: {
+    notify: vi.fn(),
+  },
+}));
+
+vi.mock('../utils/errorMessage', () => ({
+  toUserErrorMessage: vi.fn((_e: unknown, fallback: string) => fallback),
+}));
+
 function setupHook() {
   let state: AppState = {
     messages: [],
     isProcessing: true,
     inputValue: '',
+    perChatCache: {},
   } as unknown as AppState;
 
   const setState: AppStoreSetState = (updater) => {
@@ -70,6 +82,68 @@ function setupHook() {
     getState: () => state,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Tests: chat deletion (worktree flag + delete-all)
+// ---------------------------------------------------------------------------
+
+describe('chat deletion', () => {
+  beforeEach(() => {
+    chatSessionsDouble.deleteChatSession.mockClear();
+    chatSessionsDouble.deleteAllChatSessions.mockClear();
+    chatSessionsDouble.listChatSessions.mockClear();
+  });
+
+  it('passes removeWorktree=false by default', async () => {
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleDeleteChat('chat-9');
+    });
+
+    expect(chatSessionsDouble.deleteChatSession).toHaveBeenCalledWith('chat-9', false);
+  });
+
+  it('forwards the removeWorktree option', async () => {
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleDeleteChat('chat-9', { removeWorktree: true });
+    });
+
+    expect(chatSessionsDouble.deleteChatSession).toHaveBeenCalledWith('chat-9', true);
+  });
+
+  it('handleDeleteAllChats calls the API and switches to the returned active chat', async () => {
+    chatSessionsDouble.listChatSessions.mockResolvedValue({
+      chat_sessions: [{ id: 'chat-default', name: 'Chat' }],
+      active_chat_id: 'chat-default',
+    });
+    const { result, getState } = setupHook();
+
+    await act(async () => {
+      await result.current.handleDeleteAllChats();
+    });
+
+    expect(chatSessionsDouble.deleteAllChatSessions).toHaveBeenCalled();
+    expect(chatSessionsDouble.switchChatSession).toHaveBeenCalledWith('chat-default');
+    // Final activeChatId mirrors the switchChatSession response (mock returns
+    // active_chat_id 'chat-1'), confirming the post-delete switch ran.
+    expect(getState().activeChatId).toBe('chat-1');
+  });
+
+  it('handleDeleteAllChats surfaces a notification on failure', async () => {
+    chatSessionsDouble.deleteAllChatSessions.mockRejectedValueOnce(new Error('boom'));
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleDeleteAllChats();
+    });
+
+    const { notificationBus } = await import('../services/notificationBus');
+    expect(notificationBus.notify).toHaveBeenCalledWith('error', 'Chat', expect.any(String), 5000);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Tests: per-chat lastError snapshot/restore across chat switches

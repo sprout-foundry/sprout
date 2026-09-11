@@ -206,9 +206,14 @@ afterEach(() => {
   });
 });
 
-function renderEditorTabs(props: { paneId?: string; actions?: ReactNode; compact?: boolean } = {}) {
+function renderEditorTabs(
+  props: { paneId?: string; actions?: ReactNode; compact?: boolean } & Record<string, unknown> = {},
+) {
+  const { paneId, actions, compact, ...rest } = props;
   act(() => {
-    root!.render(<EditorTabs paneId={props.paneId} actions={props.actions} compact={props.compact} />);
+    root!.render(
+      <EditorTabs paneId={paneId} actions={actions} compact={compact} {...(rest as Record<string, unknown>)} />,
+    );
   });
 }
 
@@ -965,5 +970,149 @@ describe('EditorTabs tab title tooltip', () => {
 
     const tabName = container!.querySelector('.tab-name') as HTMLElement;
     expect(tabName.title).toBe('__workspace/chat/abc-123');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: chat session delete via tab context menu
+// ---------------------------------------------------------------------------
+
+function makeChatBufferWithId(bufferId: string, chatId: string, overrides: Record<string, unknown> = {}) {
+  return makeMockBuffer(bufferId, 'pane-1', {
+    kind: 'chat',
+    file: { path: `__workspace/chat/${chatId}`, name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    metadata: { chatId },
+    ...overrides,
+  });
+}
+
+describe('EditorTabs chat session delete context menu', () => {
+  test('shows "Delete Chat" for a plain non-default chat and calls onDeleteChat without worktree flag', async () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-9');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    const onDeleteChat = vi.fn();
+    renderEditorTabs({
+      paneId: 'pane-1',
+      onDeleteChat,
+      chatSessions: [{ id: 'chat-9', name: 'Chat 9', is_default: false }],
+      defaultChatIds: new Set(['chat-default']),
+    });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    expect(menus.length).toBeGreaterThan(0);
+    const deleteItem = menus
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.includes('Delete Chat'));
+    expect(deleteItem).toBeDefined();
+    expect(deleteItem!.textContent).not.toContain('Worktree');
+
+    await act(async () => {
+      (deleteItem as HTMLElement).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const { showThemedConfirm } = await import('./ThemedDialog');
+    expect(showThemedConfirm).toHaveBeenCalledTimes(1);
+    expect(onDeleteChat).toHaveBeenCalledWith('chat-9', { removeWorktree: false });
+  });
+
+  test('labels the item "Delete Chat and Worktree" and passes removeWorktree=true when the chat has a worktree', async () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-wt');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    const onDeleteChat = vi.fn();
+    renderEditorTabs({
+      paneId: 'pane-1',
+      onDeleteChat,
+      chatSessions: [{ id: 'chat-wt', name: 'WT Chat', is_default: false, worktree_path: '/tmp/wt' }],
+      chatWorktreePaths: new Map([['chat-wt', '/tmp/wt']]),
+      defaultChatIds: new Set<string>(),
+    });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const deleteItem = menus
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.includes('Delete Chat'));
+    expect(deleteItem).toBeDefined();
+    expect(deleteItem!.textContent).toContain('Worktree');
+
+    await act(async () => {
+      (deleteItem as HTMLElement).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onDeleteChat).toHaveBeenCalledWith('chat-wt', { removeWorktree: true });
+  });
+
+  test('no delete item for the default chat', () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-default');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    const onDeleteChat = vi.fn();
+    renderEditorTabs({
+      paneId: 'pane-1',
+      onDeleteChat,
+      chatSessions: [{ id: 'chat-default', name: 'Chat', is_default: true }],
+      defaultChatIds: new Set(['chat-default']),
+    });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const deleteItem = menus
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.includes('Delete Chat'));
+    expect(deleteItem).toBeUndefined();
+    expect(onDeleteChat).not.toHaveBeenCalled();
+  });
+
+  test('no delete item when onDeleteChat is not wired', () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-9');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({
+      paneId: 'pane-1',
+      chatSessions: [{ id: 'chat-9', name: 'Chat 9', is_default: false }],
+      defaultChatIds: new Set<string>(),
+    });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const deleteItem = menus
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.includes('Delete Chat'));
+    expect(deleteItem).toBeUndefined();
   });
 });

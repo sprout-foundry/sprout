@@ -6,6 +6,7 @@ import {
   listChatSessions,
   createChatSession,
   deleteChatSession,
+  deleteAllChatSessions,
   renameChatSession,
   switchChatSession,
 } from '../services/chatSessions';
@@ -51,7 +52,8 @@ export interface UseChatSessionManagerReturn {
   loadChatSessions: () => Promise<void>;
   handleActiveChatChange: (id: string) => Promise<void>;
   handleCreateChat: () => Promise<string | null>;
-  handleDeleteChat: (id: string) => Promise<void>;
+  handleDeleteChat: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
+  handleDeleteAllChats: () => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
   handleSendMessage: (message: string, options?: { allowConcurrent?: boolean; chatId?: string }) => Promise<void>;
   handleQueueMessage: (message: string) => void;
@@ -272,9 +274,9 @@ export function useChatSessionManager({
   }, [setState]);
 
   const handleDeleteChat = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { removeWorktree?: boolean }) => {
       try {
-        await deleteChatSession(id);
+        await deleteChatSession(id, options?.removeWorktree === true);
         if (id === activeChatIdRef.current) {
           const sessionsResp = await listChatSessions();
           if (sessionsResp.chat_sessions.length > 0) {
@@ -294,6 +296,21 @@ export function useChatSessionManager({
     },
     [handleActiveChatChange, setState],
   );
+
+  const handleDeleteAllChats = useCallback(async () => {
+    try {
+      const response = await deleteAllChatSessions();
+      const sessionsResp = await listChatSessions();
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+      // The backend keeps/returns the default session as active — follow it.
+      if (response.active_chat_id) {
+        await handleActiveChatChange(response.active_chat_id);
+      }
+    } catch (error) {
+      debugLog('[chat] Failed to delete all chat sessions:', error);
+      notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not delete all chat sessions.'), 5000);
+    }
+  }, [handleActiveChatChange, setState]);
 
   const handleRenameChat = useCallback(
     async (id: string, name: string) => {
@@ -758,6 +775,7 @@ export function useChatSessionManager({
     handleActiveChatChange,
     handleCreateChat,
     handleDeleteChat,
+    handleDeleteAllChats,
     handleRenameChat,
     handleSendMessage,
     handleQueueMessage,

@@ -44,8 +44,12 @@ describe('parseMessageSegments', () => {
     it('parses consecutive tool execution lines', () => {
       const content = '[executing tool [tool1]]\n[executing tool [tool2]]';
       const result = parseMessageSegments(content);
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('tool_call');
+      // 9cb8e7d72: one segment per line so parallel tool calls each get
+      // their own inline badge — no grouping.
+      expect(result).toHaveLength(2);
+      expect(result.every((s) => s.type === 'tool_call')).toBe(true);
+      expect((result[0] as any).summary).toContain('tool1');
+      expect((result[1] as any).summary).toContain('tool2');
     });
 
     it('parses tool execution with progress percentage', () => {

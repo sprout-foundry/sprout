@@ -2,7 +2,7 @@
 
 > Reusable React UI components for [Sprout IDE](https://github.com/sprout-foundry/sprout)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 > **Internal monorepo package — not published to npm.**
 > Consumed by the webui via the `file:` reference in `webui/package.json`.
@@ -27,6 +27,12 @@ No publish step is required. Build the package once after pulling:
 
 ```bash
 cd packages/ui && npm run build
+```
+
+From a fresh checkout, install the workspace root first:
+
+```bash
+npm install
 ```
 
 For external projects that want to consume `@sprout/ui` standalone, fork the package first — the public-API surface is stable, but no versioned releases are produced.
@@ -267,7 +273,7 @@ packages/ui/
 
 ## License
 
-[MIT](https://opensource.org/licenses/MIT)
+[Apache 2.0](https://opensource.org/licenses/Apache-2.0) — matches the sprout repository license (see the repo-root LICENSE).
 
 ## Contributing
 

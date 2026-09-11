@@ -49,6 +49,26 @@ vi.mock('../services/clientSession', () => ({
   getWebUIClientId: vi.fn(() => 'test-client-id'),
 }));
 
+const chatSessionsDouble = vi.hoisted(() => ({
+  switchChatSession: vi.fn().mockResolvedValue({
+    active_chat_id: 'chat-1',
+    chat_session: { messages: [], active_query: false },
+  }),
+  listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [], active_chat_id: null }),
+}));
+
+vi.mock('../services/chatSessions', () => chatSessionsDouble);
+
+vi.mock('../services/notificationBus', () => ({
+  notificationBus: {
+    notify: vi.fn(),
+  },
+}));
+
+vi.mock('../services/desktopNotify', () => ({
+  notifyIfHidden: vi.fn(),
+}));
+
 vi.mock('../services/errorCodes', () => ({
   getServerErrorCode: vi.fn(() => null),
 }));
@@ -649,5 +669,335 @@ describe('password_request', () => {
     });
 
     expect(stateHolder.current.passwordRequest).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: provider_no_credential / rate_limited / compact_* / session_changed
+// ---------------------------------------------------------------------------
+
+describe('provider_no_credential', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          activeRequestsRef,
+        }),
+      );
+    });
+
+    return { stateHolder };
+  }
+
+  it('logs an error entry and fires a notification with an action', async () => {
+    const { stateHolder } = setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pnc-1',
+        type: 'provider_no_credential',
+        data: { provider: 'openai', message: 'No API key for openai' },
+      });
+    });
+
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].level).toBe('error');
+    expect(notificationBus.notify).toHaveBeenCalledWith(
+      'error',
+      'Provider credential missing',
+      'No API key for openai',
+      8000,
+      expect.objectContaining({ label: 'Open settings' }),
+    );
+  });
+
+  it('falls back to a generic message when payload message is empty', async () => {
+    setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pnc-2',
+        type: 'provider_no_credential',
+        data: { provider: 'anthropic', message: '' },
+      });
+    });
+
+    expect(notificationBus.notify).toHaveBeenCalledWith(
+      'error',
+      'Provider credential missing',
+      'Provider "anthropic" has no API key configured.',
+      8000,
+      expect.anything(),
+    );
+  });
+});
+
+describe('rate_limited', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          activeRequestsRef,
+        }),
+      );
+    });
+
+    return { stateHolder };
+  }
+
+  it('logs a warning and announces the retry window', async () => {
+    const { stateHolder } = setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    const { notifyIfHidden } = await import('../services/desktopNotify');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+    (notifyIfHidden as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-rl-1',
+        type: 'rate_limited',
+        data: {
+          provider: 'anthropic',
+          attempt: 2,
+          max_attempts: 5,
+          retry_after_ms: 4000,
+          message: '429 too many requests',
+        },
+      });
+    });
+
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].level).toBe('warning');
+    expect(notificationBus.notify).toHaveBeenCalledWith(
+      'warning',
+      'Rate limited',
+      'anthropic rate limit hit (attempt 2/5) — retrying in ~4s.',
+      6000,
+    );
+    expect(notifyIfHidden).toHaveBeenCalledWith('Sprout', 'Rate limited — retrying');
+  });
+});
+
+describe('compact lifecycle', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          activeRequestsRef,
+        }),
+      );
+    });
+
+    return { stateHolder };
+  }
+
+  it('compact_started logs an info entry without a toast', async () => {
+    const { stateHolder } = setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-cs-1',
+        type: 'compact_started',
+        data: { source: 'manual', message_count: 40, checkpoint_count: 3, timestamp: '2026-09-11T20:00:00Z' },
+      });
+    });
+
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].level).toBe('info');
+    expect(notificationBus.notify).not.toHaveBeenCalled();
+  });
+
+  it('compact_completed success logs info without a toast', async () => {
+    const { stateHolder } = setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-cc-1',
+        type: 'compact_completed',
+        data: {
+          source: 'manual',
+          before_message_count: 40,
+          after_message_count: 8,
+          summary_chars: 1200,
+          success: true,
+          timestamp: '2026-09-11T20:01:00Z',
+        },
+      });
+    });
+
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].level).toBe('info');
+    expect(notificationBus.notify).not.toHaveBeenCalled();
+  });
+
+  it('compact_completed failure toasts the error', async () => {
+    const { stateHolder } = setup();
+    const { notificationBus } = await import('../services/notificationBus');
+    (notificationBus.notify as ReturnType<typeof vi.fn>).mockClear();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-cc-2',
+        type: 'compact_completed',
+        data: {
+          source: 'auto_llm_summary',
+          before_message_count: 40,
+          after_message_count: 40,
+          summary_chars: 0,
+          success: false,
+          error: 'provider timeout',
+          timestamp: '2026-09-11T20:02:00Z',
+        },
+      });
+    });
+
+    expect(stateHolder.current.logs[0].level).toBe('error');
+    expect(notificationBus.notify).toHaveBeenCalledWith('error', 'Compaction failed', 'provider timeout', 8000);
+  });
+});
+
+describe('session_changed', () => {
+  function setup(activeChatId: string | null) {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: activeChatId };
+    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          activeRequestsRef,
+        }),
+      );
+    });
+
+    return { stateHolder };
+  }
+
+  it('rename refreshes the local chat session list', async () => {
+    const { stateHolder } = setup('chat-1');
+    chatSessionsDouble.listChatSessions.mockResolvedValueOnce({
+      chat_sessions: [{ id: 'chat-1', name: 'Renamed' }],
+      active_chat_id: 'chat-1',
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sc-1',
+        type: 'session_changed',
+        data: { change: 'rename', summary: { id: 'chat-1', name: 'Renamed' } },
+      });
+    });
+
+    await act(async () => {});
+    expect(chatSessionsDouble.listChatSessions).toHaveBeenCalled();
+    expect((stateHolder.current.chatSessions as unknown[]).length).toBe(1);
+  });
+
+  it('switch of the active chat reloads its transcript', async () => {
+    const { stateHolder } = setup('chat-1');
+    chatSessionsDouble.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-1',
+      chat_session: {
+        active_query: false,
+        messages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'hi there' },
+        ],
+      },
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sc-2',
+        type: 'session_changed',
+        data: { change: 'switch', summary: { id: 'chat-1' } },
+      });
+    });
+
+    await act(async () => {});
+    expect(chatSessionsDouble.switchChatSession).toHaveBeenCalledWith('chat-1');
+    const messages = stateHolder.current.messages as Array<{ content: string }>;
+    expect(messages).toHaveLength(2);
+    expect(messages[1].content).toBe('hi there');
+  });
+
+  it('switch for a non-active chat does not touch the transcript', async () => {
+    const { stateHolder } = setup('chat-1');
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sc-3',
+        type: 'session_changed',
+        data: { change: 'switch', summary: { id: 'chat-other' } },
+      });
+    });
+
+    await act(async () => {});
+    expect(chatSessionsDouble.switchChatSession).not.toHaveBeenCalledWith('chat-other');
+    expect((stateHolder.current.messages as unknown[]).length).toBe(0);
   });
 });

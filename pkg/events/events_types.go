@@ -26,7 +26,6 @@ const (
 	EventTypeQueryProgress           = "query_progress"
 	EventTypeQueryCompleted          = "query_completed"
 	EventTypeError                   = "error"
-	EventTypeToolExecution           = "tool_execution"
 	EventTypeToolStart               = "tool_start"
 	EventTypeToolEnd                 = "tool_end"
 	EventTypeSubagentActivity        = "subagent_activity"

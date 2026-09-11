@@ -80,11 +80,6 @@ func (a *Agent) PublishQueryProgress(message string, iteration int, tokensUsed i
 	a.publishEvent(events.EventTypeQueryProgress, events.QueryProgressEvent(message, iteration, tokensUsed))
 }
 
-// PublishToolExecution publishes tool execution events for real-time updates
-func (a *Agent) PublishToolExecution(toolName, action string, details map[string]interface{}) {
-	a.publishEvent(events.EventTypeToolExecution, events.ToolExecutionEvent(toolName, action, details))
-}
-
 // PublishToolStart publishes a rich tool start event
 func (a *Agent) PublishToolStart(toolName, toolCallID, arguments, displayName, persona string, isSubagent bool, subagentType string, toolIndex int) {
 	a.publishEvent(events.EventTypeToolStart, events.ToolStartEvent(toolName, toolCallID, arguments, displayName, persona, isSubagent, subagentType, toolIndex))

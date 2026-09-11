@@ -432,14 +432,6 @@ func TestErrorEvent(t *testing.T) {
 	assert.NotEmpty(t, event["error"])
 }
 
-func TestToolExecutionEvent(t *testing.T) {
-	event := ToolExecutionEvent("read_file", "starting", map[string]interface{}{"path": "/test"})
-
-	assert.Equal(t, "read_file", event["tool_name"])
-	assert.Equal(t, "starting", event["action"])
-	assert.Equal(t, "/test", event["path"])
-}
-
 func TestFileChangedEvent(t *testing.T) {
 	event := FileChangedEvent("/path/to/file.go", "modified", "some content")
 

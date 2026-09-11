@@ -33,6 +33,8 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"persona",           // safe during steer
 		"subagent-persona",  // alias for /persona - safe
 		"subagent-personas", // alias for /persona - safe
+		"clear",             // rotates to a new session; prior session stays in /sessions (WebUI "New Session" depends on this)
+		"context",           // config change, no turn interaction
 	}
 
 	for _, name := range safeCommands {

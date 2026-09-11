@@ -266,10 +266,12 @@ func (a *Agent) RecoverFile(path string) (string, error) {
 	return handleRecoverFile(nil, a, map[string]interface{}{"path": path})
 }
 
-// TrackFileWrite is called by the WriteFile tool to track file writes
-func (a *Agent) TrackFileWrite(filePath string, content string) error {
+// TrackFileWrite is called by the WriteFile tool to track file writes.
+// originalContent is the file's pre-write state captured by the handler
+// before the write (empty for a create).
+func (a *Agent) TrackFileWrite(filePath string, originalContent string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
-		err := a.changeTracker.TrackFileWrite(filePath, content)
+		err := a.changeTracker.TrackFileWrite(filePath, originalContent, content)
 		// Keep the shell-snapshot cache in sync to avoid duplicate entries.
 		a.changeTracker.SyncShellCacheForPath(filePath)
 		return err

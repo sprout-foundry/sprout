@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -153,6 +154,15 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: fmt.Sprintf("failed to serialize structured content: %v", err), IsError: true}, err
 	}
 
+	// Capture pre-write content for change tracking BEFORE WriteFile
+	// mutates the file (same contract as write_file). Empty = create.
+	var preWriteOriginal string
+	if env.ResolveToolFuncs().TrackFileWrite != nil {
+		if data, readErr := os.ReadFile(path); readErr == nil {
+			preWriteOriginal = string(data)
+		}
+	}
+
 	result, err := WriteFile(ctx, path, content)
 	if err != nil {
 		return ToolResult{
@@ -163,7 +173,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	// Session change tracking (same contract as write_file). Best-effort.
 	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
-		if trackErr := fn(path, content); trackErr != nil {
+		if trackErr := fn(path, preWriteOriginal, content); trackErr != nil {
 			log.Printf("[write_structured_file] change tracking failed for %q: %v", path, trackErr)
 		}
 	}

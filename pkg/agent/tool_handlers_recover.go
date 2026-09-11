@@ -56,7 +56,10 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return "", agenterrors.NewValidation(fmt.Sprintf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope), nil)
 	}
 	if match == nil {
-		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path"), nil
+		// Session-buffer miss. Fall back to the persisted history store
+		// so cross-session recovery (the timeline tab's previous-session
+		// entries) works instead of dead-ending.
+		return recoverFromPersistedStore(a, abs)
 	}
 
 	// C1: Refuse to touch anything outside the workspace root. A crafted
@@ -136,6 +139,53 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	}
 	msg := fmt.Sprintf("%s file from session buffer (was: %s via %s)", verb, match.Operation, match.ToolCall)
 	return jsonRecoverResult(true, abs, verb, msg), nil
+}
+
+// recoverFromPersistedStore restores a file from the on-disk history
+// store when the session buffer has no record of it. This is what makes
+// cross-session recovery work: previous sessions' changes live only in
+// the persisted store once the agent process restarted. The staleness
+// guard (IsRevertSafeWithOriginal) applies exactly as for
+// session-buffer restores; the workspace boundary is enforced by the
+// caller's IsPathOutsideWorkspace check upstream.
+func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
+	rec, found, err := history.FindPersistedOriginal(abs)
+	if err != nil {
+		return jsonRecoverResult(false, abs, "", fmt.Sprintf("persisted history lookup failed: %v", err)), nil
+	}
+	if !found {
+		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path (session buffer and persisted history)"), nil
+	}
+
+	// Staleness: compare disk against the recorded post-change content.
+	// The persisted original-aware guard allows restores of uncommitted
+	// work that a destructive git command clobbered.
+	if isStaleForRevertWithOriginal(abs, rec.New, rec.Original) {
+		history.AuditRevertSkip("recoverFromPersistedStore", abs, "stale or committed")
+		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the recorded change — refusing to overwrite"), nil
+	}
+
+	if a.IsPathOutsideWorkspace(abs) {
+		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+	}
+	if match, statErr := os.Stat(abs); statErr == nil && match.IsDir() {
+		return jsonRecoverResult(false, abs, "", "path is a directory — refusing to overwrite"), nil
+	}
+	if mkErr := os.MkdirAll(filepath.Dir(abs), 0o755); mkErr != nil {
+		return jsonRecoverResult(false, abs, "", fmt.Sprintf("unable to create parent dir: %v", mkErr)), nil
+	}
+	if rec.Original == RedactedContentMarker {
+		return jsonRecoverResult(false, abs, "", "refusing to write redacted marker to disk"), nil
+	}
+	history.AuditRevertWrite("recoverFromPersistedStore", abs, "OriginalCode")
+	if writeErr := os.WriteFile(abs, []byte(rec.Original), 0o644); writeErr != nil {
+		return jsonRecoverResult(false, abs, "", fmt.Sprintf("write failed: %v", writeErr)), nil
+	}
+	if tracker := a.GetChangeTracker(); tracker != nil {
+		tracker.SyncShellCacheForPath(abs)
+	}
+	msg := fmt.Sprintf("restored file from persisted history (recorded status: %s)", rec.Status)
+	return jsonRecoverResult(true, abs, "restore", msg), nil
 }
 
 // recoverBulk handles scope="bulk": treats `bulkPath` as the FilePath

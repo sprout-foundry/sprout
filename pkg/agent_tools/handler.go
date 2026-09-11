@@ -201,8 +201,11 @@ type ToolFuncSet struct {
 	CreatePullRequest    func(ctx context.Context, args map[string]any) (string, error)
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's
-	// ChangeTracker. Nil when no tracker is available (standalone tools).
-	TrackFileWrite func(filePath string, content string) error
+	// ChangeTracker. originalContent is the file's pre-write state
+	// (empty for a create) captured by the handler BEFORE the write —
+	// the tracker must not re-read the file, which now holds new
+	// content. Nil when no tracker is available (standalone tools).
+	TrackFileWrite func(filePath string, originalContent string, content string) error
 	// TrackFileEdit records an old→new replacement (edit_file) with the
 	// agent's ChangeTracker. Nil when no tracker is available.
 	TrackFileEdit func(filePath string, originalContent string, newContent string) error

@@ -301,7 +301,12 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		if err == nil && env.Notifier != nil {
 			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout, command)
 		}
-		trackShellMutation(env, command)
+		// No mutation diff here: the command has only been STARTED, so a
+		// diff would capture nothing and rebase the tracker's baseline
+		// to pre-command state — the command's eventual writes would go
+		// untracked (or be misattributed to the next shell command).
+		// Mutations are recorded when completion is observed, in
+		// handleCheckBackground and the wakeup watcher.
 		return result, err
 	}
 
@@ -328,9 +333,28 @@ func trackShellMutation(env ToolEnv, command string) {
 	}
 }
 
+// bgSnapshotFinished reports whether a check_background snapshot JSON
+// reports the background command has exited. Failures to parse count
+// as not-finished so the mutation diff is skipped rather than run
+// speculatively.
+func bgSnapshotFinished(resultJSON string) bool {
+	var snap struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(resultJSON), &snap); err != nil {
+		return false
+	}
+	return snap.Status == "exited"
+}
+
 // handleCheckBackground retrieves accumulated output for a background session.
 // When waitSeconds > 0, it blocks (capped at maxBackgroundWaitSeconds) until
 // the session exits or the wait elapses, then returns the snapshot.
+//
+// When the snapshot reports the background command has finished, the
+// workspace mutation diff runs here: the command's writes happened
+// between its issue and this observation, and this is the first point
+// they can be captured and attributed correctly.
 func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env ToolEnv, sessionID string, waitSeconds int) (ToolResult, error) {
 	result, err := CheckBackgroundOutputWait(ctx, sessionID, waitSeconds)
 	if err != nil {
@@ -338,6 +362,10 @@ func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env Too
 			Output:  fmt.Sprintf("check background %q: %v", sessionID, err),
 			IsError: true,
 		}, agenterrors.NewTool("shell_command", fmt.Sprintf("check background %q: %v", sessionID, err), err)
+	}
+
+	if bgSnapshotFinished(result) {
+		trackShellMutation(env, "background session "+sessionID+" (completed)")
 	}
 
 	if env.OutputWriter != nil {
@@ -368,6 +396,10 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 			io.WriteString(env.OutputWriter, result)
 		}
 
+		// The killed command may have written files before termination;
+		// record whatever landed. Best-effort, same as the sync path.
+		trackShellMutation(env, "background session "+sessionID+" (stopped)")
+
 		return ToolResult{
 			Output:     result,
 			TokenUsage: int64(estimateTokenUsage(result)),
@@ -395,6 +427,10 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, result)
 	}
+
+	// The killed command may have written files before termination;
+	// record whatever landed. Best-effort, same as the sync path.
+	trackShellMutation(env, "background session "+sessionID+" (stopped)")
 
 	return ToolResult{
 		Output:     result,
@@ -573,6 +609,10 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 	go func() {
 		select {
 		case <-done:
+			// The background command's writes happened while unattended.
+			// This is the first observation point — capture them so the
+			// changes panel and recovery reflect reality. Best-effort.
+			trackShellMutation(env, "background session "+sessionID+" (completed)")
 			notifier.NotifyCompletionLabeled(sessionID, "shell_bg",
 				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)), label)
 		case <-watchCtx.Done():

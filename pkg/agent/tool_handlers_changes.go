@@ -459,7 +459,7 @@ func handleRevertMyChanges(_ context.Context, a *Agent, args map[string]interfac
 
 	tracker := a.GetChangeTracker()
 	if tracker == nil || !tracker.IsEnabled() {
-		return revertResult(0, 0, "change tracking is disabled — nothing to revert", nil), nil
+		return revertResultDisabled("change tracking is disabled — nothing to revert"), nil
 	}
 
 	candidates, err := selectRevertCandidates(tracker.GetChanges(), scope, sinceStr)
@@ -620,6 +620,20 @@ func revertResult(restored, failed int, summary string, entries interface{}) str
 		Summary  string      `json:"summary"`
 		Entries  interface{} `json:"entries,omitempty"`
 	}{Restored: restored, Failed: failed, Summary: summary, Entries: entries}
+	b, _ := json.MarshalIndent(payload, "", "  ")
+	return string(b)
+}
+
+// revertResultDisabled is the disabled-tracker variant: enabled=false
+// tells callers (WebUI, LLM) the request could not be served at all,
+// as opposed to "served but nothing matched".
+func revertResultDisabled(summary string) string {
+	payload := struct {
+		Enabled  bool   `json:"enabled"`
+		Restored int    `json:"restored"`
+		Failed   int    `json:"failed"`
+		Summary  string `json:"summary"`
+	}{Enabled: false, Restored: 0, Failed: 0, Summary: summary}
 	b, _ := json.MarshalIndent(payload, "", "  ")
 	return string(b)
 }

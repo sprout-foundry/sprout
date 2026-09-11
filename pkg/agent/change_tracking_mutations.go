@@ -444,6 +444,9 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 	// shell-driven mutations in real time, not just direct-tool edits.
 	// Action vocabulary mirrors events.FileChangedEvent ("created" /
 	// "modified" / "deleted"); map our internal ops accordingly.
+	// Content is deliberately NOT sent: consumers only use path and
+	// action, and shipping whole file bodies over the event bus wastes
+	// bandwidth and leaks file contents to any event listener.
 	if ct.agent != nil {
 		action := "modified"
 		switch op {
@@ -452,14 +455,6 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 		case "delete":
 			action = "deleted"
 		}
-		// For deletes, send the original content (lets the WebUI offer
-		// a one-click recover button); for creates, send the new
-		// content; for edits, send the new content (the file's
-		// current state).
-		eventContent := newCode
-		if op == "delete" {
-			eventContent = originalCode
-		}
-		ct.agent.PublishFileChange(path, action, eventContent)
+		ct.agent.PublishFileChange(path, action, "")
 	}
 }

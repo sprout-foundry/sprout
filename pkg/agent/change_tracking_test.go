@@ -31,7 +31,7 @@ func TestTrackFileWrite_InWorkspace(t *testing.T) {
 	}
 
 	newContent := "package main\n\nfunc main() {}\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "package main\n", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
 	}
 
 	newContent := "AWS_SECRET_KEY=xyz789"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
 	// Write a new file that doesn't exist yet (inside workspace)
 	filePath := filepath.Join(ws, "newfile.go")
 	newContent := "package main\n"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
 	externalDir := t.TempDir()
 	filePath := filepath.Join(externalDir, "new_secrets.txt")
 	newContent := "secret=value"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -165,7 +165,7 @@ func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
 	}
 
 	newContent := "updated data"
-	if err := ct.TrackFileWrite(filePath, newContent); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -207,7 +207,7 @@ func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
 	}
 
 	newContent := "package main\n\nfunc main() {}\n"
-	if err := ct.TrackFileWrite(relPath, newContent); err != nil {
+	if err := ct.TrackFileWrite(relPath, "", newContent); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -238,7 +238,7 @@ func TestTrackFileWrite_Disabled(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if err := ct.TrackFileWrite(filePath, "new content"); err != nil {
+	if err := ct.TrackFileWrite(filePath, "", "new content"); err != nil {
 		t.Fatalf("TrackFileWrite on disabled tracker: %v", err)
 	}
 
@@ -456,8 +456,8 @@ func TestGetTrackedFiles(t *testing.T) {
 	file1 := filepath.Join(ws, "a.go")
 	file2 := filepath.Join(ws, "b.go")
 
-	ct.TrackFileWrite(file1, "content1")
-	ct.TrackFileWrite(file2, "content2")
+	ct.TrackFileWrite(file1, "", "content1")
+	ct.TrackFileWrite(file2, "", "content2")
 
 	files := ct.GetTrackedFiles()
 	if len(files) != 2 {
@@ -474,7 +474,7 @@ func TestClear(t *testing.T) {
 	agent.SetWorkspaceRoot(ws)
 
 	ct := NewChangeTracker(agent, "test")
-	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "content")
+	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
 
 	if ct.GetChangeCount() != 1 {
 		t.Fatalf("expected 1 change before clear")
@@ -494,7 +494,7 @@ func TestReset(t *testing.T) {
 
 	ct := NewChangeTracker(agent, "old instruction")
 	oldID := ct.GetRevisionID()
-	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "content")
+	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
 
 	ct.Reset("new instruction")
 
@@ -549,7 +549,7 @@ func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 
 	// Track a relative path (as the LLM typically provides).
 	relPath := "pkg/agent/foo.go"
-	if err := ct.TrackFileWrite(relPath, "package main\n"); err != nil {
+	if err := ct.TrackFileWrite(relPath, "", "package main\n"); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -685,7 +685,7 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte("original content\n"), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
-	if err := ct.TrackFileWrite(relPath, "modified content\n"); err != nil {
+	if err := ct.TrackFileWrite(relPath, "original content\n", "modified content\n"); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -1008,8 +1008,9 @@ func TestChangeTrackingE2E(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", errWrite)
 	}
 
-	// Track a file write (simulating WriteFile tool)
-	err = agent.TrackFileWrite(testFileName, newContent)
+	// Track a file write (simulating WriteFile tool). The original is
+	// the pre-write content created above.
+	err = agent.TrackFileWrite(testFileName, originalContent, newContent)
 	if err != nil {
 		t.Fatalf("Failed to track file write: %v", err)
 	}
@@ -1161,7 +1162,7 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 		t.Fatalf("write fileB: %v", err)
 	}
 
-	if err := agent.TrackFileWrite(fileA, "package main\nfunc a() {}\n"); err != nil {
+	if err := agent.TrackFileWrite(fileA, "", "package main\nfunc a() {}\n"); err != nil {
 		t.Fatalf("track fileA: %v", err)
 	}
 	if err := agent.CommitChanges("checkpoint 1"); err != nil {
@@ -1172,7 +1173,7 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 		t.Fatal("expected revision ID after first checkpoint")
 	}
 
-	if err := agent.TrackFileWrite(fileB, "package main\nfunc b() {}\n"); err != nil {
+	if err := agent.TrackFileWrite(fileB, "", "package main\nfunc b() {}\n"); err != nil {
 		t.Fatalf("track fileB: %v", err)
 	}
 	if err := agent.CommitChanges("checkpoint 2"); err != nil {
@@ -1247,10 +1248,10 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 	}
 
 	// Track two changes and commit.
-	if err := agent.TrackFileWrite(fileA, "new a\n"); err != nil {
+	if err := agent.TrackFileWrite(fileA, "", "new a\n"); err != nil {
 		t.Fatalf("track fileA: %v", err)
 	}
-	if err := agent.TrackFileWrite(fileB, "new b\n"); err != nil {
+	if err := agent.TrackFileWrite(fileB, "", "new b\n"); err != nil {
 		t.Fatalf("track fileB: %v", err)
 	}
 	if err := agent.CommitChanges("first commit"); err != nil {
@@ -1282,7 +1283,7 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 	// should equal the number of tracked changes after a successful
 	// commit, so a third commit after adding ONE more change persists
 	// exactly that one.
-	if err := agent.TrackFileWrite("dup_c.go", "new c\n"); err != nil {
+	if err := agent.TrackFileWrite("dup_c.go", "", "new c\n"); err != nil {
 		t.Fatalf("track fileC: %v", err)
 	}
 	if err := agent.CommitChanges("third commit"); err != nil {
@@ -1425,7 +1426,7 @@ func TestMergeChild_TagsSource(t *testing.T) {
 
 	// Record a pre-existing primary-agent edit (no Source).
 	primaryFile := filepath.Join(ws, "primary.go")
-	if err := ct.TrackFileWrite(primaryFile, "primary content\n"); err != nil {
+	if err := ct.TrackFileWrite(primaryFile, "", "primary content\n"); err != nil {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
@@ -1578,7 +1579,7 @@ func TestSession_BufferSurvivesReEnable(t *testing.T) {
 	// Turn 1: enable tracking and record an edit.
 	a.EnableChangeTracking("first query")
 	revID := a.GetRevisionID()
-	a.TrackFileWrite(filepath.Join(ws, "main.go"), "package main\n")
+	a.TrackFileWrite(filepath.Join(ws, "main.go"), "", "package main\n")
 
 	if got := a.GetChangeCount(); got != 1 {
 		t.Fatalf("turn 1: expected 1 change, got %d", got)
@@ -1611,7 +1612,7 @@ func TestSession_ListChangesReflectsFullSession(t *testing.T) {
 	a.workspaceRoot = ws
 
 	a.EnableChangeTracking("session start")
-	a.TrackFileWrite(filepath.Join(ws, "auth.go"), "contents")
+	a.TrackFileWrite(filepath.Join(ws, "auth.go"), "", "contents")
 
 	// Simulate a new turn (ProcessQuery re-enables).
 	a.EnableChangeTracking("next turn")
@@ -1661,7 +1662,7 @@ func TestSession_ListChangesPersistsSessionScoped(t *testing.T) {
 	}
 
 	// Record a change in session 1 only.
-	a1.TrackFileWrite(filepath.Join(ws, "only_in_session1.go"), "x")
+	a1.TrackFileWrite(filepath.Join(ws, "only_in_session1.go"), "", "x")
 
 	// Session 2's list_changes (persisted merge) must NOT show it.
 	out, err := handleListChanges(context.Background(), a2, nil)
@@ -1695,7 +1696,7 @@ func TestSession_SubagentDoesNotCommit(t *testing.T) {
 	sub.workspaceRoot = ws
 	sub.subagentDepth = 1
 	sub.EnableChangeTracking("subagent run")
-	sub.TrackFileWrite(filepath.Join(ws, "by_subagent.go"), "contents")
+	sub.TrackFileWrite(filepath.Join(ws, "by_subagent.go"), "", "contents")
 
 	if !sub.IsSubagent() {
 		t.Fatalf("IsSubagent() = false for depth %d; the guard depends on this", sub.subagentDepth)
@@ -1719,7 +1720,7 @@ func TestSession_SubagentDoesNotCommit(t *testing.T) {
 	primary := NewTestAgent()
 	primary.workspaceRoot = ws
 	primary.EnableChangeTracking("primary run")
-	primary.TrackFileWrite(filepath.Join(ws, "by_primary.go"), "contents")
+	primary.TrackFileWrite(filepath.Join(ws, "by_primary.go"), "", "contents")
 	shouldCommitPrimary := !primary.IsSubagent() && primary.IsChangeTrackingEnabled() && primary.GetChangeCount() > 0
 	if !shouldCommitPrimary {
 		t.Error("post-loop commit predicate is false for a primary agent with changes — primary MUST commit")
@@ -1738,7 +1739,7 @@ func TestSession_PersistedDedupedAgainstInMemory(t *testing.T) {
 
 	path := filepath.Join(ws, "shared.go")
 	// In-memory entry for this path.
-	a.TrackFileWrite(path, "v2")
+	a.TrackFileWrite(path, "", "v2")
 
 	out, err := handleListChanges(context.Background(), a, map[string]interface{}{
 		"include_persisted": true,

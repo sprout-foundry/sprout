@@ -72,15 +72,13 @@ async function renderPanel(props: Record<string, unknown>, ref?: React.RefObject
 }
 
 describe('ContextPanel desktop collapse behavior', () => {
-  it('collapses the desktop panel (showing rail) and reports the new state', async () => {
-    const onCollapsedChange = vi.fn();
+  it('collapses the desktop panel (showing rail) via closePanel', async () => {
     const panelRef = createRef<any>();
 
-    await renderPanel(makeChatProps({ onCollapsedChange }), panelRef);
+    await renderPanel(makeChatProps(), panelRef);
 
     expect(container.querySelector('.context-panel')).not.toBeNull();
     expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(false);
-    expect(onCollapsedChange).toHaveBeenLastCalledWith(false);
 
     act(() => {
       panelRef.current.closePanel();
@@ -91,6 +89,54 @@ describe('ContextPanel desktop collapse behavior', () => {
     expect(container.querySelector('.context-panel')).not.toBeNull();
     expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(true);
     expect(container.querySelector('.context-panel-resizer')).toBeNull();
-    expect(onCollapsedChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('togglePanel flips collapsed state both ways', async () => {
+    const panelRef = createRef<any>();
+
+    await renderPanel(makeChatProps(), panelRef);
+
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(false);
+
+    act(() => {
+      panelRef.current.togglePanel();
+    });
+    await flushPromises();
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(true);
+
+    act(() => {
+      panelRef.current.togglePanel();
+    });
+    await flushPromises();
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(false);
+  });
+
+  it('idle mode: panel stays mounted, rail buttons disabled, collapse button enabled', async () => {
+    const panelRef = createRef<any>();
+
+    await renderPanel(makeChatProps({ isIdle: true }), panelRef);
+
+    const panel = container.querySelector('.context-panel');
+    expect(panel).not.toBeNull();
+    expect(panel?.classList.contains('context-panel-idle')).toBe(true);
+
+    // Tab buttons disabled, collapse button still usable
+    const tabButtons = Array.from(container.querySelectorAll('[data-testid="context-panel-tab"]'));
+    expect(tabButtons.length).toBeGreaterThan(0);
+    for (const btn of tabButtons) {
+      expect(btn.disabled).toBe(true);
+    }
+    const collapseBtn = container.querySelector('[data-testid="context-panel-collapse"]');
+    expect(collapseBtn?.disabled).toBe(false);
+
+    // Idle body note replaces tab content
+    expect(container.textContent).toContain('Chat context');
+
+    // togglePanel still works while idle (hide the panel in file view)
+    act(() => {
+      panelRef.current.togglePanel();
+    });
+    await flushPromises();
+    expect(container.querySelector('.context-panel')?.classList.contains('collapsed')).toBe(true);
   });
 });

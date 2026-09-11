@@ -38,6 +38,7 @@ import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
 import Status from './Status';
 import StatusBar from './StatusBar';
+import { WorktreeChatDialog } from './WorktreeChatDialog';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 
@@ -94,6 +95,12 @@ interface AppContentProps {
   onActiveChatChange?: (id: string) => void;
   onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
+  onCreateChatInWorktree?: (
+    branch: string,
+    baseRef?: string,
+    name?: string,
+    autoSwitch?: boolean,
+  ) => Promise<string | null>;
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
   onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
@@ -147,6 +154,7 @@ const AppContent: React.FC<AppContentProps> = ({
   perChatCache,
   onActiveChatChange,
   onCreateChat,
+  onCreateChatInWorktree,
   onDeleteChat,
   onDeleteAllChats,
   onRenameChat,
@@ -185,6 +193,45 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isForking, setIsForking] = useState(false);
+
+  // ── New Chat in Worktree dialog ────────────────────────────────
+  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
+  const [worktreeCreating, setWorktreeCreating] = useState(false);
+  const [worktreeError, setWorktreeError] = useState<string | null>(null);
+
+  const handleWorktreeSubmit = useCallback(
+    async (params: { branch: string; baseRef: string; name: string; autoSwitch: boolean }) => {
+      if (!onCreateChatInWorktree) return;
+      setWorktreeCreating(true);
+      setWorktreeError(null);
+      try {
+        const chatId = await onCreateChatInWorktree(
+          params.branch,
+          params.baseRef || undefined,
+          params.name || undefined,
+          params.autoSwitch,
+        );
+        if (chatId) {
+          openWorkspaceBuffer({
+            kind: 'chat',
+            path: `__workspace/chat/${chatId}`,
+            title: 'Worktree Chat',
+            isPinned: false,
+            isClosable: true,
+            metadata: { chatId },
+          });
+          setWorktreeDialogOpen(false);
+        } else {
+          setWorktreeError('Failed to create chat session in worktree');
+        }
+      } catch (err) {
+        setWorktreeError(err instanceof Error ? err.message : 'Failed to create chat in worktree');
+      } finally {
+        setWorktreeCreating(false);
+      }
+    },
+    [onCreateChatInWorktree, openWorkspaceBuffer],
+  );
 
   const setAppState = useAppStoreSetState();
 
@@ -876,6 +923,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 chatSessions={chatSessions}
                 onActiveChatChange={onActiveChatChange}
                 onCreateChat={onCreateChat}
+                onCreateChatInWorktree={onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined}
                 onDeleteChat={onDeleteChat}
                 onDeleteAllChats={onDeleteAllChats}
                 onRenameChat={onRenameChat}
@@ -963,6 +1011,16 @@ const AppContent: React.FC<AppContentProps> = ({
         onOpenFileAtLine={handlePaletteOpenFileAtLine}
         onOpenFileInNewPane={handlePaletteOpenFileInNewPane}
         onExecuteCommand={handlePaletteExecuteCommand}
+      />
+      <WorktreeChatDialog
+        isOpen={worktreeDialogOpen}
+        onClose={() => {
+          setWorktreeDialogOpen(false);
+          setWorktreeError(null);
+        }}
+        onSubmit={handleWorktreeSubmit}
+        isCreating={worktreeCreating}
+        error={worktreeError}
       />
     </div>
   );

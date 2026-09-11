@@ -452,6 +452,7 @@ function AppInner() {
                         activeChatId={state.activeChatId}
                         onActiveChatChange={chatManager.handleActiveChatChange}
                         onCreateChat={chatManager.handleCreateChat}
+                        onCreateChatInWorktree={chatManager.handleCreateChatInWorktree}
                         onDeleteChat={chatManager.handleDeleteChat}
                         onDeleteAllChats={chatManager.handleDeleteAllChats}
                         onRenameChat={chatManager.handleRenameChat}

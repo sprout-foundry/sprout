@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-08T13:40:49Z",
+  "updated_at": "2026-09-11T13:37:51Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -397,14 +397,18 @@
           "name": "DeepSeek Chat",
           "description": "DeepSeek Chat - General purpose chat model (alias for V4 Flash non-thinking)",
           "context_length": 1000000,
-          "input_cost": 0.32,
-          "output_cost": 0.8899999999999999
+          "input_cost": 0.2574,
+          "output_cost": 1.0287
         },
         {
           "id": "deepseek-coder",
           "name": "DeepSeek Coder",
           "description": "DeepSeek Coder - Coding specialized model",
           "context_length": 128000
+        },
+        {
+          "id": "deepseek-flash",
+          "name": "deepseek-flash"
         },
         {
           "id": "deepseek-reasoner",
@@ -423,14 +427,14 @@
         },
         {
           "id": "deepseek-v4-flash",
-          "name": "deepseek-v4-flash",
+          "name": "DeepSeek V4 Flash",
           "description": "DeepSeek-V4 Flash - Cost-effective model with 1M context, optimized for speed",
           "context_length": 1000000,
           "tags": [
             "tools"
           ],
-          "input_cost": 0.44,
-          "output_cost": 1.32
+          "input_cost": 0.08707999999999999,
+          "output_cost": 0.17415999999999998
         },
         {
           "id": "deepseek-v4-flash-max",
@@ -444,7 +448,7 @@
         },
         {
           "id": "deepseek-v4-flash-vision-exp",
-          "name": "deepseek-v4-flash-vision-exp",
+          "name": "DeepSeek V4 Flash Vision Exp",
           "description": "DeepSeek-V4 Flash Vision Exp - Experimental multimodal version of V4 Flash with image understanding, matching V4 Flash on text capabilities including agents, reasoning, and world knowledge",
           "context_length": 1000000,
           "tags": [
@@ -452,8 +456,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.44,
-          "output_cost": 1.32
+          "input_cost": 0.22,
+          "output_cost": 0.66
         },
         {
           "id": "deepseek-v4-pro",
@@ -514,8 +518,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.088606,
-          "output_cost": 0.177212
+          "input_cost": 0.08707999999999999,
+          "output_cost": 0.17415999999999998
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -546,8 +550,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.9552599999999999,
-          "output_cost": 1.9105199999999998
+          "input_cost": 0.954738,
+          "output_cost": 1.909476
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -568,6 +572,12 @@
             "tools",
             "reasoning"
           ]
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "name": "deepseek-v4.1-flash",
+          "input_cost": 0.15,
+          "output_cost": 0.6
         },
         {
           "id": "gemma4:31b",
@@ -625,8 +635,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.075,
-          "output_cost": 0.25
+          "input_cost": 0.15,
+          "output_cost": 0.5
         },
         {
           "id": "gpt-oss:120b",
@@ -681,8 +691,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 3,
-          "output_cost": 15
+          "input_cost": 2.34,
+          "output_cost": 11.7
         },
         {
           "id": "minimax-m2.7",
@@ -1557,8 +1567,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.32,
-          "output_cost": 0.8899999999999999
+          "input_cost": 0.2574,
+          "output_cost": 1.0287
         },
         {
           "id": "deepseek/deepseek-chat-v3-0324",
@@ -1569,8 +1579,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.29,
-          "output_cost": 1.1400000000000001
+          "input_cost": 0.25,
+          "output_cost": 1
         },
         {
           "id": "deepseek/deepseek-chat-v3.1",
@@ -1671,8 +1681,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.088606,
-          "output_cost": 0.177212
+          "input_cost": 0.08707999999999999,
+          "output_cost": 0.17415999999999998
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1697,8 +1707,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.14,
-          "output_cost": 0.28
+          "input_cost": 0.11,
+          "output_cost": 0.33
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp",
@@ -1715,6 +1725,20 @@
           "output_cost": 0.66
         },
         {
+          "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
+          "name": "DeepSeek: DeepSeek V4 Flash Vision Exp (batch)",
+          "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.11,
+          "output_cost": 0.33
+        },
+        {
           "id": "deepseek/deepseek-v4-pro",
           "name": "DeepSeek: DeepSeek V4 Pro 0423",
           "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
@@ -1724,8 +1748,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.9552599999999999,
-          "output_cost": 1.9105199999999998
+          "input_cost": 0.954738,
+          "output_cost": 1.909476
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -1737,8 +1761,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.0494,
-          "output_cost": 3.1482
+          "input_cost": 0.65868,
+          "output_cost": 1.97604
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813:batch",
@@ -1750,8 +1774,22 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.32,
-          "output_cost": 3.9600000000000004
+          "input_cost": 0.66,
+          "output_cost": 1.9800000000000002
+        },
+        {
+          "id": "deepseek/deepseek-v4.1-flash",
+          "name": "DeepSeek: DeepSeek V4.1 Flash",
+          "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.15,
+          "output_cost": 0.6
         },
         {
           "id": "dots-studio/dots-3-note-preview:free",
@@ -2276,8 +2314,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.07,
-          "output_cost": 0.33999999999999997
+          "input_cost": 0.041999999999999996,
+          "output_cost": 0.22
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -2393,8 +2431,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.15
+          "input_cost": 0.06,
+          "output_cost": 0.25
         },
         {
           "id": "inception/mercury-2",
@@ -2410,8 +2448,8 @@
           "output_cost": 0.75
         },
         {
-          "id": "inception/mercury-2.5-preview",
-          "name": "Inception: Mercury 2.5 Preview",
+          "id": "inception/mercury-2.5",
+          "name": "Inception: Mercury 2.5",
           "description": "Mercury 2.5 is the fastest reasoning LLM, and the latest diffusion LLM (dLLM) from Inception. Instead of generating tokens sequentially, Mercury 2.5 produces and refines multiple tokens in parallel, achieving...",
           "context_length": 260000,
           "tags": [
@@ -2421,6 +2459,17 @@
           ],
           "input_cost": 0.04,
           "output_cost": 0.15
+        },
+        {
+          "id": "inception/mercury-2.5-preview",
+          "name": "Inception: Mercury 2.5 Preview",
+          "description": "Mercury 2.5 is the fastest reasoning LLM, and the latest diffusion LLM (dLLM) from Inception. Instead of generating tokens sequentially, Mercury 2.5 produces and refines multiple tokens in parallel, achieving 1,107 tokens/sec on standard GPUs and delivering a 10+ point jump in intelligence over Mercury 2.",
+          "context_length": 260000,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ]
         },
         {
           "id": "inclusionai/ling-2.6-1t",
@@ -2485,6 +2534,31 @@
           "context_length": 262144,
           "tags": [
             "tools",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-vl",
+          "name": "inclusionAI: Ling 3.0 Flash VL",
+          "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.06,
+          "output_cost": 0.18
+        },
+        {
+          "id": "inclusionai/ling-3.0-flash-vl:free",
+          "name": "inclusionAI: Ling 3.0 Flash VL (free)",
+          "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
             "reasoning"
           ]
         },
@@ -2705,8 +2779,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.35,
-          "output_cost": 1.5
+          "input_cost": 0.175,
+          "output_cost": 0.75
         },
         {
           "id": "meta/muse-spark-1.1",
@@ -2820,7 +2894,7 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.39999999999999997,
+          "input_cost": 0.55,
           "output_cost": 2.2
         },
         {
@@ -2867,8 +2941,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 1.08
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -2954,7 +3028,9 @@
           "tags": [
             "tools",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.15,
+          "output_cost": 0.44999999999999996
         },
         {
           "id": "mistralai/devstral-2512",
@@ -3025,7 +3101,9 @@
             "tools",
             "vision",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.075,
+          "output_cost": 0.075
         },
         {
           "id": "mistralai/mistral-large",
@@ -3073,7 +3151,9 @@
             "tools",
             "vision",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.25,
+          "output_cost": 0.75
         },
         {
           "id": "mistralai/mistral-medium-3",
@@ -3132,13 +3212,15 @@
         {
           "id": "mistralai/mistral-medium-3.1:batch",
           "name": "Mistral: Mistral Medium 3.1 (batch)",
-          "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances performance and cost for enterprise workloads.",
+          "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances...",
           "context_length": 131072,
           "tags": [
             "tools",
             "vision",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.19999999999999998,
+          "output_cost": 1
         },
         {
           "id": "mistralai/mistral-nemo",
@@ -3192,14 +3274,16 @@
         {
           "id": "mistralai/mistral-small-2603:batch",
           "name": "Mistral: Mistral Small 4 (batch)",
-          "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from larger models with low latency and cost efficiency.",
+          "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from...",
           "context_length": 262144,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.075,
+          "output_cost": 0.3
         },
         {
           "id": "mistralai/mistral-small-3.1-24b-instruct",
@@ -3350,8 +3434,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 3,
-          "output_cost": 15
+          "input_cost": 2.34,
+          "output_cost": 11.7
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -3410,6 +3494,30 @@
           ]
         },
         {
+          "id": "nex-agi/nex-n2.5-mini:free",
+          "name": "Nex AGI: Nex-N2.5-Mini (free)",
+          "description": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can explore codebases, implement multi-file...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
+          "id": "nex-agi/nex-n2.5-pro:free",
+          "name": "Nex AGI: Nex-N2.5-Pro (free)",
+          "description": "Nex-N2.5 is an agentic model built to turn goals into working, verified outcomes. Its core strength is agentic coding within a visual feedback loop: it can explore codebases, implement multi-file...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
           "id": "nousresearch/hermes-3-llama-3.1-405b",
           "name": "Nous: Hermes 3 405B Instruct",
           "description": "Hermes 3 is a generalist language model with many improvements over Hermes 2, including advanced agentic capabilities, much better roleplaying, reasoning, multi-turn conversation, long context coherence, and improvements across the...",
@@ -3451,9 +3559,7 @@
           "tags": [
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.13,
-          "output_cost": 0.39999999999999997
+          ]
         },
         {
           "id": "nvidia/nemotron-3-nano-30b-a3b",
@@ -3493,7 +3599,7 @@
           "id": "nvidia/nemotron-3-super-120b-a12b",
           "name": "NVIDIA: Nemotron 3 Super",
           "description": "NVIDIA Nemotron 3 Super is a 120B-parameter open hybrid MoE model, activating just 12B parameters for maximum compute efficiency and accuracy in complex multi-agent applications. Built on a hybrid Mamba-Transformer...",
-          "context_length": 1000000,
+          "context_length": 262144,
           "tags": [
             "tools",
             "reasoning",
@@ -5200,8 +5306,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.55
+          "input_cost": 0.22,
+          "output_cost": 0.88
         },
         {
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
@@ -5238,8 +5344,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.04815,
-          "output_cost": 0.19305
+          "input_cost": 0.09,
+          "output_cost": 0.3
         },
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
@@ -5374,7 +5480,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
+          "input_cost": 0.09,
           "output_cost": 1.1
         },
         {
@@ -5495,8 +5601,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.29,
-          "output_cost": 2.4
+          "input_cost": 0.26,
+          "output_cost": 2.08
         },
         {
           "id": "qwen/qwen3.5-27b",
@@ -5846,9 +5952,37 @@
           "output_cost": 3
         },
         {
+          "id": "sakana/fugu-max",
+          "name": "Sakana: Fugu Max",
+          "description": "Fugu Max is the cost-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 6
+        },
+        {
           "id": "sakana/fugu-ultra",
           "name": "Sakana: Fugu Ultra",
           "description": "Fugu Ultra is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 5,
+          "output_cost": 30
+        },
+        {
+          "id": "sakana/fugu-ultra-v2",
+          "name": "Sakana: Fugu Ultra v2",
+          "description": "Fugu Ultra v2 is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -6177,8 +6311,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
-          "output_cost": 0.12
+          "input_cost": 0.09,
+          "output_cost": 0.36
         },
         {
           "id": "writer/palmyra-x5",
@@ -6361,8 +6495,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.55,
-          "output_cost": 2.2
+          "input_cost": 0.43,
+          "output_cost": 1.75
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -6395,7 +6529,7 @@
           "id": "z-ai/glm-4.7-flash",
           "name": "Z.ai: GLM 4.7 Flash",
           "description": "As a 30B-class SOTA model, GLM-4.7-Flash offers a new option that balances performance and efficiency. It is further optimized for agentic coding use cases, strengthening coding capabilities, long-horizon task planning,...",
-          "context_length": 202752,
+          "context_length": 200000,
           "tags": [
             "tools",
             "reasoning",
@@ -6459,13 +6593,15 @@
         {
           "id": "z-ai/glm-5.2:batch",
           "name": "Z.ai: GLM 5.2 (batch)",
-          "description": "GLM-5.2 via the Batch API at 50% of standard pricing. Large-scale reasoning model from Z.ai with a 1M-token context window.",
+          "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
           "context_length": 1048576,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
-          ]
+          ],
+          "input_cost": 0.7,
+          "output_cost": 2.2
         },
         {
           "id": "z-ai/glm-5.2:free",
@@ -6500,22 +6636,35 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.075,
-          "output_cost": 0.25
+          "input_cost": 0.15,
+          "output_cost": 0.5
         },
         {
           "id": "z-ai/glm-5.3-flash:batch",
           "name": "Z.ai: GLM 5.3 Flash (batch)",
           "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while...",
-          "context_length": 1048575,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.5
+          "input_cost": 0.075,
+          "output_cost": 0.25
+        },
+        {
+          "id": "z-ai/glm-5.3:batch",
+          "name": "Z.ai: GLM 5.3 (batch)",
+          "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.7,
+          "output_cost": 2.2
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -6639,8 +6788,22 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.5,
-          "output_cost": 14
+          "input_cost": 2.34,
+          "output_cost": 11.7
+        },
+        {
+          "id": "~openai/gpt-astra-latest",
+          "name": "OpenAI GPT Astra Latest",
+          "description": "This model always redirects to the latest model in the OpenAI GPT Astra family.",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 10,
+          "output_cost": 50
         },
         {
           "id": "~openai/gpt-latest",
@@ -6657,6 +6820,20 @@
           "output_cost": 10
         },
         {
+          "id": "~openai/gpt-luna-latest",
+          "name": "OpenAI GPT Luna Latest",
+          "description": "This model always redirects to the latest model in the OpenAI GPT Luna family.",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.19999999999999998,
+          "output_cost": 1.2
+        },
+        {
           "id": "~openai/gpt-mini-latest",
           "name": "OpenAI GPT Mini Latest",
           "description": "This model always redirects to the latest model in the OpenAI GPT Mini family.",
@@ -6669,6 +6846,34 @@
           ],
           "input_cost": 0.75,
           "output_cost": 4.5
+        },
+        {
+          "id": "~openai/gpt-sol-latest",
+          "name": "OpenAI GPT Sol Latest",
+          "description": "This model always redirects to the latest model in the OpenAI GPT Sol family.",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 10
+        },
+        {
+          "id": "~openai/gpt-terra-latest",
+          "name": "OpenAI GPT Terra Latest",
+          "description": "This model always redirects to the latest model in the OpenAI GPT Terra family.",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 12
         },
         {
           "id": "~x-ai/grok-latest",
@@ -6695,8 +6900,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.07125000000000001,
-          "output_cost": 0.2375
+          "input_cost": 0.075,
+          "output_cost": 0.25
         },
         {
           "id": "~z-ai/glm-latest",
@@ -6708,8 +6913,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.113,
-          "output_cost": 3.4979999999999998
+          "input_cost": 0.9700000000000001,
+          "output_cost": 3.3077
         }
       ]
     },
@@ -7019,6 +7224,20 @@
           "output_cost": 2.5999999999999996
         },
         {
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "name": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "description": "Introduce DeepSeek-V4.1-Flash, a multimodal Mixture-of-Experts (MoE) model with 552B backbone parameters and support for contexts of up to one million tokens.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.2,
+          "output_cost": 0.6
+        },
+        {
           "id": "google/gemini-2.5-flash",
           "name": "google/gemini-2.5-flash",
           "description": "Gemini 2.5 Flash is Google's latest thinking model, designed to tackle increasingly complex problems. It's capable of reasoning through their thoughts before responding, resulting in enhanced performance and improved accuracy.  Gemini 2.5 Flash: best for balancing reasoning and speed.",
@@ -7183,7 +7402,8 @@
           "tags": [
             "tools",
             "vision",
-            "reasoning"
+            "reasoning",
+            "structured_output"
           ],
           "input_cost": 0.09,
           "output_cost": 0.34
@@ -7283,6 +7503,20 @@
           "context_length": 262144,
           "tags": [
             "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.060000000000000005,
+          "output_cost": 0.18
+        },
+        {
+          "id": "inclusionAI/Ling-3.0-flash-VL",
+          "name": "inclusionAI/Ling-3.0-flash-VL",
+          "description": "The multimodal version built on Ling-3.0-flash — 124B total / ~5.5B active per token, with native text, image, and video understanding. It’s mainly designed for multimodal agentic workflows, long-context understanding, and multi-step reasoning.",
+          "context_length": 131072,
+          "tags": [
+            "tools",
+            "vision",
             "reasoning",
             "structured_output"
           ],
@@ -8031,8 +8265,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.4,
-          "output_cost": 2
+          "input_cost": 0.13999999999999999,
+          "output_cost": 0.27999999999999997
         },
         {
           "id": "XiaomiMiMo/MiMo-V2.5-Pro",

@@ -9,7 +9,6 @@ export interface SproutSettings {
   risk_profile?: string;
   system_prompt_text: string;
   skip_prompt: boolean;
-  enable_pre_write_validation: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
   history_scope: string;

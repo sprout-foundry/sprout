@@ -42,7 +42,6 @@ export default function AgentBehaviorSettingsTab({
       )}
       {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
       {renderToggle('skip_prompt', 'Skip confirmation prompt')}
-      {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
       {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
       {/*
         SP-058: risk profile selector. Empty string ("") means "use

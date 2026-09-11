@@ -1,19 +1,20 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import type { FsEntry } from '../services/workspaceFs/types';
-import GitHubRepoPicker from './GitHubRepoPicker';
-import WorkspaceCwdBar from './WorkspaceCwdBar';
 import { isCloud } from '../config/mode';
+import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
-import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
-import { repoDir } from '../services/workspaceFs/workspaceGit';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
+import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
+import type { FsEntry } from '../services/workspaceFs/types';
+import { repoDir } from '../services/workspaceFs/workspaceGit';
 import { debugLog } from '../utils/log';
+import GitHubRepoPicker from './GitHubRepoPicker';
+import WorkspaceCwdBar from './WorkspaceCwdBar';
 
 export interface FileTreeHandle {
   refresh: () => void;
@@ -97,6 +98,20 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     useEffect(() => {
       refreshRepos();
     }, [refreshRepos]);
+
+    // The cwd row is shell-scoped: the studio shell is a single native
+    // workspace (the gate modal picks it, the shell owns the root), so the
+    // select is the only cwd surface. On the plain webui the workspace root
+    // is fixed for the daemon's lifetime and the sidebar header's
+    // LocationSwitcher already shows it — a second selector here is noise.
+    // Starts from the boot-time identity (index.tsx sets data-shell before
+    // first paint) and follows the async capabilities handshake in case the
+    // row mounts before resolution.
+    const [isStudioShell, setIsStudioShell] = useState(() => getShellIdentity() === 'studio');
+    useEffect(() => {
+      setIsStudioShell(getShellIdentity() === 'studio');
+      return onShellIdentityChange((identity) => setIsStudioShell(identity === 'studio'));
+    }, []);
 
     // Keep the cwd honest: if the selected repo disappears (removed while the
     // store still points at it), fall back to the root rather than rooting the
@@ -347,18 +362,21 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             }, 300);
           }}
         />
-        {/* Working-directory row: ONE select is the single source of truth
-            for the session cwd (Files / Terminal / Git / Agent share it via
+        {/* Working-directory row (studio shell only — see isStudioShell
+            above): ONE select is the single source of truth for the session
+            cwd (Files / Terminal / Git / Agent share it via
             services/workspaceCwd.ts). No companion chip repeating the value;
             a cwd inside a repo shows as a dynamic "owner/name › sub/path"
             option instead of the select silently claiming the root. */}
-        <WorkspaceCwdBar
-          cwd={cwd}
-          repos={repos}
-          onChange={setWorkspaceCwd}
-          onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
-          addRepoDisabled={importStatus === 'loading'}
-        />
+        {isStudioShell && (
+          <WorkspaceCwdBar
+            cwd={cwd}
+            repos={repos}
+            onChange={setWorkspaceCwd}
+            onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
+            addRepoDisabled={importStatus === 'loading'}
+          />
+        )}
         <FileTree
           ref={fileTreeRef}
           key={treeRoot}

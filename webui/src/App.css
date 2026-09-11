@@ -347,12 +347,18 @@ body {
 /* P4.5 (user request 2026-09-10): on the touch-large band (tablets —
  * coarse pointer wider than the phone breakpoint), give the app shell
  * breathing room at the top so the first row of chrome doesn't sit
- * jammed against the screen edge / status bar area. ~50px logical;
- * desktop (pointer-fine) is untouched. Applies inside #root's scaled
- * coordinate space, so it scales with the UI tier. */
+ * jammed against the screen edge / status bar area. Scoped to the
+ * STUDIO SHELL (data-shell, set from the window.SproutStudio bridge in
+ * config/shell.ts): device-class media queries alone can't tell an
+ * iPad in the native shell from an iPad in Safari, and desktop/tablet
+ * plain-webui users shouldn't lose 50px of canvas to a margin that
+ * only matters when a status bar/home indicator overlays the page.
+ * The inset uses env(safe-area-inset-top) when the device reports one,
+ * with the original ~50px as the floor (index.html sets
+ * viewport-fit=cover, so the env() value is real on device). */
 @media (hover: none) and (min-width: 769px) {
-  .app {
-    padding-top: 50px;
+  [data-shell='studio'] .app {
+    padding-top: max(env(safe-area-inset-top, 0px), 50px);
   }
 }
 

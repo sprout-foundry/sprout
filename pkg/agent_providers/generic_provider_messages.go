@@ -62,10 +62,29 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		flush()
 
 		if !isMergeable {
-			// Emit directly without buffering
+			// Emit directly without buffering.
+			// Tool-role messages must keep string content: most providers
+			// (e.g. Qwen/ai-worker, DeepSeek, MiniMax) reject tool results
+			// whose content is a multimodal array ("tool messages must
+			// contain string content"). Images attached to a tool result
+			// are informational only — drop them and keep the text.
 			content := interface{}(msg.Content)
 			if content == "" {
 				content = nil
+			}
+			if msg.Role == "tool" {
+				convertedMsg := map[string]interface{}{
+					"role":    msg.Role,
+					"content": content,
+				}
+				if msg.ToolCallID != "" && p.config.Conversion.IncludeToolCallID {
+					convertedMsg["tool_call_id"] = msg.ToolCallID
+				}
+				if p.config.Conversion.ConvertToolRoleToUser {
+					convertedMsg["role"] = "user"
+				}
+				converted = append(converted, convertedMsg)
+				continue
 			}
 			if len(msg.Images) > 0 {
 				content = p.buildMultiModalContent(msg.Content, msg.Images)

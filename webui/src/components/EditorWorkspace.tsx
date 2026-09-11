@@ -39,6 +39,8 @@ export interface EditorWorkspaceProps {
   /** Switch the active chat when a chat tab is middle-clicked/cycled. */
   onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
+  /** Opens the New-Chat-in-Worktree dialog (AppContent owns the dialog). */
+  onCreateChatInWorktree?: () => void;
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void> | void;
   onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
@@ -130,6 +132,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   chatSessions,
   onActiveChatChange,
   onCreateChat,
+  onCreateChatInWorktree,
   onDeleteChat,
   onDeleteAllChats,
   onRenameChat,
@@ -441,6 +444,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                     }
                   : undefined
               }
+              onCreateChatInWorktree={onCreateChatInWorktree}
               onDeleteChat={onDeleteChatSync}
               onRenameChat={onRenameChat}
               onDeleteAllChats={onDeleteAllChats}

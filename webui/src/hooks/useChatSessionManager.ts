@@ -5,6 +5,7 @@ import { ApiService } from '../services/api';
 import {
   listChatSessions,
   createChatSession,
+  createChatSessionInWorktree,
   deleteChatSession,
   deleteAllChatSessions,
   renameChatSession,
@@ -52,6 +53,12 @@ export interface UseChatSessionManagerReturn {
   loadChatSessions: () => Promise<void>;
   handleActiveChatChange: (id: string) => Promise<void>;
   handleCreateChat: () => Promise<string | null>;
+  handleCreateChatInWorktree: (
+    branch: string,
+    baseRef?: string,
+    name?: string,
+    autoSwitch?: boolean,
+  ) => Promise<string | null>;
   handleDeleteChat: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
   handleDeleteAllChats: () => Promise<void>;
   handleRenameChat: (id: string, name: string) => Promise<void>;
@@ -272,6 +279,32 @@ export function useChatSessionManager({
       return null;
     }
   }, [setState]);
+
+  const handleCreateChatInWorktree = useCallback(
+    async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
+      try {
+        const response = await createChatSessionInWorktree({
+          branch,
+          base_ref: baseRef || undefined,
+          name: name || undefined,
+          auto_switch_workspace: autoSwitch,
+        });
+        const newId = response.chat_session.id;
+        const sessionsResp = await listChatSessions();
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+        if (autoSwitch && newId) {
+          await handleActiveChatChange(newId);
+        }
+        return newId;
+      } catch (error) {
+        debugLog('[chat] Failed to create chat in worktree:', error);
+        const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
+        setState((prev) => ({ lastError: message }));
+        throw error;
+      }
+    },
+    [handleActiveChatChange, setState],
+  );
 
   const handleDeleteChat = useCallback(
     async (id: string, options?: { removeWorktree?: boolean }) => {
@@ -774,6 +807,7 @@ export function useChatSessionManager({
     loadChatSessions,
     handleActiveChatChange,
     handleCreateChat,
+    handleCreateChatInWorktree,
     handleDeleteChat,
     handleDeleteAllChats,
     handleRenameChat,

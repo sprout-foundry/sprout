@@ -81,6 +81,11 @@ test('diff viewer does not constantly reload', async () => {
   await fileRow.click();
   await page.waitForTimeout(3000);
 
+  // Diffs open in text view by default; switch to merge view, which is the
+  // surface whose rebuild stability this spec measures.
+  await page.getByRole('button', { name: 'Merge', exact: true }).click();
+  await page.waitForTimeout(2000);
+
   // Count view rebuilds and narrow-mode toggles over a 10s idle window.
   const stats = await page.evaluate(() => {
     return new Promise<Record<string, number>>((resolve) => {

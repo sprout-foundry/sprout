@@ -36,7 +36,7 @@ interface DiffWorkspaceTabProps {
    * fragment reconstruction would destroy the rest of the file.
    */
   canSave?: boolean;
-  /** Initial view mode ('merge' unless the opener marks the buffer read-only history). */
+  /** Initial view mode ('text' unless the opener opts into the merge view). */
   defaultView?: 'merge' | 'text';
 }
 
@@ -64,7 +64,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   fullOriginal,
   fullModified,
   canSave = false,
-  defaultView = 'merge',
+  defaultView = 'text',
 }: DiffWorkspaceTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'merge' | 'text'>(defaultView);
   const [collapseUnchanged, setCollapseUnchanged] = useState(true);

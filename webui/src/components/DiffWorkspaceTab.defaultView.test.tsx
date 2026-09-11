@@ -68,13 +68,21 @@ const baseProps = {
 };
 
 describe('DiffWorkspaceTab default view seeding', () => {
-  it('defaults to merge view for working-tree diffs', () => {
+  it('defaults to text view for working-tree diffs', () => {
     render(<DiffWorkspaceTab {...baseProps} fullOriginal="a\n" fullModified="b\n" canSave />);
+    expect(container!.querySelector('[data-testid="diff-surface"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="merge-view"]')).toBeNull();
+    // The deferred/expensive CodeMirror mount never happens for text-first.
+    expect(mergeRenderMock).not.toHaveBeenCalled();
+  });
+
+  it('opens in merge view when defaultView="merge"', () => {
+    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="a\n" fullModified="b\n" canSave />);
     expect(container!.querySelector('[data-testid="merge-view"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="diff-surface"]')).toBeNull();
   });
 
-  it('defaults to text view when defaultView="text" (commit/history diffs)', () => {
+  it('opens in text view when defaultView="text" (commit/history diffs)', () => {
     render(<DiffWorkspaceTab {...baseProps} defaultView="text" />);
     expect(container!.querySelector('[data-testid="diff-surface"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="merge-view"]')).toBeNull();

@@ -1480,6 +1480,36 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.012,
+        "context_length": 131072,
+        "description": "The multimodal version built on Ling-3.0-flash — 124B total / ~5.5B active per token, with native text, image, and video understanding. It’s mainly designed for multimodal agentic workflows, long-context understanding, and multi-step reasoning.",
+        "id": "inclusionAI/Ling-3.0-flash-VL",
+        "input_cost": 0.06,
+        "name": "inclusionAI/Ling-3.0-flash-VL",
+        "output_cost": 0.18,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.006,
+        "context_length": 1048576,
+        "description": "DeepSeek-V4.1-Flash is a multimodal Mixture-of-Experts (MoE) model with 552B backbone parameters and native image understanding, supporting contexts of up to one million tokens.",
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "input_cost": 0.3,
+        "name": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "output_cost": 1.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

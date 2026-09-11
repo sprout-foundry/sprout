@@ -889,7 +889,6 @@ const AppContent: React.FC<AppContentProps> = ({
               contextPanelRef={contextPanelRef}
               currentView={state.currentView}
               toolExecutions={state.toolExecutions}
-              fileEdits={state.fileEdits}
               logs={state.logs}
               subagentActivities={state.subagentActivities}
               messages={state.messages}

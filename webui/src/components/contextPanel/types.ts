@@ -2,8 +2,6 @@ import type {
   ToolExecution,
   LogEntry,
   SubagentActivity,
-  TodoItem,
-  FileEdit,
   LiveLogLine,
   RevisionFile,
   Revision,
@@ -18,8 +16,6 @@ export type {
   ToolExecution,
   LogEntry,
   SubagentActivity,
-  TodoItem,
-  FileEdit,
   LiveLogLine,
   RevisionFile,
   Revision,
@@ -117,7 +113,6 @@ export interface ContextPanelBaseProps {
 export interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
-  fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
   messages: Array<{ type: string; timestamp: Date }>;

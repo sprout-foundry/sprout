@@ -120,7 +120,6 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
   fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: TodoItem[];
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
@@ -175,7 +174,7 @@ export const PANEL_DEFAULT_WIDTH = 360;
 export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
-export type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';
+export type ChatTabId = 'activity' | 'changes' | 'sessions';
 
 export interface PanelTab {
   id: ChatTabId;

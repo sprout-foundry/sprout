@@ -77,6 +77,28 @@
   padding-left: 4px;
 }
 
+/* ── Activity tab section labels ── */
+
+.activity-section-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary, #8b949e);
+}
+
+/* Deep-link highlight: highlightTool() sets activeToolId, briefly marking
+ * the targeted tool card / subagent card so the scroll target is visible. */
+.tool-highlighted {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 4px);
+}
+
 .tool-query-header {
   display: flex;
   align-items: center;

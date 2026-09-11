@@ -11,13 +11,8 @@ interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];
   resourceCounts: SubagentResourceCounts;
   expandedSubagents: Set<string>;
-  toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
-  expandedTools: Set<string>;
-  expandedQueries: Set<number>;
-  setActiveToolId: (v: string | null) => void;
-  setChatTab: (v: 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions') => void;
-  setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
-  setExpandedQueries: React.Dispatch<React.SetStateAction<Set<number>>>;
+  activeToolId: string | null;
+  toolRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
   toggleSubagentExpansion: (toolId: string) => void;
 }
 
@@ -25,13 +20,8 @@ export function SubagentsTab({
   subagentRuns,
   resourceCounts,
   expandedSubagents,
+  activeToolId,
   toolRefs,
-  expandedTools: _expandedTools,
-  expandedQueries: _expandedQueries,
-  setActiveToolId,
-  setChatTab,
-  setExpandedTools,
-  setExpandedQueries,
   toggleSubagentExpansion,
 }: SubagentsTabProps) {
   // Auto-scroll live subagent activity lists
@@ -118,7 +108,13 @@ export function SubagentsTab({
             }));
 
           return (
-            <section key={tool.id} className={`subagent-card tool-${tool.status}`}>
+            <section
+              key={tool.id}
+              ref={(el: HTMLElement | null) => {
+                toolRefs.current[tool.id] = el;
+              }}
+              className={`subagent-card tool-${tool.status} ${activeToolId === tool.id ? 'tool-highlighted' : ''}`}
+            >
               <button
                 className="subagent-card-header"
                 onClick={() => toggleSubagentExpansion(tool.id)}
@@ -261,29 +257,6 @@ export function SubagentsTab({
                     {expanded ? 'Show fewer updates' : 'Show all updates'}
                   </button>
                 )}
-                <button
-                  className="subagent-link-btn"
-                  onClick={() => {
-                    setChatTab('tools');
-                    setActiveToolId(tool.id);
-                    setExpandedTools((prev) => new Set(prev).add(tool.id));
-                    const qid = tool.queryId ?? 0;
-                    setExpandedQueries((prev) => {
-                      if (prev.has(qid)) return prev;
-                      const next = new Set(prev);
-                      next.add(qid);
-                      return next;
-                    });
-                    setTimeout(() => {
-                      const el = toolRefs.current[tool.id];
-                      if (el != null) {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                      }
-                    }, 150);
-                  }}
-                >
-                  View raw tool details
-                </button>
               </div>
             </section>
           );

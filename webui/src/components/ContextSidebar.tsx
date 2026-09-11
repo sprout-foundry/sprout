@@ -1,4 +1,4 @@
-import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
+import type { ToolExecution, LogEntry, SubagentActivity, FileEdit } from '@sprout/ui';
 import React from 'react';
 import { ApiService } from '../services/api';
 import type { QueryProgress, ViewType } from '../types/app';
@@ -15,7 +15,6 @@ export interface ContextSidebarProps {
   fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: TodoItem[];
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
@@ -44,7 +43,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   fileEdits,
   logs,
   subagentActivities,
-  currentTodos,
   messages,
   isProcessing,
   lastError,
@@ -57,7 +55,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     fileEdits,
     logs,
     subagentActivities,
-    currentTodos,
     messages,
     isProcessing,
     lastError,

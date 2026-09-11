@@ -176,7 +176,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
       // contextPanelRef.highlightTool(toolId), which then couldn't find the
       // tool in state and silently no-op'd. handleToolStart tags every new
       // tool with the current queryCount so per-turn views (timeline bar,
-      // current-turn ToolsTab group) still filter cleanly; old entries
+      // current-turn activity group) still filter cleanly; old entries
       // stay reachable for lookup and the sidebar's "Earlier" group.
       toolExecutions: prev.toolExecutions,
       fileEdits: [],

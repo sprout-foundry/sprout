@@ -1,0 +1,129 @@
+/* ── SyncStatusBanner.css ────────────────────────────────────────
+   ETH-1 sync-on-resume banner. Theme-aware via the shared design
+   tokens (--bg-*, --text-*, --accent-*, --border-*) — no raw hex.
+   ─────────────────────────────────────────────────────────────── */
+
+.sync-status-banner {
+  position: fixed;
+  bottom: 44px; /* above the status bar */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent-warning);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated, 0 4px 16px rgba(0, 0, 0, 0.25));
+  animation: sync-banner-in 0.2s ease-out;
+}
+
+@keyframes sync-banner-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.sync-status-banner-icon {
+  flex-shrink: 0;
+  color: var(--accent-warning);
+}
+
+.sync-status-banner-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sync-status-banner-branch {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.sync-status-banner-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-status-banner-error {
+  font-size: 11px;
+  color: var(--accent-danger, var(--accent-warning));
+}
+
+.sync-status-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.sync-status-banner-btn:hover:not(:disabled) {
+  background: var(--bg-hover, var(--bg-tertiary));
+  border-color: var(--accent-primary);
+}
+
+.sync-status-banner-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sync-status-banner-btn.primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--bg-primary);
+}
+
+.sync-status-banner-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.sync-status-banner-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.sync-status-banner-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.sync-status-banner-btn .spin,
+.sync-status-banner-btn.spin svg {
+  animation: sync-banner-spin 0.8s linear infinite;
+}
+
+@keyframes sync-banner-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

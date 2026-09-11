@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func (ws *ReactWebServer) registerChangesRoutes(mux *http.ServeMux) {
@@ -80,12 +81,14 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 }
 
 // handleAPIChangesDiff returns the unified diff for one file. Requires
-// a `path` query param. Mirrors show_my_change.
+// a `path` query param. Mirrors show_my_change — an envelope of
+// {found, path, op, tool, diff}. Session-buffer entries get a
+// cumulative session diff; persisted paths fall back to the history
+// store so previous-session timeline entries still render a diff.
 //
-// Without a live agent, diffs aren't computable (they require the
-// in-memory tracker's before/after content). Returns an empty
-// not-found envelope rather than a 503 so the panel degrades
-// gracefully.
+// Without a live agent, diffs are served from the persisted history
+// store. If the store has no record either, returns a found=false
+// envelope so the panel degrades gracefully.
 func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
@@ -98,6 +101,24 @@ func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Re
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
+		// No live agent: serve the persisted-store diff directly.
+		if rec, found, histErr := history.FindPersistedOriginal(path); histErr == nil && found {
+			op := "edit"
+			if rec.Original == "" {
+				op = "create"
+			}
+			payload := map[string]interface{}{
+				"found": true, "path": path, "op": op, "tool": "(persisted)",
+				"diff": history.UnifiedDiffFor(path, rec.Original, rec.New),
+			}
+			b, marshalErr := json.MarshalIndent(payload, "", "  ")
+			if marshalErr != nil {
+				writeChangesError(w, http.StatusInternalServerError, marshalErr.Error())
+				return
+			}
+			writeChangesJSON(w, string(b))
+			return
+		}
 		writeChangesJSON(w, fmt.Sprintf(`{"found":false,"path":%q}`, path))
 		return
 	}

@@ -239,7 +239,14 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
       if (!ok) return;
       try {
         const res = await apiService.revertAgentChanges({ file: path });
-        log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
+        if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
+          // Nothing actionable happened (disabled tracking, stale
+          // snapshot, no record). Surface the server's reason instead
+          // of a silent success log.
+          log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
+        } else {
+          log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
+        }
         await loadSession();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -251,7 +258,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
 
   const revertAll = useCallback(async () => {
     const ok = await showThemedConfirm(
-      `This will restore every file the agent touched in this session (${summary?.totals.files ?? 0} files) to its state before the session started. The user's own working-tree changes are NOT affected.`,
+      `This will restore every file the agent touched in this session (${summary?.totals.files ?? 0} files) to its state before the session started. Files modified since the agent last wrote them (e.g. by your own edits or a git commit) are skipped.`,
       {
         title: 'Revert all session changes?',
         confirmLabel: 'Revert all',
@@ -262,7 +269,11 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     if (!ok) return;
     try {
       const res = await apiService.revertAgentChanges({ scope: 'all' });
-      log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
+      if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
+        log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
+      } else {
+        log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
+      }
       await loadSession();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -533,7 +544,12 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                       type="button"
                       className="changes-action-btn"
                       onClick={() => revertOne(item.path)}
-                      title="Revert this file"
+                      disabled={item.recoverable === false}
+                      title={
+                        item.recoverable === false
+                          ? 'Original content was pruned or not captured — cannot revert'
+                          : 'Revert this file'
+                      }
                       aria-label="Revert this file"
                     >
                       <Undo2 size={14} />

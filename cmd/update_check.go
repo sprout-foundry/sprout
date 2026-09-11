@@ -23,7 +23,7 @@ func maybeStartUpdateCheck(a *agent.Agent) {
 	if updateCheckSkipped(a) {
 		return
 	}
-	go updatecheck.RefreshMaybe(context.Background(), buildinfo.Version, time.Now())
+	go updatecheck.RefreshMaybe(context.Background(), time.Now())
 }
 
 // maybeRenderUpdateNotice prints the one-line update notice to stderr at

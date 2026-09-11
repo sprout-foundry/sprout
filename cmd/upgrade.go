@@ -139,7 +139,7 @@ func resolveTargetVersion() (string, error) {
 	if upgradePreRelease {
 		tag, err = fetchLatestIncludingPreRelease()
 	} else {
-		tag, err = updatecheck.FetchLatestTag(context.Background())
+		tag, err = updatecheck.FetchLatestTagLongTimeout(context.Background())
 	}
 	if err != nil {
 		return "", fmt.Errorf("look up latest version: %w\n\nPin a tag explicitly with --version vX.Y.Z if you're behind a proxy or hitting GitHub's 60 req/hr unauthenticated rate limit", err)
@@ -687,13 +687,6 @@ func confirm(prompt string) bool {
 	}
 	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 	return answer == "" || answer == "y" || answer == "yes"
-}
-
-// normalizeVersion strips a leading 'v' (or 'V') so v1.2.3 / V1.2.3 / 1.2.3
-// compare equal. We re-add the 'v' before constructing release URLs because
-// the upstream tags carry it.
-func normalizeVersion(v string) string {
-	return updatecheck.NormalizeVersion(v)
 }
 
 func httpClient() *http.Client {

@@ -33,6 +33,8 @@ interface BootstrapResponse {
   pluginScripts?: string[];
   /** Workspace git snapshot (ETH-1). Absent/null when the daemon could not determine it. */
   sync?: GitSyncReport | null;
+  /** Newer release available, from the daemon's cached release check. */
+  update?: RuntimeConfig['update'];
 }
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
@@ -199,6 +201,7 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         navItems: data.navItems,
         user: data.user,
         sync: data.sync,
+        update: data.update,
       };
       lastConfig = config;
       currentUserIdentity = config.user;

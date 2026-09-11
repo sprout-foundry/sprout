@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -115,7 +117,7 @@ func TestRefreshMaybe_FetchesWhenStaleAndPersists(t *testing.T) {
 
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 
-	RefreshMaybe(context.Background(), "v0.14.0", now)
+	RefreshMaybe(context.Background(), now)
 	s := LoadState()
 	if s.LatestRelease != "v0.15.0" {
 		t.Fatalf("LatestRelease = %q, want v0.15.0", s.LatestRelease)
@@ -126,13 +128,13 @@ func TestRefreshMaybe_FetchesWhenStaleAndPersists(t *testing.T) {
 
 	// Fresh cache: no second fetch even when the endpoint changes.
 	defer withTestReleasesURL(t, `{"tag_name":"v0.99.0"}`)()
-	RefreshMaybe(context.Background(), "v0.14.0", now.Add(time.Hour))
+	RefreshMaybe(context.Background(), now.Add(time.Hour))
 	if s := LoadState(); s.LatestRelease != "v0.15.0" {
 		t.Errorf("fresh cache was re-fetched: LatestRelease = %q", s.LatestRelease)
 	}
 
 	// Stale again: fetch runs and updates the cache.
-	RefreshMaybe(context.Background(), "v0.14.0", now.Add(25*time.Hour))
+	RefreshMaybe(context.Background(), now.Add(25*time.Hour))
 	if s := LoadState(); s.LatestRelease != "v0.99.0" {
 		t.Errorf("stale cache not refreshed: LatestRelease = %q", s.LatestRelease)
 	}
@@ -150,7 +152,7 @@ func TestRefreshMaybe_FetchFailureStillAdvancesThrottle(t *testing.T) {
 	defer withTestReleasesURLStatus(t, "internal error", http.StatusInternalServerError)()
 
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
-	RefreshMaybe(context.Background(), "v0.14.0", now)
+	RefreshMaybe(context.Background(), now)
 
 	s := LoadState()
 	if !s.LastCheck.Equal(now) {
@@ -189,8 +191,8 @@ func TestStateRoundTrip(t *testing.T) {
 }
 
 func TestSkipped(t *testing.T) {
-	t.Setenv("CI", "")
 	t.Setenv("SPROUT_NO_UPDATE_CHECK", "")
+	t.Setenv("CI", "")
 	if Skipped("v1.0.0", false) {
 		t.Error("release build with no opt-outs must not skip")
 	}
@@ -206,13 +208,86 @@ func TestSkipped(t *testing.T) {
 
 	t.Setenv("SPROUT_NO_UPDATE_CHECK", "1")
 	if !Skipped("v1.0.0", false) {
-		t.Error("SPROUT_NO_UPDATE_CHECK must skip")
+		t.Error("SPROUT_NO_UPDATE_CHECK=1 must skip")
+	}
+	if Skipped("v1.0.0", false) && false {
+		t.Error("unreachable")
+	}
+
+	t.Setenv("SPROUT_NO_UPDATE_CHECK", "0")
+	if Skipped("v1.0.0", false) {
+		t.Error("SPROUT_NO_UPDATE_CHECK=0 must not skip (only =1 opts out)")
 	}
 
 	t.Setenv("SPROUT_NO_UPDATE_CHECK", "")
 	t.Setenv("CI", "1")
 	if !Skipped("v1.0.0", false) {
 		t.Error("CI environment must skip")
+	}
+}
+
+func TestRefreshMaybe_ConcurrentLaunchesFetchOnce(t *testing.T) {
+	withTempStateDir(t)
+
+	var fetches int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetches, 1)
+		time.Sleep(50 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v0.15.0"}`))
+	}))
+	defer srv.Close()
+	old := releasesURL
+	releasesURL = srv.URL
+	defer func() { releasesURL = old }()
+
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			RefreshMaybe(context.Background(), now)
+		}()
+	}
+	wg.Wait()
+
+	if n := atomic.LoadInt32(&fetches); n != 1 {
+		t.Errorf("concurrent refreshes hit the API %d times, want exactly 1", n)
+	}
+	if s := LoadState(); s.LatestRelease != "v0.15.0" {
+		t.Errorf("LatestRelease = %q, want v0.15.0", s.LatestRelease)
+	}
+}
+
+func TestNoticeFor_SurvivesConcurrentRefresh(t *testing.T) {
+	withTempStateDir(t)
+	defer withTestReleasesURL(t, `{"tag_name":"v0.15.0"}`)()
+
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	writeTestState(t, State{LastCheck: now.Add(-25 * time.Hour), LatestRelease: "v0.15.0"})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		RefreshMaybe(context.Background(), now)
+	}()
+	go func() {
+		defer wg.Done()
+		time.Sleep(10 * time.Millisecond) // let the refresh start fetching
+		if _, ok := NoticeFor("v0.14.0", now); !ok {
+			t.Error("notice should be due")
+		}
+	}()
+	wg.Wait()
+
+	s := LoadState()
+	if s.NoticeShownFor != "v0.15.0" {
+		t.Errorf("refresh wiped the notice marker: NoticeShownFor = %q", s.NoticeShownFor)
+	}
+	if s.LatestRelease != "v0.15.0" {
+		t.Errorf("LatestRelease = %q, want v0.15.0", s.LatestRelease)
 	}
 }
 

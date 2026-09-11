@@ -22,6 +22,14 @@
   backdrop-filter: blur(4px);
   overflow-y: auto;
   padding: var(--space-12);
+  /* SINGLE SCROLLBAR FIX (2026-09-10): box-sizing border-box is
+   * load-bearing. With the default content-box, the padding added
+   * height OUTSIDE the card's `max-height: 100%` budget — card
+   * (100% of overlay) + 2×padding exceeded the viewport, so the
+   * overlay ALWAYS scrolled alongside the card's inner scroller:
+   * the double scrollbar (short desktop viewports; iPad's taller
+   * canvas masked it). */
+  box-sizing: border-box;
 }
 
 .workspace-gate-content {
@@ -31,8 +39,9 @@
   box-shadow: var(--shadow-elevated);
   max-width: 560px;
   width: 100%;
-  /* Never taller than the scroll container's padding box; lets the inner
-   * sections own their own scrolling instead of overflowing the card. */
+  /* Never taller than the scroll container's padding box (border-box
+   * overlay, see the single-scrollbar fix); lets the inner sections own
+   * their own scrolling instead of overflowing the card. */
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -53,7 +62,12 @@
   overflow-y: auto;
   /* Neutralize the picker's standalone-page styling: inside the gate it is
    * a card section, not a page. The modal provides the padding; the picker
-   * provides the list. */
+   * provides the list. height:auto is load-bearing (fix 2026-09-10): the
+   * standalone `height: 100%` made the picker as tall as the WHOLE card
+   * while header+footer stacked on top — the card then overflowed the
+   * overlay and BOTH scrollbars appeared (overlay + picker) in shorter
+   * desktop viewports; the iPad's taller canvas masked it. */
+  height: auto;
   padding: 0;
   background: transparent;
   box-sizing: border-box;

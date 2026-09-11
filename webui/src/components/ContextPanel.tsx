@@ -29,6 +29,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const chatProps = isChat ? (props as ChatContextPanelProps) : null;
   const isMobileLayout = props.isMobileLayout ?? false;
   const isTabletLayout = props.isTabletLayout ?? false;
+  // Idle mode: the panel stays mounted on desktop even when no chat buffer
+  // is focused (e.g. the user is reading a file). The rail renders disabled
+  // and the body shows an idle note — the layout column never appears or
+  // disappears as the user moves between chat and files.
+  const isIdle = props.isIdle ?? false;
 
   // ── Hooks ──────────────────────────────────────────────────────────
 
@@ -142,6 +147,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     },
     closePanel: () => {
       state.setPanelCollapsed(true);
+    },
+    togglePanel: () => {
+      state.setPanelCollapsed((prev) => !prev);
     },
   };
 
@@ -297,8 +305,38 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Main render ───────────────────────────────────────────────────
 
+  // Tablet overlay needs a backdrop to dismiss; on desktop the panel is a
+  // permanent column (idle mode when no chat is focused) — no backdrop.
+  const tabletBackdrop =
+    isTabletLayout && !state.panelCollapsed ? (
+      <div className="context-panel-backdrop" onClick={() => state.setPanelCollapsed(true)} />
+    ) : null;
+
+  // Desktop idle: rail rendered (stable layout, visible but disabled) with
+  // an inert body. The idle note lives in the body slot so the aside keeps
+  // its exact collapsed/expanded geometry.
+  const bodyContent = isIdle ? (
+    <div className="side-panel-body">
+      <div className="context-panel-empty">Chat context — focus a chat to see activity.</div>
+    </div>
+  ) : (
+    <>
+      <div className="side-panel-header">
+        <div className="side-panel-title">
+          {activeTab.icon}
+          <h4>{activeTab.label}</h4>
+        </div>
+        <div className="side-panel-header-actions">
+          <span className="tool-count">{activeTab.count}</span>
+        </div>
+      </div>
+      <div className="side-panel-body">{renderTabContent()}</div>
+    </>
+  );
+
   return (
     <>
+      {tabletBackdrop}
       {!state.panelCollapsed && !isMobileLayout && !isTabletLayout && (
         <div
           className="context-panel-resizer"
@@ -310,7 +348,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       )}
       {(isMobileLayout && state.panelCollapsed) || (isTabletLayout && state.panelCollapsed) ? null : (
         <aside
-          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${state.isResizing ? ' resizing' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}`}
+          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${state.isResizing ? ' resizing' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}${isIdle ? ' context-panel-idle' : ''}`}
           aria-label="Context panel"
           style={
             isMobileLayout || isTabletLayout
@@ -326,6 +364,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 key={tab.id}
                 className={`side-rail-btn ${state.chatTab === tab.id ? 'active' : ''}`}
                 onClick={() => handleTabClick(tab.id)}
+                disabled={isIdle}
                 title={tab.label}
                 aria-label={tab.label}
                 aria-pressed={state.chatTab === tab.id}
@@ -346,16 +385,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
           {/* Content — always rendered; CSS handles fade-out on collapse */}
           <div className="side-panel-content" {...(state.panelCollapsed ? { inert: true, 'aria-hidden': true } : {})}>
-            <div className="side-panel-header">
-              <div className="side-panel-title">
-                {activeTab.icon}
-                <h4>{activeTab.label}</h4>
-              </div>
-              <div className="side-panel-header-actions">
-                <span className="tool-count">{activeTab.count}</span>
-              </div>
-            </div>
-            <div className="side-panel-body">{renderTabContent()}</div>
+            {bodyContent}
           </div>
         </aside>
       )}

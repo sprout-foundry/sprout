@@ -7,8 +7,8 @@ import WorkspaceBar from './WorkspaceBar';
 
 export interface HeaderBarProps {
   isMobile: boolean;
+  isTablet?: boolean;
   isSidebarOpen: boolean;
-  showContextSidebar: boolean;
   isConnected: boolean;
   onToggleSidebar: () => void;
   onToggleContextPanel: () => void;
@@ -16,8 +16,8 @@ export interface HeaderBarProps {
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
   isMobile,
+  isTablet = false,
   isSidebarOpen,
-  showContextSidebar,
   isConnected,
   onToggleSidebar,
   onToggleContextPanel,
@@ -143,7 +143,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             {busy ? 'Starting…' : 'Start Building'}
           </button>
         )}
-        {!isMobile && showContextSidebar && (
+        {!isMobile && (
           <button
             className="header-context-toggle-btn"
             onClick={onToggleContextPanel}

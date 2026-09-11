@@ -105,10 +105,13 @@ export interface ContextPanelBaseProps {
   style?: CSSProperties;
   isMobileLayout?: boolean;
   isTabletLayout?: boolean;
-  panelWidth?: number;
-  onPanelWidthChange?: (width: number) => void;
-  onMobileOpenChange?: (open: boolean) => void;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  /**
+   * Idle mode: no active chat buffer behind the panel (e.g. the user is
+   * viewing a plain file). Desktop keeps the panel mounted with its rail
+   * visible but disabled and an empty body — the layout column never
+   * appears/disappears as the user moves between chat and files.
+   */
+  isIdle?: boolean;
 }
 
 export interface ChatContextPanelProps extends ContextPanelBaseProps {
@@ -157,6 +160,8 @@ export interface ContextPanelHandle {
   openTab: (tab: string) => void;
   highlightTool: (toolId: string) => void;
   closePanel: () => void;
+  /** Expand when collapsed, collapse when expanded. */
+  togglePanel: () => void;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -165,6 +170,7 @@ export const PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 export const PANEL_TAB_KEY = 'sprout.contextPanel.tab';
 export const PANEL_MIN = 280;
 export const PANEL_MAX = 760;
+export const PANEL_DEFAULT_WIDTH = 360;
 /** Width of the side-rail-only collapsed context panel (px). Must match .context-panel.collapsed width in ContextPanel.css. */
 export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;

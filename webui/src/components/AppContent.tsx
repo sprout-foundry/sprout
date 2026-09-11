@@ -311,8 +311,10 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [currentBuffer, onViewChange, state.currentView]);
 
   const handleToggleContextPanel = () => {
-    if (!contextPanelRef.current) return;
-    window.dispatchEvent(new CustomEvent('toggle-context-panel'));
+    // Direct ref call (the old custom-event hop depended on a listener that
+    // lived in ContextSidebar and silently toggled hidden state when the
+    // panel was unmounted in file view).
+    contextPanelRef.current?.togglePanel();
   };
 
   const { handleOpenHotkeysConfig } = useAppContentHotkeys({
@@ -814,8 +816,8 @@ const AppContent: React.FC<AppContentProps> = ({
       >
         <HeaderBar
           isMobile={isMobile}
+          isTablet={isTablet}
           isSidebarOpen={isSidebarOpen}
-          showContextSidebar={showContextSidebar}
           isConnected={state.isConnected}
           onToggleSidebar={onToggleSidebar}
           onToggleContextPanel={handleToggleContextPanel}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -300,11 +301,31 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		if err == nil && env.Notifier != nil {
 			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout, command)
 		}
+		trackShellMutation(env, command)
 		return result, err
 	}
 
 	// Normal synchronous execution
-	return h.handleSync(ctx, env, command)
+	result, syncErr := h.handleSync(ctx, env, command)
+	// Post-side tracking (even when the command errored — a partial run may
+	// still have written something worth recording). Mirrors the legacy
+	// executeShellCommandWithTruncation behavior.
+	trackShellMutation(env, command)
+	return result, syncErr
+}
+
+// trackShellMutation records shell-caused filesystem mutations with the
+// agent's ChangeTracker via the TrackShellCommand tool func. No-op when no
+// tracker is wired (standalone handler use).
+func trackShellMutation(env ToolEnv, command string) {
+	if command == "" {
+		return
+	}
+	if fn := env.ResolveToolFuncs().TrackShellCommand; fn != nil {
+		if err := fn(command); err != nil {
+			log.Printf("[shell_command] change tracking failed: %v", err)
+		}
+	}
 }
 
 // handleCheckBackground retrieves accumulated output for a background session.

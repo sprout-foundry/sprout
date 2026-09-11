@@ -481,4 +481,44 @@ describe('useSubagentRuns resource counts', () => {
     expect(result.current.subagentRuns).toHaveLength(1);
     expect(result.current.subagentRuns[0].tool.tool).toBe('run_parallel_subagents');
   });
+
+  it('correlates strictly by toolCallId — activities outside the tool window but with matching ID attach', () => {
+    // Regression guard for the seed v1.4.0 exact-correlation contract:
+    // the old timestamp-window fallback matched events near the tool's
+    // start/end times; matching is now ID-only.
+    const tool = makeTool({ id: 'call-xyz' });
+    const props = makeBaseProps({
+      toolExecutions: [tool],
+      subagentActivities: [
+        makeActivity({
+          taskId: 'task-1',
+          toolCallId: 'call-xyz',
+          message: 'late event after tool end',
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useSubagentRuns(props));
+
+    expect(result.current.subagentRuns).toHaveLength(1);
+    expect(result.current.subagentRuns[0].activities).toHaveLength(1);
+    expect(result.current.subagentRuns[0].activities[0].label).toBe('late event after tool end');
+  });
+
+  it('never attaches activities whose toolCallId belongs to a different run', () => {
+    const toolA = makeTool({ id: 'call-a' });
+    const toolB = makeTool({ id: 'call-b' });
+    const props = makeBaseProps({
+      toolExecutions: [toolA, toolB],
+      subagentActivities: [
+        makeActivity({ taskId: 'task-1', toolCallId: 'call-a', message: 'A output' }),
+        makeActivity({ taskId: 'task-2', toolCallId: 'call-b', message: 'B output' }),
+      ],
+    });
+    const { result } = renderHook(() => useSubagentRuns(props));
+
+    const runA = result.current.subagentRuns.find((r) => r.tool.id === 'call-a');
+    const runB = result.current.subagentRuns.find((r) => r.tool.id === 'call-b');
+    expect(runA?.activities.map((a) => a.label)).toEqual(['A output']);
+    expect(runB?.activities.map((a) => a.label)).toEqual(['B output']);
+  });
 });

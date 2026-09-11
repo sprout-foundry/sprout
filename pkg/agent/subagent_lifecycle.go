@@ -58,8 +58,8 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 // publishLifecycleEvent emits a subagent_activity event with a status field
 // describing the lifecycle transition. The event is only published when
 // the shared EventBus is available.
-func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
-	r.publishLifecycleEventWithCost(taskID, persona, status, reason, tokensUsed, elapsedMs, 0)
+func (r *SubagentRunner) publishLifecycleEvent(parentCallID, taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
+	r.publishLifecycleEventWithCost(parentCallID, taskID, persona, status, reason, tokensUsed, elapsedMs, 0)
 }
 
 // publishLifecycleEventWithCost is the extended form used when the runner
@@ -67,7 +67,7 @@ func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason s
 // Kept as a separate entry point so the existing call sites that only have
 // the lifecycle transition remain a one-liner; the original signature is
 // preserved.
-func (r *SubagentRunner) publishLifecycleEventWithCost(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64, cost float64) {
+func (r *SubagentRunner) publishLifecycleEventWithCost(parentCallID, taskID, persona, status, reason string, tokensUsed int, elapsedMs int64, cost float64) {
 	if r.shared == nil || r.shared.EventBus == nil {
 		return
 	}
@@ -75,6 +75,12 @@ func (r *SubagentRunner) publishLifecycleEventWithCost(taskID, persona, status, 
 		"task_id": taskID,
 		"persona": persona,
 		"status":  status, // "queued", "started", "completed", "cancelled"
+	}
+	// Parent tool-call correlation: lets the WebUI attach this event to the
+	// run_subagent tool call that spawned it (seed v1.4.0 provides the ID
+	// in handler contexts).
+	if parentCallID != "" {
+		data["tool_call_id"] = parentCallID
 	}
 	if reason != "" {
 		data["reason"] = reason

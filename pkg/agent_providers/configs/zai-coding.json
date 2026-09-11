@@ -248,13 +248,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.015,
+        "cached_input_cost": 0.03,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "glm-5.3-flash",
-        "input_cost": 0.075,
+        "input_cost": 0.15,
         "name": "GLM-5.3 Flash",
-        "output_cost": 0.25,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -263,13 +263,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while delivering flash-tier cost and latency.",
         "id": "glm-5.3-flash:batch",
-        "input_cost": 0.15,
+        "input_cost": 0.075,
         "name": "Z.ai: GLM 5.3 Flash (batch)",
-        "output_cost": 0.5,
+        "output_cost": 0.25,
         "tags": [
           "tools",
           "vision",

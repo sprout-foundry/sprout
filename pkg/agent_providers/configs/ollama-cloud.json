@@ -31,40 +31,52 @@
     ],
     "model_info": [
       {
+        "cached_input_cost": 0.007,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash - efficient MoE model (284B total, 13B active) with 1M context",
         "id": "deepseek-v4-flash",
+        "input_cost": 0.22,
         "name": "DeepSeek V4 Flash",
+        "output_cost": 0.66,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.007,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 - official V4-Flash release with enhanced agentic capabilities",
         "id": "deepseek-v4-flash:0731",
+        "input_cost": 0.22,
         "name": "DeepSeek V4 Flash 0731",
+        "output_cost": 0.66,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.022,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro - flagship MoE model (1.6T total, 49B active) with 1M context",
         "id": "deepseek-v4-pro",
+        "input_cost": 0.66,
         "name": "DeepSeek V4 Pro",
+        "output_cost": 1.98,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Gemma 4 31B - Google DeepMind multimodal model with 256K context",
         "id": "gemma4:31b",
+        "input_cost": 0.14,
         "name": "Gemma 4 31B",
+        "output_cost": 0.4,
         "tags": [
           "vision",
           "tools",
@@ -72,48 +84,63 @@
         ]
       },
       {
+        "cached_input_cost": 0.2,
         "context_length": 200000,
         "description": "GLM-5.1 - Z.AI flagship agentic coding model with 200K context",
         "id": "glm-5.1",
+        "input_cost": 1,
         "name": "GLM-5.1",
+        "output_cost": 3.2,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.26,
         "context_length": 1048576,
         "description": "GLM-5.2 - Z.AI flagship with 1M-token context for long-horizon tasks",
         "id": "glm-5.2",
+        "input_cost": 1.4,
         "name": "GLM-5.2",
+        "output_cost": 4.4,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.014,
         "context_length": 131072,
         "description": "OpenAI gpt-oss 120B - open-weight model for reasoning and agentic tasks",
         "id": "gpt-oss:120b",
+        "input_cost": 0.15,
         "name": "GPT-OSS 120B",
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.035,
         "context_length": 131072,
         "description": "OpenAI gpt-oss 20B - open-weight model for reasoning and agentic tasks",
         "id": "gpt-oss:20b",
+        "input_cost": 0.07,
         "name": "GPT-OSS 20B",
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.16,
         "context_length": 262144,
         "description": "Kimi K2.6 - native multimodal agentic model with 256K context",
         "id": "kimi-k2.6",
+        "input_cost": 0.95,
         "name": "Kimi K2.6",
+        "output_cost": 4,
         "tags": [
           "vision",
           "tools",
@@ -121,38 +148,50 @@
         ]
       },
       {
+        "cached_input_cost": 0.19,
         "context_length": 262144,
         "description": "Kimi K2.7 Code - coding-focused agentic model built on K2.6",
         "id": "kimi-k2.7-code",
+        "input_cost": 0.95,
         "name": "Kimi K2.7 Code",
+        "output_cost": 4,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.3,
         "context_length": 1048576,
         "description": "Kimi K3 - frontier agentic model with 1M context",
         "id": "kimi-k3",
+        "input_cost": 3,
         "name": "Kimi K3",
+        "output_cost": 15,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.06,
         "context_length": 204800,
         "description": "MiniMax M2.7 - model for real-world engineering and office delivery",
         "id": "minimax-m2.7",
+        "input_cost": 0.3,
         "name": "MiniMax M2.7",
+        "output_cost": 1.2,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.12,
         "context_length": 1048576,
         "description": "MiniMax M3 - frontier multimodal coding model with 1M context",
         "id": "minimax-m3",
+        "input_cost": 0.6,
         "name": "MiniMax M3",
+        "output_cost": 2.4,
         "tags": [
           "tools"
         ]
@@ -161,7 +200,9 @@
         "context_length": 262144,
         "description": "Mistral Large 3 - open-weight flagship multimodal model",
         "id": "mistral-large-3:675b",
+        "input_cost": 0.5,
         "name": "Mistral Large 3 675B",
+        "output_cost": 1.5,
         "tags": [
           "tools"
         ]
@@ -170,25 +211,33 @@
         "context_length": 131072,
         "description": "Nemotron 3 Nano 30B - efficient lightweight reasoning model",
         "id": "nemotron-3-nano:30b",
+        "input_cost": 0.06,
         "name": "Nemotron 3 Nano 30B",
+        "output_cost": 0.24,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 262144,
         "description": "Nemotron 3 Super - agentic MoE model for multi-agent systems",
         "id": "nemotron-3-super",
+        "input_cost": 0.015,
         "name": "Nemotron 3 Super 120B",
+        "output_cost": 0.6,
         "tags": [
           "tools"
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 262144,
         "description": "Nemotron 3 Ultra - frontier reasoning and agentic coding model",
         "id": "nemotron-3-ultra",
+        "input_cost": 0.1,
         "name": "Nemotron 3 Ultra 550B",
+        "output_cost": 3,
         "tags": [
           "tools",
           "reasoning"
@@ -198,7 +247,9 @@
         "context_length": 262144,
         "description": "Qwen3.5 397B - Alibaba flagship MoE model with 256K context and vision",
         "id": "qwen3.5:397b",
+        "input_cost": 0.6,
         "name": "Qwen3.5 397B",
+        "output_cost": 3.6,
         "tags": [
           "vision",
           "tools",
@@ -206,40 +257,52 @@
         ]
       },
       {
+        "cached_input_cost": 0.007,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash preview - Mixture-of-Experts model (284B total, 13B active) built for efficient reasoning across a 1M-token context window",
         "id": "deepseek-v4-flash:preview",
+        "input_cost": 0.22,
         "name": "DeepSeek V4 Flash Preview",
+        "output_cost": 0.66,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.022,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro preview - flagship MoE model (1.6T total, 49B active) with 1M context",
         "id": "deepseek-v4-pro:preview",
+        "input_cost": 0.66,
         "name": "DeepSeek V4 Pro Preview",
+        "output_cost": 1.98,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.022,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro 0813 - official release of DeepSeek V4 Pro with enhanced agentic capabilities",
         "id": "deepseek-v4-pro:0813",
+        "input_cost": 0.66,
         "name": "DeepSeek V4 Pro 0813",
+        "output_cost": 1.98,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash - Z.AI natively multimodal model (320B total, 18B active) with 1M context, frontier coding and agentic performance at flash-tier cost",
         "id": "glm-5.3-flash",
+        "input_cost": 0.15,
         "name": "GLM-5.3 Flash",
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -247,14 +310,31 @@
         ]
       },
       {
+        "cached_input_cost": 0.26,
         "context_length": 1048576,
         "description": "Z.AI GLM-5.3 - Flagship model with 1M-token context for long-horizon reasoning and agentic coding tasks",
         "id": "glm-5.3",
+        "input_cost": 1.4,
         "name": "GLM-5.3",
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
           "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash - multimodal MoE model (552B backbone) with 1M context and KV cache compression",
+        "id": "deepseek-v4.1-flash",
+        "input_cost": 0.15,
+        "name": "DeepSeek V4.1 Flash",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
         ]
       }
     ]

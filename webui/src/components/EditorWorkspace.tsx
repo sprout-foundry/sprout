@@ -1,6 +1,6 @@
 import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
-import React, { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import { usePlugins } from '../contexts/PluginContext';
 import type { PerChatState, ViewType } from '../types/app';
@@ -27,7 +27,21 @@ export interface EditorWorkspaceProps {
   currentView: ViewType;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
+  /** Chat sessions, mirrored into per-pane EditorTabs (rename/delete menus). */
+  chatSessions?: Array<{
+    id: string;
+    name?: string;
+    is_pinned?: boolean;
+    is_default?: boolean;
+    active_query?: boolean;
+    worktree_path?: string;
+  }>;
+  /** Switch the active chat when a chat tab is middle-clicked/cycled. */
+  onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
+  onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void> | void;
+  onDeleteAllChats?: () => void;
+  onRenameChat?: (id: string, name: string) => void;
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
@@ -113,7 +127,12 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   currentView,
   perChatCache,
   activeChatId,
+  chatSessions,
+  onActiveChatChange,
   onCreateChat,
+  onDeleteChat,
+  onDeleteAllChats,
+  onRenameChat,
   chatProps,
   reviewProps,
   diffState,
@@ -140,6 +159,40 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     maxPanes,
     openWorkspaceBuffer,
   } = useEditorManager();
+
+  // Derive chat-tab data for EditorTabs (same derivation PaneLayoutManager
+  // used before the pane renderer moved here).
+  const activeChatQueries = useMemo(() => {
+    const set = new Set<string>();
+    for (const session of chatSessions ?? []) {
+      if (session.active_query) set.add(session.id);
+    }
+    return set;
+  }, [chatSessions]);
+
+  const defaultChatIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const session of chatSessions ?? []) {
+      if (session.is_default) set.add(session.id);
+    }
+    return set;
+  }, [chatSessions]);
+
+  const chatWorktreePaths = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const session of chatSessions ?? []) {
+      if (session.worktree_path) map.set(session.id, session.worktree_path);
+    }
+    return map;
+  }, [chatSessions]);
+
+  // EditorTabs' delete callback returns void; discard the promise.
+  const onDeleteChatSync = useMemo(() => {
+    if (!onDeleteChat) return undefined;
+    return (id: string, options?: { removeWorktree?: boolean }) => {
+      void onDeleteChat(id, options);
+    };
+  }, [onDeleteChat]);
 
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
   const canSplit = panes.length < maxPanes;
@@ -373,7 +426,26 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       return (
         <PaneWrapper key={pane.id} style={style}>
           <div className="pane-shell">
-            <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
+            <EditorTabs
+              paneId={pane.id}
+              compact
+              actions={renderSplitControls(pane.id)}
+              onActiveChatChange={onActiveChatChange}
+              activeChatQueries={activeChatQueries}
+              defaultChatIds={defaultChatIds}
+              chatWorktreePaths={chatWorktreePaths}
+              onCreateChat={
+                onCreateChat
+                  ? () => {
+                      onCreateChat().catch((err) => console.warn('[EditorTabs] Failed to create chat:', err));
+                    }
+                  : undefined
+              }
+              onDeleteChat={onDeleteChatSync}
+              onRenameChat={onRenameChat}
+              onDeleteAllChats={onDeleteAllChats}
+              chatSessions={chatSessions}
+            />
             <EditorPaneWrapper isActive={pane.id === activePaneIdRef.current} onClick={() => switchPane(pane.id)}>
               <EditorPaneComponent
                 paneId={pane.id}

@@ -34,6 +34,9 @@ interface EditorTabsProps {
   chatWorktreePaths?: Map<string, string>;
   onCreateChat?: () => void;
   onCreateChatInWorktree?: () => void;
+  /** Delete a chat session (and optionally its worktree) server-side. */
+  onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => void;
+  /** Legacy shape kept for callers that only delete worktree-backed chats. */
   onDeleteChatWithWorktree?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;
   onDeleteAllChats?: () => void;
@@ -50,6 +53,7 @@ function EditorTabs({
   chatWorktreePaths,
   onCreateChat,
   onCreateChatInWorktree,
+  onDeleteChat,
   onDeleteChatWithWorktree,
   onRenameChat,
   onDeleteAllChats,
@@ -627,27 +631,53 @@ function EditorTabs({
                   <Trash2 size={14} />
                   <span>Close</span>
                 </button>
-                {/* Delete Chat and Worktree — for chat tabs with worktrees */}
-                {activeContextBuffer.kind === 'chat' && contextHasWorktree && onDeleteChatWithWorktree && (
+                {/* Delete Chat — every non-default chat */}
+                {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onDeleteChat && contextChatId && (
                   <button
                     className="context-menu-item danger"
                     onClick={() =>
                       handleContextAction(async () => {
+                        const hasWorktree = contextHasWorktree === true;
                         const confirmed = await showThemedConfirm(
-                          'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
+                          hasWorktree
+                            ? 'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?'
+                            : 'This will permanently delete the chat session and its messages. Are you sure?',
                           { type: 'danger' },
                         );
                         if (!confirmed) return;
-                        if (contextChatId) {
-                          onDeleteChatWithWorktree(contextChatId);
-                        }
+                        onDeleteChat(contextChatId, { removeWorktree: hasWorktree });
                       })
                     }
                   >
                     <Trash2 size={14} />
-                    <span>Delete Chat and Worktree</span>
+                    <span>{contextHasWorktree ? 'Delete Chat and Worktree' : 'Delete Chat'}</span>
                   </button>
                 )}
+                {/* Delete Chat and Worktree — legacy callback shape, for
+                    callers that only support the worktree variant */}
+                {activeContextBuffer.kind === 'chat' &&
+                  contextHasWorktree &&
+                  !onDeleteChat &&
+                  onDeleteChatWithWorktree && (
+                    <button
+                      className="context-menu-item danger"
+                      onClick={() =>
+                        handleContextAction(async () => {
+                          const confirmed = await showThemedConfirm(
+                            'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
+                            { type: 'danger' },
+                          );
+                          if (!confirmed) return;
+                          if (contextChatId) {
+                            onDeleteChatWithWorktree(contextChatId);
+                          }
+                        })
+                      }
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete Chat and Worktree</span>
+                    </button>
+                  )}
               </>
             ) : null}
           </>

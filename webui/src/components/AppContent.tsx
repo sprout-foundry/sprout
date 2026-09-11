@@ -94,7 +94,8 @@ interface AppContentProps {
   onActiveChatChange?: (id: string) => void;
   onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
-  onDeleteChat?: (id: string) => void;
+  onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void>;
+  onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
 }
 
@@ -147,6 +148,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onActiveChatChange,
   onCreateChat,
   onDeleteChat,
+  onDeleteAllChats,
   onRenameChat,
 }) => {
   const {
@@ -871,7 +873,12 @@ const AppContent: React.FC<AppContentProps> = ({
                 currentView={state.currentView}
                 perChatCache={perChatCache}
                 activeChatId={activeChatId}
+                chatSessions={chatSessions}
+                onActiveChatChange={onActiveChatChange}
                 onCreateChat={onCreateChat}
+                onDeleteChat={onDeleteChat}
+                onDeleteAllChats={onDeleteAllChats}
+                onRenameChat={onRenameChat}
                 chatProps={chatProps}
                 reviewProps={reviewProps}
                 diffState={diffState}

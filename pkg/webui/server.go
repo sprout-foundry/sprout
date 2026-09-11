@@ -78,6 +78,15 @@ type ReactWebServer struct {
 	sshLaunchStatusMu   sync.RWMutex
 	workspaceExecMu     sync.Mutex
 
+	// clientWorkspaces remembers the last workspace each non-default client
+	// explicitly selected (via setClientWorkspaceRoot or worktree switches).
+	// When the idle-eviction worker removes a client context, the tab is
+	// still alive on the other end; the next request recreates the context,
+	// and without this map that recreated context silently falls back to
+	// the daemon's launch directory — every new terminal session spawned
+	// in the wrong cwd while the UI still displayed the chosen workspace.
+	clientWorkspaces map[string]string
+
 	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
 	// (and tests) can wait for agent teardown — which writes history and
 	// flushes the embedding store — to finish rather than racing it.
@@ -323,6 +332,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		securityPromptMgr: securityPromptMgr,
 		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
+		clientWorkspaces:  make(map[string]string),
 		chatSubscribers:   newChatSubscribersRegistry(),
 		userConnections:   &UserConnections{},
 		port:              port,

@@ -5,6 +5,7 @@ package webui
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -414,5 +415,104 @@ func TestResolveWorkspaceRootForChatMissingClient(t *testing.T) {
 	result := ws.resolveWorkspaceRootForChat("nonexistent", "default")
 	if result != "" {
 		t.Errorf("expected empty string, got %q", result)
+	}
+}
+
+func TestCleanupInactiveClientContextsRemembersWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.workspaceRoot = t.TempDir() // daemon launch dir the fallback would use
+
+	ws.mutex.Lock()
+	ws.clientContexts = map[string]*webClientContext{
+		"idle-client": {
+			WorkspaceRoot: dir,
+			LastSeenAt:    time.Now().Add(-2 * time.Hour),
+		},
+	}
+	ws.mutex.Unlock()
+
+	if removed := ws.cleanupInactiveClientContexts(time.Hour); removed != 1 {
+		t.Fatalf("expected idle context to be evicted, got %d removed", removed)
+	}
+
+	ws.mutex.RLock()
+	remembered := ws.clientWorkspaces["idle-client"]
+	ws.mutex.RUnlock()
+	if remembered != dir {
+		t.Fatalf("expected remembered workspace %q after eviction, got %q", dir, remembered)
+	}
+
+	// The recreated context must restore the remembered workspace, not the
+	// server-level launch dir.
+	ctx := ws.getOrCreateClientContext("idle-client")
+	if ctx.WorkspaceRoot != dir {
+		t.Fatalf("recreated context workspace = %q, want %q", ctx.WorkspaceRoot, dir)
+	}
+	if ctx.Terminal == nil || ctx.Terminal.workspaceRoot != dir {
+		t.Fatalf("recreated context terminal manager rooted at %v, want %q", ctx.Terminal, dir)
+	}
+}
+
+func TestCleanupInactiveClientContextsDropsVanishedWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.workspaceRoot = t.TempDir()
+
+	ws.mutex.Lock()
+	ws.clientWorkspaces = map[string]string{"idle-client": dir}
+	ws.clientContexts = map[string]*webClientContext{
+		"idle-client": {LastSeenAt: time.Now().Add(-2 * time.Hour)},
+	}
+	ws.mutex.Unlock()
+
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if removed := ws.cleanupInactiveClientContexts(time.Hour); removed != 1 {
+		t.Fatalf("expected idle context eviction, got %d removed", removed)
+	}
+
+	ctx := ws.getOrCreateClientContext("idle-client")
+	if ctx.WorkspaceRoot == dir {
+		t.Fatalf("recreated context kept vanished workspace %q", dir)
+	}
+	if ctx.WorkspaceRoot != ws.workspaceRoot {
+		t.Fatalf("recreated context workspace = %q, want server-level fallback %q", ctx.WorkspaceRoot, ws.workspaceRoot)
+	}
+
+	ws.mutex.RLock()
+	_, stillRemembered := ws.clientWorkspaces["idle-client"]
+	ws.mutex.RUnlock()
+	if stillRemembered {
+		t.Fatal("vanished workspace was not pruned from clientWorkspaces")
+	}
+}
+
+func TestCleanupInactiveClientContextsPreservesLiveTerminalConnection(t *testing.T) {
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ws.mutex.Lock()
+	ws.clientContexts = map[string]*webClientContext{
+		"terminal-only": {LastSeenAt: time.Now().Add(-2 * time.Hour)},
+	}
+	ws.mutex.Unlock()
+
+	// Only a terminal WebSocket is alive (main /ws dropped) — the stored
+	// ClientID must make the client look connected anyway.
+	ws.connections.Store("termconn", &ConnectionInfo{ClientID: "terminal-only", Type: "terminal"})
+
+	if removed := ws.cleanupInactiveClientContexts(time.Hour); removed != 0 {
+		t.Fatalf("expected terminal-only client to be preserved, got %d removed", removed)
 	}
 }

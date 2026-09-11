@@ -235,6 +235,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	ctx.WorkspaceRoot = absPath
 	if clientID == defaultWebClientID {
 		ws.workspaceRoot = absPath
+	} else {
+		ws.rememberClientWorkspacesLocked()
 	}
 	// Clear transient state (agent, terminals) like handleAPIGitWorktreeCheckout does.
 	ctx.Agent = nil
@@ -456,6 +458,8 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		ctx.WorkspaceRoot = worktreePath
 		if clientID == defaultWebClientID {
 			ws.workspaceRoot = worktreePath
+		} else {
+			ws.rememberClientWorkspacesLocked()
 		}
 		// Clear transient state (agent, terminals) like other workspace-switch handlers.
 		ctx.Agent = nil

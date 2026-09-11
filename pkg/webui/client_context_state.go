@@ -82,6 +82,11 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 	stale := make([]staleContext, 0)
 
 	ws.mutex.Lock()
+	// The workspace selection outlives the context: when the tab comes back,
+	// its recreated context must restore the remembered workspace rather
+	// than silently falling back to the daemon's launch directory. Snapshot
+	// before the deletes below (requires ws.mutex — see the Locked suffix).
+	ws.rememberClientWorkspacesLocked()
 	for clientID, ctx := range ws.clientContexts {
 		if clientID == defaultWebClientID || ctx == nil {
 			continue

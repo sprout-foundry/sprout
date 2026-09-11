@@ -362,21 +362,22 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             }, 300);
           }}
         />
-        {/* Working-directory row (studio shell only — see isStudioShell
-            above): ONE select is the single source of truth for the session
-            cwd (Files / Terminal / Git / Agent share it via
-            services/workspaceCwd.ts). No companion chip repeating the value;
-            a cwd inside a repo shows as a dynamic "owner/name › sub/path"
-            option instead of the select silently claiming the root. */}
-        {isStudioShell && (
-          <WorkspaceCwdBar
-            cwd={cwd}
-            repos={repos}
-            onChange={setWorkspaceCwd}
-            onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
-            addRepoDisabled={importStatus === 'loading'}
-          />
-        )}
+        {/* Working-directory row. STUDIO: full row — the select is the
+            single source of truth for the session cwd (Files / Terminal /
+            Git / Agent share it via services/workspaceCwd.ts); a cwd inside
+            a repo shows as a dynamic "owner/name › sub/path" option instead
+            of the select silently claiming the root. PLAIN WEBUI: selector
+            hidden (root is fixed for the daemon's lifetime; LocationSwitcher
+            already names it) but the row stays for the "+ add repo" clone
+            button — this is the only clone affordance in the Files panel. */}
+        <WorkspaceCwdBar
+          cwd={cwd}
+          repos={repos}
+          showSelector={isStudioShell}
+          onChange={setWorkspaceCwd}
+          onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
+          addRepoDisabled={importStatus === 'loading'}
+        />
         <FileTree
           ref={fileTreeRef}
           key={treeRoot}

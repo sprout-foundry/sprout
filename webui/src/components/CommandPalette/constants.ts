@@ -57,15 +57,21 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_goto_symbol', label: 'Go to Symbol in File', category: 'Editor' },
 ];
 
-export const VISIBLE_COMMANDS = COMMAND_DEFINITIONS.filter((cmd) => {
-  if (
-    !supportsLocalTerminal &&
-    (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')
-  ) {
-    return false;
-  }
-  return true;
-});
+// Terminal commands are filtered at USE time, not module scope: mode.ts
+// capability flags are live bindings that refresh when the adapter installs
+// (after module load), so a module-scope filter here would freeze the
+// boot-time default for the session.
+export function visibleCommands(): CommandDef[] {
+  return COMMAND_DEFINITIONS.filter((cmd) => {
+    if (
+      !supportsLocalTerminal &&
+      (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
 
 // ── File browsing constants ────────────────────────────────────────────────
 

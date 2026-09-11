@@ -420,3 +420,88 @@ describe('with custom adapter installed', () => {
     expect(modeModule.supportsSettings).toBe(false);
   });
 });
+
+describe('live capability refresh (adapter installs AFTER mode.ts loads)', () => {
+  const originalEnv = process.env.VITE_SPROUT_MODE;
+
+  beforeEach(() => {
+    vi.resetModules();
+    process.env.VITE_SPROUT_MODE = 'local';
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.VITE_SPROUT_MODE;
+    } else {
+      process.env.VITE_SPROUT_MODE = originalEnv;
+    }
+    vi.resetModules();
+    window.dispatchEvent(new Event('sprout:adapter-installed'));
+  });
+
+  // The REAL app sequence: config/mode.ts is imported by the component tree
+  // (module scope, before bootstrap resolves), then bootstrapAdapter installs
+  // the adapter asynchronously. The flags must flip WITHOUT re-importing the
+  // module — this is the case the previous frozen-const design silently
+  // failed (the "adapter flags override" tests above only pass because they
+  // install BEFORE import).
+  it('flags re-evaluate when ADAPTER_INSTALLED_EVENT fires post-load', async () => {
+    const modeModule = await import('./mode');
+    expect(modeModule.supportsWorkspaceSwitching).toBe(true); // local default
+    expect(modeModule.supportsLocalTerminal).toBe(true);
+
+    const { installAdapter } = await import('../services/apiAdapter');
+    installAdapter({
+      name: 'late-install-adapter',
+      fetch: async () => new Response(),
+      getWebSocketURL: () => null,
+      requiresBackendHealthCheck: false,
+      fileOpsViaAPI: true,
+      showOnboarding: true,
+      supportsSSH: false,
+      supportsGit: false,
+      supportsChat: true,
+      supportsWorkspaceSwitching: false,
+      supportsExport: false,
+      supportsInstances: true,
+      supportsLocalTerminal: false,
+      supportsSettings: false,
+    });
+
+    // Live bindings: importers see the new values with no re-import.
+    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsLocalTerminal).toBe(false);
+    expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsGit).toBe(false);
+    expect(modeModule.supportsExport).toBe(false);
+    expect(modeModule.supportsInstances).toBe(true);
+    expect(modeModule.supportsSettings).toBe(false);
+  });
+
+  it('malformed adapter flags do not crash the refresh (defaults stay)', async () => {
+    const modeModule = await import('./mode');
+    const { installAdapter } = await import('../services/apiAdapter');
+    installAdapter({
+      name: 'partial-adapter',
+      fetch: async () => new Response(),
+      getWebSocketURL: () => null,
+      requiresBackendHealthCheck: false,
+      fileOpsViaAPI: true,
+      showOnboarding: true,
+      supportsSSH: false,
+      // git/chat/workspaceSwitching/export/instances/localTerminal/settings
+      // deliberately omitted (undefined) — capability() falls back per-key.
+      supportsGit: undefined,
+      supportsChat: undefined,
+      supportsWorkspaceSwitching: undefined,
+      supportsExport: undefined,
+      supportsInstances: undefined,
+      supportsLocalTerminal: undefined,
+      supportsSettings: undefined,
+    } as unknown as Parameters<typeof installAdapter>[0]);
+
+    // Adapter-declared key applies; undefined keys keep mode defaults.
+    expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsGit).toBe(true); // local default, adapter said nothing
+  });
+});

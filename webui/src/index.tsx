@@ -29,8 +29,10 @@ import { resolveClientIdentity } from './services/clientSession';
 //
 // Shell identity starts SYNCHRONOUSLY (bridge presence → data-shell on
 // <html> before first paint; studio CSS keys off it, so no layout flash)
-// and the capabilities handshake refines it async. Plain webui: both are
-// no-ops that resolve "webui".
+// and the capabilities handshake refines it async. In the default build
+// resolveShellIdentity skips the bridge read entirely (compile-time
+// short-circuit) and pins "webui"; the sync check here only touches
+// window in a studio dist.
 applyShellAttribute(isStudioShellSync() ? 'studio' : 'webui');
 void resolveShellIdentity();
 

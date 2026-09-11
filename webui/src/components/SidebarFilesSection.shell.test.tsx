@@ -1,10 +1,10 @@
 /**
  * SidebarFilesSection.shell.test.tsx — the shell-scoped cwd row.
  *
- * The Files section renders WorkspaceCwdBar ONLY inside the studio shell
- * (config/shell.ts identity). On the plain webui the row is redundant —
- * the workspace root is fixed for the daemon's lifetime and the sidebar
- * header's LocationSwitcher already names it — so it must not render.
+ * The Files section shows the WorkspaceCwdBar SELECT only inside the
+ * studio shell (config/shell.ts identity); the plain webui keeps the row
+ * for its "+ add repo" clone button but hides the selector — the root is
+ * fixed for the daemon's lifetime and LocationSwitcher already names it.
  */
 
 import { act } from 'react';
@@ -16,6 +16,16 @@ import SidebarFilesSection from './SidebarFilesSection';
 vi.mock('../services/workspaceFs/backendsExport', () => ({
   getWorkspaceFs: vi.fn(),
   listWorkspaceRepos: vi.fn().mockResolvedValue(['octo/sprout']),
+}));
+
+// The component renders the + add-repo button only in cloud mode (cloneTrigger
+// = isCloud ? handleCloneRepo : undefined). isCloud is a build-time constant,
+// so mock the mode module rather than fighting env-replacement ordering. The
+// factory must not close over top-level lets (vi.mock is hoisted) — the flag
+// lives on a hoisted-safe object created inside vi.hoisted.
+const modeState = vi.hoisted(() => ({ isCloud: true }));
+vi.mock('../config/mode', () => ({
+  isCloud: modeState.isCloud,
 }));
 
 let container: HTMLDivElement;
@@ -30,6 +40,7 @@ function renderSection() {
 
 describe('SidebarFilesSection: shell-scoped cwd row', () => {
   beforeEach(() => {
+    modeState.isCloud = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -44,25 +55,28 @@ describe('SidebarFilesSection: shell-scoped cwd row', () => {
     vi.restoreAllMocks();
   });
 
-  it('plain webui: no cwd row', () => {
+  it('plain webui: selector hidden, but the + add-repo button stays (only clone affordance)', () => {
     publishShellIdentityForTests('webui');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).toBeNull();
+    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
   });
 
-  it('studio shell: the cwd row renders', () => {
+  it('studio shell: the full row renders (selector + add button)', () => {
     publishShellIdentityForTests('studio');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
   });
 
   it('follows a webui→studio transition without remount (handshake lands late)', () => {
     publishShellIdentityForTests('webui');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).toBeNull();
     act(() => {
       publishShellIdentityForTests('studio');
     });
-    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).not.toBeNull();
   });
 });

@@ -58,7 +58,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "4.1.11",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
@@ -68,7 +68,7 @@
     "typescript": "^5.0.0",
     "vite": "^6.4.3",
     "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.5"
+    "vitest": "4.1.11"
   },
   "exports": {
     ".": {

@@ -545,3 +545,109 @@ describe('recall_diagnostic', () => {
     expect(stateHolder.current.logs[0].category).toBe('system');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: password_request (SP-089-3) — surfaces the PasswordPromptDialog
+// ---------------------------------------------------------------------------
+
+describe('password_request', () => {
+  function setup() {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          activeRequestsRef,
+        }),
+      );
+    });
+
+    return { stateHolder };
+  }
+
+  it('sets passwordRequest from the event payload', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pw-1',
+        type: 'password_request',
+        data: {
+          request_id: 'pw-123',
+          command: 'sudo apt install',
+          prompt: '[sudo] password for dev:',
+          timestamp: '2026-09-11T18:00:00Z',
+        },
+      });
+    });
+
+    expect(stateHolder.current.passwordRequest).toEqual({
+      requestId: 'pw-123',
+      command: 'sudo apt install',
+      prompt: '[sudo] password for dev:',
+    });
+  });
+
+  it('records a warning-level system log entry', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pw-2',
+        type: 'password_request',
+        data: { request_id: 'pw-124', command: 'ssh host', prompt: 'password:', timestamp: '2026-09-11T18:01:00Z' },
+      });
+    });
+
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].level).toBe('warning');
+    expect(stateHolder.current.logs[0].category).toBe('system');
+  });
+
+  it('ignores an event without a request_id', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pw-3',
+        type: 'password_request',
+        data: { command: 'x', prompt: 'y', timestamp: '2026-09-11T18:02:00Z' },
+      });
+    });
+
+    expect(stateHolder.current.passwordRequest).toBeNull();
+  });
+
+  it('ignores a duplicate delivery with status responded', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pw-4',
+        type: 'password_request',
+        data: {
+          request_id: 'pw-125',
+          command: 'cmd',
+          prompt: 'p',
+          timestamp: '2026-09-11T18:03:00Z',
+          status: 'responded',
+        },
+      });
+    });
+
+    expect(stateHolder.current.passwordRequest).toBeNull();
+  });
+});

@@ -22,6 +22,7 @@ export type {
   WorkspaceChangedData,
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
+  PasswordRequestData,
   AskUserRequestData,
   EditApprovalRequestData,
   EditHunk,

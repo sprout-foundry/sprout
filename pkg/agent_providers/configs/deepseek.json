@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.44,
-    "output_token_cost": 1.32
+    "input_token_cost": 0.3,
+    "output_token_cost": 1.2
   },
   "defaults": {
     "max_tokens": 32768,
@@ -31,19 +31,20 @@
       "deepseek-chat",
       "deepseek-reasoner",
       "deepseek-coder",
-      "deepseek-v4-flash-vision-exp"
+      "deepseek-v4-flash-vision-exp",
+      "deepseek-flash"
     ],
     "default_context_limit": 1000000,
     "default_model": "deepseek-v4-flash",
     "model_info": [
       {
-        "cached_input_cost": 0.014,
+        "cached_input_cost": 0.006,
         "context_length": 1000000,
-        "description": "DeepSeek-V4 Flash - Cost-effective model with 1M context, optimized for speed",
+        "description": "DeepSeek-V4 Flash - Retired; requests to this legacy name are served by DeepSeek-V4.1 Flash and billed at the Flash price",
         "id": "deepseek-v4-flash",
-        "input_cost": 0.44,
+        "input_cost": 0.3,
         "name": "DeepSeek V4 Flash",
-        "output_cost": 1.32,
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools"
@@ -126,17 +127,32 @@
         ]
       },
       {
-        "cached_input_cost": 0.014,
+        "cached_input_cost": 0.006,
         "context_length": 1000000,
-        "description": "DeepSeek-V4 Flash Vision Exp - Experimental multimodal version of V4 Flash with image understanding, matching V4 Flash on text capabilities including agents, reasoning, and world knowledge",
+        "description": "DeepSeek-V4 Flash Vision Exp - Retired; requests to this legacy name are served by DeepSeek-V4.1 Flash and billed at the Flash price",
         "id": "deepseek-v4-flash-vision-exp",
-        "input_cost": 0.44,
+        "input_cost": 0.3,
         "name": "DeepSeek V4 Flash Vision Exp",
-        "output_cost": 1.32,
+        "output_cost": 1.2,
         "tags": [
           "vision",
           "tools",
           "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.006,
+        "context_length": 1000000,
+        "description": "DeepSeek-V4.1 Flash - Flagship multimodal MoE model with 552B backbone parameters and native image understanding. Supersedes V4 Flash and V4 Pro; supports thinking and non-thinking modes with a controllable reasoning effort",
+        "id": "deepseek-flash",
+        "input_cost": 0.3,
+        "name": "DeepSeek V4.1 Flash",
+        "output_cost": 1.2,
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning",
+          "vision"
         ]
       }
     ],

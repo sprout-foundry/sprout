@@ -298,8 +298,17 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	if background {
 		wakeupTimeout, _ := extractInt(args, "wakeup_timeout")
 		result, err := h.handleBackground(ctx, env, command)
-		if err == nil && env.Notifier != nil {
-			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout, command)
+		if err == nil {
+			// Remember the session→command mapping so ANY completion
+			// observer (wakeup watcher, check_background, stop) can
+			// classify destructive commands at mutation-diff time.
+			var started bgResult
+			if json.Unmarshal([]byte(result.Output), &started) == nil && started.SessionID != "" {
+				rememberBackgroundCommand(started.SessionID, command)
+			}
+			if env.Notifier != nil {
+				h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout, command)
+			}
 		}
 		// No mutation diff here: the command has only been STARTED, so a
 		// diff would capture nothing and rebase the tracker's baseline
@@ -331,6 +340,21 @@ func trackShellMutation(env ToolEnv, command string) {
 			log.Printf("[shell_command] change tracking failed: %v", err)
 		}
 	}
+}
+
+// trackBackgroundMutation is trackShellMutation for a completed/stopped
+// background session. Resolves the ORIGINAL command from the session
+// registry when available so the ChangeTracker's destructive-command
+// classifier (shellIsDestructive) sees `git reset --hard` instead of a
+// synthetic "background session <id>" label — destructive classification
+// switches the mutation walk into per-file, no-auto-skip mode, which is
+// exactly the recovery coverage a background git revert needs.
+func trackBackgroundMutation(env ToolEnv, sessionID, outcome string) {
+	command := backgroundCommandFor(sessionID)
+	if command == "" {
+		command = "background session " + sessionID + " (" + outcome + ")"
+	}
+	trackShellMutation(env, command)
 }
 
 // bgSnapshotFinished reports whether a check_background snapshot JSON
@@ -365,7 +389,7 @@ func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env Too
 	}
 
 	if bgSnapshotFinished(result) {
-		trackShellMutation(env, "background session "+sessionID+" (completed)")
+		trackBackgroundMutation(env, sessionID, "completed")
 	}
 
 	if env.OutputWriter != nil {
@@ -398,7 +422,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 
 		// The killed command may have written files before termination;
 		// record whatever landed. Best-effort, same as the sync path.
-		trackShellMutation(env, "background session "+sessionID+" (stopped)")
+		trackBackgroundMutation(env, sessionID, "stopped")
 
 		return ToolResult{
 			Output:     result,
@@ -430,7 +454,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 
 	// The killed command may have written files before termination;
 	// record whatever landed. Best-effort, same as the sync path.
-	trackShellMutation(env, "background session "+sessionID+" (stopped)")
+	trackBackgroundMutation(env, sessionID, "stopped")
 
 	return ToolResult{
 		Output:     result,
@@ -475,8 +499,9 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 	// background=true path uses, so the agent hears about completion
 	// instead of having to remember to poll (wakeup_timeout=0: completion
 	// notification only, no deadline heads-up).
-	if env.Notifier != nil {
-		if sessionID, promoted := ParsePromotedBackgroundSession(result); promoted {
+	if sessionID, promoted := ParsePromotedBackgroundSession(result); promoted {
+		rememberBackgroundCommand(sessionID, command)
+		if env.Notifier != nil {
 			h.startWakeupWatcher(ctx, env, fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID), 0, command)
 		}
 	}
@@ -612,7 +637,7 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 			// The background command's writes happened while unattended.
 			// This is the first observation point — capture them so the
 			// changes panel and recovery reflect reality. Best-effort.
-			trackShellMutation(env, "background session "+sessionID+" (completed)")
+			trackBackgroundMutation(env, sessionID, "completed")
 			notifier.NotifyCompletionLabeled(sessionID, "shell_bg",
 				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)), label)
 		case <-watchCtx.Done():

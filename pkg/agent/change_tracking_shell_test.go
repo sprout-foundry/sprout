@@ -596,6 +596,71 @@ func TestTrackShellTurn_DetectsMutationsAfterPrime(t *testing.T) {
 	}
 }
 
+// TestTrackShellTurn_SubdirWorkDirKeepsRootCache covers the cd case:
+// after the agent cd's into a subdirectory, the shell cwd (which
+// callers used to pass as workDir) differs from the primed cache root.
+// The cache must stay keyed to the original root and the diff must
+// still run against it — keying the cache to the cwd made every
+// post-cd shell command discard the baseline, pay a full cold re-walk,
+// and silently drop the triggering command's mutations.
+func TestTrackShellTurn_SubdirWorkDirKeepsRootCache(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "a.txt"), []byte("one"))
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+	if tracker.shellCache == nil {
+		t.Fatal("cache should be primed")
+	}
+
+	// The agent cd's into sub/ and a subsequent shell command creates
+	// b.txt at the workspace root (e.g. `cd sub && ../scripts/gen.sh`).
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	created := filepath.Join(dir, "b.txt")
+	mustWriteFile(t, created, []byte("two"))
+	bumpMtime(t, created)
+
+	tracker.TrackShellTurn(sub, "shell_command", false)
+
+	if got := tracker.shellCacheRoot; got != dir {
+		t.Fatalf("cache root moved from %s to %s — cd discards the baseline and forces a cold re-prime per command", dir, got)
+	}
+
+	found := false
+	for _, ch := range tracker.changes {
+		if ch.FilePath == created && (ch.Operation == "create" || ch.Operation == "edit") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("mutation at workspace root lost after cd; changes: %+v", tracker.changes)
+	}
+}
+
+// TestTrackShellTurn_UnrelatedWorkDirRePrimes covers the genuine
+// workspace-switch case: a workDir outside the cached root can't be
+// diffed against the old tree, so a re-prime is correct there.
+func TestTrackShellTurn_UnrelatedWorkDirRePrimes(t *testing.T) {
+	dirA := t.TempDir()
+	mustWriteFile(t, filepath.Join(dirA, "x.txt"), []byte("A"))
+	dirB := t.TempDir()
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dirA)
+
+	tracker.TrackShellTurn(dirB, "shell_command", false)
+
+	if tracker.shellCacheRoot != dirB {
+		t.Fatalf("unrelated workDir should re-prime; cache root = %s, want %s", tracker.shellCacheRoot, dirB)
+	}
+	if len(tracker.changes) != 0 {
+		t.Errorf("re-prime must not fabricate changes; got %+v", tracker.changes)
+	}
+}
+
 // TestTrackShellTurn_RebasesAcrossCalls confirms the cache is updated
 // after each TrackShellTurn — the second shell command's diff is
 // against the state observed by the first, not the original baseline.
@@ -1480,12 +1545,15 @@ func BenchmarkCaptureShellSnapshot_SproutRepo(b *testing.B) {
 // fast path lets us stat-walk without re-reading content for unchanged
 // files, so this should be ~5–20 ms regardless of repo size.
 //
-// Compare against BenchmarkCaptureShellSnapshot_SproutRepo (~30 ms)
-// for the cold-walk baseline to see the speedup.
+// Compare against BenchmarkCaptureShellSnapshot_SproutRepo (the cold
+// full-content walk) to see the speedup.
 func BenchmarkTrackShellTurn_WarmNoChanges(b *testing.B) {
-	tracker := &ChangeTracker{enabled: true}
+	tracker := &ChangeTracker{enabled: true, shellWalkEnabled: true}
 	root := "../.."
 	tracker.PrimeShellTracking(root) // pay the cold cost once
+	if tracker.shellCache == nil {
+		b.Fatal("prime failed — walk disabled or root unresolved")
+	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		tracker.TrackShellTurn(root, "shell_command", false)

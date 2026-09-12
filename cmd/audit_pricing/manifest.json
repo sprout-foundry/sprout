@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://api.chutes.com/v1/models",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -77,7 +77,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -663,7 +663,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -723,7 +723,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -967,7 +967,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1114,7 +1114,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "gpt-5",
@@ -1687,7 +1687,7 @@
   },
   "openrouter": {
     "source": "https://api.openrouter.com/v1/models",
-    "last_verified": "2026-09-11",
+    "last_verified": "2026-09-12",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4403,6 +4403,16 @@
         "input_per_mtok": 2,
         "output_per_mtok": 12,
         "cached_per_mtok": 0.2
+      },
+      {
+        "id": "inference-net/schematron-v2-small",
+        "input_per_mtok": 0.05,
+        "output_per_mtok": 0.23
+      },
+      {
+        "id": "inference-net/schematron-v2-turbo",
+        "input_per_mtok": 0.03,
+        "output_per_mtok": 0.15
       }
     ]
   },

@@ -352,6 +352,11 @@ func (ct *ChangeTracker) Clear() {
 
 // clearLocked is the body of Clear, callable from sites that already hold ct.mu.
 func (ct *ChangeTracker) clearLocked() {
+	// Zero the elements before truncating: changes[:0] alone keeps the
+	// backing array (and every OriginalCode/NewCode string in it) GC-
+	// reachable until later appends overwrite the slots — up to the
+	// walk's 32 MiB content budget retained per cleared session.
+	clear(ct.changes)
 	ct.changes = ct.changes[:0]
 	ct.baseRevisionRecorded = false
 	ct.committedChangeCount = 0

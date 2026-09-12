@@ -20,14 +20,25 @@ func (ct *ChangeTracker) addAutoSkipDir(workspaceRoot, relDir string) {
 		return
 	}
 	abs := filepath.Join(workspaceRoot, relDir)
+	// Walks read autoSkipDirs under shellCacheMu (walkWorkspace runs
+	// with that lock held); mutate under it too so a concurrent
+	// walk can't race on the map. Persist a snapshot taken under the
+	// lock — saveAutoSkipDirsFor iterates the set.
+	ct.shellCacheMu.Lock()
 	if ct.autoSkipDirs == nil {
 		ct.autoSkipDirs = map[string]bool{}
 	}
-	if ct.autoSkipDirs[abs] {
+	alreadyKnown := ct.autoSkipDirs[abs]
+	ct.autoSkipDirs[abs] = true
+	snapshot := make(map[string]bool, len(ct.autoSkipDirs))
+	for d := range ct.autoSkipDirs {
+		snapshot[d] = true
+	}
+	ct.shellCacheMu.Unlock()
+	if alreadyKnown {
 		return
 	}
-	ct.autoSkipDirs[abs] = true
-	if err := saveAutoSkipDirsFor(workspaceRoot, ct.autoSkipDirs); err != nil {
+	if err := saveAutoSkipDirsFor(workspaceRoot, snapshot); err != nil {
 		log.Printf("[change-tracker] failed to persist auto-skip dirs after bulk rollup: %v", err)
 	}
 }

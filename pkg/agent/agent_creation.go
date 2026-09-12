@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"golang.org/x/term"
@@ -108,6 +109,11 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Production-only initialization steps
 	if params.isProduction {
+		// The system prompts advertise /tmp/sprout as the scratch directory;
+		// create it up front so the model's first shell write doesn't fail
+		// with ENOENT. Sandbox-isolated /tmp fails silently by design.
+		filesystem.EnsureScratchDir()
+
 		// Initialize context limits based on model
 		agent.state.SetMaxContextTokens(agent.getModelContextLimit())
 		agent.state.SetCurrentContextTokens(0)

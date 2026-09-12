@@ -43,7 +43,11 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	// Apply ChangeTrackingConfig so per-tracker overrides take effect before the prime walk runs.
 	a.applyChangeTrackingConfig()
 
-	if root := a.effectiveCwd(); root != "" {
+	// Prime against the WORKSPACE ROOT, not effectiveCwd: the shell cwd
+	// follows cd commands, and a cache rooted at a subdirectory forces a
+	// full cold re-prime on every shell command after the cd (plus a
+	// dropped diff for the triggering command). See TrackShellTurn.
+	if root := a.currentWorkspaceRoot(); root != "" {
 		a.changeTracker.PrimeShellTracking(root)
 	}
 
@@ -356,7 +360,12 @@ func (a *Agent) TrackShellCommand(command string) error {
 	if shellLooksReadOnly(command) {
 		return nil
 	}
-	tracker.TrackShellTurn(a.effectiveCwd(), "shell_command", shellIsDestructive(command))
+	// Diff against the WORKSPACE ROOT, not the shell cwd. effectiveCwd
+	// follows cd commands; keying the snapshot cache to it made every
+	// post-cd shell command discard the primed baseline and pay a full
+	// cold re-walk (with the triggering command's diff silently
+	// dropped). Workspace root is stable for the agent's lifetime.
+	tracker.TrackShellTurn(a.currentWorkspaceRoot(), "shell_command", shellIsDestructive(command))
 	return nil
 }
 

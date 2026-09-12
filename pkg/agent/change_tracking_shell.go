@@ -102,10 +102,35 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		absWorkDir = workDir
 	}
 
-	// Re-prime if the workDir changed since the cache was built.
-	// Diffing a cache built for one root against a walk of another
-	// would classify every file outside the old root as a "create".
-	if ct.shellCache == nil || ct.shellCacheRoot != absWorkDir {
+	// Root-mismatch handling. The cache must stay keyed to one tree:
+	// diffing a walk of tree A against a cache of tree B reports
+	// everything outside the overlap as creates/deletes.
+	//
+	//  - workDir INSIDE the cached root (agent cd'd into a subdirectory):
+	//    walk the CACHED ROOT instead. The diff (disk vs cached state of
+	//    that same tree) stays exact, mutations the command made anywhere
+	//    in the tree are captured, and the baseline survives the cd.
+	//    Keying the cache to the shell cwd instead made every post-cd
+	//    shell command discard the baseline and pay a full cold re-walk
+	//    (with the triggering command's diff silently dropped).
+	//  - workDir OUTSIDE the cached root (workspace switch): re-prime.
+	//    The old tree's cache is meaningless for the new one.
+	if ct.shellCache != nil && ct.shellCacheRoot != absWorkDir {
+		if rel, relErr := filepath.Rel(ct.shellCacheRoot, absWorkDir); relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			absWorkDir = ct.shellCacheRoot
+			workDir = ct.shellCacheRoot
+		} else {
+			snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+			if snap == nil {
+				snap = map[string]*shellSnapshotEntry{}
+			}
+			ct.shellCache = snap
+			ct.shellCacheRoot = absWorkDir
+			return
+		}
+	}
+
+	if ct.shellCache == nil {
 		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}

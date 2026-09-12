@@ -103,7 +103,11 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 			// switch the walker into destructive mode so adaptive
 			// auto-skip can't silently drop reverts the user wanted
 			// recoverable. shell_destructive.go has the classifier.
-			tracker.TrackShellTurn(a.effectiveCwd(), "shell_command", shellIsDestructive(command))
+			//
+			// Pass the workspace root, NOT effectiveCwd: the shell cwd
+			// follows cd, and a cwd-keyed cache re-primes (cold walk +
+			// dropped diff) on every command after a cd.
+			tracker.TrackShellTurn(a.currentWorkspaceRoot(), "shell_command", shellIsDestructive(command))
 		}
 	}
 

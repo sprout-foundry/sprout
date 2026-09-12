@@ -63,10 +63,10 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	// UI events (events.EventType*) — note: events.EventTypeError ==
 	// "error", so it's the canonical entry for the error envelope used
 	// throughout the codebase. Listed once below.
-	events.EventTypeQueryStarted:                   {},
-	events.EventTypeQueryProgress:                  {},
-	events.EventTypeQueryCompleted:                 {},
-	events.EventTypeError:                          {},
+	events.EventTypeQueryStarted:   {},
+	events.EventTypeQueryProgress:  {},
+	events.EventTypeQueryCompleted: {},
+	events.EventTypeError:          {},
 	// tool_execution and validation were dropped from the registry:
 	// tool_execution had no publisher left (superseded by
 	// tool_start/tool_end), and validation has no consumer on any

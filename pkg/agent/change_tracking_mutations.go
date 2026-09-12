@@ -32,10 +32,28 @@ type pendingShellMutation struct {
 	op     string // "create" | "edit" | "delete"
 }
 
+// emitBuildBulkRollup adapts walkWorkspace's pendingShellChange slice into
+// the pendingShellMutation shape and routes through emitWithBulkRollup —
+// the build-output rollup (one bulk row per fat directory + auto-skip
+// learning). Called by TrackShellTurn when a non-destructive command
+// churns at least shellBulkThreshold files.
+func (ct *ChangeTracker) emitBuildBulkRollup(pending []pendingShellChange, toolCall string) {
+	muts := make([]pendingShellMutation, len(pending))
+	for i, p := range pending {
+		muts[i] = pendingShellMutation{path: p.Path, before: p.Before, after: p.After, op: p.Op}
+	}
+	ct.emitWithBulkRollup(muts, toolCall)
+}
+
 // RecordShellMutations diffs a pair of snapshots (before/after a
 // shell_command invocation) and appends TrackedFileChange entries for
 // every file that materially changed. Deduplicates against direct-tool
 // hooks. Above shellBulkThreshold, collapses into bulk rollup.
+//
+// Production diffing now happens inside TrackShellTurn (walkWorkspace
+// computes pending changes against the live cache), so this exists for
+// callers that hold explicit before/after snapshot pairs — the tests,
+// and any future caller that captures snapshots out-of-band.
 func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSnapshotEntry, toolCall string) {
 	if ct == nil || !ct.IsEnabled() {
 		return
@@ -110,13 +128,21 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 		}
 		return
 	}
+	// emitWithBulkRollup requires shellCacheMu held (its auto-skip
+	// learning mutates the map walks read under that lock).
+	ct.shellCacheMu.Lock()
 	ct.emitWithBulkRollup(pending, toolCall)
+	ct.shellCacheMu.Unlock()
 }
 
 // emitWithBulkRollup is the rollup path taken when a single shell
 // command exceeded shellBulkThreshold. Buckets mutations by top-level
 // workspace directory. Root-level files and light buckets emit per-file;
 // heavy buckets collapse into a single rollup row.
+//
+// Caller must hold ct.shellCacheMu (TrackShellTurn does; this function
+// and its addAutoSkipDirLocked callee touch autoSkipDirs, which walks
+// read under that lock).
 func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, toolCall string) {
 	workspaceRoot := ""
 	if ct.agent != nil {
@@ -172,7 +198,9 @@ func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, tool
 			asChanges[i] = pendingShellChange{Path: it.path, Op: it.op, Before: it.before, After: it.after}
 		}
 		ct.appendBulkRollup(label, asChanges, absWorkspace, toolCall)
-		ct.addAutoSkipDir(absWorkspace, b.topDir)
+		// Caller holds shellCacheMu — use the Locked body. Re-locking
+		// here would self-deadlock (sync.Mutex is not re-entrant).
+		ct.addAutoSkipDirLocked(absWorkspace, filepath.Join(absWorkspace, b.topDir))
 	}
 }
 

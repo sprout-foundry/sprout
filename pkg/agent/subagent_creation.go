@@ -129,6 +129,13 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		return nil, err
 	}
 
+	// Set subagentDepth based on parent's depth + 1 BEFORE
+	// EnableChangeTracking: the tracker consults the depth to skip the
+	// eager shell-cache prime and the revision-compaction goroutine for
+	// short-lived subagents. This enables configurable nesting: EA (0)
+	// → orchestrator (1) → coder/tester (2).
+	agent.subagentDepth = r.parentAgent.subagentDepth + 1
+
 	// Enable a lightweight change tracker on the subagent so the returned
 	// envelope can include a structured FilesModified manifest. Tracking
 	// just records writes in memory; it does not participate in the
@@ -149,10 +156,6 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 			agent.SetTerminalManager(tm)
 		}
 	}
-
-	// Set subagentDepth based on parent's depth + 1.
-	// This enables configurable nesting: EA (0) → orchestrator (1) → coder/tester (2).
-	agent.subagentDepth = r.parentAgent.subagentDepth + 1
 
 	// Propagate rootPersonaID from parent so depth limits can vary by root persona.
 	if r.parentAgent.rootPersonaID != "" {

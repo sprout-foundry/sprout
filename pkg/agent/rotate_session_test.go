@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -193,5 +194,60 @@ func TestRotateSessionFromEmptyID(t *testing.T) {
 	}
 	if got := a.GetSessionID(); got != newID {
 		t.Errorf("GetSessionID() = %q, want %q", got, newID)
+	}
+}
+
+// TestRotateSessionResetsChangeTracker pins the /clear contract: the new
+// session's change manifest starts empty. Before this, RotateSession
+// rotated the conversation but left the prior session's tracked changes
+// in the buffer — list_changes kept showing them and revert_my_changes
+// kept targeting them in the "new" session.
+func TestRotateSessionResetsChangeTracker(t *testing.T) {
+	isolateStateAndIndexForTest(t)
+
+	// RotateSession now COMMITS pending changes before resetting, which
+	// writes to the persisted history store — isolate it so this test
+	// doesn't pollute the include_persisted assertions of other tests.
+	_, configCleanup := configuration.NewTestManager(t)
+	defer configCleanup()
+	setHistory := isolateHistoryForTest(t)
+
+	a := newTestAgent(t)
+	a.SetSessionID("session_prior_tracker_test")
+	// History persistence is project-scoped under the agent's workspace
+	// root (.sprout/changes). Without this the commit below writes into
+	// pkg/agent/.sprout/ in the SOURCE TREE, which every later
+	// include_persisted test in this package then reads back.
+	a.SetWorkspaceRoot(t.TempDir())
+	a.EnableChangeTracking("rotate test")
+	setHistory()
+
+	if err := a.TrackFileWrite("/tmp/rotate-tracker-test-file.txt", "", "hello"); err != nil {
+		t.Fatalf("TrackFileWrite: %v", err)
+	}
+	if got := a.GetChangeCount(); got != 1 {
+		t.Fatalf("precondition: expected 1 tracked change, got %d", got)
+	}
+
+	newID, err := a.RotateSession()
+	if err != nil {
+		t.Fatalf("RotateSession: %v", err)
+	}
+
+	if got := a.GetChangeCount(); got != 0 {
+		t.Errorf("after RotateSession the tracker buffer must be empty; got %d entries", got)
+	}
+	tracker := a.GetChangeTracker()
+	if tracker == nil {
+		t.Fatal("tracker should still exist after rotation (change tracking stays enabled)")
+	}
+	if !tracker.IsEnabled() {
+		t.Error("change tracking should stay enabled after rotation")
+	}
+	if got := tracker.GetRevisionID(); got == "" {
+		t.Error("tracker should have a fresh revision ID after rotation")
+	}
+	if tracker.sessionID != newID {
+		t.Errorf("tracker sessionID = %q, want the new session ID %q", tracker.sessionID, newID)
 	}
 }

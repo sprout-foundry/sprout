@@ -180,6 +180,15 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// recoverable entry. Below the threshold we keep per-file shape.
 	if destructive && len(pending) >= shellDestructiveBulkThreshold {
 		ct.appendDestructiveBulkRollup(pending, toolCall)
+	} else if !destructive && len(pending) >= shellBulkThreshold {
+		// Build-style non-destructive commands (npm run build, cargo
+		// build, go build with many outputs) emit one rollup row per
+		// fat directory instead of hundreds of per-file entries, and
+		// teach the walker to auto-skip those dirs on future walks.
+		// Restores the build-rollup design that RecordShellMutations
+		// carried when it was the production diff entry point; this
+		// path replaced it without re-wiring the rollup.
+		ct.emitBuildBulkRollup(pending, toolCall)
 	} else {
 		for _, p := range pending {
 			ct.appendShellMutation(p.Path, p.Before, p.After, p.Op, toolCall)

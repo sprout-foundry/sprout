@@ -160,6 +160,10 @@ storybook-static
 code_review_output.json
 .claude/
 
+# sprout runtime per-workspace config, written when a sprout binary runs
+# from the repo root (last-used provider, per-role model picks).
+workspace.json
+
 # Tree-sitter grammar blobs copied from the gotreesitter module cache by
 # scripts/prepare-grammars.sh (SP-058). Not tracked — regenerated on every build.
 pkg/ast/grammars/bin/*.bin

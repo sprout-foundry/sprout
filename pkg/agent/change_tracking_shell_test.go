@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -593,6 +594,79 @@ func TestTrackShellTurn_DetectsMutationsAfterPrime(t *testing.T) {
 	add := byPath[created]
 	if add.Operation != "create" {
 		t.Errorf("new.go should be op=create, got %q", add.Operation)
+	}
+}
+
+// TestTrackShellTurn_NonDestructiveBuildRollup pins the production wiring:
+// a non-destructive command (make build, npm install) that churns at least
+// shellBulkThreshold files must collapse into bulk rollup rows via
+// emitWithBulkRollup — not emit hundreds of per-file entries. This path
+// was dormant (only RecordShellMutations carried the rollup, and nothing
+// in production called it) until TrackShellTurn was re-wired.
+func TestTrackShellTurn_NonDestructiveBuildRollup(t *testing.T) {
+	// t.TempDir() on macOS lives under /var, a symlink to /private/var.
+	// emitWithBulkRollup EvalSymlinks-resolves the workspace root while
+	// walkWorkspace records unresolved paths — use the resolved dir for
+	// both so bucketing matches (production roots are symlink-free).
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve tempdir: %v", err)
+	}
+
+	tracker := newTrackerForShellTest(t)
+	// emitWithBulkRollup buckets by top-level dir relative to the
+	// agent's workspace root; without an agent pointer every path
+	// buckets as "root-level" and emits per-file.
+	tracker.agent = &Agent{workspaceRoot: dir}
+	tracker.PrimeShellTracking(dir)
+
+	// Simulate a build dropping shellBulkThreshold files under one
+	// directory — above the rollup threshold, below the cumulative
+	// auto-skip threshold, and NOT in the static skip list so the walk
+	// sees them fresh.
+	prev := shellBulkThreshold
+	shellBulkThreshold = 10
+	defer func() { shellBulkThreshold = prev }()
+
+	buildDir := filepath.Join(dir, "genout")
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	for i := 0; i < 12; i++ {
+		p := filepath.Join(buildDir, fmt.Sprintf("out%d.js", i))
+		mustWriteFile(t, p, []byte(fmt.Sprintf("built %d", i)))
+		bumpMtime(t, p)
+	}
+
+	tracker.TrackShellTurn(dir, "make build", false)
+
+	changes := tracker.GetChanges()
+	if len(changes) == 0 {
+		t.Fatal("no changes recorded for build output")
+	}
+	perFile := 0
+	bulk := 0
+	for _, ch := range changes {
+		if ch.Operation == "bulk" {
+			bulk++
+			if ch.BulkCount < 1 {
+				t.Errorf("bulk row carries BulkCount=%d, want ≥1", ch.BulkCount)
+			}
+		} else {
+			perFile++
+		}
+	}
+	if bulk == 0 {
+		t.Fatalf("expected a bulk rollup row for %d churned files; got %d per-file entries and %d bulk rows", 12, perFile, bulk)
+	}
+	if perFile > shellBulkBucketMin {
+		t.Errorf("per-file emission (%d) should stay below the light-bucket minimum; rollup should dominate", perFile)
+	}
+
+	// The rollup must also teach the walker to skip the fat dir on the
+	// next walk (addAutoSkipDir from emitWithBulkRollup).
+	if !tracker.autoSkipDirs[buildDir] {
+		t.Errorf("build dir %q not learned as auto-skip after rollup; autoSkipDirs=%v", buildDir, tracker.autoSkipDirs)
 	}
 }
 

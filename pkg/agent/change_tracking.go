@@ -21,6 +21,7 @@ type ChangeTracker struct {
 	// mu protects revisionID, instructions, changes, baseRevisionRecorded,
 	// committedChangeCount, and checkpointedChangeCount.
 	mu           sync.Mutex
+	commitMu     sync.Mutex
 	revisionID   string
 	sessionID    string
 	instructions string
@@ -207,54 +208,90 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 	if !ct.IsEnabled() {
 		return nil
 	}
-	ct.mu.Lock()
-	if len(ct.changes) == 0 {
-		ct.mu.Unlock()
-		return nil
-	}
-	if ct.committedChangeCount >= len(ct.changes) {
-		ct.mu.Unlock()
-		return nil
-	}
+
+	// commitMu serializes commits (turn end + session cleanup can race
+	// with a WebUI-triggered commit). It lets ct.mu stay held only for
+	// microsecond snapshot/counter work: history.Record* performs disk
+	// I/O (base64 + two file writes per change), and holding ct.mu
+	// across it stalled every concurrent GetChanges/TrackFileWrite —
+	// including the WebUI changes panel — for the whole write burst.
+	ct.commitMu.Lock()
+	defer ct.commitMu.Unlock()
 
 	historyConversation := convertToHistoryMessages(conversation)
 
-	if !ct.baseRevisionRecorded {
-		revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
-		if err != nil {
+	for {
+		ct.mu.Lock()
+		if len(ct.changes) == 0 || ct.committedChangeCount >= len(ct.changes) {
 			ct.mu.Unlock()
-			return agenterrors.Wrap(err, "failed to record base revision")
+			break
 		}
-		ct.revisionID = revisionID
-		ct.baseRevisionRecorded = true
-	}
-
-	// Record each file change. Advance committedChangeCount after each
-	// successful record so a mid-loop failure doesn't leave the counter stale.
-	for ct.committedChangeCount < len(ct.changes) {
-		change := ct.changes[ct.committedChangeCount]
-		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
-		note := fmt.Sprintf("Agent session: %s", ct.sessionID)
-
-		err := history.RecordChangeWithDetails(
-			ct.revisionID,
-			change.FilePath,
-			change.OriginalCode,
-			change.NewCode,
-			description,
-			note,
-			ct.instructions,
-			llmResponse,
-			ct.getAgentModel(),
-		)
-		if err != nil {
+		if !ct.baseRevisionRecorded {
+			// RecordBaseRevision is I/O; do it outside ct.mu. The flag
+			// is only set after success under ct.mu, so a concurrent
+			// commit (serialized by commitMu anyway) can't duplicate it.
+			revisionID := ct.revisionID
 			ct.mu.Unlock()
-			return agenterrors.Wrap(err, fmt.Sprintf("failed to record change for %s", change.FilePath))
+			newRevisionID, err := history.RecordBaseRevision(revisionID, ct.instructions, llmResponse, historyConversation)
+			if err != nil {
+				return agenterrors.Wrap(err, "failed to record base revision")
+			}
+			ct.mu.Lock()
+			if ct.revisionID == revisionID {
+				ct.revisionID = newRevisionID
+				ct.baseRevisionRecorded = true
+			}
+			ct.mu.Unlock()
+		} else {
+			ct.mu.Unlock()
 		}
-		ct.committedChangeCount++
+
+		// Snapshot the uncommitted slice under ct.mu, then release the
+		// lock for the I/O burst. committedChangeCount advances per
+		// successful record so a mid-burst failure resumes without
+		// re-recording completed entries.
+		ct.mu.Lock()
+		start := ct.committedChangeCount
+		end := len(ct.changes)
+		pending := make([]TrackedFileChange, end-start)
+		copy(pending, ct.changes[start:end])
+		ct.mu.Unlock()
+
+		for i, change := range pending {
+			description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
+			note := fmt.Sprintf("Agent session: %s", ct.sessionID)
+
+			ct.mu.Lock()
+			revisionID := ct.revisionID
+			instructions := ct.instructions
+			ct.mu.Unlock()
+			err := history.RecordChangeWithDetails(
+				revisionID,
+				change.FilePath,
+				change.OriginalCode,
+				change.NewCode,
+				description,
+				note,
+				instructions,
+				llmResponse,
+				ct.getAgentModel(),
+			)
+			if err != nil {
+				return agenterrors.Wrap(err, fmt.Sprintf("failed to record change for %s", change.FilePath))
+			}
+			ct.mu.Lock()
+			if start+i+1 > ct.committedChangeCount {
+				ct.committedChangeCount = start + i + 1
+			}
+			ct.mu.Unlock()
+		}
+
+		// Loop: entries may have been appended while the lock was
+		// released. The re-check at the top exits when caught up.
 	}
 
 	// Snapshot the changes for the sweep. Copy under the lock, then release.
+	ct.mu.Lock()
 	changesSnapshot := make([]TrackedFileChange, len(ct.changes))
 	copy(changesSnapshot, ct.changes)
 	ct.mu.Unlock()
@@ -345,6 +382,12 @@ func (ct *ChangeTracker) MergeChild(changes []TrackedFileChange, source string) 
 // Clear clears all tracked changes (but keeps the tracker enabled).
 // Also resets the shell-snapshot cache.
 func (ct *ChangeTracker) Clear() {
+	// commitMu first: a Commit mid-I/O-burst must finish (or fail)
+	// before the buffer resets, preserving the historical ordering
+	// where Clear blocked on ct.mu for the whole commit. Lock order
+	// commitMu → mu → shellCacheMu is acyclic.
+	ct.commitMu.Lock()
+	defer ct.commitMu.Unlock()
 	ct.mu.Lock()
 	ct.clearLocked()
 	ct.mu.Unlock()
@@ -369,6 +412,9 @@ func (ct *ChangeTracker) clearLocked() {
 // Reset resets the change tracker with a new revision ID and instructions
 func (ct *ChangeTracker) Reset(instructions string) {
 	revID := generateRevisionID(ct.sessionID, instructions)
+	// Same ordering as Clear: serialize against in-flight commits.
+	ct.commitMu.Lock()
+	defer ct.commitMu.Unlock()
 	ct.mu.Lock()
 	ct.instructions = instructions
 	ct.revisionID = revID

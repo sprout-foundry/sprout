@@ -2107,3 +2107,41 @@ func TestSP079_AnalyzeUIScreenshot_HandlerBehavior(t *testing.T) {
 		}
 	}
 }
+
+// TestAgent_EnableChangeTracking_SubagentSkipsShellPrime pins the memory
+// guard: subagents must not eagerly prime the shell snapshot cache at
+// EnableChangeTracking time. Each primed cache holds up to the 32 MiB
+// content budget; N parallel subagents multiplied that by N, and
+// read-only subagents paid the cold workspace walk for nothing.
+// TrackShellTurn auto-primes on the first tracked shell command, so
+// shell-heavy subagents keep full mutation coverage.
+func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
+	a := &Agent{
+		state:         NewAgentStateManager(false),
+		workspaceRoot: t.TempDir(),
+		subagentDepth: 1,
+	}
+	a.EnableChangeTracking("subagent run")
+
+	tracker := a.GetChangeTracker()
+	if tracker == nil {
+		t.Fatal("subagent should still get a tracker (FilesModified manifest)")
+	}
+	if !tracker.IsEnabled() {
+		t.Fatal("subagent tracking should be enabled")
+	}
+	if tracker.shellCache != nil {
+		t.Error("subagent tracker eagerly primed the shell cache; expected lazy (nil) until first tracked shell command")
+	}
+
+	// Primary agents still prime eagerly.
+	b := &Agent{
+		state:         NewAgentStateManager(false),
+		workspaceRoot: t.TempDir(),
+	}
+	b.EnableChangeTracking("primary run")
+	bt := b.GetChangeTracker()
+	if bt == nil || bt.shellCache == nil {
+		t.Error("primary agent tracker should have an eagerly primed shell cache")
+	}
+}

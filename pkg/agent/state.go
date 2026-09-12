@@ -352,10 +352,35 @@ func (a *Agent) RotateSession() (string, error) {
 		}
 	}
 
+	// Persist the closing session's tracked changes before resetting the
+	// buffer. Without this, the new session's list_changes manifest kept
+	// showing (and revert_my_changes kept targeting) the prior session's
+	// entries — "/clear" means a fresh session, but the tracker buffer
+	// outlived the conversation it belonged to. Best-effort: a commit
+	// failure logs but doesn't block rotation (the same tolerance the
+	// session-cleanup defer in processQueryWithSeed applies).
+	if a.changeTracker != nil && a.changeTracker.IsEnabled() && a.GetChangeCount() > 0 {
+		if err := a.CommitChanges("Session rotated via /clear"); err != nil {
+			a.Logger().Debug("rotate: commit of pending tracked changes failed (buffer still reset): %v\n", err)
+		}
+	}
+
 	a.ClearConversationHistory()
 
 	newID := newSessionID()
 	a.SetSessionID(newID)
+
+	// Reset the tracker for the new session: fresh revisionID under the
+	// new session, empty buffer. Committed entries above were already
+	// persisted to the history store, so the timeline tab still shows
+	// them; only the live session manifest starts clean. sessionID is
+	// written after Reset returns — Reset's commitMu barrier guarantees
+	// no in-flight Commit is still reading the old value.
+	if a.changeTracker != nil {
+		a.changeTracker.Reset("session rotated")
+		a.changeTracker.sessionID = newID
+	}
+
 	return newID, nil
 }
 

@@ -47,12 +47,26 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	// follows cd commands, and a cache rooted at a subdirectory forces a
 	// full cold re-prime on every shell command after the cd (plus a
 	// dropped diff for the triggering command). See TrackShellTurn.
-	if root := a.currentWorkspaceRoot(); root != "" {
-		a.changeTracker.PrimeShellTracking(root)
+	//
+	// Subagents skip the eager prime: each subagent tracker would hold
+	// its own copy of the workspace snapshot (up to the 32 MiB content
+	// budget) — N parallel subagents multiplied that by N, and read-only
+	// subagents paid the cold walk for nothing. TrackShellTurn
+	// auto-primes on the subagent's first non-read-only shell command,
+	// so shell-heavy subagents still get full mutation tracking; ones
+	// that only read cost zero. The parent's own walk picks up any gap:
+	// its next shell command diffs the whole tree, capturing subagent
+	// mutations the subagent's tracker never observed.
+	if a.subagentDepth == 0 {
+		if root := a.currentWorkspaceRoot(); root != "" {
+			a.changeTracker.PrimeShellTracking(root)
+		}
 	}
 
 	// One-shot revision-history compaction. Runs in the background so the agent's startup isn't blocked by I/O.
-	go a.compactRevisionHistoryAsync()
+	if a.subagentDepth == 0 {
+		go a.compactRevisionHistoryAsync()
+	}
 }
 
 // compactRevisionHistoryAsync runs one pass of pkg/history.CompactRevisions using the policy resolved from configuration.

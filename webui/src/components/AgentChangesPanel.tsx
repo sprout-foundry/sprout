@@ -128,6 +128,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [flashedPaths, setFlashedPaths] = useState<Set<string>>(new Set());
+  const reloadTimer = useRef<number | undefined>(undefined);
 
   // ── Load session ────────────────────────────────────────────────
 
@@ -183,12 +184,24 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           });
         }, 1200);
       }
-      // Debounced reload — fire-and-forget; if multiple events arrive
-      // in quick succession the new state still converges.
-      void loadSession();
+      // Debounced reload — a destructive shell command can emit several
+      // file_changed events in quick succession; coalesce them into one
+      // manifest/summary fetch instead of one per event.
+      if (reloadTimer.current !== undefined) {
+        window.clearTimeout(reloadTimer.current);
+      }
+      reloadTimer.current = window.setTimeout(() => {
+        reloadTimer.current = undefined;
+        void loadSession();
+      }, 300);
     };
     window.addEventListener('agent-file-changed', handler);
-    return () => window.removeEventListener('agent-file-changed', handler);
+    return () => {
+      window.removeEventListener('agent-file-changed', handler);
+      if (reloadTimer.current !== undefined) {
+        window.clearTimeout(reloadTimer.current);
+      }
+    };
   }, [loadSession]);
 
   // ── Diff modal ─────────────────────────────────────────────────

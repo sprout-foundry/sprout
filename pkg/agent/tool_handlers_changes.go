@@ -147,6 +147,13 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		Diff        string          `json:"diff,omitempty"`
 	}
 
+	// Hoist the snapshot out of the loop: GetChanges() copies the full
+	// tracked-change buffer (including file contents), and calling it
+	// per file made include_diff O(N²) in buffer size.
+	var allChanges []TrackedFileChange
+	if includeDiff && len(changes) > 0 {
+		allChanges = tracker.GetChanges()
+	}
 	files := make([]fileEntry, 0, len(changes))
 	for _, ch := range changes {
 		entry := fileEntry{
@@ -174,7 +181,7 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 			// not just the immediate change. Matches the prior
 			// show_my_change behaviour.
 			if abs, err := filepath.Abs(ch.FilePath); err == nil {
-				original, latestNew, _, _, found := collectFileChangeSpan(tracker.GetChanges(), abs)
+				original, latestNew, _, _, found := collectFileChangeSpan(allChanges, abs)
 				if found {
 					entry.Diff = buildUnifiedDiff(abs, original, latestNew)
 				}

@@ -173,6 +173,44 @@ func EstimateInputTokens(messages []Message, tools []Tool) int {
 	return inputTokens
 }
 
+// EstimateMessagesTokensWireView estimates message tokens as they appear on
+// the wire when reasoning history is NOT replayed (the provider config has
+// an empty reasoning_content_field and no structured reasoning_details
+// replay). ReasoningContent is excluded because the provider never receives
+// it — counting it inflates fallback estimates by the full reasoning mass
+// (tens of thousands of tokens on reasoning-heavy agents), which skews both
+// the context-usage display and the compaction trigger.
+func EstimateMessagesTokensWireView(messages []Message) int {
+	tokens := 0
+	for _, msg := range messages {
+		tokens += EstimateTokens(msg.Content)
+		for _, img := range msg.Images {
+			tokens += estimateImageTokens(img)
+		}
+		for _, toolCall := range msg.ToolCalls {
+			tokens += EstimateTokens(toolCall.ID)
+			tokens += EstimateTokens(toolCall.Type)
+			tokens += EstimateTokens(toolCall.Function.Name)
+			tokens += EstimateTokens(toolCall.Function.Arguments)
+			tokens += ToolCallOverheadTokens
+		}
+		if msg.ToolCallID != "" {
+			tokens += EstimateTokens(msg.ToolCallID)
+			tokens += ToolCallIDOverheadTokens
+		}
+		tokens += MessageOverheadTokens
+	}
+	return tokens
+}
+
+// EstimateInputTokensWireView is EstimateInputTokens over
+// EstimateMessagesTokensWireView.
+func EstimateInputTokensWireView(messages []Message, tools []Tool) int {
+	return EstimateMessagesTokensWireView(messages) +
+		len(tools)*ToolTokenEstimate +
+		SystemInstructionBuffer
+}
+
 // CalculateOutputBudget calculates the safe output token budget given context constraints.
 // It returns the maximum tokens that can be requested for completion.
 // If the input exceeds the context limit, returns 0 and an error message.

@@ -26,10 +26,10 @@ func TestTokenAnchorModelKeyInvalidatesOnModelSwitch(t *testing.T) {
 	messages := []core.Message{{Role: "user", Content: "hi"}}
 	anchor.update("model-a", messages, 2, 5000)
 
-	if _, _, ok := anchor.estimate("model-a", messages, 2); !ok {
+	if _, _, ok := anchor.estimate("model-a", messages, 2, nil); !ok {
 		t.Error("expected anchor to apply for the same model that measured it")
 	}
-	if _, _, ok := anchor.estimate("model-b", messages, 2); ok {
+	if _, _, ok := anchor.estimate("model-b", messages, 2, nil); ok {
 		t.Error("expected anchor to be invalidated when the model changes (tokenizer differs)")
 	}
 }

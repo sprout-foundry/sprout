@@ -29,11 +29,12 @@ require github.com/sprout-foundry/seed v1.4.0
 require github.com/odvcencio/gotreesitter v0.16.0
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/coder/hnsw v0.6.1
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sinter v0.2.2
+	github.com/sprout-foundry/sinter v0.2.3
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1
@@ -45,7 +46,6 @@ require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/BobuSumisu/aho-corasick v1.0.3 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect

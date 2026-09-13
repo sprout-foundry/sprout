@@ -649,12 +649,44 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 	}
 	// Anchor to the last real Usage.PromptTokens count when the message prefix still matches.
 	// Falls back to a full from-scratch heuristic estimate on the first call or after compaction.
-	if total, _, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools)); ok {
+	if total, _, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools), sp.deltaEstimator()); ok {
 		return total
 	}
 
-	// Delegate to sprout's centralized estimator.
+	// Delegate to sprout's centralized estimator. When the provider does not
+	// replay historical reasoning content on the wire, use the wire-view
+	// variant so the estimate matches what the provider actually receives —
+	// otherwise a missed anchor inflates the estimate by the full reasoning
+	// mass (observed as the context meter jumping ~80K tokens between
+	// iterations on reasoning-heavy agents).
+	if !sp.replaysReasoningHistory() {
+		return api.EstimateInputTokensWireView(req.Messages, req.Tools)
+	}
 	return api.EstimateInputTokens(req.Messages, req.Tools)
+}
+
+// replaysReasoningHistory reports whether the current client replays
+// historical assistant reasoning on requests. Unknown client types are
+// treated as replaying (conservative: their estimate stays as before).
+func (sp *sproutProvider) replaysReasoningHistory() bool {
+	c := sp.currentClient()
+	if c == nil {
+		return true
+	}
+	if r, ok := c.(providers.ReasoningHistoryReplayer); ok {
+		return r.ReplaysReasoningHistory()
+	}
+	return true
+}
+
+// deltaEstimator returns the estimator for the non-anchored message tail —
+// the wire-view estimator when the provider does not replay reasoning
+// history, nil (default) otherwise.
+func (sp *sproutProvider) deltaEstimator() func([]core.Message) int {
+	if sp.replaysReasoningHistory() {
+		return nil
+	}
+	return api.EstimateMessagesTokensWireView
 }
 
 // setMaxTokensHint stores a pre-computed max_tokens hint for the next request.
@@ -687,7 +719,7 @@ func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
 		sp.setMaxTokensHint(0)
 		return
 	}
-	total, heuristic, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools))
+	total, heuristic, ok := sp.tokenAnchor.estimate(sp.currentClient().GetModel(), req.Messages, len(req.Tools), sp.deltaEstimator())
 	if !ok {
 		sp.setMaxTokensHint(0) // no hint — let provider compute from scratch
 		return

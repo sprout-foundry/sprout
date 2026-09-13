@@ -86,11 +86,17 @@ func (a *tokenAnchor) update(model string, messages []core.Message, toolCount in
 // the anchor was recorded. Callers must fall back to a full heuristic
 // estimate in that case.
 //
+// deltaEstimate lets the caller select the estimator for the appended
+// (non-anchored) message tail: nil uses api.EstimateMessagesTokens; pass
+// api.EstimateMessagesTokensWireView for providers that do not replay
+// historical reasoning content, so the heuristic tail excludes reasoning
+// mass the provider never sees.
+//
 // Returns (totalTokens, heuristicTokens, ok). When ok is true, totalTokens
 // is the full estimate and heuristicTokens is the portion that went through
 // the heuristic (subject to EstimationErrorPercent). The anchored portion
 // (totalTokens - heuristicTokens) is a real measurement.
-func (a *tokenAnchor) estimate(model string, messages []core.Message, toolCount int) (totalTokens, heuristicTokens int, ok bool) {
+func (a *tokenAnchor) estimate(model string, messages []core.Message, toolCount int, deltaEstimate func([]core.Message) int) (totalTokens, heuristicTokens int, ok bool) {
 	a.mu.RLock()
 	messageCount, fingerprint, anchoredToolCount, anchoredModel, actualTokens := a.messageCount, a.fingerprint, a.toolCount, a.model, a.actualTokens
 	a.mu.RUnlock()
@@ -111,6 +117,9 @@ func (a *tokenAnchor) estimate(model string, messages []core.Message, toolCount 
 		return 0, 0, false
 	}
 
-	delta := api.EstimateMessagesTokens(messages[messageCount:])
+	if deltaEstimate == nil {
+		deltaEstimate = api.EstimateMessagesTokens
+	}
+	delta := deltaEstimate(messages[messageCount:])
 	return actualTokens + delta, delta, true
 }

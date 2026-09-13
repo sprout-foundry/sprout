@@ -816,6 +816,25 @@ type MaxTokensHinter interface {
 	SetMaxTokensHint(tokens int)
 }
 
+// ReasoningHistoryReplayer reports whether the provider replays historical
+// assistant ReasoningContent on the wire (flat reasoning_content_field or
+// structured reasoning_details). Token estimation that runs against the
+// wire-visible view must exclude reasoning mass when this returns false —
+// the provider never bills or sees those tokens.
+type ReasoningHistoryReplayer interface {
+	ReplaysReasoningHistory() bool
+}
+
+// ReplaysReasoningHistory reports whether converted assistant messages
+// carry historical reasoning content on requests. False when the provider
+// config neither sets a reasoning_content_field nor preserves structured
+// reasoning_details.
+func (p *GenericProvider) ReplaysReasoningHistory() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.config.Conversion.ReasoningContentField != "" || p.config.Conversion.PreserveReasoningDetails
+}
+
 // SetMaxTokensHint sets a pre-computed max_tokens override (0 to clear).
 func (p *GenericProvider) SetMaxTokensHint(tokens int) {
 	p.maxTokensHintMu.Lock()

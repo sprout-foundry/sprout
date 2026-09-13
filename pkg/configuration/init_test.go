@@ -11,7 +11,7 @@ func TestInitialize_DebugPrintConfig(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
 	config := NewConfig()
 	config.LastUsedProvider = "openrouter"
-	config.Version = "2.0"
+	config.Version = "2.1"
 	apiKeys, err := LoadAPIKeys()
 	require.NoError(t, err)
 	assert.NotPanics(t, func() {
@@ -37,7 +37,7 @@ func TestInitialize_LoadOrInitConfig_SkipPrompt(t *testing.T) {
 	config, err := LoadOrInitConfig(true)
 	require.NoError(t, err)
 	require.NotNil(t, config)
-	assert.Equal(t, "2.0", config.Version)
+	assert.Equal(t, "2.1", config.Version)
 }
 
 func TestInitialize_ValidateProviderSetup_Editor(t *testing.T) {

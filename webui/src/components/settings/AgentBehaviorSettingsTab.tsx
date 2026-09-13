@@ -69,7 +69,7 @@ export default function AgentBehaviorSettingsTab({
       <p className="config-help" style={{ marginBottom: '12px' }}>
         When enabled, Sprout automatically processes background task completions without waiting for your next message.
       </p>
-      {renderToggle('wakeup.enabled', 'Enable auto-resume', 'Off by default. Requires the daemon (sprout serve).')}
+      {renderToggle('wakeup.enabled', 'Enable auto-resume', 'On by default. Requires the daemon (sprout serve).')}
       {renderNumberInput &&
         renderNumberInput(
           'wakeup.max_tokens_per_session',

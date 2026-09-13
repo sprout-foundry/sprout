@@ -67,7 +67,11 @@ func ensureRegistered() {
 		if registrationErr != nil {
 			return
 		}
-		registrationErr = registerMigration("2.0", "3.0", migrateV2ToV3)
+		registrationErr = registerMigration("2.0", "2.1", migrateV2ToV2_1)
+		if registrationErr != nil {
+			return
+		}
+		registrationErr = registerMigration("2.1", "3.0", migrateV2ToV3)
 	})
 }
 
@@ -533,6 +537,56 @@ func applyDefaultPersonaAllowedTools(raw map[string]interface{}) {
 func applyV3Defaults(raw map[string]interface{}) error {
 	applyDefaultPersonaAllowedTools(raw)
 	return nil
+}
+
+// migrateV2ToV2_1 repairs the wakeup all-zeros artifact. The pre-pointer
+// partial-settings patch path (see wakeupPatch's doc comment) zeroed the
+// whole WakeupConfig on any wakeup patch, persisting {"enabled": false,
+// "max_tokens_per_session": 0, "max_resumes_per_session": 0} into user
+// configs and permanently disabling auto-resume — which is meant to default
+// to ON. A deliberate opt-out carries the default budgets (5000/10) because
+// any full save materializes them, so the exact false+0+0 signature uniquely
+// identifies the wipe artifact: drop the block entirely and let defaults
+// apply. Idempotent: configs without the artifact pass through unchanged.
+func migrateV2ToV2_1(raw map[string]interface{}) error {
+	wakeup, ok := raw["wakeup"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	enabled, _ := wakeup["enabled"].(bool)
+	if enabled {
+		return nil
+	}
+	// Require the exact machine-written artifact signature: all three keys
+	// present with false/0/0. A hand-written {"enabled": false} (budgets
+	// absent) is treated as a deliberate minimal opt-out and kept.
+	maxTokens, hasTokens := numericField(wakeup, "max_tokens_per_session")
+	if !hasTokens || maxTokens != 0 {
+		return nil
+	}
+	maxResumes, hasResumes := numericField(wakeup, "max_resumes_per_session")
+	if !hasResumes || maxResumes != 0 {
+		return nil
+	}
+	delete(raw, "wakeup")
+	return nil
+}
+
+// numericField reads a numeric field that may have decoded as float64
+// (json.Unmarshal into map[string]interface{}) or int (hand-built test
+// maps). Returns (value, present).
+func numericField(m map[string]interface{}, key string) (int, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	}
+	return 0, true
 }
 
 // migrateV2ToV3 handles migration from version 2.0 to version 3.0.

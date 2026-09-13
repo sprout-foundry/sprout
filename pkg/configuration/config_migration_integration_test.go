@@ -33,7 +33,7 @@ func TestConfigMigration_Integration_WithLoad(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	// Verify migration was applied
-	assert.Equal(t, "2.0", cfg.Version)
+	assert.Equal(t, "2.1", cfg.Version)
 
 	// Verify API timeouts defaults were applied
 	assert.NotNil(t, cfg.APITimeouts)

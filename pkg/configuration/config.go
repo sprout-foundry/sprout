@@ -14,7 +14,7 @@ import (
 var personaDefaultsWarningOnce sync.Once
 
 const (
-	ConfigVersion  = "2.0"
+	ConfigVersion  = "2.1"
 	ConfigDirName  = ".sprout"
 	ConfigFileName = "config.json"
 
@@ -273,7 +273,9 @@ type WakeupConfig struct {
 	MaxResumesPerSession int  `json:"max_resumes_per_session"` // Max auto-resumes before requiring user input; default 10
 }
 
-// DefaultWakeupConfig returns conservative defaults.
+// DefaultWakeupConfig returns defaults. Auto-resume is ON by default: a
+// config without a wakeup block resolves Enabled=true through the NewConfig
+// seed, and only an explicit "enabled": false disables it.
 func DefaultWakeupConfig() WakeupConfig {
 	return WakeupConfig{
 		Enabled:              true,

@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -46,6 +48,76 @@ func SnapshotRealStateDir() (realDir string, before map[string]time.Time) {
 		return "", nil
 	}
 	return d, snapshotStateDir(d)
+}
+
+// liveSproutInstanceRunning reports whether any sprout process is
+// heartbeating instances.json. The detector compares mtimes under the real
+// state dir before/after the run; a concurrently running sprout session
+// (e.g. the developer driving sprout while `go test ./pkg/agent` executes)
+// autosaves its own session JSONs and turn journals into that dir, which
+// is indistinguishable from a test bypassing isolation. Mirrors orphan
+// cleanup's "skipped session(s) with a live owner process" policy: a
+// recent heartbeat means a live owner wrote the files, not a leak.
+func liveSproutInstanceRunning() bool {
+	instancesFile := filepath.Join(instancesConfigDir(), "instances.json")
+	data, err := os.ReadFile(instancesFile)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	var instances map[string]struct {
+		PID      int       `json:"pid"`
+		LastPing time.Time `json:"last_ping"`
+	}
+	if err := json.Unmarshal(data, &instances); err != nil {
+		return false
+	}
+	staleBefore := time.Now().Add(-instanceStaleAfterForTest)
+	for _, info := range instances {
+		if info.LastPing.After(staleBefore) && info.PID > 0 && pidAlive(info.PID) {
+			return true
+		}
+	}
+	return false
+}
+
+// instanceStaleAfterForTest matches cmd's instanceStaleAfter (12s). Not
+// imported — cmd imports agent, so the constant is duplicated here by
+// design to keep the dependency direction one-way.
+const instanceStaleAfterForTest = 12 * time.Second
+
+// instancesConfigDir resolves the same directory cmd's instance registry
+// writes instances.json to. Honors SPROUT_CONFIG_DIR (so tests can fake
+// the heartbeat file) and falls through to the HOME/XDG default the same
+// way envutil's resolution does. SPROUT_CONFIG is deliberately NOT
+// honored: TestMain sets it to a throwaway dir for config isolation, but
+// the heartbeat file we want is the real one under the config root.
+func instancesConfigDir() string {
+	if dir := os.Getenv("SPROUT_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "sprout")
+	}
+	home := os.Getenv("HOME")
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		} else {
+			return filepath.Join(os.TempDir(), "sprout-instances-unknown")
+		}
+	}
+	return filepath.Join(home, ".config", "sprout")
+}
+
+func pidAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return p.Signal(syscall.Signal(0)) == nil
 }
 
 // AssertNoStateLeak is the TestMain counterpart of the Layer-5 check
@@ -95,6 +167,25 @@ func AssertNoStateLeak(realDir string, before map[string]time.Time) int {
 		}
 	}
 	if len(leaked) == 0 {
+		return 0
+	}
+	// A concurrently running sprout instance autosaves its own session
+	// state into the real dir on every turn. Its writes are indistinguishable
+	// from a test bypassing isolation, so degrade to a warning instead of
+	// failing the run — matching orphan cleanup's live-owner policy.
+	// Suppression applies only when realDir IS the real state dir: unit
+	// tests pass synthetic temp dirs and must keep exercising the leak
+	// path deterministically.
+	isRealStateDir := false
+	if realState, stateErr := defaultGetStateDir(); stateErr == nil {
+		isRealStateDir = realState == realDir
+	}
+	if isRealStateDir && liveSproutInstanceRunning() {
+		fmt.Fprintf(os.Stderr,
+			"\n[state-leak] %d file(s) appeared in real state dir %q during the test run, "+
+				"but a live sprout instance is heartbeating — treating as concurrent-session "+
+				"writes, not a test leak. First path: %s\n",
+			len(leaked), realDir, leaked[0])
 		return 0
 	}
 	fmt.Fprintf(os.Stderr,

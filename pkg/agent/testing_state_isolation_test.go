@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -137,5 +138,94 @@ func TestAssertNoStateLeak_MtimeWithinRun(t *testing.T) {
 	code := AssertNoStateLeak(tmp, before)
 	if code == 0 {
 		t.Fatal("expected leak detection for file modified within run window, got 0")
+	}
+}
+
+// TestAssertNoStateLeak_LiveInstanceDegradesToWarning covers the
+// concurrent-session case: when a live sprout instance is heartbeating
+// instances.json, writes into the real state dir during the run are its
+// autosaves, not a test leak — the detector must return 0.
+func TestAssertNoStateLeak_LiveInstanceDegradesToWarning(t *testing.T) {
+	// SPROUT_STATE_DIR makes defaultGetStateDir resolve to this dir, so
+	// the dir we pass as realDir IS "the real state dir" for the run.
+	// SPROUT_CONFIG_DIR redirects the instances lookup to a throwaway
+	// heartbeat file so the test never depends on the developer's real
+	// instances.json.
+	stateRoot := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateRoot)
+	t.Setenv("SPROUT_CONFIG_DIR", t.TempDir())
+
+	// Heartbeat: this test process (alive by definition), pinged now.
+	heartbeat := map[string]struct {
+		PID      int       `json:"pid"`
+		LastPing time.Time `json:"last_ping"`
+	}{
+		"instance_test": {PID: os.Getpid(), LastPing: time.Now()},
+	}
+	b, err := json.Marshal(heartbeat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(instancesConfigDir(), "instances.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !liveSproutInstanceRunning() {
+		t.Fatal("precondition: live instance should be detected from the fake heartbeat")
+	}
+
+	realDir := filepath.Join(stateRoot, "sessions")
+	if err := os.MkdirAll(realDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshotStateDir(realDir)
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(realDir, "leaked.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := AssertNoStateLeak(realDir, before); code != 0 {
+		t.Fatal("expected 0 when a live instance explains the writes")
+	}
+}
+
+// TestAssertNoStateLeak_StaleHeartbeatStillFails covers the inverse: a
+// stale heartbeat (dead/old PID) must not suppress leak detection.
+func TestAssertNoStateLeak_StaleHeartbeatStillFails(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateRoot)
+	t.Setenv("SPROUT_CONFIG_DIR", t.TempDir())
+
+	// PID 99999999 with a fresh ping: pidAlive fails the signal probe.
+	heartbeat := map[string]struct {
+		PID      int       `json:"pid"`
+		LastPing time.Time `json:"last_ping"`
+	}{
+		"instance_test": {PID: 99999999, LastPing: time.Now()},
+	}
+	b, err := json.Marshal(heartbeat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(instancesConfigDir(), "instances.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if liveSproutInstanceRunning() {
+		t.Skip("PID 99999999 is somehow alive on this machine")
+	}
+
+	realDir := filepath.Join(stateRoot, "sessions")
+	if err := os.MkdirAll(realDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshotStateDir(realDir)
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(realDir, "leaked.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := AssertNoStateLeak(realDir, before); code == 0 {
+		t.Fatal("expected leak detection with only a stale heartbeat, got 0")
 	}
 }

@@ -133,6 +133,13 @@ func isTestFunction(name, scope string) bool {
 // simple literal (string, number, boolean) or a direct call expression,
 // indicating it is not a meaningful code unit.
 func isPlainLiteralVar(sym ast.ScopedSymbol, result *ast.ASTResult) bool {
+	// AST spans can be inverted or past-end on malformed input — slicing
+	// without validating panics ("slice bounds out of range"). Treat an
+	// invalid span as a plain literal so the symbol is skipped, matching
+	// buildUnitFromSymbol's skip-on-invalid behavior.
+	if sym.StartByte < 0 || sym.StartByte >= sym.EndByte || sym.EndByte > len(result.Source) {
+		return true
+	}
 	symText := string(result.Source[sym.StartByte:sym.EndByte])
 
 	// Check if it ends with a closing brace (object or function body).

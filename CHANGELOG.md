@@ -2,6 +2,45 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.17.27] - 2026-09-13
+
+- fix(config): default auto-resume to enabled (514cf9ade)
+- fix(providers): replay reasoning history on DeepInfra (8091a9813)
+- deps: bump sinter v0.4.0 -> v0.4.1 (46e412020)
+- fix(agent): log panic stacks in query recover; guard embedding AST span slices (89bc58beb)
+- fix(agent): estimate tokens against the wire view for non-reasoning-replay providers (de258a82f)
+- deps: bump sinter v0.2.3 -> v0.4.0 — minicpm5-2b becomes the suggested local default (6a57374c2)
+- fix(test): suppress state-leak detector when a live sprout session is autosaving (f98ce112f)
+- deps: bump sinter v0.2.2 -> v0.2.3; fix state-leak detector false positive on live sessions (82177284b)
+- deps: bump sinter v0.1.2 -> v0.2.2 (bfb99c48c)
+- fix(agent): bootstrap the /tmp/sprout scratch dir and document the sandbox fallback (1005ee4a6)
+- fix(tracking): resolve four review follow-ups (4db94531c)
+- fix(tracking): classify background shell completions with the original command (2f3d26cdc)
+- fix(tracking): second-pass review fixes for ChangeTracker (edc12437f)
+- perf(tracking): key shell snapshot cache to workspace root, not shell cwd (3bf4c2aef)
+- refactor(events): drop tool_execution and validation browser forwarding (1d9bcd683)
+- feat(webui): restore the New Chat in Worktree flow (a34e45549)
+- feat(settings): expose unexposed config fields; drop dead pre-write toggle (72addd5b4)
+- fix(ui): align package license with repo (Apache 2.0) and fix stale messageSegments test (2e4429597)
+- refactor(webui): prune stale synthetic endpoints and pin clear as steer-safe (bbf8754aa)
+- feat(webui): handle provider_no_credential, rate_limited, compact, session_changed events (108d22cb3)
+- style(webui): prettier UpdateAvailableBanner (869831520)
+- chore: gitignore local webui audit notes (52fda36d6)
+- feat(webui): SyncStatusBanner for the ETH-1 sync-on-resume report (ff7fb69c4)
+- fix(webui): rewire chat session rename/delete/delete-all into EditorTabs (e2971997f)
+- fix(webui): surface password_request events via PasswordPromptDialog (f6b43e878)
+- Merge branch 'feat/update-reminder' (93009832b)
+- fix(update): address review findings on the passive release check (8d3f0fb04)
+- feat(update): passive release check with CLI notice and WebUI banner (fd7626064)
+- fix(webui): wire live changes refresh; repair diff endpoint; gate timeline actions (9524e39e7)
+- fix(tracking): capture true pre-write state; track background shells; restore from persisted history (9d784f385)
+- fix(providers): keep tool message content as string when tool result carries images (061a6a1d3)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (a4c3d23f1)
+- feat(webui): default diff buffers to text view (a5c13131d)
+- chore: refresh provider catalog (#73) (2c092bf72)
+- fix(pricing): pricing and model audit (#74) (27c7c6f94)
+- docs: Update changelog for v0.17.26 (422d89cee)
+
 ## [v0.17.26] - 2026-09-11
 
 - fix(webui): restore workspace on client-context recreation; terminal WS anchors its client (278ce71d6)

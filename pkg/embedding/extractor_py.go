@@ -114,7 +114,9 @@ func buildPyUnitFromSymbol(path string, sym ast.ScopedSymbol, src []byte, bt *go
 	}
 
 	// Compute end byte: end of the last non-blank line in the extended range.
-	bodyEndByte := lineEndByte(lines, bodyEndLine-1) // convert back to 0-based index
+	// lineEndByte adds +1 for each newline; on the final line of a file with
+	// no trailing newline that overcounts by one, so clamp to the source length.
+	bodyEndByte := min(lineEndByte(lines, bodyEndLine-1), len(src)) // convert back to 0-based index
 
 	// Extract the full text including decorators through body.
 	if decorStartByte >= bodyEndByte || decorStartByte >= len(src) {

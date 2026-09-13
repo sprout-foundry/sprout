@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +188,11 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
+					// The recovered value alone ("slice bounds out of range
+					// [4394:4207]") is not actionable without the frames —
+					// log the full stack so the panicking function is named.
+					fmt.Fprintf(os.Stderr, "%s agent panic recovered: %v\nstack:\n%s\n",
+						console.GlyphError.Prefix(), r, debug.Stack())
 					resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
 				}
 			}()

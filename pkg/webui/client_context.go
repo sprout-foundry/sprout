@@ -501,6 +501,26 @@ func (ws *ReactWebServer) setAgentStateForClient(clientID string, snapshot []byt
 	ctx.LastSeenAt = time.Now()
 }
 
+// setAgentStateForClientChat writes a state snapshot into ONE chat session
+// (and the top-level slot when it is the active chat, for backward
+// compatibility with readers of ctx.AgentState). Unlike
+// setAgentStateForClient it never redirects to the active chat when the
+// caller asked for a specific one.
+func (ws *ReactWebServer) setAgentStateForClientChat(clientID, chatID string, snapshot []byte) {
+	if len(snapshot) == 0 {
+		snapshot = emptyAgentStateSnapshot()
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.setChatSessionState(chatID, snapshot)
+	if ctx.DefaultChatID == chatID {
+		ctx.AgentState = append([]byte(nil), snapshot...)
+	}
+	ctx.LastSeenAt = time.Now()
+}
+
 func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {

@@ -1,10 +1,9 @@
-import { Bot, Wrench, History, Clock, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Bot, History, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
 import { ActivityTab } from './contextPanel/ActivityTab';
 import AgentChangesPanel from './AgentChangesPanel';
-import { SessionsTab } from './contextPanel/SessionsTab';
 import type {
   ContextPanelProps,
   ContextPanelHandle,
@@ -15,10 +14,9 @@ import type {
 } from './contextPanel/types';
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
-import { useSessionManager } from './contextPanel/useSessionManager';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
 
-const TAB_IDS = ['activity', 'changes', 'sessions'] as const;
+const TAB_IDS = ['activity', 'changes'] as const;
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
   const isChat = props.context === 'chat';
@@ -54,23 +52,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // Panel state (no external deps — avoids circular hook ordering)
   const state = useContextPanelState(props);
 
-  // Session manager (depends on chatTab from state). The "changes" tab
-  // is now self-contained in AgentChangesPanel — it loads its own data
-  // from /api/changes/* so there's no revision manager to thread here.
-  const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
-
   const { subagentRuns, resourceCounts } = useSubagentRuns(chatProps);
 
   // ── Imperative handle ─────────────────────────────────────────────
 
   const handleTabClick = (tabId: string) => {
     state.setPanelCollapsed(false);
-    const id = tabId as ChatTabId;
-    state.setChatTab(id);
-    // 'changes' tab is self-loading (AgentChangesPanel fetches on mount).
-    if (id === 'sessions' && sessionManager.sessionsCount === 0) {
-      sessionManager.loadSessions();
-    }
+    state.setChatTab(tabId as ChatTabId);
+    // Both tabs are self-loading (AgentChangesPanel fetches on mount).
   };
 
   const imperativeHandle = {
@@ -126,7 +115,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     ref,
     () => imperativeHandle,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isChat, chatProps, sessionManager.sessionsCount],
+    [isChat, chatProps],
   );
 
   // ── Computed counts for tabs ──────────────────────────────────────
@@ -157,9 +146,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         label: 'Agent Changes',
         icon: <History size={14} />,
       },
-      { id: 'sessions', label: 'Sessions', icon: <Clock size={14} />, count: `${sessionManager.sessionsCount}` },
     ],
-    [activeSubagentCount, activeToolCount, toolExecutions.length, sessionManager.sessionsCount],
+    [activeSubagentCount, activeToolCount, toolExecutions.length],
   );
 
   const activeTab = chatPanelTabs.find((t) => t.id === state.chatTab) || chatPanelTabs[0];
@@ -191,30 +179,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         );
       case 'changes':
         return <AgentChangesPanel />;
-      case 'sessions':
-        return (
-          <SessionsTab
-            sessions={sessionManager.sessions}
-            currentSessionId={sessionManager.currentSessionId}
-            isLoadingSessions={sessionManager.isLoadingSessions}
-            sessionRestoreError={sessionManager.sessionRestoreError}
-            loadSessions={sessionManager.loadSessions}
-            handleRestoreSession={sessionManager.handleRestoreSession}
-            sessionSearchQuery={sessionManager.sessionSearchQuery}
-            sessionSearchResults={sessionManager.sessionSearchResults}
-            sessionSearchLoading={sessionManager.sessionSearchLoading}
-            sessionSearchError={sessionManager.sessionSearchError}
-            showSessionSearchDropdown={sessionManager.showSessionSearchDropdown}
-            handleSessionSearchChange={sessionManager.handleSessionSearchChange}
-            handleSessionSearchClear={sessionManager.handleSessionSearchClear}
-            handleSessionSearchBlur={sessionManager.handleSessionSearchBlur}
-            handleSessionSearchFocus={sessionManager.handleSessionSearchFocus}
-            handleSessionSearchResultClick={sessionManager.handleSessionSearchResultClick}
-            isExportingAll={sessionManager.isExportingAll}
-            exportAllError={sessionManager.exportAllError}
-            handleExportAllSessions={sessionManager.handleExportAllSessions}
-          />
-        );
       default:
         return null;
     }

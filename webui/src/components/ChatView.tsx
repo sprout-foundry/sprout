@@ -20,6 +20,7 @@ import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
 import { ToolTimelineBar } from './chat/ToolTimelineBar';
 import { TurnChangesStrip } from './chat/TurnChangesStrip';
+import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
@@ -49,6 +50,7 @@ function Chat(props: ChatProps): JSX.Element {
     onChatCleared,
     fileEdits = [],
     onReviewChange,
+    onRestoreSession,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -228,13 +230,13 @@ function Chat(props: ChatProps): JSX.Element {
   const showExpiredSessionRecovery =
     supportsSSH && !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
-  // Stable Footer/Header component references — prevents Virtuoso from
+  // Stable Footer component reference — prevents Virtuoso from
   // unmounting/remounting Footer (ChatFooter → ToolTimelineBar) on every
   // keystroke. Without useCallback, the inline arrow functions change
   // reference on every render (e.g. during typing), causing ToolTimelineBar
   // to lose internal state (shouldRender, completedAtRef) and its badges
-  // to flash in/out.
-  const VirtuosoHeader = useCallback(() => <ChatHeader worktreePath={worktreePath} />, [worktreePath]);
+  // to flash in/out. (The header row now lives OUTSIDE Virtuoso — see the
+  // chat-header-row div — so it no longer needs a stable component ref.)
   // Latest turn's change strip (SP-139 Phase 2): memoized group of the
   // edits stamped with the current queryId. Rendered inside the scroll flow
   // under the last turn, only when the turn completed with edits. The
@@ -464,8 +466,15 @@ function Chat(props: ChatProps): JSX.Element {
                 role="log"
                 aria-label="Chat messages"
                 data-testid="chat-message-list"
-                style={{ flex: 1, minHeight: 0, position: 'relative' }}
+                style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}
               >
+                {/* SP-139 Phase 3: fixed header row (history switcher +
+                    worktree chip). Outside Virtuoso so the popover anchors
+                    don't scroll with the transcript. */}
+                <div className="chat-header-row">
+                  <ChatHistorySwitcher chatId={chatId} onRestoreSession={onRestoreSession} />
+                  {worktreePath && <ChatHeader worktreePath={worktreePath} />}
+                </div>
                 <Virtuoso
                   ref={virtuosoRef}
                   data={messages}
@@ -474,9 +483,9 @@ function Chat(props: ChatProps): JSX.Element {
                   increaseViewportBy={{ top: 400, bottom: 400 }}
                   atBottomStateChange={setIsAtBottom}
                   itemContent={renderMessageItem}
-                  components={{ Header: VirtuosoHeader, Footer: VirtuosoFooter }}
+                  components={{ Footer: VirtuosoFooter }}
                   className="chat-virtuoso"
-                  style={{ height: '100%' }}
+                  style={{ height: '100%', flex: 1, minHeight: 0 }}
                 />
                 {!isAtBottom && (
                   <button

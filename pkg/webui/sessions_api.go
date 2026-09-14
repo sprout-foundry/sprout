@@ -104,6 +104,13 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	// Parse request body
 	var req struct {
 		SessionID string `json:"session_id"`
+		// ChatID optionally scopes the restore to a specific chat session.
+		// Empty restores into the client's ACTIVE chat (pre-existing
+		// behavior — the panel and Costs page rely on it). With multiple
+		// chats open, a background pane must be able to restore into ITS
+		// own chat without first becoming the active one, so the header
+		// history switcher passes its chat id explicitly.
+		ChatID string `json:"chat_id"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -119,6 +126,11 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	}
 
 	sessionID := strings.TrimSpace(req.SessionID)
+	clientID := ws.resolveClientID(r)
+	chatID := strings.TrimSpace(req.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 
 	var state *agent.ConversationState
@@ -156,24 +168,23 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		return
 	}
 
-	clientID := ws.resolveClientID(r)
-	ws.setAgentStateForClient(clientID, stateData)
-	if clientAgent, err := ws.getClientAgent(clientID); err == nil && clientAgent != nil {
-		_ = clientAgent.ImportState(stateData)
-		clientAgent.SetWorkspaceRoot(workspaceRoot)
+	ws.setAgentStateForClientChat(clientID, chatID, stateData)
+	if chatAgent, err := ws.getChatAgent(clientID, chatID); err == nil && chatAgent != nil {
+		_ = chatAgent.ImportState(stateData)
+		chatAgent.SetWorkspaceRoot(workspaceRoot)
 		if recovered {
-			clientAgent.NoteRecoveredSession()
+			chatAgent.NoteRecoveredSession()
 		}
 	}
 
-	// Restore config overrides from the saved session into the active chat session.
-	// These will be applied to the agent on next getOrCreateAgent call.
+	// Restore config overrides from the saved session into the target chat
+	// session. These will be applied to the agent on next getOrCreateAgent
+	// call.
 	if len(state.ConfigOverrides) > 0 {
 		ws.mutex.Lock()
 		ctx := ws.clientContexts[clientID]
 		if ctx != nil {
-			activeChatID := ctx.getActiveChatID()
-			if cs := ctx.getChatSession(activeChatID); cs != nil {
+			if cs := ctx.getChatSession(chatID); cs != nil {
 				cs.mu.Lock()
 				cs.ConfigOverrides = state.ConfigOverrides
 				// Also set Provider/Model from overrides for backward compat
@@ -189,7 +200,9 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		ws.mutex.Unlock()
 	}
 
-	ws.publishClientEvent(clientID, "connection_status", map[string]interface{}{
+	// Chat-scoped so only the pane viewing this chat reconciles; other
+	// chats' views are untouched by a restore into a sibling chat.
+	ws.publishClientEventWithChat(clientID, chatID, "connection_status", map[string]interface{}{
 		"connected":     true,
 		"session_id":    state.SessionID,
 		"restored":      true,

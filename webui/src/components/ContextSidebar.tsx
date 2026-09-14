@@ -1,6 +1,5 @@
 import type { ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import React from 'react';
-import { ApiService } from '../services/api';
 import type { QueryProgress, ViewType } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
@@ -56,8 +55,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     isProcessing,
     lastError,
     queryProgress,
-    onLoadSessions: () => ApiService.getInstance().getSessions(),
-    onRestoreSession: (sessionId: string) => ApiService.getInstance().restoreSession(sessionId),
   };
 
   // Desktop keeps the panel mounted (idle when no chat is focused);

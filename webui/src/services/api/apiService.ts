@@ -762,7 +762,10 @@ class ApiService {
     return sessionApi.getSessions(clientFetch, scope);
   }
 
-  async restoreSession(sessionId: string): Promise<{
+  async restoreSession(
+    sessionId: string,
+    chatId?: string,
+  ): Promise<{
     message: string;
     session_id: string;
     message_count: number;
@@ -771,7 +774,7 @@ class ApiService {
     name?: string;
     working_directory?: string;
   }> {
-    return sessionApi.restoreSession(clientFetch, sessionId);
+    return sessionApi.restoreSession(clientFetch, sessionId, chatId);
   }
 
   async searchSessions(

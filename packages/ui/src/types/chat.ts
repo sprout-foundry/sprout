@@ -224,6 +224,12 @@ export interface ChatProps {
    * diff already fetched by the strip.
    */
   onReviewChange?: (path: string, diff: { stats?: string; diff?: string }) => void;
+  /**
+   * Restores a saved conversation into this chat (SP-139 Phase 3 header
+   * history switcher). Receives the chat's own id so restores stay scoped
+   * to the pane that triggered them.
+   */
+  onRestoreSession?: (sessionId: string, chatId?: string) => void | Promise<void>;
   // Worktree support
   chatId?: string;
   worktreePath?: string;

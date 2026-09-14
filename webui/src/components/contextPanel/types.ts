@@ -8,14 +8,10 @@ import type {
   RevisionDetailFile,
 } from '@sprout/ui';
 import type { ReactNode, CSSProperties } from 'react';
-import type { SessionEntry } from '../../services/api/types';
 import type { QueryProgress } from '../../types/app';
 
 // Re-export shared types from @sprout/ui for convenience
 export type { ToolExecution, LogEntry, SubagentActivity, LiveLogLine, RevisionFile, Revision, RevisionDetailFile };
-
-// Re-export SessionEntry from services/api/types for convenience
-export type { SessionEntry };
 
 // ── WebUI-specific Core data interfaces ─────────────────────────────
 
@@ -134,8 +130,6 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
     query_count?: number;
   };
   onHandleToolPillClick?: (toolId: string) => void;
-  onLoadSessions: () => Promise<{ sessions: SessionEntry[]; current_session_id: string }>;
-  onRestoreSession: (sessionId: string) => Promise<{ messages: unknown[] }>;
 }
 
 export type ContextPanelProps = ChatContextPanelProps;
@@ -161,7 +155,7 @@ export const PANEL_DEFAULT_WIDTH = 360;
 export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
-export type ChatTabId = 'activity' | 'changes' | 'sessions';
+export type ChatTabId = 'activity' | 'changes';
 
 export interface PanelTab {
   id: ChatTabId;

@@ -83,16 +83,11 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       setPanelCollapsed(true);
     }
     if (storedTab) {
-      // Migration: pre-merge tab ids map onto their Phase-1 successors
-      // ('subagents'/'tools' → 'activity'; 'tasks'/'status' tabs removed —
-      // fall back to the default).
+      // Migration: pre-merge tab ids map onto their successors
+      // ('subagents'/'tools' → 'activity'; 'tasks'/'status'/'sessions'
+      // removed — fall back to the default).
       const legacy = storedTab as string;
-      const migrated =
-        legacy === 'subagents' || legacy === 'tools'
-          ? 'activity'
-          : legacy === 'changes' || legacy === 'sessions'
-            ? legacy
-            : null;
+      const migrated = legacy === 'subagents' || legacy === 'tools' ? 'activity' : legacy === 'changes' ? legacy : null;
       if (migrated) {
         setChatTab(migrated as ChatTabId);
       }

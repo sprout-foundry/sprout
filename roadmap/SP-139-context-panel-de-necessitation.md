@@ -21,7 +21,7 @@ carry it? A tab earns its place only by providing something the in-flow
 surfaces structurally cannot (cross-turn aggregation, bulk ops, arbitrary
 history access).
 
-## Status: 🟡 Phase 1-2 Shipped | Phase 3 Decision Pending
+## Status: ✅ All Phases Shipped (2026-09-14)
 
 ### Phase 1: Consolidation 6 → 3 ✅ (2026-09-10)
 
@@ -61,23 +61,27 @@ Acceptance met: "what did this turn change?" is answerable in the chat
 flow. The panel tab remains the cross-revision timeline / rollback
 surface — no overlap introduced.
 
-### Phase 3: Sessions — relocate or ratify 🟡 decision needed
+### Phase 3: Sessions relocated to chat-header history switcher ✅ (2026-09-14)
 
-Phase 1 deferred this: *"relocation to a chat-header switcher remains
-phase-gated behind a real design."* No design exists yet.
+Decision: relocate. Prerequisite fix first — `POST /api/sessions/restore`
+ignored chat identity and wrote the restored state into the client's
+ACTIVE chat, so a background pane restoring its own history would clobber
+the focused chat. The handler now accepts `chat_id` (empty = active chat,
+backward compatible), writes via `setAgentStateForClientChat`, imports
+into the target chat's agent, scopes config overrides and the
+connection_status event. Pinned by TestRestoreSessionScopesToRequestedChat.
 
-Current coverage: chat tabs in `EditorTabs` handle switching/renaming/
-deleting; CostsPage's session table restores sessions found by cost.
-Remaining unique value: restore arbitrary past sessions + export-all.
+The switcher: a permanent header row above the transcript (outside
+Virtuoso so the popover doesn't scroll) with a History trigger.
+Popover = debounced search (existing /api/sessions/search) over the
+recent-sessions list (existing /api/sessions), restore with confirm
+(chat-scoped), and export-all in the footer. Closed popover renders one
+button; all fetches are open/typing-triggered — same performance
+contract as the Phase 2 strip.
 
-Decision required (pick one):
-- **(a) Relocate** — design the chat-header session switcher; the panel
-  drops to Activity + Changes; export-all moves into the switcher.
-- **(b) Ratify** — declare Sessions a permanent utility tab (bulk export
-  and arbitrary restore are legitimately panel-shaped) and close the SP
-  after Phase 2.
-
-Do not start Phase 3 without the design decision recorded here.
+Panel drops to Activity + Changes (2 tabs): SessionsTab,
+useSessionManager, sessionSearchHelpers and 10 orphaned testids deleted
+(−5 files, ~1000 lines). Tab persistence migrates legacy 'sessions'.
 
 ## End state
 

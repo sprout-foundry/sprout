@@ -88,15 +88,28 @@ test.describe('Multi-Chat', () => {
           expect(count).toBeGreaterThan(0);
         }).toPass({ timeout: 15_000 });
 
-        // Switch back to chat A via the chat-header history switcher
-        // (the old sidebar session list was removed in SP-139 Phase 3).
+        // Switch back to chat A via the chat-header history switcher. In
+        // shared mode (the e2e stack), the "New Chat" button is /clear —
+        // chat A rotated into a SAVED conversation, so restoring it via
+        // history is the correct switch-back path (the old sidebar list
+        // was removed in SP-139 Phase 3).
         await page.getByTestId(TESTIDS['chs-trigger']).click();
-        const chatAItem = page.getByTestId(TESTIDS['chs-row']).filter({ hasText: 'Message from chat A' }).first();
+        const chatAItem = page
+          .getByTestId(TESTIDS['chs-row'])
+          .filter({ hasText: /Message from chat A|chat A/i })
+          .first();
         const hasChatA = await chatAItem.isVisible({ timeout: 5_000 }).catch(() => false);
 
         if (hasChatA) {
           await chatAItem.click();
-          await page.waitForTimeout(1000);
+          // Restore asks for confirmation; the confirm button is
+          // autofocused, so Enter accepts it.
+          await page.keyboard.press('Enter');
+          // Wait for chat A's message to be back in the transcript (the
+          // restore round-trip is async: POST restore → event → state).
+          await expect(
+            messageList.filter({ hasText: 'Message from chat A' }).first(),
+          ).toBeVisible({ timeout: 15_000 });
 
           // Verify chat A's messages are back (should NOT contain "chat B")
           const chatMessages = messageList.locator('> *');

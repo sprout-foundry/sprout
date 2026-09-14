@@ -193,7 +193,7 @@
         "id": "anthracite-org/magnum-v4-72b",
         "input_cost": 2.5,
         "name": "Magnum v4 72B",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "structured_output"
         ]
@@ -231,9 +231,9 @@
         "context_length": 200000,
         "description": "Claude Haiku 4.5 is Anthropic’s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4’s performance...",
         "id": "anthropic/claude-haiku-4.5",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "Anthropic: Claude Haiku 4.5",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "tools",
           "vision",
@@ -439,9 +439,9 @@
         "context_length": 1000000,
         "description": "Sonnet 5 is Anthropic's most capable Sonnet-class model, with frontier performance across coding, agents, and professional work. It supports adaptive thinking with selectable reasoning effort levels (low, medium, high, max,...",
         "id": "anthropic/claude-sonnet-5",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Anthropic: Claude Sonnet 5",
-        "output_cost": 10.0,
+        "output_cost": 10,
         "tags": [
           "tools",
           "vision",
@@ -890,7 +890,7 @@
         "id": "google/gemini-3-flash-preview",
         "input_cost": 0.5,
         "name": "Google: Gemini 3 Flash Preview",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -903,9 +903,9 @@
         "context_length": 131072,
         "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
         "id": "google/gemini-3-pro-image",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Google: Nano Banana Pro (Gemini 3 Pro Image)",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "tools",
           "vision",
@@ -918,9 +918,9 @@
         "context_length": 65536,
         "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
         "id": "google/gemini-3-pro-image-preview",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Google: Nano Banana Pro (Gemini 3 Pro Image Preview)",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "vision",
           "reasoning",
@@ -1001,9 +1001,9 @@
         "context_length": 1048576,
         "description": "Gemini 3.1 Pro Preview is Google’s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation...",
         "id": "google/gemini-3.1-pro-preview",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Google: Gemini 3.1 Pro Preview",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "tools",
           "vision",
@@ -1016,9 +1016,9 @@
         "context_length": 1048576,
         "description": "Gemini 3.1 Pro Preview Custom Tools is a variant of Gemini 3.1 Pro that improves tool selection behavior by preventing overuse of a general bash tool when more efficient third-party...",
         "id": "google/gemini-3.1-pro-preview-customtools",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Google: Gemini 3.1 Pro Preview Custom Tools",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "tools",
           "vision",
@@ -1133,6 +1133,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
         "id": "google/gemma-4-26b-a4b-it",
@@ -1144,8 +1145,7 @@
           "vision",
           "reasoning",
           "structured_output"
-        ],
-        "cached_input_cost": 0.05
+        ]
       },
       {
         "context_length": 262144,
@@ -1680,9 +1680,9 @@
         "context_length": 128000,
         "description": "This is Mistral AI's flagship model, Mistral Large 2 (version `mistral-large-2407`). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement [here](https://mistral.ai/news/mistral-large-2407/)....",
         "id": "mistralai/mistral-large",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Mistral Large",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "structured_output"
@@ -1693,9 +1693,9 @@
         "context_length": 131072,
         "description": "This is Mistral AI's flagship model, Mistral Large 2 (version mistral-large-2407). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement [here](https://mistral.ai/news/mistral-large-2407/)....",
         "id": "mistralai/mistral-large-2407",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Mistral Large 2407",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "structured_output"
@@ -1722,7 +1722,7 @@
         "id": "mistralai/mistral-medium-3",
         "input_cost": 0.4,
         "name": "Mistral: Mistral Medium 3",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -1750,7 +1750,7 @@
         "id": "mistralai/mistral-medium-3.1",
         "input_cost": 0.4,
         "name": "Mistral: Mistral Medium 3.1",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -1837,9 +1837,9 @@
         "context_length": 65536,
         "description": "Mistral's official instruct fine-tuned version of [Mixtral 8x22B](/models/mistralai/mixtral-8x22b). It uses 39B active parameters out of 141B, offering unparalleled cost efficiency for its size. Its strengths include: - strong math, coding,...",
         "id": "mistralai/mixtral-8x22b-instruct",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Mistral: Mixtral 8x22B Instruct",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "structured_output"
@@ -2441,7 +2441,7 @@
         "id": "openai/gpt-5-mini",
         "input_cost": 0.25,
         "name": "OpenAI: GPT-5 Mini",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -3298,17 +3298,17 @@
         ]
       },
       {
+        "cached_input_cost": 0.4,
         "context_length": 128000,
         "description": "Qwen2.5-VL is proficient in recognizing common objects such as flowers, birds, fish, and insects. It is also highly capable of analyzing texts, charts, icons, graphics, and layouts within images.",
         "id": "qwen/qwen2.5-vl-72b-instruct",
         "input_cost": 0.8,
         "name": "Qwen: Qwen2.5 VL 72B Instruct",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "vision",
           "structured_output"
-        ],
-        "cached_input_cost": 0.4
+        ]
       },
       {
         "context_length": 131072,
@@ -3433,7 +3433,7 @@
         "id": "qwen/qwen3-coder",
         "input_cost": 0.3,
         "name": "Qwen: Qwen3 Coder 480B A35B",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "structured_output"
@@ -3561,7 +3561,7 @@
         "id": "qwen/qwen3-vl-235b-a22b-thinking",
         "input_cost": 0.4,
         "name": "Qwen: Qwen3 VL 235B A22B Thinking",
-        "output_cost": 4.0,
+        "output_cost": 4,
         "tags": [
           "tools",
           "vision",
@@ -3680,6 +3680,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.225,
         "context_length": 262144,
         "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers...",
         "id": "qwen/qwen3.5-397b-a17b",
@@ -3691,8 +3692,7 @@
           "vision",
           "reasoning",
           "structured_output"
-        ],
-        "cached_input_cost": 0.225
+        ]
       },
       {
         "context_length": 262144,
@@ -3757,7 +3757,7 @@
         "id": "qwen/qwen3.6-27b",
         "input_cost": 0.3,
         "name": "Qwen: Qwen3.6 27B",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -4081,7 +4081,7 @@
         "context_length": 1048576,
         "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
         "id": "thinkingmachines/inkling",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "Thinking Machines: Inkling",
         "output_cost": 4.05,
         "tags": [
@@ -4207,9 +4207,9 @@
         "context_length": 256000,
         "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
         "id": "x-ai/grok-build-0.1",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "xAI: Grok Build 0.1",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -4394,7 +4394,7 @@
         "id": "z-ai/glm-5.2",
         "input_cost": 0.6,
         "name": "Z.ai: GLM 5.2",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "reasoning",
@@ -4435,9 +4435,9 @@
         "context_length": 1000000,
         "description": "This model always redirects to the latest model in the Claude Fable family.",
         "id": "~anthropic/claude-fable-latest",
-        "input_cost": 10.0,
+        "input_cost": 10,
         "name": "Anthropic: Claude Fable Latest",
-        "output_cost": 50.0,
+        "output_cost": 50,
         "tags": [
           "tools",
           "vision",
@@ -4450,9 +4450,9 @@
         "context_length": 200000,
         "description": "This model always redirects to the latest model in the Anthropic Claude Haiku family.",
         "id": "~anthropic/claude-haiku-latest",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "Anthropic Claude Haiku Latest",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "tools",
           "vision",
@@ -4480,9 +4480,9 @@
         "context_length": 1000000,
         "description": "This model always redirects to the latest model in the Anthropic Claude Sonnet family.",
         "id": "~anthropic/claude-sonnet-latest",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Anthropic Claude Sonnet Latest",
-        "output_cost": 10.0,
+        "output_cost": 10,
         "tags": [
           "tools",
           "vision",
@@ -4510,9 +4510,9 @@
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the Google Gemini Pro family.",
         "id": "~google/gemini-pro-latest",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Google Gemini Pro Latest",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "tools",
           "vision",
@@ -5312,9 +5312,9 @@
         "context_length": 1050000,
         "description": "GPT-5.6 Sol Pro via the Batch API at 50% of standard pricing. Flagship with pro reasoning mode.",
         "id": "openai/gpt-5.6-sol-pro:batch",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "OpenAI: GPT-5.6 Sol Pro (batch)",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "tools",
           "vision",
@@ -5327,9 +5327,9 @@
         "context_length": 1050000,
         "description": "GPT-5.6 Sol via the Batch API at 50% of standard pricing. Flagship model for complex reasoning, coding, and agentic workflows.",
         "id": "openai/gpt-5.6-sol:batch",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "OpenAI: GPT-5.6 Sol (batch)",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "tools",
           "vision",
@@ -6074,7 +6074,7 @@
         "id": "mistralai/mistral-medium-3.1:batch",
         "input_cost": 0.2,
         "name": "Mistral: Mistral Medium 3.1 (batch)",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -6155,9 +6155,9 @@
         "context_length": 1010000,
         "description": "Qwen3.8 2.4T A95B is an open-weight sparse mixture-of-experts model from Qwen and the open-weight variant of Qwen3.8 Max, with 95 billion active parameters out of 2.4 trillion total. It delivers frontier reasoning and coding performance in an open-weight package.",
         "id": "qwen/qwen3.8-2.4t-a95b:batch",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Qwen: Qwen3.8 2.4T A95B (batch)",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "reasoning",
@@ -6691,6 +6691,35 @@
         "name": "Inference.net: Schematron V2 Turbo",
         "output_cost": 0.15,
         "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
+        "id": "~deepseek/deepseek-flash-latest",
+        "input_cost": 0.15,
+        "name": "DeepSeek: DeepSeek Flash Latest",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05808,
+        "context_length": 1048576,
+        "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
+        "id": "~deepseek/deepseek-pro-latest",
+        "input_cost": 0.5808,
+        "name": "DeepSeek: DeepSeek Pro Latest",
+        "output_cost": 1.7424,
+        "tags": [
+          "tools",
+          "reasoning",
           "structured_output"
         ]
       }

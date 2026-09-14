@@ -1277,3 +1277,71 @@ describe('subagent-run attribution', () => {
     expect(messages[1].content).toBe('');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: file_changed stamping (SP-139 Phase 2 — per-turn change strip)
+// ---------------------------------------------------------------------------
+
+describe('file_changed stamping', () => {
+  it('stamps queryId from queryCount and preserves server ts', () => {
+    const stateHolder = { current: createDefaultState() };
+    stateHolder.current.queryCount = 7;
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-f1',
+        type: 'file_changed',
+        data: {
+          file_path: 'pkg/foo.go',
+          action: 'modified',
+          size: 123,
+          ts: '2026-09-14T10:00:00.123456789Z',
+        },
+      } as unknown as WsEvent);
+    });
+
+    const edits = stateHolder.current.fileEdits as Array<Record<string, unknown>>;
+    expect(edits.length).toBe(1);
+    expect(edits[0].queryId).toBe(7);
+    expect(edits[0].serverTs).toBe('2026-09-14T10:00:00.123456789Z');
+    expect(edits[0].path).toBe('pkg/foo.go');
+  });
+
+  it('dispatches the agent-file-changed bridge event', () => {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+
+    const bridge: Array<{ path?: string }> = [];
+    const handler = (e: Event) => bridge.push((e as CustomEvent).detail);
+    window.addEventListener('agent-file-changed', handler);
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-f2',
+        type: 'file_changed',
+        data: { file_path: 'a.ts', action: 'write' },
+      } as unknown as WsEvent);
+    });
+    window.removeEventListener('agent-file-changed', handler);
+    expect(bridge.length).toBe(1);
+    expect(bridge[0].path).toBe('a.ts');
+  });
+});

@@ -1,0 +1,155 @@
+/* Per-turn change strip (SP-139 Phase 2) — collapsed one-liner under a
+ * completed turn, expandable to per-file rows. Deliberately compact: this
+ * renders after every turn, so it must read as a footnote, not a card. */
+
+.turn-changes-strip {
+  margin: 2px 0 6px 0;
+  font-size: 11px;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.tcs-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.tcs-summary:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.tcs-label {
+  white-space: nowrap;
+}
+
+.tcs-counts {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.tcs-add {
+  color: var(--accent-success);
+}
+
+.tcs-mod {
+  color: var(--accent-primary);
+}
+
+.tcs-del {
+  color: var(--accent-error);
+}
+
+.tcs-body {
+  margin-top: 4px;
+  margin-left: 8px;
+  border-left: 2px solid var(--border-subtle);
+  padding-left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tcs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tcs-op {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tcs-op.op-create {
+  background: color-mix(in srgb, var(--accent-success) 18%, transparent);
+  color: var(--accent-success);
+}
+
+.tcs-op.op-edit {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: var(--accent-primary);
+}
+
+.tcs-op.op-delete {
+  background: color-mix(in srgb, var(--accent-error) 16%, transparent);
+  color: var(--accent-error);
+}
+
+.tcs-op.op-bulk {
+  background: color-mix(in srgb, var(--accent-warning, #f59e0b) 18%, transparent);
+  color: var(--accent-warning, #f59e0b);
+}
+
+.tcs-path {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tcs-path:hover {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.tcs-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tcs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-family: inherit;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.tcs-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.tcs-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tcs-btn.tcs-revert:hover:not(:disabled) {
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.tcs-btn.tcs-dismiss {
+  padding: 2px 4px;
+}

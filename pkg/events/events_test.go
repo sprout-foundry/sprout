@@ -441,6 +441,13 @@ func TestFileChangedEvent(t *testing.T) {
 	// burst of file_changed events doesn't flood/overflow the event bus.
 	assert.NotContains(t, event, "content", "file_changed must not carry file content")
 	assert.Equal(t, len("some content"), event["size"])
+	// Server-side timestamp: consumers floor revert-since against tracker
+	// timestamps, which use server time — browser clocks are not comparable.
+	ts, ok := event["ts"].(string)
+	assert.True(t, ok, "file_changed must carry a string ts")
+	parsed, err := time.Parse(time.RFC3339Nano, ts)
+	assert.NoError(t, err)
+	assert.WithinDuration(t, time.Now().UTC(), parsed, 5*time.Second)
 }
 
 func TestStreamChunkEvent(t *testing.T) {

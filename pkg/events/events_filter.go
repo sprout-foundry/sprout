@@ -78,6 +78,14 @@ func FileChangedEvent(filePath, action string, content string) map[string]interf
 		"file_path": filePath,
 		"action":    action, // "created", "modified", "deleted", "write", "edit", "git_*", …
 		"size":      len(content),
+		// Server-side timestamp (RFC3339Nano). Consumers that need to order
+		// or floor against tracker-recorded timestamps must use server time
+		// — browser clocks are not comparable across deployments (cloud
+		// mode especially). Emitted at publish time, i.e. microseconds AFTER
+		// the tracker append, so revert-since consumers should subtract a
+		// safety margin (the tracker's .Before() comparison would otherwise
+		// skip the change that produced this event).
+		"ts": time.Now().UTC().Format(time.RFC3339Nano),
 	}
 }
 

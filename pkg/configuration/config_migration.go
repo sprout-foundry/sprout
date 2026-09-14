@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -75,6 +76,50 @@ func ensureRegistered() {
 	})
 }
 
+// ConfigFromNewerBuildError reports that the on-disk config version is newer
+// than this binary's ConfigVersion. This happens when a newer sprout (e.g. a
+// dev build or a post-update install) has already migrated the config and an
+// older binary is now reading it. The config is still parseable — unknown
+// fields are ignored by json.Unmarshal — so callers should load it as-is
+// rather than treat this as a hard failure.
+type ConfigFromNewerBuildError struct {
+	ConfigVersion string
+	BuildVersion  string
+}
+
+func (e *ConfigFromNewerBuildError) Error() string {
+	return fmt.Sprintf("config version %q is newer than this build's %q — run `sprout upgrade` to catch up (config is used as-is)",
+		e.ConfigVersion, e.BuildVersion)
+}
+
+// compareConfigVersions compares dotted numeric version strings ("2.1" vs "2.10").
+// Returns -1 if a < b, 0 if equal, 1 if a > b. Non-numeric or empty segments
+// compare as 0 so unknown shapes never trigger the newer-config path.
+func compareConfigVersions(a, b string) int {
+	aParts := strings.Split(a, ".")
+	bParts := strings.Split(b, ".")
+	n := len(aParts)
+	if len(bParts) > n {
+		n = len(bParts)
+	}
+	for i := 0; i < n; i++ {
+		var av, bv int
+		if i < len(aParts) {
+			av, _ = strconv.Atoi(strings.TrimSpace(aParts[i]))
+		}
+		if i < len(bParts) {
+			bv, _ = strconv.Atoi(strings.TrimSpace(bParts[i]))
+		}
+		switch {
+		case av < bv:
+			return -1
+		case av > bv:
+			return 1
+		}
+	}
+	return 0
+}
+
 // MigrateConfig applies all necessary migration steps to bring raw config up to the target version.
 // It takes a raw JSON map, determines the current version, and runs each step in order.
 // Returns the migrated raw config or an error if a step fails or the chain cannot reach the target.
@@ -90,6 +135,14 @@ func MigrateConfig(raw map[string]interface{}, targetVersion string) (map[string
 	}
 	if currentVersion == targetVersion {
 		return raw, nil
+	}
+
+	// A config written by a newer build (e.g. a dev build bumped
+	// ConfigVersion and saved, then an older installed binary runs).
+	// There is no downgrade path by design; surface a typed error so
+	// callers can distinguish this benign case from a broken chain.
+	if compareConfigVersions(currentVersion, targetVersion) > 0 {
+		return raw, &ConfigFromNewerBuildError{ConfigVersion: currentVersion, BuildVersion: targetVersion}
 	}
 
 	// Build ordered migration chain

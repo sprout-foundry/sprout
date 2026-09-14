@@ -1,3 +1,4 @@
+import { getBootstrapConfig } from '../../bootstrapAdapter';
 import type { EditorPreferences } from './types';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
@@ -35,8 +36,22 @@ export default function GeneralSettingsTab({
       </label>
     ));
 
+  // Running build version from the server's bootstrap payload. Read once at
+  // render — the config is resolved before the settings panel opens, and
+  // "dev" means a source build (version is injected via ldflags at release).
+  const buildVersion = getBootstrapConfig().buildVersion ?? 'dev';
+  const update = getBootstrapConfig().update;
+
   return (
     <div className="section">
+      <h4>About</h4>
+      <div className="config-item">
+        <label>Sprout version</label>
+        <span className="config-help">
+          {buildVersion}
+          {update ? ` — ${update.latest} is available` : ''}
+        </span>
+      </div>
       <h4>Display</h4>
       {toggle(!!editorPreferences.autoSaveEnabled, 'Auto-save files (every 30s)', (v) =>
         onEditorPreferenceChanged('autoSaveEnabled', v),

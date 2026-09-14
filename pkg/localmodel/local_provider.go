@@ -264,7 +264,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	TouchActivity()
 	warmSystemPrefix(model, messages, tools)
 
-	prompt := buildPrompt(model, messages, tools)
+	prompt := buildPrompt(model, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
 	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
 	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
@@ -304,6 +304,12 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 
 	logMLXMemory("chat-start")
 	start := time.Now()
+	// Capture the model's thinking trace (preserve-thinking families emit
+	// one when thinking is enabled; the closed-cue families normally don't).
+	// It lands on the response Message as ReasoningContent — the agent loop
+	// persists it in history and buildPrompt replays it on later turns.
+	var trace strings.Builder
+	cfg.ReasoningFn = func(chunk string) { trace.WriteString(chunk) }
 	text, err := model.GenerateText(ctx, prompt, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("generation failed: %w", err)
@@ -330,6 +336,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	}}
 	resp.Choices[0].Message.Role = "assistant"
 	resp.Choices[0].Message.Content = content
+	resp.Choices[0].Message.ReasoningContent = strings.TrimSpace(trace.String())
 	resp.Choices[0].Message.ToolCalls = toolCalls
 	if len(toolCalls) > 0 {
 		resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: text}
@@ -350,7 +357,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	TouchActivity()
 	warmSystemPrefix(model, messages, tools)
 
-	prompt := buildPrompt(model, messages, tools)
+	prompt := buildPrompt(model, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
 	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
 	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
@@ -367,7 +374,20 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	cfg.Temperature = 0
 	cfg.RepetitionPenalty = 0
 
+	// Thinking-trace capture: preserve-thinking families emit a
+	// <think>...</think> block before the answer when thinking is enabled.
+	// Trace chunks stream to the caller under the "reasoning" content type
+	// (the agent loop routes them to the reasoning buffer/UI) and land on
+	// the response Message as ReasoningContent for history persistence.
 	hasTools := len(tools) > 0
+	var trace strings.Builder
+	cfg.ReasoningFn = func(chunk string) {
+		trace.WriteString(chunk)
+		if !hasTools && callback != nil {
+			callback(chunk, "reasoning")
+		}
+	}
+
 	var outputBuf strings.Builder
 	// generatedTokens counts every decoded token (including filtered
 	// thinking/EOS markers) so cap exhaustion can be distinguished from a
@@ -412,6 +432,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		resp.Choices = []api.Choice{{Index: 0, FinishReason: finishReason}}
 		resp.Choices[0].Message.Role = "assistant"
 		resp.Choices[0].Message.Content = content
+		resp.Choices[0].Message.ReasoningContent = strings.TrimSpace(trace.String())
 		resp.Choices[0].Message.ToolCalls = toolCalls
 		if len(toolCalls) > 0 {
 			resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: outputBuf.String()}
@@ -426,6 +447,11 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		Choices: []api.Choice{{
 			Index:        0,
 			FinishReason: localFinishReason(generatedTokens, cfg.MaxTokens, nil),
+			Message: api.Message{
+				Role:             "assistant",
+				Content:          outputBuf.String(),
+				ReasoningContent: strings.TrimSpace(trace.String()),
+			},
 		}},
 	}, nil
 }
@@ -604,8 +630,10 @@ const localRawContentMetaKey = "sprout_local_raw"
 
 // buildPrompt constructs the full prompt from messages and tools, using
 // the model's native chat template (via FormatChat) and architecture-
-// specific tool prompt formatting.
-func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) string {
+// specific tool prompt formatting. enableThinking selects the generation
+// cue on preserve-thinking template families (Qwen3.8: open <think>\n cue
+// vs the closed empty block); other families render identically either way.
+func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool, enableThinking bool) string {
 	cfg := model.Config()
 	arch := cfg.Arch
 	isGemma := arch == gemmaArch
@@ -625,7 +653,7 @@ func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) str
 
 	msgs := make([]llm.ChatMessage, len(messages))
 	for i, m := range messages {
-		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
+		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent}
 		if m.Role == "tool" {
 			if isGemma {
 				msgs[i] = llm.ChatMessage{Role: "tool", Content: gemmaFormatToolResponse(callNames[m.ToolCallID], m.Content)}
@@ -661,7 +689,7 @@ func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool) str
 		}
 		return model.FormatChat(msgs)
 	}
-	prompt := model.FormatChat(msgs)
+	prompt := model.FormatChatThinking(msgs, enableThinking)
 	if len(tools) > 0 {
 		// Some architectures (e.g. LFM2) embed tools into the system
 		// prompt via the chat template; for those, FormatChat already

@@ -1617,6 +1617,45 @@
   color: var(--accent-warning-fg);
 }
 
+.model-selection-badge--notdl {
+  margin-left: 8px;
+  background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* Inline download/cancel affordance on local-provider rows. A span with
+ * button semantics so the row's own select handler doesn't fire. */
+.model-selection-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--accent-info);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.model-selection-download-btn:hover {
+  background: color-mix(in srgb, var(--accent-info) 12%, transparent);
+}
+
+.model-selection-download-btn .spin {
+  animation: model-selection-spin 1s linear infinite;
+}
+
+@keyframes model-selection-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Footer */
 .model-selection-footer {
   display: flex;

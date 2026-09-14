@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { AlertTriangle, Check, Star } from 'lucide-react';
+import { AlertTriangle, Check, Download, Loader2, Star } from 'lucide-react';
 import { ApiService } from '../services/api';
 import type { ProviderModel } from '../services/api/types';
 import { debugLog } from '../utils/log';
@@ -42,8 +42,64 @@ function ModelSelectionModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [filter, setFilter] = useState('');
+  // Downloads: model ID → live status. Local-provider rows tagged
+  // "not downloaded" get an inline download button; selecting one starts
+  // the download and the modal selects it on completion.
+  const [downloadStates, setDownloadStates] = useState<Record<string, string>>({});
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
   const listRef = useRef<HTMLUListElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const isLocal = provider === 'sprout-local' || provider === 'Sprout Local';
+  const anyDownloading = Object.values(downloadStates).some((s) => s === 'downloading');
+
+  const refreshDownloads = useCallback(async () => {
+    if (!isLocal) return;
+    try {
+      const status = await ApiService.getInstance().getLocalLLMStatus();
+      setDownloadStates((prev) => {
+        const next = { ...prev };
+        for (const m of status.models) {
+          if (m.download) next[m.id] = m.download.status;
+        }
+        return next;
+      });
+      setModels((prev) =>
+        prev.map((m) => {
+          const updated = status.models.find((sm) => sm.id === m.id);
+          return updated ? { ...m, tags: updated.present ? m.tags?.filter((t) => t !== 'not downloaded') : m.tags } : m;
+        }),
+      );
+    } catch {
+      // status polling is best-effort
+    }
+  }, [isLocal]);
+
+  // Poll download state at 2s while anything is downloading.
+  useEffect(() => {
+    if (!anyDownloading) return;
+    const interval = setInterval(refreshDownloads, 2000);
+    return () => clearInterval(interval);
+  }, [anyDownloading, refreshDownloads]);
+
+  const handleDownload = useCallback(async (modelId: string) => {
+    setDownloadErrors((prev) => ({ ...prev, [modelId]: '' }));
+    setDownloadStates((prev) => ({ ...prev, [modelId]: 'downloading' }));
+    try {
+      await ApiService.getInstance().downloadLocalLLMModel(modelId);
+    } catch (e) {
+      setDownloadStates((prev) => ({ ...prev, [modelId]: 'failed' }));
+      setDownloadErrors((prev) => ({ ...prev, [modelId]: e instanceof Error ? e.message : String(e) }));
+    }
+  }, []);
+
+  const handleCancelDownload = useCallback(async (modelId: string) => {
+    try {
+      await ApiService.getInstance().cancelLocalLLMDownload(modelId);
+    } catch {
+      // cancel is best-effort; the poll will reflect real state
+    }
+  }, []);
 
   // Filter models against the search input — handy when a provider lists
   // dozens of variants (Anthropic claude-*-*, OpenRouter's full catalog).
@@ -88,9 +144,11 @@ function ModelSelectionModal({
 
   const handleSelect = useCallback(() => {
     if (selectedModel) {
+      const dl = downloadStates[selectedModel];
+      if (dl === 'downloading') return; // wait for completion
       onSelectModel(selectedModel);
     }
-  }, [selectedModel, onSelectModel]);
+  }, [selectedModel, onSelectModel, downloadStates]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -112,6 +170,22 @@ function ModelSelectionModal({
       setSelectedModel(visibleModels[0].id);
     }
   }, [loading, error, visibleModels, selectedModel]);
+
+  // A download finishing while its model is selected → select it (the
+  // user's intent was "get this model and use it"). Fetching a fresh model
+  // list lets the backend drop the "not downloaded" tag.
+  useEffect(() => {
+    for (const [id, state] of Object.entries(downloadStates)) {
+      if (state === 'completed') {
+        if (id === selectedModel) {
+          onSelectModel(id);
+        }
+        fetchModels();
+        return;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [downloadStates]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -170,6 +244,18 @@ function ModelSelectionModal({
             <div className="model-selection-empty">No models available for this provider.</div>
           )}
 
+          {!loading && !error && isLocal && Object.entries(downloadErrors).some(([, e]) => e) && (
+            <div className="model-selection-error" role="alert">
+              {Object.entries(downloadErrors)
+                .filter(([, e]) => e)
+                .map(([id, e]) => (
+                  <div key={id}>
+                    {id}: {e}
+                  </div>
+                ))}
+            </div>
+          )}
+
           {!loading && !error && models.length > 0 && (
             <>
               <input
@@ -192,6 +278,9 @@ function ModelSelectionModal({
                       const eligible = model.eligible_roles ?? [];
                       const warnings = model.warnings ?? [];
                       const recommendedRole = recommended.includes('primary') ? 'primary' : recommended[0];
+                      const notDownloaded = model.tags?.includes('not downloaded') ?? false;
+                      const dlState = downloadStates[model.id];
+                      const downloading = dlState === 'downloading';
                       return (
                         <li key={model.id}>
                           <button
@@ -210,7 +299,17 @@ function ModelSelectionModal({
                             role="option"
                             data-testid="model-picker-option"
                           >
-                            <span className="model-selection-item-text">{model.id}</span>
+                            <span className="model-selection-item-text">
+                              {model.id}
+                              {notDownloaded && !downloading && (
+                                <span
+                                  className="model-selection-badge model-selection-badge--notdl"
+                                  title="Not downloaded yet"
+                                >
+                                  not downloaded
+                                </span>
+                              )}
+                            </span>
                             {recommendedRole && (
                               <span
                                 className="model-selection-badge model-selection-badge--recommended"
@@ -234,6 +333,45 @@ function ModelSelectionModal({
                                 aria-label={`Warning: ${warnings.join('; ')}`}
                               >
                                 <AlertTriangle size={10} />
+                              </span>
+                            )}
+                            {isLocal && notDownloaded && dlState !== 'completed' && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="model-selection-download-btn"
+                                data-testid="model-picker-download"
+                                title={
+                                  downloading
+                                    ? 'Downloading — click to cancel'
+                                    : `Download ${model.id} (one-time, multi-GB)`
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (downloading) {
+                                    handleCancelDownload(model.id);
+                                  } else if (dlState !== 'downloading') {
+                                    handleDownload(model.id);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (downloading) handleCancelDownload(model.id);
+                                    else handleDownload(model.id);
+                                  }
+                                }}
+                              >
+                                {downloading ? (
+                                  <>
+                                    <Loader2 size={11} className="spin" /> cancel
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download size={11} /> download
+                                  </>
+                                )}
                               </span>
                             )}
                             {selectedModel === model.id && (
@@ -266,9 +404,9 @@ function ModelSelectionModal({
             type="button"
             className="model-selection-btn model-selection-btn--select"
             onClick={handleSelect}
-            disabled={!selectedModel || loading}
+            disabled={!selectedModel || loading || downloadStates[selectedModel] === 'downloading'}
           >
-            Select Model
+            {downloadStates[selectedModel] === 'downloading' ? 'Downloading…' : 'Select Model'}
           </button>
         </div>
       </div>

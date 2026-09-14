@@ -21,7 +21,7 @@ carry it? A tab earns its place only by providing something the in-flow
 surfaces structurally cannot (cross-turn aggregation, bulk ops, arbitrary
 history access).
 
-## Status: 🟡 Phase 1 Shipped | Phases 2–3 Scoped, Unstarted
+## Status: 🟡 Phase 1-2 Shipped | Phase 3 Decision Pending
 
 ### Phase 1: Consolidation 6 → 3 ✅ (2026-09-10)
 
@@ -45,25 +45,21 @@ In-flow surfaces that already cover live monitoring (no panel needed):
 | Todos | `InlineTodoSummary` in the chat surface |
 | Cost / context window / model | `ChatStatusBarItems` segments in the status bar |
 
-### Phase 2: Changes — in-flow agent-change summaries 🟡 unstarted
+### Phase 2: Changes — in-flow agent-change summaries ✅ (2026-09-14, `af8cdb8f5`)
 
-`AgentChangesPanel` (the Changes tab) is the last tab with no in-flow
-counterpart. It remains the only aggregate "what did the agent change this
-revision" view; the left Git sidebar covers repo state, not agent
-attribution. Backend correlation is trustworthy as of `053caeb5d`
-(exact subagent attribution, seed v1.4.0) + `edc12437f`, and live refresh
-works (`9524e39e7`).
+`TurnChangesStrip` renders under the last completed turn: collapsed
+"N files changed this turn", expandable to per-file rows with Review
+(opens a diff buffer seeded from /api/changes/diff) and Revert
+(`revert(since=firstServerTs−1s)`; labeled honestly — exact for the
+latest turn, "this turn onward" for older ones; no accept action, that
+belongs to LLM edit approval). Data: `file_changed` events carry a
+server-side `ts`, `fileEdits` entries carry `queryId` correlation.
+Performance contract: no polling, no new event types, no new store
+slices; memo'd component over the 50-capped fileEdits array.
 
-Scope:
-- Surface a per-turn change summary in the chat turn that produced it —
-  the turn's assistant footer gains a collapsed "changed N files" strip
-  (files, +/- counts) fed from the revision manifest, deep-linking to the
-  diff view for each file. The per-turn data is already correlated; this
-  is presentation only.
-- The panel tab stays as the cross-revision timeline / rollback surface.
-
-Acceptance: a user can answer "what did this turn change?" without opening
-the panel.
+Acceptance met: "what did this turn change?" is answerable in the chat
+flow. The panel tab remains the cross-revision timeline / rollback
+surface — no overlap introduced.
 
 ### Phase 3: Sessions — relocate or ratify 🟡 decision needed
 

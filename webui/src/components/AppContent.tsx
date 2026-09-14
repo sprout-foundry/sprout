@@ -337,9 +337,11 @@ const AppContent: React.FC<AppContentProps> = ({
   // Session search restore: call API then dispatch the custom event
   const log = useLog();
   const handleSessionSearchRestore = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, chatId?: string) => {
       try {
-        const response = await apiService.restoreSession(sessionId);
+        // chatId scopes the restore to that chat (empty = active chat,
+        // the pre-existing Costs-page behavior).
+        const response = await apiService.restoreSession(sessionId, chatId);
         if (response.messages?.length) {
           window.dispatchEvent(
             new CustomEvent('sprout:session-restored', {
@@ -750,6 +752,7 @@ const AppContent: React.FC<AppContentProps> = ({
       onChatCleared: handleChatCleared,
       fileEdits: state.fileEdits,
       onReviewChange: handleReviewChange,
+      onRestoreSession: handleSessionSearchRestore,
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
@@ -782,6 +785,7 @@ const AppContent: React.FC<AppContentProps> = ({
       handleChatCleared,
       state.fileEdits,
       handleReviewChange,
+      handleSessionSearchRestore,
       handleToolPillClick,
       state.stats,
       state.isConnected,

@@ -11,11 +11,15 @@ export async function getSessions(fetchFn: typeof fetch, scope?: string): Promis
   return response.json();
 }
 
-export async function restoreSession(fetchFn: typeof fetch, sessionId: string): Promise<SessionRestoreResponse> {
+export async function restoreSession(
+  fetchFn: typeof fetch,
+  sessionId: string,
+  chatId?: string,
+): Promise<SessionRestoreResponse> {
   const response = await fetchFn('/api/sessions/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId }),
+    body: JSON.stringify(chatId ? { session_id: sessionId, chat_id: chatId } : { session_id: sessionId }),
   });
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();

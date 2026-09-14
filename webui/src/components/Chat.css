@@ -271,3 +271,34 @@
   font-style: italic;
   font-size: var(--text-xs);
 }
+
+/* ── Chat header row (SP-139 Phase 3) ───────────────────────────────
+ * Fixed row above the transcript: history switcher + worktree chip.
+ * Lives outside Virtuoso so popover anchors don't scroll away. */
+
+.chat-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 2px 12px;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.chat-header-row .worktree-indicator {
+  margin-left: auto;
+}
+
+.chat-header-row .worktree-indicator-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  color: var(--text-tertiary);
+}
+
+.chat-header-row .worktree-indicator-icon {
+  display: inline-flex;
+  color: var(--text-tertiary);
+}

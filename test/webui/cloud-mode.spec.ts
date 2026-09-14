@@ -23,7 +23,11 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  browser = await chromium.launch();
+  try {
+    browser = await chromium.launch({ channel: 'chrome' });
+  } catch {
+    browser = await chromium.launch();
+  }
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
@@ -107,8 +111,9 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
     // was implemented after SP-CLOUD spec was written (supportsGit=true now).
     await expect(page.getByTestId(TESTIDS['sidebar-git-tab'])).toBeVisible({ timeout: 10_000 });
 
-    // Export all button should NOT be visible in cloud mode (supportsExport=false)
-    await expect(page.getByTestId(TESTIDS['sidebar-export-all'])).not.toBeVisible({ timeout: 10_000 });
+    // Export-all should NOT be visible in cloud mode (supportsExport=false;
+    // lives in the history-switcher popover footer since SP-139 Phase 3)
+    await expect(page.getByTestId(TESTIDS['chs-export-all'])).not.toBeVisible({ timeout: 10_000 });
   });
 
   test.fixme('file tree loads without errors', async () => {

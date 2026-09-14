@@ -47,6 +47,7 @@ const TESTIDS = {
   'chs-popover': 'chs-popover',
   'chs-search-input': 'chs-search-input',
   'chs-row': 'chs-row',
+  'chs-export-all': 'chs-export-all',
   'chat-query-progress': 'chat-query-progress',
   'chat-new-button': 'chat-new-button',
 

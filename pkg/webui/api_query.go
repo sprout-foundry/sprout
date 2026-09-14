@@ -596,14 +596,24 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 	}
 	cmdName := parts[0]
 
-	// Get the registry from the agent
-	registryRaw := chatAgent.SlashCommands()
-	if registryRaw == nil {
+	// Get the registry from the agent. Daemon-mode (`sprout agent --daemon`)
+	// seeds the server with the CLI-created agent, which never had
+	// SetSlashCommands called — its registry is nil, and every command
+	// resolved through this helper returned "command_not_found" even for
+	// /clear. runChatQuery avoids this by building its own registry; do the
+	// same here: fall back to a fresh registry when a real agent merely
+	// lacks one. A nil AGENT still short-circuits — commands need an agent
+	// to act on.
+	if chatAgent == nil {
 		return nil, "", nil
 	}
-	registry, ok := registryRaw.(*agent_commands.CommandRegistry)
-	if !ok {
-		return nil, "", nil
+	registryRaw := chatAgent.SlashCommands()
+	var registry *agent_commands.CommandRegistry
+	if registryRaw != nil {
+		registry, _ = registryRaw.(*agent_commands.CommandRegistry)
+	}
+	if registry == nil {
+		registry = agent_commands.NewCommandRegistry()
 	}
 
 	cmd, ok := registry.GetCommand(cmdName)

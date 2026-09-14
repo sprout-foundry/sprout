@@ -785,6 +785,14 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
           paneBridge.setActiveBufferId(null);
         }
       }
+
+      // Notify listeners (e.g. useChatSessionsSync) which buffer closed so a
+      // dismissed chat tab is not resurrected on the next sessions update.
+      window.dispatchEvent(
+        new CustomEvent('workspace:buffer-closed', {
+          detail: { id: bufferId, kind: buffer.kind, chatId: buffer.metadata?.chatId },
+        }),
+      );
     },
     [isAutoSaveEnabled, saveBuffer, paneBridge],
   );

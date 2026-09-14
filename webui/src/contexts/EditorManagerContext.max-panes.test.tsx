@@ -606,8 +606,30 @@ describe('closeSplit at various pane counts', () => {
 
     expect(ctx().panes.length).toBe(1);
     expect(ctx().paneLayout).toBe('single');
-    expect(ctx().panes[0].position).toBe('primary');
+    // closeSplit keeps the ACTIVE pane (the one the user invoked the control
+    // from), not necessarily the original primary. After 5 splits the active
+    // pane is the last-created one.
+    expect(ctx().panes[0].position).toBe('senary');
     expect(ctx().paneSizes[ctx().panes[0].id]).toBe(100);
+  });
+
+  it('closeSplit(keepPaneId) keeps the explicitly requested pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+
+    const keeper = ctx().panes[1];
+    await actAndUpdate(() => {
+      ctx().closeSplit(keeper.id);
+    });
+
+    expect(ctx().panes.length).toBe(1);
+    expect(ctx().panes[0].id).toBe(keeper.id);
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().paneSizes[keeper.id]).toBe(100);
   });
 
   it('closeSplit from 3 panes returns to single pane', async () => {

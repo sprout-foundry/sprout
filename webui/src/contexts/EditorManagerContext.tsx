@@ -72,7 +72,7 @@ interface EditorManagerContextValue {
   switchPane: (paneId: string) => void;
   switchToBuffer: (bufferId: string) => void;
   splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => string | null;
-  closeSplit: () => void;
+  closeSplit: (keepPaneId?: string) => void;
   setPaneLayout: (layout: PaneLayout) => void;
   updateBufferContent: (bufferId: string, content: string) => void;
   updateBufferCursor: (bufferId: string, position: { line: number; column: number }) => void;

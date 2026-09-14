@@ -1,5 +1,5 @@
 /* MergeViewWrapper - diff viewer React component */
-import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import {
   MergeView,
@@ -13,6 +13,7 @@ import { EditorState } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { Redo2, Undo2 } from 'lucide-react';
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { getLanguageExtensions, detectLanguage } from '../extensions/languageRegistry';
@@ -56,11 +57,13 @@ export interface MergeViewWrapperProps {
   className?: string;
   /** Inline styles */
   style?: React.CSSProperties;
-  /** Called when user accepts a chunk in unified mode */
-  onAcceptChunk?: () => void;
-  /** Called when user rejects a chunk in unified mode */
-  onRejectChunk?: () => void;
-  /** Show accept/reject controls in unified mode (default: true) */
+  /**
+   * Show per-chunk accept/reject controls in unified mode. Only meaningful
+   * where chunk accept/reject has real semantics (LLM-gated edit approval,
+   * conflict resolution). Git-diff viewing passes false — there is nothing
+   * to accept into, and hover buttons that only sometimes appear were
+   * reported as confusing.
+   */
   mergeControls?: boolean;
   /** Show Prev/Next navigation in side-by-side mode (default: true) */
   sideBySideNavigation?: boolean;
@@ -96,9 +99,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   collapseUnchanged,
   className = '',
   style,
-  onAcceptChunk,
-  onRejectChunk,
-  mergeControls = true,
+  mergeControls = false,
   sideBySideNavigation = true,
   aLabel = 'Original',
   bLabel = 'Modified',
@@ -154,6 +155,15 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const onModifiedChangeRef = useRef(onModifiedChange);
   onModifiedChangeRef.current = onModifiedChange;
   const [hunkInfo, setHunkInfo] = useState<{ current: number; total: number } | null>(null);
+  // Undo/redo availability for the slim toolbar buttons. Updated by a
+  // docVersion bump whenever the relevant editor changes (buttons stay
+  // disabled at depth 0, matching Cmd+Z semantics).
+  const [docVersion, setDocVersion] = useState(0);
+  const bumpDocVersion = useCallback(() => setDocVersion((v) => v + 1), []);
+  // Same trick as onModifiedChangeRef — the listener closure is created once
+  // per mount, so it must call through a ref to see later renders' callback.
+  const bumpDocVersionRef = useRef<(() => void) | null>(null);
+  bumpDocVersionRef.current = bumpDocVersion;
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -226,6 +236,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
         const content = update.state.doc.toString();
         lastSyncedContentRef.current = { ...lastSyncedContentRef.current, modified: content };
         onModifiedChangeRef.current?.(content);
+        bumpDocVersionRef.current?.();
       }),
     );
     return extensions;
@@ -254,19 +265,6 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
 
     return extensions;
   }, [originalContent, highlightChanges, gutter, mergeControls, collapseUnchanged, buildBaseExtensions]);
-
-  // Accept/reject handlers for unified mode
-  const handleAccept = useCallback(() => {
-    if (editorViewRef.current && acceptChunk(editorViewRef.current) && onAcceptChunk) {
-      onAcceptChunk();
-    }
-  }, [onAcceptChunk]);
-
-  const handleReject = useCallback(() => {
-    if (editorViewRef.current && rejectChunk(editorViewRef.current) && onRejectChunk) {
-      onRejectChunk();
-    }
-  }, [onRejectChunk]);
 
   const handlePrevChunk = useCallback(() => {
     if (editorViewRef.current) goToPreviousChunk(editorViewRef.current);
@@ -317,20 +315,45 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   }, [updateSbsHunkInfo]);
 
   const handleSbsUndo = useCallback(() => {
-    if (mergeViewRef.current?.b) undo(mergeViewRef.current.b);
-  }, []);
+    if (mergeViewRef.current?.b) {
+      undo(mergeViewRef.current.b);
+      bumpDocVersion();
+    }
+  }, [bumpDocVersion]);
 
   const handleSbsRedo = useCallback(() => {
-    if (mergeViewRef.current?.b) redo(mergeViewRef.current.b);
-  }, []);
+    if (mergeViewRef.current?.b) {
+      redo(mergeViewRef.current.b);
+      bumpDocVersion();
+    }
+  }, [bumpDocVersion]);
 
   const handleUnifiedUndo = useCallback(() => {
-    if (editorViewRef.current) undo(editorViewRef.current);
-  }, []);
+    if (editorViewRef.current) {
+      undo(editorViewRef.current);
+      bumpDocVersion();
+    }
+  }, [bumpDocVersion]);
 
   const handleUnifiedRedo = useCallback(() => {
-    if (editorViewRef.current) redo(editorViewRef.current);
-  }, []);
+    if (editorViewRef.current) {
+      redo(editorViewRef.current);
+      bumpDocVersion();
+    }
+  }, [bumpDocVersion]);
+
+  // Undo/redo depths for button disabled states. docVersion is read so the
+  // expression re-evaluates after every doc change (the bump fires from the
+  // update listeners and from the button handlers themselves).
+  void docVersion;
+  const sbsUndoDepth =
+    effectiveMode === 'side-by-side' && mergeViewRef.current?.b ? undoDepth(mergeViewRef.current.b.state) : 0;
+  const sbsRedoDepth =
+    effectiveMode === 'side-by-side' && mergeViewRef.current?.b ? redoDepth(mergeViewRef.current.b.state) : 0;
+  const unifiedUndoDepth =
+    effectiveMode === 'unified' && editorViewRef.current ? undoDepth(editorViewRef.current.state) : 0;
+  const unifiedRedoDepth =
+    effectiveMode === 'unified' && editorViewRef.current ? redoDepth(editorViewRef.current.state) : 0;
 
   // Reset hunk info when the effective mode changes
   useEffect(() => {
@@ -384,9 +407,16 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       const buildOriginal = origContentRef.current;
       const buildModified = modContentRef.current;
 
+      // Pass config objects ({doc, extensions}), NOT pre-created EditorState
+      // instances. MergeView's config is typed EditorStateConfig — an
+      // EditorState satisfies .doc/.selection but its extension list is NOT
+      // part of that surface, so MergeView silently drops every extension:
+      // history (Undo/Redo dead after a revert arrow), the pane-B
+      // updateListener (onModifiedChange never fired), keymaps, and pane-A's
+      // readOnly facet (original side became editable/focusable).
       const mv = new MergeView({
-        a: EditorState.create({ doc: buildOriginal, extensions: aKeymaps }),
-        b: EditorState.create({ doc: buildModified, extensions: bKeymaps }),
+        a: { doc: buildOriginal, extensions: aKeymaps },
+        b: { doc: buildModified, extensions: bKeymaps },
         parent: host,
         orientation: 'a-b',
         revertControls: 'a-to-b',
@@ -538,6 +568,12 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       // Add history for undo/redo support
       extensions.push(history());
       extensions.push(keymap.of(historyKeymap));
+      // Track doc changes so the toolbar undo/redo buttons enable/disable.
+      extensions.push(
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) bumpDocVersionRef.current?.();
+        }),
+      );
 
       const state = EditorState.create({
         doc: modContentRef.current,
@@ -621,18 +657,30 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
               <span className="shortcut-hint">Alt+Down</span>
             </button>
             <span className="btn-separator">|</span>
-            <button type="button" className="btn-undo" onClick={handleSbsUndo} title="Undo Revert (Ctrl+Z)">
-              Undo
-              <span className="shortcut-hint">Ctrl+Z</span>
+            <button
+              type="button"
+              className="btn-icon btn-undo"
+              onClick={handleSbsUndo}
+              disabled={sbsUndoDepth <= 0}
+              title="Undo (Ctrl/Cmd+Z)"
+              aria-label="Undo"
+            >
+              <Undo2 size={14} />
             </button>
-            <button type="button" className="btn-redo" onClick={handleSbsRedo} title="Redo Revert (Ctrl+Shift+Z)">
-              Redo
-              <span className="shortcut-hint">Ctrl+⇧+Z</span>
+            <button
+              type="button"
+              className="btn-icon btn-redo"
+              onClick={handleSbsRedo}
+              disabled={sbsRedoDepth <= 0}
+              title="Redo (Ctrl/Cmd+Shift+Z)"
+              aria-label="Redo"
+            >
+              <Redo2 size={14} />
             </button>
           </div>
         </div>
       )}
-      {effectiveMode === 'unified' && mergeControls && (
+      {effectiveMode === 'unified' && (
         <div className="merge-view-controls">
           <button type="button" className="btn-prev" onClick={handlePrevChunk} title="Previous Change (Alt+Up)">
             Prev
@@ -643,20 +691,25 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
             <span className="shortcut-hint">Alt+Down</span>
           </button>
           <span className="btn-separator">|</span>
-          <button type="button" className="btn-undo" onClick={handleUnifiedUndo} title="Undo (Ctrl+Z)">
-            Undo
-            <span className="shortcut-hint">Ctrl+Z</span>
+          <button
+            type="button"
+            className="btn-icon btn-undo"
+            onClick={handleUnifiedUndo}
+            disabled={unifiedUndoDepth <= 0}
+            title="Undo (Ctrl/Cmd+Z)"
+            aria-label="Undo"
+          >
+            <Undo2 size={14} />
           </button>
-          <button type="button" className="btn-redo" onClick={handleUnifiedRedo} title="Redo (Ctrl+Shift+Z)">
-            Redo
-            <span className="shortcut-hint">Ctrl+⇧+Z</span>
-          </button>
-          <span className="btn-separator">|</span>
-          <button type="button" className="btn-reject" onClick={handleReject} title="Reject Change">
-            Reject
-          </button>
-          <button type="button" className="btn-accept" onClick={handleAccept} title="Accept Change">
-            Accept
+          <button
+            type="button"
+            className="btn-icon btn-redo"
+            onClick={handleUnifiedRedo}
+            disabled={unifiedRedoDepth <= 0}
+            title="Redo (Ctrl/Cmd+Shift+Z)"
+            aria-label="Redo"
+          >
+            <Redo2 size={14} />
           </button>
         </div>
       )}

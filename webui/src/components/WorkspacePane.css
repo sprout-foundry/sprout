@@ -30,6 +30,70 @@
   flex-shrink: 0;
 }
 
+/* In-flow confirm bar for unsaved pane-B edits in the git-diff merge view */
+.workspace-diff-edit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-secondary));
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.workspace-diff-edit-bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.workspace-diff-edit-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-diff-edit-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.workspace-diff-edit-bar-btn.discard {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.workspace-diff-edit-bar-btn.discard:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.workspace-diff-edit-bar-btn.save {
+  background: var(--accent-success);
+  color: var(--accent-fg);
+  border-color: var(--accent-success);
+}
+
+.workspace-diff-edit-bar-btn.save:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-success) 85%, var(--bg-primary));
+}
+
+.workspace-diff-edit-bar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .workspace-diff-merge-wrapper .merge-view-wrapper {
   flex: 1;
   min-height: 0;

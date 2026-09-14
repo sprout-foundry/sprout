@@ -1,4 +1,4 @@
-import { GitCompareArrows, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, GitCompareArrows, ChevronUp, ChevronDown, RotateCcw, Save } from 'lucide-react';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { writeFileWithConsent } from '../services/fileAccess';
 import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
@@ -114,6 +114,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   const handleSave = useCallback(
     async (content: string) => {
       if (!path) return;
+      setIsSaving(true);
       try {
         // Set the save cooldown before the HTTP write so the server-side
         // fsnotify echo is suppressed (same pattern as the editor save).
@@ -128,9 +129,14 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
           throw new Error(errorText || `Failed to save file: ${response.statusText}`);
         }
         log.success(`${path} saved successfully`, { title: 'File Saved', duration: 3000 });
+        // Edits are now on disk; the next git refresh will produce a diff
+        // matching the saved content, so drop the local edit state.
+        setEditedModified(null);
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Failed to save file';
         log.error(msg, { title: 'Save Error' });
+      } finally {
+        setIsSaving(false);
       }
     },
     [path, log],
@@ -144,6 +150,14 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
 
   const modifiedContent = editedModified ?? docs.modified;
   const mergeEditable = canSave && hasFullContents;
+  // True when pane B holds edits the user made (reverted chunks or typed
+  // text) that haven't been saved — drives the in-flow confirm bar.
+  const hasUnsavedEdits = editedModified !== null && editedModified !== docs.modified;
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleDiscardEdits = useCallback(() => {
+    setEditedModified(null);
+  }, []);
 
   return (
     <div className="workspace-tab workspace-diff-tab">
@@ -196,6 +210,38 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
       ) : diffText ? (
         viewMode === 'merge' && (docs.original !== '' || docs.modified !== '') ? (
           <div className="workspace-diff-merge-wrapper">
+            {/* In-flow confirm bar: appears only when pane B holds unsaved
+                edits (reverted chunks or typing). Accept/Reject belong on the
+                LLM edit-approval surface, not here — this bar is the only
+                decision a git-diff review needs: keep the edited result on
+                disk, or throw the edits away. */}
+            {hasUnsavedEdits && mergeEditable && (
+              <div className="workspace-diff-edit-bar" role="status">
+                <span className="workspace-diff-edit-bar-label">
+                  <Check size={13} /> Unsaved edits in this diff
+                </span>
+                <div className="workspace-diff-edit-bar-actions">
+                  <button
+                    type="button"
+                    className="workspace-diff-edit-bar-btn discard"
+                    onClick={handleDiscardEdits}
+                    disabled={isSaving}
+                    title="Discard your edits and restore the diff view"
+                  >
+                    <RotateCcw size={13} /> Discard
+                  </button>
+                  <button
+                    type="button"
+                    className="workspace-diff-edit-bar-btn save"
+                    onClick={() => void handleSave(modifiedContent)}
+                    disabled={isSaving}
+                    title="Write the edited file to disk (Cmd+S)"
+                  >
+                    <Save size={13} /> {isSaving ? 'Saving…' : 'Save to disk'}
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Collapse unchanged toggle */}
             <div className="workspace-diff-collapse-toggle">
               <button

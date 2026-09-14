@@ -28,7 +28,7 @@ interface PaneManagerContextValue {
   closePane: (paneId: string) => void;
   switchPane: (paneId: string) => void;
   splitPane: (paneId: string, direction: 'vertical' | 'horizontal') => string | null;
-  closeSplit: () => void;
+  closeSplit: (keepPaneId?: string) => void;
   setPaneLayout: (layout: PaneLayout) => void;
   updatePaneSize: (paneId: string, size: number) => void;
   toggleLinkedScroll: () => void;
@@ -131,7 +131,7 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ childr
 
   const closePane = useCallback(
     (paneId: string) => {
-      if (panes.length === 1) return;
+      if (panes.length <= 1) return;
 
       const pane = panes.find((p) => p.id === paneId);
       if (pane?.bufferId) {
@@ -139,7 +139,12 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ childr
       }
 
       const remaining = panes.filter((p) => p.id !== paneId);
-      setPanes(remaining);
+
+      // Pure functional update: composes correctly if anything else touched
+      // panes this tick. (The previous non-functional setPanes(remaining)
+      // let the last write win when several closes queued in one tick,
+      // silently resurrecting panes the earlier writes had removed.)
+      setPanes((prev) => prev.filter((p) => p.id !== paneId));
 
       const evenSize = remaining.length === 1 ? 100 : 100 / remaining.length;
       const newSizes: Record<string, number> = {};
@@ -159,29 +164,38 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ childr
     [panes, activePaneId, closeBuffer],
   );
 
-  const closeSplit = useCallback(() => {
-    const activePane = panes.find((p) => p.id === activePaneId);
+  // Close every pane except `keepPaneId`. Used by the "Close split panes"
+  // control: the split the user intends to keep is the pane they invoked
+  // the control from (the active pane), NOT necessarily the original
+  // first pane. Previously this always kept the `primary` pane, which
+  // closed the wrong split whenever the user had focused a later pane.
+  // One functional setPanes for the whole operation — the old loop of
+  // closePane calls derived every removal from the same stale array and
+  // the last write resurrected the earlier removals.
+  const closeSplit = useCallback(
+    (keepPaneId?: string) => {
+      if (panes.length <= 1) return;
+      const keepId = keepPaneId ?? activePaneId;
+      const keeper = panes.find((p) => p.id === keepId) ?? panes[0];
 
-    panes.forEach((pane) => {
-      if (pane.position !== 'primary' && pane.id !== activePaneId) {
-        closePane(pane.id);
+      // Close buffers owned by the panes being removed (outside the state
+      // updater — updaters must stay pure).
+      panes.forEach((pane) => {
+        if (pane.id !== keeper.id && pane.bufferId) {
+          closeBuffer(pane.bufferId);
+        }
+      });
+
+      setPanes(() => [keeper]);
+      setPaneSizes({ [keeper.id]: 100 });
+      setPaneLayoutState('single');
+      setActivePaneId(keeper.id);
+      if (keeper.bufferId) {
+        setActiveBufferId(keeper.bufferId);
       }
-    });
-
-    setPanes((prev) => {
-      const primaryPane = prev.find((p) => p.position === 'primary');
-      return primaryPane ? [primaryPane] : prev;
-    });
-
-    setPaneLayoutState('single');
-    setActivePaneId(panes[0]?.id || null);
-    setPaneSizes({ [panes[0]?.id || 'pane-1']: 100 });
-
-    const remainingBuffer = activePane?.bufferId;
-    if (remainingBuffer) {
-      setActiveBufferId(remainingBuffer);
-    }
-  }, [panes, activePaneId, closePane]);
+    },
+    [panes, activePaneId, closeBuffer],
+  );
 
   const setPaneLayout = useCallback(
     (layout: PaneLayout) => {

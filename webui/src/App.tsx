@@ -35,6 +35,7 @@ import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
 import type { QueuedMessage } from './hooks/useChatSessionManager';
+import { useBackgroundChatSync } from './hooks/useBackgroundChatSync';
 import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
@@ -243,6 +244,15 @@ function AppInner() {
     activeChatIdRef,
     queuedMessagesRef,
     isProcessing: state.isProcessing,
+  });
+
+  // Background chat panes (chat buffers open in non-active split panes)
+  // refresh from the read-only messages endpoint when their cached entry
+  // accumulates WS events, so both panes stream independently.
+  useBackgroundChatSync({
+    perChatCache: state.perChatCache,
+    activeChatId: state.activeChatId,
+    setState,
   });
 
   // ── Persistence ───────────────────────────────────────────────────

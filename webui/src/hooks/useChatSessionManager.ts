@@ -265,7 +265,14 @@ export function useChatSessionManager({
     [setState, activeRequestsRef],
   );
 
+  // In-flight create guard: the New Chat button stays enabled while the
+  // create round-trip runs, and the tab only appears after the follow-up
+  // list refresh — a double-click fired two (or five) sessions. A ref (not
+  // state) so re-entry during the same tick is also blocked.
+  const createChatInFlightRef = useRef(false);
   const handleCreateChat = useCallback(async (): Promise<string | null> => {
+    if (createChatInFlightRef.current) return null;
+    createChatInFlightRef.current = true;
     try {
       const response = await createChatSession();
       const newId = response.chat_session.id;
@@ -276,7 +283,13 @@ export function useChatSessionManager({
       debugLog('[chat] Failed to create chat session:', error);
       const message = error instanceof Error ? error.message : 'Failed to create new chat';
       setState((prev) => ({ lastError: message }));
+      // The button gave no feedback while the request ran (and shared-mode
+      // servers reject creates outright) — without a toast the click looks
+      // dead and users re-click it.
+      notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not create a new chat.'), 5000);
       return null;
+    } finally {
+      createChatInFlightRef.current = false;
     }
   }, [setState]);
 

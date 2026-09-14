@@ -160,7 +160,7 @@
     border-color 0.12s ease;
 }
 
-.merge-view-controls button:hover:not(:disabled):not(.btn-accept):not(.btn-reject) {
+.merge-view-controls button:hover:not(:disabled) {
   background: var(--bg-tertiary);
   border-color: var(--border-default);
   color: var(--text-primary);
@@ -176,31 +176,20 @@
   cursor: not-allowed;
 }
 
-.merge-view-controls .btn-accept {
-  background: var(--accent-success);
-  color: var(--accent-fg);
-  border-color: var(--accent-success);
-}
-
-.merge-view-controls .btn-accept:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-success) 85%, var(--bg-primary));
-}
-
-.merge-view-controls .btn-reject {
-  background: var(--accent-error);
-  color: var(--accent-fg);
-  border-color: var(--accent-error);
-}
-
-.merge-view-controls .btn-reject:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-error) 85%, var(--bg-primary));
-}
-
 .merge-view-controls .btn-undo,
 .merge-view-controls .btn-redo {
   background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--border-subtle);
+}
+
+/* Slim icon-only undo/redo buttons */
+.merge-view-controls .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  padding: 4px 0;
 }
 
 .merge-view-controls .sbs-nav-buttons {
@@ -243,42 +232,53 @@
   user-select: none;
 }
 
-/* Accept/Reject buttons in unified diff */
-.cm-merge-view .cm-merge-view-chunk {
+/* Accept/Reject chunk buttons in unified diff.
+   @codemirror/merge renders these as .cm-chunkButtons > button[name=accept|reject]
+   inside the .cm-deletedChunk block widget, styled with only
+   `position: absolute; insetInlineEnd: 5px`. Without a positioned ancestor
+   the buttons anchor to the nearest positioned element — here
+   .merge-view-container — so they glue to the container edge instead of the
+   chunk and only line up at certain scroll/width positions. Positioning the
+   chunk widget itself makes the buttons track their chunk, stay inside the
+   scroller, and never collide with the bottom toolbar. */
+.cm-merge-view .cm-deletedChunk {
   position: relative;
 }
 
-.cm-merge-view .cm-merge-view-chunk .cm-merge-view-accept,
-.cm-merge-view .cm-merge-view-chunk .cm-merge-view-reject {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 3px 8px;
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons {
+  display: flex;
+  gap: 4px;
+  inset-inline-end: 8px;
+  top: 2px;
+  z-index: 5;
+}
+
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons button {
+  padding: 2px 8px;
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 10px;
   font-weight: 600;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  z-index: 10;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
 
-.cm-merge-view .cm-merge-view-chunk:hover .cm-merge-view-accept,
-.cm-merge-view .cm-merge-view-chunk:hover .cm-merge-view-reject {
-  opacity: 1;
-}
-
-.cm-merge-view .cm-merge-view-accept {
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons button[name='accept'] {
   background: var(--accent-success);
   color: var(--accent-fg);
 }
 
-.cm-merge-view .cm-merge-view-reject {
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons button[name='accept']:hover {
+  background: color-mix(in srgb, var(--accent-success) 85%, var(--bg-primary));
+}
+
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons button[name='reject'] {
   background: var(--accent-error);
   color: var(--accent-fg);
+}
+
+.cm-merge-view .cm-deletedChunk .cm-chunkButtons button[name='reject']:hover {
+  background: color-mix(in srgb, var(--accent-error) 85%, var(--bg-primary));
 }
 
 /* Theme-integrated change decoration — same color-mix formulas as

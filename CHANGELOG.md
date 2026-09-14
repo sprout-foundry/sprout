@@ -2,6 +2,28 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.0] - 2026-09-14
+
+- test: drop flaky BPM password-scanner e2e-ish test (5fbf5eac5)
+- fix(e2e): accept the restore confirm in tier2-multi-chat (9414952c3)
+- fix(localmodel): download tests were env-blind and fixture-blind (e1b73b0cf)
+- fix(e2e): retarget specs to the history switcher after Sessions-tab removal (11ca1d2ae)
+- fix: address subagent review findings across the release set (63cd3914a)
+- webui: download not-downloaded local models from the model picker (92d000dde)
+- local: select and download specific models — in-process engine, WebUI progress (7effef422)
+- feat(webui): chat-header history switcher, chat-scoped restore (SP-139 Phase 3) (e68b0c63a)
+- docs(roadmap): SP-139 Phase 2 shipped — per-turn change strip (7e12a4da3)
+- feat(webui): per-turn change strip with Review/Revert (SP-139 Phase 2) (af8cdb8f5)
+- local: qwen3.8-27b support — reasoning traces through the local provider (d706a95fe)
+- docs(roadmap): SP-139 context panel de-necessitation + drop dead import (37aeafe6b)
+- docs: update AGENTS.md with frontend testing and gotchas (cc4ab0361)
+- fix(webui): make /clear instant and fix the New Session button (fbbeb8191)
+- fix(webui): six WebUI fixes — diff controls, live split chats, optimistic new chat, pane resize/close (c5bbba855)
+- fix(config): recognize newer-than-build configs, dedupe migration logging (2db9733a5)
+- merge: origin/main (release changelog) (90ff18a34)
+- feat(webui): show running build version in settings General tab (736caba76)
+- docs: Update changelog for v0.17.27 (d90daf8ac)
+
 ## [v0.17.27] - 2026-09-13
 
 - fix(config): default auto-resume to enabled (514cf9ade)

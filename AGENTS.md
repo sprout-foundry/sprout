@@ -6,9 +6,17 @@ Guidance for AI agents working in this repository.
 
 - **Subagents**: serialized only — `run_subagent`, never `run_parallel_subagents`.
 - **Build**: `make build-all` after every code change.
-- **Test**: `go test ./...` (unit), `make test-smoke` (smoke).
 - **Roadmap**: `ls roadmap/` before touching an area; `SP-###.md` files are authoritative.
 - **First-time setup**: `make prepare-grammars` (needed for IDE; Make targets do it automatically).
+
+## Testing
+
+- Go unit: `go test ./...`; smoke: `make test-smoke`.
+- WebUI unit (vitest, jsdom): `make test-webui-vitest` (runs `webui/src/**/*.test.*`).
+- WebUI e2e (Playwright, `test/webui/*.spec.ts`): `npx playwright test --project=webui test/webui/<spec>.spec.ts`. The backend + Vite stack auto-starts (`test/webui/start-stack.mjs`).
+- **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
+- The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Multi-chat happy paths can't run on the standard stack — pin shared-mode UX in e2e and cover multi-chat logic in vitest.
+- Known local-only failure: `TestOnboardingComplete_LocalProviderPersistsConfig` (pkg/webui) panics loading real local-LLM weights when none are installed — confirm it fails on a clean tree before investigating.
 
 ## Critical Git Rules
 
@@ -41,6 +49,13 @@ Details, hermetic test requirements, and platform workarounds: `docs/internal/ci
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`).
 - Read `CONTRIBUTING.md`, `docs/TESTING.md`, `docs/ARCHITECTURE.md` before major changes.
 
+## Frontend (webui / packages/ui)
+
+- `webui`'s `tsc` resolves `@sprout/ui` types from `packages/ui/dist` (symlinked via workspaces; dist is gitignored). **After changing `packages/ui/src`, run `cd packages/ui && npm run build` or webui type-check fails on stale types.**
+- Frontend gates: `make lint` (webui eslint + prettier + tsc), prettier: `cd webui && npx prettier --check "src/**/*.{ts,tsx,css,json}"`. No raw hex/rgba in CSS — design tokens only (`docs/internal/design-system.md`).
+- CodeMirror: pass config objects (`{doc, extensions}`) to `MergeView`/unified constructors — a pre-created `EditorState` silently drops its extension list (only `.doc`/`.selection` are read), killing history/listeners/readOnly.
+- React state updaters must stay pure — never fire side effects (`closeBuffer`, event dispatches, toasts) inside `setX(updater)`; StrictMode double-invokes them.
+
 ## Incident / User-Data Hygiene (public repo)
 
 - **NEVER commit incident writeups, debugging narratives, or references to specific incidents** (no `INCIDENT-YYYY-MM-DD` files/ids) — this is a public repo.
@@ -50,8 +65,8 @@ Details, hermetic test requirements, and platform workarounds: `docs/internal/ci
 
 ## Design System
 
-No raw hex/rgba in CSS. Use design tokens from `App.css`. Full rules: `docs/internal/design-system.md`.
+Full rules: `docs/internal/design-system.md` (token reference lives there; see also Frontend section above).
 
 ## Integration with Sprout Foundry
 
-This repo's binary and packages (`@sprout/events`, `@sprout/ui`) are consumed by `../sprout-foundry`. Bump versions and run `cd ../sprout-foundry && make test-integration` when changing contracts. See `../sprout-foundry/COMPATIBILITY.md`.
+This repo's binary and packages (`@sprout/events`, `@sprout/ui`) are consumed by `../sprout-foundry`. When changing contracts (`packages/ui/src/types`, event schemas, HTTP API shapes), bump versions and run `cd ../sprout-foundry && make test-integration`. Optional/backward-compatible props still warrant the run when the sibling checkout exists — if it doesn't, note the pending integration check in the commit message. See `../sprout-foundry/COMPATIBILITY.md`.

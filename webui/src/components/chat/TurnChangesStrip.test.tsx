@@ -138,7 +138,7 @@ describe('TurnChangesStrip', () => {
     expect(container.querySelector('.tcs-revert')!.textContent).toContain('Revert from here');
   });
 
-  it('dismiss hides the strip', () => {
+  it('dismiss hides the strip for this turn but not the next', () => {
     renderStrip({ fileEdits: [mkEdit({ path: 'a.go' })] });
     act(() => {
       fireEvent.click(container.querySelector('.tcs-summary')!);
@@ -147,5 +147,10 @@ describe('TurnChangesStrip', () => {
       fireEvent.click(container.querySelector('.tcs-dismiss')!);
     });
     expect(container.querySelector('.turn-changes-strip')).toBeNull();
+
+    // Next turn's edits render their own strip (dismissal is per-turn).
+    renderStrip({ fileEdits: [mkEdit({ path: 'b.go', queryId: 4 })], queryId: 4 });
+    expect(container.querySelector('.turn-changes-strip')).not.toBeNull();
+    expect(container.querySelector('.tcs-summary')!.textContent).toContain('1 file changed');
   });
 });

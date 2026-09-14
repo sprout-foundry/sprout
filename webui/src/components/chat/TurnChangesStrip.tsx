@@ -50,8 +50,8 @@ const OP_CHIP: Record<string, string> = {
 
 function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChange }: TurnChangesStripProps) {
   const [expanded, setExpanded] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [dismissedFor, setDismissedFor] = useState<number | null>(null);
   const log = useLog();
 
   // Only this turn's edits; collapse duplicate paths (last write wins for
@@ -103,7 +103,7 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
       const since = new Date(Date.parse(firstServerTs) - SINCE_MARGIN_MS).toISOString();
       const res = await revertChanges(clientFetch, { since });
       log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
-      setDismissed(true);
+      setDismissedFor(queryId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error(`Revert failed: ${msg}`, { title: 'Agent Changes' });
@@ -129,7 +129,9 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
     [onReviewChange, log],
   );
 
-  if (dismissed || turnEdits.length === 0) return null;
+  // Dismissal is per-turn: dismissing turn N's summary must not suppress
+  // turn N+1's (the strip component is reused across turns).
+  if (dismissedFor === queryId || turnEdits.length === 0) return null;
 
   const creates = turnEdits.filter((e) => e.action === 'created' || e.action === 'write').length;
   const edits = turnEdits.filter((e) => e.action === 'modified' || e.action === 'edit').length;
@@ -184,7 +186,7 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
             <button
               type="button"
               className="tcs-btn tcs-dismiss"
-              onClick={() => setDismissed(true)}
+              onClick={() => setDismissedFor(queryId)}
               title="Dismiss this summary"
             >
               <X size={12} />

@@ -183,7 +183,8 @@ function ModelCard({
 }: ModelCardProps): ReactElement {
   const dl = model.download;
   const downloading = dl?.status === 'downloading';
-  const pct = downloading && dl.total_bytes ? Math.min(100, Math.round((dl.bytes_downloaded * 100) / dl.total_bytes)) : null;
+  const pct =
+    downloading && dl.total_bytes ? Math.min(100, Math.round((dl.bytes_downloaded * 100) / dl.total_bytes)) : null;
 
   return (
     <div className="local-llm-model-card">

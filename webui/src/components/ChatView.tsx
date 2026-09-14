@@ -51,6 +51,7 @@ function Chat(props: ChatProps): JSX.Element {
     fileEdits = [],
     onReviewChange,
     onRestoreSession,
+    queryCount,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -102,7 +103,10 @@ function Chat(props: ChatProps): JSX.Element {
 
   const needsHealthCheck = requiresBackendHealthCheck();
 
-  const currentQueryCount = typeof stats?.queryCount === 'number' ? stats.queryCount : undefined;
+  // Client-side turn counter — the SAME counter ToolExecution.queryId and
+  // FileEdit.queryId are stamped from. NOT stats.queryCount (server-global
+  // counter; diverges after restores/multi-tab/multi-chat).
+  const currentQueryCount: number | undefined = queryCount;
   // Show all tool executions — don't filter by queryId. The queryId filter
   // caused tools from the previous query to vanish when a new query started,
   // making the badges show and hide at random intervals.
@@ -452,6 +456,15 @@ function Chat(props: ChatProps): JSX.Element {
             )}
 
             <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
+            {/* SP-139 Phase 3: fixed header row (history switcher +
+                worktree chip). Rendered on EVERY chat state — an empty
+                chat is exactly when restoring a past conversation is most
+                useful — and outside Virtuoso so popover anchors don't
+                scroll with the transcript. */}
+            <div className="chat-header-row">
+              <ChatHistorySwitcher chatId={chatId} onRestoreSession={onRestoreSession} />
+              {worktreePath && <ChatHeader worktreePath={worktreePath} />}
+            </div>
             {showOffline ? (
               <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
             ) : messages.length === 0 ? (
@@ -468,13 +481,6 @@ function Chat(props: ChatProps): JSX.Element {
                 data-testid="chat-message-list"
                 style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}
               >
-                {/* SP-139 Phase 3: fixed header row (history switcher +
-                    worktree chip). Outside Virtuoso so the popover anchors
-                    don't scroll with the transcript. */}
-                <div className="chat-header-row">
-                  <ChatHistorySwitcher chatId={chatId} onRestoreSession={onRestoreSession} />
-                  {worktreePath && <ChatHeader worktreePath={worktreePath} />}
-                </div>
                 <Virtuoso
                   ref={virtuosoRef}
                   data={messages}

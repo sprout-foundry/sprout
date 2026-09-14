@@ -19,7 +19,11 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  browser = await chromium.launch();
+  try {
+    browser = await chromium.launch({ channel: 'chrome' });
+  } catch {
+    browser = await chromium.launch();
+  }
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
@@ -91,8 +95,11 @@ test.describe('Onboarding', () => {
       }
     }
 
-    // After onboarding (if any), the sidebar search should be interactable
-    const searchInput = page.getByTestId(TESTIDS['sidebar-sessions-search-input']);
+    // After onboarding (if any), the history-switcher search should be
+    // interactable (session search moved to the chat-header popover,
+    // SP-139 Phase 3).
+    await page.getByTestId(TESTIDS['chs-trigger']).click();
+    const searchInput = page.getByTestId(TESTIDS['chs-search-input']);
     await expect(searchInput).toBeVisible({ timeout: 15_000 });
 
     // Click into it to verify it's focusable

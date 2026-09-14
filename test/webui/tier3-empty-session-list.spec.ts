@@ -17,7 +17,11 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  browser = await chromium.launch();
+  try {
+    browser = await chromium.launch({ channel: 'chrome' });
+  } catch {
+    browser = await chromium.launch();
+  }
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
@@ -45,8 +49,9 @@ test.describe('Empty Session List', () => {
     expect(data.chat_sessions).toBeDefined();
     expect(Array.isArray(data.chat_sessions)).toBe(true);
 
-    // Check for the empty-state CTA using the chat-sessions-empty testid
-    const emptyState = page.getByTestId(TESTIDS['chat-sessions-empty']);
+    // Empty state now surfaces in the history-switcher popover (SP-139 P3)
+    await page.getByTestId(TESTIDS['chs-trigger']).click();
+    const emptyState = page.locator('.chs-empty');
     const hasEmptyState = await emptyState.isVisible({ timeout: 5_000 }).catch(() => false);
 
     if (hasEmptyState) {
@@ -79,8 +84,9 @@ test.describe('Empty Session List', () => {
       const listData = await listResp.json();
       expect(listData.chat_sessions.length).toBeGreaterThanOrEqual(1);
 
-      // Look for the session item using the chat-item testid
-      const sessionItem = page.getByTestId(TESTIDS['chat-item']).filter({ hasText: 'First E2E Session' }).first();
+      // Session rows render in the history-switcher popover (SP-139 P3)
+      await page.getByTestId(TESTIDS['chs-trigger']).click();
+      const sessionItem = page.getByTestId(TESTIDS['chs-row']).filter({ hasText: 'First E2E Session' }).first();
       const hasSessionItem = await sessionItem.isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (hasSessionItem) {

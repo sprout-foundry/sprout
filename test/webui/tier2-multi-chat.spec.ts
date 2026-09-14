@@ -16,7 +16,11 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  browser = await chromium.launch();
+  try {
+    browser = await chromium.launch({ channel: 'chrome' });
+  } catch {
+    browser = await chromium.launch();
+  }
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
@@ -84,8 +88,10 @@ test.describe('Multi-Chat', () => {
           expect(count).toBeGreaterThan(0);
         }).toPass({ timeout: 15_000 });
 
-        // Switch back to chat A by clicking its entry in the sidebar.
-        const chatAItem = page.getByTestId(TESTIDS['chat-item']).filter({ hasText: 'chat A' }).first();
+        // Switch back to chat A via the chat-header history switcher
+        // (the old sidebar session list was removed in SP-139 Phase 3).
+        await page.getByTestId(TESTIDS['chs-trigger']).click();
+        const chatAItem = page.getByTestId(TESTIDS['chs-row']).filter({ hasText: 'Message from chat A' }).first();
         const hasChatA = await chatAItem.isVisible({ timeout: 5_000 }).catch(() => false);
 
         if (hasChatA) {

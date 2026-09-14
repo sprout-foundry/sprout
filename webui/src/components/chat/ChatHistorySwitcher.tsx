@@ -2,6 +2,7 @@ import { Clock, Download, History, Loader2, Search, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clientFetch } from '../../services/clientSession';
+import { supportsExport } from '../../config/mode';
 import { getSessions, searchSessions } from '../../services/api/sessionApi';
 import type { SessionEntry, SessionSearchResult } from '../../services/api/types/session';
 import { showThemedConfirm } from '../ThemedDialog';
@@ -273,16 +274,21 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession }: ChatHistorySwitc
             )}
           </div>
           <div className="chs-footer">
-            <button
-              type="button"
-              className="chs-footer-btn"
-              onClick={() => void handleExportAll()}
-              disabled={exporting}
-              title="Export every saved conversation as markdown"
-            >
-              {exporting ? <Loader2 size={12} className="chs-spinner" /> : <Download size={12} />}
-              {exporting ? 'Exporting…' : 'Export all'}
-            </button>
+            {/* Cloud mode: export endpoints are not deployed — hide rather
+             * than 404 (same gating as ChatView's per-chat Export button). */}
+            {supportsExport && (
+              <button
+                type="button"
+                className="chs-footer-btn"
+                onClick={() => void handleExportAll()}
+                disabled={exporting}
+                title="Export every saved conversation as markdown"
+                data-testid="chs-export-all"
+              >
+                {exporting ? <Loader2 size={12} className="chs-spinner" /> : <Download size={12} />}
+                {exporting ? 'Exporting…' : 'Export all'}
+              </button>
+            )}
           </div>
         </div>,
         document.body,

@@ -51,7 +51,7 @@
         "id": "ByteDance/Seed-2.0-code",
         "input_cost": 0.5,
         "name": "ByteDance/Seed-2.0-code",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -79,7 +79,7 @@
         "id": "ByteDance/Seed-2.0-pro",
         "input_cost": 0.5,
         "name": "ByteDance/Seed-2.0-pro",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -253,7 +253,7 @@
         "id": "Qwen/Qwen3-Max",
         "input_cost": 1.2,
         "name": "Qwen/Qwen3-Max",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "structured_output"
@@ -265,7 +265,7 @@
         "id": "Qwen/Qwen3-Max-Thinking",
         "input_cost": 1.2,
         "name": "Qwen/Qwen3-Max-Thinking",
-        "output_cost": 6.0,
+        "output_cost": 6,
         "tags": [
           "tools",
           "structured_output"
@@ -343,7 +343,7 @@
         "id": "Qwen/Qwen3.5-35B-A3B",
         "input_cost": 0.14,
         "name": "Qwen/Qwen3.5-35B-A3B",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -357,7 +357,7 @@
         "id": "Qwen/Qwen3.5-397B-A17B",
         "input_cost": 0.45,
         "name": "Qwen/Qwen3.5-397B-A17B",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -457,9 +457,9 @@
         "context_length": 1048576,
         "description": "MiMo-V2.5-Pro is an open-source Mixture-of-Experts (MoE) language model with 1.02T total parameters and 42B active parameters. It utilizes the hybrid attention architecture and 3-layers Multi-Token Prediction (MTP) introduced in [MiMo-V2-Flash](https://github.com/XiaomiMiMo/MiMo-V2-Flash).",
         "id": "XiaomiMiMo/MiMo-V2.5-Pro",
-        "input_cost": 1.0,
+        "input_cost": 1,
         "name": "XiaomiMiMo/MiMo-V2.5-Pro",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "reasoning",
@@ -540,9 +540,9 @@
         "context_length": 1000000,
         "description": "Claude Sonnet 4.6 delivers frontier intelligence at scale—built for coding, agents, and enterprise workflows.",
         "id": "anthropic/claude-sonnet-4-6",
-        "input_cost": 3.0,
+        "input_cost": 3,
         "name": "Claude Sonnet 4.6",
-        "output_cost": 15.0,
+        "output_cost": 15,
         "tags": [
           "tools",
           "vision",
@@ -554,9 +554,9 @@
         "context_length": 1000000,
         "description": "Claude Sonnet 5 is Anthropic's most capable Sonnet model yet, built for coding, agents, and professional work at scale. It brings near-Opus intelligence to the model teams run at scale every day, with the same balance of capability, cost, and speed teams already rely on Sonnet for.",
         "id": "anthropic/claude-sonnet-5",
-        "input_cost": 3.0,
+        "input_cost": 3,
         "name": "Claude Sonnet 5",
-        "output_cost": 15.0,
+        "output_cost": 15,
         "tags": [
           "tools",
           "vision",
@@ -723,9 +723,9 @@
         "context_length": 1000000,
         "description": "Bring any idea to life with state-of-the-art reasoning to help you learn, build, and plan anything. Best for complex tasks and bringing creative concepts to life.",
         "id": "google/gemini-3.1-pro",
-        "input_cost": 2.0,
+        "input_cost": 2,
         "name": "Gemini 3.1 Pro",
-        "output_cost": 12.0,
+        "output_cost": 12,
         "tags": [
           "tools",
           "vision",
@@ -737,9 +737,9 @@
         "context_length": 131072,
         "description": "Nano Banana Pro (Gemini 3 Pro Image) is designed to tackle the most challenging image generation by incorporating state-of-the-art reasoning capabilities. It is the best model for complex and multi-turn image generation and editing.",
         "id": "google/gemini-3-pro-image",
-        "input_cost": 0,
-        "name": "google/gemini-3-pro-image",
-        "output_cost": 0,
+        "input_cost": 120,
+        "name": "Gemini 3 Pro Image",
+        "output_cost": 120,
         "tags": [
           "image-gen"
         ]
@@ -750,7 +750,7 @@
         "id": "google/gemini-3.5-flash",
         "input_cost": 1.5,
         "name": "Gemini 3.5 Flash",
-        "output_cost": 9.0,
+        "output_cost": 9,
         "tags": [
           "tools",
           "vision",
@@ -1445,7 +1445,7 @@
         "id": "zai-org/GLM-5.3",
         "input_cost": 1.2,
         "name": "GLM-5.3",
-        "output_cost": 4.0,
+        "output_cost": 4,
         "tags": [
           "tools",
           "reasoning",
@@ -1508,6 +1508,19 @@
           "tools",
           "vision",
           "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.014,
+        "context_length": 1000000,
+        "description": "Qwen's fast, low-cost model with a one-million-token context window, billed at a flat rate across the entire window.",
+        "id": "Qwen/Qwen3.8-Flash",
+        "input_cost": 0.113,
+        "name": "Qwen3.8 Flash",
+        "output_cost": 0.382,
+        "tags": [
+          "tools",
           "structured_output"
         ]
       }

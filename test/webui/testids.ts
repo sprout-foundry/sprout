@@ -42,6 +42,7 @@ const TESTIDS = {
   'chat-error': 'chat-error',
   'chat-tool-timeline': 'chat-tool-timeline',
   'chat-subagent-feed': 'chat-subagent-feed',
+  'turn-changes-strip': 'turn-changes-strip',
   'chat-query-progress': 'chat-query-progress',
   'chat-sessions-empty': 'chat-sessions-empty',
   'chat-item': 'chat-item',

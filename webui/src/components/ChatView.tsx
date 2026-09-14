@@ -19,6 +19,7 @@ import CommandInput from './CommandInput';
 import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
 import { ToolTimelineBar } from './chat/ToolTimelineBar';
+import { TurnChangesStrip } from './chat/TurnChangesStrip';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
@@ -46,6 +47,8 @@ function Chat(props: ChatProps): JSX.Element {
     onStopProcessing,
     onRetractSteer,
     onChatCleared,
+    fileEdits = [],
+    onReviewChange,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -232,21 +235,39 @@ function Chat(props: ChatProps): JSX.Element {
   // to lose internal state (shouldRender, completedAtRef) and its badges
   // to flash in/out.
   const VirtuosoHeader = useCallback(() => <ChatHeader worktreePath={worktreePath} />, [worktreePath]);
+  // Latest turn's change strip (SP-139 Phase 2): memoized group of the
+  // edits stamped with the current queryId. Rendered inside the scroll flow
+  // under the last turn, only when the turn completed with edits. The
+  // component itself is memo'd and derives everything from these props.
+  const latestTurnEdits = useMemo(() => fileEdits, [fileEdits]);
   const VirtuosoFooter = useCallback(
     () => (
-      <ChatFooter
-        queryProgress={queryProgress as QueryProgress | null}
-        isProcessing={isProcessing}
-        filteredToolExecutions={filteredToolExecutions}
-        lastError={lastError}
-        showExpiredSessionRecovery={showExpiredSessionRecovery}
-        handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
-        currentTodos={currentTodos}
-      />
+      <>
+        {!isProcessing && onReviewChange && currentQueryCount != null && currentQueryCount > 0 && (
+          <TurnChangesStrip
+            fileEdits={latestTurnEdits}
+            queryId={currentQueryCount}
+            isLatestTurn
+            onReviewChange={onReviewChange}
+          />
+        )}
+        <ChatFooter
+          queryProgress={queryProgress as QueryProgress | null}
+          isProcessing={isProcessing}
+          filteredToolExecutions={filteredToolExecutions}
+          lastError={lastError}
+          showExpiredSessionRecovery={showExpiredSessionRecovery}
+          handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
+          currentTodos={currentTodos}
+        />
+      </>
     ),
     [
-      queryProgress,
       isProcessing,
+      onReviewChange,
+      currentQueryCount,
+      latestTurnEdits,
+      queryProgress,
       filteredToolExecutions,
       lastError,
       showExpiredSessionRecovery,

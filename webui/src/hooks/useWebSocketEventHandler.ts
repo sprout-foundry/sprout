@@ -747,18 +747,24 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'file';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as FileChangedData;
+  const data = (event.data ?? {}) as FileChangedData & { ts?: string };
   const path = String(data.path || data.file_path || 'Unknown');
-  const newFileEdit = {
+  const baseFileEdit = {
     path,
     action: String(data.action || data.operation || 'edited'),
     timestamp: new Date(),
+    // Server-side timestamp when present: ordering/revert floors must use
+    // server time (browser clocks aren't comparable). Fallback keeps the
+    // local clock for older servers.
+    serverTs: data.ts,
     linesAdded: typeof data.lines_added === 'number' ? data.lines_added : undefined,
     linesDeleted: typeof data.lines_deleted === 'number' ? data.lines_deleted : undefined,
   };
   setState((prev) => ({
     logs: appendCappedLog(prev.logs, logEntry),
-    fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
+    // Turn correlation mirrors tool_start's queryId so the per-turn
+    // change strip can group edits by the query that produced them.
+    fileEdits: [...prev.fileEdits, { ...baseFileEdit, queryId: prev.queryCount }].slice(-50),
   }));
   debugLog('[edit] File changed:', path);
   // Bridge for window-level listeners: the Agent Changes panel listens

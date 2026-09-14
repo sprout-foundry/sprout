@@ -142,6 +142,12 @@ export interface FileEdit {
   timestamp: Date;
   linesAdded?: number;
   linesDeleted?: number;
+  /** Server-side RFC3339 timestamp from the file_changed event, when the
+   * backend provides one. Revert-since floors must use server time. */
+  serverTs?: string;
+  /** The queryCount of the turn that produced this edit (same correlation
+   * pattern as ToolExecution.queryId). */
+  queryId?: number;
 }
 
 // ── Live Log Types ─────────────────────────────────────────────────────
@@ -207,6 +213,17 @@ export interface ChatProps {
    * the UI waits for the backend round trip.
    */
   onChatCleared?: () => void;
+  /**
+   * Per-turn agent-change summaries (SP-139 Phase 2). When provided, each
+   * completed turn with edits renders a collapsed "N files changed" strip
+   * with Review / Revert actions. Empty array disables the feature.
+   */
+  fileEdits?: FileEdit[];
+  /**
+   * Opens a review surface for one changed file, given the agent-session
+   * diff already fetched by the strip.
+   */
+  onReviewChange?: (path: string, diff: { stats?: string; diff?: string }) => void;
   // Worktree support
   chatId?: string;
   worktreePath?: string;

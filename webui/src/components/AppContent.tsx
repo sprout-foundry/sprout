@@ -253,6 +253,38 @@ const AppContent: React.FC<AppContentProps> = ({
     }));
   }, [setAppState]);
 
+  // SP-139 Phase 2: the turn change strip fetched an agent-session diff;
+  // open it as a review buffer. Shaped as a GitDiffResponse so the
+  // DiffWorkspaceTab text view renders it directly (no staged/unstaged
+  // modes; defaultView text — the fragment diff has no full-file pair for
+  // the merge view).
+  const handleReviewChange = useCallback(
+    (path: string, diff: { stats?: string; diff?: string }) => {
+      openWorkspaceBuffer({
+        kind: 'diff',
+        path: `__workspace/changes/${path}`,
+        title: `Agent change: ${path.split('/').pop() || path}`,
+        ext: '.diff',
+        metadata: {
+          sourcePath: path,
+          defaultView: 'text',
+          modeOptions: ['combined'],
+          title: 'Agent Change',
+          diff: {
+            message: 'Agent session change',
+            path,
+            has_staged: false,
+            has_unstaged: true,
+            staged_diff: '',
+            unstaged_diff: '',
+            diff: (diff.stats ? `${diff.stats}\n\n` : '') + (diff.diff ?? ''),
+          },
+        },
+      });
+    },
+    [openWorkspaceBuffer],
+  );
+
   // Read inputValue from the store (not via props) so typing doesn't
   // re-render AppInner and cascade prop-references to children.
   const inputValue = useAppStateField('inputValue');
@@ -716,6 +748,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onStopProcessing,
       onRetractSteer,
       onChatCleared: handleChatCleared,
+      fileEdits: state.fileEdits,
+      onReviewChange: handleReviewChange,
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
@@ -746,6 +780,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onStopProcessing,
       onRetractSteer,
       handleChatCleared,
+      state.fileEdits,
+      handleReviewChange,
       handleToolPillClick,
       state.stats,
       state.isConnected,

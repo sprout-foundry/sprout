@@ -2,7 +2,6 @@ package localmodel
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -16,7 +15,9 @@ func TestLiveStartDownloadCompletes(t *testing.T) {
 	if os.Getenv("SPROUT_LIVE_DOWNLOAD") != "1" {
 		t.Skip("SPROUT_LIVE_DOWNLOAD not set")
 	}
-	t.Setenv("SPROUT_LLM_MODELS_DIR", filepath.Join(t.TempDir(), "models"))
+	// DefaultModelsDir is resolved at package init; t.Setenv alone would
+	// leave downloads targeting the real home dir.
+	withIsolatedModelsDir(t)
 
 	job, err := StartDownload("gemma4-e2b")
 	if err != nil {

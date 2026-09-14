@@ -168,9 +168,23 @@ export async function getLocalLLMModels(
 export async function downloadLocalLLMModel(
   fetchFn: typeof fetch,
   model?: string,
-): Promise<{ status: string; model: string; pid: number; message: string }> {
+): Promise<{ status: string; model: string; message: string }> {
   const params = model ? `?model=${encodeURIComponent(model)}` : '';
   const response = await fetchFn(`/api/local-llm/download${params}`, { method: 'POST' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(String(data.message || data.error || `HTTP ${response.status}`));
+  }
+  return response.json();
+}
+
+export async function cancelLocalLLMDownload(
+  fetchFn: typeof fetch,
+  model: string,
+): Promise<{ status: string; model: string }> {
+  const response = await fetchFn(`/api/local-llm/download/cancel?model=${encodeURIComponent(model)}`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(String(data.message || data.error || `HTTP ${response.status}`));

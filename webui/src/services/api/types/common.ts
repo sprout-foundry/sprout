@@ -86,11 +86,23 @@ export interface ProviderModelsResponse {
   reason?: string | null;
 }
 
+export interface LocalLLMDownloadStatus {
+  model_id: string;
+  status: 'downloading' | 'completed' | 'failed' | 'canceled';
+  bytes_downloaded: number;
+  total_bytes?: number;
+  error?: string;
+}
+
 export interface LocalLLMModel {
   id: string;
   name: string;
+  dir?: string;
   present: boolean;
   size_hint: string;
+  tier?: string;
+  description?: string;
+  download?: LocalLLMDownloadStatus | null;
 }
 
 export interface LocalLLMStatus {

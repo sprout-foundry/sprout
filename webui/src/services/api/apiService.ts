@@ -128,8 +128,14 @@ class ApiService {
 
   async downloadLocalLLMModel(
     model?: string,
-  ): Promise<{ status: string; model: string; pid: number; message: string }> {
+  ): Promise<{ status: string; model: string; message: string }> {
     return miscApi.downloadLocalLLMModel(clientFetch, model);
+  }
+
+  async cancelLocalLLMDownload(
+    model: string,
+  ): Promise<{ status: string; model: string }> {
+    return miscApi.cancelLocalLLMDownload(clientFetch, model);
   }
 
   async getProviderCredentials(): Promise<{

@@ -11,6 +11,7 @@ import {
   Pencil,
   RefreshCw,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
@@ -32,7 +33,9 @@ interface EditorTabsProps {
   activeChatQueries?: Set<string>;
   defaultChatIds?: Set<string>;
   chatWorktreePaths?: Map<string, string>;
-  onCreateChat?: () => void;
+  /** Create a new chat. May return the new chat id (directly or via Promise)
+   * so the caller can open a buffer for it immediately. */
+  onCreateChat?: () => string | null | Promise<string | null> | void;
   onCreateChatInWorktree?: () => void;
   /** Delete a chat session (and optionally its worktree) server-side. */
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => void;
@@ -70,6 +73,7 @@ function EditorTabs({
     reorderBuffers,
     moveBufferToPane,
     toggleBufferPin,
+    openWorkspaceBuffer,
   } = useEditorManager();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -297,18 +301,62 @@ function EditorTabs({
   // ── Safe callbacks for chat actions (fire-and-forget with error handling) ──
   // These catch unhandled rejections when the prop is actually an async function
   // but typed as () => void (e.g. PaneLayoutManager's wrapper that discards the Promise).
+  // Optimistic UX: a placeholder chat tab opens IMMEDIATELY (spinner in the
+  // tab), then claims the real chatId when the create resolves and closes
+  // itself on failure. Previously nothing appeared until create+list
+  // round-trips finished, which read as "button did nothing".
   const handleNewChat = useCallback(() => {
-    if (onCreateChat) {
-      try {
-        const result = onCreateChat();
-        // The prop is typed as () => void but the actual implementation may
-        // return a Promise (handleCreateChat is async). Duck-type check.
-        catchIfAsync(result, (err) => console.warn('[EditorTabs] Failed to create chat:', err));
-      } catch (err) {
-        console.warn('[EditorTabs] Failed to create chat:', err);
-      }
+    if (!onCreateChat) return;
+    // Shared-mode servers reject creates outright — don't show a placeholder
+    // that's about to vanish.
+    if (isSharedMode()) return;
+    const placeholderId = openWorkspaceBuffer({
+      kind: 'chat',
+      path: `__workspace/chat/creating-${Date.now()}`,
+      title: 'Creating…',
+      isPinned: false,
+      isClosable: true,
+      metadata: { creating: true },
+    });
+    // On success open the REAL buffer (path-keyed, so useChatSessionsSync's
+    // open of __workspace/chat/<id> dedupes against it) and drop the
+    // placeholder. Mutating the placeholder's metadata in place instead
+    // would race the session-list sync, which matches buffers by chatId —
+    // losing that race produced two tabs for one chat.
+    const swapInReal = (newId: string) => {
+      openWorkspaceBuffer({
+        kind: 'chat',
+        path: `__workspace/chat/${newId}`,
+        title: 'New Chat',
+        isPinned: false,
+        isClosable: true,
+        metadata: { chatId: newId },
+      });
+      void closeBuffer(placeholderId);
+      // Creating a chat lands you IN it: the buffer is already active, so
+      // switch the chat-level state to match (otherwise the tab renders the
+      // previous active chat's transcript).
+      onActiveChatChange?.(newId);
+    };
+    try {
+      Promise.resolve(onCreateChat())
+        .then((newId) => {
+          if (typeof newId === 'string' && newId) {
+            swapInReal(newId);
+          } else {
+            // Create failed — remove the placeholder.
+            void closeBuffer(placeholderId);
+          }
+        })
+        .catch((err: unknown) => {
+          console.warn('[EditorTabs] Failed to create chat:', err);
+          void closeBuffer(placeholderId);
+        });
+    } catch (err) {
+      console.warn('[EditorTabs] Failed to create chat:', err);
+      void closeBuffer(placeholderId);
     }
-  }, [onCreateChat]);
+  }, [onCreateChat, openWorkspaceBuffer, closeBuffer, onActiveChatChange]);
 
   const handleNewWorktreeChat = useCallback(() => {
     if (onCreateChatInWorktree) {
@@ -412,9 +460,13 @@ function EditorTabs({
                     {buffer.kind === 'chat' && hasActiveQuery && !isActive && (
                       <span className="chat-tab-activity-dot" />
                     )}
-                    <span className="tab-icon" style={{ color: getFileIconColor(buffer.file.ext) }}>
-                      {getBufferIcon(buffer)}
-                    </span>
+                    {buffer.metadata?.creating ? (
+                      <Loader2 size={13} className="tab-creating-spinner" aria-label="Creating chat" />
+                    ) : (
+                      <span className="tab-icon" style={{ color: getFileIconColor(buffer.file.ext) }}>
+                        {getBufferIcon(buffer)}
+                      </span>
+                    )}
                     {/* Worktree badge for chat tabs */}
                     {buffer.kind === 'chat' && worktreePath && (
                       <span className="tab-worktree-badge" title={`Worktree: ${worktreePath}`}>

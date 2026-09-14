@@ -274,6 +274,7 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/chat-sessions/pin", ws.handleAPIChatSessionsPin)
 	mux.HandleFunc("/api/chat-sessions/unpin", ws.handleAPIChatSessionsUnpin)
 	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
+	mux.HandleFunc("/api/chat-sessions/messages", ws.handleAPIChatSessionMessages)
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
 	mux.HandleFunc("/api/chat-sessions/fork", ws.handleAPIChatSessionFork)

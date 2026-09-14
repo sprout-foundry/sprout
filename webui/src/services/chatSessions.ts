@@ -120,6 +120,18 @@ export async function switchChatSession(id: string): Promise<ChatSessionSwitchRe
   return res.json();
 }
 
+/**
+ * Read-only fetch of a chat session's messages. Does NOT change the
+ * server-side active chat — safe for background panes to poll/refresh
+ * while the active chat streams elsewhere. Shape matches switch so the
+ * same message-mapping code applies.
+ */
+export async function fetchChatSessionMessages(id: string): Promise<ChatSessionSwitchResponse> {
+  const res = await clientFetch(`/api/chat-sessions/messages?chat_id=${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error('Failed to fetch chat session messages');
+  return res.json();
+}
+
 export async function getChatSessionWorktree(
   chatId: string,
 ): Promise<{ message: string; chat_id: string; worktree_path: string }> {

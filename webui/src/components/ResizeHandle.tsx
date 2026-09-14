@@ -26,6 +26,15 @@ interface ResizeHandleProps {
  * Pointer events cover mouse, trackpad, touch, and pencil uniformly.
  * `touch-action: none` in ResizeHandle.css keeps the browser from
  * claiming the gesture for scrolling.
+ *
+ * The window listeners are added once per drag (in beginDrag) and call
+ * through refs, NOT through captured props. A previous version attached
+ * `handleMove` directly and had a cleanup effect keyed on `handleMove`'s
+ * identity — every onResize-driven state update (paneSizes) produced a new
+ * handleMove, the cleanup fired MID-DRAG, and the listener tore itself
+ * down after the first applied delta. The drag then went dead: a 120px
+ * drag moved the split ~15px. Refs keep the listeners stable while still
+ * invoking the latest onResize/onResizeEnd from each render.
  */
 function ResizeHandle({
   direction,
@@ -43,31 +52,40 @@ function ResizeHandle({
   const lastDragPos = useRef<{ x: number; y: number } | null>(null);
   const handleRef = useRef<HTMLDivElement>(null);
 
+  // Latest-prop refs: window listeners registered at drag start call these,
+  // so listener identity never depends on prop identity.
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  const onResizeEndRef = useRef(onResizeEnd);
+  onResizeEndRef.current = onResizeEnd;
+  const onResizeStartRef = useRef(onResizeStart);
+  onResizeStartRef.current = onResizeStart;
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
+
   // PointerEvent is universal in shipping Safari/Chrome/Firefox; the mouse
   // fallback only matters for very old jsdom-style environments.
   const supportsPointer = typeof window !== 'undefined' && typeof window.PointerEvent === 'function';
 
-  // Handle move during drag
-  const handleMove = useCallback(
-    (e: MouseEvent | PointerEvent) => {
-      if (!isDraggingRef.current || !dragStartPos.current) return;
+  // Handle move during drag. Stable identity for the drag's lifetime.
+  const handleMove = useCallback((e: MouseEvent | PointerEvent) => {
+    if (!isDraggingRef.current || !dragStartPos.current) return;
 
-      const deltaX = e.clientX - (lastDragPos.current?.x ?? dragStartPos.current.x);
-      const deltaY = e.clientY - (lastDragPos.current?.y ?? dragStartPos.current.y);
-      const totalDeltaX = e.clientX - dragStartPos.current.x;
-      const totalDeltaY = e.clientY - dragStartPos.current.y;
+    const deltaX = e.clientX - (lastDragPos.current?.x ?? dragStartPos.current.x);
+    const deltaY = e.clientY - (lastDragPos.current?.y ?? dragStartPos.current.y);
+    const totalDeltaX = e.clientX - dragStartPos.current.x;
+    const totalDeltaY = e.clientY - dragStartPos.current.y;
 
-      // For horizontal split (vertical divider), use deltaX
-      // For vertical split (horizontal divider), use deltaY
-      const delta = direction === 'horizontal' ? deltaX : deltaY;
-      const totalDelta = direction === 'horizontal' ? totalDeltaX : totalDeltaY;
+    // For horizontal split (vertical divider), use deltaX
+    // For vertical split (horizontal divider), use deltaY
+    const dir = directionRef.current;
+    const delta = dir === 'horizontal' ? deltaX : deltaY;
+    const totalDelta = dir === 'horizontal' ? totalDeltaX : totalDeltaY;
 
-      onResize(delta, totalDelta);
+    onResizeRef.current(delta, totalDelta);
 
-      lastDragPos.current = { x: e.clientX, y: e.clientY };
-    },
-    [direction, onResize],
-  );
+    lastDragPos.current = { x: e.clientX, y: e.clientY };
+  }, []);
 
   // Handle drag end (pointer up OR pointercancel — iOS can cancel a
   // pointer mid-gesture, e.g. when the system intercepts the touch).
@@ -93,8 +111,8 @@ function ResizeHandle({
     document.body.style.cursor = '';
 
     // Notify drag end
-    onResizeEnd?.();
-  }, [handleMove, onResizeEnd, supportsPointer]);
+    onResizeEndRef.current?.();
+  }, [handleMove, supportsPointer]);
 
   const beginDrag = useCallback(
     (x: number, y: number) => {
@@ -104,7 +122,7 @@ function ResizeHandle({
       lastDragPos.current = { x, y };
 
       // Notify drag start
-      onResizeStart?.();
+      onResizeStartRef.current?.();
 
       if (supportsPointer) {
         window.addEventListener('pointermove', handleMove);
@@ -117,9 +135,9 @@ function ResizeHandle({
 
       // Prevent text selection during drag
       document.body.style.userSelect = 'none';
-      document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
+      document.body.style.cursor = directionRef.current === 'horizontal' ? 'col-resize' : 'row-resize';
     },
-    [direction, handleMove, handleDragEnd, onResizeStart, supportsPointer],
+    [handleMove, handleDragEnd, supportsPointer],
   );
 
   const handlePointerDown = useCallback(
@@ -147,7 +165,10 @@ function ResizeHandle({
     [beginDrag],
   );
 
-  // Cleanup on unmount
+  // Cleanup on unmount only. Identity-stable handlers mean a mid-drag
+  // re-render must NOT tear the window listeners down (that was the bug:
+  // the cleanup keyed on handleMove fired after the first onResize-driven
+  // render, killing the drag).
   useEffect(() => {
     return () => {
       if (isDraggingRef.current) {

@@ -3,6 +3,7 @@ import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import { usePlugins } from '../contexts/PluginContext';
+import { isSharedMode } from '../utils/sharedMode';
 import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
@@ -161,6 +162,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     updatePaneSize,
     maxPanes,
     openWorkspaceBuffer,
+    closeBuffer,
   } = useEditorManager();
 
   // Derive chat-tab data for EditorTabs (same derivation PaneLayoutManager
@@ -245,7 +247,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
   // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
   const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
-  const handleCloseAllSplitsRef = useRef<(() => void) | null>(null);
+  const handleCloseAllSplitsRef = useRef<((fromPaneId?: string) => void) | null>(null);
 
   // ---------------------------------------------------------------------------
   // Handlers (must be declared before render helpers that reference them via refs)
@@ -276,16 +278,20 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [activePaneId, panes.length, splitPane, updatePaneSize],
   );
 
-  const handleCloseAllSplits = useCallback(() => {
-    if (nestedSplit) {
-      // When a nested split is active, close just the nested pane (3 → 2 panes)
-      closePane(nestedSplit.nestedPaneId);
-      setNestedSplit(null);
-    } else {
-      // No nested split — close all splits (2 → 1 pane)
-      closeSplit();
-    }
-  }, [closeSplit, closePane, nestedSplit]);
+  const handleCloseAllSplits = useCallback(
+    (fromPaneId?: string) => {
+      if (nestedSplit) {
+        // When a nested split is active, close just the nested pane (3 → 2 panes)
+        closePane(nestedSplit.nestedPaneId);
+        setNestedSplit(null);
+      } else {
+        // No nested split — close all splits (2 → 1 pane), keeping the pane
+        // the user invoked the control from.
+        closeSplit(fromPaneId);
+      }
+    },
+    [closeSplit, closePane, nestedSplit],
+  );
 
   // Keep function refs up to date for memoized render helpers
   React.useEffect(() => {
@@ -361,11 +367,22 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       };
       return (
         <div className={`split-controls split-controls-embedded ${isActive ? '' : 'split-controls--inactive'}`}>
-          {onCreateChat && (
+          {onCreateChat && !isSharedMode() && (
             <button
               onClick={activateThenRun(async () => {
-                const newId = await onCreateChat();
-                if (newId) {
+                // Optimistic placeholder: open the tab immediately with a
+                // spinner; on resolve open the real (path-keyed) buffer and
+                // drop the placeholder — mutating the placeholder in place
+                // races the session-list sync and can double-tab the chat.
+                const placeholderId = openWorkspaceBuffer({
+                  kind: 'chat',
+                  path: `__workspace/chat/creating-${Date.now()}`,
+                  title: 'Creating…',
+                  isPinned: false,
+                  isClosable: true,
+                  metadata: { creating: true },
+                });
+                const swapInReal = (newId: string) => {
                   openWorkspaceBuffer({
                     kind: 'chat',
                     path: `__workspace/chat/${newId}`,
@@ -374,6 +391,21 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                     isClosable: true,
                     metadata: { chatId: newId },
                   });
+                  void closeBuffer(placeholderId);
+                  // Creating a chat lands you IN it — switch chat-level
+                  // state to match the now-active buffer.
+                  onActiveChatChange?.(newId);
+                };
+                try {
+                  const newId = await onCreateChat();
+                  if (newId) {
+                    swapInReal(newId);
+                  } else {
+                    void closeBuffer(placeholderId);
+                  }
+                } catch (err) {
+                  console.warn('[EditorWorkspace] Failed to create chat:', err);
+                  void closeBuffer(placeholderId);
                 }
               })}
               className="pane-control-btn compact"
@@ -385,7 +417,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           )}
           {canCloseSplit && (
             <button
-              onClick={activateThenRun(() => handleCloseAllSplitsRef.current?.())}
+              onClick={activateThenRun(() => handleCloseAllSplitsRef.current?.(paneId))}
               className="pane-control-btn compact"
               title="Close split panes"
               aria-label="Close split panes"
@@ -416,7 +448,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         </div>
       );
     },
-    [onCreateChat, canCloseSplit, canSplit, switchPane, openWorkspaceBuffer],
+    [onCreateChat, canCloseSplit, canSplit, switchPane, openWorkspaceBuffer, closeBuffer, onActiveChatChange],
   );
 
   const renderPaneById = useCallback(
@@ -440,7 +472,12 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               onCreateChat={
                 onCreateChat
                   ? () => {
-                      onCreateChat().catch((err) => console.warn('[EditorTabs] Failed to create chat:', err));
+                      // Return the promise so EditorTabs can open the chat
+                      // buffer as soon as the new id resolves.
+                      return onCreateChat().catch((err: unknown) => {
+                        console.warn('[EditorTabs] Failed to create chat:', err);
+                        return null;
+                      });
                     }
                   : undefined
               }

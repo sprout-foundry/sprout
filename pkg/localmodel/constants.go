@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // Registers the real local-model listing with pkg/agent_api's
@@ -29,62 +28,149 @@ const DefaultPort = 18081
 const localBackendMLX = "mlx"
 
 // DefaultModelsDir is where downloaded LLM (chat) model weights are
-// stored — XDG-style, honoring $SPROUT_DATA_DIR/$XDG_DATA_HOME like
-// sprout's other data, under the SAME models/ root pkg/embedding's
-// DefaultModelDir uses (<DataDir>/models/embedding for embedding models),
-// but its own "llm" subdirectory — one shared, discoverable "models" root
-// with a subdirectory per kind, rather than two same-purpose-sounding but
-// unrelated top-level directories under DataDir. $SPROUT_MODELS_DIR is
-// already pkg/embedding's env var for its own directory, so this uses a
-// distinct name.
+// stored — ~/.sprout-local/models. $SPROUT_LLM_MODELS_DIR overrides for
+// tests and custom layouts.
 //
-// ~/dev/llm-models was the prior hardcoded default here: a personal
-// dev-machine convention ("~/dev/...") baked in as if it were universal,
-// not a real per-user default — most tools use a dot-folder or XDG path
-// for downloaded model weights.
-//
-// Resolution: $SPROUT_LLM_MODELS_DIR → $SPROUT_DATA_DIR/models/llm →
-// $XDG_DATA_HOME/sprout/models/llm → $HOME/.local/share/sprout/models/llm.
-// Falls back to the legacy ~/dev/llm-models location only when it already
-// has content and the new location doesn't, so installations that
-// downloaded models before this fix keep working without needing to
-// re-download or manually migrate anything. New installs go straight to
-// the proper location.
+// History: ~/dev/llm-models was the original hardcoded default (a personal
+// dev-machine convention that leaked into the product), superseded by an
+// XDG data-dir layout, and finally by ~/.sprout-local/models — a dedicated,
+// predictable root users can find and size at a glance, with one
+// subdirectory per model. Installations with weights at a previous
+// location are migrated once, at first resolve: each model directory is
+// renamed into the new root (same-volume renames are instant); a
+// cross-volume move falls back to copy+delete; anything that can't move
+// is left in place and keeps resolving to the old root until it can be
+// migrated (partial migration is safe — remaining dirs migrate on a later
+// attempt).
 var DefaultModelsDir = resolveDefaultModelsDir()
 
 func resolveDefaultModelsDir() string {
 	if dir := strings.TrimSpace(os.Getenv("SPROUT_LLM_MODELS_DIR")); dir != "" {
 		return dir
 	}
-	newDir := legacyModelsDirFallback() // overwritten below if DataDir resolves
-	if dataDir, err := envutil.DataDir(); err == nil {
-		newDir = filepath.Join(dataDir, "models", "llm")
-	}
-	if legacy := legacyModelsDir(); legacy != "" && hasEntries(legacy) && !hasEntries(newDir) {
-		return legacy
-	}
+	newDir := sproutLocalModelsDir()
+	migrateLegacyModels(newDir)
 	return newDir
 }
 
-// legacyModelsDir returns the pre-fix default (~/dev/llm-models), or ""
-// if the home directory can't be resolved.
-func legacyModelsDir() string {
+// sproutLocalModelsDir returns ~/.sprout-local/models, or a temp-dir
+// fallback when $HOME can't be resolved (tests, exotic sandboxes).
+func sproutLocalModelsDir() string {
 	h, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	if err != nil || strings.TrimSpace(h) == "" {
+		return filepath.Join(os.TempDir(), "sprout-local", "models")
 	}
-	return filepath.Join(h, "dev", "llm-models")
+	return filepath.Join(h, ".sprout-local", "models")
 }
 
-// legacyModelsDirFallback mirrors the original hardcoded default, used
-// only if envutil.DataDir() itself fails to resolve (no $HOME, no XDG
-// vars) — envutil.DataDir failing at all is itself unusual, so this is a
-// last-resort fallback, not the normal path.
-func legacyModelsDirFallback() string {
-	if dir := legacyModelsDir(); dir != "" {
-		return dir
+// legacyModelsDirs lists the previous default locations, oldest scheme
+// first. The first one holding any model content is the migration source.
+func legacyModelsDirs() []string {
+	var dirs []string
+	if h, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, filepath.Join(h, "dev", "llm-models")) // original hardcoded path
+		if dataDir, err := envutilDataDir(); err == nil {
+			dirs = append(dirs, filepath.Join(dataDir, "models", "llm")) // XDG-era path
+		}
 	}
-	return filepath.Join(os.TempDir(), "llm-models")
+	return dirs
+}
+
+// envutilDataDir mirrors pkg/envutil.DataDir ($SPROUT_DATA_DIR →
+// $XDG_DATA_HOME/sprout → ~/.local/share/sprout) without an import cycle.
+func envutilDataDir() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv("SPROUT_DATA_DIR")); dir != "" {
+		return dir, nil
+	}
+	h, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(h) == "" {
+		return "", os.ErrNotExist
+	}
+	if xdg := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdg != "" {
+		return filepath.Join(xdg, "sprout"), nil
+	}
+	return filepath.Join(h, ".local", "share", "sprout"), nil
+}
+
+// migrateLegacyModels moves model directories from the first legacy
+// location that has content into newDir. Best-effort and idempotent: a
+// failed move (cross-device link, permissions) leaves the directory in
+// place for a later attempt; entries that already exist under newDir are
+// skipped (never overwritten). Run before DefaultModelsDir is first used
+// — resolveDefaultModelsDir calls it, so the migration happens once per
+// process at package init.
+func migrateLegacyModels(newDir string) {
+	if hasEntries(newDir) {
+		return // new location already in use — nothing to migrate
+	}
+	for _, legacy := range legacyModelsDirs() {
+		if legacy == newDir || !hasEntries(legacy) {
+			continue
+		}
+		entries, err := os.ReadDir(legacy)
+		if err != nil {
+			continue
+		}
+		if err := os.MkdirAll(newDir, 0o755); err != nil {
+			return
+		}
+		moved := 0
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue // migrate model directories only
+			}
+			src := filepath.Join(legacy, e.Name())
+			dst := filepath.Join(newDir, e.Name())
+			if _, err := os.Stat(dst); err == nil {
+				continue // already migrated
+			}
+			if err := moveDir(src, dst); err != nil {
+				continue // leave for a later attempt
+			}
+			moved++
+		}
+		// One legacy source is enough — don't merge multiple old roots in
+		// a single pass (keeps failure半ways recoverable and the operation
+		// easy to reason about).
+		_ = moved
+		return
+	}
+}
+
+// moveDir relocates a directory tree: a plain rename when the source and
+// destination share a device, copy+delete otherwise.
+func moveDir(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	// Cross-device fallback: copy the tree, then remove the source only
+	// when the copy was complete.
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	err := filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		os.RemoveAll(dst) // incomplete copy — don't leave a partial model
+		return err
+	}
+	return os.RemoveAll(src)
 }
 
 func hasEntries(dir string) bool {

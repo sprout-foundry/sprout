@@ -33,6 +33,7 @@ type localLLMStatus struct {
 type localLLMModel struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
+	Dir      string `json:"dir"`
 	Present  bool   `json:"present"`
 	SizeHint string `json:"size_hint"`
 	// Tier is "suggested", "stretch", or "blocked" for this machine's RAM —
@@ -42,6 +43,9 @@ type localLLMModel struct {
 	// Description explains the tier classification (e.g. why a model is
 	// blocked, or how much RAM a stretch pick risks).
 	Description string `json:"description,omitempty"`
+	// Download carries live in-process download state (nil when no job has
+	// run this session). Additive.
+	Download *localmodel.DownloadStatusPayload `json:"download,omitempty"`
 }
 
 var (
@@ -54,10 +58,10 @@ const localLLMCacheTTL = 10 * time.Second
 const localLLMEndpoint = "http://127.0.0.1:18081"
 
 // catalogModelsForRAM builds the local model list from the real RAM-tier
-// catalog (pkg/gomlx/catalog.TieredCatalogForRAM / pkg/localmodel), the same
-// source /model in the CLI uses — this used to be a separate hardcoded
-// single-entry list here, disconnected from the real catalog and RAM-aware
-// selection logic used everywhere else.
+// catalog (sinter's catalog.TieredCatalogForRAM via pkg/localmodel), the
+// same source /model in the CLI uses. IDs are catalog Names (the stable
+// selection ID everywhere else in sprout). Downloads are tracked in-process
+// by pkg/localmodel's download registry — no external binary.
 func catalogModelsForRAM(ram uint64) []localLLMModel {
 	tiered := catalog.TieredCatalogForRAM(ram)
 	models := make([]localLLMModel, 0, len(tiered))
@@ -78,12 +82,21 @@ func catalogModelsForRAM(ram uint64) []localLLMModel {
 			description = fmt.Sprintf("Requires more RAM than this machine has (%.0f GB)", float64(ram)/(1024*1024*1024))
 		}
 		models = append(models, localLLMModel{
-			ID:          tm.Model.Dir,
+			ID:          tm.Model.Name,
 			Name:        tm.Model.Name,
+			Dir:         tm.Model.Dir,
 			SizeHint:    sizeHint,
 			Tier:        tm.Status.String(),
 			Description: description,
 		})
+	}
+
+	// Overlay live download state so the client sees progress on every
+	// status poll without a separate endpoint.
+	for i := range models {
+		if job := localmodel.DownloadStatus(models[i].ID); job != nil {
+			models[i].Download = job
+		}
 	}
 	return models
 }
@@ -117,37 +130,19 @@ func probeLocalLLMStatus() *localLLMStatus {
 
 	ram := localmodel.TotalSystemRAM()
 	status.Models = catalogModelsForRAM(ram)
-	status.RecommendedModel = catalog.RecommendModelForRAM(ram).Dir
+	// RecommendedModel is a catalog Name (the unified selection ID).
+	status.RecommendedModel = catalog.RecommendModelForRAM(ram).Name
+	status.ModelDir = localmodel.DefaultModelsDir
 
-	// Check for downloaded models. localmodel.DefaultModelsDir is the same
-	// directory the in-process provider and llm_server use
-	// (~/dev/llm-models); check the legacy ~/.cache/sprout/models path as a
-	// fallback for machines onboarded before that layout existed.
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return status
-	}
-	primaryDir := localmodel.DefaultModelsDir
-	legacyDir := filepath.Join(home, ".cache", "sprout", "models")
-	status.ModelDir = primaryDir
-
-	checkModel := func(dir string) bool {
-		any := false
-		for i, m := range status.Models {
-			modelPath := filepath.Join(dir, m.ID)
-			if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err == nil {
-				status.Models[i].Present = true
-				any = true
-			}
+	// Check for downloaded models under the models root. Presence = the
+	// catalog entry's directory holding actual weights (config.json is the
+	// marker every downloader guarantees post-download).
+	for i, m := range status.Models {
+		modelPath := filepath.Join(status.ModelDir, m.Dir)
+		if _, err := os.Stat(filepath.Join(modelPath, "config.json")); err == nil {
+			status.Models[i].Present = true
+			status.ModelPresent = true
 		}
-		return any
-	}
-
-	if checkModel(primaryDir) {
-		status.ModelPresent = true
-	} else if checkModel(legacyDir) {
-		status.ModelPresent = true
-		status.ModelDir = legacyDir
 	}
 
 	// Health check the local server.
@@ -210,7 +205,10 @@ func (ws *ReactWebServer) handleLocalLLMStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	modelDir := pickLocalModel(status)
+	// Start as a detached subprocess. The optional ?model= parameter picks
+	// WHICH installed model to load (catalog Name); without it the first
+	// present model in tier order is used, as before.
+	modelDir := pickLocalModel(status, r.URL.Query().Get("model"))
 	if modelDir == "" {
 		writeJSONErr(w, http.StatusBadRequest, "no_model_dir",
 			"Could not find a model directory")
@@ -298,26 +296,34 @@ func findLocalLLMBinary() string {
 	return ""
 }
 
-func pickLocalModel(status *localLLMStatus) string {
+// pickLocalModel resolves a catalog Name (or directory basename) to the
+// absolute model directory under the models root. Empty preferredID (or an
+// ID that isn't installed) falls back to the first present model in tier
+// order — the historical behavior.
+func pickLocalModel(status *localLLMStatus, preferredID string) string {
+	if preferredID != "" {
+		if st, err := localmodel.ResolveModelID(preferredID); err == nil && st.Installed {
+			return st.Dir
+		}
+	}
 	for _, m := range status.Models {
 		if !m.Present {
 			continue
 		}
-		// Try primary path, then legacy.
-		for _, base := range []string{status.ModelDir, filepath.Join(os.Getenv("HOME"), ".cache", "sprout", "models")} {
-			path := filepath.Join(base, m.ID)
-			if _, err := os.Stat(filepath.Join(path, "config.json")); err == nil {
-				return path
-			}
+		path := filepath.Join(status.ModelDir, m.Dir)
+		if _, err := os.Stat(filepath.Join(path, "config.json")); err == nil {
+			return path
 		}
 	}
 	return ""
 }
 
 // handleLocalLLMDownload handles POST /api/local-llm/download?model=<id>
-// Downloads a model using the llm_download binary. Returns immediately with
-// a job ID; the client polls /api/local-llm/status to see when the model
-// appears. Download runs as a detached background process.
+// Starts an in-process download job for a catalog model (by catalog Name —
+// the same ID every other selection surface uses) and returns immediately;
+// the client polls /api/local-llm/status, whose models[] entries carry
+// live progress in the download field. Cancel with
+// POST /api/local-llm/download/cancel?model=<id>.
 func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -335,52 +341,44 @@ func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.
 		modelID = status.RecommendedModel
 	}
 
-	// Validate the model ID is in our catalog.
-	valid := false
-	for _, m := range catalogModelsForRAM(localmodel.TotalSystemRAM()) {
-		if m.ID == modelID {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		writeJSONErr(w, http.StatusBadRequest, "invalid_model",
-			fmt.Sprintf("Unknown model: %s", modelID))
+	job, err := localmodel.StartDownload(modelID)
+	if err != nil {
+		writeJSONErr(w, http.StatusBadRequest, "download_start_failed", err.Error())
 		return
 	}
 
-	binaryPath := findLocalLLMDownloadBinary()
-	if binaryPath == "" {
-		writeJSONErr(w, http.StatusNotFound, "binary_not_found",
-			"Model download binary not found. Build with: make build-llm-download")
-		return
-	}
-
-	// Launch download as a detached process so it survives the request.
-	cmd := exec.Command(binaryPath, "-model", modelID)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Start(); err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "download_failed",
-			fmt.Sprintf("Failed to start download: %v", err))
-		return
-	}
+	// Invalidate the status cache so the next poll immediately carries the
+	// new job's downloading state.
+	localLLMMu.Lock()
+	localLLMCached = nil
+	localLLMMu.Unlock()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"status":  "downloading",
-		"model":   modelID,
-		"pid":     cmd.Process.Pid,
-		"message": fmt.Sprintf("Downloading %s in the background. Check status to monitor progress.", modelID),
+		"status":  job.Status,
+		"model":   job.ModelID,
+		"message": fmt.Sprintf("Downloading %s. Progress appears in the model list.", job.ModelID),
 	})
 }
 
-func findLocalLLMDownloadBinary() string {
-	for _, name := range []string{"llm_download", "sprout-llm-download"} {
-		if path, err := exec.LookPath(name); err == nil {
-			return path
-		}
+// handleLocalLLMDownloadCancel handles POST
+// /api/local-llm/download/cancel?model=<id>.
+func (ws *ReactWebServer) handleLocalLLMDownloadCancel(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
 	}
-	return ""
+	modelID := r.URL.Query().Get("model")
+	if modelID == "" {
+		writeJSONErr(w, http.StatusBadRequest, "model_required", "model parameter is required")
+		return
+	}
+	if err := localmodel.CancelDownload(modelID); err != nil {
+		writeJSONErr(w, http.StatusConflict, "cancel_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "canceled",
+		"model":  modelID,
+	})
 }
 
 // ensureLocalLLMRunning starts the local LLM server if the platform supports
@@ -399,7 +397,7 @@ func ensureLocalLLMRunning() string {
 	if binaryPath == "" {
 		return ""
 	}
-	modelDir := pickLocalModel(status)
+	modelDir := pickLocalModel(status, "")
 	if modelDir == "" {
 		return ""
 	}

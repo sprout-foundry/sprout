@@ -1584,6 +1584,44 @@ body,
   font-size: var(--text-sm);
 }
 
+.local-llm-download-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.local-llm-download-bar {
+  flex: 1;
+  max-width: 220px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  overflow: hidden;
+}
+
+.local-llm-download-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-info);
+  transition: width 1s linear;
+}
+
+.local-llm-download-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.local-llm-download-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--accent-danger);
+}
+
 .settings-message {
   margin: var(--space-3) 0;
   padding: var(--space-2) var(--space-3);

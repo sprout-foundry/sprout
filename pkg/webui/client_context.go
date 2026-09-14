@@ -501,22 +501,49 @@ func (ws *ReactWebServer) setAgentStateForClient(clientID string, snapshot []byt
 	ctx.LastSeenAt = time.Now()
 }
 
-// setAgentStateForClientChat writes a state snapshot into ONE chat session
-// (and the top-level slot when it is the active chat, for backward
-// compatibility with readers of ctx.AgentState). Unlike
-// setAgentStateForClient it never redirects to the active chat when the
-// caller asked for a specific one.
+// setAgentStateForClientChat writes a state snapshot into ONE chat session.
+// Unlike setAgentStateForClient it never redirects to the active chat when
+// the caller asked for a specific one, and it does NOT clobber the
+// top-level AgentState/CurrentSessionID when the target is a background
+// chat — setChatSessionState updates those unconditionally, which would
+// misreport the client's current session (e.g. /api/sessions) after a
+// restore into a non-active chat. The top-level slots update only when the
+// target IS the active/default chat.
 func (ws *ReactWebServer) setAgentStateForClientChat(clientID, chatID string, snapshot []byte) {
 	if len(snapshot) == 0 {
 		snapshot = emptyAgentStateSnapshot()
 	}
 
+	sessionID := ""
+	var state agent.AgentState
+	if err := json.Unmarshal(snapshot, &state); err == nil {
+		sessionID = strings.TrimSpace(state.SessionID)
+	}
+
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
-	ctx.setChatSessionState(chatID, snapshot)
-	if ctx.DefaultChatID == chatID {
+	if ctx.ChatSessions == nil {
+		// No chat-session map (legacy single-chat context): the only state
+		// slot IS the top level.
 		ctx.AgentState = append([]byte(nil), snapshot...)
+		ctx.CurrentSessionID = sessionID
+		ctx.LastSeenAt = time.Now()
+		return
+	}
+	if chatID == "" {
+		chatID = ctx.DefaultChatID
+	}
+	if cs, ok := ctx.ChatSessions[chatID]; ok {
+		cs.mu.Lock()
+		cs.AgentState = append([]byte(nil), snapshot...)
+		cs.CurrentSessionID = sessionID
+		cs.LastActiveAt = time.Now()
+		cs.mu.Unlock()
+	}
+	if ctx.getActiveChatID() == chatID {
+		ctx.AgentState = append([]byte(nil), snapshot...)
+		ctx.CurrentSessionID = sessionID
 	}
 	ctx.LastSeenAt = time.Now()
 }

@@ -79,4 +79,18 @@ func TestRestoreSessionScopesToRequestedChat(t *testing.T) {
 			t.Fatalf("restore leaked into chat B (active) — messages must stay scoped")
 		}
 	}
+
+	// Top-level current-session pointer must NOT reflect the background
+	// restore — /api/sessions reports it as current_session_id.
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[testConcurrentClientID]
+	topCurrent := ctx.CurrentSessionID
+	bCurrent := ctx.ChatSessions[chatB].CurrentSessionID
+	ws.mutex.RUnlock()
+	if topCurrent == savedID {
+		t.Fatalf("top-level CurrentSessionID %q reflects the background restore; must stay scoped to the active chat", topCurrent)
+	}
+	if bCurrent == savedID {
+		t.Fatalf("active chat B's CurrentSessionID %q was clobbered by chat A's restore", bCurrent)
+	}
 }

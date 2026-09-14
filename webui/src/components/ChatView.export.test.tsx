@@ -108,6 +108,9 @@ vi.mock('./Chat.css', () => ({}));
 /* --- utils/log --- */
 vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
+  // ChatHistorySwitcher (rendered in the chat-header row on every state,
+  // including empty chats) calls useLog for error toasts.
+  useLog: () => ({ info: vi.fn(), error: vi.fn(), success: vi.fn(), warn: vi.fn() }),
 }));
 
 // ---------------------------------------------------------------------------

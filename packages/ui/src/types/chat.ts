@@ -230,6 +230,13 @@ export interface ChatProps {
    * to the pane that triggered them.
    */
   onRestoreSession?: (sessionId: string, chatId?: string) => void | Promise<void>;
+  /**
+   * Client-side turn counter (AppState.queryCount) — the SAME counter
+   * ToolExecution.queryId and FileEdit.queryId are stamped with. Consumers
+   * that group by turn must use this, NOT stats.queryCount (a server
+   * global that diverges after restores / multi-tab / multi-chat).
+   */
+  queryCount?: number;
   // Worktree support
   chatId?: string;
   worktreePath?: string;

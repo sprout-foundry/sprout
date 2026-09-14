@@ -168,6 +168,7 @@ const TESTIDS = {
   'model-picker': 'model-picker',
   'model-picker-option': 'model-picker-option',
   'model-picker-current': 'model-picker-current',
+  'model-picker-download': 'model-picker-download',
 
   // Export dialog
   'export-dialog': 'export-dialog',

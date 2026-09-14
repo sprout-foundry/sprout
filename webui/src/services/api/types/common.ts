@@ -71,6 +71,8 @@ export interface ProviderModel {
   recommended_roles?: string[];
   /** Non-blocking caveats to surface (e.g. a small context window). */
   warnings?: string[];
+  /** Feature/state tags; the local provider marks not-downloaded catalog entries. */
+  tags?: string[];
 }
 
 export interface ProviderModelsResponse {

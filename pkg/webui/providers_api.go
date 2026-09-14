@@ -422,6 +422,7 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 			"eligible_roles":    m.EligibleRoles,
 			"recommended_roles": m.RecommendedRoles,
 			"warnings":          m.Warnings,
+			"tags":              m.Tags,
 		})
 	}
 

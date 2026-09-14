@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -173,6 +174,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		if enableWebUI {
 			var webErr error
+			// Seed the slash-command registry on the shared agent. In shared
+			// mode the WebUI adopts this exact agent instance; the command
+			// surface resolves commands through the agent's registry, and the
+			// CLI's registry assignment normally happens later (interactive
+			// REPL loop) which daemon mode never reaches — without this the
+			// WebUI's /clear (New Session button) failed with
+			// "command_not_found".
+			if chatAgent != nil && chatAgent.SlashCommands() == nil {
+				chatAgent.SetSlashCommands(agent_commands.NewCommandRegistry())
+			}
 			webServer, webErr = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr, bindSocket, secretToken)
 			if webErr != nil {
 				log.Fatalf("%v", webErr)

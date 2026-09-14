@@ -45,6 +45,7 @@ function Chat(props: ChatProps): JSX.Element {
     onToolPillClick,
     onStopProcessing,
     onRetractSteer,
+    onChatCleared,
     chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
@@ -334,6 +335,13 @@ function Chat(props: ChatProps): JSX.Element {
     async (command: string) => {
       setCommandOutputError(null);
       setCommandOutputPanelVisible(true);
+      // /clear should feel instant: empty the transcript the moment the user
+      // asks, don't wait for the HTTP round trip + rotation + state sync +
+      // session_changed echo. The backend event reconciles afterwards (and
+      // restores the transcript if the command failed).
+      if (command.trim().toLowerCase() === '/clear') {
+        onChatCleared?.();
+      }
       try {
         const result = await executeCommand(clientFetch, command, chatId);
         const output = result.output || '(no output)';
@@ -364,7 +372,7 @@ function Chat(props: ChatProps): JSX.Element {
         });
       }
     },
-    [chatId],
+    [chatId, onChatCleared],
   );
 
   const showOffline = needsHealthCheck && backendReachable === false && !isProcessing && messages.length === 0;

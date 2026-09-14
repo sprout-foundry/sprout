@@ -254,7 +254,40 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	// the command is missing or not SteerCapable — distinguish "not
 	// found" vs "not safe" by re-parsing the command name ourselves so
 	// the WebUI gets an actionable error code.
-	resolvedCmd, output, cmdErr := ws.executeSafeSteerCommandStreaming(cmdLine, clientAgent, chunkCallback, func(_ agent_commands.Command, _ string, _ error) {
+	resolvedCmd, output, cmdErr := ws.executeSafeSteerCommandStreaming(cmdLine, clientAgent, chunkCallback, func(cmd agent_commands.Command, _ string, err error) {
+		// /clear rotated the agent to a fresh session. The WebUI's
+		// transcript only clears on query_completed (the typed /clear path
+		// via /api/query) or a session_changed event — the command surface
+		// published NEITHER, so the New Session button executed the command
+		// but the transcript stayed. Publish session_changed("clear") so
+		// every connected view reloads the (now empty) transcript.
+		//
+		// Ordering matters: the state sync must complete BEFORE the event,
+		// because the frontend's reload fetches the snapshot we're about to
+		// write — publishing first lets the fetch race the sync and return
+		// the pre-rotation (still-full) transcript. For /clear the export is
+		// cheap (the conversation was just emptied), so it runs inline; all
+		// other commands keep the async sync.
+		if cmd != nil && err == nil && cmd.Name() == "clear" {
+			if syncErr := ws.syncAgentStateForClientWithChat(clientID, chatID); syncErr != nil {
+				ws.log().Error("state sync failed after /clear",
+					slog.String("handler", "handleAPICommandExecute"),
+					slog.String("chat_id", chatID),
+					slog.Any("err", syncErr),
+				)
+			}
+			ws.mutex.RLock()
+			var summary map[string]interface{}
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				if cs := ctx.getChatSession(chatID); cs != nil {
+					summary = cs.chatSessionSummary(false)
+				}
+			}
+			ws.mutex.RUnlock()
+			ws.publishSessionChanged(clientID, chatID, "clear", summary)
+			return
+		}
+
 		// Sync agent state so the WebUI picks up changes (e.g. /clear rotates
 		// to a new session). Run asynchronously so it doesn't block the HTTP
 		// response or the final WS marker.
@@ -271,18 +304,17 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	if resolvedCmd == nil {
 		// Command not found / not safe — re-parse to give the WebUI an
 		// actionable error code. We don't emit any WS events for a
-		// rejected command (no output to stream).
+		// rejected command (no output to stream). Note: the registry
+		// fallback here mirrors executeSafeSteerCommandStreaming — the
+		// daemon-shared CLI agent may have no registry of its own.
 		parts := strings.Fields(cmdLine)
 		if len(parts) > 0 {
 			headCmd := strings.TrimPrefix(parts[0], "/")
-			if registryRaw := clientAgent.SlashCommands(); registryRaw != nil {
-				if registry, ok := registryRaw.(*agent_commands.CommandRegistry); ok {
-					if _, found := registry.GetCommand(headCmd); found {
-						writeJSONErr(w, http.StatusBadRequest, "command_not_safe",
-							"Command /"+headCmd+" is not safe to run from the WebUI command surface (mutates state or requires interactive input)")
-						return
-					}
-				}
+			registry := agent_commands.NewCommandRegistry()
+			if _, found := registry.GetCommand(headCmd); found {
+				writeJSONErr(w, http.StatusBadRequest, "command_not_safe",
+					"Command /"+headCmd+" is not safe to run from the WebUI command surface (mutates state or requires interactive input)")
+				return
 			}
 		}
 		writeJSONErr(w, http.StatusBadRequest, "command_not_found",

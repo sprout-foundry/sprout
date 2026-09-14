@@ -235,6 +235,24 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const setAppState = useAppStoreSetState();
 
+  // Optimistic clear for the New Session (/clear) button: empty the
+  // transcript the instant the user clicks, mirroring the state reset the
+  // typed /clear path does in useChatSessionManager. The backend confirms
+  // with session_changed("clear") — if the command fails there, the
+  // post-command state sync restores the transcript.
+  const handleChatCleared = useCallback(() => {
+    setAppState((prev) => ({
+      messages: [],
+      isProcessing: false,
+      toolExecutions: [],
+      fileEdits: [],
+      subagentActivities: [],
+      currentTodos: [],
+      queryProgress: null,
+      lastError: null,
+    }));
+  }, [setAppState]);
+
   // Read inputValue from the store (not via props) so typing doesn't
   // re-render AppInner and cascade prop-references to children.
   const inputValue = useAppStateField('inputValue');
@@ -697,6 +715,7 @@ const AppContent: React.FC<AppContentProps> = ({
       currentTodos,
       onStopProcessing,
       onRetractSteer,
+      onChatCleared: handleChatCleared,
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
@@ -726,6 +745,7 @@ const AppContent: React.FC<AppContentProps> = ({
       currentTodos,
       onStopProcessing,
       onRetractSteer,
+      handleChatCleared,
       handleToolPillClick,
       state.stats,
       state.isConnected,

@@ -1292,8 +1292,14 @@ const handleSessionChanged = (ctx: EventHandlerContext): void => {
   if (!chatId) return;
   debugLog('[session_changed]', data.change, chatId);
 
-  if (data.change === 'switch' && activeChatIdRef.current && chatId === activeChatIdRef.current) {
-    // Another client switched this chat's session — reload the transcript.
+  // "clear" (New Session button via /api/command/execute) and "switch"
+  // both mean "the transcript for the chat you're viewing changed
+  // wholesale" — reload it. For clear the reload yields an empty
+  // transcript, which is exactly the visible effect the user expects the
+  // instant the button is pressed.
+  const isTranscriptReset = data.change === 'switch' || data.change === 'clear';
+  if (isTranscriptReset && activeChatIdRef.current && chatId === activeChatIdRef.current) {
+    // Another client switched/cleared this chat's session — reload the transcript.
     switchChatSession(chatId)
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
@@ -1305,7 +1311,14 @@ const handleSessionChanged = (ctx: EventHandlerContext): void => {
             content: typeof m.content === 'string' ? m.content : '',
             timestamp: new Date(),
           }));
-        setState((prev) => ({ activeChatId: chatId, messages: backendMessages }));
+        setState((prev) => ({
+          activeChatId: chatId,
+          messages: backendMessages,
+          // A cleared chat has no in-flight work.
+          ...(data.change === 'clear'
+            ? { isProcessing: false, toolExecutions: [], currentTodos: [], queryProgress: null }
+            : {}),
+        }));
       })
       .catch((err) => debugLog('[session_changed] switch reload failed:', err));
     return;

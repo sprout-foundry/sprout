@@ -200,6 +200,13 @@ export interface ChatProps {
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
   onRetractSteer?: () => boolean | Promise<boolean>;
+  /**
+   * Optimistic clear for the New Session (/clear) action. Called the moment
+   * the user invokes clear so the transcript empties instantly; the backend
+   * confirms via session_changed("clear") afterwards. Optional — without it
+   * the UI waits for the backend round trip.
+   */
+  onChatCleared?: () => void;
   // Worktree support
   chatId?: string;
   worktreePath?: string;

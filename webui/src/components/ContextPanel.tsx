@@ -5,7 +5,6 @@ import './ContextPanel.css';
 import { ActivityTab } from './contextPanel/ActivityTab';
 import AgentChangesPanel from './AgentChangesPanel';
 import { SessionsTab } from './contextPanel/SessionsTab';
-import { SubagentsTab } from './contextPanel/SubagentsTab';
 import type {
   ContextPanelProps,
   ContextPanelHandle,

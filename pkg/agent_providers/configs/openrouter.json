@@ -754,13 +754,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.009744,
+        "cached_input_cost": 0.017416,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.04872,
+        "input_cost": 0.08708,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 0.09744,
+        "output_cost": 0.17416,
         "tags": [
           "tools",
           "reasoning",
@@ -768,13 +768,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.008,
+        "cached_input_cost": 0.012,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.04,
+        "input_cost": 0.06,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
-        "output_cost": 0.08,
+        "output_cost": 0.12,
         "tags": [
           "tools",
           "reasoning",
@@ -1426,7 +1426,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.71,
         "context_length": 131072,
         "description": "The Meta Llama 3.3 multilingual large language model (LLM) is a pretrained and instruction tuned generative model in 70B (text in/text out). The Llama 3.3 instruction tuned text only model...",
         "id": "meta-llama/llama-3.3-70b-instruct",
@@ -1442,9 +1441,9 @@
         "context_length": 1048576,
         "description": "Llama 4 Maverick 17B Instruct (128E) is a high-capacity multimodal language model from Meta, built on a mixture-of-experts (MoE) architecture with 128 experts and 17 billion active parameters per forward...",
         "id": "meta-llama/llama-4-maverick",
-        "input_cost": 0.2,
+        "input_cost": 0.1875,
         "name": "Meta: Llama 4 Maverick",
-        "output_cost": 0.696,
+        "output_cost": 0.6525,
         "tags": [
           "tools",
           "vision",
@@ -1452,7 +1451,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.055,
         "context_length": 1310720,
         "description": "Llama 4 Scout 17B Instruct (16E) is a mixture-of-experts (MoE) language model developed by Meta, activating 17 billion parameters out of a total of 109B. It supports native multimodal input...",
         "id": "meta-llama/llama-4-scout",
@@ -2096,9 +2094,9 @@
         "context_length": 1000000,
         "description": "NVIDIA Nemotron 3 Super is a 120B-parameter open hybrid MoE model, activating just 12B parameters for maximum compute efficiency and accuracy in complex multi-agent applications. Built on a hybrid Mamba-Transformer...",
         "id": "nvidia/nemotron-3-super-120b-a12b",
-        "input_cost": 0.085,
+        "input_cost": 0.08,
         "name": "NVIDIA: Nemotron 3 Super",
-        "output_cost": 0.4,
+        "output_cost": 0.45,
         "tags": [
           "tools",
           "reasoning",
@@ -2119,13 +2117,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1875,
+        "cached_input_cost": 0.12,
         "context_length": 512288,
         "description": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid Transformer-Mamba mixture-of-experts architecture, it...",
         "id": "nvidia/nemotron-3-ultra-550b-a55b",
-        "input_cost": 0.625,
+        "input_cost": 0.6,
         "name": "NVIDIA: Nemotron 3 Ultra",
-        "output_cost": 3.125,
+        "output_cost": 2.4,
         "tags": [
           "tools",
           "reasoning",
@@ -3314,9 +3312,9 @@
         "context_length": 131072,
         "description": "Qwen3-14B is a dense 14.8B parameter causal language model from the Qwen3 series, designed for both complex reasoning and efficient dialogue. It supports seamless switching between a \"thinking\" mode for...",
         "id": "qwen/qwen3-14b",
-        "input_cost": 0.2275,
+        "input_cost": 0.12,
         "name": "Qwen: Qwen3 14B",
-        "output_cost": 0.91,
+        "output_cost": 0.24,
         "tags": [
           "tools",
           "reasoning",
@@ -3665,13 +3663,12 @@
         ]
       },
       {
-        "cached_input_cost": 0.15625,
         "context_length": 262144,
         "description": "The Qwen3.5 Series 35B-A3B is a native vision-language model designed with a hybrid architecture that integrates linear attention mechanisms and a sparse mixture-of-experts model, achieving higher inference efficiency. Its overall...",
         "id": "qwen/qwen3.5-35b-a3b",
-        "input_cost": 0.3125,
+        "input_cost": 0.1625,
         "name": "Qwen: Qwen3.5-35B-A3B",
-        "output_cost": 1.25,
+        "output_cost": 1.3,
         "tags": [
           "tools",
           "vision",
@@ -4332,7 +4329,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.01,
         "context_length": 202752,
         "description": "As a 30B-class SOTA model, GLM-4.7-Flash offers a new option that balances performance and efficiency. It is further optimized for agentic coding use cases, strengthening coding capabilities, long-horizon task planning,...",
         "id": "z-ai/glm-4.7-flash",
@@ -4388,13 +4384,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.15,
+        "cached_input_cost": 0.14,
         "context_length": 1048576,
         "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
         "id": "z-ai/glm-5.2",
-        "input_cost": 0.6,
+        "input_cost": 1.4,
         "name": "Z.ai: GLM 5.2",
-        "output_cost": 2,
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
@@ -4402,13 +4398,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.2028,
+        "cached_input_cost": 0.26,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
         "id": "z-ai/glm-5.3",
-        "input_cost": 1.092,
+        "input_cost": 1.4,
         "name": "Z.ai: GLM 5.3",
-        "output_cost": 3.432,
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
@@ -4521,7 +4517,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.256,
+        "cached_input_cost": 0.23,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
@@ -4596,13 +4592,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.00112,
+        "cached_input_cost": 0.01,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.0352,
+        "input_cost": 0.04,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.1056,
+        "output_cost": 0.1,
         "tags": [
           "tools",
           "reasoning",
@@ -5636,13 +5632,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.018396,
+        "cached_input_cost": 0.020958,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro 0813 is a large-scale mixture-of-experts model from DeepSeek. This is the GA release of DeepSeek V4 Pro, with a 1M-token context window and support for tool calls, JSON output, and thinking mode.",
         "id": "deepseek/deepseek-v4-pro-0813",
-        "input_cost": 0.57816,
+        "input_cost": 0.65868,
         "name": "DeepSeek: DeepSeek V4 Pro 0813",
-        "output_cost": 1.73448,
+        "output_cost": 1.97604,
         "tags": [
           "tools",
           "reasoning",
@@ -5900,13 +5896,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1872,
+        "cached_input_cost": 0.1755,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
-        "input_cost": 0.936,
+        "input_cost": 0.8775,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 3.168,
+        "output_cost": 2.97,
         "tags": [
           "tools",
           "reasoning",
@@ -5941,13 +5937,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.015,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.075,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.5,
+        "output_cost": 0.25,
         "tags": [
           "tools",
           "vision",
@@ -6673,6 +6669,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 128000,
         "description": "Schematron V2 Small is a 3B-parameter HTML-to-JSON extraction model from Inference.net. It prioritizes extraction quality for complex schemas and long pages. Extraction instructions must be supplied through a JSON schema...",
         "id": "inference-net/schematron-v2-small",
@@ -6684,6 +6681,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 128000,
         "description": "Schematron V2 Turbo is a 3B-parameter HTML-to-JSON extraction model from Inference.net. It prioritizes throughput for high-volume extraction workloads. Extraction instructions must be supplied through a JSON schema in response_format rather...",
         "id": "inference-net/schematron-v2-turbo",
@@ -6695,7 +6693,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.003,
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",

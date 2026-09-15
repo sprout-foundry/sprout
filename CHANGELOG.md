@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.1] - 2026-09-15
+
+- fix(webui): stop the chat tab pinning/activation storm that blanked multi-chat windows (eb3d8a599)
+
 ## [v0.18.0] - 2026-09-14
 
 - test: drop flaky BPM password-scanner e2e-ish test (5fbf5eac5)

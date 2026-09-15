@@ -168,6 +168,8 @@ const AppContent: React.FC<AppContentProps> = ({
     updateBufferTitle,
     updateBufferMetadata,
     closeBuffer,
+    setBufferPinned,
+    setBufferClosable,
     splitPane,
     switchPane,
   } = useEditorManager();
@@ -366,6 +368,8 @@ const AppContent: React.FC<AppContentProps> = ({
     buffersRef,
     updateBufferTitle,
     updateBufferMetadata,
+    setBufferPinned,
+    setBufferClosable,
     openWorkspaceBuffer,
   });
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });

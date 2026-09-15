@@ -54,6 +54,10 @@ const chatSessionsDouble = vi.hoisted(() => ({
     active_chat_id: 'chat-1',
     chat_session: { messages: [], active_query: false },
   }),
+  fetchChatSessionMessages: vi.fn().mockResolvedValue({
+    active_chat_id: 'chat-1',
+    chat_session: { messages: [], active_query: false },
+  }),
   listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [], active_chat_id: null }),
 }));
 
@@ -957,9 +961,9 @@ describe('session_changed', () => {
     expect((stateHolder.current.chatSessions as unknown[]).length).toBe(1);
   });
 
-  it('switch of the active chat reloads its transcript', async () => {
+  it('switch of the active chat reloads its transcript read-only', async () => {
     const { stateHolder } = setup('chat-1');
-    chatSessionsDouble.switchChatSession.mockResolvedValueOnce({
+    chatSessionsDouble.fetchChatSessionMessages.mockResolvedValueOnce({
       active_chat_id: 'chat-1',
       chat_session: {
         active_query: false,
@@ -979,7 +983,10 @@ describe('session_changed', () => {
     });
 
     await act(async () => {});
-    expect(chatSessionsDouble.switchChatSession).toHaveBeenCalledWith('chat-1');
+    // The reload must be read-only — a side-effecting switch would re-broadcast
+    // session_changed("switch") and loop forever (blank-flash on every turn).
+    expect(chatSessionsDouble.fetchChatSessionMessages).toHaveBeenCalledWith('chat-1');
+    expect(chatSessionsDouble.switchChatSession).not.toHaveBeenCalledWith('chat-1');
     const messages = stateHolder.current.messages as Array<{ content: string }>;
     expect(messages).toHaveLength(2);
     expect(messages[1].content).toBe('hi there');
@@ -997,7 +1004,7 @@ describe('session_changed', () => {
     });
 
     await act(async () => {});
-    expect(chatSessionsDouble.switchChatSession).not.toHaveBeenCalledWith('chat-other');
+    expect(chatSessionsDouble.fetchChatSessionMessages).not.toHaveBeenCalledWith('chat-other');
     expect((stateHolder.current.messages as unknown[]).length).toBe(0);
   });
 });

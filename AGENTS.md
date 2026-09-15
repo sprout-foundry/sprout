@@ -16,7 +16,7 @@ Guidance for AI agents working in this repository.
 - WebUI e2e (Playwright, `test/webui/*.spec.ts`): `npx playwright test --project=webui test/webui/<spec>.spec.ts`. The backend + Vite stack auto-starts (`test/webui/start-stack.mjs`).
 - **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Multi-chat happy paths can't run on the standard stack — pin shared-mode UX in e2e and cover multi-chat logic in vitest.
-- Known local-only failure: `TestOnboardingComplete_LocalProviderPersistsConfig` (pkg/webui) panics loading real local-LLM weights when none are installed — confirm it fails on a clean tree before investigating.
+- Local-LLM selection skips model dirs with a corrupt config.json (`validModelConfig` in pkg/localmodel) — if a local model panics in sinter LoadConfig, check `~/.sprout-local/models/*/"config.json` for truncated downloads before debugging code.
 
 ## Critical Git Rules
 

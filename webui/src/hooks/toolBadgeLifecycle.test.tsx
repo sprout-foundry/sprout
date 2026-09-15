@@ -104,6 +104,24 @@ let container: HTMLDivElement;
 let root: Root;
 let hookHandleEvent: ((event: unknown) => void) | null = null;
 
+// Mount the hook host. Called at the top of each test — the
+// testing-library/no-render-in-lifecycle rule forbids rendering inside
+// beforeEach, and CI enforces it as an error.
+function mountHook(): { stateHolder: { current: Record<string, unknown> } } {
+  const stateHolder = { current: createDefaultState() };
+  const setStateMock = vi.fn((updater: unknown) => {
+    if (typeof updater === 'function') {
+      stateHolder.current = { ...stateHolder.current, ...updater(stateHolder.current) };
+    } else {
+      stateHolder.current = updater;
+    }
+  });
+  act(() => {
+    root.render(createElement(HookWrapper, { stateHolder, setStateMock }));
+  });
+  return { stateHolder };
+}
+
 const HookWrapper = ({
   stateHolder,
   setStateMock,
@@ -163,17 +181,6 @@ describe('tool badge lifecycle (live stream → completion → render)', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     hookHandleEvent = null;
-    stateHolder = { current: createDefaultState() };
-    const setStateMock = vi.fn((updater: unknown) => {
-      if (typeof updater === 'function') {
-        stateHolder.current = { ...stateHolder.current, ...updater(stateHolder.current) };
-      } else {
-        stateHolder.current = updater;
-      }
-    });
-    act(() => {
-      root.render(createElement(HookWrapper, { stateHolder, setStateMock }));
-    });
   });
 
   afterEach(() => {
@@ -208,6 +215,7 @@ describe('tool badge lifecycle (live stream → completion → render)', () => {
   }
 
   it('marker path: tool_start badge stays inline through completion (streamed text wins)', () => {
+    ({ stateHolder } = mountHook());
     fire({ type: 'query_started', data: { query: 'check the repo' } });
     fire({ type: 'stream_chunk', data: { chunk: shortAnswer, content_type: 'assistant_text' } });
     fire({
@@ -236,6 +244,7 @@ describe('tool badge lifecycle (live stream → completion → render)', () => {
   });
 
   it('marker-less path: agent_message tool_log badge renders inline (fallback)', () => {
+    ({ stateHolder } = mountHook());
     fire({ type: 'query_started', data: { query: 'run the checks' } });
     fire({ type: 'stream_chunk', data: { chunk: 'Running the checks now.', content_type: 'assistant_text' } });
     // tool_log agent_message — updates toolExecutions, NEVER touches message text.
@@ -263,6 +272,7 @@ describe('tool badge lifecycle (live stream → completion → render)', () => {
   });
 
   it('completion-replacement path: markers wiped by longer final response, refs still badge inline', () => {
+    ({ stateHolder } = mountHook());
     fire({ type: 'query_started', data: { query: 'deep check' } });
     fire({ type: 'stream_chunk', data: { chunk: shortAnswer, content_type: 'assistant_text' } });
     fire({

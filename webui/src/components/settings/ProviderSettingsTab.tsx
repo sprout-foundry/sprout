@@ -376,7 +376,7 @@ export default function ProviderSettingsTab({
             <div className="form-row">
               <label>Billing Type</label>
               <select
-                className="styled-input"
+                className="styled-select"
                 value={providerBillingType}
                 onChange={(e) => setProviderBillingType(e.target.value as 'pay_per_token' | 'subscription' | 'free')}
               >

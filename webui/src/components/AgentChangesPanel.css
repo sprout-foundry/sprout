@@ -371,12 +371,52 @@
 }
 
 .changes-timeline-controls select {
-  padding: 4px var(--space-1);
-  background: var(--bg-elevated);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  min-height: 24px;
+  padding: 2px 22px 2px var(--space-2);
+  background-color: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 1.5px),
+      var(--text-secondary) calc(50% - 0.75px),
+      var(--text-secondary) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 1.5px),
+      var(--text-secondary) calc(50% - 0.75px),
+      var(--text-secondary) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    );
+  background-repeat: no-repeat, no-repeat;
+  background-position:
+    calc(100% - 9px) calc(50% + 1px),
+    calc(100% - 4px) calc(50% + 1px);
+  background-size:
+    5px 5px,
+    5px 5px;
+}
+
+.changes-timeline-controls select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.changes-timeline-controls select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
 }
 
 .changes-timeline-list {

@@ -939,6 +939,92 @@ body,
   background: var(--accent-primary-alpha);
 }
 
+/* ── Canonical select styling ───────────────────────────────────
+ * One theme-aware recipe for every native <select> in the webui.
+ * The chevron is painted with two 1.5px gradient strokes in adjacent
+ * 6px background tiles (left stroke TL→BR, right stroke BL→TR, meeting
+ * at the bottom vertex). Its color comes from --select-caret-color
+ * (default --text-secondary), so it flips with the theme — the previous
+ * per-component data-URI chevrons were hardcoded dark-theme greys and
+ * vanished on light backgrounds. Component CSS may override size and
+ * spacing but must keep the caret + focus halo. */
+select.styled-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  --select-caret-color: var(--text-secondary);
+  width: 100%;
+  min-height: 32px;
+  padding: 0 30px 0 var(--space-4);
+  background-color: var(--bg-input, var(--bg-primary));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    background-color 0.15s var(--ease-out);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 1.5px),
+      var(--select-caret-color) calc(50% - 0.75px),
+      var(--select-caret-color) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 1.5px),
+      var(--select-caret-color) calc(50% - 0.75px),
+      var(--select-caret-color) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    );
+  background-repeat: no-repeat, no-repeat;
+  /* Adjacent 6px tiles (left stroke's right edge = right stroke's left
+   * edge) so the two diagonal strokes meet exactly at the chevron's
+   * bottom vertex. calc(100% - Xpx) puts a tile's right edge X px from
+   * the select's right edge. */
+  background-position:
+    calc(100% - 11px) calc(50% + 1px),
+    calc(100% - 5px) calc(50% + 1px);
+  background-size:
+    6px 6px,
+    6px 6px;
+}
+
+select.styled-select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background-color: var(--bg-surface);
+}
+
+select.styled-select:focus {
+  outline: none;
+}
+
+select.styled-select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
+}
+
+select.styled-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Option list: match the active theme surface instead of the OS default
+ * (which renders white-on-white for dark themes). */
+select.styled-select option,
+select option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
 /* Editor View Layout */
 .editor-view {
   flex: 1;
@@ -1351,23 +1437,41 @@ body,
   box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
+/* Onboarding selects reuse the canonical gradient caret: the first
+ * background layer is the card's subtle vertical fill, the next two are
+ * the caret stroke tiles (colors ride --select-caret-color so they
+ * re-theme automatically). */
 .onboarding-card select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  padding-right: 40px;
+  --select-caret-color: var(--text-secondary);
   background-image:
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--bg-surface) 82%, transparent),
       color-mix(in srgb, var(--bg-elevated) 92%, transparent)
     ),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237f8794' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat, no-repeat;
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 1.5px),
+      var(--select-caret-color) calc(50% - 0.75px),
+      var(--select-caret-color) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 1.5px),
+      var(--select-caret-color) calc(50% - 0.75px),
+      var(--select-caret-color) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    );
+  background-repeat: no-repeat, no-repeat, no-repeat;
   background-position:
     0 0,
-    right 12px center;
-  background-size: auto, 12px;
+    calc(100% - 15px) calc(50% + 1px),
+    calc(100% - 9px) calc(50% + 1px);
+  background-size:
+    auto,
+    6px 6px,
+    6px 6px;
 }
 
 .onboarding-provider-grid {
@@ -2191,14 +2295,43 @@ button.primary.success {
   max-width: 100%;
   flex: 1 1 auto;
   height: 26px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  color: var(--text-primary, #e6e9f0);
-  background: color-mix(in srgb, var(--bg-secondary, #141821) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 20%, transparent);
+  color: var(--text-primary);
+  background-color: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 20%, transparent);
   border-radius: var(--radius-sm);
-  padding: 0 4px;
+  /* Compact mono row: smaller caret pulled closer to the text. */
+  padding: 0 16px 0 var(--space-2);
   cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 1.5px),
+      var(--text-secondary) calc(50% - 0.75px),
+      var(--text-secondary) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 1.5px),
+      var(--text-secondary) calc(50% - 0.75px),
+      var(--text-secondary) calc(50% + 0.75px),
+      transparent calc(50% + 1.5px)
+    );
+  background-repeat: no-repeat, no-repeat;
+  background-position:
+    calc(100% - 10px) 55%,
+    calc(100% - 5px) 55%;
+  background-size:
+    5px 5px,
+    5px 5px;
 }
 
 .workspace-cwd-select:hover {
@@ -2206,8 +2339,9 @@ button.primary.success {
 }
 
 .workspace-cwd-select:focus-visible {
-  outline: 1px solid var(--accent-primary);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
 }
 
 /* "+ Add repo" button on the workspace row — adds a workspace entry

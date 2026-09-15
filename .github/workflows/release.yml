@@ -83,14 +83,20 @@ jobs:
   #
   # NOTE: desktop-release.yml is currently disabled (SP-080).
 
+  # Builds Linux, Windows, and Intel-macOS binaries on a hosted ubuntu runner,
+  # plus the embedded-UI commit to the release tag (all platform builds share
+  # those committed assets via -refs/tags checkout). The Apple-Silicon macOS
+  # binary is built separately in the `macos-build` job on a self-hosted Mac,
+  # because it needs cgo + Apple's MLX C library — cross-compiling darwin/arm64
+  # from a Linux runner disables cgo, silently swapping in the local-LLM stub
+  # (pkg/localmodel/local_provider_stub.go) and breaking local models on every
+  # Apple Silicon Mac. See the `macos-build` job for the cgo guard.
   build:
-    name: Build and Release
+    name: Build (Linux / Windows / Intel-macOS)
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # Create the GitHub Release + upload assets
-      id-token: write   # OIDC token used by actions/attest-build-provenance
-      attestations: write # Publish the provenance attestation to the repo
+      contents: write   # Commit embedded UI assets + changelog to the release tag
 
     steps:
     - name: Checkout code
@@ -241,13 +247,160 @@ jobs:
         GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-windows-amd64.exe .
         zip sprout-windows-amd64.zip sprout-windows-amd64.exe
 
-        # Build for macOS (AMD64)
+        # Build for macOS (AMD64 / Intel). Intel Macs have no MLX, so the
+        # darwin/amd64 build correctly carries the local-LLM stub here.
         GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-darwin-amd64 .
         tar -czvf sprout-darwin-amd64.tar.gz sprout-darwin-amd64
 
-        # Build for macOS (ARM64)
+        # darwin/arm64 (Apple Silicon) is NOT built here — it needs cgo + the
+        # MLX C library and is built natively in the `macos-build` job.
+        ls -la sprout-linux-amd64.tar.gz sprout-linux-arm64.tar.gz sprout-windows-amd64.zip sprout-darwin-amd64.tar.gz
+
+    - name: Upload Linux / Windows / Intel-macOS binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: platform-binaries
+        path: |
+          sprout-linux-amd64.tar.gz
+          sprout-linux-arm64.tar.gz
+          sprout-windows-amd64.zip
+          sprout-darwin-amd64.tar.gz
+        if-no-files-found: error
+
+    - name: Build WASM shell module
+      # Required by the cloud webui bundle (sprout.wasm is copied into the
+      # bundle's wasm/ directory by build-webui-dist.mjs).
+      run: make build-wasm
+
+    - name: Build cloud-mode webui bundle for platform vendoring
+      run: node scripts/build-webui-dist.mjs --mode cloud --output dist/sprout-webui-cloud
+
+    - name: Package cloud-mode webui bundle
+      # Stable filename (no version embedded) so platform's vendor workflow
+      # can fetch the latest with `gh release download --pattern`. The
+      # bundle's wasm/version.json carries the actual sprout version.
+      run: tar -czvf sprout-webui-cloud.tar.gz -C dist sprout-webui-cloud
+
+    - name: Upload cloud-mode webui bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: cloud-bundle
+        path: sprout-webui-cloud.tar.gz
+        if-no-files-found: error
+
+  # Builds the Apple-Silicon macOS binary (darwin/arm64) natively on a
+  # self-hosted Mac. Local LLM (MLX) requires cgo plus Apple's MLX C library:
+  # cross-compiling darwin/arm64 from a Linux runner disables cgo, which
+  # silently compiles the local-LLM stub (pkg/localmodel/local_provider_stub.go)
+  # and makes `local LLM requires Apple Silicon with MLX` fail on every correct
+  # Apple Silicon Mac. Building on a native macOS/arm64 runner keeps cgo on and
+  # links the real MLX provider.
+  #
+  # Runs after `build` so the embedded UI assets committed to the release tag
+  # by that job are present in this job's checkout (binaries embed
+  # pkg/webui/static via //go:embed).
+  macos-build:
+    name: Build Apple-Silicon macOS
+    needs: build
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+    - name: Checkout release tag (embed the UI assets committed by `build`)
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0 # match release build history for version ldflags
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+
+    - name: Install MLX C library (Apple Silicon)
+      run: |
+        brew install mlx-c
+        # Fail fast if the MLX C library isn't actually linkable — a missing
+        # -lmlx/-lmlxc would otherwise surface as the local-LLM stub silently.
+        ls -1 /opt/homebrew/lib/libmlx*.dylib
+        test -d /opt/homebrew/include
+
+    - name: Download module deps and copy grammar blobs for embedding
+      run: |
+        go mod download
+        make prepare-grammars
+
+    - name: Guard — darwin/arm64 build MUST have cgo enabled (MLX)
+      # Regression guard: if this ever builds with cgo off (e.g. someone moves
+      # this back onto a cross-compile runner), the darwin/arm64 binary embeds
+      # the local-LLM stub and silently breaks local models. Fail loudly instead.
+      run: |
+        if [ "$(go env CGO_ENABLED)" != "1" ]; then
+          echo "ERROR: Apple-Silicon (darwin/arm64) build requires cgo for MLX, but CGO_ENABLED=$(go env CGO_ENABLED)" >&2
+          echo "This binary must be built on a native macOS/arm64 runner with 'brew install mlx-c'." >&2
+          exit 1
+        fi
+        echo "cgo enabled — real MLX provider will be linked."
+
+    - name: Build darwin/arm64 binary (native, cgo + MLX)
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        COMMIT=$(git rev-parse --short HEAD)
+        DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        LDFLAGS="-X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=$VERSION'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=$COMMIT'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Date=$DATE'"
+        LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Tag=$VERSION'"
+
+        echo "Using ldflags: $LDFLAGS"
         GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
         tar -czvf sprout-darwin-arm64.tar.gz sprout-darwin-arm64
+
+    - name: Verify the built binary links MLX (is not the local-LLM stub)
+      # The local-LLM stub is what ships when cgo is off. Confirm the real
+      # MLX provider is present by checking the binary's dynamic links against
+      # Apple's MLX C library (libmlx/libmlxc). otool is native to macOS.
+      run: |
+        otool -L sprout-darwin-arm64 | grep -E "libmlx" \
+          || { echo "ERROR: darwin/arm64 binary does not link MLX — the local-LLM stub was compiled." >&2; exit 1; }
+        echo "Verified: darwin/arm64 binary links the MLX C library."
+        ./sprout-darwin-arm64 version
+
+    - name: Upload Apple-Silicon macOS binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: darwin-arm64
+        path: sprout-darwin-arm64.tar.gz
+        if-no-files-found: error
+
+  # Assembles the release from the artifacts produced by `build` (Linux /
+  # Windows / Intel-macOS) and `macos-build` (Apple Silicon). Runs the
+  # deterministic steps (SHA256SUMS, Homebrew formula stamping) and the
+  # provenance attestation here, on a hosted runner, once all binaries exist.
+  release:
+    name: Create Release
+    needs: [build, macos-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Create the GitHub Release + upload assets
+      id-token: write   # OIDC token used by actions/attest-build-provenance
+      attestations: write # Publish the provenance attestation to the repo
+
+    steps:
+    - name: Checkout release tag (for Homebrew formula template + stamp script)
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Get the version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Download platform binaries
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+
+    - name: List downloaded artifacts
+      run: ls -la
 
     - name: Generate SHA256SUMS
       # Consumed by scripts/install.{sh,ps1} to verify the downloaded archive
@@ -300,20 +453,6 @@ jobs:
           sprout-windows-amd64.zip
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
-
-    - name: Build WASM shell module
-      # Required by the cloud webui bundle (sprout.wasm is copied into the
-      # bundle's wasm/ directory by build-webui-dist.mjs).
-      run: make build-wasm
-
-    - name: Build cloud-mode webui bundle for platform vendoring
-      run: node scripts/build-webui-dist.mjs --mode cloud --output dist/sprout-webui-cloud
-
-    - name: Package cloud-mode webui bundle
-      # Stable filename (no version embedded) so platform's vendor workflow
-      # can fetch the latest with `gh release download --pattern`. The
-      # bundle's wasm/version.json carries the actual sprout version.
-      run: tar -czvf sprout-webui-cloud.tar.gz -C dist sprout-webui-cloud
 
     - name: Create Release
       uses: softprops/action-gh-release@v2

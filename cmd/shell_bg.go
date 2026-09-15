@@ -28,6 +28,7 @@ var shellBgBaseDirOverride string
 var (
 	shellBgListJSON bool
 	shellBgGrace    time.Duration
+	shellBgTTL      time.Duration
 )
 
 var shellBgCmd = &cobra.Command{
@@ -60,6 +61,7 @@ func init() {
 	shellBgCmd.AddCommand(shellBgStatusCmd)
 	shellBgCmd.AddCommand(shellBgStopCmd)
 	shellBgCmd.AddCommand(shellBgStopAllCmd)
+	shellBgCmd.AddCommand(shellBgKeepaliveCmd)
 
 	shellBgListCmd.Flags().BoolVar(&shellBgListJSON, "json", false, "Output in JSON format")
 	shellBgStopCmd.Flags().DurationVar(&shellBgGrace, "grace", 10*time.Second, "Grace period between SIGINT and SIGTERM")
@@ -627,6 +629,61 @@ func isStdinTTY() bool {
 		return false
 	}
 	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// ---------------------------------------------------------------------------
+// keepalive
+// ---------------------------------------------------------------------------
+
+var shellBgKeepaliveCmd = &cobra.Command{
+	Use:   "keepalive <session_id>",
+	Short: "Renew a background session's expiry timer",
+	Long: `Touch a background session's activity timer so the cleanup pass treats
+it as recently used.
+
+Use this for long-lived watcher sessions (gh run watch, tail -f) that
+are silent for hours by design: renewal prevents the session's TTL from
+expiring while the process is still healthy. Safe to call repeatedly
+(e.g. from a wait loop).
+
+In-process sessions (same sprout invocation) are renewed directly.
+Cross-process sessions discovered via PID files are renewed by touching
+their .pid file, which updates the mtime used as the fallback activity
+signal.
+
+Examples:
+  sprout shell-bg keepalive bg-sleep-abc12345`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runShellBgKeepalive(args[0])
+	},
+}
+
+func runShellBgKeepalive(sessionID string) error {
+	// In-process BPM renews directly.
+	if currentBPM != nil {
+		if _, ok := currentBPM.GetProcess(sessionID); ok {
+			if err := currentBPM.KeepAlive(sessionID); err != nil {
+				return err
+			}
+			console.GlyphSuccess.Printf("Renewed %s.", sessionID)
+			return nil
+		}
+	}
+
+	// Cross-process: touch the .pid file so its mtime (the fallback
+	// activity signal used by list/status discovery) reflects the renewal.
+	baseDir := getShellBgBaseDir()
+	pidFile := filepath.Join(baseDir, sessionID+".pid")
+	if _, err := os.Stat(pidFile); err != nil {
+		return fmt.Errorf("session %q not found: %w", sessionID, err)
+	}
+	now := time.Now()
+	if err := os.Chtimes(pidFile, now, now); err != nil {
+		return fmt.Errorf("touch pid file: %w", err)
+	}
+	console.GlyphSuccess.Printf("Renewed %s.", sessionID)
+	return nil
 }
 
 // getShellBgBaseDir returns the base directory for shell-bg files.

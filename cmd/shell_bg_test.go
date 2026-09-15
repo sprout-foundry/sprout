@@ -579,3 +579,49 @@ func TestShellBgEntry_JSONSerialization(t *testing.T) {
 	assert.Equal(t, "sleep 30", decoded["command"])
 	assert.Equal(t, "running", decoded["status"])
 }
+
+func TestShellBgKeepalive_FromBPM(t *testing.T) {
+	defer resetShellBgGlobals()
+
+	bpm := tools.NewBackgroundProcessManager()
+	currentBPM = bpm
+	t.Cleanup(func() {
+		currentBPM = nil
+		bpm.Close()
+	})
+
+	sessionID, err := bpm.Start(nil, "sleep 30", "")
+	require.NoError(t, err)
+
+	// KeepAlive must not error and must leave the session tracked; the
+	// timer-renewal itself is covered in the tools package
+	// (TestBPM_KeepAliveResetsTimer). Here we verify the CLI surface.
+	require.NoError(t, runShellBgKeepalive(sessionID))
+	assert.True(t, bpm.IsActive(sessionID))
+
+	// Unknown session errors.
+	assert.Error(t, runShellBgKeepalive("bg-unknown-0000"))
+}
+
+func TestShellBgKeepalive_CrossProcessTouch(t *testing.T) {
+	defer resetShellBgGlobals()
+
+	tmpDir := t.TempDir()
+	shellBgBaseDirOverride = tmpDir
+	currentBPM = nil
+
+	pidFile := filepath.Join(tmpDir, "bg-test-cafe0000.pid")
+	require.NoError(t, os.WriteFile(pidFile, []byte("999999998 0\n"), 0o600))
+	old := time.Now().Add(-24 * time.Hour)
+	require.NoError(t, os.Chtimes(pidFile, old, old))
+
+	require.NoError(t, runShellBgKeepalive("bg-test-cafe0000"))
+
+	info, err := os.Stat(pidFile)
+	require.NoError(t, err)
+	assert.True(t, time.Since(info.ModTime()) < time.Minute,
+		"keepalive must touch the pid file for cross-process sessions")
+
+	// Missing session errors.
+	assert.Error(t, runShellBgKeepalive("bg-missing-0000"))
+}

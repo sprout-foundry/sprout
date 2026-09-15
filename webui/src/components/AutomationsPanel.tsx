@@ -37,9 +37,36 @@ interface SessionsResponse {
 }
 
 interface RunResponse {
-  session_id: string;
+  session_id?: string;
   workflow: string;
-  status: string;
+  status?: string;
+  // Server contract (pkg/webui/automations_api.go): a workflow needing
+  // confirmation returns {requires_approval: true, workflow, summary}
+  // INSTEAD of launching. The summary mirrors the CLI's overview payload.
+  requires_approval?: boolean;
+  summary?: WorkflowSummary;
+}
+
+// WorkflowSummary mirrors automate.Summary (pkg/automate/discovery.go) —
+// the subset the confirmation dialog renders.
+interface WorkflowSummary {
+  description?: string;
+  continue_on_error?: boolean;
+  no_web_ui?: boolean;
+  requires_approval?: boolean | null;
+  subagent_timeout_seconds?: number | null;
+  initial?: {
+    persona?: string;
+    provider?: string;
+    model?: string;
+    max_iterations?: number;
+    risk_profile?: string;
+    subagent_overrides?: { persona: string; provider?: string; model?: string }[];
+  };
+  steps?: { name?: string; kind?: string }[];
+  budget?: { usd: number; warn_at?: number[] };
+  allowed_paths?: { path: string; mode: string; reason?: string }[];
+  warnings?: string[];
 }
 
 interface RunModalState {
@@ -129,6 +156,13 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
 
+  // Run/approval failures get their own slot rather than reusing
+  // sessionsError: the two are written by independent async paths that can
+  // resolve in either order, and a launch failure isn't a session-list
+  // failure — sharing one field let whichever settled last win, hiding the
+  // sessions error the Running tab was meant to show.
+  const [runError, setRunError] = useState<string | null>(null);
+
   // Run modal
   const [runModal, setRunModal] = useState<RunModalState>({
     open: false,
@@ -137,6 +171,18 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     heartbeat: '',
   });
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
+
+  // Approval gate. When the server responds with {requires_approval: true}
+  // the workflow has NOT been launched — the request is a request for
+  // confirmation. Stash the summary so the dialog can render the same
+  // overview the CLI shows (steps, budget, allowed paths, warnings) and
+  // hold the pending launch params for the confirmed retry.
+  const [approval, setApproval] = useState<{
+    workflow: string;
+    name: string;
+    summary: WorkflowSummary | null;
+    body: Record<string, unknown>;
+  } | null>(null);
 
   // Stop loading tracking
   const [stoppingIds, setStoppingIds] = useState<Set<string>>(new Set());
@@ -227,16 +273,39 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     setIsRunningWorkflow(false);
   }, []);
 
+  // launchWorkflow performs the actual POST /api/automate/run. Returns
+  // normally either way — the caller inspects the parsed response.
+  const launchWorkflow = useCallback(async (body: Record<string, unknown>): Promise<RunResponse> => {
+    const response = await clientFetch('/api/automate/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to run workflow: ${friendlyStatus(response.status)}`);
+    }
+    return (await response.json()) as RunResponse;
+  }, []);
+
   const handleRunWorkflow = useCallback(async () => {
     if (!runModal.workflow) return;
 
-    const confirmed = window.confirm(`Run workflow "${runModal.workflow.name}"?`);
-    if (!confirmed) return;
-
+    // Phase 1: probe the server WITHOUT the approval flag. A gated
+    // workflow answers {requires_approval: true, summary} and nothing has
+    // launched — the rich dialog shows the CLI-equivalent overview and
+    // its "Approve & Run" sends the confirmed retry. An ungated workflow
+    // launches straight away. (The old window.confirm was removed: it
+    // duplicated the confirmation step while showing none of the
+    // workflow detail the server hands back.)
     setIsRunningWorkflow(true);
+    setRunError(null);
 
     const body: Record<string, unknown> = {
-      workflow: runModal.workflow.name,
+      // The API resolves the workflow by filename (it calls
+      // automate.ResolvePath(dir, req.Workflow)). `name` and `filename`
+      // are the same value today, but sending the filename keeps the
+      // contract explicit if the display name ever diverges.
+      workflow: runModal.workflow.filename || runModal.workflow.name,
     };
     if (runModal.budgetUsd.trim() !== '') {
       body.budget_usd = parseFloat(runModal.budgetUsd);
@@ -246,26 +315,60 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     }
 
     try {
-      const response = await clientFetch('/api/automate/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to run workflow: ${friendlyStatus(response.status)}`);
+      const result = await launchWorkflow(body);
+
+      // Gated workflow: the server did NOT launch. Prompt for explicit
+      // approval instead of pretending the run started.
+      if (result.requires_approval) {
+        setApproval({
+          workflow: body.workflow as string,
+          name: runModal.workflow.name,
+          summary: result.summary ?? null,
+          body: { ...body, approved: true },
+        });
+        closeRunModal();
+        return;
       }
-      const result: RunResponse = await response.json();
+
       debugLog('[AutomationsPanel] Workflow started:', result);
       closeRunModal();
       setActiveTab('running');
       await fetchSessions();
     } catch (err) {
       debugLog('[AutomationsPanel] Failed to run workflow:', err);
-      setSessionsError(err instanceof Error ? err.message : String(err));
+      setRunError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunningWorkflow(false);
     }
-  }, [runModal, closeRunModal, fetchSessions]);
+  }, [runModal, closeRunModal, fetchSessions, launchWorkflow]);
+
+  // User confirmed the approval dialog — relaunch with approved=true.
+  const handleConfirmApproval = useCallback(async () => {
+    if (!approval) return;
+    setIsRunningWorkflow(true);
+    try {
+      const result = await launchWorkflow(approval.body);
+      if (result.requires_approval) {
+        // Server still gating — surface rather than silently looping.
+        setRunError('Workflow still requires approval.');
+        return;
+      }
+      debugLog('[AutomationsPanel] Workflow started after approval:', result);
+      setApproval(null);
+      setActiveTab('running');
+      await fetchSessions();
+    } catch (err) {
+      debugLog('[AutomationsPanel] Failed to run approved workflow:', err);
+      setRunError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsRunningWorkflow(false);
+    }
+  }, [approval, fetchSessions, launchWorkflow]);
+
+  const handleCancelApproval = useCallback(() => {
+    setApproval(null);
+    setIsRunningWorkflow(false);
+  }, []);
 
   const closeDetail = useCallback(() => {
     setSelectedSessionId(null);
@@ -446,6 +549,13 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
               <div className="automations-error" aria-live="polite">
                 <AlertCircle size={14} />
                 <span>{workflowsError}</span>
+              </div>
+            )}
+
+            {runError && (
+              <div className="automations-error" aria-live="polite">
+                <AlertCircle size={14} />
+                <span>{runError}</span>
               </div>
             )}
 
@@ -710,6 +820,149 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <>
                     <Zap size={14} />
                     <span>Run</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Approval Dialog ───────────────────────────────
+          Shown when the server answers a run request with
+          {requires_approval: true} — the workflow has NOT started.
+          Renders the CLI-equivalent overview so the user can see what
+          the workflow will do (steps, budget, external paths) before
+          confirming. */}
+      {approval && (
+        <div className="automations-run-modal" role="dialog" aria-modal="true" aria-labelledby="approval-modal-title">
+          <div className="automations-modal-overlay" onClick={handleCancelApproval} />
+          <div className="automations-modal-content">
+            <div className="automations-modal-header">
+              <h3 id="approval-modal-title">Approve Workflow</h3>
+              <button
+                className="automations-modal-close"
+                onClick={handleCancelApproval}
+                title="Close"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="automations-modal-body">
+              <div className="automations-modal-workflow-info">
+                <div className="automations-modal-workflow-name">{approval.name}</div>
+                {approval.summary?.description && (
+                  <div className="automations-modal-workflow-desc">{approval.summary.description}</div>
+                )}
+              </div>
+
+              <p className="automations-approval-note">This workflow requires confirmation before it starts.</p>
+
+              {approval.summary?.initial && (
+                <div className="automations-approval-section">
+                  <div className="automations-approval-section-title">Initial run</div>
+                  <ul className="automations-approval-list">
+                    <li>
+                      persona={approval.summary.initial.persona || 'default'} provider=
+                      {approval.summary.initial.provider || 'config default'} model=
+                      {approval.summary.initial.model || 'config default'}
+                    </li>
+                    <li>
+                      max_iterations=
+                      {approval.summary.initial.max_iterations && approval.summary.initial.max_iterations > 0
+                        ? approval.summary.initial.max_iterations
+                        : '0 (unlimited)'}
+                      {approval.summary.initial.risk_profile
+                        ? ` risk_profile=${approval.summary.initial.risk_profile}`
+                        : ''}
+                    </li>
+                  </ul>
+                  {(approval.summary.initial.subagent_overrides?.length ?? 0) > 0 && (
+                    <>
+                      <div className="automations-approval-subtitle">Subagent overrides</div>
+                      <ul className="automations-approval-list">
+                        {approval.summary.initial.subagent_overrides!.map((ov) => (
+                          <li key={ov.persona}>
+                            {ov.persona} — provider={ov.provider || '(inherit)'} model={ov.model || '(inherit)'}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {(approval.summary?.steps?.length ?? 0) > 0 && (
+                <div className="automations-approval-section">
+                  <div className="automations-approval-section-title">{approval.summary!.steps!.length} step(s)</div>
+                  <ul className="automations-approval-list">
+                    {approval.summary!.steps!.map((step, i) => (
+                      <li key={`${step.name || 'step'}-${i}`}>
+                        {step.name || `step-${i + 1}`}
+                        {step.kind ? ` [${step.kind}]` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {approval.summary?.budget && approval.summary.budget.usd > 0 && (
+                <div className="automations-approval-section">
+                  <div className="automations-approval-section-title">Budget</div>
+                  <div>${approval.summary.budget.usd.toFixed(2)} cap</div>
+                </div>
+              )}
+
+              {(approval.summary?.allowed_paths?.length ?? 0) > 0 && (
+                <div className="automations-approval-section">
+                  <div className="automations-approval-section-title">External paths</div>
+                  <ul className="automations-approval-list">
+                    {approval.summary!.allowed_paths!.map((ap) => (
+                      <li key={`${ap.path}-${ap.mode}`}>
+                        {ap.path} [{ap.mode}]{ap.reason ? ` — ${ap.reason}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(approval.summary?.warnings?.length ?? 0) > 0 && (
+                <div className="automations-approval-warnings">
+                  {approval.summary!.warnings!.map((w) => (
+                    <div key={w} className="automations-approval-warning">
+                      <AlertCircle size={14} />
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="automations-approval-note">
+                Workflows run autonomously in the background and consume tokens until they finish or are stopped.
+              </p>
+            </div>
+
+            <div className="automations-modal-footer">
+              <button
+                className="automations-modal-cancel-btn"
+                onClick={handleCancelApproval}
+                disabled={isRunningWorkflow}
+              >
+                Cancel
+              </button>
+              <button
+                className="automations-modal-run-btn"
+                onClick={handleConfirmApproval}
+                disabled={isRunningWorkflow}
+              >
+                {isRunningWorkflow ? (
+                  'Starting...'
+                ) : (
+                  <>
+                    <Zap size={14} />
+                    <span>Approve &amp; Run</span>
                   </>
                 )}
               </button>

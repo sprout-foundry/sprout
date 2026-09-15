@@ -12,9 +12,18 @@ import (
 // Registers the real local-model listing with pkg/agent_api's
 // GetModelsForProvider dispatch — see api.LocalModelsProvider's doc comment
 // for why this is a runtime hook rather than a direct import.
+//
+// Serves TieredModelInfos directly rather than through GetLocalProvider:
+// in a cgo-less build the provider singleton is the stub whose ListModels
+// returns (nil, nil) — which GetModelsForProviderCtx treats as a valid
+// empty list, leaving the WebUI model picker empty while the settings
+// tab (which reads the catalog independently) shows every model. The
+// catalog matrix is pure Go — no cgo, no MLX — so listing works on every
+// platform; whether a listed model can actually load is gated separately
+// in LocalProvider.SetModel and detectBackend.
 func init() {
 	api.LocalModelsProvider = func(ctx context.Context) ([]api.ModelInfo, error) {
-		return GetLocalProvider().ListModels(ctx)
+		return TieredModelInfos(TotalSystemRAM()), nil
 	}
 }
 

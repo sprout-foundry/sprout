@@ -4,6 +4,12 @@ All notable changes to Sprout will be documented in this file.
 
 ## [v0.18.1] - 2026-09-15
 
+- docs: update changelog for v0.18.1 (2aade74d0)
+- fix(webui): stop chat tab pinning/activation storm that blanks multi-chat windows (eb3d8a599)
+- docs: Update changelog for v0.18.0 (41713863a)
+
+## [v0.18.1] - 2026-09-15
+
 - fix(webui): stop the chat tab pinning/activation storm that blanked multi-chat windows (eb3d8a599)
 
 ## [v0.18.0] - 2026-09-14

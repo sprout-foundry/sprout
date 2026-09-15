@@ -9,6 +9,22 @@ export type { WsEvent };
 
 type EventCallback = (event: WsEvent) => void;
 
+/**
+ * Event types excluded from the sprout:wsevent DOM bridge. These arrive at
+ * token/byte-level frequency; every DOM-bridge consumer only cares about
+ * lifecycle events, so dispatching them to `window` was pure overhead —
+ * one CustomEvent allocation + dispatch per chunk on the main thread.
+ * Add a type here only if a listener actually needs it (and check the
+ * listener filters first).
+ */
+const DOM_BRIDGE_SUPPRESSED_TYPES: ReadonlySet<string> = new Set([
+  'stream_chunk',
+  'command_output',
+  'query_progress',
+  'subagent_activity',
+  'connection_status',
+]);
+
 class WebSocketService {
   private static instance: WebSocketService;
   private ws: WebSocket | null = null;
@@ -487,10 +503,18 @@ class WebSocketService {
     // (BackgroundTasks badge, attachable-session lists) can react without
     // registering a direct callback with this service. Detail shape:
     // { type: string, data: ... } — same envelope as the WS frame.
-    try {
-      window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: event }));
-    } catch {
-      // Non-browser (tests, SSR) — ignore.
+    //
+    // High-frequency event types are excluded: their only DOM-bridge
+    // consumers filter down to lifecycle events anyway, and dispatching a
+    // CustomEvent per token/terminal byte flooded the main thread during
+    // streaming (allocation + dispatch per chunk on top of the per-chunk
+    // callback fan-out).
+    if (!DOM_BRIDGE_SUPPRESSED_TYPES.has(event.type)) {
+      try {
+        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: event }));
+      } catch {
+        // Non-browser (tests, SSR) — ignore.
+      }
     }
   }
 

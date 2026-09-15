@@ -29,7 +29,7 @@ import type {
   DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { fetchChatSessionMessages, listChatSessions } from '../services/chatSessions';
 import { getWebUIClientId } from '../services/clientSession';
@@ -204,15 +204,117 @@ const handleQueryProgress = (ctx: EventHandlerContext): void => {
   debugLog('[>>] Query progress:', data);
 };
 
-// Handle stream_chunk event
-const handleStreamChunk = (ctx: EventHandlerContext): void => {
-  const { event, setState } = ctx;
-  const logEntry = createLogEntry(event);
-  logEntry.category = 'stream';
-  logEntry.level = 'info';
-  const data = (event.data ?? {}) as StreamChunkData;
-  const chunkContent = String(data.chunk || '');
-  const chunkType = String(data.content_type || 'assistant_text');
+/** Flush cadence for buffered stream chunks (≈20 updates/sec ceiling). */
+const STREAM_FLUSH_INTERVAL_MS = 48;
+
+/**
+ * Pending stream_chunk text, held OUTSIDE React state. Every chunk calling
+ * setState directly re-rendered the whole app per token; buffered text is
+ * flushed on a timer (or synchronously before any other event routes) so
+ * React sees one update per interval instead of one per token.
+ */
+interface PendingStreamChunks {
+  text: string;
+  reasoning: string;
+  /** chat_id the chunks belong to — the buffer is discarded if the user
+   * switches chats before the flush fires. */
+  chatId: string | undefined;
+}
+
+/** Public surface of the stream buffer used by the dispatch loop. */
+interface StreamFlusher {
+  buffer: (chunkContent: string, chunkType: string, chatId: string | undefined) => void;
+  flush: () => void;
+  discard: () => void;
+}
+
+/**
+ * Build the stream-chunk buffer. Flush appends the buffered text into
+ * state using the same append-or-create logic as the old direct path.
+ * The dispatch loop calls flush() synchronously before routing any
+ * non-chunk event — query_completed must see the full streamed text or
+ * its completion heuristics mis-fire.
+ */
+const makeStreamFlusher = (
+  setState: AppStoreSetState,
+  bufferRef: React.MutableRefObject<PendingStreamChunks | null>,
+  timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  activeChatIdRef: React.MutableRefObject<string | null>,
+): StreamFlusher => {
+  const flush = (): void => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const pending = bufferRef.current;
+    bufferRef.current = null;
+    if (!pending) return;
+    // Chat switched while chunks were buffered — drop them (the new chat's
+    // authoritative transcript fetch will render on switch).
+    if (pending.chatId !== undefined && activeChatIdRef.current && pending.chatId !== activeChatIdRef.current) {
+      return;
+    }
+    setState((prev) => {
+      const newMessages = [...prev.messages];
+      const lastMessage = newMessages[newMessages.length - 1];
+      // An inline subagent-run message (isSubagentRun) is never a valid
+      // append target for primary-agent chunks: its content is rendered
+      // inside the subagent's collapsible block. Create a fresh primary
+      // assistant message instead.
+      const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
+      if (canAppendToLast) {
+        if (pending.reasoning) {
+          newMessages[newMessages.length - 1] = {
+            ...lastMessage,
+            reasoning: (lastMessage.reasoning || '') + pending.reasoning,
+          };
+        }
+        if (pending.text) {
+          newMessages[newMessages.length - 1] = {
+            ...newMessages[newMessages.length - 1],
+            content: newMessages[newMessages.length - 1].content + pending.text,
+          };
+        }
+      } else {
+        const newMsg: Message = {
+          id: generateMessageId(),
+          type: 'assistant',
+          content: pending.text,
+          timestamp: new Date(),
+        };
+        if (pending.reasoning) newMsg.reasoning = pending.reasoning;
+        newMessages.push(newMsg);
+      }
+      return { messages: newMessages };
+    });
+  };
+
+  const buffer = (chunkContent: string, chunkType: string, chatId: string | undefined): void => {
+    if (!bufferRef.current) {
+      bufferRef.current = { text: '', reasoning: '', chatId };
+      timerRef.current = setTimeout(flush, STREAM_FLUSH_INTERVAL_MS);
+    }
+    if (chunkType === 'reasoning') {
+      bufferRef.current.reasoning += chunkContent;
+    } else {
+      bufferRef.current.text += chunkContent;
+    }
+  };
+
+  const discard = (): void => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    bufferRef.current = null;
+  };
+
+  return { buffer, flush, discard };
+};
+
+// Handle stream_chunk event — buffers the text; the flusher owns state.
+const handleStreamChunk = (ctx: EventHandlerContext, streamFlusher: StreamFlusher): void => {
+  const { event } = ctx;
 
   // Subagent stream_chunk events are decorated with subagent_depth > 0.
   // Without this guard, the subagent's LLM output gets appended to the
@@ -225,36 +327,13 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
     return;
   }
 
-  setState((prev) => {
-    const newMessages = [...prev.messages];
-    const lastMessage = newMessages[newMessages.length - 1];
-    // An inline subagent-run message (isSubagentRun) is never a valid
-    // append target for primary-agent chunks: its content is rendered inside
-    // the subagent's collapsible block, so any chunk landed there makes
-    // primary output look like it came from the subagent. Create a fresh
-    // primary assistant message instead.
-    const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
-    if (canAppendToLast) {
-      if (chunkType === 'reasoning') {
-        newMessages[newMessages.length - 1] = {
-          ...lastMessage,
-          reasoning: (lastMessage.reasoning || '') + chunkContent,
-        };
-      } else {
-        newMessages[newMessages.length - 1] = { ...lastMessage, content: lastMessage.content + chunkContent };
-      }
-    } else {
-      const newMsg: Message = {
-        id: generateMessageId(),
-        type: 'assistant',
-        content: chunkType === 'reasoning' ? '' : chunkContent,
-        timestamp: new Date(),
-      };
-      if (chunkType === 'reasoning') newMsg.reasoning = chunkContent;
-      newMessages.push(newMsg);
-    }
-    return { messages: newMessages };
-  });
+  const data = (event.data ?? {}) as StreamChunkData;
+  const chunkContent = String(data.chunk || '');
+  const chunkType = String(data.content_type || 'assistant_text');
+  if (!chunkContent) return;
+
+  const eventChatId = typeof data.chat_id === 'string' && data.chat_id ? data.chat_id : undefined;
+  streamFlusher.buffer(chunkContent, chunkType, eventChatId);
 };
 
 // Handle query_completed event
@@ -1518,6 +1597,22 @@ export function useWebSocketEventHandler({
     lastConnectionStateRef,
   } = refs;
 
+  // Stream-chunk buffer (see makeStreamFlusher) — refs survive re-renders;
+  // the flusher closes over them and over setState.
+  const streamBufferRef = useRef<PendingStreamChunks | null>(null);
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamFlusher = useMemo(
+    () => makeStreamFlusher(setState, streamBufferRef, streamTimerRef, activeChatIdRef),
+    [setState, activeChatIdRef],
+  );
+
+  // Pending buffer holds un-flushed chunk text only across the flush
+  // interval; dropping it on unmount avoids a post-unmount setState from
+  // the timer (React warns and the state write is lost anyway).
+  useEffect(() => {
+    return () => streamFlusher.discard();
+  }, [streamFlusher]);
+
   const handleEvent = useCallback(
     (event: WsEvent) => {
       const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
@@ -1601,6 +1696,12 @@ export function useWebSocketEventHandler({
 
       debugLog('[msg] Received event:', event.type, eventData);
 
+      // Flush buffered stream chunks BEFORE any other event routes. The
+      // completion heuristics in query_completed compare streamed text
+      // against the server's final response — they only work if the
+      // chunks have landed in state first.
+      streamFlusher.flush();
+
       const ctx: EventHandlerContext = {
         event,
         setState,
@@ -1622,7 +1723,7 @@ export function useWebSocketEventHandler({
         case 'query_progress':
           return handleQueryProgress(ctx);
         case 'stream_chunk':
-          return handleStreamChunk(ctx);
+          return handleStreamChunk(ctx, streamFlusher);
         case 'query_completed':
           return handleQueryCompleted(ctx);
         case 'tool_start':
@@ -1702,6 +1803,7 @@ export function useWebSocketEventHandler({
       setState,
       apiService,
       pendingProviderRef,
+      streamFlusher,
     ],
   );
 

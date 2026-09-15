@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-08-19):** 100 shipped · 11 pending rows (9 with living spec bodies: 7 at root + `SP-121-7` and `SP-GIT-CLIENT` in `_active/`; plus 2 body-less historical rows `SP-121`/`SP-CLOUD`) · 2 parked in `future/`.
+**Counts (as of 2026-09-15):** 100 shipped · 19 pending rows (17 with living spec bodies: 15 at root + `SP-121-7` and `SP-GIT-CLIENT` in `_active/`; plus 2 body-less historical rows `SP-121`/`SP-CLOUD`) · 2 parked in `future/`.
 
 ## Shipped
 
@@ -142,6 +142,13 @@ treating an entry as unstarted._
 | SP-137 | [Vision & Image Analysis: First-Class Paths, Provider Neutrality, Native OCR](./SP-137-vision-first-class.md) | 🟢 Implemented (2026-09-08) — seed v1.3.21 preserves tool-result images (PDF multimodal un-broken); registry-driven vision capability resolution (no hardcoded provider lists, native OCR counts); read_file image branch (inline attach + OCR, never binary); analyze_image_content attaches images for general mode; dead legacy handlers removed, live input-resolve helper kept; image guidance in both prompts; PDFOCR* → neutral ocr_fallback_model with migration; native OCR shims (macOS Vision via compiled helper, Windows.Media.Ocr, tesseract). Provider-name grep enforced by test. |
 | SP-139 | [Context Panel De-Necessitation](./SP-139-context-panel-de-necessitation.md) | ✅ All phases shipped. Phase 1 (2026-09-10): 6 tabs → 3. Phase 2 (2026-09-14, `af8cdb8f5`): per-turn change strip (Review/Revert) in the chat flow. Phase 3 (2026-09-14): chat-scoped `/api/sessions/restore` fix + chat-header history switcher (search/restore/export-all popover); Sessions tab deleted, panel = Activity + Changes. |
 | SP-GIT-CLIENT | [In-Browser Git Client via isomorphic-git](./_active/SP-GIT-CLIENT-in-browser-git.md) | ✅ Phase 7 shipped, 8/10 acceptance criteria verified (2026-07-26, `a35ad3981`) — browser-side clone/status/log/branch/checkout/read/diff/add/commit/push, VFS bridge to WASM shell, agent git-tool bridge. Playwright E2E tests deferred (same open item as SP-121-7). |
+
+| SP-140 | [Design Workspace — Agent-Native UX Design on Open Formats](./SP-140-design-workspace.md) | 🟡 Draft — umbrella spec. Directory contract, phase map, open-format charter; premises: co-evolution (no handoff) and git as design's source control. Coordinates SP-140-1…5. |
+| SP-140-1 | [Design Format Charter — DTCG Tokens, SVG Wireframes, Mermaid Flows](./SP-140-1-formats.md) | 🟡 Draft — not started. |
+| SP-140-2 | [Designer Persona, Design Skill, and Agent Design Tools](./SP-140-2-persona-tools.md) | 🟡 Draft — not started. Depends on SP-140-1. |
+| SP-140-3 | [WebUI DesignView — Flow Canvas and Screen Browser](./SP-140-3-designview.md) | 🟡 Draft — not started. Depends on SP-140-1. |
+| SP-140-4 | [Visual Loop — Render→Critique, Consistency Checks, Human Feedback](./SP-140-4-visual-loop.md) | 🟡 Draft — not started. Depends on SP-140-2, SP-140-3. |
+| SP-140-5 | [Design↔Code Sync — Continuous Bidirectional Loop](./SP-140-5-sync.md) | 🟡 Draft — not started. Export + `design_sync` (code→design import), directional drift reporting. Depends on SP-140-1 (core); SP-140-4 for full value. |
 
 ## Future / On Hold
 

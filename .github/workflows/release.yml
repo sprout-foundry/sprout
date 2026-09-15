@@ -147,6 +147,18 @@ jobs:
       shell: bash
       run: make verify-ui-embedded
 
+    - name: Upload embedded UI assets (consumed by macos-build)
+      # pkg/webui/static is gitignored (only `placeholder` is tracked), so the
+      # "commit UI assets to the tag" step below is a no-op for real assets and
+      # a fresh checkout of the tag carries no UI. The darwin/arm64 binary
+      # embeds the same UI, so macos-build overlays this artifact onto its
+      # checkout before building.
+      uses: actions/upload-artifact@v4
+      with:
+        name: ui-assets
+        path: pkg/webui/static
+        if-no-files-found: error
+
     - name: Commit embedded UI assets and package version bumps to release tag
       run: |
         git config --local user.email "action@github.com"
@@ -308,6 +320,22 @@ jobs:
       uses: actions/checkout@v5
       with:
         fetch-depth: 0 # match release build history for version ldflags
+
+    - name: Download embedded UI assets from `build`
+      # pkg/webui/static is gitignored (only `placeholder` is tracked), so a
+      # fresh tag checkout carries no UI. Overlay the ui-assets artifact built
+      # by the `build` job so the darwin/arm64 binary embeds the real UI.
+      uses: actions/download-artifact@v4
+      with:
+        name: ui-assets
+        path: pkg/webui/static
+
+    - name: Verify embedded UI assets are present (not the placeholder)
+      run: |
+        test -f pkg/webui/static/index.html || {
+          echo "ERROR: pkg/webui/static/index.html missing — UI assets were not overlaid" >&2
+          exit 1
+        }
 
     - name: Set up Go
       uses: actions/setup-go@v5

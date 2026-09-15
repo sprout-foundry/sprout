@@ -194,6 +194,46 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             return null;
         }
       })}
+
+      {/* Render any toolRefs that weren't matched to a "[executing tool]"
+       * text marker as inline badges after the text. Tool execution often
+       * arrives via agent_message / tool_log events that update the execution
+       * state (feeding the footer timeline bar above the input) and never
+       * insert a marker into the message text — so parseMessageSegments finds
+       * no tool_call segment for them. Without this fallback those tools
+       * vanish from the chat bubble (they show only above the input).
+       * claimMatchingToolRef already splices claimed refs out, so this only
+       * renders refs with no inline marker — no duplicate badges. */}
+      {unclaimedRefs.map((ref) => {
+        const baseName = ref.toolName.split('(')[0].trim();
+        const toolStatus = getToolStatus?.(ref.toolId);
+        const isDone =
+          toolStatus === 'completed' || toolStatus === 'error' || toolStatus === undefined;
+        const Icon = toolStatus === 'error' ? XCircle : toolStatus === 'completed' ? CheckCircle : Loader2;
+        return (
+          <span
+            key={`ref-${ref.toolId}`}
+            className={`${isDone ? 'segment-tool-footnote' : 'segment-tool-call'}${toolStatus === 'error' ? ' segment-tool-footnote--error' : ''}`}
+            role={onToolRefClick ? 'button' : undefined}
+            tabIndex={onToolRefClick ? 0 : undefined}
+            onClick={() => onToolRefClick?.(ref.toolId)}
+            onKeyDown={(e) => {
+              if (onToolRefClick && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onToolRefClick?.(ref.toolId);
+              }
+            }}
+            title={ref.label}
+            aria-label={`View tool: ${ref.label}`}
+          >
+            {!isDone && <span className="tool-pill-icon">{getToolIcon(baseName)}</span>}
+            <Icon size={12} className={isDone ? 'tool-footnote-icon' : 'tool-pill-icon'} />
+            <span className={isDone ? 'tool-footnote-name' : 'tool-pill-name'}>
+              {getShortToolName(baseName)}
+            </span>
+          </span>
+        );
+      })}
     </div >
   );
 };

@@ -2288,6 +2288,13 @@
   overflow: hidden;
 }
 
+/* Breathing room between the sub-tab bar's bottom border and the panel
+ * content — without it the branch row / commit filter sit flush against
+ * the rule and the pane reads as squished. */
+.git-subtab-panel {
+  padding-top: var(--space-4);
+}
+
 .git-sidebar-tab {
   /* `min-width: 0` lets flex distribute width evenly even when intrinsic
    * label width exceeds the share. Combined with the ellipsis on the

@@ -72,12 +72,14 @@ SP-140-3e):
 {
   "target": "wireframes/login.svg",
   "status": "changes-requested",
+  "resolution": "",
   "annotations": [
     {
       "id": "a1",
       "at": {"x": 0.42, "y": 0.18},
       "area": "hierarchy",
       "note": "Primary CTA reads as secondary; swap emphasis with the link below",
+      "resolved": false,
       "created": "2026-09-15T10:36:47Z"
     }
   ]
@@ -85,6 +87,10 @@ SP-140-3e):
 ```
 
 - `at` coordinates are normalized 0–1 (resolution-independent).
+- `resolved` (per annotation, set from the DesignView detail pane) and
+  the top-level `resolution` note (written by the agent when it closes
+  the loop with a summary of changes) are the resolution fields the
+  140-3e/4d flow depends on.
 - Agent side: `design_assets` output includes pending feedback targets
   with counts; the skill's loop starts any `changes-requested` target
   with a read of its feedback file. No new tool needed — this is

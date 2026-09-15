@@ -80,6 +80,12 @@ time by the agent or user):
   diffs and the convention vocabulary (CSS vars, Tailwind classes,
   router files, component file names) rather than parsing source
   trees. Deep static analysis is explicitly deferred.
+- "Defaults to the turn's ChangeTracker set": `ToolEnv` has no typed
+  ChangeTracker accessor — the sanctioned seam is
+  `env.ResolveToolFuncs().ListChanges` (string output, parsed). Name
+  this in the handler rather than inventing new plumbing.
+- Gate-1 `PrecheckFileAccess` on all touched paths; apply-mode writes
+  are confined to `design/` (asserted by test).
 
 ### 5c. Drift direction — two different meanings of "stale"
 
@@ -113,6 +119,22 @@ Prompt/skill wiring (no machinery):
 - The designer prompt drops "hand off to coding personas" for
   "developers read the tree; keep it truthful, run sync after your
   dev-side work."
+
+### 5g. `design_brief` — the screen scaffold contract
+
+New agent tool, invoked before a dev turn builds a screen (the
+"brief whenever building a screen" step in §5d):
+
+- Args: `screen_name` (wireframe stem), optional `depth`
+  (`summary` | `full`, default `summary`).
+- Reads the design tree for that screen — wireframe, flow edges touching
+  it, tokens referenced, README purpose, pending feedback — and returns
+  a structured brief: purpose, wireframe path, flows in/out with
+  triggers, token paths to consume, open feedback annotations, status.
+- Output is advisory context for the implementing agent (returned as
+  text/JSON in the `ToolResult`); it writes no files. It is a contract,
+  not a generator — no component code is produced (Non-goals).
+- Gate-1 on any path resolution, per SP-140 invariant 7.
 
 ### 5f. Git: one commit carries both sides
 

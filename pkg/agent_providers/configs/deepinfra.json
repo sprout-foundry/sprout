@@ -32,6 +32,7 @@
     ],
     "model_info": [
       {
+        "cached_input_cost": 0.05,
         "context_length": 256000,
         "description": "Optimized specifically for multimodal agent scenarios. It features enhanced agent capabilities, upgraded multimodal comprehension, and more flexible context management.",
         "id": "ByteDance/Seed-1.8",
@@ -46,6 +47,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 256000,
         "description": "A coding model optimized for real-world development environments, with reliable tool use in common IDEs such as Claude Code. It delivers strong front-end performance and supports Skills.",
         "id": "ByteDance/Seed-2.0-code",
@@ -60,6 +62,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.02,
         "context_length": 256000,
         "description": "Built for low-latency, high-concurrency, cost-sensitive use cases, with flexible deployment, four-tier thinking, and multimodal",
         "id": "ByteDance/Seed-2.0-mini",
@@ -74,6 +77,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 256000,
         "description": "Built for the Agent era, it delivers stable performance in complex reasoning and long-horizon tasks, including multi-step planning, visual-text reasoning, video understanding, and advanced analysis.",
         "id": "ByteDance/Seed-2.0-pro",
@@ -111,6 +115,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.07,
         "context_length": 196608,
         "description": "Speed-optimized MiniMax-M2.7",
         "id": "MiniMaxAI/MiniMax-M2.7-Turbo",
@@ -124,6 +129,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.056,
         "context_length": 524288,
         "description": "MiniMax-M3 is a native multimodal model with 1M context. It has ~428B parameters and ~23B activated parameters.",
         "id": "MiniMaxAI/MiniMax-M3",
@@ -201,7 +207,7 @@
         "description": "Qwen3-235B-A22B-Thinking-2507 is the Qwen3's new model with scaling the thinking capability of Qwen3-235B-A22B, improving both the quality and depth of reasoning. ",
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
         "input_cost": 0.23,
-        "name": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+        "name": "Qwen3 235B A22B Thinking 2507",
         "output_cost": 2.3,
         "tags": [
           "tools",
@@ -227,7 +233,7 @@
         "description": "Qwen3 is the latest generation of large language models in Qwen series, offering a comprehensive suite of dense and mixture-of-experts (MoE) models. Built upon extensive training, Qwen3 delivers groundbreaking advancements in reasoning, instruction-following, agent capabilities, and multilingual support",
         "id": "Qwen/Qwen3-32B",
         "input_cost": 0.08,
-        "name": "Qwen/Qwen3-32B",
+        "name": "Qwen3 32B",
         "output_cost": 0.28,
         "tags": [
           "tools",
@@ -236,6 +242,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 262144,
         "description": "Qwen3-Coder-480B-A35B-Instruct is the Qwen3's most agentic code model, featuring Significant Performance on Agentic Coding, Agentic Browser-Use and other foundational coding tasks, achieving results comparable to Claude Sonnet.",
         "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
@@ -248,11 +255,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.24,
         "context_length": 256000,
         "description": "The latest flagship model in the Qwen family. State-of-the-art results across a comprehensive suite of benchmarks — including knowledge, reasoning, coding, instruction following, human preference alignment, agent tasks, and multilingual understanding.",
         "id": "Qwen/Qwen3-Max",
         "input_cost": 1.2,
-        "name": "Qwen/Qwen3-Max",
+        "name": "Qwen3 Max",
         "output_cost": 6,
         "tags": [
           "tools",
@@ -260,11 +268,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.24,
         "context_length": 256000,
         "description": "The latest flagship reasoning model in the Qwen3 family. Further enhanced by multiple innovations like adaptive tool-use and advanced test-time scaling techniques",
         "id": "Qwen/Qwen3-Max-Thinking",
         "input_cost": 1.2,
-        "name": "Qwen/Qwen3-Max-Thinking",
+        "name": "Qwen3 Max Thinking",
         "output_cost": 6,
         "tags": [
           "tools",
@@ -284,11 +293,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.11,
         "context_length": 262144,
         "description": "Meet Qwen3-VL — the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding \u0026 generation, deeper visual perception \u0026 reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
         "id": "Qwen/Qwen3-VL-235B-A22B-Instruct",
         "input_cost": 0.2,
-        "name": "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
         "output_cost": 0.88,
         "tags": [
           "tools",
@@ -338,6 +348,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Qwen3.5-35B-A3B is an efficient Mixture-of-Experts model from Alibaba's Qwen3.5 series with 35B total parameters and only 3B activated per token. It features a 262K token context window (extensible to 1M with YaRN), thinking/reasoning mode, tool calling, and support for 201 languages. Delivers strong performance on reasoning, coding, and vision-language tasks at a fraction of the compute cost.",
         "id": "Qwen/Qwen3.5-35B-A3B",
@@ -352,11 +363,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.22,
         "context_length": 262144,
         "description": "Qwen3.5-397B-A17B is Alibaba's most capable Qwen3.5 model, a Mixture-of-Experts architecture with 397B total parameters and 17B activated per token. It features a 262K token context window (extensible to 1M with YaRN), thinking/reasoning mode, tool calling with MCP integration, and support for 201 languages. Sets state-of-the-art results on reasoning, coding, math, and multimodal benchmarks.",
         "id": "Qwen/Qwen3.5-397B-A17B",
         "input_cost": 0.45,
-        "name": "Qwen/Qwen3.5-397B-A17B",
+        "name": "Qwen3.5 397B A17B",
         "output_cost": 3,
         "tags": [
           "tools",
@@ -407,11 +419,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.5,
         "context_length": 256000,
         "description": "The largest and most capable in the Qwen3.7 series. Qwen3.7 is a next‑generation flagship model designed for the agent‑centric.",
         "id": "Qwen/Qwen3.7-Max",
         "input_cost": 2.5,
-        "name": "Qwen/Qwen3.7-Max",
+        "name": "Qwen3.7 Max",
         "output_cost": 7.5,
         "tags": [
           "tools",
@@ -440,6 +453,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.0028,
         "context_length": 262144,
         "description": "MiMo-V2.5 is a native omnimodal model with strong agentic capabilities, supporting text, image, video, and audio understanding within a unified architecture. Built upon the MiMo-V2-Flash backbone and extended with dedicated vision and audio encoders, it delivers robust performance across multimodal perception, long-context reasoning, and agentic workflows. ",
         "id": "XiaomiMiMo/MiMo-V2.5",
@@ -454,6 +468,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.2,
         "context_length": 1048576,
         "description": "MiMo-V2.5-Pro is an open-source Mixture-of-Experts (MoE) language model with 1.02T total parameters and 42B active parameters. It utilizes the hybrid attention architecture and 3-layers Multi-Token Prediction (MTP) introduced in [MiMo-V2-Flash](https://github.com/XiaomiMiMo/MiMo-V2-Flash).",
         "id": "XiaomiMiMo/MiMo-V2.5-Pro",
@@ -565,6 +580,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.35,
         "context_length": 163840,
         "description": "The DeepSeek R1 model has undergone a minor version upgrade, with the current version being DeepSeek-R1-0528.",
         "id": "deepseek-ai/DeepSeek-R1-0528",
@@ -590,6 +606,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.135,
         "context_length": 163840,
         "description": "DeepSeek-V3-0324, a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token, an improved iteration over DeepSeek-V3.",
         "id": "deepseek-ai/DeepSeek-V3-0324",
@@ -602,6 +619,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.13,
         "context_length": 163840,
         "description": "DeepSeek-V3.1 is post-trained on the top of DeepSeek-V3.1-Base, which is built upon the original V3 base checkpoint through a two-phase long context extension approach, following the methodology outlined in the original DeepSeek-V3 report. We have expanded our dataset by collecting additional long documents and substantially extending both training phases. The 32K extension phase has been increased 10-fold to 630B tokens, while the 128K extension phase has been extended by 3.3x to 209B tokens. Additionally, DeepSeek-V3.1 is trained using the UE8M0 FP8 scale data format to ensure compatibility with microscaling data formats.",
         "id": "deepseek-ai/DeepSeek-V3.1",
@@ -628,6 +646,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.13,
         "context_length": 163840,
         "description": "DeepSeek-V3.2 is a large language model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism that reduces training and inference cost while preserving quality in long-context scenarios. A scalable reinforcement learning post-training framework further improves reasoning, with reported performance in the GPT-5 class, and the model has demonstrated gold-medal results on the 2025 IMO and IOI. V3.2 also uses a large-scale agentic task synthesis pipeline to better integrate reasoning into tool-use settings, boosting compliance and generalization in interactive environments.",
         "id": "deepseek-ai/DeepSeek-V3.2",
@@ -640,6 +659,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.018,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-focused MoE model with 284B total parameters (13B active) and a 1M-token context window. It's tuned for fast inference and high-throughput use cases while still holding up on reasoning and coding tasks.",
         "id": "deepseek-ai/DeepSeek-V4-Flash",
@@ -653,6 +673,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "DeepSeek-V4-Flash-0731 is the official release of DeepSeek-V4-Flash, superseding the preview version, with substantially enhanced agentic capabilities. DeepSeek-V4-Flash-0731 outperforms DeepSeek-V4-Pro (Preview) on benchmarks listed below despite its far smaller activated parameter count, and is broadly competitive with the strongest proprietary models available.",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
@@ -666,6 +687,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is an MoE model with 1.6T total parameters (49B active) and a 1M-token context window. It's built for advanced reasoning, coding, and long-running agent tasks, and performs well on knowledge, math, and software engineering benchmarks.",
         "id": "deepseek-ai/DeepSeek-V4-Pro",
@@ -682,7 +704,7 @@
         "description": "Gemini 2.5 Flash is Google's latest thinking model, designed to tackle increasingly complex problems. It's capable of reasoning through their thoughts before responding, resulting in enhanced performance and improved accuracy.  Gemini 2.5 Flash: best for balancing reasoning and speed.",
         "id": "google/gemini-2.5-flash",
         "input_cost": 0.3,
-        "name": "google/gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
         "output_cost": 2.5,
         "tags": [
           "tools",
@@ -696,7 +718,7 @@
         "description": "Gemini 2.5 Pro is Google's the most advanced thinking model, designed to tackle increasingly complex problems. Gemini 2.5 Pro leads common benchmarks by meaningful margins and showcases strong reasoning and code capabilities.  Gemini 2.5 models are thinking models, capable of reasoning through their thoughts before responding, resulting in enhanced performance and improved accuracy.  The Gemini 2.5 Pro model is now available on DeepInfra.",
         "id": "google/gemini-2.5-pro",
         "input_cost": 1.25,
-        "name": "google/gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
         "output_cost": 10,
         "tags": [
           "tools",
@@ -710,7 +732,7 @@
         "description": "Bring any idea to life with state-of-the-art reasoning to help you learn, build, and plan anything. Best for high-volume tasks that need efficiency and intelligence.",
         "id": "google/gemini-3.1-flash-lite",
         "input_cost": 0.25,
-        "name": "google/gemini-3.1-flash-lite",
+        "name": "Gemini 3.1 Flash Lite",
         "output_cost": 1.5,
         "tags": [
           "tools",
@@ -816,7 +838,7 @@
         "description": "Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
         "id": "google/gemma-4-31B-it",
         "input_cost": 0.13,
-        "name": "google/gemma-4-31B-it",
+        "name": "Gemma 4 31B",
         "output_cost": 0.38,
         "tags": [
           "tools",
@@ -840,6 +862,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
         "id": "google/gemma-4-31B-it-turbo",
@@ -905,7 +928,7 @@
         "description": "Llama Guard 4 is a natively multimodal safety classifier with 12 billion parameters trained jointly on text and multiple images. Llama Guard 4 is a dense architecture pruned from the Llama 4 Scout pre-trained model and fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM inputs (prompt classification) and in LLM responses (response classification). It itself acts as an LLM: it generates text in its output that indicates whether a given prompt or response is safe or unsafe, and if unsafe, it also lists the content categories violated.",
         "id": "meta-llama/Llama-Guard-4-12B",
         "input_cost": 0.18,
-        "name": "meta-llama/Llama-Guard-4-12B",
+        "name": "Llama Guard 4 12B",
         "output_cost": 0.18,
         "tags": [
           "vision"
@@ -940,7 +963,7 @@
         "description": "Phi-4 is a model built upon a blend of synthetic datasets, data from filtered public domain websites, and acquired academic books and Q\u0026A datasets. The goal of this approach was to ensure that small capable models were trained with data focused on high quality and advanced reasoning.",
         "id": "microsoft/phi-4",
         "input_cost": 0.07,
-        "name": "microsoft/phi-4",
+        "name": "Phi 4",
         "output_cost": 0.14,
         "tags": [
           "structured_output"
@@ -987,7 +1010,7 @@
         "description": "Kimi K2.5 is an open-source, native multimodal agentic model built through continual pretraining on approximately 15 trillion mixed visual and text tokens atop Kimi-K2-Base. It seamlessly integrates vision and language understanding with advanced agentic capabilities, instant and thinking modes, as well as conversational and agentic paradigms.",
         "id": "moonshotai/Kimi-K2.5",
         "input_cost": 0.45,
-        "name": "moonshotai/Kimi-K2.5",
+        "name": "Kimi K2.5",
         "output_cost": 2.25,
         "tags": [
           "tools",
@@ -997,6 +1020,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.15,
         "context_length": 262144,
         "description": "Kimi K2.6 is an open-source, native multimodal agentic model that advances practical capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration.",
         "id": "moonshotai/Kimi-K2.6",
@@ -1011,6 +1035,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.136,
         "context_length": 262144,
         "description": "Kimi K2.7 Code is a coding-focused agentic model built upon Kimi K2.6. With substantial improvements on real-world long-horizon coding tasks, it strengthens end-to-end task completion across complex software engineering workflows while improving token efficiency, reducing thinking-token usage by approximately 30% compared with Kimi K2.6.",
         "id": "moonshotai/Kimi-K2.7-Code",
@@ -1038,6 +1063,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 262144,
         "description": "Nemotron 3 Ultra is built for, frontier reasoning, orchestration, coding agents, deep research, and complex enterprise workflows. It delivers up to 5x faster inference and up to 30% lower cost for agentic workloads while supporting up to 1M token context.",
         "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
@@ -1052,11 +1078,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.025,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3 Nano is an open small reasoning model optimized for fast, cost-efficient inference in agentic and production workloads. Built with a hybrid Mixture-of-Experts (MoE) and Mamba-Transformer architecture, it delivers strong multi-step reasoning, high token throughput, stable latency with predictable cost, and efficient deployment for agent-based systems. Designed for real-world AI systems where reasoning can generate significantly more tokens per prompt, Nemotron Nano reduces compute cost while maintaining strong reasoning quality.",
         "id": "nvidia/Nemotron-3-Nano-30B-A3B",
         "input_cost": 0.05,
-        "name": "nvidia/Nemotron-3-Nano-30B-A3B",
+        "name": "Nemotron 3 Nano 30B A3B",
         "output_cost": 0.2,
         "tags": [
           "tools",
@@ -1118,7 +1145,7 @@
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI’s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
         "id": "openai/gpt-oss-20b",
         "input_cost": 0.03,
-        "name": "openai/gpt-oss-20b",
+        "name": "gpt-oss-20b",
         "output_cost": 0.14,
         "tags": [
           "tools",
@@ -1127,6 +1154,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.04,
         "context_length": 262144,
         "description": "Step 3.7 Flash is an open-source multimodal reasoning model by StepFun with 198B total parameters (11B active) using Mixture of Experts. It accepts   text and image inputs and features a 256K context window, selectable reasoning effort, tool calling, and agentic capabilities for coding and search workflows, scoring   80.9% on GPQA Diamond and 56.3% on SWE-bench Pro.",
         "id": "stepfun-ai/Step-3.7-Flash",
@@ -1139,11 +1167,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.035,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts (MoE) model with 21B active parameters and 3.8B MTP layer parameters, developed by the Tencent Hy Team. Following the Hy3 Preview launch in late April, we gathered feedback from 50+ products and scaled up post-training with higher quality data. Today, we introduce Hy3, which outperforms similar-size models and rivals flagship open-source models with 2-5x parameters. It also shows significant gains in utility across various products and productivity tasks.",
         "id": "tencent/Hy3",
         "input_cost": 0.14,
-        "name": "tencent/Hy3",
+        "name": "Hy3",
         "output_cost": 0.58,
         "tags": [
           "tools",
@@ -1152,6 +1181,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.16,
         "context_length": 524288,
         "description": "Inkling is a general-purpose multimodal model that accepts text, image and audio inputs and generates text outputs.",
         "id": "thinkingmachines/Inkling",
@@ -1166,11 +1196,12 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 524288,
         "description": "Inkling-Small is a Mixture-of-Experts transformer with 276B total parameters, 12B active, trained on NVIDIA GB300 NVL72 systems. Like Inkling, it features native reasoning over audio and images, variable thinking effort",
         "id": "thinkingmachines/Inkling-Small",
         "input_cost": 0.45,
-        "name": "thinkingmachines/Inkling-Small",
+        "name": "Inkling Small",
         "output_cost": 1.2,
         "tags": [
           "tools",
@@ -1180,6 +1211,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 202752,
         "description": "Compared with GLM-4.5, GLM-4.6 brings several key improvements:  Longer context window: The context window has been expanded from 128K to 200K tokens, enabling the model to handle more complex agentic tasks. Superior coding performance: The model achieves higher scores on code benchmarks and demonstrates better real-world performance in applications such as Claude Code、Cline、Roo Code and Kilo Code, including improvements in generating visually polished front-end pages. Advanced reasoning: GLM-4.6 shows a clear improvement in reasoning performance and supports tool use during inference, leading to stronger overall capability. More capable agents: GLM-4.6 exhibits stronger performance in tool using and search-based agents, and integrates more effectively within agent frameworks. Refined writing: Better aligns with human preferences in style and readability, and performs more naturally in role-playing scenarios.",
         "id": "zai-org/GLM-4.6",
@@ -1193,6 +1225,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.08,
         "context_length": 202752,
         "description": "GLM-4.7 is a state-of-the-art, multilingual Mixture-of-Experts (MoE) language model designed for complex reasoning, agentic coding, and tool use. Building on its predecessor GLM-4.6, it delivers significant improvements across key benchmarks, including multilingual SWE-bench, Terminal Bench, and reasoning-heavy evaluations like HLE. The model features advanced \"Interleaved Thinking\" and new \"Preserved Thinking\" modes, allowing it to reason before actions and maintain consistency across long, multi-turn tasks. With 358 billion parameters, GLM-4.7 excels in generating clean code, modern UI elements, and sophisticated reasoning outputs.",
         "id": "zai-org/GLM-4.7",
@@ -1232,6 +1265,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.205,
         "context_length": 202752,
         "description": "GLM-5.1 is Z-AI's next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor. It achieves state-of-the-art performance on SWE-Bench Pro and leads GLM-5 by a wide margin on NL2Repo (repo generation) and Terminal-Bench 2.0 (real-world terminal tasks).",
         "id": "zai-org/GLM-5.1",
@@ -1245,6 +1279,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.14,
         "context_length": 1048576,
         "description": "GLM-5.2 is Z-AI's latest flagship model for long-horizon tasks. It marks a substantial leap in long-horizon task capability over its predecessor GLM-5.1 and, for the first time, delivers that capability on a **solid 1M-token context**.",
         "id": "zai-org/GLM-5.2",
@@ -1271,7 +1306,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.015,
+        "cached_input_cost": 0.012,
         "context_length": 131072,
         "description": "The model prioritizes token efficiency and agentic inference at production scale, stretching what developers can achieve within limited token, latency, and serving-cost budgets.",
         "id": "inclusionAI/Ling-3.0-flash",
@@ -1285,7 +1320,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.27,
+        "cached_input_cost": 0.285,
         "context_length": 1048576,
         "description": "Kimi K3 is Moonshot AI's 2.8T-parameter open-weight multimodal reasoning model. Built for complex coding, knowledge work, and long-horizon agentic workflows, it excels at navigating large repositories, calling tools, debugging, and iterating on images, logs, tests, and runtime feedback. Its architecture relies on KDA and Attention Residuals for computational efficiency.",
         "id": "moonshotai/Kimi-K3",
@@ -1314,6 +1349,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.04,
         "context_length": 28672,
         "description": "NVIDIA Nemotron 3.5 Lightning is NVIDIA's fastest open model for always-on agents and high-volume specialized tasks. It delivers a substantial leap in agentic capability over its predecessor Nemotron 3 Nano, with up to 4x higher throughput on a 1M-token context.",
         "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
@@ -1368,13 +1404,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.04,
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
         "id": "Qwen/Qwen3.8-27B",
-        "input_cost": 0.4,
+        "input_cost": 0.2,
         "name": "Qwen3.8 27B",
-        "output_cost": 3,
+        "output_cost": 2.5,
         "tags": [
           "tools",
           "vision",
@@ -1440,6 +1476,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.2,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves on GLM-5.2 in coding and in the balance between performance and token efficiency.",
         "id": "zai-org/GLM-5.3",
@@ -1453,7 +1490,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.14,
+        "cached_input_cost": 0.014,
         "context_length": 1048576,
         "description": "DeepSeek-V4-Flash-Vision-Exp is DeepSeek's experimental multimodal model in the V4-Flash family, adding visual understanding to the V4-Flash architecture. It serves a 1M-token (1,048,576) context window and supports image input with visual grounding, tool calling, structured/JSON output, and configurable reasoning effort (low/high/max, or disabled).",
         "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",

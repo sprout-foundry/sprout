@@ -95,7 +95,7 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		SignupURL:           "https://openrouter.ai/keys",
 		APIKeyLabel:         "OpenRouter API Key",
 		APIKeyHelp:          "Create an API key in OpenRouter, then choose a coding-focused model from the list below.",
-		Recommended:         true,
+		Recommended:         false,
 		RecommendedPrefixes: []string{"qwen/qwen3-coder", "deepseek/deepseek-chat", "z-ai/glm", "google/gemini-2.5-pro"},
 		RecommendedModelWhy: "Prefer a coding-focused or reasoning-heavy model instead of a generic default.",
 	},
@@ -107,7 +107,7 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		APIKeyLabel:         "DeepInfra API Key",
 		APIKeyHelp:          "Create a DeepInfra API key, then pick one of the available coding-capable open models.",
 		Recommended:         true,
-		RecommendedPrefixes: []string{"deepseek-ai/deepseek-v3", "qwen/", "zai-org/glm-5", "meta-llama/"},
+		RecommendedPrefixes: []string{"deepseek-ai/deepseek-v4", "deepseek-ai/deepseek-v3", "qwen/", "zai-org/glm-5", "meta-llama/"},
 		RecommendedModelWhy: "Prefer current open coding or reasoning models with good tool-use support.",
 	},
 	"chutes": {
@@ -148,8 +148,8 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 var onboardingProviderOrder = map[string]int{
 	"zai":          0,
 	"minimax":      1,
-	"openrouter":   2,
-	"deepinfra":    3,
+	"deepinfra":    2,
+	"openrouter":   3,
 	"chutes":       4,
 	"cerebras":     5,
 	"sprout-local": 6,

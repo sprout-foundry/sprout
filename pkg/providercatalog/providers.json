@@ -800,7 +800,6 @@
       "signup_url": "https://openrouter.ai/keys",
       "api_key_label": "OpenRouter API Key",
       "api_key_help": "Choose a coding-capable model after connecting your key.",
-      "recommended": true,
       "default_model": "qwen/qwen3.5-27b",
       "recommended_model": "qwen/qwen3.5-27b",
       "recommended_model_why": "Prefer a coding-focused model over generic defaults.",
@@ -6928,9 +6927,9 @@
       "api_key_label": "DeepInfra API Key",
       "api_key_help": "Create a key, then choose a current coding or reasoning model from the provider list.",
       "recommended": true,
-      "default_model": "deepseek-ai/DeepSeek-V3.1-Terminus",
-      "recommended_model": "deepseek-ai/DeepSeek-V3.1-Terminus",
-      "recommended_model_why": "Good default for coding-oriented open-model inference.",
+      "default_model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "recommended_model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "recommended_model_why": "Current DeepSeek coding checkpoint: 1M context, lowest-cost tier, and the strongest tool-calling record in this model family.",
       "models": [
         {
           "id": "anthropic/claude-fable-5",

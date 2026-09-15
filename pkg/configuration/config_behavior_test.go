@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 // ---------------------------------------------------------------------------
@@ -331,4 +334,46 @@ func TestLoadRespectsExplicitWakeupOptOut(t *testing.T) {
 		"Wakeup.MaxTokensPerSession should keep its default when not in file")
 	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession,
 		"Wakeup.MaxResumesPerSession should keep its default when not in file")
+}
+
+// TestNewConfigDeepInfraDefaultIsCurrentCheckpoint guards the fresh-install
+// default for deepinfra against staleness: it must match the provider
+// catalog's curated default whenever the catalog can serve one. The static
+// fallback map in NewConfig is only an offline safety net.
+func TestNewConfigDeepInfraDefaultIsCurrentCheckpoint(t *testing.T) {
+	cfg := NewConfig()
+
+	got := cfg.ProviderModels["deepinfra"]
+	require.NotEmpty(t, got)
+
+	if p, ok := providercatalog.FindProvider("deepinfra"); ok && p.DefaultModel != "" {
+		assert.Equal(t, p.DefaultModel, got,
+			"NewConfig deepinfra default must track the provider catalog default")
+	}
+
+	// The checkpoint must be a V4-family model, not a retired one.
+	assert.Contains(t, got, "DeepSeek-V4",
+		"deepinfra default should be a current DeepSeek checkpoint, got %q", got)
+}
+
+// TestDefaultProviderModelsFallbackTracksCatalog fails the build when the
+// static fallback map names a model the catalog no longer lists for that
+// provider — the drift that left fresh installs on an 11-month-old model.
+func TestDefaultProviderModelsFallbackTracksCatalog(t *testing.T) {
+	for id, model := range defaultProviderModels {
+		p, ok := providercatalog.FindProvider(id)
+		if !ok || len(p.Models) == 0 {
+			continue
+		}
+		listed := false
+		for _, m := range p.Models {
+			if strings.EqualFold(m.ID, model) {
+				listed = true
+				break
+			}
+		}
+		assert.True(t, listed,
+			"fallback default %q for %s is not in the catalog's live model list — update defaultProviderModels",
+			model, id)
+	}
 }

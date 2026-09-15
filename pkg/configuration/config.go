@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 // personaDefaultsWarningOnce guards the warning output when embedded persona
@@ -310,23 +311,53 @@ type TrainingConfig struct {
 
 type APIKeys map[string]string
 
+// defaultProviderModels is the offline fallback used when the provider
+// catalog cannot serve a recommendation (test binaries, refresh failures,
+// air-gapped installs). Kept deliberately minimal: the live defaults come
+// from pkg/providercatalog via defaultProviderModelsCatalogDriven, so this
+// map cannot silently drift from the catalog again.
+var defaultProviderModels = map[string]string{
+	"openai":       "gpt-5-mini",
+	"zai":          "GLM-4.6",
+	"deepinfra":    "deepseek-ai/DeepSeek-V4-Flash-0731",
+	"openrouter":   "openai/gpt-5",
+	"ollama-local": "qwen3-coder:30b",
+	"ollama-cloud": "deepseek-v4-flash",
+}
+
+// defaultProviderModelsCatalogDriven overrides the static fallback with the
+// provider catalog's curated default/recommended models. A provider keeps
+// its static entry when the catalog has no model for it (local providers
+// like ollama-local whose model IDs aren't curated).
+func defaultProviderModelsCatalogDriven() map[string]string {
+	out := make(map[string]string, len(defaultProviderModels))
+	for k, v := range defaultProviderModels {
+		out[k] = v
+	}
+	for id := range out {
+		p, ok := providercatalog.FindProvider(id)
+		if !ok {
+			continue
+		}
+		if m := p.DefaultModel; m != "" {
+			out[id] = m
+		} else if m := p.RecommendedModel; m != "" {
+			out[id] = m
+		}
+	}
+	return out
+}
+
 // NewConfig creates a new configuration with sensible defaults
 func NewConfig() *Config {
 	return &Config{
 		Version:          ConfigVersion,
 		LastUsedProvider: "",
-		ProviderModels: map[string]string{
-			"openai":       "gpt-5-mini",
-			"zai":          "GLM-4.6",
-			"deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
-			"openrouter":   "openai/gpt-5",
-			"ollama-local": "qwen3-coder:30b",
-			"ollama-cloud": "deepseek-v3.1:671b",
-		},
+		ProviderModels:   defaultProviderModelsCatalogDriven(),
 		ProviderPriority: []string{
+			"deepinfra",
 			"openrouter",
 			"zai",
-			"deepinfra",
 			"ollama-cloud",
 			"ollama-local",
 			"openai",

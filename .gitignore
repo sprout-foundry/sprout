@@ -9,7 +9,7 @@ ledit
 ledit-*
 ledit-main
 model_registry_server
-refresh_provider_catalog
+/refresh_provider_catalog
 validate_registry
 *.exe
 *.exe~

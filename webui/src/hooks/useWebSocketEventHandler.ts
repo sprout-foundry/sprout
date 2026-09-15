@@ -31,11 +31,11 @@ import type {
 import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
+import { fetchChatSessionMessages, listChatSessions } from '../services/chatSessions';
 import { getWebUIClientId } from '../services/clientSession';
 import { notifyIfHidden } from '../services/desktopNotify';
 import { getServerErrorCode } from '../services/errorCodes';
 import { LSPClientService } from '../services/lspClientService';
-import { switchChatSession, listChatSessions } from '../services/chatSessions';
 import { notificationBus } from '../services/notificationBus';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
@@ -1305,8 +1305,13 @@ const handleSessionChanged = (ctx: EventHandlerContext): void => {
   // instant the button is pressed.
   const isTranscriptReset = data.change === 'switch' || data.change === 'clear';
   if (isTranscriptReset && activeChatIdRef.current && chatId === activeChatIdRef.current) {
-    // Another client switched/cleared this chat's session — reload the transcript.
-    switchChatSession(chatId)
+    // Another client switched/cleared this chat's session — reload the
+    // transcript. Use the read-only fetch, NOT switchChatSession: a back-end
+    // switch would re-emit session_changed("switch") to every subscriber
+    // (including this client), which would re-trigger this reload and loop
+    // forever (blank-flash on every turn). We only need the new transcript,
+    // not another side-effecting switch.
+    fetchChatSessionMessages(chatId)
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
@@ -1752,7 +1757,10 @@ export function useWebSocketEventHandler({
           const chatId = activeChatIdRef.current;
           if (chatId) {
             debugLog('[reconnect] query completed during disconnect — reloading messages for', chatId);
-            switchChatSession(chatId)
+            // Read-only reload: a switchChatSession here would re-broadcast
+            // session_changed("switch") and risk the same echo-reload loop the
+            // session_changed handler avoids.
+            fetchChatSessionMessages(chatId)
               .then((response) => {
                 // Bail if user switched chats while we were loading.
                 if (activeChatIdRef.current !== chatId) return;

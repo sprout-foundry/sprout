@@ -1,0 +1,157 @@
+import { renderHook } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { EditorBuffer } from '../types/editor';
+import { useChatSessionsSync } from './useChatSessionsSync';
+
+type Sessions = Array<{ id: string; name?: string; is_default?: boolean }>;
+
+function makeBuffer(overrides: Partial<EditorBuffer> & { id: string }): EditorBuffer {
+  return {
+    kind: 'chat',
+    file: { name: 'Chat', path: '__workspace/chat', isDir: false, size: 0, modified: 0, ext: '.chat' },
+    content: '',
+    originalContent: '',
+    contentLoaded: true,
+    cursorPosition: { line: 0, column: 0 },
+    scrollPosition: { top: 0, left: 0 },
+    isModified: false,
+    isActive: false,
+    paneId: 'pane-1',
+    isPinned: false,
+    isClosable: true,
+    metadata: { chatId: null },
+    ...overrides,
+  };
+}
+
+function setup(opts: { sessions: Sessions; activeChatId: string | null; buffers: Map<string, EditorBuffer> }) {
+  const buffersRef: React.RefObject<Map<string, EditorBuffer>> = { current: opts.buffers };
+  const calls: {
+    open: Array<{ id: string; isPinned?: boolean; isClosable?: boolean; activate?: boolean }>;
+    pinned: Array<[string, boolean]>;
+    closable: Array<[string, boolean]>;
+  } = { open: [], pinned: [], closable: [] };
+
+  const openWorkspaceBuffer = (o: {
+    kind: 'chat';
+    path: string;
+    title: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    activate?: boolean;
+    metadata?: Record<string, unknown>;
+  }) => {
+    const id = o.path;
+    calls.open.push({ id, isPinned: o.isPinned, isClosable: o.isClosable, activate: o.activate });
+    // Mirror openWorkspaceBuffer: register a new buffer so subsequent runs dedupe.
+    const chatId = o.metadata?.chatId as string;
+    opts.buffers.set(
+      id,
+      makeBuffer({
+        id,
+        file: { ...makeBuffer({ id: id }).file, name: o.title, path: id },
+        isPinned: o.isPinned ?? false,
+        isClosable: o.isClosable ?? !o.isPinned,
+        metadata: { chatId },
+      }),
+    );
+    return id;
+  };
+
+  const utils = renderHook(() =>
+    useChatSessionsSync({
+      chatSessions: opts.sessions as never,
+      activeChatId: opts.activeChatId,
+      buffersRef,
+      updateBufferTitle: vi.fn(),
+      updateBufferMetadata: (id, updates) => {
+        const b = opts.buffers.get(id);
+        if (b) opts.buffers.set(id, { ...b, metadata: { ...b.metadata, ...updates } });
+      },
+      setBufferPinned: (id, v) => {
+        calls.pinned.push([id, v]);
+        const b = opts.buffers.get(id);
+        if (b) opts.buffers.set(id, { ...b, isPinned: v });
+      },
+      setBufferClosable: (id, v) => {
+        calls.closable.push([id, v]);
+        const b = opts.buffers.get(id);
+        if (b) opts.buffers.set(id, { ...b, isClosable: v });
+      },
+      openWorkspaceBuffer: openWorkspaceBuffer as never,
+    }),
+  );
+
+  return { ...utils, calls, buffers: opts.buffers };
+}
+
+describe('useChatSessionsSync', () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('claims the initial chat buffer for the active session (stays pinned)', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, isActive: true })],
+    ]);
+    setup({ sessions: [{ id: 'A' }], activeChatId: 'A', buffers });
+    // No new tab should be opened for the active session when buffer-chat is unclaimed.
+    expect(buffers.get('buffer-chat')?.metadata?.chatId).toBe('A');
+  });
+
+  it('opens a non-active session as an unpinned, closable, NON-activating tab', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      [
+        'buffer-chat',
+        makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, metadata: { chatId: 'A' }, isActive: true }),
+      ],
+    ]);
+    const { calls } = setup({ sessions: [{ id: 'A' }, { id: 'B' }], activeChatId: 'A', buffers });
+    const b = calls.open.find((o) => o.id.endsWith('/B'));
+    expect(b).toBeTruthy();
+    expect(b!.isPinned).toBe(false);
+    expect(b!.isClosable).toBe(true);
+    // The background tab must not hijack the active chat.
+    expect(b!.activate).toBe(false);
+  });
+
+  it('repairs a permanently-pinned non-active tab so it becomes closable/unpinned', () => {
+    // Simulate the old-bug state: session B's tab was permanently pinned and unclosable.
+    const buffers = new Map<string, EditorBuffer>([
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, metadata: { chatId: 'A' } })],
+      [
+        '__workspace/chat/B',
+        makeBuffer({
+          id: '__workspace/chat/B',
+          isPinned: true,
+          isClosable: false,
+          metadata: { chatId: 'B', isActive: false },
+        }),
+      ],
+    ]);
+    const activeChatId = 'A';
+    const { calls, buffers: mutated } = setup({
+      sessions: [{ id: 'A' }, { id: 'B' }],
+      activeChatId,
+      buffers,
+    });
+    // B's tab was repaired: it must now be closable and unpinned.
+    expect(calls.closable.some(([id, v]) => id === '__workspace/chat/B' && v === true)).toBe(true);
+    expect(calls.pinned.some(([id, v]) => id === '__workspace/chat/B' && v === false)).toBe(true);
+    expect(mutated.get('__workspace/chat/B')?.isClosable).toBe(true);
+    expect(mutated.get('__workspace/chat/B')?.isPinned).toBe(false);
+  });
+
+  it('keeps the active chat tab pinned and unclosable (single pinned tab)', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, metadata: { chatId: 'A' } })],
+    ]);
+    const { calls } = setup({
+      sessions: [{ id: 'A' }, { id: 'B' }],
+      activeChatId: 'A',
+      buffers,
+    });
+    // Active chat's own tab must NOT be unpinned or made closable.
+    expect(calls.closable.some(([id, v]) => id === 'buffer-chat' && v === true)).toBe(false);
+    expect(calls.pinned.some(([id, v]) => id === 'buffer-chat' && v === false)).toBe(false);
+  });
+});

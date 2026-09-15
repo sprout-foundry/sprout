@@ -38,6 +38,7 @@ interface BufferManagerContextValue {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
+    activate?: boolean;
     metadata?: Record<string, unknown>;
   }) => string;
   openCompareBuffer: (options: {
@@ -300,6 +301,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       ext?: string;
       isPinned?: boolean;
       isClosable?: boolean;
+      activate?: boolean;
       metadata?: Record<string, unknown>;
     }) => {
       if (options.kind === 'file') {
@@ -349,6 +351,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;
 
       const bufferId = `buffer-${options.kind}-${Date.now()}`;
+      const shouldActivate = options.activate ?? true;
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: options.kind,
@@ -366,7 +369,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         cursorPosition: { line: 0, column: 0 },
         scrollPosition: { top: 0, left: 0 },
         isModified: false,
-        isActive: true,
+        isActive: shouldActivate,
         paneId: targetPaneId,
         isPinned: options.isPinned ?? false,
         isClosable: options.isClosable ?? !options.isPinned,
@@ -375,19 +378,22 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       setBuffers((prev) => {
         const next = new Map(prev);
-        next.forEach((existing, key) => {
-          if (key !== bufferId && existing.paneId === targetPaneId) {
-            next.set(key, { ...existing, isActive: false });
-          }
-        });
+        if (shouldActivate) {
+          next.forEach((existing, key) => {
+            if (key !== bufferId && existing.paneId === targetPaneId) {
+              next.set(key, { ...existing, isActive: false });
+            }
+          });
+        }
         next.set(bufferId, newBuffer);
         return next;
       });
 
-      paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === targetPaneId ? { ...pane, bufferId } : pane)));
-
-      paneBridge.setActivePaneId(targetPaneId);
-      paneBridge.setActiveBufferId(bufferId);
+      if (shouldActivate) {
+        paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === targetPaneId ? { ...pane, bufferId } : pane)));
+        paneBridge.setActivePaneId(targetPaneId);
+        paneBridge.setActiveBufferId(bufferId);
+      }
 
       return bufferId;
     },

@@ -105,11 +105,43 @@ func main() {
 
 		provider := providerIndex[providerID]
 		provider.Models = normalizeModels(models)
+		// A recommendation that no longer exists in the provider's live
+		// model list is stale by definition — recompute it instead of
+		// serving a retired model to fresh installs. A recommendation that
+		// still exists is left alone: auto-picking "newest" would churn
+		// users onto unproven checkpoints (or regressions) unattended.
+		if !modelListed(provider.RecommendedModel, provider.Models) {
+			if provider.DefaultModel != "" && modelListed(provider.DefaultModel, provider.Models) {
+				provider.RecommendedModel = provider.DefaultModel
+			} else if len(provider.Models) > 0 {
+				provider.RecommendedModel = provider.Models[0].ID
+			}
+			fmt.Fprintf(os.Stdout, "recomputed stale recommendation for %s: %s -> %s\n",
+				providerID, provider.DefaultModel, provider.RecommendedModel)
+		}
 		if provider.RecommendedModel == "" {
 			if provider.DefaultModel != "" {
 				provider.RecommendedModel = provider.DefaultModel
 			} else if len(provider.Models) > 0 {
 				provider.RecommendedModel = provider.Models[0].ID
+			}
+		}
+		if !modelListed(provider.DefaultModel, provider.Models) && len(provider.Models) > 0 {
+			previous := provider.DefaultModel
+			provider.DefaultModel = provider.RecommendedModel
+			fmt.Fprintf(os.Stdout, "recomputed stale default for %s: %s -> %s\n",
+				providerID, previous, provider.DefaultModel)
+		}
+		// Zombie-pricing warning: a recommended model that is still listed
+		// but has lost its pricing while sibling models report it is
+		// usually a deprecation in progress (e.g. DeepSeek-V3.1-Terminus
+		// kept serving long after its pricing stopped updating). The
+		// recommendation still works, so this stays a warning for a human
+		// rather than an auto-recompute — but it should be loud.
+		if rec := provider.RecommendedModel; modelListed(rec, provider.Models) {
+			if hasPricing, hasAnyPricing := modelPricingState(rec, provider.Models); !hasPricing && hasAnyPricing {
+				fmt.Fprintf(os.Stdout, "WARNING: recommended model %s for %s has no pricing while sibling models do — check for a newer checkpoint\n",
+					rec, providerID)
 			}
 		}
 		providerIndex[providerID] = provider
@@ -149,6 +181,36 @@ func main() {
 	} else {
 		fmt.Printf("wrote per-provider JSON files to %s/models/\n", *registryDir)
 	}
+}
+
+// modelPricingState reports whether the named model has pricing and whether
+// any sibling model in the list does. Used to detect zombie recommendations:
+// still listed but silently losing maintenance (pricing first to go).
+func modelPricingState(modelID string, models []providercatalog.Model) (hasPricing, hasAnyPricing bool) {
+	for _, m := range models {
+		has := m.InputCost > 0 || m.OutputCost > 0
+		if has {
+			hasAnyPricing = true
+		}
+		if strings.EqualFold(m.ID, modelID) {
+			hasPricing = has
+		}
+	}
+	return hasPricing, hasAnyPricing
+}
+
+// modelListed reports whether modelID appears in the provider's live model
+// list. Empty modelID is treated as unlisted (nothing to recommend).
+func modelListed(modelID string, models []providercatalog.Model) bool {
+	if strings.TrimSpace(modelID) == "" {
+		return false
+	}
+	for _, m := range models {
+		if strings.EqualFold(m.ID, modelID) {
+			return true
+		}
+	}
+	return false
 }
 
 // carryForwardProbeData reads any prior per-provider JSON file and stamps the

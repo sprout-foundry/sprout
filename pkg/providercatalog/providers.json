@@ -9119,16 +9119,16 @@
     {
       "id": "sprout-local",
       "name": "Local (Offline)",
-      "description": "Run entirely on-device with no API key or network. Uses Apple MLX for GPU-accelerated inference with quantized Qwen3.5 models.",
+      "description": "Run entirely on-device with no API key or network. Uses Apple MLX for GPU-accelerated inference with quantized models from the sinter catalog.",
       "setup_hint": "No setup needed if a model is already downloaded. First use will download the recommended model (~2-5 GB).",
-      "default_model": "qwen3.5-4b-4bit",
-      "recommended_model": "qwen3.5-4b-4bit",
-      "recommended_model_why": "Best speed-to-capability ratio for 16 GB machines; fits comfortably in unified memory at 4-bit.",
+      "default_model": "minicpm5-2b",
+      "recommended_model": "minicpm5-2b",
+      "recommended_model_why": "SOTA for its size class and the suggested default on 8 GB machines; fits comfortably in unified memory at 4-bit.",
       "models": [
         {
-          "id": "qwen3.5-2b-4bit",
-          "name": "Qwen3.5 2B (4-bit)",
-          "description": "Good speed/quality balance — ~49 tok/s on M1 Pro. Fits in 8 GB RAM.",
+          "id": "minicpm5-2b",
+          "name": "MiniCPM5 2B (4-bit)",
+          "description": "Official OpenBMB MLX 4-bit export — SOTA for its size class, always fits. The 8 GB machine default.",
           "context_length": 32000,
           "tags": [
             "local",
@@ -9136,9 +9136,19 @@
           ]
         },
         {
-          "id": "qwen3.5-4b-4bit",
+          "id": "gemma4-e2b",
+          "name": "Gemma4 E2B (5-bit)",
+          "description": "Compact always-fits tier — a safe, lighter-weight choice.",
+          "context_length": 32000,
+          "tags": [
+            "local",
+            "quantized"
+          ]
+        },
+        {
+          "id": "qwen3.5-4b",
           "name": "Qwen3.5 4B (4-bit)",
-          "description": "Quantized Qwen3.5 4B — hybrid DeltaNet architecture, 32K context. ~13 tok/s on M1 Pro.",
+          "description": "Hybrid DeltaNet architecture, 32K context. Selectable on 8 GB+, suggested on 16 GB.",
           "context_length": 32000,
           "tags": [
             "local",
@@ -9146,9 +9156,39 @@
           ]
         },
         {
-          "id": "qwen3.5-9b-4bit",
+          "id": "qwen3.5-9b",
           "name": "Qwen3.5 9B (4-bit)",
-          "description": "Larger model with better reasoning. ~18 tok/s on M1 Pro at 4-bit. Requires 32 GB RAM for comfortable use.",
+          "description": "Larger model with better reasoning. Selectable on 16 GB+, suggested on 24 GB.",
+          "context_length": 32000,
+          "tags": [
+            "local",
+            "quantized"
+          ]
+        },
+        {
+          "id": "qwen3.8-27b",
+          "name": "Qwen3.8 27B (4-bit)",
+          "description": "Dense 27B with preserve-thinking chat template. Selectable on 32 GB+, suggested on 48 GB.",
+          "context_length": 32000,
+          "tags": [
+            "local",
+            "quantized"
+          ]
+        },
+        {
+          "id": "qwen3.6-35b-a3b",
+          "name": "Qwen3.6 35B-A3B (4-bit)",
+          "description": "MoE ~35B total, ~3B active per token. Top-of-line — always an explicit, warned pick (32 GB+ RAM).",
+          "context_length": 32000,
+          "tags": [
+            "local",
+            "quantized"
+          ]
+        },
+        {
+          "id": "edge0-35b-a3b",
+          "name": "Edge0 35B-A3B preview (4-bit)",
+          "description": "Same qwen3_5_moe model as qwen3.6-35b-a3b with merged Recover-LoRA. Top-of-line — always an explicit, warned pick (32 GB+ RAM).",
           "context_length": 32000,
           "tags": [
             "local",

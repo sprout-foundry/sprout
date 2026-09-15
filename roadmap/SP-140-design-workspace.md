@@ -35,6 +35,12 @@ persona**, a **canvas**, and the **two loops**: the visual loop
 (render→critique) and the design↔code loop (continuous sync — no
 handoff; see the second premise below).
 
+Naming note: the workspace-level `design/` directory, `design_*` agent
+tools, and `designer` persona are distinct from `packages/design/` (the
+`@sprout-foundry/design` npm package) and from the webui house token
+system (`@sprout/ui`, rooted in `webui/src/App.css`). No coupling, no
+shared code — just don't confuse them.
+
 ## Premise: files are the integration boundary
 
 Everything in this spec treats design assets as plain files in an
@@ -90,7 +96,7 @@ design/
   brand/                    # brand.md + logo SVGs (SP-140-1d)
   icons/                    # icon SVGs + sprite.svg (SP-140-1f)
   wireframes/               # screen wireframes, one SVG per screen (SP-140-1b)
-  screens/                  # hi-fi HTML/CSS screen designs (SP-140-1c)
+  screens/                  # hi-fi HTML/CSS screen designs (SP-140-1i)
   flows/                    # mermaid flow sources, one .mmd per flow (SP-140-1c)
   feedback/                 # human annotations, JSON per target (SP-140-4d)
 ```
@@ -107,12 +113,14 @@ external tools equal citizens.
 | 1 | SP-140-1 | Format charter: DTCG tokens, SVG wireframe conventions, mermaid flows, brand/icons, README manifest, validator tool | — |
 | 2 | SP-140-2 | `designer` persona, `design-system` skill, agent-facing tools (`design_assets`, `design_render`, `design_import_sketch`) | 140-1 |
 | 3 | SP-140-3 | WebUI DesignView + canvas (React Flow over mermaid, screen nodes, tokens viewer) | 140-1 (140-2 for end-to-end) |
-| 4 | SP-140-4 | Visual loop: render→critique, sketch import, consistency checks, human annotations | 140-2, 140-3 |
-| 5 | SP-140-5 | Design↔code sync (continuous, bidirectional): token export (CSS vars / TS / Tailwind `@theme`), screen scaffold briefs, `design_sync` code→design import, directional drift reporting | 140-1 (140-4 for full value) |
+| 4 | SP-140-4 | Visual loop: render→critique, consistency checks, human annotations | 140-2, 140-3 |
+| 5 | SP-140-5 | Design↔code sync (continuous, bidirectional): token export (CSS vars / TS / Tailwind `@theme`), screen scaffold briefs (`design_brief`), `design_sync` code→design import, directional drift reporting | 140-1 (140-4 for full value) |
 
 Phases 2 and 3 are independent of each other and can proceed in parallel
-after Phase 1. Phase 5's core (token export) only needs Phase 1, so it can
-start early if sync value is needed before the canvas exists.
+after Phase 1. Only Phase 5's token export (SP-140-5 §5a) needs Phase 1
+alone — it can start early if sync value is needed before the canvas
+exists; the drift reporting (§5c) additionally needs Phase 2's
+`design_assets`.
 
 ## Relationship to existing work
 
@@ -167,6 +175,17 @@ start early if sync value is needed before the canvas exists.
    reaches the tree through the same write/diff/review/commit surfaces
    as code, and generated artifacts carry provenance hashes so any
    commit's consistency is checkable offline.
+7. **Master tool roster**: the design tool set is exactly
+   `design_validate` (140-1g), `design_assets`, `design_render`,
+   `design_import_sketch` (140-2c), `design_critique` (140-4a),
+   `design_export_tokens`, `design_sync`, `design_brief` (140-5a/5b/5g).
+   Every one of these that touches workspace paths runs Gate-1
+   `PrecheckFileAccess`, including the Phase 4/5 writers (critique
+   cache, token export, sync apply) — not just the Phase 2 four.
+   Browser- and vision-dependent tools (`design_render`,
+   `design_import_sketch`, `design_critique`) are `//go:build !js` with
+   WASM stubs mirroring `all_vision.go`; only `design_assets` and
+   `design_validate` ship WASM variants.
 
 ## Acceptance criteria (umbrella)
 

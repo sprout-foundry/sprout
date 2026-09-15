@@ -28,11 +28,15 @@ schema (see `docs/PERSONAS.md` §1, §3):
   vocabulary, screen-flow id==stem rule), the validate-then-declare-done
   workflow, and the critique vocabulary (hierarchy, affordance,
   consistency, spacing rhythm, contrast) used by SP-140-4's loop.
-- **AllowedTools:** default set plus the new design tools (`design_assets`,
+- **AllowedTools:** explicit array (the catalog has no default-set
+  mechanism — every persona lists its tools): the standard file/shell/
+  edit/subagent set plus the design tools (`design_assets`,
   `design_render`, `design_import_sketch`, `design_validate`) and
-  `analyze_ui_screenshot`. **Not** a minimal allowlist: the designer also
-  needs shell (to run renders), edit/write, and subagents. The persona
-  specializes behavior; it does not sandbox.
+  `analyze_ui_screenshot`. Listing tools that register later is
+  harmless (the allowlist filters the registered roster), so the
+  persona can land before the tools. **Not** a minimal allowlist: the
+  designer also needs shell (to run renders), edit/write, and
+  subagents. The persona specializes behavior; it does not sandbox.
 - **Capabilities:** `git_write` — **deliberate**, and required by
   SP-140's git premise: the design↔code loop commits design and code
   together, so the persona who finishes a design iteration must be
@@ -87,12 +91,24 @@ Four `ToolHandler` structs, each one line in `pkg/agent_tools/all.go`.
   source is never mutated).
 - Implementation: for SVG/HTML reuse the browser-adapter render path
   inside `analyze_ui_screenshot_handler.go` (extract a shared helper;
-  no duplication). For mermaid, generate a standalone HTML page
-  embedding the mermaid script + source, render via the same browser
-  path (this is why `flow_layout` lives here — layout is a render-time
-  concern). Mermaid script sourcing: pinned vendored copy in
-  `pkg/agent_tools/design/` (offline-safe; matches the vendored copy
-  SP-140-3 uses in the webui).
+  no duplication). The existing branch is gated on `IsHTMLInput`,
+  which matches `.html`/`.htm` only — the shared helper must extend
+  input detection (e.g. an `IsRenderableInput` covering `.svg`) or
+  take an explicit render-mode argument, so SVG sources render to PNG
+  instead of falling through to the raw `image/svg+xml` vision branch.
+  Local file rendering passes `allow_file_url: true` in `BrowseOptions`
+  (see `browser_adapter.go`'s `buildBrowseOptions`).
+- For mermaid: generate a standalone HTML page embedding the mermaid
+  script + source, render via the same browser path (this is why
+  `flow_layout` lives here — layout is a render-time concern). Mermaid
+  script sourcing: pinned vendored copy in `pkg/agent_tools/design/`
+  (offline-safe; matches the vendored copy SP-140-3 uses in the webui;
+  keep the upstream LICENSE/NOTICE and exempt the vendored bundle from
+  the 500-line rule).
+- Build tags: `design_render` and `design_import_sketch` depend on the
+  host browser/vision tiers — they are `//go:build !js` files with WASM
+  stubs mirroring `all_vision.go`/`all_browse_url_wasm.go`, not
+  unconditional registrations in `all.go`.
 - Output: `ToolResult` with images attached via the SP-137
   images-preserving path, plus a text summary. Critique prompting
   (`analysis_prompt`) passes through to the vision tier.
@@ -106,10 +122,11 @@ Four `ToolHandler` structs, each one line in `pkg/agent_tools/all.go`.
 - Implementation: pure prompt orchestration — image attaches to the
   vision tier via SP-137; the model extracts structure and writes
   convention-compliant SVG/token/mermaid files with the normal file
-  tools; `design_validate` runs before returning. This tool is a thin
-  gatekeeper (path validation, Gate-1 precheck mirroring
-  `analyze_ui_screenshot`'s `PrecheckFileAccess` pattern, target
-  conventions in the prompt), not an image pipeline.
+  tools. The tool itself is a thin gatekeeper (path validation, Gate-1
+  precheck mirroring `analyze_ui_screenshot`'s `PrecheckFileAccess`
+  pattern, target conventions in the prompt), not an image pipeline;
+  the post-write `design_validate` run is the agent's job, directed by
+  the skill (2b) — the tool's output reminds the agent to run it.
 - Gate 1 precheck on `image_path` like every file-touching tool.
 
 **`design_validate`** — defined in SP-140-1g; listed here because the
@@ -118,16 +135,20 @@ persona prompt and skill direct its use.
 ### 2d. Prompt guidance
 
 Both embedded prompts (`pkg/agent/prompts/system_prompt.md`,
-`system_prompt.lite.md`) get a short conditional block: when the
-workspace contains `design/`, read `design/README.md` first, use
-`design_assets` for inventory, and route design work to the designer
-persona or design-system skill. Same shape as the SP-137 image-guidance
-block; lite version kept minimal.
+`system_prompt.lite.md`) get a short static section (not runtime
+injection — embedded prompts are fixed; the LLM evaluates the
+condition, same shape as the SP-137 image-guidance block at
+`system_prompt.md:126`): when the workspace contains `design/`, read
+`design/README.md` first, use `design_assets` for inventory, and route
+design work to the designer persona or design-system skill. Lite
+version kept minimal.
 
 ### 2e. Security notes
 
 - All four tools run Gate-1 `PrecheckFileAccess` on workspace paths
-  (mirror `analyze_ui_screenshot_handler.go`).
+  (mirror `analyze_ui_screenshot_handler.go`); the same requirement
+  extends to every later design tool that touches paths (SP-140
+  invariant 7: critique cache, token export, sync apply, brief).
 - `design_render` renders workspace-local files in a headless browser —
   the same trust level as the existing `analyze_ui_screenshot` HTML
   path (already accepted); no network in render beyond mermaid's

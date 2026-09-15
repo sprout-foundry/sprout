@@ -17,11 +17,19 @@ up. Design assets would be invisible text files.
 ### 3a. DesignView — one new top-level view
 
 `webui/src/components/design/DesignView.tsx`, added to the existing
-view routing (`AppContent.tsx` currentView pattern). Activates when
-`design/` exists in the workspace (same detection the agent uses —
-presence of the directory); hidden otherwise. Layout: canvas as the
-primary surface, with a left rail (assets browser) and a right detail
-pane.
+view routing (`currentView` on `AppState`, `webui/src/types/app.ts:92`;
+the render branch lives in `EditorWorkspace.tsx`'s view switch, with a
+nav affordance added to `Sidebar.tsx`). `ViewType` is an open union, so
+`'design'` needs no type change. Activates when `design/` exists in the
+workspace (same detection the agent uses — presence of the directory);
+hidden otherwise. Layout: canvas as the primary surface, with a left rail
+(assets browser) and a right detail pane.
+
+File-split plan (AGENTS.md <500-line rule): `DesignView.tsx` is a shell
+only — routing, tab state, layout. Each tab is its own component
+(`FlowsCanvas.tsx`, `ScreensGrid.tsx`, `TokensTree.tsx`), the canvas
+layout derivation lives in pure modules (`webui/src/design/layout.ts`,
+`sidecar.ts`), and the feedback affordance is its own component.
 
 Three tabs inside DesignView: **Flows**, **Screens**, **Tokens**.
 Mirrors the asset classes; keeps the view shallow (SP-139's
@@ -36,8 +44,12 @@ de-necessitation lesson: do not build a six-tab panel again).
 - **Sources of truth:** `design/flows/*.mmd` (edges, labels, groups)
   and `design/wireframes/*.svg` (node imagery). The canvas holds
   **derived** position data only: `design/flows/<name>.layout.json`
-  sidecars `{nodes: {id: {x, y}}, derivedFrom: <mmd content hash>}` —
-  SP-140 invariant 2; regenerated when the hash drifts.
+  sidecars `{nodes: {id: {x, y}}, layoutHint: <hint or "">, derivedFrom:
+  <mmd content hash>}` — SP-140 invariant 2; regenerated when the hash
+  drifts. `layoutHint` records the `design_render` orientation hint so
+  the canvas layout and the agent's render agree (the AC "dagre layout
+  matches `design_render`'s orientation hints" is checked against this
+  field).
 - **Node imagery:** wireframe SVGs render inside nodes (object URL
   from file text). Flows without wireframes render labeled boxes.
 - **Interactions v1:** pan/zoom, node select → detail pane, edge
@@ -52,8 +64,11 @@ de-necessitation lesson: do not build a six-tab panel again).
 
 - Grid of wireframe/screen cards (SVG thumbnails, screen name, README
   status chip). Click → detail pane = **LivePreview reuse**: the
-  existing split editor + renderer component, instantiated with the
-  screen file (behavior unchanged; it is already exactly this surface).
+  existing split editor + renderer component, instantiated directly as
+  the controlled component (`content`/`language: 'html'`/`fileName`
+  props; the synthetic `__workspace/` preview-buffer path is not
+  used). `onContentChange` wires to a file write through `designApi`
+  (the detail pane's write-back path).
 - Device-frame-aware sizing from `design/README.md` frames.
 
 ### 3d. Tokens tab
@@ -73,12 +88,13 @@ agent-side consumption (reading feedback) is SP-140-4.
 
 ### 3f. Data access
 
-New thin `webui/src/services/designApi.ts` over the existing
-workspace-file APIs (same fetch patterns as `filesApi`):
-`listAssets()`, `readAsset(path)`, `writeLayout(name, sidecar)`,
-`writeFeedback(target, json)`. No new HTTP endpoints unless the
-existing file APIs cannot express these — prefer zero backend changes;
-the workspace is already served to the webui.
+New thin `webui/src/services/api/designApi.ts` (alongside
+`filesApi.ts`, with an export line in `webui/src/services/api/index.ts`)
+over the existing workspace-file APIs (same fetch patterns as
+`filesApi.ts`): `listAssets()`, `readAsset(path)`, `writeLayout(name,
+sidecar)`, `writeFeedback(target, json)`. No new HTTP endpoints unless
+the existing file APIs cannot express these — prefer zero backend
+changes; the workspace is already served to the webui.
 
 ### 3g. Vendored mermaid for client rendering
 
@@ -120,6 +136,10 @@ enforced *from* a project's own tokens; out of scope here.
 - [ ] Vitest coverage: layout-derivation pure functions (mmd → dagre →
       nodes), sidecar hash/staleness logic, designApi.
 - [ ] Playwright e2e (`test/webui/design_view.spec.ts`, chrome-channel
-      launch per AGENTS.md): open fixture workspace → flow renders →
-      select node → detail pane → open screen in editor.
+      launch per AGENTS.md): the standard `start-stack.mjs` webServer
+      boots a fresh temp workspace with no `design/`, so this spec must
+      start its own stack with a pre-seeded `workspaceDir` fixture
+      (`test/webui/fixtures/sprout.ts` `StartSproutOptions`): open
+      fixture workspace → flow renders → select node → detail pane →
+      open screen in editor.
 - [ ] `cd webui && npx prettier --check` and `make lint` clean.

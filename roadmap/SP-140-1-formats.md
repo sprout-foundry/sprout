@@ -55,7 +55,7 @@ consistency):
 
 - Root element: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">`
   with integer `W H` matching a device frame declared in
-  `design/README.md` (e.g. `1440x900` desktop, `390x844` mobile).
+  `design/README.md` (see §1e's machine-parseable `frame:` lines).
 - Self-contained: no `<script>`; no external resource references —
   embedded rasters must be data URIs. External `href`/`src` is an error.
 - Text stays `<text>` (not outlined paths) so it remains greppable,
@@ -66,6 +66,12 @@ consistency):
   stem. This is the machine-checkable screen→screen edge.
 - One screen per file; the file stem is the canonical screen name
   (`^[a-z0-9]+(-[a-z0-9]+)*$`).
+
+Validator enforcement levels: well-formedness, viewBox presence,
+self-containment, slug rule, and `data-nav` targets are hard checks;
+frame matching, `<text>` usage, and stable ids on interactive elements
+are advisory (`info`) — the validator cannot reliably parse intent from
+SVG structure.
 
 ### 1c. Flows — mermaid
 
@@ -95,7 +101,15 @@ in use, per-screen one-line purpose, per-flow purpose, status markers
 (`draft` / `review` / `ready`), and links. This is the file the agent
 reads first when `design/` exists (SP-140-2d wires the prompt guidance).
 Keep it plain Markdown with a light suggested shape; the validator checks
-links resolve, not prose.
+links resolve, not prose. Device frames are declared with
+machine-parseable fenced lines so the validator and SP-140-3's
+device-frame-aware sizing can read them:
+
+```
+frames:
+  desktop: 1440x900
+  mobile: 390x844
+```
 
 ### 1f. Icons
 
@@ -116,7 +130,13 @@ New `ToolHandler` in `pkg/agent_tools` (one struct + one line in
 - Mermaid: parse (`mermaid.parse` equivalent — Go-side parser for the
   `flowchart` subset; full syntax fidelity is not required, edge/node
   extraction is), node-id == wireframe-stem rule for screen flows.
-- README: relative links resolve to real files.
+- Screens (`design/screens/*.html`): self-containment (no `<script>`
+  pulling network resources; inline `<style>` or workspace-relative
+  CSS only), slug naming shared with wireframes, advisory check that
+  the root container width matches a declared device frame.
+- README: relative links resolve to real files; `frames:` block parses
+  (name → `WxH`); wireframe viewBox frame-matching runs against these
+  declarations (advisory `info`).
 
 Output: structured per-file findings `{file, line?, severity, message,
 rule}` — not prose. Exit semantics match other agent tools (`ToolResult`
@@ -145,6 +165,28 @@ The tree is versioned by the workspace repository — no side channel
   size threshold, pointing at the "move it to `brand/` and reference
   it" escape hatch.
 
+Ownership: the validator's no-args run on a workspace lacking
+`.gitattributes` (or lacking the `diff=html` line) emits a `fix`
+finding with the exact line to add; the agent (via the design-system
+skill, SP-140-2b) applies it. The scaffold **appends** to an existing
+`.gitattributes` — user workspaces already carry text/binary rules
+that must not be clobbered.
+
+## 1i. Screens — HTML + CSS
+
+Location `design/screens/<screen-name>.html`, one self-contained file
+per screen (file stem shares the wireframe slug rule). Conventions:
+
+- Inline `<style>` or workspace-relative `<link>` CSS only; no
+  `<script>` pulling network resources (vendored/local scripts allowed
+  for derived artifacts only). No external font/CDN references.
+- The root container's width should match a declared device frame
+  (advisory check).
+- Semantic HTML; text stays text (same greppability rationale as
+  wireframes).
+- These are the sources SP-140-2's `design_render` renders and
+  SP-140-3's Screens tab previews via `LivePreview`.
+
 ## Non-goals
 
 - No token *transformation* here (CSS/TS generation is SP-140-5).
@@ -165,8 +207,11 @@ The tree is versioned by the workspace repository — no side channel
 - [ ] `design_validate` registered in `pkg/agent_tools/all.go`; callable
       with no args on a workspace with `design/`; returns structured
       findings JSON.
-- [ ] `make vet && make lint && make build-all` and `go test ./...`
-      clean.
-- [ ] No proprietary product names appear in the design-tier code
-      (grep-enforced test, mirroring SP-137's
-      `TestVisionTierNoProviderNames` pattern).
+- [ ] `make vet && make fmt-check && make lint && make build-all` and
+      `go test ./...` clean.
+- [ ] No proprietary product names appear in the design-tier code:
+      grep-enforced test (mirroring SP-137's
+      `TestVisionTierNoProviderNames` pattern) with a hardcoded word
+      list (`figma`, `penpot`, `sketch`, `illustrator`, `adobe`,
+      `photoshop`) scanned over the new design-tier Go files and webui
+      design components — not docs, specs, or fixtures.

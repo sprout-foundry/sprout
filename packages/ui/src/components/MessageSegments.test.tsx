@@ -470,6 +470,36 @@ describe('MessageSegments', () => {
     expect(container.querySelector('.segment-tool-call')).not.toBeNull();
   });
 
+  it('renders unclaimed toolRef with no text marker as an inline badge', () => {
+    // Regression: tool execution often arrives via agent_message / tool_log
+    // events that update execution state but never insert a "[executing tool]"
+    // marker into the message text. Without the unclaimed-refs fallback those
+    // tools showed only above the input (footer timeline) and vanished from
+    // the chat bubble. A toolRef with no matching marker must still render
+    // inline.
+    const toolRefs: ToolRef[] = [
+      { toolId: 'u1', toolName: 'shell_command', label: 'shell_command(echo hi)' },
+      { toolId: 'u2', toolName: 'read_file', label: 'read_file(path="a.txt")' },
+    ];
+    const getToolStatus = vi.fn(() => 'completed');
+
+    act(() => {
+      root.render(
+        createElement(MessageSegments, {
+          content: 'The model narrates prose without any tool markers.',
+          toolRefs,
+          getToolStatus,
+        })
+      );
+    });
+
+    // Both refs lack a marker; the fallback renders each as an inline footnote.
+    expect(container.querySelectorAll('.segment-tool-footnote')).toHaveLength(2);
+    expect(container.querySelectorAll('.segment-tool-call')).toHaveLength(0);
+    expect(container.textContent).toContain('shell');
+    expect(container.textContent).toContain('read');
+  });
+
   it('renders empty content as empty message-segments div', () => {
     act(() => {
       root.render(createElement(MessageSegments, { content: '' }));

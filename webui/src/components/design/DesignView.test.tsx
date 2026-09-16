@@ -8,11 +8,20 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import DesignView, { DESIGN_TABS } from './DesignView';
+
+function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
+  return render(
+    <SproutAdapterProvider>
+      <DesignView {...props} />
+    </SproutAdapterProvider>,
+  );
+}
 
 describe('DesignView shell', () => {
   it('renders the view root', () => {
-    render(<DesignView />);
+    renderDesign();
     expect(screen.getByTestId('design-view')).toBeInTheDocument();
   });
 
@@ -20,7 +29,7 @@ describe('DesignView shell', () => {
     expect(DESIGN_TABS.map((t) => t.id)).toEqual(['flows', 'screens', 'tokens']);
     expect(DESIGN_TABS.map((t) => t.label)).toEqual(['Flows', 'Screens', 'Tokens']);
 
-    render(<DesignView />);
+    renderDesign();
     expect(screen.getByTestId('design-tab-flows')).toHaveTextContent('Flows');
     expect(screen.getByTestId('design-tab-screens')).toHaveTextContent('Screens');
     expect(screen.getByTestId('design-tab-tokens')).toHaveTextContent('Tokens');
@@ -28,7 +37,7 @@ describe('DesignView shell', () => {
   });
 
   it('defaults to the Flows tab', () => {
-    render(<DesignView />);
+    renderDesign();
     expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', 'flows');
     expect(screen.getByTestId('design-tab-flows')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('design-tab-screens')).toHaveAttribute('aria-selected', 'false');
@@ -36,14 +45,14 @@ describe('DesignView shell', () => {
   });
 
   it('honours an initialTab override', () => {
-    render(<DesignView initialTab="tokens" />);
+    renderDesign({ initialTab: 'tokens' });
     expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', 'tokens');
     expect(screen.getByTestId('design-tokens-tree')).toBeInTheDocument();
     expect(screen.queryByTestId('design-flows-canvas')).not.toBeInTheDocument();
   });
 
   it('switches the rendered panel body when a tab is clicked', () => {
-    render(<DesignView />);
+    renderDesign();
 
     fireEvent.click(screen.getByTestId('design-tab-screens'));
     expect(screen.getByTestId('design-screens-grid')).toBeInTheDocument();
@@ -56,7 +65,7 @@ describe('DesignView shell', () => {
   });
 
   it('keeps the tabpanel wired to the active tab', () => {
-    render(<DesignView />);
+    renderDesign();
     const panel = screen.getByTestId('design-tabpanel');
     expect(panel).toHaveAttribute('aria-labelledby', 'design-tab-flows');
 
@@ -65,7 +74,7 @@ describe('DesignView shell', () => {
   });
 
   it('renders the left rail and right detail pane', () => {
-    render(<DesignView />);
+    renderDesign();
     expect(screen.getByTestId('design-assets-rail')).toBeInTheDocument();
     expect(screen.getByTestId('design-detail-pane')).toBeInTheDocument();
     // No asset selected yet.
@@ -74,7 +83,7 @@ describe('DesignView shell', () => {
 
   it('rail selection flows into the detail pane and can open the asset in the editor', () => {
     const onOpenFile = vi.fn();
-    render(<DesignView onOpenFile={onOpenFile} />);
+    renderDesign({ onOpenFile });
 
     expect(screen.queryByText('Open in editor')).not.toBeInTheDocument();
 
@@ -89,10 +98,14 @@ describe('DesignView shell', () => {
 
   it('renders the back affordance only when onBack is provided', () => {
     const onBack = vi.fn();
-    const { rerender } = render(<DesignView />);
+    const { rerender } = renderDesign();
     expect(screen.queryByLabelText('Back to chat')).not.toBeInTheDocument();
 
-    rerender(<DesignView onBack={onBack} />);
+    rerender(
+      <SproutAdapterProvider>
+        <DesignView onBack={onBack} />
+      </SproutAdapterProvider>,
+    );
     fireEvent.click(screen.getByLabelText('Back to chat'));
     expect(onBack).toHaveBeenCalledTimes(1);
   });

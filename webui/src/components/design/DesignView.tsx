@@ -9,15 +9,24 @@
  *
  * Layout follows the spec: the canvas is the primary surface, with a left
  * rail (assets browser) and a right detail pane.
+ *
+ * The shell owns the inventory (`designApi.listAssets`) because the rail and
+ * every tab body read the same asset lists; tabs receive them as props and
+ * stay pure functions of workspace state. `DesignDetailPane` takes its content
+ * as children so a tab can hand it the selected node/edge detail without the
+ * shell learning each tab's shape (SP-140-3 §3a: shell only).
  */
 
-import { useCallback, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import FlowsCanvas from './FlowsCanvas';
-import ScreensGrid from './ScreensGrid';
-import TokensTree from './TokensTree';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useSproutFetch } from '../../contexts/SproutAdapterContext';
+import { listAssets } from '../../services/api/designApi';
+import type { DesignInventory } from '../../services/api/types';
 import DesignAssetsRail from './DesignAssetsRail';
 import DesignDetailPane from './DesignDetailPane';
+import { FlowsCanvasContainer } from './FlowsCanvasContainer';
+import ScreensGrid from './ScreensGrid';
+import TokensTree from './TokensTree';
 import './DesignView.css';
 
 export type DesignTab = 'flows' | 'screens' | 'tokens';
@@ -46,6 +55,24 @@ export interface DesignViewProps {
 export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }: DesignViewProps = {}) {
   const [activeTab, setActiveTab] = useState<DesignTab>(initialTab);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ReactNode>(null);
+  const [inventory, setInventory] = useState<DesignInventory | null>(null);
+  const fetchFn = useSproutFetch();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await listAssets(fetchFn);
+        if (!cancelled) setInventory(next);
+      } catch {
+        if (!cancelled) setInventory(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchFn]);
 
   const handleSelectAsset = useCallback((path: string) => {
     setSelectedAsset(path);
@@ -87,7 +114,12 @@ export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }:
 
       <div className="design-view-body">
         <aside className="design-view-rail" aria-label="Design assets">
-          <DesignAssetsRail tab={activeTab} onSelect={handleSelectAsset} />
+          <DesignAssetsRail
+            tab={activeTab}
+            inventory={inventory}
+            selected={selectedAsset}
+            onSelect={handleSelectAsset}
+          />
         </aside>
 
         <section
@@ -97,13 +129,24 @@ export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }:
           aria-labelledby={`design-tab-${activeTab}`}
           data-testid="design-tabpanel"
         >
-          {activeTab === 'flows' && <FlowsCanvas onSelectAsset={handleSelectAsset} />}
+          {activeTab === 'flows' && (
+            <FlowsCanvasContainer
+              flows={inventory ? inventory.flows : []}
+              wireframes={inventory ? inventory.wireframes : []}
+              layouts={inventory ? inventory.layouts : []}
+              activeFlowPath={inventory?.flows?.[0]?.path ?? null}
+              onSelectAsset={handleSelectAsset}
+              onOpenFile={onOpenFile}
+            />
+          )}
           {activeTab === 'screens' && <ScreensGrid onSelectAsset={handleSelectAsset} />}
           {activeTab === 'tokens' && <TokensTree onSelectAsset={handleSelectAsset} />}
         </section>
 
         <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">
-          <DesignDetailPane path={selectedAsset} onOpenFile={onOpenFile} />
+          <DesignDetailPane path={selectedAsset} onOpenFile={onOpenFile} onDetail={setDetail}>
+            {detail}
+          </DesignDetailPane>
         </aside>
       </div>
     </div>

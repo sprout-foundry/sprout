@@ -15,6 +15,7 @@ const (
 	IDResearcher   = "researcher"
 	IDCoordinator  = "coordinator"
 	IDComputerUser = "computer_user"
+	IDDesigner     = "designer"
 )
 
 // Retired persona IDs. These personas were consolidated in 2026-09 when the

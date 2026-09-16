@@ -818,7 +818,8 @@ export function useEditorFileIO(
     openWorkspaceBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ref to prevent rapid-fire duplicate auto-reload events for the same buffer
+  // Ref to prevent rapid-fire duplicate auto-reload events for the same buffer.
+  // Holds `${bufferId}\u0000${content}` — content identity, not just length.
   const lastReloadKeyRef = useRef<string>('');
 
   // ── Auto-reload sync listener ──────────────────────────────────
@@ -832,24 +833,67 @@ export function useEditorFileIO(
       const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
       if (detail.bufferId !== buffer.id) return;
 
-      // Skip duplicate rapid-fire events for the same content.
-      const reloadKey = `${detail.bufferId}:${detail.content.length}`;
-      if (lastReloadKeyRef.current === reloadKey) return;
-      lastReloadKeyRef.current = reloadKey;
+      // Skip duplicate rapid-fire events for the same content. Keyed by
+      // content IDENTITY, not length — two different contents of equal
+      // length must not dedupe against each other (a length-keyed check
+      // could leave the CodeMirror view and the buffer holding different
+      // text, which reads as mystery reverts on the next sync).
+      const lastContent = lastReloadKeyRef.current;
+      const separatorIdx = lastContent.indexOf('\u0000');
+      if (
+        separatorIdx >= 0 &&
+        lastContent.slice(0, separatorIdx) === detail.bufferId &&
+        lastContent.slice(separatorIdx + 1) === detail.content
+      ) {
+        return;
+      }
+      lastReloadKeyRef.current = `${detail.bufferId}\u0000${detail.content}`;
 
       // Skip if content hasn't actually changed to avoid resetting cursor/selection
       // when the file content is the same as what's already in the editor.
-      const currentContent = cmViewApiRef.current?.view?.state.doc.toString();
+      const view = cmViewApiRef.current?.view;
+      const currentContent = view?.state.doc.toString();
       if (currentContent === detail.content) return;
 
-      if (cmViewApiRef.current?.view) {
+      if (view) {
         cmViewApiRef.current?.withExternalUpdate(() => {
-          cmViewApiRef.current?.dispatch({
-            changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: detail.content },
+          // Replace only the differing range (common prefix/suffix trim) instead
+          // of the whole document. A full-document swap drops the cursor at the
+          // same offset in entirely different text — the "view jumped / page
+          // refreshed" symptom — and discards selection context. CodeMirror maps
+          // the selection through a small ranged change, so the cursor stays put
+          // for edits outside the changed span.
+          let from = 0;
+          const minLen = Math.min(currentContent!.length, detail.content.length);
+          while (from < minLen && currentContent!.charCodeAt(from) === detail.content.charCodeAt(from)) from++;
+          let endCur = currentContent!.length;
+          let endNext = detail.content.length;
+          while (
+            endCur > from &&
+            endNext > from &&
+            currentContent!.charCodeAt(endCur - 1) === detail.content.charCodeAt(endNext - 1)
+          ) {
+            endCur--;
+            endNext--;
+          }
+          view.dispatch({
+            changes: { from, to: endCur, insert: detail.content.slice(from, endNext) },
             annotations: suppressHistoryAnnotations,
           });
           setLocalContent(detail.content);
-          setSelectionInfo(null);
+
+          // The cursor listener skips external updates, so refresh the
+          // selection readout from the post-change view state directly
+          // (same shaping as useEditorCursor's update listener).
+          const ranges = view.state.selection.ranges;
+          if (ranges.length > 1) {
+            const totalChars = ranges.reduce((sum, r) => sum + (r.to - r.from), 0);
+            setSelectionInfo({ charCount: totalChars, selectionCount: ranges.length });
+          } else if (ranges.length === 1 && !ranges[0].empty) {
+            setSelectionInfo({ charCount: ranges[0].to - ranges[0].from, selectionCount: 1 });
+          } else {
+            setSelectionInfo(null);
+          }
         });
       } else {
         setLocalContent(detail.content);

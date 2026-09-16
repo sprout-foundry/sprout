@@ -156,6 +156,42 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+.design-rail-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.design-rail-row {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm, 0.875rem);
+  text-align: left;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.design-rail-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.design-rail-row.selected {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.design-rail-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .design-tab-body {
   padding: var(--space-4);
 }
@@ -173,4 +209,117 @@
 .design-detail-open:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* Flows canvas (SP-140-3 §3b). Tokens only — no raw hex/rgba. */
+
+.design-flows {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.design-flows-status {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.design-flows-viewport {
+  flex: 1;
+  min-height: 320px;
+}
+
+/* React Flow's own surfaces, re-pointed at the app tokens so the canvas
+   follows the theme instead of React Flow's built-in light palette. */
+.design-flows .react-flow {
+  --xy-background-color: var(--bg-primary);
+  --xy-background-pattern-dots-color: var(--border-strong);
+  --xy-edge-stroke: var(--border-strong);
+  --xy-edge-stroke-selected: var(--accent-primary);
+  --xy-edge-label-background-color: var(--bg-secondary);
+  --xy-edge-label-color: var(--text-primary);
+  --xy-controls-button-background-color: var(--bg-secondary);
+  --xy-controls-button-background-color-hover: var(--bg-tertiary, var(--bg-secondary));
+  --xy-controls-button-color: var(--text-primary);
+  --xy-controls-button-color-hover: var(--text-primary);
+  --xy-controls-button-border-color: var(--border-default);
+  --xy-node-background-color: var(--bg-secondary);
+  --xy-node-color: var(--text-primary);
+  --xy-node-border: 1px solid var(--border-default);
+  --xy-handle-background-color: var(--accent-primary);
+  --xy-handle-border-color: var(--bg-primary);
+  background: var(--bg-primary);
+}
+
+.design-flows .react-flow__edge-text {
+  fill: var(--text-primary);
+  font-size: var(--text-xs, 12px);
+}
+
+.design-flow-node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* Mid-drag the node follows the cursor, so it must paint over its neighbours. */
+.design-flow-node.is-dragging {
+  z-index: 1;
+  box-shadow: 0 4px 12px var(--accent-primary-alpha);
+}
+
+.design-flow-node.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.design-flow-node.has-image {
+  padding: var(--space-2);
+}
+
+.design-flow-node-image {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.design-flow-node-caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.design-flow-node-label {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.design-flow-node-group {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+}
+
+.design-flow-node-missing {
+  font-size: var(--text-xs, 12px);
+  color: var(--accent-warning);
+}
+
+.design-flow-handle {
+  width: 6px;
+  height: 6px;
+  opacity: 0.6;
 }

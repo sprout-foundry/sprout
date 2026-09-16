@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -28,16 +27,20 @@ func (h *designValidateHandler) Definition() ToolDefinition {
 		Name: "design_validate",
 		Description: "Validate the design/ workspace tree against the sprout design " +
 			"conventions (SP-140-1): DTCG tokens, SVG wireframes, icon SVGs, mermaid flows, " +
-			"self-contained screen HTML, the README manifest, brand.md, and feedback JSON. " +
+			"self-contained screen HTML, the README manifest, brand.md, feedback JSON, and the " +
+			"git contract (.gitattributes SVG diff rule, .gitignore design/.cache/ policy, " +
+			"oversized embedded data URIs). " +
 			"Returns structured findings {file, line, severity, message, rule}. Findings are " +
 			"advisory — they never block the turn — so run this after creating or editing " +
-			"design assets and fix the error-severity findings before declaring a design done.",
+			"design assets and fix the error-severity findings before declaring a design done. " +
+			"Severity `fix` findings are machine-applicable: append the exact line they name " +
+			"(never replace existing rules).",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
 				Type:        "string",
 				Required:    false,
-				Description: "Optional path to a single design asset (e.g. `design/wireframes/login.svg`), relative to the workspace root. Omit to validate the whole `design/` tree.",
+				Description: "Optional path to a single design asset (e.g. `design/wireframes/login.svg`) or a repository-level git-contract file (`.gitattributes`, `.gitignore`), relative to the workspace root. Omit to validate the whole `design/` tree.",
 			},
 		},
 		Required: nil,
@@ -161,7 +164,7 @@ func renderFindingsSummary(root string, out findingsOutput) string {
 	if out.Count == 0 {
 		// Distinguish "clean tree" from "no design/ at all" so the agent
 		// knows to scaffold first.
-		if _, err := os.Stat(filepath.Join(root, design.DirName)); err != nil {
+		if !design.FileExists(root) {
 			return "design_validate: No design/ directory found — nothing to validate. " +
 				"Use the design-system skill to scaffold one."
 		}
@@ -170,6 +173,10 @@ func renderFindingsSummary(root string, out findingsOutput) string {
 	var parts []string
 	for _, sev := range []string{"error", "warn", "info", "fix"} {
 		if n := out.BySeverity[sev]; n > 0 {
+			if sev == "fix" {
+				parts = append(parts, fmt.Sprintf("%d fix(es) to apply", n))
+				continue
+			}
 			parts = append(parts, fmt.Sprintf("%d %s(s)", n, sev))
 		}
 	}

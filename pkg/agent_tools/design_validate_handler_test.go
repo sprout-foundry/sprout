@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sprout-foundry/sprout/pkg/design"
@@ -70,7 +72,7 @@ func dvWrite(t *testing.T, root, rel, content string) {
 }
 
 // dvWriteValidTree populates root with a small design/ tree that yields zero
-// findings on a whole-tree run.
+// findings on a whole-tree run, including the §1h git contract lines.
 func dvWriteValidTree(t *testing.T, root string) {
 	t.Helper()
 	dvWrite(t, root, "design/README.md", dvTestManifest)
@@ -78,6 +80,8 @@ func dvWriteValidTree(t *testing.T, root string) {
 	dvWrite(t, root, "design/wireframes/login.svg", dvTestLoginSVG)
 	dvWrite(t, root, "design/wireframes/home.svg", dvTestHomeSVG)
 	dvWrite(t, root, "design/flows/sign-up.mmd", dvTestFlowMMD)
+	dvWrite(t, root, design.GitContractFile, "* text=auto eol=lf\n"+design.GitAttributesDiffHTMLLine+"\n")
+	dvWrite(t, root, design.GitIgnoreFile, "node_modules/\n"+design.GitIgnoreCacheLine+"\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -444,6 +448,107 @@ func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {
 	require.Contains(t, res.Output, "2 finding(s)")
 	require.Contains(t, res.Output, "1 error(s)")
 	require.Contains(t, res.Output, "1 warn(s)")
+}
+
+// ---------------------------------------------------------------------------
+// git contract (§1h)
+// ---------------------------------------------------------------------------
+
+func TestDesignValidateHandler_GitContractFixFindings(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	// A complete, valid tree so only the git contract is at issue.
+	dvWriteValidTree(t, root)
+	// The repo already carries .gitattributes rules that must be preserved.
+	dvWrite(t, root, ".gitattributes", "* text=auto eol=lf\n*.go text eol=lf\n")
+	dvWrite(t, root, ".gitignore", "node_modules/\n")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "fix findings are advisory — they never block a turn")
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Len(t, out.Findings, 2, "expected the .gitattributes + .gitignore fixes, got %#v", out.Findings)
+	require.Equal(t, 2, out.BySeverity["fix"])
+	require.Contains(t, res.Output, "2 fix(es) to apply")
+	require.Equal(t, 0, out.BySeverity["error"])
+
+	byFile := map[string]findingOut{}
+	for _, f := range out.Findings {
+		byFile[f.File] = f
+		assert.Equal(t, "fix", f.Severity)
+	}
+	attrs, ok := byFile[".gitattributes"]
+	require.True(t, ok, "expected a .gitattributes finding, got %#v", out.Findings)
+	assert.Equal(t, "gitattributes_diff_html_fix", attrs.Rule)
+	assert.Contains(t, attrs.Message, "design/**/*.svg diff=html",
+		"the fix must carry the exact line to append")
+
+	ignore, ok := byFile[".gitignore"]
+	require.True(t, ok, "expected a .gitignore finding, got %#v", out.Findings)
+	assert.Equal(t, "gitignore_design_cache_fix", ignore.Rule)
+	assert.Contains(t, ignore.Message, "design/.cache/")
+
+	// The validator must not have modified the repo files.
+	attrsBody, err := os.ReadFile(filepath.Join(root, ".gitattributes"))
+	require.NoError(t, err)
+	require.Equal(t, "* text=auto eol=lf\n*.go text eol=lf\n", string(attrsBody),
+		"design_validate must report the fix, never apply it")
+}
+
+func TestDesignValidateHandler_GitContractSatisfied(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 0, out.Count)
+	require.Equal(t, 0, out.BySeverity["fix"])
+}
+
+func TestDesignValidateHandler_PathArgGitContractFile(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	dvWrite(t, root, ".gitattributes", "*.png binary\n")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": ".gitattributes"})
+	require.NoError(t, err, "the repository-level git-contract files are valid path arguments")
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 1, out.Count)
+	require.Equal(t, ".gitattributes", out.Findings[0].File)
+	require.Equal(t, "gitattributes_diff_html_fix", out.Findings[0].Rule)
+	require.Equal(t, "fix", out.Findings[0].Severity)
+}
+
+func TestDesignValidateHandler_DataURISizeWarn(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	// An oversized embedded raster keeps the SVG self-contained but is a warn.
+	dvWrite(t, root, "design/wireframes/photo.svg",
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Photo</text><image href="data:image/png;base64,`+
+			strings.Repeat("A", (1<<20)+8)+`" /></svg>`)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "design/wireframes/photo.svg"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 1, out.Count)
+	require.Equal(t, "svg_data_uri_size", out.Findings[0].Rule)
+	require.Equal(t, "warn", out.Findings[0].Severity)
+	require.Contains(t, out.Findings[0].Message, "brand/")
 }
 
 // compile-time interface check + import guard for the design package.

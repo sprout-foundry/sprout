@@ -11,9 +11,10 @@ import (
 
 // ValidateTree validates the whole design/ tree under root, SP-140-1 §1g:
 // every §1.x whole-tree validator runs (tokens, wireframes, flows, screens,
-// icons, brand, README manifest) and the combined findings are
-// sorted by file, line, rule, message. root is the workspace root (the
-// parent of design/).
+// icons, brand, README manifest) plus the §1h git contract
+// (.gitattributes diff rule, .gitignore cache policy), and the combined
+// findings are sorted by file, line, rule, message. root is the workspace
+// root (the parent of design/).
 //
 // A missing or partial design/ tree yields empty findings, not an error —
 // a whole-tree run must not fail on workspaces without design assets.
@@ -62,6 +63,11 @@ func ValidateTree(root string) ([]Finding, error) {
 	findings = append(findings, ValidateBrandDir(root)...)
 	findings = append(findings, ValidateManifest(root)...)
 
+	// SP-140-1 §1h: the design tree's git contract (.gitattributes diff rule,
+	// .gitignore cache policy). A workspace without design/ contributes
+	// nothing here, so a missing tree stays finding-free.
+	findings = append(findings, ValidateGitContract(root)...)
+
 	sortFindings(findings)
 	return findings, errors.Join(errs...)
 }
@@ -73,7 +79,8 @@ func ValidateTree(root string) ([]Finding, error) {
 // design/ and the file must exist.
 //
 // Dispatch is by location + extension: tokens/*.tokens.json, wireframes/*.svg,
-// icons/*.svg, flows/*.mmd, screens/*.html, README.md, and brand/brand.md.
+// icons/*.svg, flows/*.mmd, screens/*.html, README.md, brand/brand.md, and the
+// repository-level git-contract files .gitattributes and .gitignore (§1h).
 // Anything else is an error, not a silent pass. The result is never nil.
 func ValidateFile(root, relPath string) ([]Finding, error) {
 	rel := path.Clean(filepath.ToSlash(strings.TrimSpace(relPath)))
@@ -83,6 +90,28 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 	if strings.HasPrefix(rel, "/") {
 		return nil, fmt.Errorf("design asset path %q must be relative to the workspace root", relPath)
 	}
+
+	// SP-140-1 §1h: the repository-level git-contract files live outside
+	// design/ but are legitimate single-file targets.
+	if isGitContractRelPath(rel) {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		info, err := os.Stat(abs)
+		if err != nil {
+			return nil, fmt.Errorf("design asset %s: %w", rel, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("%s is a directory; validate one asset per path argument", rel)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", abs, err)
+		}
+		if rel == GitContractFile {
+			return ValidateGitAttributesContent(rel, data), nil
+		}
+		return ValidateGitIgnoreContent(rel, data), nil
+	}
+
 	if !strings.HasPrefix(rel, DirName+"/") {
 		rel = DirName + "/" + rel
 	}
@@ -149,6 +178,14 @@ func manifestFrames(root string) []Frame {
 		return nil
 	}
 	return frames
+}
+
+// FileExists reports whether the workspace at root has a design/ directory.
+// The design_validate handler uses it to distinguish "clean tree" from "no
+// design/ at all" when a run yields zero findings.
+func FileExists(root string) bool {
+	info, err := os.Stat(filepath.Join(root, DirName))
+	return err == nil && info.IsDir()
 }
 
 // assetStems returns the file stems (name without the extension) of the files

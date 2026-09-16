@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -43,6 +44,11 @@ const (
 	// ruleSVGStableIDs is advisory: an interactive element (data-nav) lacks
 	// a stable id.
 	ruleSVGStableIDs = "svg_stable_ids"
+
+	// ruleSVGDataURISize is advisory (warn): an embedded data: URI exceeds
+	// the size threshold, so the SVG diff is no longer reviewable and the
+	// raster should move to brand/ (SP-140-1 §1h).
+	ruleSVGDataURISize = DataURISizeRule
 )
 
 // resourceAttrs are the SVG attribute local names that may reference a
@@ -235,6 +241,9 @@ func ValidateWireframe(relPath string, content []byte, knownStems []string, fram
 			})
 		}
 	}
+
+	// embedded data URI size (advisory warn, SP-140-1 §1h binary hygiene).
+	findings = append(findings, ValidateDataURISizes(relPath, content)...)
 
 	return finalizeWireframeFindings(findings)
 }
@@ -478,6 +487,167 @@ func findAttrValueOffset(content []byte, attr, value string, fromOff int) int {
 		needle := []byte(attr + q + value + q)
 		if idx := bytes.Index(content[fromOff:], needle); idx >= 0 {
 			return fromOff + idx
+		}
+	}
+	return -1
+}
+
+// dataURI is one data: URI occurrence under the shared design root.
+type dataURI struct {
+	line int
+	size int
+}
+
+// findDataURIsIn scans content for embedded data: URIs (SP-140-1 §1h). It
+// first tries the XML walk so a URI inside an attribute value is measured as
+// the attribute value, then sweeps the raw text for anything the walk missed
+// (for example a URI inside a <style> block, which is not an XML attribute).
+// Overlapping candidates are deduplicated so one URI yields one result.
+func findDataURIsIn(content []byte) []dataURI {
+	var out []dataURI
+	seen := map[int]bool{}
+	add := func(off int) {
+		if off < 0 || seen[off] {
+			return
+		}
+		seen[off] = true
+		end := dataURITokenEnd(content, off)
+		out = append(out, dataURI{
+			line: lineOfOffset(content, off),
+			size: end - off,
+		})
+	}
+
+	walk := walkSVG(content)
+	var m xmlMap
+	if walk.error == nil {
+		m = xmlOffsets(content)
+	}
+	for _, ref := range walk.resourceRefs {
+		if !strings.HasPrefix(strings.TrimSpace(ref.value), "data:") {
+			continue
+		}
+		off := findResourceValueOffset(content, ref, m)
+		if off < 0 {
+			off = findDataURIValueOffset(content, ref.value, 0)
+		}
+		add(off)
+	}
+
+	for from := 0; ; {
+		idx := bytes.Index(content[from:], []byte("data:"))
+		if idx < 0 {
+			break
+		}
+		off := from + idx
+		from = off + len("data:")
+		add(off)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].line != out[j].line {
+			return out[i].line < out[j].line
+		}
+		return out[i].size < out[j].size
+	})
+	return out
+}
+
+// dataURITokenEnd returns the exclusive end offset of the data: URI starting
+// at off. The scan stops at an unescaped whitespace character or at a
+// terminator that would close the surrounding attribute, XML text, or CSS
+// url() context: the marked quotes, and the angle brackets, backslash, and
+// parentheses that delimit markup and CSS. A baseline-64 payload contains
+// none of them, so the byte count is the encoded payload size — the value a
+// reviewer would have to read in a diff. A malformed payload carrying one of
+// those bytes stops the measurement early, which can only under-report the
+// size; the same document fails the SVG well-formedness check anyway.
+func dataURITokenEnd(content []byte, off int) int {
+	for i := off; i < len(content); i++ {
+		switch c := content[i]; {
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			return i
+		case c == '"' || c == '\'' || c == '<' || c == '>' || c == '\\' || c == '(' || c == ')':
+			return i
+		}
+	}
+	return len(content)
+}
+
+// xmlMap maps quoted attribute values to their byte offsets in a document.
+type xmlMap map[string][]int
+
+// xmlOffsets locates every "value" and 'value' occurrence in content, so the
+// walk's decoded attribute values can be mapped back to a byte offset (and
+// hence a line) even when the decoder normalized the value.
+func xmlOffsets(content []byte) xmlMap {
+	m := xmlMap{}
+	for _, q := range []byte{'"', '\''} {
+		for i := 0; i < len(content); i++ {
+			if content[i] != q {
+				continue
+			}
+			j := i + 1
+			for j < len(content) && content[j] != q {
+				j++
+			}
+			if j >= len(content) {
+				break
+			}
+			value := string(content[i+1 : j])
+			m[value] = append(m[value], i+1)
+			i = j
+		}
+	}
+	return m
+}
+
+// findResourceValueOffset resolves a walk resource reference to its literal
+// byte offset: the recorded attribute-value opening quote, then the attribute
+// name, then the first quoted occurrence of the decoded value.
+func findResourceValueOffset(content []byte, ref refLoc, m xmlMap) int {
+	attr := []byte(ref.attr)
+	for q := 0; q < len(content); q++ {
+		if content[q] != '"' && content[q] != '\'' {
+			continue
+		}
+		if q+len(attr) >= len(content) || string(content[q+1:q+1+len(attr)]) != ref.attr {
+			continue
+		}
+		j := q + 1 + len(attr)
+		for j < len(content) && (content[j] == ' ' || content[j] == '\t' || content[j] == '\n' || content[j] == '\r') {
+			j++
+		}
+		if j < len(content) && content[j] == '=' {
+			j++
+		}
+		for j < len(content) && (content[j] == ' ' || content[j] == '\t' || content[j] == '\n' || content[j] == '\r') {
+			j++
+		}
+		if j < len(content) && (content[j] == '"' || content[j] == '\'') {
+			if m != nil {
+				for _, off := range m[string(content[j+1:min(j+1+len(ref.value), len(content))])] {
+					if off == j+1 {
+						return off
+					}
+				}
+			}
+			return j + 1
+		}
+		if j < len(content) {
+			return j
+		}
+	}
+	return -1
+}
+
+// findDataURIValueOffset locates "value" or 'value' at or after fromOff,
+// returning the offset of the value's first byte, or -1.
+func findDataURIValueOffset(content []byte, value string, fromOff int) int {
+	for _, q := range []string{"\"", "'"} {
+		needle := []byte(q + value + q)
+		if idx := bytes.Index(content[fromOff:], needle); idx >= 0 {
+			return fromOff + idx + 1
 		}
 	}
 	return -1

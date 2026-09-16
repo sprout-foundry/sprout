@@ -25,8 +25,14 @@ var ErrManifestIsDirectory = errors.New("design manifest path is a directory")
 
 // Scaffold creates the design workspace tree under dir: the design/
 // root, each canonical subdirectory with a .gitkeep placeholder (git
-// does not track empty directories), and the manifest from the embedded
-// template.
+// does not track empty directories), the manifest from the embedded
+// template, and the workspace git contract (SP-140-1 §1h).
+//
+// The git contract appends GitAttributesDiffHTMLLine to the workspace
+// .gitattributes and GitIgnoreCacheLine to the workspace .gitignore when the
+// line is absent, creating either file when missing. Existing rules are never
+// clobbered — the lines are appended, and an already-satisfied contract
+// (including one covered by a broader rule) is a no-op.
 //
 // Scaffold never overwrites user work: if design/README.md exists with
 // content it returns ErrManifestExists (wrapped with the path) and
@@ -78,6 +84,69 @@ func Scaffold(dir string) error {
 	}
 	if err := os.WriteFile(manifest, template, 0o644); err != nil {
 		return fmt.Errorf("creating %s: %w", manifest, err)
+	}
+
+	if err := AppendGitContract(dir); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AppendGitContract appends the SP-140-1 §1h lines to the workspace
+// .gitattributes and .gitignore when absent, creating either file when
+// missing. It is append-only: existing lines are preserved verbatim, and a
+// contract already satisfied (directly or via a broader ignore rule) is left
+// alone. For example, appending .gitattributes to:
+//
+//   - text=auto eol=lf
+//     *.go text eol=lf
+//
+// yields the same rules plus "design/**/*.svg diff=html" at the end — the
+// repo's text/binary rules are never clobbered. design/generated/ is
+// deliberately never added (SP-140-1 §1h leaves that choice to the project).
+func AppendGitContract(dir string) error {
+	attrsPath := filepath.Join(dir, GitContractFile)
+	attrs, err := os.ReadFile(attrsPath)
+	switch {
+	case err != nil && !errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("reading %s: %w", attrsPath, err)
+	case err == nil && hasGitAttributesDiffHTMLLine(string(attrs)):
+		// Already satisfied — leave the file untouched.
+	default:
+		if err := appendLine(attrsPath, attrs, GitAttributesDiffHTMLLine); err != nil {
+			return err
+		}
+	}
+
+	ignorePath := filepath.Join(dir, GitIgnoreFile)
+	ignore, err := os.ReadFile(ignorePath)
+	switch {
+	case err != nil && !errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("reading %s: %w", ignorePath, err)
+	case err == nil && hasGitIgnorePattern(string(ignore), GitIgnoreCacheLine):
+		// Already satisfied — leave the file untouched.
+	default:
+		if err := appendLine(ignorePath, ignore, GitIgnoreCacheLine); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// appendLine appends line to path, creating the file when it does not exist
+// and adding a separating newline first when the existing content does not end
+// with one. An empty or missing file is written as the single line.
+func appendLine(path string, existing []byte, line string) error {
+	body := existing
+	if len(body) > 0 {
+		if body[len(body)-1] != '\n' {
+			body = append(body, '\n')
+		}
+	}
+	body = append(body, line...)
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	return nil
 }

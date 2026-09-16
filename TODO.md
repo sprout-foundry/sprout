@@ -50,7 +50,7 @@ prettier --check`).
       `pkg/agent_tools/all.go`; runnable with no args (whole tree) or a
       path; structured findings `{file, line?, severity, message, rule}`;
       advisory only (findings never block a turn). Spec: SP-140-1 §1g.
-- [ ] **1.9** Git contract findings: validator emits a `fix` finding
+- [x] **1.9** Git contract findings: validator emits a `fix` finding
       when `.gitattributes` lacks `design/**/*.svg diff=html` (exact
       line to add; append, never clobber — repo already has
       `.gitattributes`); gitignore guidance for `design/.cache/` only;

@@ -57,6 +57,33 @@ Screens and flows carry one of: `draft`, `review`, `ready`.
 - `review` — awaiting human feedback
 - `ready` — approved as the source of truth for implementation
 
+## Git contract
+
+The design tree is versioned by the workspace repository like any other
+source file. Two repository-level lines make that work; `design_validate`
+reports a `fix` finding with the exact line to append when either is
+missing, and the scaffold appends them without touching existing rules.
+
+`.gitattributes` — mark wireframe, icon, and logo SVGs as HTML so a
+rendered PR diff is readable markup (`append`, never replace):
+
+```
+design/**/*.svg diff=html
+```
+
+`.gitignore` — render PNGs and critique scratch are never sources. Only
+`design/.cache/` is ignored; `design/generated/` is deliberately left
+alone — committing generated artifacts (with their provenance hashes) is
+the project's choice:
+
+```
+design/.cache/
+```
+
+Embedded data-URI rasters inside an otherwise-text SVG keep diffs
+reviewable, but the validator warns when one exceeds the size threshold:
+move it to `brand/` and reference it by relative path instead.
+
 ## Links
 
 Relative links to key assets; the validator checks that these resolve.

@@ -76,7 +76,9 @@ const validTreeIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2
 const validBrandMD = "Logo usage: render in {color.brand.primary} on light backgrounds.\n"
 
 // writeValidDesignTree populates root with a small design/ tree that
-// satisfies every validator so a whole-tree run yields zero findings.
+// satisfies every validator — including the SP-140-1 §1h git contract
+// (.gitattributes diff rule, .gitignore cache-only policy) — so a whole-tree
+// run yields zero findings.
 func writeValidDesignTree(t *testing.T, root string) {
 	t.Helper()
 	write := func(rel, content string) {
@@ -92,6 +94,10 @@ func writeValidDesignTree(t *testing.T, root string) {
 	write("design/screens/login.html", validScreenHTML)
 	write("design/icons/home.svg", validTreeIconSVG)
 	write("design/brand/brand.md", validBrandMD)
+	// Repository-level git contract: present, with unrelated rules that must
+	// stay untouched, plus the required design lines.
+	write(GitContractFile, "* text=auto eol=lf\n*.png binary\n"+GitAttributesDiffHTMLLine+"\n")
+	write(GitIgnoreFile, "node_modules/\n"+GitIgnoreCacheLine+"\n")
 }
 
 func TestValidateTreeValid(t *testing.T) {
@@ -110,14 +116,18 @@ func TestValidateTreeMissingDesignDir(t *testing.T) {
 	findings, err := ValidateTree(root)
 	require.NoError(t, err, "a workspace without design/ is not an error")
 	require.NotNil(t, findings)
-	assert.Empty(t, findings)
+	assert.Empty(t, findings, "no design/ tree means no git-contract findings either")
 
-	// A design/ directory with only some subdirectories present is also
-	// not an error — the tree may be partial mid-scaffold.
+	// A design/ directory with only some subdirectories present is a partial
+	// mid-scaffold tree whose assets are all missing; the §1h git contract is
+	// the only thing the run can report, and it does, as fix findings.
 	require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "tokens"), 0o755))
 	findings, err = ValidateTree(root)
 	require.NoError(t, err)
-	assert.Empty(t, findings)
+	rules := findingRules(findings)
+	assert.Equal(t, 1, rules[FixGitAttributesRule])
+	assert.Equal(t, 1, rules[FixGitIgnoreCacheRule])
+	assert.Len(t, findings, 2, "a partial tree yields only the git-contract fixes, got %#v", findings)
 }
 
 func TestValidateTreeSeededBad(t *testing.T) {

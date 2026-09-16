@@ -23,6 +23,11 @@ const (
 	// ruleIconSpriteSymbol fires when a sprite.svg <symbol> id is not a slug
 	// (or the sprite has no symbols).
 	ruleIconSpriteSymbol = "icon_sprite_symbol"
+
+	// ruleIconDataURISize is advisory (warn): an embedded data: URI exceeds
+	// the size threshold, so the SVG diff is no longer reviewable and the
+	// raster should move to brand/ (SP-140-1 §1h).
+	ruleIconDataURISize = DataURISizeRule
 )
 
 // iconSpriteName is the designated sprite sheet filename under design/icons/.
@@ -150,6 +155,9 @@ func validateIconSVG(relPath string, content []byte, isSprite bool) []Finding {
 			}
 		}
 	}
+
+	// embedded data URI size (advisory warn, SP-140-1 §1h binary hygiene).
+	findings = append(findings, ValidateDataURISizes(relPath, content)...)
 
 	return finalizeIconFindings(findings)
 }

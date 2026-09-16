@@ -6,6 +6,8 @@ import { debugLog } from '../utils/log';
 import { resolveEditorFilePath } from '../services/lspClientService';
 import { writeFileWithFetch } from './fileWriteHelpers';
 import { useSproutFetch } from './SproutAdapterContext';
+import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
+import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
 
 // ---------------------------------------------------------------------------
 // Pane Bridge Interface for cross-context communication
@@ -697,6 +699,16 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         }
       }
 
+      // Announce the save BEFORE the write so the external file watcher
+      // learns the new mtime and enters its cooldown before the fsnotify
+      // echo / next poll can flag our own write as an external change.
+      // (Same contract as useEditorFileIO.handleSave.)
+      document.dispatchEvent(
+        new CustomEvent('file:editor-saved', {
+          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+        }),
+      );
+
       try {
         const response = await writeFileWithFetch(sproutFetch, buffer.file.path, contentToSave);
 
@@ -707,6 +719,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
             throw new Error(data.error || 'Save validation failed');
           }
           if (data.message === 'File saved successfully' || data.success === true) {
+            const serverMtime = typeof data.mod_time === 'number' ? data.mod_time : undefined;
             setBuffers((prev) => {
               const newBuffers = new Map(prev);
               const buf = newBuffers.get(bufferId);
@@ -715,11 +728,19 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
                   ...buf,
                   originalContent: formattedContent ?? buf.content,
                   isModified: false,
+                  ...(serverMtime != null ? { file: { ...buf.file, modified: serverMtime } } : {}),
                 });
               }
               return newBuffers;
             });
-            return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined, formattedContent };
+            // Re-announce with the authoritative server mtime once the HTTP
+            // response lands.
+            document.dispatchEvent(
+              new CustomEvent('file:editor-saved', {
+                detail: { path: buffer.file.path, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+              }),
+            );
+            return { mod_time: serverMtime, formattedContent };
           }
         }
       } catch (error) {
@@ -875,6 +896,21 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
     return () => clearInterval(intervalId);
   }, [isAutoSaveEnabled, autoSaveInterval]);
+
+  // ── External file change detection ─────────────────────────────
+  // Polls disk mtimes for open file buffers; on an external write,
+  // clean buffers auto-reload from disk and modified buffers get the
+  // conflict dialog (via useEditorFileIO's file_externally_modified
+  // listener). This layer was silently dropped in the hook-consolidation
+  // refactor — without it the editor never learns that the agent or a
+  // build changed an open file, and a later save clobbers those edits.
+  useExternalFileWatcher({ buffers });
+
+  useAutoReloadCleanBuffers({
+    buffersRef,
+    reloadBufferFromDisk,
+    setBufferExternallyModified,
+  });
 
   const value = React.useMemo<BufferManagerContextValue>(
     () => ({

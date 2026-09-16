@@ -78,14 +78,19 @@
   letter-spacing: 0.03em;
 }
 
+/* Chip sizing only — the op hues (.op-create/.op-edit/.op-delete/
+   .op-bulk) are canonical in AgentChangesPanel.css so the strip and the
+   panel can't drift apart on colors. The tint backgrounds below reuse
+   the same hue tokens per chip. */
+
 .tcs-op.op-create {
   background: color-mix(in srgb, var(--accent-success) 18%, transparent);
   color: var(--accent-success);
 }
 
 .tcs-op.op-edit {
-  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
-  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-info) 16%, transparent);
+  color: var(--accent-info);
 }
 
 .tcs-op.op-delete {

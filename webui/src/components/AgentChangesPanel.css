@@ -246,7 +246,11 @@
   gap: 4px;
 }
 
-/* ── Op icons ─────────────────────────────────────────────────── */
+/* ── Op icons & classes ───────────────────────────────────────── */
+/* .op-create/.op-edit/.op-delete/.op-bulk are the CANONICAL op colors,
+   shared with the per-turn change strip (chat/TurnChangesStrip.css
+   keeps only chip sizing; it intentionally does not re-specify hues).
+   Classes come from utils/changes.ts classifyChangeOp. */
 
 .op-icon {
   flex-shrink: 0;

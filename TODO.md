@@ -62,7 +62,7 @@ prettier --check`).
       `$type`, missing viewBox, `<script>`, external href, dangling
       `data-nav`, mermaid id with no wireframe, README link to missing
       file, screens HTML with network script). Spec: SP-140-1 AC.
-- [ ] **1.11** Proprietary-name grep test: hardcoded word list (`figma`,
+- [x] **1.11** Proprietary-name grep test: hardcoded word list (`figma`,
       `penpot`, `sketch`, `illustrator`, `adobe`, `photoshop`) over the
       new design-tier Go files and webui design components — not docs,
       specs, or fixtures (`TestVisionTierNoProviderNames` pattern).

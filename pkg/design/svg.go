@@ -304,9 +304,8 @@ type svgWalk struct {
 	scripts        []refLoc
 	resourceRefs   []refLoc
 	dataNavs       []dataNavLoc
-}
-
-// refLoc is a <script> tag or a resource reference (href/src) found during
+	symbols        []symbolLoc
+} // refLoc is a <script> tag or a resource reference (href/src) found during
 // the walk.
 type refLoc struct {
 	tag   string
@@ -318,6 +317,12 @@ type refLoc struct {
 type dataNavLoc struct {
 	value string
 	id    string
+}
+
+// symbolLoc is a <symbol> entry and its id during the walk (used for the
+// icon sprite.svg check, SP-140-1 §1f).
+type symbolLoc struct {
+	id string
 }
 
 // walkSVG decodes one SVG document and collects the structural facts the
@@ -374,6 +379,14 @@ func walkSVG(content []byte) svgWalk {
 			w.scripts = append(w.scripts, refLoc{tag: tagName})
 		case strings.EqualFold(tagName, "text"):
 			w.hasText = true
+		case strings.EqualFold(tagName, "symbol"):
+			symID := ""
+			for _, a := range se.Attr {
+				if a.Name.Local == "id" {
+					symID = a.Value
+				}
+			}
+			w.symbols = append(w.symbols, symbolLoc{id: symID})
 		}
 
 		for _, a := range se.Attr {

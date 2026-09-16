@@ -37,6 +37,8 @@ export interface SproutSettings {
   skills: Record<string, SkillConfig>;
   embedding_index?: {
     enabled: boolean;
+    /** Second opt-in gate (SP-137): off by default; see EmbeddingIndexConfig. */
+    experimental: boolean;
     provider: string;
     ort_library_path: string;
     model_dir: string;

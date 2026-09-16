@@ -1279,13 +1279,11 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 				"get_callers", "get_callees":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
-				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate":
+				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate(nil) should return error for tool %q", name)
-			}
-
-			// Validate must handle empty map
+			} // Validate must handle empty map
 			err = h.Validate(map[string]any{})
 			switch name {
 			case "read_file", "fetch_url", "search_files", "embedding_index",
@@ -1293,13 +1291,11 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 				"get_callers", "get_callees":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
-				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate":
+				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate({}) should return error for tool %q", name)
-			}
-
-			// Required list in Definition should match Required flags on parameters
+			} // Required list in Definition should match Required flags on parameters
 			if len(def.Required) > 0 {
 				requiredSet := make(map[string]bool)
 				for _, r := range def.Required {

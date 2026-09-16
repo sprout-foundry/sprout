@@ -17,6 +17,16 @@ const (
 	SlugPattern = `^[a-z0-9]+(-[a-z0-9]+)*$`
 )
 
+// Canonical subdirectory names, named so callers can test membership and
+// subtree relationships without repeating string literals.
+const (
+	// TokenSubdir holds the W3C DTCG *.tokens.json files.
+	TokenSubdir = "tokens"
+
+	// FlowSubdir holds the mermaid *.mmd flow sources.
+	FlowSubdir = "flows"
+)
+
 // Subdirs are the canonical design workspace subdirectories, in contract
 // order.
 var Subdirs = []string{

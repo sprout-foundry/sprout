@@ -97,9 +97,11 @@ func (FSScanner) WalkDir(root string, fn func(path string, d os.DirEntry, err er
 
 // tierSpec is the design-tier file surface for one language: the directory
 // trees to walk plus explicit, individually-named files that live outside those
-// trees. `pkg/design` and its ToolHandler `pkg/agent_tools/design_validate_handler.go`
-// are the whole SP-140-1 Go design tier; the webui design components live under
-// `src/components/design` and `src/design` (SP-140-3).
+// trees. `pkg/design` and its ToolHandlers
+// `pkg/agent_tools/design_validate_handler.go` and
+// `pkg/agent_tools/design_assets_handler.go` are the SP-140 Go design tier; the
+// webui design components live under `src/components/design` and `src/design`
+// (SP-140-3).
 type tierSpec struct {
 	dirs  []string
 	files []string
@@ -112,7 +114,7 @@ type tierSpec struct {
 var designTier = map[string]tierSpec{
 	"go": {
 		dirs:  []string{"pkg/design"},
-		files: []string{"pkg/agent_tools/design_validate_handler.go"},
+		files: []string{"pkg/agent_tools/design_validate_handler.go", "pkg/agent_tools/design_assets_handler.go"},
 	},
 	"webui": {
 		dirs: []string{"src/components/design", "src/design"},

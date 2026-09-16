@@ -45,7 +45,7 @@ prettier --check`).
       files; `frames:` block parses (name → `WxH`); wireframe
       frame-matching runs against declarations (advisory). Spec:
       SP-140-1 §1e, §1g.
-- [ ] **1.8** `design_validate` ToolHandler: `//go:build !js`-safe (no
+- [x] **1.8** `design_validate` ToolHandler: `//go:build !js`-safe (no
       browser/vision deps); one struct + one line in
       `pkg/agent_tools/all.go`; runnable with no args (whole tree) or a
       path; structured findings `{file, line?, severity, message, rule}`;

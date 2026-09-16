@@ -42,7 +42,9 @@ import type {
   SessionSummaryResponse,
   TimelineItem,
 } from '../services/api/changesApi';
+import { changeOpLabel, classifyChangeOp, describeRevertOutcome } from '../utils/changes';
 import { copyToClipboard } from '../utils/clipboard';
+import { formatRelativeTime } from '../utils/format';
 import { useLog } from '../utils/log';
 import DiffView from './DiffView';
 import { showThemedConfirm } from './ThemedDialog';
@@ -64,29 +66,16 @@ interface AgentChangesPanelProps {
 type Tab = 'session' | 'timeline';
 
 const opIcon = (op: string) => {
-  switch (op) {
+  const cls = `op-icon op-${classifyChangeOp(op)}`;
+  switch (classifyChangeOp(op)) {
     case 'create':
-      return <FilePlus size={14} className="op-icon op-create" />;
+      return <FilePlus size={14} className={cls} />;
     case 'delete':
-      return <FileMinus size={14} className="op-icon op-delete" />;
+      return <FileMinus size={14} className={cls} />;
     case 'bulk':
-      return <FolderCog size={14} className="op-icon op-bulk" />;
+      return <FolderCog size={14} className={cls} />;
     default:
-      return <FilePen size={14} className="op-icon op-edit" />;
-  }
-};
-
-const opLabel = (op: string) => {
-  switch (op) {
-    case 'create':
-      return 'Created';
-    case 'delete':
-      return 'Deleted';
-    case 'bulk':
-      return 'Build output';
-    case 'edit':
-    default:
-      return 'Modified';
+      return <FilePen size={14} className={cls} />;
   }
 };
 
@@ -96,17 +85,6 @@ const opLabel = (op: string) => {
 function formatBulkCount(n?: number): string {
   if (!n || n <= 0) return '';
   return new Intl.NumberFormat(undefined).format(n) + ' file' + (n === 1 ? '' : 's');
-}
-
-function formatRelativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const delta = Math.floor((now - then) / 1000);
-  if (delta < 5) return 'just now';
-  if (delta < 60) return `${delta}s ago`;
-  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
-  return `${Math.floor(delta / 86400)}d ago`;
 }
 
 function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps): JSX.Element {
@@ -314,14 +292,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
       if (!ok) return;
       try {
         const res = await apiService.revertAgentChanges({ file: path });
-        if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
-          // Nothing actionable happened (disabled tracking, stale
-          // snapshot, no record). Surface the server's reason instead
-          // of a silent success log.
-          log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
-        } else {
-          log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
-        }
+        const outcome = describeRevertOutcome(res);
+        if (outcome.level === 'error') log.error(outcome.message, { title: 'Agent Changes' });
+        else log.info(outcome.message, { title: 'Agent Changes' });
         await loadSession();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -344,11 +317,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     if (!ok) return;
     try {
       const res = await apiService.revertAgentChanges({ scope: 'all' });
-      if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
-        log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
-      } else {
-        log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
-      }
+      const outcome = describeRevertOutcome(res);
+      if (outcome.level === 'error') log.error(outcome.message, { title: 'Agent Changes' });
+      else log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
       await loadSession();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -445,7 +416,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                     {opIcon(f.op)}
                     <span className="changes-file-path changes-file-path--bulk">{f.path}</span>
                     <span className="changes-file-op">
-                      {opLabel(f.op)}
+                      {changeOpLabel(f.op)}
                       {count ? ` · ${formatBulkCount(count)}` : ''}
                     </span>
                   </div>
@@ -462,7 +433,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                   >
                     {f.path}
                   </button>
-                  <span className="changes-file-op">{opLabel(f.op)}</span>
+                  <span className="changes-file-op">{changeOpLabel(f.op)}</span>
                   <div className="changes-file-actions">
                     <button
                       type="button"

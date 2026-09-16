@@ -1,5 +1,3 @@
-import { debugLog } from './log';
-
 /** Format a duration between two Date objects (or from start to now) into a compact string. */
 export function formatDuration(start: Date, end?: Date): string {
   const ms = (end || new Date()).getTime() - start.getTime();
@@ -8,13 +6,18 @@ export function formatDuration(start: Date, end?: Date): string {
   return `${(ms / 60000).toFixed(1)}m`;
 }
 
-/** Simple relative date formatter (e.g. "3 days ago", "2 hours ago") */
-export function formatRelativeDate(dateStr: string): string {
+/**
+ * Canonical relative-time formatter ("just now" → "2y ago"). Single
+ * source of truth — the contextPanel helpers, TopSessionsTable, and
+ * AgentChangesPanel delegate here instead of keeping private copies.
+ *
+ * A future timestamp renders as "just now" rather than a negative
+ * count; no clamping beyond that.
+ */
+export function formatRelativeTime(dateStr: string): string {
   try {
     const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      return dateStr;
-    }
+    if (isNaN(date.getTime())) return dateStr;
     const now = Date.now();
     const diffMs = now - date.getTime();
     const diffSec = Math.floor(diffMs / 1000);
@@ -32,11 +35,13 @@ export function formatRelativeDate(dateStr: string): string {
     if (diffWeeks < 5) return `${diffWeeks}w ago`;
     if (diffMonths < 12) return `${diffMonths}mo ago`;
     return `${diffYears}y ago`;
-  } catch (err) {
-    debugLog('[format] formatRelativeDate failed:', err);
+  } catch {
     return dateStr;
   }
 }
+
+/** Back-compat alias — formatRelativeTime is the canonical name. */
+export const formatRelativeDate = formatRelativeTime;
 
 /** Extract the first line of a commit message (subject line). */
 export function firstLine(message: string): string {

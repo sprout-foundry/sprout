@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { classifyDiffLine } from '../utils/format';
 import './DiffView.css';
 
 interface DiffViewProps {
@@ -11,23 +12,15 @@ interface DiffLine {
   text: string;
 }
 
-/**
- * Classify one line of a unified diff. Header lines ("--- a/x",
- * "+++ b/x") and the difflib "(no textual difference)" placeholder get
- * their own muted treatment; everything else with a recognized prefix
- * maps to add/del/hunk/context.
- */
-function classifyLine(line: string): DiffLine {
-  // Meta headers first: "--- a/x" starts with "-" and "+++ b/x" starts
-  // with "+", so the file-header check must precede the prefix checks.
-  if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('index ') || line.startsWith('diff ')) {
-    return { kind: 'meta', text: line };
-  }
-  if (line.startsWith('@@')) return { kind: 'hunk', text: line };
-  if (line.startsWith('+')) return { kind: 'add', text: line };
-  if (line.startsWith('-')) return { kind: 'del', text: line };
-  return { kind: 'context', text: line };
-}
+// classifyDiffLine (utils/format) names the header class 'file'; the
+// view's CSS calls it 'meta'. One-line bridge.
+const KIND_MAP: Record<string, DiffLine['kind']> = {
+  file: 'meta',
+  hunk: 'hunk',
+  add: 'add',
+  del: 'del',
+  context: 'context',
+};
 
 /**
  * DiffView — read-only renderer for a unified diff with add/remove/hunk
@@ -42,7 +35,7 @@ export function DiffView({ diff }: DiffViewProps): JSX.Element {
         // difflib output ends with a trailing newline → a final empty
         // split artifact; drop it so the view doesn't end on a gap.
         .filter((l, i, arr) => !(i === arr.length - 1 && l === ''))
-        .map(classifyLine),
+        .map((text) => ({ kind: KIND_MAP[classifyDiffLine(text)] ?? 'context', text })),
     [diff],
   );
 

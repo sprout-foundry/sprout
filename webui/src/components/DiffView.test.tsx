@@ -46,10 +46,10 @@ const lineKinds = () =>
 
 describe('DiffView', () => {
   it('classifies add, del, hunk, and header lines', () => {
-    render(
-      ['diff --git a/x.go b/x.go', '--- a/x.go', '+++ b/x.go', '@@ -1,2 +1,2 @@', '-old', '+new', ' ctx'].join('\n'),
-    );
-    expect(lineKinds()).toEqual(['meta', 'meta', 'meta', 'hunk', 'del', 'add', 'context']);
+    // difflib output (what /api/changes/diff emits) has ---/+++ headers
+    // but no "diff --git" line.
+    render(['--- a/x.go', '+++ b/x.go', '@@ -1,2 +1,2 @@', '-old', '+new', ' ctx'].join('\n'));
+    expect(lineKinds()).toEqual(['meta', 'meta', 'hunk', 'del', 'add', 'context']);
   });
 
   it('renders a plain placeholder line as context, not as a deletion', () => {

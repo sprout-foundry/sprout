@@ -28,7 +28,7 @@ import type {
   SettingsSection,
   SettingsPanelProps,
 } from './settings/types';
-import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer, subsectionToLegacyTab } from './settings/types';
+import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer } from './settings/types';
 import { isCloud } from '../config/mode';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 import { useSettingsMutation } from './settings/useSettingsMutation';
@@ -196,13 +196,11 @@ function SettingsPanel({
   const activeSection = activeSubsection ? getSectionForSubsection(activeSubsection) : undefined;
   const effectiveLayer = activeSection ? scopeToLayer(activeSection.scope) : 'session';
 
-  /* ─── Sync legacy activeSubTab to trigger fetch effects ── */
-
+  // Providers-consuming subsections (Providers, Subagents) trigger the
+  // persona/provider-info fetches in useSettingsState.
   useEffect(() => {
-    if (activeSubsection) {
-      const legacyTab = subsectionToLegacyTab(activeSubsection);
-      state.setActiveSubTab(legacyTab);
-    }
+    const isProvidersSubsection = activeSubsection === 'env-providers' || activeSubsection === 'agent-subagents';
+    state.setProvidersSectionActive(isProvidersSubsection);
   }, [activeSubsection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -216,6 +214,7 @@ function SettingsPanel({
     configViewLayer: effectiveLayer,
     api: state.api,
     setProvenanceSources: state.setProvenanceSources,
+    bumpLayerFetchTick: state.bumpLayerFetchTick,
     // MCP server state
     editingServer: state.editingServer,
     setEditingServer: state.setEditingServer,

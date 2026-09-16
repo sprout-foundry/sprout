@@ -20,6 +20,8 @@ interface MutationHookParams {
   configViewLayer: 'session' | 'workspace' | 'global';
   api: ReturnType<typeof ApiService.getInstance>;
   setProvenanceSources: (v: Record<string, string>) => void;
+  /** Re-fetch the active layer after a non-session save. */
+  bumpLayerFetchTick: () => void;
   // MCP server state
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
@@ -93,6 +95,7 @@ export function useSettingsMutation(params: MutationHookParams) {
     configViewLayer,
     api,
     setProvenanceSources,
+    bumpLayerFetchTick,
     settingsRef,
     editingServer,
     setEditingServer,
@@ -249,6 +252,11 @@ export function useSettingsMutation(params: MutationHookParams) {
             .catch((err) => {
               debugLog('[SettingsPanel] Failed to refresh provenance after save:', err);
             });
+        } else {
+          // The layer file just changed on the server; re-fetch it so the
+          // displayed values stay the source of truth instead of a stale
+          // optimistic snapshot.
+          bumpLayerFetchTick();
         }
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);
@@ -264,7 +272,7 @@ export function useSettingsMutation(params: MutationHookParams) {
         setSavingKey(null);
       }
     },
-    [onSettingsChanged, api, addNotification, configViewLayer, setProvenanceSources, settingsRef],
+    [onSettingsChanged, api, addNotification, configViewLayer, setProvenanceSources, bumpLayerFetchTick, settingsRef],
   );
 
   /* ─── Skills toggle ────────────────────────────────────── */

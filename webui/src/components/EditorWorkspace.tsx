@@ -11,12 +11,18 @@ import ErrorBoundary from './ErrorBoundary';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
+import { useDesignPresence } from './design/useDesignPresence';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
 // open. Each render site below wraps the component in <Suspense>.
 const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
+
+// SP-140-3 §3a: DesignView is lazy so a workspace without design/ (the
+// common case — the nav item is hidden and the view unreachable) pays
+// zero bundle cost for the canvas/preview/mermaid stack.
+const DesignView = lazy(() => import('./design/DesignView').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
   <div className="editor-workspace-route-fallback">
@@ -53,6 +59,8 @@ export interface EditorWorkspaceProps {
   onSessionRestore?: (sessionId: string) => void;
   /** Called when the user clicks Back from a non-chat view (e.g. costs). */
   onViewChange?: (view: ViewType) => void;
+  /** SP-140-3: open a design asset path in the editor (Sidebar's file handler). */
+  onOpenDesignFile?: (path: string) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -143,11 +151,18 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   handleOutlineNavigateToSymbol,
   onSessionRestore,
   onViewChange,
+  onOpenDesignFile,
 }) => {
   // P4.2: phone form factor — peer-buffer keep-alive topology (see
   // the mobile branch below). Desktop keeps the panes topology
   // unchanged.
   const isMobileViewport = useIsMobileViewport();
+  // SP-140-3 §3a: defense-in-depth for the design route. The Sidebar nav item
+  // is gated on design/ presence, but this hook re-checks it here so a
+  // currentView mutated through any other path (devtools, a future URL route,
+  // a bug in onViewChange) can never reveal DesignView in a workspace without
+  // a design tree. `loading` keeps the branch from deciding on a stale false.
+  const { present: designPresent, loading: designLoading } = useDesignPresence();
   const {
     panes,
     paneLayout,
@@ -668,6 +683,15 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex]);
 
+  // SP-140-3 §3a: if a design view is requested but the workspace has no
+  // design/ tree, bounce back to chat. Runs as an effect (never during
+  // render) so StrictMode's double-invoke can't fire onViewChange twice
+  // concurrently, and so the presence probe's loading state can settle first.
+  React.useEffect(() => {
+    if (currentView !== 'design' || designLoading || designPresent) return;
+    onViewChange?.('chat');
+  }, [currentView, designLoading, designPresent, onViewChange]);
+
   const { pluginViews } = usePlugins();
 
   // ── P4.2 mobile helpers ──────────────────────────────────────────
@@ -700,6 +724,30 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         </Suspense>
       </ErrorBoundary>
     );
+  }
+
+  // SP-140-3 §3a: the design surface. Rendered only when a design/ tree is
+  // present — the same rule the Sidebar nav item applies, re-checked here so
+  // the view is unreachable (and its chunk unloaded) without a design tree.
+  // While the presence probe is in flight we hold the fallback rather than
+  // flashing the view; a confirmed-absent tree falls through to chat.
+  if (currentView === 'design') {
+    if (designLoading) {
+      return <RouteFallback />;
+    }
+    if (designPresent) {
+      return (
+        <ErrorBoundary>
+          <Suspense fallback={<RouteFallback />}>
+            <DesignView onBack={onViewChange ? () => onViewChange('chat') : undefined} onOpenFile={onOpenDesignFile} />
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
+    // No design/ directory: the redirect effect above moves us to chat; hold
+    // the fallback meanwhile rather than rendering a dead view or flashing
+    // the pane layout.
+    return <RouteFallback />;
   }
 
   // ── P4.2 mobile branch: peer-buffer keep-alive topology ─────────

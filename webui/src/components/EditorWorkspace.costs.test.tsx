@@ -70,6 +70,12 @@ vi.mock('./ErrorBoundary', () => {
   return { default: ErrorBoundary };
 });
 
+// SP-140-3: EditorWorkspace gates the design route on design/ presence.
+vi.mock('./design/useDesignPresence', () => ({
+  __esModule: true,
+  useDesignPresence: () => ({ present: false, loading: false }),
+}));
+
 // Mock CostsPage — returns a div with data-testid="costs-page" so we can assert it renders
 vi.mock('./CostsPage', () => {
   const CostsPage = ({ onSessionClick }) => (

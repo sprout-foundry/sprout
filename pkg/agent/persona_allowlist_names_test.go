@@ -27,6 +27,25 @@ var dynamicallyRegisteredTools = map[string]bool{
 	"mcp_tools":       true,
 }
 
+// pendingRegistrationTools are named by a persona in advance of the handler
+// existing. SP-140-2 §2a makes this an explicit, sanctioned pattern: the
+// catalog has no default-set mechanism, so every persona lists its tools, and
+// "listing tools that register later is harmless (the allowlist filters the
+// registered roster), so the persona can land before the tools."
+//
+// The cost of a pending name is the one described below — no schema is
+// advertised until the handler lands — but unlike a stale name it is a
+// deliberate forward reference, not a leftover from a rename. Entries are
+// therefore listed here explicitly (never as a wildcard or prefix) so the
+// exemption is visible and each one is deleted when its handler registers.
+// TestPendingRegistrationToolsNamesEveryForwardReference keeps this list
+// honest: an entry here that IS registered, or that no persona names, fails.
+var pendingRegistrationTools = map[string]bool{
+	"design_assets":        true, // SP-140-2 item 2.3
+	"design_render":        true, // SP-140-2 item 2.5
+	"design_import_sketch": true, // SP-140-2 item 2.6
+}
+
 // A persona allowlist entry that matches no registered tool is a silently
 // missing ADVERTISEMENT. filterToolsByName compares tool.Function.Name with an
 // exact string equal, so a stale name never matches and the tool is absent from
@@ -81,7 +100,7 @@ func TestEveryPersonaAllowlistEntryNamesARegisteredTool(t *testing.T) {
 	for id, def := range defs {
 		for _, name := range def.AllowedTools {
 			name = strings.TrimSpace(name)
-			if name == "" || registered[name] || dynamicallyRegisteredTools[name] {
+			if name == "" || registered[name] || dynamicallyRegisteredTools[name] || pendingRegistrationTools[name] {
 				continue
 			}
 			misses = append(misses, miss{id, name})
@@ -99,6 +118,39 @@ func TestEveryPersonaAllowlistEntryNamesARegisteredTool(t *testing.T) {
 			"the entry does nothing, so that tool is never advertised to the model "+
 			"(allowlist matching is an exact string compare)",
 			m.persona, m.tool)
+	}
+}
+
+// TestPendingRegistrationToolsNamesEveryForwardReference keeps
+// pendingRegistrationTools from becoming a dumping ground. An entry must be
+// (a) named by at least one persona and (b) genuinely unregistered — the moment
+// the handler lands, the exemption is stale and must be deleted, which is what
+// makes the pending list self-cleaning rather than permanent.
+func TestPendingRegistrationToolsNamesEveryForwardReference(t *testing.T) {
+	if len(pendingRegistrationTools) == 0 {
+		return
+	}
+
+	defs, err := personas.DefaultDefinitions()
+	if err != nil {
+		t.Fatalf("load persona definitions: %v", err)
+	}
+	namedBySomePersona := map[string]bool{}
+	for _, def := range defs {
+		for _, name := range def.AllowedTools {
+			namedBySomePersona[strings.TrimSpace(name)] = true
+		}
+	}
+
+	for name := range pendingRegistrationTools {
+		if allRegisteredToolNames()[name] {
+			t.Errorf("pendingRegistrationTools[%q] is registered — remove the exemption "+
+				"now that the handler exists", name)
+		}
+		if !namedBySomePersona[name] {
+			t.Errorf("pendingRegistrationTools[%q] is named by no persona — the forward "+
+				"reference is gone, so remove the exemption", name)
+		}
 	}
 }
 

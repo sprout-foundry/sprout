@@ -108,6 +108,38 @@ func TestReadEmbeddedPromptFileWithRepoRelativePath(t *testing.T) {
 	}
 }
 
+// TestReadEmbeddedPromptFile_DesignerPrompt verifies the designer persona's
+// prompt ships embedded (so a spawned designer never fails to load its
+// prompt) and carries the four SP-140-2 §2a content blocks: the directory
+// contract, the format charter, the validate-then-declare-done workflow, and
+// the critique vocabulary.
+func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
+	content, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/designer.md")
+	if err != nil {
+		t.Fatalf("expected designer prompt to be embedded, got: %v", err)
+	}
+	body := strings.ToLower(string(content))
+	if strings.TrimSpace(body) == "" {
+		t.Fatal("expected non-empty designer prompt content")
+	}
+
+	blocks := map[string][]string{
+		"directory contract": {"design/readme.md", "design/tokens/", "design/wireframes/", "design/flows/"},
+		"format charter":     {"dtcg", "$value", "viewbox", "data-nav", "mermaid", "flowchart"},
+		"validate workflow":  {"design_validate", "validate, then declare done"},
+		"critique vocabulary": {
+			"hierarchy", "affordance", "consistency", "spacing rhythm", "contrast",
+		},
+	}
+	for block, needles := range blocks {
+		for _, needle := range needles {
+			if !strings.Contains(body, strings.ToLower(needle)) {
+				t.Errorf("designer prompt (%s block) must mention %q", block, needle)
+			}
+		}
+	}
+}
+
 // TestSystemPromptContainsCwd verifies every system-prompt builder injects a
 // "Current Working Directory" section with the real cwd. Fallback to "." is
 // allowed but should never appear if os.Getwd succeeds.

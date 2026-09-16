@@ -12,7 +12,7 @@ func TestDefaultDefinitions_CorePersonas(t *testing.T) {
 		t.Fatalf("expected embedded persona configs to load, got error: %v", err)
 	}
 
-	for _, id := range []string{"orchestrator", "coder", "tester", "reviewer", "researcher", "general"} {
+	for _, id := range []string{"orchestrator", "coder", "tester", "reviewer", "researcher", "general", IDDesigner} {
 		def, exists := definitions[id]
 		if !exists {
 			t.Fatalf("expected %s in default persona definitions", id)

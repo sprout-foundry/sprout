@@ -105,6 +105,8 @@ export interface SearchState {
   setSemanticThreshold: (v: number) => void;
   indexStatus: { available: boolean; initialized: boolean; building: boolean; record_count: number } | null;
   isBuilding: boolean;
+  /** True when the experimental embedding index is opted in (enabled && experimental). */
+  embeddingsEnabled: boolean;
 
   // Expansion
   expandedFiles: Set<string>;

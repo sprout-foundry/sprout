@@ -2,6 +2,18 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.3] - 2026-09-16
+
+- feat(webui): rewire external file change detection into buffer manager (978b1d9d3)
+- fix(webui): protect unsaved editor work on workspace switch and reload (68c983e6e)
+- perf(webui): throttle stream-chunk re-renders and prune DOM-bridge traffic (9b997e06a)
+- fix(webui): pad git sub-tab panels so content clears the tab bar (de73f4136)
+- feat(webui): unify select styling and modernize dropdown visuals (caedb6e33)
+- fix(localmodel): skip model dirs with corrupt config.json instead of panicking (ca1aad5aa)
+- Merge remote-tracking branch 'origin/main' (1b4e41aec)
+- fix(tools): background session expiry probes liveness instead of polling (c1bf81b58)
+- docs: Update changelog for v0.18.2 (b9f3eb016)
+
 ## [v0.18.2] - 2026-09-15
 
 - fix(catalog): current deepinfra recommendation and staleness policy (ebe5e5f51)

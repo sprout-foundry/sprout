@@ -56,7 +56,7 @@ prettier --check`).
       `.gitattributes`); gitignore guidance for `design/.cache/` only;
       warn when a data URI exceeds the size threshold. Spec:
       SP-140-1 §1h.
-- [ ] **1.10** Fixture test tree + seeded-bad fixtures: valid tree →
+- [x] **1.10** Fixture test tree + seeded-bad fixtures: valid tree →
       zero findings (`TestDesignAssetConventions`); each bad fixture
       trips its rule class (broken alias, cyclic alias, unknown
       `$type`, missing viewBox, `<script>`, external href, dangling

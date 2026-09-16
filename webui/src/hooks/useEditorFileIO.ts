@@ -415,8 +415,8 @@ export function useEditorFileIO(
 
       // Notify the external file watcher and auto-reload cooldown *before*
       // the HTTP roundtrip. The server-side fsnotify fires as soon as it
-      // writes the file, and the WebSocket "file_content_changed" event can
-      // reach the browser *before* the HTTP save response.
+      // writes the file, so the mtime poll can observe our own write before
+      // this save's response arrives.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
           detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },

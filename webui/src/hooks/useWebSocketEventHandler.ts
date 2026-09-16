@@ -217,7 +217,10 @@ interface PendingStreamChunks {
   text: string;
   reasoning: string;
   /** chat_id the chunks belong to — the buffer is discarded if the user
-   * switches chats before the flush fires. */
+   * switches chats before the flush fires. Tagged from the FIRST chunk in
+   * the batch: a chat switch mid-batch drops at most one interval (~48ms)
+   * of the new chat's text, recovered by the authoritative transcript
+   * fetch on switch-back. */
   chatId: string | undefined;
 }
 

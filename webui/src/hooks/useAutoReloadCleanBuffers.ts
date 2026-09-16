@@ -5,8 +5,10 @@ import { type EditorBuffer } from '../types/editor';
 import { debugLog } from '../utils/log';
 
 // Per-path notification cooldown to prevent toast storms from rapid
-// WebSocket-originated file_content_changed events (e.g. build tools
-// touching a file multiple times in quick succession).
+// file_externally_modified events (e.g. build tools touching a file
+// multiple times in quick succession). Events are fed by the mtime poll
+// in useExternalFileWatcher — the server's fsnotify push
+// (file_content_changed) is NOT bridged into this pipeline.
 const NOTIFY_COOLDOWN_MS = 4000;
 
 // Per-path "just saved" timestamp to suppress redundant reloads triggered by

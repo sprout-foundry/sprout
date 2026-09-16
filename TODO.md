@@ -11,37 +11,37 @@ prettier --check`).
 
 ## SP-140-1 — Format Charter (`roadmap/SP-140-1-formats.md`)
 
-- [ ] **1.1** Scaffold the `design/` directory contract (tokens/, brand/,
+- [x] **1.1** Scaffold the `design/` directory contract (tokens/, brand/,
       icons/, wireframes/, screens/, flows/, feedback/) with a starter
       `design/README.md` manifest template: device frames declared as
       machine-parseable fenced lines (`frames:` → `name: WxH`),
       screen/flow purpose, status markers. Spec: SP-140-1 §1e + parent
       SP-140 "Directory contract".
-- [ ] **1.2** Token convention checks in the validator: JSON parse,
+- [x] **1.2** Token convention checks in the validator: JSON parse,
       `$value`/`$type` leaf structure, `$type` membership (color,
       dimension, fontFamily, fontWeight, number, duration, cubicBezier,
       strokeStyle, border), alias `{group.token}` resolution — reject
       dangling and cyclic refs, `$extensions` passed through untouched.
       Spec: SP-140-1 §1a.
-- [ ] **1.3** SVG wireframe convention checks: root `<svg>` with integer
+- [x] **1.3** SVG wireframe convention checks: root `<svg>` with integer
       viewBox, self-containment (no `<script>`, no external href/src,
       data-URI rasters only), slug name rule `^[a-z0-9]+(-[a-z0-9]+)*$`,
       `data-nav` targets must exist as wireframe stems. Hard checks;
       frame-match/`<text>`/id checks are advisory `info`. Spec:
       SP-140-1 §1b.
-- [ ] **1.4** Mermaid flow convention checks: Go-side parser for the
+- [x] **1.4** Mermaid flow convention checks: Go-side parser for the
       `flowchart` subset (edge/node extraction, not full syntax
       fidelity); node-id == wireframe-stem rule for screen flows.
       Spec: SP-140-1 §1c.
-- [ ] **1.5** Brand + icon convention checks: `brand.md` palette
+- [x] **1.5** Brand + icon convention checks: `brand.md` palette
       references into tokens (no raw hex), icon/logo SVGs follow the
       same self-containment + slug rules, optional `sprite.svg`
       `<symbol>` entries. Spec: SP-140-1 §1d, §1f.
-- [ ] **1.6** Screens convention checks: `design/screens/*.html`
+- [x] **1.6** Screens convention checks: `design/screens/*.html`
       self-containment (no network `<script>`/CDN refs; inline or
       workspace-relative CSS), slug naming, advisory device-frame width
       check against README `frames:` declarations. Spec: SP-140-1 §1i.
-- [ ] **1.7** README manifest check: relative links resolve to real
+- [x] **1.7** README manifest check: relative links resolve to real
       files; `frames:` block parses (name → `WxH`); wireframe
       frame-matching runs against declarations (advisory). Spec:
       SP-140-1 §1e, §1g.

@@ -1,0 +1,457 @@
+package tools
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/sprout-foundry/sprout/pkg/design"
+	"github.com/sprout-foundry/sprout/pkg/events"
+)
+
+// ---------------------------------------------------------------------------
+// design_validate handler fixtures
+// ---------------------------------------------------------------------------
+
+const dvTestManifest = `# Design Workspace
+
+frames:
+  desktop: 1440x900
+  mobile: 390x844
+
+## Screens
+
+- ` + "`login`" + ` — draft — sign-in entry point
+- ` + "`home`" + ` — ready — post-sign-in landing
+
+## Flows
+
+- ` + "`sign-up`" + ` — draft — account creation
+
+## Status markers
+
+Screens and flows carry one of: draft, review, ready.
+
+## Links
+
+- [Color tokens](tokens/color.tokens.json)
+- [Login wireframe](wireframes/login.svg)
+`
+
+const dvTestTokenJSON = `{
+  "color": {
+    "brand": {
+      "primary": {"$value": "#0055ff", "$type": "color"}
+    }
+  }
+}`
+
+const dvTestLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <text x="24" y="64" font-size="28">Login</text>
+  <rect id="submit" x="24" y="200" width="342" height="52" data-nav="home" />
+</svg>`
+
+const dvTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <text x="24" y="64" font-size="28">Home</text>
+</svg>`
+
+const dvTestFlowMMD = "flowchart TD\n  login --> home\n"
+
+// dvWrite writes rel (slash-separated) under root with parent directories.
+func dvWrite(t *testing.T, root, rel, content string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}
+
+// dvWriteValidTree populates root with a small design/ tree that yields zero
+// findings on a whole-tree run.
+func dvWriteValidTree(t *testing.T, root string) {
+	t.Helper()
+	dvWrite(t, root, "design/README.md", dvTestManifest)
+	dvWrite(t, root, "design/tokens/color.tokens.json", dvTestTokenJSON)
+	dvWrite(t, root, "design/wireframes/login.svg", dvTestLoginSVG)
+	dvWrite(t, root, "design/wireframes/home.svg", dvTestHomeSVG)
+	dvWrite(t, root, "design/flows/sign-up.mmd", dvTestFlowMMD)
+}
+
+// ---------------------------------------------------------------------------
+// design_validate tests
+// ---------------------------------------------------------------------------
+
+func TestDesignValidateHandler_NameAndDefinition(t *testing.T) {
+	t.Parallel()
+	h := &designValidateHandler{}
+
+	require.Equal(t, "design_validate", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "design_validate", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Contains(t, def.Description, "tokens")
+	require.Contains(t, def.Description, "wireframes")
+	require.Empty(t, def.Required, "path must be optional — the tool is runnable with no args")
+
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+		if p.Name == "path" {
+			require.False(t, p.Required, "the path parameter must not be required")
+			require.Equal(t, "string", p.Type)
+		}
+	}
+	require.True(t, paramNames["path"], "should have a 'path' parameter")
+}
+
+func TestDesignValidateHandler_Metadata(t *testing.T) {
+	t.Parallel()
+	h := &designValidateHandler{}
+
+	require.Nil(t, h.Aliases())
+	require.Equal(t, designValidateTimeout, h.Timeout())
+	require.Equal(t, 0, h.MaxResultSize())
+	require.True(t, h.SafeForParallel(), "design_validate is read-only and safe for parallel execution")
+	require.False(t, h.Interactive())
+}
+
+func TestDesignValidateHandler_Validate(t *testing.T) {
+	t.Parallel()
+	h := &designValidateHandler{}
+
+	// No args, empty args, and a string path are all valid.
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+	require.NoError(t, h.Validate(map[string]any{"path": "design/wireframes/login.svg"}))
+
+	// path must be a string when present.
+	err := h.Validate(map[string]any{"path": 42})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be a string")
+}
+
+func TestDesignValidateHandler_NoArgsValidTree(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "findings are advisory; a clean run must never be an error")
+	require.Contains(t, res.Output, "design_validate: 0 findings")
+
+	// StructuredOut carries findings + count + bySeverity.
+	out, ok := res.StructuredOut.(findingsOutput)
+	require.True(t, ok, "StructuredOut should be findingsOutput, got %T", res.StructuredOut)
+	require.Equal(t, 0, out.Count)
+	require.Empty(t, out.Findings)
+	require.Equal(t, 0, out.BySeverity["error"])
+	require.Equal(t, 0, out.BySeverity["warn"])
+}
+
+func TestDesignValidateHandler_NoArgsNoDesignDir(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "a missing design/ is a scaffold hint, not a failure")
+	require.Contains(t, res.Output, "No design/")
+	require.Contains(t, res.Output, "scaffold")
+
+	out, ok := res.StructuredOut.(findingsOutput)
+	require.True(t, ok)
+	require.Equal(t, 0, out.Count)
+}
+
+func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	// Seed a bad wireframe: a dangling data-nav target.
+	dvWrite(t, root, "design/wireframes/signup.svg",
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Sign up</text><rect id="go" data-nav="nowhere" /></svg>`)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	// Advisory semantics: findings never block a turn.
+	require.False(t, res.IsError, "error-severity findings must not set IsError — findings are advisory (SP-140-1 §1g)")
+	require.Contains(t, res.Output, "1 finding(s)")
+	require.Contains(t, res.Output, "1 error(s)")
+
+	out, ok := res.StructuredOut.(findingsOutput)
+	require.True(t, ok)
+	require.Equal(t, 1, out.Count)
+	require.Equal(t, 1, out.BySeverity["error"])
+	require.Len(t, out.Findings, 1)
+	require.Equal(t, "design/wireframes/signup.svg", out.Findings[0].File)
+	require.Equal(t, "svg_data_nav_dangling", out.Findings[0].Rule)
+	require.Equal(t, "error", out.Findings[0].Severity)
+	require.NotEmpty(t, out.Findings[0].Message)
+}
+
+func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	// A brand.md with a raw hex color produces a warn with no line number.
+	dvWrite(t, root, "design/brand/brand.md", "Primary is #ff0000 and accent is {color.brand.secondary}.\n")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 1, out.Count)
+	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Equal(t, "warn", out.Findings[0].Severity)
+	require.Equal(t, "brand_raw_hex", out.Findings[0].Rule)
+	require.Equal(t, 0, out.Findings[0].Line, "a finding with no derivable line must carry line=0")
+
+	// The structured output must be JSON-friendly, with "line" omitted at 0.
+	data, err := json.Marshal(out)
+	require.NoError(t, err)
+	var raw struct {
+		Findings []map[string]any `json:"findings"`
+	}
+	require.NoError(t, json.Unmarshal(data, &raw))
+	require.Len(t, raw.Findings, 1)
+	require.NotContains(t, raw.Findings[0], "line", "line must be omitted when 0")
+	require.Contains(t, raw.Findings[0], "file")
+	require.Contains(t, raw.Findings[0], "severity")
+	require.Contains(t, raw.Findings[0], "message")
+	require.Contains(t, raw.Findings[0], "rule")
+}
+
+func TestDesignValidateHandler_PathArgGoodAsset(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"path": "design/wireframes/login.svg"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "0 findings")
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 0, out.Count)
+}
+
+func TestDesignValidateHandler_PathArgDesignPrefixOptional(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"path": "wireframes/login.svg"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 0, out.Count)
+}
+
+func TestDesignValidateHandler_PathArgBadAsset(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	dvWrite(t, root, "design/tokens/bad.tokens.json",
+		`{"a": {"$value": "{nope.missing}", "$type": "color"}}`)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"path": "design/tokens/bad.tokens.json"})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "rule violations are findings, not tool errors")
+	require.Contains(t, res.Output, "1 finding(s)")
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 1, out.Count)
+	require.Equal(t, "token_alias_dangling", out.Findings[0].Rule)
+	require.Equal(t, "design/tokens/bad.tokens.json", out.Findings[0].File)
+}
+
+func TestDesignValidateHandler_PathArgREADME(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWrite(t, root, "design/README.md", "# Design\n\nNo frames block, no markers.\n\n- [Missing](tokens/nope.tokens.json)\n")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "design/README.md"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.True(t, out.Count >= 2, "expected frames + dangling-link findings, got %#v", out)
+	require.Equal(t, 2, out.BySeverity["error"])
+}
+
+func TestDesignValidateHandler_PathArgUnrecognized(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWrite(t, root, "design/notes.txt", "not a design asset")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "design/notes.txt"})
+	require.Error(t, err)
+	require.True(t, res.IsError, "an unrecognized design asset is a tool error, not a finding")
+	require.Contains(t, res.Output, "not a recognized design asset")
+}
+
+func TestDesignValidateHandler_PathArgMissing(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"path": "design/wireframes/nope.svg"})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+}
+
+func TestDesignValidateHandler_EmptyPathMeansWholeTree(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "   "})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "0 findings")
+}
+
+func TestDesignValidateHandler_Gate1Deny(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = denyClassifier{}
+
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/wireframes/login.svg"})
+	require.Error(t, err)
+	require.True(t, res.IsError, "a Gate-1 deny is a tool failure, not a finding")
+	require.Contains(t, res.Output, "design_validate blocked")
+}
+
+func TestDesignValidateHandler_Gate1AllowResolvesPath(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = allowClassifier{}
+
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/wireframes/login.svg"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	// The allow verdict's absolute resolved path must be converted back to
+	// the workspace-relative form ValidateFile expects.
+	require.Contains(t, res.Output, "0 findings")
+}
+
+func TestDesignValidateHandler_NoArgsNoWorkspaceRoot(t *testing.T) {
+	t.Parallel()
+	// env.WorkspaceRoot empty falls back to "." — the run must not panic
+	// whatever the process cwd holds: a missing design/ is not an error.
+	h := &designValidateHandler{}
+
+	env := ToolEnv{
+		EventBus:      events.NewEventBus(),
+		OutputWriter:  os.Stderr,
+		WorkspaceRoot: "",
+	}
+	res, err := h.Execute(newTestCtx("."), env, map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+}
+
+func TestDesignValidateHandler_ReadOnly(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	h := &designValidateHandler{}
+
+	before := map[string]string{}
+	require.NoError(t, filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			before[path] = string(data)
+		}
+		return nil
+	}))
+
+	_, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+
+	after := map[string]string{}
+	require.NoError(t, filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			after[path] = string(data)
+		}
+		return nil
+	}))
+
+	require.Equal(t, before, after, "design_validate must never write to the tree")
+}
+
+func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	// One bad token file (dangling alias) and one bad brand.md (raw hex →
+	// warn) produce findings in two severity classes.
+	dvWrite(t, root, "design/tokens/bad.tokens.json",
+		`{"a": {"$value": "{nope.missing}", "$type": "color"}}`)
+	dvWrite(t, root, "design/brand/brand.md", "Primary is #ff0000; use {color.brand.primary}.\n")
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 2, out.Count)
+	require.Equal(t, 1, out.BySeverity["error"])
+	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Contains(t, res.Output, "2 finding(s)")
+	require.Contains(t, res.Output, "1 error(s)")
+	require.Contains(t, res.Output, "1 warn(s)")
+}
+
+// compile-time interface check + import guard for the design package.
+var (
+	_ ToolHandler = (*designValidateHandler)(nil)
+	_             = design.DirName
+)
+
+// designValidateTimeout mirrors the handler's timeout so the metadata test
+// asserts against a named constant rather than a magic number.
+const designValidateTimeout = 60 * time.Second

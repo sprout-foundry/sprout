@@ -50,6 +50,7 @@ func AllTools() []ToolHandler {
 		&requestClarificationHandler{},
 		&respondClarificationHandler{},
 		&registerPreviewPortHandler{},
+		&designValidateHandler{},
 	}
 	// Platform-specific tools (nil on WASM via build-tagged stubs).
 	tools = append(tools, registerBrowseURLTool()...)

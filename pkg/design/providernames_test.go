@@ -46,6 +46,8 @@ func TestDesignTierNoProprietaryNames(t *testing.T) {
 		"design-tier Go scan must include pkg/design production files")
 	assert.Contains(t, files, filepath.Join("pkg", "agent_tools", "design_validate_handler.go"),
 		"design-tier Go scan must include the design_validate handler")
+	assert.Contains(t, files, filepath.Join("pkg", "agent_tools", "design_assets_handler.go"),
+		"design-tier Go scan must include the design_assets handler")
 
 	assert.Empty(t, scanFilesForProprietaryNames(t, root, files),
 		"design-tier Go files must not name a proprietary design tool (SP-140-1 AC)")
@@ -247,6 +249,7 @@ func designTierGoFiles(t *testing.T, root string) []string {
 	}))
 
 	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_validate_handler.go")))
+	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_assets_handler.go")))
 	sort.Strings(files)
 	return files
 }

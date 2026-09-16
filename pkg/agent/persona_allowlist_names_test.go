@@ -41,7 +41,6 @@ var dynamicallyRegisteredTools = map[string]bool{
 // TestPendingRegistrationToolsNamesEveryForwardReference keeps this list
 // honest: an entry here that IS registered, or that no persona names, fails.
 var pendingRegistrationTools = map[string]bool{
-	"design_assets":        true, // SP-140-2 item 2.3
 	"design_render":        true, // SP-140-2 item 2.5
 	"design_import_sketch": true, // SP-140-2 item 2.6
 }

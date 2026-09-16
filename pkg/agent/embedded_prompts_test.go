@@ -140,6 +140,84 @@ func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
 	}
 }
 
+// TestSubagentPromptIndexLinksEveryPersonaPrompt is the drift guard for the
+// static index at pkg/agent/prompts/subagent_prompts/README.md (SP-140-2 §2a
+// requires the README be updated alongside each new persona prompt). A persona
+// prompt can ship embedded and still be undiscoverable if the index forgets to
+// list it — that exact drift happened when designer.md landed. This test keeps
+// the index and the directory in lockstep in both directions: every prompt file
+// (except the README itself) must be linked, and no link may point at a missing
+// file.
+func TestSubagentPromptIndexLinksEveryPersonaPrompt(t *testing.T) {
+	const dir = "prompts/subagent_prompts"
+
+	entries, err := embeddedPromptFiles.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("expected embedded subagent_prompts directory, got: %v", err)
+	}
+
+	readmeBytes, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/README.md")
+	if err != nil {
+		t.Fatalf("expected the subagent prompt index README to be embedded, got: %v", err)
+	}
+	readme := string(readmeBytes)
+
+	promptFiles := map[string]bool{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name == "README.md" || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		promptFiles[name] = true
+		// The index must link the file so a human/agent browsing the index can
+		// reach it. Markdown link form: ](name.md).
+		if !strings.Contains(readme, "]("+name+")") {
+			t.Errorf("prompt index README must link %q (found %d prompt files)", name, len(promptFiles))
+		}
+	}
+
+	if len(promptFiles) == 0 {
+		t.Fatal("expected at least one persona prompt file in the directory")
+	}
+
+	// Reverse direction: every markdown link in the index must resolve to a
+	// sibling prompt file that actually exists. A dead link is as misleading
+	// as a missing one.
+	linkRe := regexp.MustCompile(`\]\(([a-zA-Z0-9_./-]+\.md)\)`)
+	for _, match := range linkRe.FindAllStringSubmatch(readme, -1) {
+		target := match[1]
+		if strings.Contains(target, "/") {
+			continue // out-of-directory links (see-also) are not our concern here
+		}
+		if !promptFiles[target] {
+			t.Errorf("prompt index README links %q which is not a prompt file in %s", target, dir)
+		}
+	}
+}
+
+// TestDesignerPromptIsIndexed pins the specific SP-140-2 §2a deliverable: the
+// designer prompt must be discoverable through the static index, and the index
+// must record its aliases so a reader can map `ux`/`design` back to the
+// canonical persona. This is narrower than the directory-scan test above and
+// names the aliases explicitly, because the alias list is the piece a reviewer
+// reading the index cares about.
+func TestDesignerPromptIsIndexed(t *testing.T) {
+	readme, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/README.md")
+	if err != nil {
+		t.Fatalf("expected the subagent prompt index README to be embedded, got: %v", err)
+	}
+	body := string(readme)
+
+	if !strings.Contains(body, "[Designer](designer.md)") {
+		t.Error("prompt index README must list the designer persona with a link to designer.md")
+	}
+	for _, alias := range []string{"ux", "design"} {
+		if !strings.Contains(body, alias) {
+			t.Errorf("prompt index README should mention the %q alias for designer", alias)
+		}
+	}
+}
+
 // TestSystemPromptContainsCwd verifies every system-prompt builder injects a
 // "Current Working Directory" section with the real cwd. Fallback to "." is
 // allowed but should never appear if os.Getwd succeeds.

@@ -22,6 +22,7 @@ import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
 import AutomationsPanel from './AutomationsPanel';
+import { useDesignPresence } from './design/useDesignPresence';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
@@ -44,6 +45,7 @@ import {
   Monitor,
   Zap,
   CircleDollarSign,
+  Palette,
 } from 'lucide-react';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
@@ -213,6 +215,10 @@ function Sidebar({
     [platformNavItems],
   );
   const fileTreeRef = useRef<FileTreeHandle | null>(null);
+  // SP-140-3 §3a: the design nav item is visible only when the workspace has
+  // a design/ directory. The view route is equally gated (EditorWorkspace),
+  // so a workspace without a design tree can never reach the DesignView chunk.
+  const { present: designPresent } = useDesignPresence();
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
@@ -547,6 +553,23 @@ function Sidebar({
                   })}
                 </nav>
               </>
+            )}
+
+            {/* Design — visible only when the workspace has a design/ tree */}
+            {designPresent && (
+              <div role="tablist" aria-orientation="vertical">
+                <button
+                  role="tab"
+                  aria-selected={currentView === 'design'}
+                  className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
+                  onClick={() => onViewChange?.('design')}
+                  title="Design"
+                  aria-label="Design"
+                  data-testid="sidebar-design-button"
+                >
+                  <Palette size={18} strokeWidth={1.5} />
+                </button>
+              </div>
             )}
 
             {/* Costs — local feature, always visible */}

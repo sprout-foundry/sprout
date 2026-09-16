@@ -999,6 +999,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
                 onSessionRestore={handleSessionSearchRestore}
                 onViewChange={onViewChange}
+                onOpenDesignFile={handleFileClick}
               />
             </ErrorBoundary>
           </div>

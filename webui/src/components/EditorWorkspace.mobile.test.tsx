@@ -76,6 +76,12 @@ vi.mock('@sprout/ui', () => ({
   CommandInput: () => <div className="mock-command-input" />,
 }));
 
+// SP-140-3: EditorWorkspace gates the design route on design/ presence.
+vi.mock('./design/useDesignPresence', () => ({
+  __esModule: true,
+  useDesignPresence: () => ({ present: false, loading: false }),
+}));
+
 import EditorWorkspace from './EditorWorkspace';
 
 const minimalProps = {

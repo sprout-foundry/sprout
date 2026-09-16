@@ -44,6 +44,7 @@ const TESTIDS = {
   "chat-subagent-feed": "chat-subagent-feed",
   "turn-changes-strip": "turn-changes-strip",
   "diff-view": "diff-view",
+  "chat-metrics-strip": "chat-metrics-strip",
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",

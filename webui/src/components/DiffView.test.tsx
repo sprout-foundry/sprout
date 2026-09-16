@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { describe, it, expect } from 'vitest';
 import DiffView from './DiffView';
 
 let container: HTMLDivElement;
@@ -25,6 +25,8 @@ afterEach(() => {
 });
 
 function render(diff: string) {
+  // Raw createRoot (not RTL render) — act is required here.
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root.render(createElement(DiffView, { diff }));
   });
@@ -71,6 +73,7 @@ describe('DiffView', () => {
 
   it('re-renders when the diff changes', () => {
     render('-old\n');
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
       root.render(createElement(DiffView, { diff: '+new\n' }));
     });
@@ -80,5 +83,26 @@ describe('DiffView', () => {
   it('renders an empty diff as an empty view without crashing', () => {
     render('');
     expect(container.querySelectorAll('.diff-line').length).toBe(0);
+  });
+
+  it('windows large diffs behind a show-all expander', () => {
+    const many = Array.from({ length: 2000 }, (_, i) => `+added ${i}`).join('\n');
+    render(many);
+
+    const rows = () => container.querySelectorAll('.diff-line').length;
+    expect(rows()).toBe(1500);
+    const expand = container.querySelector('.diff-view-expand')!;
+    expect(expand.textContent).toContain('500 more lines');
+
+    act(() => {
+      (expand as HTMLButtonElement).click();
+    });
+    expect(rows()).toBe(2000);
+    expect(container.querySelector('.diff-view-expand')).toBeNull();
+  });
+
+  it('does not render an expander under the window size', () => {
+    render('+a\n+b\n');
+    expect(container.querySelector('.diff-view-expand')).toBeNull();
   });
 });

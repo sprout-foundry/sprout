@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { classifyDiffLine } from '../utils/format';
 import './DiffView.css';
 
 interface DiffViewProps {
   /** Raw unified diff text (the /api/changes/diff `diff` field). */
   diff: string;
+  /** Lines rendered before the "show all" expander appears.
+   *  Rendering tens of thousands of diff rows locks the tab; the
+   *  backend caps diffs at 4k lines, and 1500 is well inside smooth
+   *  DOM territory. Expand is explicit and one-way per mount. */
+  initialLines?: number;
 }
 
 interface DiffLine {
@@ -22,12 +27,16 @@ const KIND_MAP: Record<string, DiffLine['kind']> = {
   context: 'context',
 };
 
+const DEFAULT_INITIAL_LINES = 1500;
+
 /**
  * DiffView — read-only renderer for a unified diff with add/remove/hunk
  * coloring. Line-based, no tokenizer, no dependencies: the ChangeTracker
  * diffs are plain difflib unified output.
  */
-export function DiffView({ diff }: DiffViewProps): JSX.Element {
+export function DiffView({ diff, initialLines = DEFAULT_INITIAL_LINES }: DiffViewProps): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+
   const lines = useMemo(
     () =>
       diff
@@ -39,9 +48,12 @@ export function DiffView({ diff }: DiffViewProps): JSX.Element {
     [diff],
   );
 
+  const visible = expanded ? lines : lines.slice(0, initialLines);
+  const hidden = lines.length - visible.length;
+
   return (
     <div className="diff-view" data-testid="diff-view">
-      {lines.map((line, i) => (
+      {visible.map((line, i) => (
         // Lines are positional content of an immutable diff string —
         // index is the correct key here.
         // eslint-disable-next-line react/no-array-index-key
@@ -52,6 +64,11 @@ export function DiffView({ diff }: DiffViewProps): JSX.Element {
           <span className="diff-line-text">{line.text}</span>
         </div>
       ))}
+      {hidden > 0 && (
+        <button type="button" className="diff-view-expand" onClick={() => setExpanded(true)}>
+          Show {hidden.toLocaleString()} more line{hidden === 1 ? '' : 's'} ({lines.length.toLocaleString()} total)
+        </button>
+      )}
     </div>
   );
 }

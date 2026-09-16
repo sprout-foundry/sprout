@@ -29,6 +29,9 @@ export interface PaneBridge {
 
 interface BufferManagerContextValue {
   buffers: Map<string, EditorBuffer>;
+  /** Ref mirror of `buffers` — read latest map inside event handlers without
+   *  re-subscribing (used by the beforeunload unsaved-changes guard). */
+  buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   openFile: (file: EditorFileEntry) => string;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
@@ -876,6 +879,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   const value = React.useMemo<BufferManagerContextValue>(
     () => ({
       buffers,
+      buffersRef,
       openFile,
       openWorkspaceBuffer,
       openCompareBuffer,
@@ -902,6 +906,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     }),
     [
       buffers,
+      buffersRef,
       openFile,
       openWorkspaceBuffer,
       openCompareBuffer,

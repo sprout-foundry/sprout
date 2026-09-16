@@ -1,0 +1,56 @@
+/* DiffView — token-colored unified diff rendering. Uses design-system
+   accent tokens so it theme-switches with the rest of the UI. */
+
+.diff-view {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.diff-line {
+  display: flex;
+  align-items: flex-start;
+  white-space: pre;
+}
+
+.diff-line-gutter {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.diff-line-text {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.diff-line--add {
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+}
+.diff-line--add .diff-line-text {
+  color: var(--accent-success);
+}
+
+.diff-line--del {
+  background: color-mix(in srgb, var(--accent-error) 14%, transparent);
+}
+.diff-line--del .diff-line-text {
+  color: var(--accent-error);
+}
+
+.diff-line--hunk {
+  background: color-mix(in srgb, var(--accent-info) 10%, transparent);
+}
+.diff-line--hunk .diff-line-text {
+  color: var(--accent-info);
+}
+
+.diff-line--meta {
+  color: var(--text-tertiary);
+}
+
+.diff-line--context {
+  color: var(--text-secondary);
+}

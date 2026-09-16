@@ -855,6 +855,21 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
   window.dispatchEvent(new CustomEvent('agent-file-changed', { detail: { path } }));
 };
 
+// Handle agent_changes_reverted — the server publishes this after a
+// successful revert so every open tab can refresh its Agent Changes
+// panel (the tab that triggered the revert refreshes from its own API
+// response; this bridge covers the OTHER tabs).
+const handleAgentChangesReverted = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'file';
+  logEntry.level = 'info';
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  debugLog('[changes] Reverted:', data);
+  window.dispatchEvent(new CustomEvent('agent-changes-reverted', { detail: { scope: data.scope } }));
+};
+
 // Handle error event
 const handleError = (ctx: EventHandlerContext): void => {
   const {
@@ -1741,6 +1756,8 @@ export function useWebSocketEventHandler({
           return handleTodoUpdate(ctx);
         case 'file_changed':
           return handleFileChanged(ctx);
+        case 'agent_changes_reverted':
+          return handleAgentChangesReverted(ctx);
         case 'error':
           return handleError(ctx);
         case 'metrics_update':

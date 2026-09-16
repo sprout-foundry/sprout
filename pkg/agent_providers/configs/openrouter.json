@@ -1218,9 +1218,9 @@
         "context_length": 8192,
         "description": "One of the highest performing and most popular fine-tunes of Llama 2 13B, with rich descriptions and roleplay. #merge",
         "id": "gryphe/mythomax-l2-13b",
-        "input_cost": 0.06,
+        "input_cost": 0.08,
         "name": "MythoMax 13B",
-        "output_cost": 0.06,
+        "output_cost": 0.11,
         "tags": [
           "structured_output"
         ]
@@ -1527,7 +1527,7 @@
         "context_length": 1000000,
         "description": "MiniMax-M1 is a large-scale, open-weight reasoning model designed for extended context and high-efficiency inference. It leverages a hybrid Mixture-of-Experts (MoE) architecture paired with a custom \"lightning attention\" mechanism, allowing it...",
         "id": "minimax/minimax-m1",
-        "input_cost": 0.55,
+        "input_cost": 0.4,
         "name": "MiniMax: MiniMax M1",
         "output_cost": 2.2,
         "tags": [
@@ -1821,9 +1821,9 @@
         "context_length": 256000,
         "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
         "id": "mistralai/mistral-small-3.2-24b-instruct",
-        "input_cost": 0.075,
+        "input_cost": 0.09375,
         "name": "Mistral: Mistral Small 3.2 24B",
-        "output_cost": 0.2,
+        "output_cost": 0.25,
         "tags": [
           "tools",
           "vision",
@@ -1924,13 +1924,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.15,
+        "cached_input_cost": 0.18,
         "context_length": 262144,
         "description": "MoonshotAI: Kimi K2.7 Code is a coding-focused model in Moonshot AI's Kimi K2 family, built to complete end-to-end programming tasks reliably over long contexts. It uses a native multimodal mixture-of-experts...",
         "id": "moonshotai/kimi-k2.7-code",
-        "input_cost": 0.71,
+        "input_cost": 0.7062,
         "name": "MoonshotAI: Kimi K2.7 Code",
-        "output_cost": 3.5,
+        "output_cost": 3.21,
         "tags": [
           "tools",
           "vision",
@@ -2117,13 +2117,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.12,
+        "cached_input_cost": 0.1875,
         "context_length": 512288,
         "description": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid Transformer-Mamba mixture-of-experts architecture, it...",
         "id": "nvidia/nemotron-3-ultra-550b-a55b",
-        "input_cost": 0.6,
+        "input_cost": 0.625,
         "name": "NVIDIA: Nemotron 3 Ultra",
-        "output_cost": 2.4,
+        "output_cost": 3.125,
         "tags": [
           "tools",
           "reasoning",
@@ -3571,9 +3571,9 @@
         "context_length": 262144,
         "description": "Qwen3-VL-30B-A3B-Instruct is a multimodal model that unifies strong text generation with visual understanding for images and videos. Its Instruct variant optimizes instruction-following for general multimodal tasks. It excels in perception...",
         "id": "qwen/qwen3-vl-30b-a3b-instruct",
-        "input_cost": 0.15,
+        "input_cost": 0.13,
         "name": "Qwen: Qwen3 VL 30B A3B Instruct",
-        "output_cost": 0.6,
+        "output_cost": 0.52,
         "tags": [
           "tools",
           "vision",
@@ -5937,13 +5937,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.015,
+        "cached_input_cost": 0.018,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.075,
+        "input_cost": 0.09,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.25,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",

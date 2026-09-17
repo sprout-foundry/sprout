@@ -49,8 +49,8 @@ if (typeof Response === 'undefined') {
 describe('cloudEndpointRegistry', () => {
   describe('CLOUD_ENDPOINTS', () => {
     it('should have all required endpoints defined', () => {
-      // Verify we have approximately 111 endpoints (15 wasm-local + 81 foundry-backend + 14 synthetic + 1 no-op)
-      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(111);
+      // Verify we have approximately 109 endpoints (19 wasm-local + 27 browser-git + 19 foundry-backend + 40 synthetic + 4 no-op)
+      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(109);
     });
 
     it('should have unique path+method combinations', () => {
@@ -480,7 +480,7 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of synthetic endpoints', () => {
       const synthetic = getEndpointsByCategory('synthetic');
-      // Includes onboarding, instances, embedding/LSP, history, costs,
+      // Includes onboarding, instances, embedding/LSP, history,
       // settings/mcp/skills/subagent-types, and other not-available-in-
       // browser-mode endpoints.
       expect(synthetic.length).toBeGreaterThanOrEqual(40);

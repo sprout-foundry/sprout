@@ -176,7 +176,7 @@ prettier --check`).
       detail pane writing `design/feedback/<target>.json` per the
       SP-140-4d schema (including `resolved`/`resolution` fields).
       Spec: SP-140-3 §3e.
-- [ ] **3.10** Sidecar hash/staleness + designApi Vitest coverage.
+- [x] **3.10** Sidecar hash/staleness + designApi Vitest coverage.
       Runner: `cd webui && npx vitest run <explicit globs>` (never bare
       vitest; `scripts/vitest-safe.sh` runs packages/ui tests, not
       webui). Spec: SP-140-3 AC.

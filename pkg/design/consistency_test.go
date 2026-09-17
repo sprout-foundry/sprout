@@ -186,6 +186,12 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // §4b rule 3 — README screen references exist
+//
+// The consolidated item-4.9 severity matrix for all four §4b acceptance rules
+// (orphan screen, dangling data-nav, this README reference, literal-color
+// tracking) lives in acceptance_4b_test.go:TestAcceptance4bSeededFixturesSeverityMatrix,
+// which asserts the whole rule→severity table in one auditable place. The
+// per-rule subtests below remain the deep behavioural coverage.
 // ---------------------------------------------------------------------------
 
 // TestConsistencyReadmeScreenRefs covers the §4b "screens referenced in README

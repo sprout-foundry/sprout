@@ -234,7 +234,7 @@ prettier --check`).
       Tailwind `@theme` (also swift/kotlin), deterministic
       byte-identical output, targets `design/generated/`. Spec:
       SP-140-5 §5a.
-- [ ] **5.2** Export hardening: provenance content-hash headers,
+- [x] **5.2** Export hardening: provenance content-hash headers,
       refuses dirty alias graphs. Spec: SP-140-5 §5a + SP-140 invariant 2.
 - [ ] **5.3** `design_sync` analyze mode: read touched UI code + design
       tree, return sync report `{delta, kind, design_files, confidence,

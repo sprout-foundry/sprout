@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -45,8 +46,15 @@ func (h *designExportHandler) Definition() ToolDefinition {
 			"cssVar lookup), `tailwind` → tailwind.theme.css (a Tailwind v4 @theme block), " +
 			"`swift` → tokens.swift, `kotlin` → tokens.kt. " +
 			"Output is deterministic and byte-identical for the same tokens, so re-running the " +
-			"export after no token change is a no-op. DTCG aliases emit a var(--target) " +
+			"export after no token change is a no-op. Every generated file opens with a " +
+			"provenance header carrying `source-hash: fnv1a64:<hex>` — a content hash of the " +
+			"token inputs (design/tokens/*.tokens.json) — so design/code consistency can be " +
+			"verified offline at any checkout by recomputing the hash from those bytes (no " +
+			"timestamp, fully deterministic). DTCG aliases emit a var(--target) " +
 			"reference in the CSS/Tailwind targets and the resolved value elsewhere. " +
+			"If the token tree has a dirty alias graph — a dangling alias referencing a " +
+			"nonexistent token, or a cyclic alias — the tool REFUSES to export and reports " +
+			"the offending token(s) instead of emitting broken output. " +
 			"This is the design→code half of the loop: run it before UI work so the " +
 			"implementation consumes the current theme, then let design_sync bring dev-side " +
 			"changes back. It only ever writes under design/generated/ — the token sources are " +
@@ -100,10 +108,29 @@ type designExportOutput struct {
 	TargetCount int `json:"targetCount"`
 	// TokenCount is the number of DTCG token leaves exported.
 	TokenCount int `json:"tokenCount"`
+	// SourceHash is the §5f provenance hash of the token inputs, echoed from
+	// the artifacts' headers so a caller can verify the export offline without
+	// opening a file. Empty when nothing was exported.
+	SourceHash string `json:"sourceHash,omitempty"`
 	// Files are the written artifacts, in canonical target order.
 	Files []designExportFile `json:"files"`
+	// Refused, when non-empty, names the alias violations that made the export
+	// refuse (item 5.2). The run is an error; this carries the per-token detail
+	// a model reads to fix the graph.
+	Refused []designExportViolation `json:"refused,omitempty"`
 	// Guidance is the scaffold text for a missing design/ tree ("" otherwise).
 	Guidance string `json:"guidance,omitempty"`
+}
+
+// designExportViolation is one dangling/cyclic alias in the structured
+// refusal. Field names mirror design.Finding so a model reads one vocabulary.
+type designExportViolation struct {
+	File    string `json:"file"`
+	Line    int    `json:"line,omitempty"`
+	Token   string `json:"token"`
+	Kind    string `json:"kind"`
+	Rule    string `json:"rule"`
+	Message string `json:"message"`
 }
 
 // designExportFile is one generated artifact in the structured output.
@@ -112,6 +139,10 @@ type designExportFile struct {
 	Path        string `json:"path"`
 	Bytes       int    `json:"bytes"`
 	ContentHash string `json:"contentHash"`
+	// SourceHash is the provenance hash carried in this artifact's header
+	// (= the run's SourceHash). Recorded per file so a caller checking one
+	// artifact does not have to trust the run-level field.
+	SourceHash string `json:"sourceHash"`
 }
 
 func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
@@ -184,6 +215,32 @@ func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map
 			msg := "design_export_tokens: no tokens found under " + tokensPath + "/ — add a W3C DTCG *.tokens.json file first."
 			return ToolResult{Output: msg, StructuredOut: out, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
 		}
+		// Dirty alias graph (item 5.2): the tool refuses rather than emit
+		// broken output. Report the per-token violations structured, plus a
+		// summary naming the offending tokens, so the model can fix the
+		// aliases and re-run. This is a hard failure.
+		var dirty *design.DirtyAliasError
+		if errors.As(err, &dirty) {
+			out := designExportOutput{
+				Exists:     true,
+				TokensPath: tokensPath,
+				OutDir:     filepath.ToSlash(outDir),
+				Files:      []designExportFile{},
+				Refused:    make([]designExportViolation, 0, len(dirty.Violations)),
+			}
+			for _, v := range dirty.Violations {
+				out.Refused = append(out.Refused, designExportViolation{
+					File:    v.Path,
+					Line:    v.Line,
+					Token:   v.Token,
+					Kind:    v.Kind,
+					Rule:    v.Rule,
+					Message: v.Message,
+				})
+			}
+			msg := "design_export_tokens refused: " + dirty.Error()
+			return ToolResult{Output: msg, StructuredOut: out, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
+		}
 		msg := fmt.Sprintf("design_export_tokens failed: %v", err)
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
 	}
@@ -227,6 +284,7 @@ func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map
 		OutDir:      filepath.ToSlash(outDir),
 		TargetCount: len(relocated),
 		TokenCount:  len(tokens.Leaves),
+		SourceHash:  tokens.InputHash,
 		Files:       make([]designExportFile, 0, len(relocated)),
 	}
 	for _, a := range relocated {
@@ -235,6 +293,7 @@ func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map
 			Path:        a.RelPath,
 			Bytes:       len(a.Content),
 			ContentHash: a.Hash,
+			SourceHash:  tokens.InputHash,
 		})
 	}
 	return ToolResult{
@@ -382,8 +441,12 @@ func renderDesignExportSummary(out designExportOutput) string {
 	for _, f := range ordered {
 		parts = append(parts, fmt.Sprintf("%s (%d bytes)", f.Path, f.Bytes))
 	}
-	return fmt.Sprintf("design_export_tokens: %d token(s) → %d file(s) in %s/: %s.",
+	summary := fmt.Sprintf("design_export_tokens: %d token(s) → %d file(s) in %s/: %s.",
 		out.TokenCount, out.TargetCount, out.OutDir, strings.Join(parts, ", "))
+	if out.SourceHash != "" {
+		summary += " source-hash: " + out.SourceHash + "."
+	}
+	return summary
 }
 
 func (h *designExportHandler) Aliases() []string      { return nil }

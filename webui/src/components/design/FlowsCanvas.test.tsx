@@ -276,12 +276,18 @@ describe('FlowsCanvas selection', () => {
     expect(onSelectAsset).toHaveBeenCalledWith('flows/app.mmd');
   });
 
-  it('fires the click-through callback with the selected node id', () => {
+  it('fills the detail pane on a node click without leaving the canvas', () => {
+    const onSelectAsset = vi.fn();
     const onOpenSource = vi.fn();
-    render(<FlowsCanvas {...baseProps} onOpenSource={onOpenSource} />);
+    render(<FlowsCanvas {...baseProps} onSelectAsset={onSelectAsset} onOpenSource={onOpenSource} />);
 
     fireEvent.click(screen.getByTestId('rf-node-click-n:dash'));
-    expect(onOpenSource).toHaveBeenCalledWith('dash');
+
+    // Selecting a node is the detail-pane hand-off (§3b)…
+    expect(onSelectAsset).toHaveBeenCalledWith('flows/app.mmd');
+    // …and must NOT fire the editor hand-off, which would navigate the user
+    // out of the design surface on a click that only meant to select.
+    expect(onOpenSource).not.toHaveBeenCalled();
   });
 
   it('fires the detail-pane callback on edge select with the edge description', () => {
@@ -292,12 +298,14 @@ describe('FlowsCanvas selection', () => {
     expect(onSelectAsset).toHaveBeenCalledWith('flows/app.mmd#Dash --> Reports');
   });
 
-  it('fires the click-through callback with the edge endpoint ids', () => {
+  it('fires the click-through callback with the edge source node id', () => {
     const onOpenSource = vi.fn();
     render(<FlowsCanvas {...baseProps} onOpenSource={onOpenSource} />);
 
     fireEvent.click(screen.getByTestId('rf-edge-n:dash->n:reports#1'));
-    expect(onOpenSource).toHaveBeenCalledWith('dash->reports');
+    // A node id, not the `a->b` pair: the pair form appears in no source line
+    // (edges render as `a --> b`), so it could never anchor to a line.
+    expect(onOpenSource).toHaveBeenCalledWith('dash');
   });
 
   it('fires on image click for wireframe nodes, like a node click', () => {
@@ -686,9 +694,12 @@ describe('FlowsCanvasContainer wiring', () => {
     render(<FlowsCanvasContainer flows={flows} onOpenFile={onOpenFile} />);
 
     await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
-    // `login` is declared on the flow's second line.
-    fireEvent.click(screen.getByTestId('rf-node-click-n:login'));
-    expect(onOpenFile).toHaveBeenCalledWith('flows/app.mmd#L2');
+    // `login` is declared on the flow's second line. The line travels as its
+    // own argument — appending `#L2` to the path would make the editor request
+    // a file by that name.
+    fireEvent.click(screen.getByTestId('rf-edge-n:login->n:dash#0'));
+    expect(onOpenFile).toHaveBeenCalledWith('flows/app.mmd', 2);
+    expect(onOpenFile).not.toHaveBeenCalledWith(expect.stringContaining('#L'));
   });
 
   it('accepts pre-resolved flow text without re-reading it', async () => {

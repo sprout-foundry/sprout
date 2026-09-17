@@ -44,8 +44,15 @@ export const DESIGN_TABS: DesignTabSpec[] = [
 ];
 
 export interface DesignViewProps {
-  /** Initial tab; defaults to Flows. */
-  initialTab?: DesignTab;
+  /**
+   * The active tab. Controlled by the shell so the mode's rail drives this
+   * surface: a rail that cannot reflect (or set) the current section is
+   * decorative, and the in-view tab strip it replaces was a second control for
+   * the same state.
+   */
+  tab?: DesignTab;
+  /** Fired when the surface wants to change section (not used while controlled). */
+  onTabChange?: (tab: DesignTab) => void;
   /** Called when the user leaves DesignView (back to chat). */
   onBack?: () => void;
   /** Called when a design asset should open in the editor. */
@@ -59,18 +66,45 @@ export interface DesignViewProps {
 }
 
 export default function DesignView({
-  initialTab = 'flows',
+  tab,
+  onTabChange,
   onBack,
   onOpenFile,
   writeFetch,
   readFn,
   writeFn,
 }: DesignViewProps = {}) {
-  const [activeTab, setActiveTab] = useState<DesignTab>(initialTab);
+  // SP-140-5: the in-view tab strip is gone — the mode's rail
+  // (workspaces/rail.ts) is the section control and the shell drives `tab`.
+  // The uncontrolled fallback keeps the component usable standalone (tests,
+  // hosts without a rail); `onTabChange` is the seam for surface-initiated
+  // section changes, so a host that owns the rail state never drifts from
+  // the surface.
+  const [internalTab, setInternalTab] = useState<DesignTab>('flows');
+  const activeTab = tab ?? internalTab;
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReactNode>(null);
   const [inventory, setInventory] = useState<DesignInventory | null>(null);
   const fetchFn = useSproutFetch();
+
+  /**
+   * The surface's section-change path. The mode's rail is the section control
+   * and the shell drives `tab`; when the surface itself asks for a section
+   * (a tab body wanting to be shown), uncontrolled hosts apply it to local
+   * state and every host hears about it through `onTabChange`, so the rail
+   * and the surface stay in step. It is handed to the tab bodies as
+   * `onSelectTab` so a body can request a switch without the shell learning
+   * each body's shape.
+   */
+  const changeTab = useCallback(
+    (next: DesignTab) => {
+      if (tab === undefined) {
+        setInternalTab(next);
+      }
+      onTabChange?.(next);
+    },
+    [tab, onTabChange],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -106,23 +140,6 @@ export default function DesignView({
           </button>
         )}
         <h1 className="design-view-title">Design</h1>
-        <div className="design-view-tabs" role="tablist" aria-label="Design views">
-          {DESIGN_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              id={`design-tab-${tab.id}`}
-              aria-selected={activeTab === tab.id}
-              aria-controls="design-tabpanel"
-              className={`design-view-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              data-testid={`design-tab-${tab.id}`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
       </header>
 
       <div className="design-view-body">
@@ -139,7 +156,7 @@ export default function DesignView({
           className="design-view-canvas"
           id="design-tabpanel"
           role="tabpanel"
-          aria-labelledby={`design-tab-${activeTab}`}
+          aria-label={`${activeTab} panel`}
           data-testid="design-tabpanel"
         >
           {activeTab === 'flows' && (
@@ -149,11 +166,16 @@ export default function DesignView({
               layouts={inventory ? inventory.layouts : []}
               activeFlowPath={inventory?.flows?.[0]?.path ?? null}
               onSelectAsset={handleSelectAsset}
+              onSelectTab={changeTab}
               onOpenFile={onOpenFile}
             />
           )}
-          {activeTab === 'screens' && <ScreensTabContainer inventory={inventory} onSelectAsset={handleSelectAsset} />}
-          {activeTab === 'tokens' && <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} />}
+          {activeTab === 'screens' && (
+            <ScreensTabContainer inventory={inventory} onSelectAsset={handleSelectAsset} onSelectTab={changeTab} />
+          )}
+          {activeTab === 'tokens' && (
+            <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} onSelectTab={changeTab} />
+          )}
         </section>
 
         <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">

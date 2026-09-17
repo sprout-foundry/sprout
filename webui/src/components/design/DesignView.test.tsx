@@ -1,9 +1,14 @@
 /**
  * SP-140-3 item 3.3 — DesignView shell.
  *
- * Pins the shell contract the later tab items build on: three tabs render
- * (Flows, Screens, Tokens), the tab state swaps the panel body, and the
+ * Pins the shell contract the later tab items build on: the shell-controlled
+ * `tab` prop drives the panel body (Flows, Screens, Tokens), and the
  * three-pane layout (rail / canvas / detail) is present.
+ *
+ * SP-140-5: the in-view tab strip was removed — the mode's rail (the
+ * sidebar) is the section control and drives `tab` from the shell — so
+ * these tests drive the `tab` prop (and rerender with it) rather than
+ * clicking tabs.
  *
  * SP-140-4 item 4.8 adds one check: a rail selection reaches the detail pane's
  * resolution flow (§4d), i.e. the pane the shell threads the feedback read/write
@@ -13,7 +18,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
-import DesignView, { DESIGN_TABS } from './DesignView';
+import DesignView, { DESIGN_TABS, type DesignTab } from './DesignView';
 
 function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
   return render(
@@ -23,58 +28,75 @@ function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = 
   );
 }
 
+/** Render with a controlled `tab`, returning a rerender helper for the same. */
+function renderControlled(tab: DesignTab) {
+  const rendered = render(
+    <SproutAdapterProvider>
+      <DesignView tab={tab} />
+    </SproutAdapterProvider>,
+  );
+  const setTab = (next: DesignTab) =>
+    rendered.rerender(
+      <SproutAdapterProvider>
+        <DesignView tab={next} />
+      </SproutAdapterProvider>,
+    );
+  return { ...rendered, setTab };
+}
+
 describe('DesignView shell', () => {
   it('renders the view root', () => {
     renderDesign();
     expect(screen.getByTestId('design-view')).toBeInTheDocument();
   });
 
-  it('exposes exactly three tabs in order: Flows, Screens, Tokens', () => {
+  it('exposes exactly three sections in order: Flows, Screens, Tokens', () => {
     expect(DESIGN_TABS.map((t) => t.id)).toEqual(['flows', 'screens', 'tokens']);
     expect(DESIGN_TABS.map((t) => t.label)).toEqual(['Flows', 'Screens', 'Tokens']);
 
-    renderDesign();
-    expect(screen.getByTestId('design-tab-flows')).toHaveTextContent('Flows');
-    expect(screen.getByTestId('design-tab-screens')).toHaveTextContent('Screens');
-    expect(screen.getByTestId('design-tab-tokens')).toHaveTextContent('Tokens');
-    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    const { setTab } = renderControlled('flows');
+    for (const spec of DESIGN_TABS) {
+      setTab(spec.id);
+      expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', spec.id);
+    }
   });
 
   it('defaults to the Flows tab', () => {
     renderDesign();
     expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', 'flows');
-    expect(screen.getByTestId('design-tab-flows')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('design-tab-screens')).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByTestId('design-flows-canvas')).toBeInTheDocument();
+    expect(screen.queryByTestId('design-screens-grid')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('design-tokens-tree')).not.toBeInTheDocument();
   });
 
-  it('honours an initialTab override', () => {
-    renderDesign({ initialTab: 'tokens' });
+  it('honours a controlled tab', () => {
+    renderDesign({ tab: 'tokens' });
     expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', 'tokens');
     expect(screen.getByTestId('design-tokens-tree')).toBeInTheDocument();
     expect(screen.queryByTestId('design-flows-canvas')).not.toBeInTheDocument();
   });
 
-  it('switches the rendered panel body when a tab is clicked', () => {
-    renderDesign();
+  it('switches the rendered panel body when the controlled tab changes', () => {
+    const { setTab } = renderControlled('flows');
+    expect(screen.getByTestId('design-flows-canvas')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('design-tab-screens'));
+    setTab('screens');
     expect(screen.getByTestId('design-screens-grid')).toBeInTheDocument();
     expect(screen.queryByTestId('design-flows-canvas')).not.toBeInTheDocument();
-    expect(screen.getByTestId('design-tab-screens')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('design-view')).toHaveAttribute('data-active-tab', 'screens');
 
-    fireEvent.click(screen.getByTestId('design-tab-tokens'));
+    setTab('tokens');
     expect(screen.getByTestId('design-tokens-tree')).toBeInTheDocument();
     expect(screen.queryByTestId('design-screens-grid')).not.toBeInTheDocument();
   });
 
-  it('keeps the tabpanel wired to the active tab', () => {
-    renderDesign();
+  it('keeps the tabpanel labelled by the active section', () => {
+    const { setTab } = renderControlled('flows');
     const panel = screen.getByTestId('design-tabpanel');
-    expect(panel).toHaveAttribute('aria-labelledby', 'design-tab-flows');
+    expect(panel).toHaveAttribute('aria-label', 'flows panel');
 
-    fireEvent.click(screen.getByTestId('design-tab-tokens'));
-    expect(screen.getByTestId('design-tabpanel')).toHaveAttribute('aria-labelledby', 'design-tab-tokens');
+    setTab('tokens');
+    expect(screen.getByTestId('design-tabpanel')).toHaveAttribute('aria-label', 'tokens panel');
   });
 
   it('renders the left rail and right detail pane', () => {

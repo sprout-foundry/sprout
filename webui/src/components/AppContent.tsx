@@ -34,6 +34,8 @@ import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
+import DesignRail from './design/DesignRail';
+import type { DesignTab } from './design/DesignView';
 import { useDesignPresence } from './design/useDesignPresence';
 import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
@@ -404,6 +406,12 @@ const AppContent: React.FC<AppContentProps> = ({
     modes: workspaceModes,
     select: selectWorkspaceMode,
   } = useWorkspaceMode({ hasDesignTree });
+
+  // SP-140-5: the Design mode's active section (its rail entries). Owned here
+  // because the rail (Sidebar) and the surface (EditorWorkspace) are
+  // siblings and must agree on it: the rail drives it, the surface renders
+  // it.
+  const [designSection, setDesignSection] = useState<DesignTab>('flows');
 
   /**
    * Selecting a mode moves the view. The workspace-mode state is the source of
@@ -928,6 +936,9 @@ const AppContent: React.FC<AppContentProps> = ({
           modes={workspaceModes}
           activeModeId={workspaceMode.id}
           onSelectMode={handleSelectMode}
+          modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
+          modeSection={designSection}
+          onModeSectionChange={(id) => setDesignSection(id as DesignTab)}
           selectedSection={selectedSection}
           onSectionChange={onSectionChange}
           sidebarWidth={sidebarWidth}
@@ -1055,6 +1066,8 @@ const AppContent: React.FC<AppContentProps> = ({
                 onSessionRestore={handleSessionSearchRestore}
                 onViewChange={onViewChange}
                 onOpenDesignFile={handleFileClick}
+                designTab={designSection}
+                onDesignTabChange={setDesignSection}
               />
             </ErrorBoundary>
           </div>

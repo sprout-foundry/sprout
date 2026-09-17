@@ -11,6 +11,7 @@ import ErrorBoundary from './ErrorBoundary';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
+import type { DesignTab } from './design/DesignView';
 import { useDesignPresence } from './design/useDesignPresence';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 
@@ -61,6 +62,10 @@ export interface EditorWorkspaceProps {
   onViewChange?: (view: ViewType) => void;
   /** SP-140-3: open a design asset path in the editor (Sidebar's file handler). */
   onOpenDesignFile?: (path: string, lineNumber?: number) => void;
+  /** SP-140-5: the design surface's active section (the mode's rail entry). */
+  designTab?: DesignTab;
+  /** SP-140-5: the surface requests a section change (the shell updates the rail). */
+  onDesignTabChange?: (tab: DesignTab) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -152,6 +157,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   onSessionRestore,
   onViewChange,
   onOpenDesignFile,
+  designTab,
+  onDesignTabChange,
 }) => {
   // P4.2: phone form factor — peer-buffer keep-alive topology (see
   // the mobile branch below). Desktop keeps the panes topology
@@ -739,7 +746,12 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       return (
         <ErrorBoundary>
           <Suspense fallback={<RouteFallback />}>
-            <DesignView onBack={onViewChange ? () => onViewChange('chat') : undefined} onOpenFile={onOpenDesignFile} />
+            <DesignView
+              onBack={onViewChange ? () => onViewChange('chat') : undefined}
+              onOpenFile={onOpenDesignFile}
+              tab={designTab}
+              onTabChange={onDesignTabChange}
+            />
           </Suspense>
         </ErrorBoundary>
       );

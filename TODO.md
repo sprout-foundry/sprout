@@ -266,7 +266,7 @@ prettier --check`).
       (wireframe, flow edges, tokens, README purpose, pending feedback)
       and returns a structured brief; writes no files (contract, not
       generator); Gate-1. Spec: SP-140-5 §5g.
-- [ ] **5.9** End-to-end loop test: scripted-client design turn
+- [x] **5.9** End-to-end loop test: scripted-client design turn
       (designer persona, SP-137 scripted pattern) → export → dev turn →
       `design_sync` → tree reflects the tweak; next design turn builds
       on it. Spec: SP-140-5 AC.

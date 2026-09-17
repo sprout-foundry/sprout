@@ -2,6 +2,24 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.4] - 2026-09-17
+
+- fix(test): wait for agent teardown before temp-dir cleanup in concurrent delete test (daefd65a9)
+- feat(webui): clickable reload badge and context-menu reload for conflicted tabs (802313017)
+- fix(webui): stop save/auto-save from clobbering external file changes (4d18473f7)
+- docs: document hot-reload WebUI development workflow (3059c96e6)
+- feat(webui): move LLM metrics out of the app footer into the chat (27ca0778c)
+- perf(history): stop reading LLM responses on manifest loads (863baf522)
+- fix(changes): bound diff computation and rendering that locked up the WebUI (9e93356b6)
+- refactor(webui): deduplicate change-tracking utilities (eac3f93be)
+- feat(webui): improve the agent change-tracking panel (cb9f07554)
+- docs: refocus README on setup/development, tighten AGENTS.md (0464628a9)
+- refactor(webui): remove the legacy settings subtab shim (f081bff40)
+- feat(webui): gate semantic search behind the experimental embedding opt-in (0b650bbb0)
+- fix(webui): layered settings writes reload the live config manager (b9083d4b2)
+- fix(config): Manager.Reload re-reads the workspace layer (f0f58a32c)
+- docs: Update changelog for v0.18.3 (f06d00e28)
+
 ## [v0.18.3] - 2026-09-16
 
 - feat(webui): rewire external file change detection into buffer manager (978b1d9d3)

@@ -754,13 +754,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.017416,
+        "cached_input_cost": 0.014,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.08708,
+        "input_cost": 0.07,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 0.17416,
+        "output_cost": 0.14,
         "tags": [
           "tools",
           "reasoning",
@@ -1939,13 +1939,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.302644,
+        "cached_input_cost": 0.3,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 2.648138,
+        "input_cost": 3,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 13.282724,
+        "output_cost": 15,
         "tags": [
           "tools",
           "vision",
@@ -2052,13 +2052,12 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3 Nano 30B A3B is a small language MoE model with highest compute efficiency and accuracy for developers to build specialized agentic AI systems. The model is fully...",
         "id": "nvidia/nemotron-3-nano-30b-a3b",
-        "input_cost": 0.05,
+        "input_cost": 0.06,
         "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
-        "output_cost": 0.2,
+        "output_cost": 0.24,
         "tags": [
           "tools",
           "reasoning",
@@ -4596,9 +4595,9 @@
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.04,
+        "input_cost": 0.03,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.1,
+        "output_cost": 0.13,
         "tags": [
           "tools",
           "reasoning",
@@ -5526,9 +5525,9 @@
         "context_length": 131072,
         "description": "Muse Glimmer 30B is a dense, open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark and optimized for autonomous agents on consumer hardware. It is suited for long-horizon agentic and coding workflows, with multi-step reasoning, reliable tool use, failure recovery, image understanding, and multilingual support across more than 100 languages.",
         "id": "meta/muse-glimmer-30b",
-        "input_cost": 0.35,
+        "input_cost": 0.3,
         "name": "Meta: Muse Glimmer 30B",
-        "output_cost": 1.5,
+        "output_cost": 1.1,
         "tags": [
           "tools",
           "vision",
@@ -5632,13 +5631,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.020958,
+        "cached_input_cost": 0.05808,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro 0813 is a large-scale mixture-of-experts model from DeepSeek. This is the GA release of DeepSeek V4 Pro, with a 1M-token context window and support for tool calls, JSON output, and thinking mode.",
         "id": "deepseek/deepseek-v4-pro-0813",
-        "input_cost": 0.65868,
+        "input_cost": 0.5808,
         "name": "DeepSeek: DeepSeek V4 Pro 0813",
-        "output_cost": 1.97604,
+        "output_cost": 1.7424,
         "tags": [
           "tools",
           "reasoning",
@@ -6718,6 +6717,19 @@
         "tags": [
           "tools",
           "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Union Alpha is a multimodal model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks. Union Alpha is a stealth model....",
+        "id": "stealth/union-alpha",
+        "input_cost": 0,
+        "name": "Union Alpha",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
           "structured_output"
         ]
       }

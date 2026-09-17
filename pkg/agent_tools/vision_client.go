@@ -3,12 +3,18 @@ package tools
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
+
+// testVisionCapabilityOverride pins HasVisionCapability's verdict for tests
+// (nil = use the real environment probe). See SetVisionCapabilityForTest.
+var testVisionCapabilityOverride atomic.Pointer[bool]
 
 // ============================================================================
 // Vision Processor Constructors
@@ -339,8 +345,52 @@ func isLocalRuntimeProvider(providerType api.ClientType) bool {
 	return strings.EqualFold(strings.TrimSpace(cfg.Auth.Type), "none")
 }
 
+// SetVisionCapabilityForTest pins HasVisionCapability's verdict for the
+// duration of a test and returns a restore func the caller should defer (or
+// register with t.Cleanup). It exists so a test can exercise "no vision tier
+// available" deterministically: the real probe depends on host state (compiled
+// native-OCR shims, configured providers), which differs between a developer
+// machine and CI.
+//
+// Test-only seam: production code must never call it.
+func SetVisionCapabilityForTest(available bool) func() {
+	testVisionCapabilityOverride.Store(&available)
+	return func() { testVisionCapabilityOverride.Store(nil) }
+}
+
+// ResetVisionCapabilityCacheForTest clears the one-shot capability cache, so a
+// test that changes the environment (keys, config, native-OCR availability) can
+// re-probe instead of reading a verdict cached earlier in the process.
+func ResetVisionCapabilityCacheForTest() {
+	visionCapabilityOnce = sync.Once{}
+	visionCapabilityValue = false
+}
+
+// visionCapabilityOnce caches the *probe* result for the process, so a run
+// with no vision tier does not re-resolve provider clients per call. Tests can
+// pin the verdict with SetVisionCapabilityForTest (which bypasses the cache) or
+// clear the cache with ResetVisionCapabilityCacheForTest.
+var (
+	visionCapabilityOnce  sync.Once
+	visionCapabilityValue bool
+)
+
 // HasVisionCapability checks if vision processing is available
 func HasVisionCapability() bool {
+	if override := testVisionCapabilityOverride.Load(); override != nil {
+		return *override
+	}
+	visionCapabilityOnce.Do(func() {
+		visionCapabilityValue = probeVisionCapability()
+	})
+	return visionCapabilityValue
+}
+
+// probeVisionCapability resolves vision availability from the environment:
+// native OCR shim, then a registry-driven provider that can build a
+// vision-capable client. It never performs a network call — client
+// construction and SupportsVision() are local.
+func probeVisionCapability() bool {
 	// Native OCR counts: text extraction needs no provider at all (SP-137).
 	if nativeOCRAvailable() {
 		return true

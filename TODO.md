@@ -198,7 +198,7 @@ prettier --check`).
       suggestion}`. Spec: SP-140-4 §4a.- [x] **4.2** Critique degradation: non-vision primary → static findings
       with `visual: false`, never fails the turn (SP-137 tier order).
       Spec: SP-140-4 §4a.
-- [ ] **4.3** Critique cache + cost cap: PNG cache under
+- [x] **4.3** Critique cache + cost cap: PNG cache under
       `design/.cache/renders/` keyed by content hash with provenance
       header (skip re-render on unchanged content); whole-tree critique
       capped at 20 screens with explicit notice (tool arg, not CLI

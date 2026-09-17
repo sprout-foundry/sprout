@@ -4,6 +4,8 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	stdsort "sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,13 +43,11 @@ import (
 // registration is build-tagged and lives in neither the shared AllTools list
 // nor the WASM roster (SP-140 invariant 7).
 //
-// Scope note (SP-140-4 item 4.1): this is the tool core — render, attach,
-// structured findings, and the derived-artifact cache path with its
-// provenance header. Non-vision degradation (item 4.2), reasoning about
-// render counts/caps (item 4.3), the consistency rule packs (items 4.4/4.5),
-// and feedback consumption (item 4.7) are separate TODO items; the seams they
-// need (visualCritiqueEnabled, designCriticoArtifactPath, the finding model)
-// are in place here but their behavior is deliberately not implemented.
+// Scope note (SP-140-4 items 4.1–4.3): this is the tool core — render, attach,
+// structured findings, the derived-artifact cache path with its provenance
+// header (4.1), the non-vision degradation (4.2), and the content-hash render
+// cache + whole-tree cost cap (4.3). The consistency rule packs (items
+// 4.4/4.5) and feedback consumption (item 4.7) are separate TODO items.
 type designCritiqueHandler struct{}
 
 func (h *designCritiqueHandler) Name() string { return "design_critique" }
@@ -110,10 +111,28 @@ const provenanceHeaderPrefix = "sprout:derived-artifact"
 // extract it without guessing a length.
 const provenanceHeaderTerminator = "sprout:end-provenance"
 
-// designCritiqueMaxTargetsBanner is deliberately NOT the §4e cap. §4e's
-// whole-tree cap (20 screens, item 4.3) is a separate TODO item; this tool
-// critiques exactly what the caller named so item 4.3 can add the cap without
-// rewriting the discovery path.
+// designCritiqueDefaultMaxScreens is the §4e whole-tree cost cap: one
+// design_critique run over the whole design/ tree may rasterize (and, with a
+// vision tier, critique) at most this many screens, so a single turn cannot
+// fire one vision call per file in a large tree. It is a *tool argument*
+// (max_screens) with this default, never a CLI flag — the cap has to travel
+// with the call that spends the budget.
+//
+// The spec's "cap at 20 screens per run" is this number; the cap applies to
+// the whole-tree target only, because a critique the caller narrowed to one
+// screen is already the narrow critique the notice tells them to run.
+const designCritiqueDefaultMaxScreens = 20
+
+// designCritiqueCapNoticePrefix opens the explicit notice appended to a capped
+// run's Note (and therefore its human-readable summary). It names the cap, the
+// number of targets left uncovered, and the remedy, so a truncated critique is
+// never silently mistaken for a complete one (§4e "with explicit notice").
+const designCritiqueCapNoticePrefix = "critique capped at "
+
+// Definition describes the tool. The §4e whole-tree cap is a *tool argument*
+// (max_screens) rather than a CLI flag, because the cap has to travel with the
+// call that spends the vision budget; the default is
+// designCritiqueDefaultMaxScreens.
 func (h *designCritiqueHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "design_critique",
@@ -127,7 +146,12 @@ func (h *designCritiqueHandler) Definition() ToolDefinition {
 			"Pass rubric to focus the pass (consistency, accessibility, hierarchy, or all — the " +
 			"default) and compare_to to review a second screen for delta/drift instead of " +
 			"absolutes. The render is cached as a derived artifact under design/.cache/renders/ " +
-			"with a provenance header; that PNG is never a source of truth. A critique never " +
+			"keyed by the source content hash, so re-critiquing an unchanged screen skips the " +
+			"re-render and reuses the cached PNG (the PNG is never a source of truth). A " +
+			"whole-tree critique is capped at 20 screens per run (raise or lower it with " +
+			"max_screens); when the tree exceeds the cap the result says so explicitly and " +
+			"tells you to run narrowed critiques for the rest, so one turn cannot fire a vision " +
+			"call per file. A critique never " +
 			"blocks the turn: the findings are advisory, and a non-vision primary still receives " +
 			"the rendered artifact and the rubric. When no vision tier is reachable the critique " +
 			"degrades to design_validate-style static findings marked `visual: false` (hierarchy, " +
@@ -169,6 +193,12 @@ func (h *designCritiqueHandler) Definition() ToolDefinition {
 				Required:    false,
 				Description: "Browser height in px for each render (default 720).",
 			},
+			{
+				Name:        "max_screens",
+				Type:        "integer",
+				Required:    false,
+				Description: "Cap on screens rendered/critiqued in one run, applied to a whole-tree (design/) target (default 20). The cap is enforced with an explicit notice naming how many targets were skipped; run narrowed critiques (a subtree, a slug, or a file) to cover the rest. Ignored for a single named target, which is already narrow.",
+			},
 		},
 		Required: []string{"target"},
 	}
@@ -184,6 +214,11 @@ func (h *designCritiqueHandler) Validate(args map[string]any) error {
 				return fmt.Errorf("parameter '%s' must be a string, got %T", key, v)
 			}
 		}
+	}
+	// max_screens is optional; when present it must be an integer in range, so
+	// a "20" string or a negative number cannot silently become the default.
+	if _, err := critiqueMaxScreensArg(args); err != nil {
+		return err
 	}
 	return nil
 }
@@ -249,6 +284,12 @@ type critiqueArtifact struct {
 	Target     string `json:"target"`
 	Path       string `json:"path"`
 	Provenance string `json:"provenance"`
+	// Cached reports that this artifact was reused from an earlier run whose
+	// cache key matched, so no browser render happened for it (§4e). It is
+	// deliberately unexported to JSON so the §4a artifact shape stays
+	// {target, path, provenance} for consumers; the run-level CacheHits field
+	// carries the same information in the structured output.
+	Cached bool `json:"-"`
 }
 
 // critiqueOutput is the structured result of one design_critique run.
@@ -274,7 +315,23 @@ type critiqueOutput struct {
 	Instruction string `json:"instruction"`
 	// RenderCount is how many rasterizations this run performed, so a caller
 	// (and item 4.3's cache tests) can count renders rather than infer them.
+	// It counts browser renders only: a cache hit (§4e) reuses a cached PNG
+	// and does not increment it, so RenderCount is the true cost signal.
 	RenderCount int `json:"renderCount"`
+	// CacheHits is how many targets reused a cached render instead of
+	// re-rasterizing (§4e). It is surfaced so a consumer can see that a run
+	// was cheap because the content was unchanged, rather than guessing.
+	CacheHits int `json:"cacheHits"`
+	// MaxScreens is the whole-tree cap in force for this run (§4e). It is
+	// always reported (the default when the caller passed nothing) so the
+	// cost ceiling is visible even on a run that did not hit it.
+	MaxScreens int `json:"maxScreens"`
+	// Capped is true when the whole-tree target exceeded MaxScreens and the
+	// run was truncated. SkippedCount is how many targets were left
+	// uncovered; both are reported so a truncated critique is never mistaken
+	// for a complete one.
+	Capped       bool `json:"capped"`
+	SkippedCount int  `json:"skippedCount"`
 	// Visual reports whether a vision-capable critique ran against real
 	// pixels: a vision tier was reachable (a wired VisionProcessor, or an
 	// available package-level vision capability — see
@@ -292,8 +349,9 @@ type critiqueOutput struct {
 	Degraded bool `json:"degraded"`
 	// Screen is the screen slug when the target resolved to a screen ("").
 	Screen string `json:"screen,omitempty"`
-	// Note is the per-run notice ("" when there is nothing to say). Used for
-	// the §4e whole-tree cap notice by item 4.3 and for render-skip notices.
+	// Note is the per-run notice ("" when there is nothing to say): the §4e
+	// whole-tree cap notice, the item 4.2 degradation notice, and the
+	// cache-skip notice can all appear here, joined so none is lost.
 	Note string `json:"note,omitempty"`
 }
 
@@ -319,6 +377,12 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 	compareTo := strings.TrimSpace(stringArg(args, "compare_to"))
 	analysisPrompt := strings.TrimSpace(stringArg(args, "analysis_prompt"))
 
+	// §4e cost cap: the whole-tree ceiling, as a tool argument with a default.
+	maxScreens, err := critiqueMaxScreensArg(args)
+	if err != nil {
+		return h.critiqueError(err.Error())
+	}
+
 	// Gate-1 precheck (SP-140 invariant 7): every workspace path the tool
 	// touches is checked before it is read, mirroring design_render. The
 	// requested target is checked here — before discovery stats it — and tree
@@ -338,6 +402,21 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 		msg := err.Error()
 		return ToolResult{Output: msg, IsError: true}, err
 	}
+
+	// §4e whole-tree cap: a target that resolved to the whole design/ tree is
+	// truncated to maxScreens so one run cannot fire one vision call per file
+	// (the spec's "cap at 20 screens per run"). A single named target, a slug,
+	// and a subtree are already narrow — the caller did the narrowing — so
+	// they are never capped. The truncated targets are reported explicitly so
+	// a capped critique is never mistaken for a complete one.
+	capped := false
+	skippedCount := 0
+	if targetIsWholeTree(cleanCritiqueTarget(target)) && len(targets) > maxScreens {
+		capped = true
+		skippedCount = len(targets) - maxScreens
+		targets = targets[:maxScreens]
+	}
+
 	if compareTo != "" {
 		cmpTargets, cmpErr := discoverCritiqueTargets(ctx, env, compareTo)
 		if cmpErr != nil {
@@ -364,15 +443,21 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}
 
 	out := critiqueOutput{
-		Target:      target,
-		Rubric:      rubric,
-		CompareTo:   compareTo,
-		Findings:    []critiqueFinding{},
-		BySeverity:  zeroSeverityTally(),
-		Artifacts:   []critiqueArtifact{},
-		Areas:       designCritiqueAreas,
-		Visual:      false,
-		Instruction: buildCritiquePrompt(rubric, target, compareTo, analysisPrompt),
+		Target:       target,
+		Rubric:       rubric,
+		CompareTo:    compareTo,
+		Findings:     []critiqueFinding{},
+		BySeverity:   zeroSeverityTally(),
+		Artifacts:    []critiqueArtifact{},
+		Areas:        designCritiqueAreas,
+		Visual:       false,
+		MaxScreens:   maxScreens,
+		Capped:       capped,
+		SkippedCount: skippedCount,
+		Instruction:  buildCritiquePrompt(rubric, target, compareTo, analysisPrompt),
+	}
+	if capped {
+		out.Note = appendNote(out.Note, critiqueCapNotice(maxScreens, skippedCount))
 	}
 
 	var renderedAny bool
@@ -400,7 +485,14 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 			continue
 		}
 		renderedAny = true
-		out.RenderCount++
+		// A cache hit reused a stored artifact and did not rasterize, so it
+		// must not be counted as a render (§4e: repeat critiques of unchanged
+		// content skip the re-render). The artifact still rides the result.
+		if artifact.Cached {
+			out.CacheHits++
+		} else {
+			out.RenderCount++
+		}
 		out.Artifacts = append(out.Artifacts, artifact)
 		if out.Screen == "" && t.Screen != "" {
 			out.Screen = t.Screen
@@ -445,6 +537,12 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 	if !renderedAny {
 		msg := fmt.Sprintf("design_critique: %s has nothing renderable — expected a .svg, .html/.htm, or .mmd target (or a slug/tree naming one)", target)
 		return ToolResult{Output: msg, IsError: true}, agenterrors.NewTool("design_critique", msg, nil)
+	}
+
+	// §4e: disclose the cache reuse so a cheap run is legible as "nothing
+	// changed" rather than as a run whose renders mysteriously did not happen.
+	if out.CacheHits > 0 {
+		out.Note = appendNote(out.Note, critiqueCacheNotice(out.CacheHits))
 	}
 
 	// Visual is decided once, after every pass: true only when a vision tier
@@ -970,6 +1068,12 @@ func precheckCritiqueTarget(ctx context.Context, env ToolEnv, t critiqueTarget) 
 // pixels. It returns (rendered, attachment, artifact, analysis, analyzeErr,
 // renderErr).
 //
+// §4e render cache: before rasterizing, it computes the target's cache key
+// (source content hash + render material) and, when an artifact from an
+// earlier run matches, reuses it — the browser is not asked to render again,
+// and the cached provenance is preserved (writeCritiqueArtifact replaces it
+// with a fresh one, which carries the same sourceHash and render material).
+//
 // analyzeErr is a degraded-result signal, not a tool failure: a missing or
 // failing vision tier still leaves a rendered artifact and a rubric, which item
 // 4.2 turns into the visual:false static result.
@@ -982,14 +1086,21 @@ func renderCritiqueTarget(
 	critique bool,
 ) (bool, ToolResult, critiqueArtifact, string, error, error) {
 	renderSource := t.RenderSource
+
+	// §4e cache lookup: read the source bytes once (for either the mermaid
+	// page or the plain browser render) and derive the content hash from them,
+	// so a repeat critique of unchanged content can skip the re-render.
+	sourceBytes, hashErr := readCritiqueSourceBytes(ctx, t)
+	if hashErr != nil {
+		return false, ToolResult{}, critiqueArtifact{}, "", nil, hashErr
+	}
+	sourceHash := critiqueContentHash(sourceBytes)
+	material := critiqueRenderMaterial(viewOpts, instruction)
+	key := critiqueCacheKey(sourceHash, material)
+
 	var cleanup func()
 	if t.Kind == renderKindMermaid {
-		data, readErr := readDesignSource(ctx, t.Source)
-		if readErr != nil {
-			return false, ToolResult{}, critiqueArtifact{}, "", nil,
-				fmt.Errorf("cannot read flow source %s: %w", t.Source, readErr)
-		}
-		htmlPath, mermaidCleanup, buildErr := writeMermaidHTMLFile(string(data), "")
+		htmlPath, mermaidCleanup, buildErr := writeMermaidHTMLFile(string(sourceBytes), "")
 		if buildErr != nil {
 			return false, ToolResult{}, critiqueArtifact{}, "", nil,
 				fmt.Errorf("cannot prepare flow render page: %w", buildErr)
@@ -999,6 +1110,28 @@ func renderCritiqueTarget(
 	}
 	if cleanup != nil {
 		defer cleanup()
+	}
+
+	artifactPath := critiqueArtifactPath(t)
+
+	// A matching cache entry means the pixels for this exact content + render
+	// material are already on disk: attach them, report the artifact, and skip
+	// the browser entirely. The critique still runs against the cached PNG, so
+	// the vision tier judges the same bytes it would have rendered.
+	if hit, ok := loadCachedCritiqueArtifact(ctx, artifactPath, key); ok {
+		hit.artifact.Target = t.Label
+		analysis, analyzeErr := "", error(nil)
+		if critique {
+			// The cached PNG is the render; run the vision pass against it so a
+			// cache hit produces the same findings a fresh render would.
+			pngAbs, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, artifactPath)
+			if resolveErr == nil {
+				analysis, analyzeErr = runCritiqueVisionPass(ctx, env, instruction, pngAbs)
+			} else {
+				analyzeErr = resolveErr
+			}
+		}
+		return true, hit.attachment, hit.artifact, analysis, analyzeErr, nil
 	}
 
 	var attachment ToolResult
@@ -1038,7 +1171,7 @@ func renderCritiqueTarget(
 		return false, ToolResult{}, critiqueArtifact{}, "", nil, nil
 	}
 
-	artifact, writeErr := writeCritiqueArtifact(ctx, t, pngBytes, instruction)
+	artifact, writeErr := writeCritiqueArtifact(ctx, t, pngBytes, instruction, key, sourceHash, material)
 	if writeErr != nil {
 		// The artifact is derived output: failing to cache it must not fail
 		// the critique. The caller still gets the render count and the
@@ -1052,7 +1185,12 @@ func renderCritiqueTarget(
 // design/.cache/renders/ and appends the SP-140 invariant 2 provenance header.
 // It returns the artifact descriptor (workspace-relative path + provenance
 // text). A failure is returned for the caller to downgrade to a notice.
-func writeCritiqueArtifact(ctx context.Context, t critiqueTarget, png []byte, instruction string) (critiqueArtifact, error) {
+//
+// sourceHash (the §4e content hash of the render source bytes) and material
+// (the canonical render material) are recorded in the provenance so a consumer
+// can verify the artifact; cacheKey (their composed key) is written to the
+// sidecar so a later run can prove a cache hit rather than assume it.
+func writeCritiqueArtifact(ctx context.Context, t critiqueTarget, png []byte, instruction, cacheKey, sourceHash, material string) (critiqueArtifact, error) {
 	if len(png) == 0 {
 		return critiqueArtifact{}, errors.New("no rendered bytes to persist")
 	}
@@ -1067,10 +1205,14 @@ func writeCritiqueArtifact(ctx context.Context, t critiqueTarget, png []byte, in
 		return critiqueArtifact{}, mkErr
 	}
 
-	provenance := buildCritiqueProvenance(t, instruction)
+	provenance := buildCritiqueProvenance(t, instruction, sourceHash, material)
 	if writeErr := os.WriteFile(abs, append(append([]byte{}, png...), []byte(provenanceBanner(provenance))...), 0o644); writeErr != nil {
 		return critiqueArtifact{}, writeErr
 	}
+	// The sidecar is what makes the next run's cache lookup possible (§4e).
+	// Best-effort: a sidecar write failure still leaves a valid PNG, so the
+	// artifact is returned and the next run simply re-renders.
+	_ = writeCritiqueCache(ctx, artifactPath, cacheKey, sourceHash, material)
 	return critiqueArtifact{Target: t.Label, Path: artifactPath, Provenance: provenance}, nil
 }
 
@@ -1138,11 +1280,24 @@ func provenanceBanner(provenance string) string {
 // buildCritiqueProvenance composes the provenance text for one artifact
 // (SP-140 invariant 2: a derived artifact must be recognizable as derived and
 // carry enough to regenerate it).
-func buildCritiqueProvenance(t critiqueTarget, instruction string) string {
+//
+// sourceHash is the artifact's §4e content hash (the SHA-256 of the render
+// source bytes) and material is the canonical render material (viewport +
+// rubric) folded into the cache key. Both are recorded so a consumer can
+// verify the artifact's provenance and so a later run can prove a cache hit
+// rather than assume it.
+func buildCritiqueProvenance(t critiqueTarget, instruction, sourceHash, material string) string {
 	var sb strings.Builder
 	sb.WriteString("tool: design_critique\n")
 	fmt.Fprintf(&sb, "source: %s\n", t.Label)
 	fmt.Fprintf(&sb, "kind: %s\n", renderKindName(t.Kind))
+	if sourceHash != "" {
+		// The source content hash, per §4e.
+		fmt.Fprintf(&sb, "sourceHash: %s\n", sourceHash)
+	}
+	if material != "" {
+		fmt.Fprintf(&sb, "renderMaterial: %s\n", material)
+	}
 	sb.WriteString("generated: " + time.Now().UTC().Format(time.RFC3339) + "\n")
 	sb.WriteString("note: derived render cache — never edit; regenerate with design_render/design_critique\n")
 	if instruction != "" {
@@ -1164,6 +1319,263 @@ func renderKindName(k designRenderKind) string {
 	default:
 		return "unknown"
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Render cache + cost cap (SP-140-4 §4e, TODO item 4.3)
+// ---------------------------------------------------------------------------
+
+// critiqueCacheFilename is the sidecar a cached render writes next to its PNG:
+// design/.cache/renders/<stem>.cache.json. The PNG stays a plain
+// provenance-headed image (SP-140 invariant 2); the sidecar holds the machine
+// -readable cache key, so a cache lookup never has to parse the provenance
+// banner out of image bytes.
+const critiqueCacheFilenameSuffix = ".cache.json"
+
+// critiqueCacheEntry is the sidecar record for one cached render. It is
+// written atomically alongside the PNG and read on the next run.
+type critiqueCacheEntry struct {
+	// SourceHash is the SHA-256 (hex) of the render source bytes — the §4e
+	// content hash. For a mermaid flow it is the hash of the .mmd content; for
+	// an SVG/HTML screen it is the hash of the source file content.
+	SourceHash string `json:"sourceHash"`
+	// RenderMaterial is the canonical render material (viewport + rubric)
+	// folded into the cache key, so a re-render with a different viewport or
+	// rubric under the same path does not return a stale critique.
+	RenderMaterial string `json:"renderMaterial"`
+	// Artifact is the workspace-relative PNG path this entry describes.
+	Artifact string `json:"artifact"`
+	// Generated is when the cached render was produced (RFC3339 UTC).
+	Generated string `json:"generated"`
+}
+
+// critiqueContentHash is the §4e content hash of a render source: the SHA-256
+// of the source bytes, hex-encoded. It is the same hash the webui sidecar uses
+// in spirit — a content-addressed digest of the render input — so an unchanged
+// screen produces an unchanged key regardless of file mtime, and the hash can
+// be recorded in the provenance header for a consumer to verify.
+func critiqueContentHash(source []byte) string {
+	sum := sha256.Sum256(source)
+	return hex.EncodeToString(sum[:])
+}
+
+// critiqueRenderMaterial canonically describes everything besides the source
+// content that can change the rendered pixels or the critique: the viewport
+// and the rubric/instruction. Two runs whose source content is identical but
+// whose viewport or rubric differ are *not* interchangeable — a re-render at a
+// new viewport (or under a different rubric) must not return a stale critique —
+// so the material is folded into the cache key and any change is a cache miss.
+func critiqueRenderMaterial(viewOpts RenderInputOptions, instruction string) string {
+	return fmt.Sprintf("viewport=%sx%s;rubric=%s",
+		trimFloat(viewOpts.ViewportWidth), trimFloat(viewOpts.ViewportHeight),
+		strings.Join(strings.Fields(instruction), " "))
+}
+
+// critiqueCacheKey composes the artifact's cache key from the source content
+// hash and the render material, so a consumer (and the sidecar) has one string
+// that identifies "these pixels from this source at this viewport under this
+// rubric".
+func critiqueCacheKey(sourceHash, material string) string {
+	sum := sha256.Sum256([]byte(sourceHash + "\x00" + material))
+	return hex.EncodeToString(sum[:])
+}
+
+// critiqueCachePath is the sidecar path for a target's artifact, alongside the
+// PNG under design/.cache/renders/.
+func critiqueCachePath(artifactPath string) string {
+	return artifactPath + critiqueCacheFilenameSuffix
+}
+
+// readCritiqueSourceBytes reads the bytes the §4e content hash is derived from:
+// the render source itself. For a mermaid flow that is the .mmd file content
+// (the HTML page is generated from it and is not the source of truth); for an
+// SVG/HTML screen it is the source file content. Reading goes through the
+// workspace-safe resolver, so it is subject to the same Gate-1 checks as any
+// other read.
+func readCritiqueSourceBytes(ctx context.Context, t critiqueTarget) ([]byte, error) {
+	rel := firstNonEmpty(t.Source, t.Label)
+	if rel == "" {
+		return nil, errors.New("no render source to hash")
+	}
+	data, err := readDesignSource(ctx, rel)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read render source %s: %w", rel, err)
+	}
+	return data, nil
+}
+
+// loadCachedCritiqueArtifact returns a reusable cached render for artifactPath
+// when one exists whose sidecar matches cacheKey, so the caller can skip the
+// browser render entirely (§4e). The PNG is re-attached through the SP-137 path
+// and the vision critique is run against the cached pixels, so a cache hit
+// produces the same result as a fresh render would — the only thing skipped is
+// the rasterization.
+//
+// A missing/corrupt/uncertain cache is a miss, never an error: the caller then
+// renders normally. That keeps a stale or hand-edited cache from breaking a
+// critique.
+func loadCachedCritiqueArtifact(ctx context.Context, artifactPath, cacheKey string) (cachedCritiqueArtifact, bool) {
+	sidecarPath := critiqueCachePath(artifactPath)
+	absSidecar, err := filesystem.SafeResolvePathWithBypass(ctx, sidecarPath)
+	if err != nil {
+		return cachedCritiqueArtifact{}, false
+	}
+	raw, err := os.ReadFile(absSidecar)
+	if err != nil {
+		return cachedCritiqueArtifact{}, false
+	}
+	var entry critiqueCacheEntry
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		return cachedCritiqueArtifact{}, false
+	}
+	if entry.SourceHash == "" || entry.RenderMaterial == "" {
+		return cachedCritiqueArtifact{}, false
+	}
+	// A sidecar naming a different artifact is not this artifact's cache entry
+	// (e.g. a stale copy left behind by a rename): treat it as a miss.
+	if entry.Artifact != "" && entry.Artifact != artifactPath {
+		return cachedCritiqueArtifact{}, false
+	}
+	if critiqueCacheKey(entry.SourceHash, entry.RenderMaterial) != cacheKey {
+		return cachedCritiqueArtifact{}, false
+	}
+
+	absPNG, err := filesystem.SafeResolvePathWithBypass(ctx, artifactPath)
+	if err != nil {
+		return cachedCritiqueArtifact{}, false
+	}
+	pngWithProvenance, readErr := os.ReadFile(absPNG)
+	if readErr != nil {
+		return cachedCritiqueArtifact{}, false
+	}
+	attachment, ok := buildRenderAttachment(ctx, absPNG)
+	if !ok {
+		return cachedCritiqueArtifact{}, false
+	}
+	return cachedCritiqueArtifact{
+		attachment: attachment,
+		artifact: critiqueArtifact{
+			Target:     "",
+			Path:       artifactPath,
+			Provenance: extractProvenanceBanner(string(pngWithProvenance)),
+			Cached:     true,
+		},
+	}, true
+}
+
+// extractProvenanceBanner pulls the textual provenance block back out of a
+// cached artifact's bytes, so a cache hit reports the same provenance a fresh
+// render would (the banner is appended after IEND and ignored by PNG decoders).
+// A missing/malformed banner yields "" rather than an error: the artifact is
+// still usable.
+func extractProvenanceBanner(raw string) string {
+	idx := strings.Index(raw, provenanceHeaderPrefix+"\n")
+	if idx < 0 {
+		return ""
+	}
+	body := raw[idx+len(provenanceHeaderPrefix)+1:]
+	end := strings.Index(body, provenanceHeaderTerminator)
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimSuffix(body[:end], "\n")
+}
+
+// cachedCritiqueArtifact is the reusable part of a cache hit: the SP-137
+// attachment re-derived from the cached PNG plus the artifact descriptor.
+type cachedCritiqueArtifact struct {
+	attachment ToolResult
+	artifact   critiqueArtifact
+}
+
+// writeCritiqueCache records the sidecar that makes a future run's cache lookup
+// possible. It is best-effort: a failure to write the sidecar (or hand back a
+// usable PNG) is reported so the caller can skip the cache but must never fail
+// the critique, which already has its rendered pixels.
+func writeCritiqueCache(ctx context.Context, artifactPath, cacheKey, sourceHash, material string) error {
+	abs, err := filesystem.SafeResolvePathForWriteWithBypass(ctx, critiqueCachePath(artifactPath))
+	if err != nil {
+		return err
+	}
+	if mkErr := os.MkdirAll(filepath.Dir(abs), 0o755); mkErr != nil {
+		return mkErr
+	}
+	entry := critiqueCacheEntry{
+		SourceHash:     sourceHash,
+		RenderMaterial: material,
+		Artifact:       artifactPath,
+		Generated:      time.Now().UTC().Format(time.RFC3339),
+	}
+	data, jsonErr := json.MarshalIndent(entry, "", "  ")
+	if jsonErr != nil {
+		return jsonErr
+	}
+	return os.WriteFile(abs, append(data, '\n'), 0o644)
+}
+
+// trimFloat renders a viewport dimension without a trailing ".0" for integral
+// values, so the material string is stable across int/float64 arg forms.
+func trimFloat(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// targetIsWholeTree reports whether the requested target names the whole
+// design/ tree (the §4e cap's scope). Bare `design`, `design/`, `.`, and the
+// empty string all resolve to the tree (see discoverCritiqueTargets).
+func targetIsWholeTree(clean string) bool {
+	return clean == design.DirName || clean == "." || clean == ""
+}
+
+// cleanCritiqueTarget normalizes a requested target the same way
+// discoverCritiqueTargets does, so the cap's scope test agrees with discovery.
+func cleanCritiqueTarget(requested string) string {
+	return strings.TrimSuffix(filepath.ToSlash(path.Clean(strings.TrimSpace(requested))), "/")
+}
+
+// critiqueCapNotice is the §4e explicit notice for a truncated whole-tree
+// critique: it names the cap, how many targets were skipped, and the remedy, so
+// a capped run is never mistaken for a complete one.
+func critiqueCapNotice(maxScreens, skipped int) string {
+	return fmt.Sprintf("%s%d screens; run narrowed critiques to cover the rest",
+		designCritiqueCapNoticePrefix, maxScreens) +
+		fmt.Sprintf(" (%d further target(s) in this tree were not critiqued).", skipped)
+}
+
+// critiqueCacheNotice is the per-run note disclosing that renders were reused
+// from the §4e cache rather than re-rasterized.
+func critiqueCacheNotice(hits int) string {
+	if hits == 1 {
+		return "1 render was reused from the render cache (content unchanged since it was rendered)."
+	}
+	return fmt.Sprintf("%d renders were reused from the render cache (content unchanged since they were rendered).", hits)
+}
+
+// critiqueMaxScreensArg extracts the optional max_screens tool argument with
+// the §4e default, rejecting a non-integer or non-positive value so a typo
+// cannot quietly lower or disable the cost cap.
+func critiqueMaxScreensArg(args map[string]any) (int, error) {
+	v, exists := lookupKey(args, "max_screens")
+	if !exists || v == nil {
+		return designCritiqueDefaultMaxScreens, nil
+	}
+	var n int
+	switch t := v.(type) {
+	case int:
+		n = t
+	case int64:
+		n = int(t)
+	case float64:
+		if t != float64(int(t)) {
+			return 0, fmt.Errorf("parameter 'max_screens' must be a whole number, got %v", t)
+		}
+		n = int(t)
+	default:
+		return 0, fmt.Errorf("parameter 'max_screens' must be an integer, got %T", v)
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("parameter 'max_screens' must be at least 1, got %d", n)
+	}
+	return n, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1211,12 +1623,23 @@ func buildCritiqueSummary(out critiqueOutput, attached bool, analysis string, an
 
 	if len(out.Artifacts) > 0 {
 		fmt.Fprintf(&sb, "\n\nRendered %d target(s); derived artifact(s):", out.RenderCount)
+		if out.CacheHits > 0 {
+			fmt.Fprintf(&sb, " (%d reused from cache)", out.CacheHits)
+		}
 		for _, a := range out.Artifacts {
 			if a.Path == "" {
 				continue
 			}
 			sb.WriteString("\n- " + a.Path + " (derived; provenance header)")
+			if a.Cached {
+				sb.WriteString(" [cache hit]")
+			}
 		}
+	}
+	if out.Capped {
+		// §4e: the cap is stated up front in the summary, not buried in a note,
+		// so a truncated whole-tree critique cannot be read as complete.
+		fmt.Fprintf(&sb, "\n\nWARNING: %s", critiqueCapNotice(out.MaxScreens, out.SkippedCount))
 	}
 	if attached {
 		sb.WriteString("\nThe rendered image is attached for visual critique.")

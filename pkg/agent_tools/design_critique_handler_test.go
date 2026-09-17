@@ -24,9 +24,11 @@ import (
 // structured findings shape {target, area, severity, note, suggestion}, and the
 // derived-artifact PNG under design/.cache/renders/ with its provenance header.
 //
-// Out of scope here (separate TODO items): non-vision degradation semantics
-// (4.2), cache-hit/render counting (4.3), consistency rule packs (4.4/4.5),
-// feedback consumption (4.7).
+// Out of scope here (separate TODO items): cache-hit/render counting (4.3),
+// consistency rule packs (4.4/4.5), feedback consumption (4.7).
+//
+// Item 4.2 (non-vision degradation → static findings, visual:false) is covered
+// by the "Non-vision degradation" section below.
 // ---------------------------------------------------------------------------
 
 // dcWrite writes rel (slash-separated) under root with parent directories.
@@ -137,6 +139,11 @@ func dcCritiqueEnv(t *testing.T, root string) (ToolEnv, *drMockBrowser) {
 // state (native-OCR shims, configured providers) or a sibling test leaving the
 // capability cached. Callers that need no-parallel safety (they read global
 // capability state) must not call t.Parallel themselves.
+//
+// SetVisionCapabilityForTest returns a restore func that clears the override
+// (stores nil) rather than pinning it to some other value, so registering it
+// directly with t.Cleanup restores the process-wide state exactly as it was
+// found — no prior value needs to be captured.
 func dcCritiqueEnvNoVision(t *testing.T, root string) (ToolEnv, *drMockBrowser) {
 	t.Helper()
 	t.Cleanup(SetVisionCapabilityForTest(false))
@@ -717,7 +724,286 @@ func TestDesignCritiqueHandler_EmptyFindingsShape(t *testing.T) {
 	// directly, so a cross-test leak of the process-wide vision capability
 	// (e.g. a sibling test leaving provider env vars set) surfaces as a clear
 	// failure here instead of a confusing `visual` mismatch.
-	require.Equal(t, 0, out.Count, "a no-vision critique must not produce findings")
+	//
+	// Item 4.2 note: this fixture tree is statically clean, so the *static*
+	// degradation path (which this run takes) also finds nothing. A degraded
+	// run with violations is covered by the item-4.2 tests below.
+	require.Equal(t, 0, out.Count, "a no-vision critique of a clean tree must not produce findings")
+	assert.False(t, out.Degraded, "no findings means nothing to mark degraded")
+}
+
+// ---------------------------------------------------------------------------
+// Non-vision degradation — static findings (SP-140-4 §4a, TODO item 4.2)
+//
+// AC: "Non-vision scripted client: design_critique returns visual:false static
+// findings, no error." These tests pin that a run with no reachable vision tier
+// degrades to the design validator's rule-pack findings (mapped into the
+// critique schema) instead of returning an empty list, and that the turn never
+// fails.
+// ---------------------------------------------------------------------------
+
+// dcViolatingSVG is a wireframe that trips the static rule packs:
+//   - a data-nav target ("nowhere") that matches no wireframe stem
+//     (svg_data_nav_dangling, hard → blocker),
+//   - the data-nav element lacks a stable id (svg_stable_ids, info).
+//
+// It keeps a <text> element so svg_text_usage does not also fire, a valid
+// viewBox so svg_viewbox does not short-circuit the walk, and a slug-clean stem
+// so svg_slug_name does not fire — which keeps the expected finding set small
+// and readable.
+const dcViolatingSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <text x="24" y="64" font-size="28">Login</text>
+  <rect x="24" y="200" width="342" height="52" data-nav="nowhere"/>
+</svg>`
+
+// dcWriteViolatingTree seeds the clean tree plus one wireframe that violates
+// the static rules, so a non-vision critique has static findings to surface.
+func dcWriteViolatingTree(t *testing.T, root string) {
+	t.Helper()
+	dcWriteTree(t, root)
+	dcWrite(t, root, "design/wireframes/checkout.svg", dcViolatingSVG)
+}
+
+// TestDesignCritiqueHandler_NoVisionDegradesToStaticFindings is the item-4.2
+// acceptance case: with no vision tier reachable, design_critique returns
+// `visual:false` static findings and NO error. The findings come from the
+// design validator's rule packs, mapped into the critique schema, and every one
+// is attributable to a rule id.
+func TestDesignCritiqueHandler_NoVisionDegradesToStaticFindings(t *testing.T) {
+	// Not parallel: dcCritiqueEnvNoVision pins process-wide vision-capability
+	// state, so no-vision tests must not race the parallel vision-enabled suite.
+	root := t.TempDir()
+	dcWriteViolatingTree(t, root)
+	env, mock := dcCritiqueEnvNoVision(t, root)
+
+	h := &designCritiqueHandler{}
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/checkout.svg"})
+	require.NoError(t, err, "a non-vision critique must never fail the turn")
+	require.False(t, res.IsError, "output: %s", res.Output)
+
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+
+	// AC: visual:false, and the run is explicitly marked degraded.
+	assert.False(t, out.Visual, "no vision tier is reachable, so this is not a visual critique")
+	assert.True(t, out.Degraded, "a static-finding run must be marked degraded")
+
+	// AC: static findings are present (not the empty 4.1 result).
+	require.NotEmpty(t, out.Findings, "a non-vision primary must still get static findings")
+	assert.Equal(t, len(out.Findings), out.Count)
+
+	// The hard data-nav violation surfaces as a blocker in the consistency area
+	// and carries its rule id + line, so it is traceable to the static pack.
+	var dangling *critiqueFinding
+	for i := range out.Findings {
+		if out.Findings[i].Rule == "svg_data_nav_dangling" {
+			dangling = &out.Findings[i]
+			break
+		}
+	}
+	require.NotNil(t, dangling, "the dangling data-nav must surface as a static finding")
+	assert.Equal(t, "design/wireframes/checkout.svg", dangling.Target)
+	assert.Equal(t, "blocker", dangling.Severity, "a hard validator error is a critique blocker")
+	assert.Equal(t, "consistency", dangling.Area)
+	assert.Greater(t, dangling.Line, 0, "the static finding keeps the validator's source line")
+	assert.Contains(t, dangling.Note, "does not match any wireframe stem")
+	assert.NotEmpty(t, dangling.Suggestion, "a static finding carries the rule's concrete fix")
+
+	// The map is consistent: a blocker is counted, and every area is in the
+	// advertised critique vocabulary.
+	assert.GreaterOrEqual(t, out.BySeverity["blocker"], 1)
+	for _, f := range out.Findings {
+		assert.Contains(t, designCritiqueAreas, f.Area, "static area must be a critique area")
+		assert.Contains(t, critiqueSeverities, f.Severity)
+	}
+
+	// Never-fail: the render + artifact contract is unaffected by the tier.
+	require.Len(t, out.Artifacts, 1)
+	require.Len(t, res.Images, 1)
+	assert.Equal(t, 1, mock.calls)
+
+	// The degradation is disclosed in the human-readable output.
+	assert.Contains(t, res.Output, "(static; visual=false)")
+	assert.Contains(t, res.Output, "visual:false")
+	assert.Contains(t, res.Output, "svg_data_nav_dangling")
+
+	// JSON shape: the marker and the degraded flag are real booleans and the
+	// findings carry the rule id.
+	data, err := json.Marshal(out)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	assert.Equal(t, false, raw["visual"])
+	assert.Equal(t, true, raw["degraded"])
+}
+
+// TestDesignCritiqueHandler_NoVisionStaticFindingsTreeWide pins that a
+// whole-tree critique also degrades to static findings, using the tree
+// validator (which resolves cross-file references a per-file run cannot). The
+// findings are stamped with each file as their target, so a tree-wide
+// degradation stays attributable.
+func TestDesignCritiqueHandler_NoVisionStaticFindingsTreeWide(t *testing.T) {
+	root := t.TempDir()
+	dcWriteViolatingTree(t, root)
+	env, _ := dcCritiqueEnvNoVision(t, root)
+
+	h := &designCritiqueHandler{}
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design"})
+	require.NoError(t, err, "a tree-wide non-vision critique must not fail")
+	require.False(t, res.IsError, "output: %s", res.Output)
+
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	assert.False(t, out.Visual)
+	assert.True(t, out.Degraded)
+	require.NotEmpty(t, out.Findings)
+
+	// The violating file is named as a finding target; the clean files are not
+	// invented into findings.
+	targets := map[string]bool{}
+	for _, f := range out.Findings {
+		targets[f.Target] = true
+	}
+	assert.True(t, targets["design/wireframes/checkout.svg"],
+		"the tree-wide static pass must attribute the violation to its file")
+}
+
+// TestDesignCritiqueHandler_NoVisionStaticFindingsRubricFiltered pins that the
+// static degradation honours the active rubric: a consistency-focused pass
+// reports consistency-area findings (dangling references) and drops findings
+// the rubric does not cover, so a focused pass stays focused.
+func TestDesignCritiqueHandler_NoVisionStaticFindingsRubricFiltered(t *testing.T) {
+	root := t.TempDir()
+	// A wireframe whose only violation is a missing viewBox → hierarchy area.
+	dcWriteTree(t, root)
+	dcWrite(t, root, "design/wireframes/noview.svg", `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844"><text x="1" y="1">x</text></svg>`)
+	env, _ := dcCritiqueEnvNoVision(t, root)
+
+	h := &designCritiqueHandler{}
+
+	// hierarchy rubric keeps the viewBox finding.
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{
+		"target": "design/wireframes/noview.svg",
+		"rubric": designRubricHierarchy,
+	})
+	require.NoError(t, err)
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	require.NotEmpty(t, out.Findings)
+	for _, f := range out.Findings {
+		assert.Contains(t, rubricAreas(designRubricHierarchy), f.Area,
+			"a focused rubric must not surface out-of-scope areas")
+	}
+
+	// A consistency rubric drops the hierarchy-only finding.
+	res, err = h.Execute(newTestCtx(root), env, map[string]any{
+		"target": "design/wireframes/noview.svg",
+		"rubric": designRubricConsistency,
+	})
+	require.NoError(t, err)
+	out, ok = res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	for _, f := range out.Findings {
+		assert.Contains(t, rubricAreas(designRubricConsistency), f.Area)
+	}
+}
+
+// TestDesignCritiqueHandler_NoVisionCleanTreeNotesDegradation pins the
+// "clean-but-degraded" case: a non-vision critique of a statically clean target
+// reports no findings but still discloses that the static fallback ran, so an
+// empty list is not mistaken for "no critique was attempted".
+func TestDesignCritiqueHandler_NoVisionCleanTreeNotesDegradation(t *testing.T) {
+	root := t.TempDir()
+	dcWriteTree(t, root)
+	env, _ := dcCritiqueEnvNoVision(t, root)
+
+	h := &designCritiqueHandler{}
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	assert.False(t, out.Visual)
+	assert.Empty(t, out.Findings)
+	assert.False(t, out.Degraded, "no findings means nothing was degraded into the result")
+	assert.Contains(t, out.Note, "degraded to static",
+		"a clean degraded run must still disclose that the static fallback ran")
+	assert.Contains(t, res.Output, "degraded to static")
+}
+
+// TestDesignCritiqueHandler_VisionPreferredOverStatic is the SP-137 tier-order
+// half of item 4.2: when a vision tier is reachable, the vision findings win
+// and the static pass does not run — even on a target that would trip the
+// static rules.
+func TestDesignCritiqueHandler_VisionPreferredOverStatic(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dcWriteViolatingTree(t, root)
+
+	env, _ := dcCritiqueEnv(t, root)
+	env.VisionProcessor = &VisionProcessor{visionClient: &dcScriptedVisionClient{
+		response: `[{"area":"hierarchy","severity":"minor","note":"vision finding","suggestion":"v"}]`,
+	}}
+
+	h := &designCritiqueHandler{}
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/checkout.svg"})
+	require.NoError(t, err)
+
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	assert.True(t, out.Visual)
+	assert.False(t, out.Degraded, "a vision critique is not degraded")
+	require.Len(t, out.Findings, 1)
+	assert.Equal(t, "vision finding", out.Findings[0].Note)
+	assert.Empty(t, out.Findings[0].Rule, "a vision finding carries no validator rule")
+}
+
+// TestCritiqueSeverityForDesign pins the severity mapping the static
+// degradation uses.
+func TestCritiqueSeverityForDesign(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "blocker", critiqueSeverityForDesign(design.SeverityError))
+	assert.Equal(t, "major", critiqueSeverityForDesign(design.SeverityWarn))
+	assert.Equal(t, "minor", critiqueSeverityForDesign(design.SeverityFix))
+	assert.Equal(t, "info", critiqueSeverityForDesign(design.SeverityInfo))
+	assert.Equal(t, "info", critiqueSeverityForDesign(design.Severity("bogus")))
+}
+
+// TestCritiqueAreaForRule pins the rule → area classification, including the
+// fallback for an unknown rule (a rule pack item 4.4/4.5 adds later).
+func TestCritiqueAreaForRule(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"svg_data_nav_dangling":  "consistency",
+		"svg_slug_name":          "consistency",
+		"manifest_link_dangling": "consistency",
+		"svg_viewbox":            "hierarchy",
+		"svg_frame_match":        "hierarchy",
+		"screen_external_ref":    "affordance",
+		"icon_wellformed":        "affordance",
+		"brand_raw_hex":          "contrast",
+		"svg_data_uri_size":      "contrast",
+		"a_rule_from_the_future": "consistency",
+		"":                       "consistency",
+	}
+	for rule, want := range cases {
+		assert.Equal(t, want, critiqueAreaForRule(rule), "critiqueAreaForRule(%q)", rule)
+	}
+	// Every mapped area is a real critique area.
+	for rule := range cases {
+		assert.Contains(t, designCritiqueAreas, critiqueAreaForRule(rule))
+	}
+}
+
+// TestAppendNote pins the note composition used by the degradation (and by
+// item 4.3's cap notice through the same field).
+func TestAppendNote(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "b", appendNote("", " b "))
+	assert.Equal(t, "a", appendNote("a", ""))
+	assert.Equal(t, "a b", appendNote(" a ", " b "))
+	assert.Equal(t, "cap notice static notice", appendNote("cap notice", "static notice"))
 }
 
 // TestDesignCritiqueHandler_NoVisionTierIsHermetic pins that the no-processor

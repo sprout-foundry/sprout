@@ -195,7 +195,7 @@ prettier --check`).
       `design_render`, images via SP-137 path, structured rubric prompt
       (hierarchy, affordance, consistency, spacing rhythm, contrast,
       touch targets), structured findings `{target, area, severity, note,
-      suggestion}`. Spec: SP-140-4 §4a.- [ ] **4.2** Critique degradation: non-vision primary → static findings
+      suggestion}`. Spec: SP-140-4 §4a.- [x] **4.2** Critique degradation: non-vision primary → static findings
       with `visual: false`, never fails the turn (SP-137 tier order).
       Spec: SP-140-4 §4a.
 - [ ] **4.3** Critique cache + cost cap: PNG cache under

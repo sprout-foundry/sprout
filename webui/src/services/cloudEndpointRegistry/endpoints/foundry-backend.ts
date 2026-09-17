@@ -176,11 +176,6 @@ const settingsEndpoints: CloudEndpoint[] = [
   },
 ];
 
-// --- Costs ---
-// Intentionally empty: these endpoints are not available in browser mode and
-// return synthetic safe-default responses (see synthetic.ts).
-const costEndpoints: CloudEndpoint[] = [];
-
 // --- Providers ---
 const providerEndpoints: CloudEndpoint[] = [
   {
@@ -221,7 +216,6 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...taskEndpoints,
   ...flyWorkspaceEndpoints,
   ...settingsEndpoints,
-  ...costEndpoints,
   ...providerEndpoints,
   ...statsEndpoints,
   ...workspaceEndpoints,

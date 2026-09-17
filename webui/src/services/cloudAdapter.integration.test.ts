@@ -578,7 +578,7 @@ describe('CloudAdapter Integration Tests', () => {
 
   // NOTE: "URL Rewriting - Other foundry-backend Endpoints" describe block
   // was removed: all the endpoints it tested (/api/upload/image,
-  // /api/diagnostics, /api/semantic, /api/lsp/*, /api/history/*, /api/costs/*,
+  // /api/diagnostics, /api/semantic, /api/lsp/*, /api/history/*,
   // /api/hotkeys) are now intercepted as synthetic responses because they
   // are not available in browser mode. See synthetic.ts for their definitions.
 

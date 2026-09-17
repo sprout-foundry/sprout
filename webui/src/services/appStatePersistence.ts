@@ -105,7 +105,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       // design surface landed, so a reload dropped a user out of the design
       // workspace. The active workspace mode also consults this on boot.
       currentView:
-        ['chat', 'editor', 'git', 'costs', 'design'].includes(parsed.currentView) ||
+        ['chat', 'editor', 'git', 'design'].includes(parsed.currentView) ||
         getPluginViewIds().includes(parsed.currentView)
           ? parsed.currentView
           : 'chat',

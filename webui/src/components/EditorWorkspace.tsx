@@ -16,8 +16,6 @@ import { useIsMobileViewport } from '../hooks/useMobileSheets';
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
 // open. Each render site below wraps the component in <Suspense>.
-const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
-
 const RouteFallback: React.FC = () => (
   <div className="editor-workspace-route-fallback">
     <SkeletonText lines={6} />
@@ -49,9 +47,7 @@ export interface EditorWorkspaceProps {
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
   handleOutlineNavigateToSymbol: (line: number) => void;
-  /** Called when a cost session row is clicked to restore that session */
-  onSessionRestore?: (sessionId: string) => void;
-  /** Called when the user clicks Back from a non-chat view (e.g. costs). */
+  /** Called when the user clicks Back from a non-chat view. */
   onViewChange?: (view: ViewType) => void;
 }
 
@@ -141,7 +137,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   reviewProps,
   diffState,
   handleOutlineNavigateToSymbol,
-  onSessionRestore,
   onViewChange,
 }) => {
   // P4.2: phone form factor — peer-buffer keep-alive topology (see
@@ -687,16 +682,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Component onBack={() => onViewChange?.('chat')} onNavigate={(id) => onViewChange?.(id)} />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
-
-  if (currentView === 'costs') {
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={<RouteFallback />}>
-          <CostsPage onSessionClick={onSessionRestore} onBack={onViewChange ? () => onViewChange('chat') : undefined} />
         </Suspense>
       </ErrorBoundary>
     );

@@ -236,7 +236,7 @@ prettier --check`).
       SP-140-5 §5a.
 - [x] **5.2** Export hardening: provenance content-hash headers,
       refuses dirty alias graphs. Spec: SP-140-5 §5a + SP-140 invariant 2.
-- [ ] **5.3** `design_sync` analyze mode: read touched UI code + design
+- [x] **5.3** `design_sync` analyze mode: read touched UI code + design
       tree, return sync report `{delta, kind, design_files, confidence,
       basis: literal|structural|inferred}`; diff + convention based (CSS
       vars, Tailwind classes, router files), no AST analysis; touched

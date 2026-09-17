@@ -181,7 +181,7 @@ describe('ScreensGrid cards', () => {
     );
 
     expect(screen.getByTestId('design-screens-grid').getAttribute('data-inventory')).toBe('missing');
-    expect(screen.getByText('No design/ tree to browse.')).toBeTruthy();
+    expect(screen.getByText("Couldn't load the design inventory.")).toBeTruthy();
   });
 });
 

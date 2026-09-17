@@ -381,7 +381,6 @@ const TESTIDS = {
   "design-rail-flows": "design-rail-flows",
   "design-rail-screens": "design-rail-screens",
   "design-rail-tokens": "design-rail-tokens",
-  "design-rail-stub-row": "design-rail-stub-row",
   "design-detail-pane": "design-detail-pane",
   "design-detail-content": "design-detail-content",
   // Flows canvas

@@ -43,6 +43,8 @@ const TESTIDS = {
   "chat-tool-timeline": "chat-tool-timeline",
   "chat-subagent-feed": "chat-subagent-feed",
   "turn-changes-strip": "turn-changes-strip",
+  "diff-view": "diff-view",
+  "chat-metrics-strip": "chat-metrics-strip",
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",
@@ -427,6 +429,7 @@ const TESTIDS = {
   "token-font-line": "token-font-line",
   "token-font-meta": "token-font-meta",
   "token-space-bar": "token-space-bar",
+
 } as const;
 
 // Derived set for O(1) coverage lookups

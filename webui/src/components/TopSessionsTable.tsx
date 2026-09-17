@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { SessionCostRow } from '../types/costs';
-import { formatDollar } from '../utils/format';
+import { formatDollar, formatRelativeTime } from '../utils/format';
 import './TopSessionsTable.css';
 
 type SortKey = 'title' | 'working_dir' | 'total_cost' | 'last_updated';
@@ -14,28 +14,6 @@ interface TopSessionsTableProps {
 }
 
 const SKELETON_ROW_COUNT = 5;
-
-function formatRelativeTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    const now = Date.now();
-    const diffMs = now - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHours = Math.floor(diffMin / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffSec < 60) return 'just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    // Fall back to YYYY-MM-DD for older entries
-    return date.toISOString().slice(0, 10);
-  } catch {
-    return dateStr;
-  }
-}
 
 function sortSessions(sessions: SessionCostRow[], key: SortKey, direction: SortDirection): SessionCostRow[] {
   const sorted = [...sessions];

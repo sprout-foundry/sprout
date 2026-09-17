@@ -159,6 +159,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
             <label>
               Registry starters:
               <select
+                className="styled-select"
                 value=""
                 onChange={(e) => {
                   if (e.target.value) handleRegistrySelect(e.target.value);

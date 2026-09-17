@@ -503,6 +503,16 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Fold the layer write back into the live config manager. The file write
+	// above bypasses the manager, so without this the merged in-memory config
+	// (what every agent reads via GetConfig) keeps the previous value until
+	// the next restart — the save "worked" but nothing running saw it.
+	if cm := ws.resolveConfigManagerQuietly(r); cm != nil {
+		if err := cm.Reload(); err != nil {
+			ws.log().Warn("layered settings write: manager reload failed", slog.Any("err", err))
+		}
+	}
+
 	// If the patch contained a primary provider/model change, also apply
 	// it to the live agent and republish provider state. Without this,
 	// the on-disk config is correct but the active session keeps running

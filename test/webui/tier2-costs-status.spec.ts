@@ -16,7 +16,9 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  browser = await chromium.launch();
+  // AGENTS.md: prefer system Chrome; the Playwright browser download is
+  // absent on some dev machines.
+  browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });

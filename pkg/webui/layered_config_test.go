@@ -241,6 +241,59 @@ func makeSettingsRequest(ws *ReactWebServer, method, urlPath string, body string
 	return rec
 }
 
+// TestHandlePutWorkspaceSettings_ReachesLiveConfigManager pins the folded
+// reload: a workspace-layer PUT writes the layer file AND updates the merged
+// in-memory config the running agents read. Before the reload was added, the
+// file was correct but cm.GetConfig() kept serving the old value until restart.
+func TestHandlePutWorkspaceSettings_ReachesLiveConfigManager(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+	t.Setenv("SPROUT_CONFIG", "")
+
+	workspaceRoot := t.TempDir()
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	// Prime the merged config with a known value via a workspace-layer write.
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "low"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initial workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	cm := ws.resolveConfigManagerQuietly(makeClientRequest(clientID))
+	if cm == nil {
+		t.Fatal("no config manager resolved")
+	}
+	if got := cm.GetConfig().ReasoningEffort; got != "low" {
+		t.Fatalf("expected reasoning_effort %q after initial PUT, got %q", "low", got)
+	}
+
+	// Change the same key through a second layer write.
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "high"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The merged in-memory config must reflect the new value immediately —
+	// this is the running agent's view, not a fresh read of the file.
+	if got := cm.GetConfig().ReasoningEffort; got != "high" {
+		t.Errorf("live config manager kept stale reasoning_effort after layered PUT: got %q, want %q", got, "high")
+	}
+}
+
+func makeClientRequest(clientID string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	req.Header.Set(webClientIDHeader, clientID)
+	return req
+}
+
 func TestHandlePutSessionSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
 	t.Setenv("HOME", isolatedHome)

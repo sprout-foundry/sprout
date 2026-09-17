@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -81,6 +82,15 @@ func ListModels() []ModelStatus {
 	seen := make(map[string]bool)
 
 	for _, im := range installed {
+		// Skip corrupt installs: a directory with weights but a truncated
+		// config.json would panic the engine at load time. Listing it as
+		// installed turns every auto-selection into a crash; skipping it
+		// lets selection fall through to the next candidate and the
+		// download UI offer a clean reinstall.
+		if !validModelConfig(im.Dir) {
+			log.Printf("local: skipping %s — config.json is missing, empty, or invalid (re-download the model)", im.Dir)
+			continue
+		}
 		name := im.Name
 		if !im.IsTuned {
 			if catalogName, ok := dirBasenameToCatalogName[im.Name]; ok {
@@ -107,7 +117,11 @@ func ListModels() []ModelStatus {
 		}
 		installedOnDisk := false
 		if st, err := os.Stat(dir); err == nil && st.IsDir() {
-			installedOnDisk = hasModelWeights(dir)
+			// Same corrupt-install guard as the directory-scan path above:
+			// weights without a usable config.json must not count as
+			// installed, or auto-selection resolves straight back into the
+			// panicking directory.
+			installedOnDisk = hasModelWeights(dir) && validModelConfig(dir)
 		}
 		// MinRAM reflects the "can select at all" threshold (MinRAMSelect) —
 		// this field answers "how much RAM do I need to use this model",
@@ -486,4 +500,45 @@ func dirSizeBytes(dir string) int64 {
 
 func hasModelWeights(dir string) bool {
 	return catalog.HasWeights(dir)
+}
+
+// validModelConfig reports whether the model directory carries a parseable
+// config.json with the fields the engine requires. A truncated or empty
+// config (seen after interrupted downloads) otherwise survives weight-based
+// install checks and only surfaces as a divide-by-zero panic deep in
+// sinter's LoadConfig at load time (HiddenSize / NumHeads with NumHeads==0).
+// A missing config.json is fine — sprout-tuned variants and GGUF models
+// don't ship one.
+func validModelConfig(dir string) bool {
+	cfgPath := filepath.Join(dir, "config.json")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return os.IsNotExist(err) // unreadable file is suspicious; missing is fine
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return false
+	}
+
+	var raw struct {
+		NumAttentionHeads int `json:"num_attention_heads"`
+		HiddenSize        int `json:"hidden_size"`
+		TextConfig        *struct {
+			NumAttentionHeads int `json:"num_attention_heads"`
+			HiddenSize        int `json:"hidden_size"`
+		} `json:"text_config"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	numHeads := raw.NumAttentionHeads
+	hidden := raw.HiddenSize
+	if raw.TextConfig != nil {
+		if numHeads == 0 {
+			numHeads = raw.TextConfig.NumAttentionHeads
+		}
+		if hidden == 0 {
+			hidden = raw.TextConfig.HiddenSize
+		}
+	}
+	return numHeads > 0 && hidden > 0
 }

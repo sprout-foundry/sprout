@@ -78,6 +78,62 @@ func TestManager_Reload_Idempotent(t *testing.T) {
 	}
 }
 
+func TestManager_Reload_LayeredManager_PreservesGlobalLayer(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	globalDir := filepath.Join(isolatedHome, ".config", "sprout")
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(globalDir, "config.json"), map[string]interface{}{
+		"last_used_provider": "openai",
+		"reasoning_effort":   "low",
+	})
+
+	workspaceRoot := t.TempDir()
+	workspaceDir := filepath.Join(workspaceRoot, ".sprout")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(workspaceDir, "workspace.json"), map[string]interface{}{
+		"reasoning_effort": "high",
+	})
+
+	mgr, err := NewManagerWithLayers(globalDir, workspaceDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithLayers() failed: %v", err)
+	}
+
+	// Merged view before reload: workspace reasoning_effort wins, global provider visible.
+	if got := mgr.GetConfig().ReasoningEffort; got != "high" {
+		t.Fatalf("expected merged reasoning_effort %q before reload, got %q", "high", got)
+	}
+	if got := mgr.GetConfig().LastUsedProvider; got != "openai" {
+		t.Fatalf("expected global provider %q before reload, got %q", "openai", got)
+	}
+
+	// External edit to the workspace layer (what PUT ?layer=workspace does).
+	writeJSON(t, filepath.Join(workspaceDir, "workspace.json"), map[string]interface{}{
+		"reasoning_effort": "medium",
+	})
+
+	if err := mgr.Reload(); err != nil {
+		t.Fatalf("Reload() failed: %v", err)
+	}
+
+	if got := mgr.GetConfig().ReasoningEffort; got != "medium" {
+		t.Errorf("expected reloaded reasoning_effort %q, got %q", "medium", got)
+	}
+	// The bug this pins: reloading from the workspace save file alone dropped
+	// the global layer, so last_used_provider vanished from memory.
+	if got := mgr.GetConfig().LastUsedProvider; got != "openai" {
+		t.Errorf("expected global provider %q to survive layered reload, got %q", "openai", got)
+	}
+}
+
 func writeJSON(t *testing.T, path string, v interface{}) {
 	t.Helper()
 	data, err := json.MarshalIndent(v, "", "  ")

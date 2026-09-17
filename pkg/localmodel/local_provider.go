@@ -134,6 +134,15 @@ func (p *LocalProvider) ensureLoadedLocked() (*llm.Model, error) {
 		return nil, p.loadErr
 	}
 
+	// Load-time guard for corrupt installs: a truncated config.json would
+	// panic inside sinter's LoadConfig (divide-by-zero on missing head
+	// counts). Surface it as an error instead — auto-selection skips such
+	// dirs, but an explicit SetModel target can still point at one.
+	if !validModelConfig(dir) {
+		p.loadErr = fmt.Errorf("refusing to load %s: config.json is missing, empty, or invalid — re-download the model", dir)
+		return nil, p.loadErr
+	}
+
 	if localDebug() {
 		log.Printf("local: resolved model dir=%s backend=%s", dir, resolvedBackend)
 	}

@@ -39,6 +39,10 @@ func (m *BackgroundProcessManager) StartWithKind(_ context.Context, _ string, _ 
 // errors before reading it.
 type StartOptions struct {
 	EventBus *events.EventBus
+
+	// TTL mirrors the non-JS StartOptions so call sites that set it still
+	// compile against the WASM stub (where it has no effect).
+	TTL time.Duration
 }
 
 // StartWithOptions always returns an error in WASM builds.
@@ -97,6 +101,11 @@ func (p *BackgroundProcess) Done() <-chan struct{} {
 	ch := make(chan struct{})
 	close(ch)
 	return ch
+}
+
+// KeepAlive always returns an error in WASM builds.
+func (m *BackgroundProcessManager) KeepAlive(_ string) error {
+	return errors.New("background process management is not available in WASM")
 }
 
 // bpmContextKey is the context key for BackgroundProcessManager.

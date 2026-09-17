@@ -36,7 +36,6 @@ import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
 import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
-import Status from './Status';
 import StatusBar from './StatusBar';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import Terminal from './Terminal';
@@ -309,7 +308,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // the provider setup flow instead — opening ModelSelectionModal for
   // "editor" would fail at the /api/providers/models?provider=editor
   // fetch since there's no such provider on the backend.
-  const handleStatusBarModelClick = useCallback(
+  const handleChatModelClick = useCallback(
     (provider: string) => {
       const p = provider || state.provider || '';
       if (!p || p === 'editor') {
@@ -761,6 +760,7 @@ const AppContent: React.FC<AppContentProps> = ({
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
+      onModelClick: handleChatModelClick,
       backendReachable,
       onRetryConnection,
       subagentActivities: state.subagentActivities,
@@ -795,6 +795,7 @@ const AppContent: React.FC<AppContentProps> = ({
       handleToolPillClick,
       state.stats,
       state.isConnected,
+      handleChatModelClick,
       backendReachable,
       onRetryConnection,
       state.subagentActivities,
@@ -1020,7 +1021,6 @@ const AppContent: React.FC<AppContentProps> = ({
             />
           </div>
         </div>
-        <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar
           branch={gitBranches.current || gitStatus?.branch}
           workspacePath={workspaceRoot}
@@ -1036,9 +1036,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 }
               : null
           }
-          chatStats={state.stats}
-          isConnected={state.isConnected}
-          onModelClick={handleStatusBarModelClick}
         />
         {!supportsLocalTerminal && (
           <ErrorBoundary panelName="Terminal">

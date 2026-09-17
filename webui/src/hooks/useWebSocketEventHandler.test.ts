@@ -1160,47 +1160,91 @@ describe('subagent-run attribution', () => {
     return { stateHolder };
   }
 
-  it('stream_chunk after a completed subagent run creates a NEW primary message, not appending to the subagent run', () => {
-    const subagentRun = mkSubagentRun('subagent-tc-1');
-    const { stateHolder } = setup([
-      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
-      mkPrimary('a1', 'Working on it. Delegating to coder.'),
-      subagentRun,
-    ]);
+  it('buffered chunks flush BEFORE a following non-chunk event routes (query_completed ordering)', () => {
+    vi.useFakeTimers();
+    try {
+      const { stateHolder } = setup([
+        { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+        mkPrimary('a1', 'partial answer '),
+      ]);
 
-    act(() => {
-      hookHandleEvent!({
-        id: 'e1',
-        type: 'stream_chunk',
-        data: { chunk: 'The subagent finished. Summary of results.' },
+      act(() => {
+        hookHandleEvent!({ id: 'e1', type: 'stream_chunk', data: { chunk: 'more text' } });
       });
-    });
+      // No timer advance — the chunk is still buffered. The next event must
+      // flush it synchronously before its own handler runs, or query_completed's
+      // streamed-vs-server heuristics compare against a truncated transcript.
+      act(() => {
+        hookHandleEvent!({ id: 'e2', type: 'query_completed', data: { query: 'do the thing', response: 'short' } });
+      });
 
-    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
-    // A new primary assistant message was appended — total 4.
-    expect(messages).toHaveLength(4);
-    // The subagent run message is untouched.
-    expect(messages[2]).toBe(subagentRun);
-    // The new message is a plain primary assistant message with the chunk.
-    expect(messages[3].type).toBe('assistant');
-    expect(messages[3].isSubagentRun).toBeFalsy();
-    expect(messages[3].content).toBe('The subagent finished. Summary of results.');
+      const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+      expect(messages[messages.length - 1].content).toBe('partial answer more text');
+      // Timer was consumed by the sync flush — no pending work left.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stream_chunk after a completed subagent run creates a NEW primary message, not appending to the subagent run', () => {
+    vi.useFakeTimers();
+    try {
+      const subagentRun = mkSubagentRun('subagent-tc-1');
+      const { stateHolder } = setup([
+        { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+        mkPrimary('a1', 'Working on it. Delegating to coder.'),
+        subagentRun,
+      ]);
+
+      act(() => {
+        hookHandleEvent!({
+          id: 'e1',
+          type: 'stream_chunk',
+          data: { chunk: 'The subagent finished. Summary of results.' },
+        });
+      });
+      // Chunks are buffered and flushed on a timer (stream throttling).
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+      // A new primary assistant message was appended — total 4.
+      expect(messages).toHaveLength(4);
+      // The subagent run message is untouched.
+      expect(messages[2]).toBe(subagentRun);
+      // The new message is a plain primary assistant message with the chunk.
+      expect(messages[3].type).toBe('assistant');
+      expect(messages[3].isSubagentRun).toBeFalsy();
+      expect(messages[3].content).toBe('The subagent finished. Summary of results.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('stream_chunk still appends to the existing primary message when the subagent run is NOT the last message', () => {
-    const { stateHolder } = setup([
-      { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
-      mkPrimary('a1', 'partial answer '),
-    ]);
+    vi.useFakeTimers();
+    try {
+      const { stateHolder } = setup([
+        { id: 'u1', type: 'user', content: 'do the thing', timestamp: new Date() },
+        mkPrimary('a1', 'partial answer '),
+      ]);
 
-    act(() => {
-      hookHandleEvent!({ id: 'e2', type: 'stream_chunk', data: { chunk: 'more text' } });
-    });
+      act(() => {
+        hookHandleEvent!({ id: 'e2', type: 'stream_chunk', data: { chunk: 'more text' } });
+      });
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
 
-    const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
-    // No new message — appended to the existing primary assistant.
-    expect(messages).toHaveLength(2);
-    expect(messages[1].content).toBe('partial answer more text');
+      const messages = stateHolder.current.messages as Array<Record<string, unknown>>;
+      // No new message — appended to the existing primary assistant.
+      expect(messages).toHaveLength(2);
+      expect(messages[1].content).toBe('partial answer more text');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('tool_start after a subagent run attaches the marker to a new primary message, not the subagent block', () => {

@@ -1,0 +1,75 @@
+/* ChatMetricsStrip — per-chat LLM metrics, rendered inside the chat
+   shell above the input. Design tokens only. */
+
+.chat-metrics-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  min-height: 20px;
+  flex-shrink: 0;
+}
+
+.chat-metrics-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.chat-metrics-sep {
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.chat-metrics-persona {
+  font-weight: 500;
+}
+
+.chat-metrics-model-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.chat-metrics-model-button:hover {
+  text-decoration: underline;
+  color: var(--accent-primary);
+}
+
+.chat-metrics-model-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-radius: 2px;
+}
+
+.chat-metrics-cost--warn {
+  color: var(--accent-warning, #f59e0b);
+}
+
+.chat-metrics-cost--alert {
+  color: var(--accent-error);
+}
+
+.chat-metrics-conn--off {
+  color: var(--accent-error);
+}
+
+.chat-metrics-conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}

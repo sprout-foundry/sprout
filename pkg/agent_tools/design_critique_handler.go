@@ -1939,6 +1939,8 @@ func critiqueStaticSuggestion(rule string) string {
 		return "Add a frames: block naming each device frame as name: WxH."
 	case "flowchart_node_stem":
 		return "Rename the flow node to match an existing wireframe stem."
+	case "consistency_flow_edge_wireframe":
+		return "Add the missing wireframe for the flow node, or mark the node terminal (no outgoing edge)."
 	case "flowchart_declaration", "flowchart_syntax":
 		return "Fix the mermaid declaration/syntax so the flow parses."
 	case "token_alias_dangling":

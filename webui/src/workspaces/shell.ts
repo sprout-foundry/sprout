@@ -94,7 +94,6 @@ export interface WorkspaceShellProps {
 
   // Editor chrome handlers (Code shell).
   handleOutlineNavigateToSymbol: (line: number) => void;
-  onSessionRestore: (sessionId: string, chatId?: string) => void;
 
   // Per-mode payloads; each shell reads only its own.
   chat: WorkspaceShellChat;

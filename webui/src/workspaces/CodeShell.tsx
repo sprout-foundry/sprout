@@ -41,7 +41,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   queryProgress,
   currentBuffer,
   handleOutlineNavigateToSymbol,
-  onSessionRestore,
   chat,
   git,
 }) => {
@@ -132,7 +131,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
               reviewProps={reviewProps}
               diffState={diffState}
               handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-              onSessionRestore={onSessionRestore}
               onViewChange={onViewChange}
             />
           </ErrorBoundary>
@@ -143,7 +141,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             isTablet={isTablet}
             showContextSidebar={showContextSidebar}
             contextPanelRef={contextPanelRef}
-            currentView={currentView}
             toolExecutions={toolExecutions}
             logs={logs}
             subagentActivities={subagentActivities}

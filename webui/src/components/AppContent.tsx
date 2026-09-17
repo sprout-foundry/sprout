@@ -3,12 +3,12 @@ import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-rea
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
-import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
+import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
 import { useFileHandler } from '../hooks/useFileHandler';
@@ -27,19 +27,22 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
+import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
+import type { WorkspaceModeId } from '../workspaces/registry';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
+import { useDesignPresence } from './design/useDesignPresence';
 import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
 import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
 import StatusBar from './StatusBar';
-import { WorktreeChatDialog } from './WorktreeChatDialog';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
+import { WorktreeChatDialog } from './WorktreeChatDialog';
 
 interface AppContentProps {
   state: AppState;
@@ -392,6 +395,47 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
 
+  // SP-140 / workspace modes: which mode the shell is showing. Availability
+  // depends on the workspace's own content (a design tree), probed once here so
+  // the switcher and the surface agree on what exists.
+  const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
+  const {
+    mode: workspaceMode,
+    modes: workspaceModes,
+    select: selectWorkspaceMode,
+  } = useWorkspaceMode({ hasDesignTree });
+
+  /**
+   * Selecting a mode moves the view. The workspace-mode state is the source of
+   * truth for "which surface am I in"; `currentView` remains the intra-mode
+   * route (chat/editor/git inside Code, the design surface inside Design), so
+   * the two are kept in step here rather than each mode re-deriving it.
+   */
+  const handleSelectMode = useCallback(
+    (id: WorkspaceModeId) => {
+      selectWorkspaceMode(id);
+      if (id === 'design') onViewChange('design');
+      else if (state.currentView === 'design') onViewChange('chat');
+    },
+    [selectWorkspaceMode, onViewChange, state.currentView],
+  );
+
+  /**
+   * Reconcile the view with the persisted mode once the design-presence probe
+   * settles. `currentView` alone can't decide this: it is restored before the
+   * probe answers, so a Design-mode workspace whose `design/` check is still in
+   * flight would briefly (or permanently) sit on chat. Runs only until it has
+   * acted once, so it never fights the user's own navigation.
+   */
+  const modeViewSyncedRef = useRef(false);
+  useEffect(() => {
+    if (modeViewSyncedRef.current) return;
+    if (designPresenceLoading) return; // probe still in flight
+    modeViewSyncedRef.current = true;
+    if (workspaceMode.id === 'design' && state.currentView !== 'design') onViewChange('design');
+    else if (workspaceMode.id !== 'design' && state.currentView === 'design') onViewChange('chat');
+  }, [designPresenceLoading, workspaceMode.id, state.currentView, onViewChange]);
+
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
     document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
   }, []);
@@ -404,6 +448,13 @@ const AppContent: React.FC<AppContentProps> = ({
     if (initialViewSyncRef.current) {
       return;
     }
+    // A persisted Design mode owns the view: the design surface renders outside
+    // the chat buffer, so forcing `chat` here would undo the mode the user left
+    // the workspace in. Mode reconciliation is handled by the effect above.
+    if (workspaceMode.id === 'design') {
+      initialViewSyncRef.current = true;
+      return;
+    }
     if (currentBuffer?.kind === 'chat' && state.currentView !== 'chat') {
       initialViewSyncRef.current = true;
       onViewChange('chat');
@@ -412,7 +463,7 @@ const AppContent: React.FC<AppContentProps> = ({
     if (currentBuffer) {
       initialViewSyncRef.current = true;
     }
-  }, [currentBuffer, onViewChange, state.currentView]);
+  }, [currentBuffer, onViewChange, state.currentView, workspaceMode.id]);
 
   const handleToggleContextPanel = () => {
     // Direct ref call (the old custom-event hop depended on a listener that
@@ -874,6 +925,9 @@ const AppContent: React.FC<AppContentProps> = ({
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
           onSidebarToggle={onSidebarToggle}
+          modes={workspaceModes}
+          activeModeId={workspaceMode.id}
+          onSelectMode={handleSelectMode}
           selectedSection={selectedSection}
           onSectionChange={onSectionChange}
           sidebarWidth={sidebarWidth}

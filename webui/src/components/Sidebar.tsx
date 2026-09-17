@@ -15,12 +15,15 @@ import {
   SIDEBAR_COLLAPSED_WIDTH,
   clampSidebarWidth,
 } from '../hooks/useSidebarState';
+import { useUIScale } from '../hooks/useUIScale';
 import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
+import ModeSwitcher from '../workspaces/ModeSwitcher';
+import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
 import AutomationsPanel from './AutomationsPanel';
 import { useDesignPresence } from './design/useDesignPresence';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
@@ -46,6 +49,7 @@ import {
   Zap,
   CircleDollarSign,
   Palette,
+  PanelLeft,
 } from 'lucide-react';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
@@ -53,8 +57,6 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
-import { useUIScale } from '../hooks/useUIScale';
-
 interface SidebarProps {
   isConnected: boolean;
   instances?: SproutInstance[];
@@ -90,6 +92,12 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
+  /** Workspace modes offered for the current workspace, in switcher order. */
+  modes?: WorkspaceMode[];
+  /** The active mode's id. */
+  activeModeId?: WorkspaceModeId;
+  /** Switch modes (the top-left switcher). */
+  onSelectMode?: (id: WorkspaceModeId) => void;
   selectedSection?: SectionTab;
   onSectionChange?: (section: SectionTab) => void;
   onFileClick?: (filePath: string, lineNumber?: number) => void;
@@ -176,6 +184,9 @@ function Sidebar({
   onMobileMenuToggle,
   sidebarCollapsed,
   onSidebarToggle,
+  modes = [],
+  activeModeId = 'code',
+  onSelectMode,
   selectedSection,
   onSectionChange,
   onFileClick,
@@ -310,6 +321,19 @@ function Sidebar({
     setSettingsFocusTarget: modelState.setSettingsFocusTarget,
   });
 
+  /**
+   * Mode selection from the top-left switcher. Optional because Sidebar is also
+   * rendered in hosts that don't own workspace state (tests, storybook-style
+   * harnesses); without a handler the switcher simply doesn't render options
+   * that do nothing.
+   */
+  const selectMode = useCallback(
+    (id: string) => {
+      onSelectMode?.(id);
+    },
+    [onSelectMode],
+  );
+
   const handleLogoToggle = useCallback(() => {
     if (isMobile) {
       finalOnMobileMenuToggle?.();
@@ -434,18 +458,19 @@ function Sidebar({
             : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }
         }
       >
-        {/* Pinned global header: instance selector */}
+        {/* Pinned global header: mode switcher (top-left) + location selector */}
         <div className="sidebar-pinned-header">
-          <button
-            type="button"
-            className="sidebar-brand sidebar-brand-button"
-            onClick={handleLogoToggle}
-            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            data-testid="sidebar-brand"
-          >
-            <SproutLogo showWordmark={false} compact />
-          </button>
+          <ModeSwitcher
+            modes={modes}
+            activeId={activeModeId}
+            onSelect={selectMode}
+            triggerLabel="Switch mode"
+            trigger={({ open }) => (
+              <span className={`sidebar-brand-mark${open ? ' is-open' : ''}`}>
+                <SproutLogo showWordmark={false} compact />
+              </span>
+            )}
+          />
           {!effectiveSidebarCollapsed ? (
             <>
               {supportsWorkspaceSwitching ? (
@@ -465,6 +490,19 @@ function Sidebar({
               )}
             </>
           ) : null}
+          {/* Collapse/expand now lives beside the switcher: the logo's click
+              moved to opening the mode menu, and a control that vanishes when
+              the rail is collapsed would strand a collapsed user. */}
+          <button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={handleLogoToggle}
+            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-collapse-toggle"
+          >
+            <PanelLeft size={16} aria-hidden="true" />
+          </button>
         </div>
 
         {/* Icon rail (always visible) + Content pane (only when expanded) */}

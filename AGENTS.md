@@ -60,7 +60,7 @@ Details, hermetic test requirements, and platform workarounds: `docs/internal/ci
 
 - **NEVER commit incident writeups, debugging narratives, or references to specific incidents** (no `INCIDENT-YYYY-MM-DD` files/ids) — this is a public repo.
 - **NEVER commit user-identifying data**: session IDs, workspace/host paths, customer domains, infra identifiers (pool/tenant IDs), credentials, transcripts, or tool-output excerpts from real sessions. Test fixtures must be synthetic.
-- Comments and commit messages describe the *mechanism*, never the *incident*: "a JWT inside a serialized JSON string", not "session X's token dump".
+- Comments and commit messages describe the _mechanism_, never the _incident_: "a JWT inside a serialized JSON string", not "session X's token dump".
 - If debugging requires real session data, keep it out of the tree entirely (read from state dirs at runtime in throwaway local tests, delete before commit).
 
 ## Design System

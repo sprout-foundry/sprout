@@ -250,6 +250,8 @@ func designTierGoFiles(t *testing.T, root string) []string {
 
 	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_validate_handler.go")))
 	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_assets_handler.go")))
+	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_render_handler.go")))
+	files = append(files, filepath.ToSlash(filepath.Join("pkg", "agent_tools", "design_render_mermaid.go")))
 	sort.Strings(files)
 	return files
 }

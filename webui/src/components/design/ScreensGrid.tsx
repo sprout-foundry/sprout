@@ -27,7 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
-import { readAsset, writeAsset } from '../../services/api/designApi';
+import { designRootPath, readAsset, writeAsset } from '../../services/api/designApi';
 import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
 import LivePreview from '../LivePreview';
 import type { DesignTabProps } from './DesignTabProps';
@@ -77,6 +77,19 @@ export function frameForScreen(
 /** Content language for a screen/wireframe asset: SVG thumbnails, HTML screens. */
 export function languageForScreen(path: string | null | undefined): 'svg' | 'html' {
   return (path ?? '').toLowerCase().endsWith('.svg') ? 'svg' : 'html';
+}
+
+/**
+ * The thumbnail image URL for a card.
+ *
+ * Inventory card paths are workspace-relative (`design/wireframes/login.svg`)
+ * while design-root-relative paths (`wireframes/login.svg`) also reach this
+ * module, so the prefix goes through `designRootPath` — which leaves an
+ * already-prefixed path alone instead of doubling it
+ * (`design/design/wireframes/...`).
+ */
+export function thumbnailUrl(path: string): string {
+  return `/api/file?path=${encodeURIComponent(designRootPath(path))}`;
 }
 
 /** The README status marker for an asset (`draft`/`review`/`ready`), else ''. */
@@ -274,7 +287,7 @@ export default function ScreensGrid({
                     {content ? (
                       <img
                         className="design-screen-thumb-image"
-                        src={`/api/file?path=${encodeURIComponent('design/' + card.path)}`}
+                        src={thumbnailUrl(card.path)}
                         alt=""
                         data-testid={`design-screen-thumb-${card.name}`}
                       />

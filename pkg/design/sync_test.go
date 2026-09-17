@@ -156,17 +156,25 @@ func TestAnalyzeTouchedFiles_LiteralTokenRevalueNamesDTCGEntry(t *testing.T) {
 }
 
 // TestAnalyzeTouchedFiles_LiteralTokenRename is the rename half of the §5b
-// fixture: the code uses the *renamed* var, and the report maps it to the DTCG
-// entry by the generated CSS-var name the export machinery owns.
+// fixture: the code adopts a var name that differs from the one the fixture's
+// declaration used, and the report still maps it to the DTCG entry by the
+// generated CSS-var name the export machinery owns.
+//
+// The rename here is in the separator spelling, which is the only rename the
+// identifier rule can produce: `cssVarStem` collapses every non-alphanumeric
+// run in a token path to '-', so `color_brand_primary` and
+// `color-brand-primary` denote the same token `color.brand.primary`. A var name
+// that differs by more than separators is a different token, not a rename (see
+// TestAnalyzeTouchedFiles_UnknownVarRefIsAnInferredProposal and
+// TestAnalyzeTouchedFiles_NewVarNameIsStillAProposal).
 func TestAnalyzeTouchedFiles_LiteralTokenRename(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
 
-	// Before: code declared --color-brand-primary. After the dev turn it
-	// declares the same value under a var that still maps to the same DTCG
-	// entry (the rename is in the DTCG tier's spelling, not the value).
+	// The fixture's own declaration is `--color-brand-primary`; the dev turn
+	// renames it to the underscore spelling of the same token.
 	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
-		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary: #0055ff; }\n")},
+		{Path: "src/theme.css", Content: []byte(":root{ --color_brand_primary: #0055ff; }\n")},
 	}})
 	require.NoError(t, err)
 
@@ -174,9 +182,78 @@ func TestAnalyzeTouchedFiles_LiteralTokenRename(t *testing.T) {
 	assert.Equal(t, "color.brand.primary", d.TokenEntry, "the entry is named")
 	assert.Equal(t, "design/tokens/color.tokens.json", d.TokenFile)
 	assert.True(t, d.SafeToApply)
-	// Values match, so this is a declaration (not a revalue) — the report
-	// still surfaces it, because the code now carries the var.
-	assert.NotEmpty(t, d.Delta)
+	assert.Contains(t, d.Delta, "--color_brand_primary")
+
+	// A renamed var must not *also* be reported as counterpart-less: the
+	// inferred pass would say "no token counterpart" for a token that exists.
+	for _, candidate := range rep.Deltas {
+		if candidate.Basis == DeltaBasisInferred {
+			assert.NotContains(t, candidate.Delta, "no token counterpart",
+				"a var resolving to an existing token is not counterpart-less")
+		}
+	}
+}
+
+// TestAnalyzeTouchedFiles_NewVarNameIsStillAProposal pins the other side of the
+// separator tolerance: a var name that differs by more than separators is a
+// genuinely new token, so it stays an inferred proposal and is never applied
+// automatically (§5b's confidence bar).
+func TestAnalyzeTouchedFiles_NewVarNameIsStillAProposal(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary-alt: #0055ff; }\n")},
+	}})
+	require.NoError(t, err)
+
+	for _, d := range rep.Deltas {
+		if d.Basis == DeltaBasisLiteral {
+			t.Fatalf("a new var name must not resolve to an existing token: %q", d.Delta)
+		}
+	}
+	inferred := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.Basis == DeltaBasisInferred })
+	assert.True(t, inferred.Proposal)
+	assert.False(t, inferred.SafeToApply)
+}
+
+// TestAnalyzeTouchedFiles_RenamedVarReferenceIsKnown covers the reference pass:
+// `var(--color_brand_primary)` names a var the semantic layer does know about
+// (under its canonical spelling), so it is not reported as an unknown
+// reference.
+func TestAnalyzeTouchedFiles_RenamedVarReferenceIsKnown(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{ color: var(--color_brand_primary); }\n")},
+	}})
+	require.NoError(t, err)
+
+	for _, d := range rep.Deltas {
+		assert.NotContains(t, d.Delta, "has no DTCG token counterpart",
+			"a renamed reference to an existing token is a known var")
+	}
+}
+
+// TestAnalyzeTouchedFiles_NoTokenTierDoesNotPanic covers the workspace with no
+// design/tokens/ tier at all: every var is counterpart-less, and the
+// separator-tolerance lookup must not dereference an absent token projection.
+func TestAnalyzeTouchedFiles_NoTokenTierDoesNotPanic(t *testing.T) {
+	root := t.TempDir()
+	syncWrite(t, root, "design/wireframes/login.svg", syncFixtureWireframe)
+
+	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary: #0055ff; color: var(--color_brand_primary); }\n")},
+	}})
+	require.NoError(t, err)
+
+	// No tokens to resolve against, so the declaration is a proposal — not a
+	// literal delta, and not a crash.
+	for _, d := range rep.Deltas {
+		assert.NotEqual(t, DeltaBasisLiteral, d.Basis,
+			"a workspace with no token tier cannot produce a literal token delta")
+	}
 }
 
 // TestAnalyzeTouchedFiles_UnknownVarRefIsAnInferredProposal covers the other

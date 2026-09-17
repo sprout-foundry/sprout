@@ -242,7 +242,7 @@ prettier --check`).
       vars, Tailwind classes, router files), no AST analysis; touched
       files default from `env.ResolveToolFuncs().ListChanges` (parsed —
       no typed ChangeTracker accessor exists). Spec: SP-140-5 §5b.
-- [ ] **5.4** `design_sync` apply mode: write safe subset (literal
+- [x] **5.4** `design_sync` apply mode: write safe subset (literal
       token renames/revalues, wireframe/sidecar updates, flow edge
       additions), mark inferred as proposals; never modify files outside
       `design/`; Gate-1 on touched paths. Spec: SP-140-5 §5b, §5e.

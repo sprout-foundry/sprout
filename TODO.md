@@ -168,7 +168,7 @@ prettier --check`).
       `frames:`, click → detail pane instantiating `LivePreview` as a
       controlled component with `onContentChange` wired to designApi
       write-back. Spec: SP-140-3 §3c.
-- [ ] **3.8** Tokens tab (`TokensTree.tsx`): grouped DTCG tree, color
+- [x] **3.8** Tokens tab (`TokensTree.tsx`): grouped DTCG tree, color
       swatches, typography/spacing specimens, search/filter by token
       path, detail pane opens `.tokens.json` in editor. Read-only.
       Spec: SP-140-3 §3d.

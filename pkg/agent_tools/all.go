@@ -3,8 +3,9 @@ package tools
 // AllTools returns all available tool handlers for registration.
 // This is the central registration point for the interface-based tool system.
 //
-// browse_url, vision tools, and run_automate are registered conditionally
-// via build-tagged stubs (nil on WASM).
+// browse_url, vision tools, run_automate, design_render,
+// design_import_sketch, and design_critique are registered conditionally via
+// build-tagged stubs (nil on WASM).
 //
 // To register all tools with a registry:
 //
@@ -58,5 +59,11 @@ func AllTools() []ToolHandler {
 	tools = append(tools, registerVisionTools()...)
 	tools = append(tools, registerRunAutomateTool()...)
 	tools = append(tools, registerCodegraphTools()...)
+	tools = append(tools, registerDesignRenderTools()...)
+	tools = append(tools, registerDesignImportSketchTools()...)
+	tools = append(tools, registerDesignCritiqueTools()...)
+	tools = append(tools, registerDesignExportTools()...)
+	tools = append(tools, registerDesignSyncTools()...)
+	tools = append(tools, registerDesignBriefTools()...)
 	return append(tools, registerSearchTool()...)
 }

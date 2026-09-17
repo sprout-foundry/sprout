@@ -11,3 +11,7 @@ Makefile text eol=lf
 *.ico binary
 *.woff binary
 *.woff2 binary
+
+# Vendored third-party bundles (SP-140-2c): minified, generated upstream,
+# exempt from review/diff noise. Provenance lives in the adjacent NOTICE.
+pkg/agent_tools/design/mermaid.min.js linguist-generated=true -diff

@@ -1049,20 +1049,17 @@ func TestDesignCritiqueHandler_VisualFalseWhenNoVisionTier(t *testing.T) {
 	// Not parallel: the no-tier case reads process-wide vision-capability state
 	// (pinned by dcCritiqueEnvNoVision), so it must not race the parallel
 	// suite's vision-enabled tests.
-	root := t.TempDir()
-	dcWriteTree(t, root)
-
 	cases := []struct {
 		name string
-		env  func() (ToolEnv, *drMockBrowser)
+		env  func(root string) (ToolEnv, *drMockBrowser)
 	}{
 		{
 			name: "no vision processor wired",
-			env:  func() (ToolEnv, *drMockBrowser) { return dcCritiqueEnvNoVision(t, root) },
+			env:  func(root string) (ToolEnv, *drMockBrowser) { return dcCritiqueEnvNoVision(t, root) },
 		},
 		{
 			name: "vision processor wired that yields no analysis",
-			env: func() (ToolEnv, *drMockBrowser) {
+			env: func(root string) (ToolEnv, *drMockBrowser) {
 				env, mock := dcCritiqueEnvNoVision(t, root)
 				// A wired tier that returns an empty analysis (a scripted
 				// client that answers with blank text) must still not be
@@ -1075,7 +1072,13 @@ func TestDesignCritiqueHandler_VisualFalseWhenNoVisionTier(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			env, mock := tc.env()
+			// A fresh root per case: the assertions below are about the tier's
+			// verdict, and a shared root would let the second case hit the
+			// §4e render cache (its own render-count behavior is covered by the
+			// dedicated cache tests).
+			root := t.TempDir()
+			dcWriteTree(t, root)
+			env, mock := tc.env(root)
 			h := &designCritiqueHandler{}
 			res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
 			require.NoError(t, err, "a missing vision tier must never fail the critique")
@@ -1483,17 +1486,23 @@ func TestProvenanceBanner_RoundTrip(t *testing.T) {
 func TestBuildCritiqueProvenance(t *testing.T) {
 	t.Parallel()
 	tgt := critiqueTarget{Label: "design/flows/sign-up.mmd", Kind: renderKindMermaid}
-	p := buildCritiqueProvenance(tgt, "Critique\nthis   design.")
+	p := buildCritiqueProvenance(tgt, "Critique\nthis   design.", "abc123", "viewport=1280x720;rubric=all")
 	assert.Contains(t, p, "tool: design_critique")
 	assert.Contains(t, p, "source: design/flows/sign-up.mmd")
 	assert.Contains(t, p, "kind: mermaid")
 	assert.Contains(t, p, "generated: ")
+	assert.Contains(t, p, "sourceHash: abc123",
+		"§4e: the content hash must be recorded so a consumer can verify it")
+	assert.Contains(t, p, "renderMaterial: viewport=1280x720;rubric=all",
+		"the render material must be recorded alongside the source hash")
 	assert.Contains(t, p, "instruction: Critique this design.",
 		"the instruction must be recorded on a single line for a stable banner")
 
-	// No instruction ⇒ no instruction line.
-	p = buildCritiqueProvenance(critiqueTarget{Label: "x.svg", Kind: renderKindBrowser}, "")
+	// No instruction ⇒ no instruction line; no hash/material ⇒ neither line.
+	p = buildCritiqueProvenance(critiqueTarget{Label: "x.svg", Kind: renderKindBrowser}, "", "", "")
 	assert.NotContains(t, p, "instruction:")
+	assert.NotContains(t, p, "sourceHash:")
+	assert.NotContains(t, p, "renderMaterial:")
 }
 
 func TestRenderKindName(t *testing.T) {

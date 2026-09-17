@@ -11,20 +11,31 @@
  * `useSproutFetch` return JSON. Passing `readFn` keeps the module testable
  * with a plain fetch mock while letting DesignView reuse the consent-aware
  * workspace read path. See SP-140-3 §3b/§3e.
+ *
+ * This module keeps the inventory/read half and re-exports the write half
+ * (`designApiWrite.ts`), the shared path vocabulary (`designApiPaths.ts`), and
+ * the domain types, so `designApi` stays the one import site for callers and
+ * every file stays under the AGENTS.md 500-line rule.
  */
 
+import {
+  ASSET_EXTENSIONS,
+  DESIGN_DIR,
+  basename,
+  classify,
+  fileUrl,
+  relativePath,
+  SUMMARY_MAX_CHARS,
+} from './designApiPaths';
 import type {
   DesignAssetEntry,
   DesignAssetKind,
   DesignFeedbackEntry,
-  DesignFeedbackFile,
   DesignFlowSummary,
   DesignFrame,
   DesignInventory,
-  DesignLayoutSidecar,
   DesignManifestSummary,
   DesignTokenGroup,
-  DesignWriteResult,
   FilesResponse,
 } from './types';
 
@@ -43,43 +54,10 @@ export type {
   DesignWriteResult,
 } from './types';
 
-export const DESIGN_DIR = 'design';
-export const SUMMARY_MAX_CHARS = 4000;
+export { DESIGN_DIR, SUMMARY_MAX_CHARS, designRootPath } from './designApiPaths';
+export { writeAsset, writeFeedback, writeLayout } from './designApiWrite';
 
 const EMPTY_MANIFEST: DesignManifestSummary = { path: 'README.md', exists: false, frames: [], chars: 0 };
-const ASSET_EXTENSIONS = ['.svg', '.mmd', '.mmdc', '.json', '.md', '.html', '.css', '.txt'];
-
-function basename(p: string): string {
-  const parts = p.split('/');
-  return parts[parts.length - 1] || p;
-}
-
-/** Workspace-relative path (POSIX separators), design/ prefix intact. */
-function relativePath(path: string, workspaceRoot: string): string {
-  const raw = (path ?? '').replace(/\\/g, '/');
-  if (raw && !raw.startsWith('/')) return raw.replace(/^\.\//, '');
-  const root = workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '');
-  const rel = root && raw.startsWith(root + '/') ? raw.slice(root.length + 1) : raw;
-  return rel.replace(/^\.\//, '');
-}
-
-function classify(rel: string): DesignAssetKind | null {
-  if (!rel.startsWith(DESIGN_DIR + '/')) return null;
-  const inner = rel.slice(DESIGN_DIR.length + 1);
-  const name = basename(inner);
-  if (inner === 'README.md' || inner === 'README') return 'manifest';
-  if (inner.startsWith('wireframes/')) return name.endsWith('.svg') ? 'wireframe' : null;
-  if (inner.startsWith('screens/')) return 'screen';
-  if (inner.startsWith('flows/')) {
-    if (name.endsWith('.layout.json')) return 'layout';
-    return name.endsWith('.mmd') || name.endsWith('.mmdc') ? 'flow' : null;
-  }
-  if (inner.startsWith('tokens/')) return name.endsWith('.tokens.json') ? 'tokens' : null;
-  if (inner.startsWith('feedback/')) return name.endsWith('.json') ? 'feedback' : null;
-  if (inner.startsWith('brand/')) return 'brand';
-  if (inner.startsWith('icons/')) return 'icon';
-  return null;
-}
 
 /** Workspace roots containing a `design/` segment, from the file list. */
 function designRootsOf(files: FilesResponse): string[] {
@@ -197,14 +175,6 @@ export function buildInventory(files: FilesResponse | null | undefined): DesignI
 }
 
 /** Design-root-relative path for an inventory entry at `rel`. */
-export function designRootPath(rel: string): string {
-  const normalized = rel.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-  return normalized.startsWith(DESIGN_DIR + '/') ? normalized : `${DESIGN_DIR}/${normalized}`;
-}
-
-function fileUrl(path: string): string {
-  return `/api/file?path=${encodeURIComponent(designRootPath(path))}`;
-}
 
 async function responseText(response: Response): Promise<string> {
   return typeof response.text === 'function' ? response.text() : '';
@@ -272,11 +242,19 @@ export async function listAssets(fetchFn: typeof fetch, readFn?: typeof fetch): 
   const manifestText = readText(inventory.manifest.exists ? inventory.manifest.path : 'README.md');
 
   const [groups, flows, fb, md] = await Promise.all([tokenGroups, flowSummaries, feedback, manifestText]);
+  const screenStatuses = parseManifestStatuses(md);
   return {
     ...inventory,
     manifest: inventory.manifest.exists
       ? { ...inventory.manifest, chars: md.length, frames: parseFrames(md) }
       : inventory.manifest,
+    // Screens carry the README status chip (§3c); the wireframe of the same
+    // stem is the fallback, mirroring `pkg/design/inventory.go`'s name.
+    screens: inventory.screens.map((screen) => {
+      const stem = screen.name.replace(/\.[^.]*$/, '').toLowerCase();
+      const status = screenStatuses[stem] ?? screenStatuses[`${stem}.html`] ?? '';
+      return status ? { ...screen, status } : screen;
+    }),
     tokenGroups: groups,
     tokenCount: groups.reduce((sum, g) => sum + g.tokenCount, 0),
     flowSummaries: flows,
@@ -381,6 +359,59 @@ export function parseFlowText(text: string): FlowParseResult {
   return result;
 }
 
+/**
+ * Status markers a manifest listing may carry, mirroring
+ * `pkg/design/inventory.go`'s `parseManifestListings` (`draft`/`review`/`ready`
+ * — the SP-140-1 §1e convention). A middle segment outside this set is part of
+ * the summary, never a status.
+ */
+const MANIFEST_STATUSES = ['draft', 'review', 'ready'] as const;
+
+/**
+ * Parse the manifest's screen/flow status markers, mirroring
+ * `pkg/design/inventory.go`'s `parseManifestListings`: a listing bullet of the
+ * form ``- `login` — ready — sign-in entry point`` maps `login` → `ready`.
+ * The dash separator may be an em dash (the template's) or a spaced ASCII
+ * hyphen, matching the Go parser, and an unrecognised middle segment leaves the
+ * entry without a status. Names are keyed lowercased; the value is lowercase.
+ */
+export function parseManifestStatuses(text: string): Record<string, string> {
+  const statuses: Record<string, string> = {};
+  if (!text) return statuses;
+  for (const raw of text.split('\n')) {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('- ')) continue;
+    const body = trimmed.slice(2).trim();
+    const start = body.indexOf('`');
+    if (start < 0) continue;
+    const rest = body.slice(start + 1);
+    const end = rest.indexOf('`');
+    if (end < 0) continue;
+    const name = rest.slice(0, end).trim();
+    if (!name) continue;
+    const segments = splitDashSegments(rest.slice(end + 1));
+    if (segments.length === 0) continue;
+    const marker = segments[0].toLowerCase();
+    if ((MANIFEST_STATUSES as readonly string[]).includes(marker)) statuses[name.toLowerCase()] = marker;
+  }
+  return statuses;
+}
+
+/** Split a manifest listing tail on its dash separators, dropping empties. */
+function splitDashSegments(tail: string): string[] {
+  let text = tail.trim();
+  if (!text) return [];
+  for (const dash of ['\u2014', '-']) {
+    if (text.startsWith(dash + ' ')) text = text.slice(dash.length + 1);
+    if (text.endsWith(' ' + dash)) text = text.slice(0, text.length - dash.length - 1);
+  }
+  const normalized = text.split(' \u2014 ').join('\u0000').split(' - ').join('\u0000');
+  return normalized
+    .split('\u0000')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== '');
+}
+
 /** Parse the manifest frames: block (`name: WxH`), mirroring pkg/design/frames.go. */
 export function parseFrames(text: string): DesignFrame[] {
   const frames: DesignFrame[] = [];
@@ -405,81 +436,4 @@ export function parseFrames(text: string): DesignFrame[] {
     frames.push({ name: rawName.trim(), width, height });
   }
   return frames;
-}
-
-async function writeDesignFile(
-  fetchFn: typeof fetch,
-  path: string,
-  content: string,
-  writeFn: typeof fetch | undefined,
-  failure: string,
-): Promise<DesignWriteResult> {
-  const response = await (writeFn ?? fetchFn)(fileUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-  if (!response.ok) throw new Error(failure);
-  return { path: designRootPath(path), content, response };
-}
-
-/**
- * Write `design/flows/<name>.layout.json` — SP-140 invariant 2 sidecar.
- * Pass the consent-aware write function (writeFileWithFetch /
- * writeFileWithConsent) as `writeFn`.
- */
-export function writeLayout(
-  fetchFn: typeof fetch,
-  name: string,
-  sidecar: DesignLayoutSidecar,
-  writeFn?: typeof fetch,
-): Promise<DesignWriteResult> {
-  const stem = name.replace(/\.layout\.json$/, '').replace(/\.mmd$/, '');
-  const path = `flows/${stem}.layout.json`;
-  const payload: DesignLayoutSidecar = {
-    nodes: sidecar.nodes ?? {},
-    layoutHint: sidecar.layoutHint ?? '',
-    derivedFrom: sidecar.derivedFrom ?? '',
-  };
-  return writeDesignFile(
-    fetchFn,
-    path,
-    JSON.stringify(payload, null, 2),
-    writeFn,
-    `Failed to write layout sidecar: ${designRootPath(path)}`,
-  );
-}
-
-/**
- * Write `design/feedback/<target>.json` in the SP-140-4d schema (including
- * the `resolution` field and per-annotation `resolved` flags).
- */
-export function writeFeedback(
-  fetchFn: typeof fetch,
-  target: string,
-  json: DesignFeedbackFile,
-  writeFn?: typeof fetch,
-): Promise<DesignWriteResult> {
-  const stem = target.replace(/\.json$/, '');
-  const path = `feedback/${stem}.json`;
-  const payload: DesignFeedbackFile = {
-    target: json.target ?? target,
-    status: json.status ?? '',
-    resolution: json.resolution ?? '',
-    annotations: (json.annotations ?? []).map((a) => ({
-      id: a.id ?? '',
-      at: { x: a.at?.x ?? 0, y: a.at?.y ?? 0 },
-      area: a.area ?? '',
-      note: a.note ?? '',
-      resolved: a.resolved ?? false,
-      created: a.created ?? '',
-    })),
-  };
-  return writeDesignFile(
-    fetchFn,
-    path,
-    JSON.stringify(payload, null, 2),
-    writeFn,
-    `Failed to write feedback: ${designRootPath(path)}`,
-  );
 }

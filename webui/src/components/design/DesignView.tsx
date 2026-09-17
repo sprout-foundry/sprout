@@ -25,7 +25,7 @@ import type { DesignInventory } from '../../services/api/types';
 import DesignAssetsRail from './DesignAssetsRail';
 import DesignDetailPane from './DesignDetailPane';
 import { FlowsCanvasContainer } from './FlowsCanvasContainer';
-import ScreensGrid from './ScreensGrid';
+import { ScreensTabContainer } from './ScreensGrid';
 import TokensTree from './TokensTree';
 import './DesignView.css';
 
@@ -139,7 +139,7 @@ export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }:
               onOpenFile={onOpenFile}
             />
           )}
-          {activeTab === 'screens' && <ScreensGrid onSelectAsset={handleSelectAsset} />}
+          {activeTab === 'screens' && <ScreensTabContainer inventory={inventory} onSelectAsset={handleSelectAsset} />}
           {activeTab === 'tokens' && <TokensTree onSelectAsset={handleSelectAsset} />}
         </section>
 

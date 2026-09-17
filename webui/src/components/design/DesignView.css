@@ -211,6 +211,132 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+/* Screens tab (SP-140-3 §3c). Tokens only — no raw hex/rgba. */
+
+.design-screens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.design-screens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.design-screens-grid > li {
+  min-width: 0;
+}
+
+.design-screen-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-2);
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.design-screen-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-screen-card.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.design-screen-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* The frame-aware box: `aspect-ratio` comes from the card's declared frame. */
+.design-screen-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.design-screen-thumb-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.design-screen-thumb-empty {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.design-screen-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.design-screen-name {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.design-screen-frame {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+}
+
+.design-screen-status {
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.design-screen-status.status-draft {
+  border-color: var(--accent-warning, var(--border-default));
+}
+
+.design-screen-status.status-review {
+  border-color: var(--accent-info, var(--border-default));
+}
+
+.design-screen-status.status-ready {
+  border-color: var(--accent-success, var(--border-default));
+}
+
+.design-screen-detail {
+  min-height: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* Flows canvas (SP-140-3 §3b). Tokens only — no raw hex/rgba. */
 
 .design-flows {

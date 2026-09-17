@@ -117,6 +117,19 @@ vision calls.
 A design iteration is not done because files were written. It is done when
 the loop stops on that rule and the README reflects the tree.
 
+## Human feedback
+
+`design/feedback/<target>.json` carries human annotations (SP-140-4 §4d):
+normalized 0–1 `at` coordinates, a per-annotation `resolved` flag, and
+top-level `status` / `resolution`. `design_assets` reports pending feedback
+targets with counts — any target whose `status` is `changes-requested` or that
+still has an unresolved annotation. **Start such a target by reading its
+feedback file** (`read_file design/feedback/<target>.json`), address each
+annotation on the annotated screen through the validate/critique loop above,
+then close the loop by writing a `resolution` summary and moving `status` off
+`changes-requested`. No dedicated feedback tool exists — it is file tools plus
+the `design_assets` report.
+
 Render to see your own output before judging it: `design_render` on a
 wireframe SVG, a screen HTML, or a flow `.mmd`, then critique the rendered
 image. `design_critique` does the render-and-judge dance in one call; reach

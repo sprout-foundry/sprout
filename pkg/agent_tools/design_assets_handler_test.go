@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -67,6 +68,44 @@ const daTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 
 </svg>`
 
 const daTestFlowMMD = "flowchart TD\n  login --> home\n"
+
+// daFeedbackPendingJSON is a §4d feedback document for the login wireframe:
+// status changes-requested with one unresolved annotation (pending).
+const daFeedbackPendingJSON = `{
+  "target": "design/wireframes/login.svg",
+  "status": "changes-requested",
+  "resolution": "",
+  "annotations": [
+    {"id": "a1", "at": {"x": 0.42, "y": 0.18}, "area": "hierarchy",
+     "note": "Primary CTA reads as secondary", "resolved": false,
+     "created": "2026-09-15T10:36:47Z"}
+  ]
+}`
+
+// daFeedbackPartialJSON is a §4d document whose status is not
+// "changes-requested" but that carries one unresolved annotation out of three,
+// so it is still pending (§4d predicate) with the right counts.
+const daFeedbackPartialJSON = `{
+  "target": "design/wireframes/home.svg",
+  "status": "reviewed",
+  "resolution": "",
+  "annotations": [
+    {"id": "a1", "at": {"x": 0.1, "y": 0.1}, "area": "contrast", "note": "quiet", "resolved": true, "created": ""},
+    {"id": "a2", "at": {"x": 0.2, "y": 0.2}, "area": "contrast", "note": "loud", "resolved": true, "created": ""},
+    {"id": "a3", "at": {"x": 0.3, "y": 0.3}, "area": "spacing", "note": "tight", "resolved": false, "created": ""}
+  ]
+}`
+
+// daFeedbackResolvedJSON is a §4d document with no pending work: status
+// resolved and every annotation resolved.
+const daFeedbackResolvedJSON = `{
+  "target": "design/flows/sign-up.mmd",
+  "status": "resolved",
+  "resolution": "Swapped CTA emphasis and rebuilt the form spacing.",
+  "annotations": [
+    {"id": "a1", "at": {"x": 0.5, "y": 0.5}, "area": "hierarchy", "note": "done", "resolved": true, "created": ""}
+  ]
+}`
 
 // daWriteValidTree populates root with a small design/ tree that yields zero
 // findings on a whole-tree run, including the §1h git contract lines.
@@ -369,6 +408,103 @@ func TestDesignAssetsHandler_Gate1DenyOnImplicitRoot(t *testing.T) {
 	require.Contains(t, res.Output, design.DirName)
 }
 
+// offWorkspaceClassifier is a Gate-1 test double for the production
+// classifier (pkg/agent.Agent.ClassifyFileAccess): a resolved path is "allow"
+// when it sits inside the workspace root it was built with, "prompt"
+// otherwise (no session allowlist is configured, so there is no "deny" case to
+// model). It cannot be the Agent itself — pkg/agent imports pkg/agent_tools,
+// so the reverse import would cycle.
+type offWorkspaceClassifier struct {
+	root string
+}
+
+func (c offWorkspaceClassifier) ClassifyFileAccess(_ context.Context, filePath, resolvedPath, _ string) string {
+	target := resolvedPath
+	if target == "" {
+		target = filePath
+	}
+	if c.underRoot(target) {
+		return "allow"
+	}
+	return "prompt"
+}
+
+func (offWorkspaceClassifier) IsFolderSessionAllowed(_ string) bool { return false }
+
+// underRoot reports containment of target in the workspace root, mirroring
+// Agent.IsUnderWorkspaceRoot: both sides are symlink-resolved before the
+// prefix check (this matters on macOS, where the temp root is reachable both
+// as /var/... and /private/var/...). A candidate that does not exist cannot be
+// symlink-resolved, so it falls back to its symlink-resolved parent plus the
+// basename.
+func (c offWorkspaceClassifier) underRoot(target string) bool {
+	if c.root == "" || target == "" {
+		return false
+	}
+	rel, err := filepath.Rel(resolveCandidate(c.root), resolveCandidate(target))
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func resolveCandidate(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	dir, base := filepath.Split(filepath.Clean(p))
+	if resolvedDir, err := filepath.EvalSymlinks(filepath.Clean(dir)); err == nil {
+		return filepath.Join(resolvedDir, base)
+	}
+	return filepath.Clean(p)
+}
+
+// TestDesignAssetsHandler_OffWorkspaceDenied is the SP-140-2 §2e negative
+// test: a path outside design/ — whether outside the workspace entirely or a
+// sensitive system path — is refused before `design.Scan` runs, so the tool can
+// never walk (and report on) a tree it should not touch.
+//
+// design_assets' own design/ subtree guard is the enforcement point: the
+// classifier still runs and records the verdict, but an off-design path is
+// rejected without an inventory regardless of allow/prompt.
+func TestDesignAssetsHandler_OffWorkspaceDenied(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	daWriteValidTree(t, root)
+
+	// A sibling directory beside the workspace, used to build absolute
+	// off-workspace paths.
+	outsideRoot := t.TempDir()
+	require.NotEqual(t, root, outsideRoot)
+
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = offWorkspaceClassifier{root: root}
+
+	// The classifier's containment check must be live: an in-workspace
+	// subtree is "allow" and an off-workspace path is "prompt". The
+	// off-design refusal below is independent of the verdict — it holds for
+	// both — but the two assertions pin the precheck to a single live run.
+	inWorkspace, inDecision := PrecheckFileAccess(newTestCtx(root), env.FileAccessClassifier, "design_assets", "design/wireframes")
+	require.Equal(t, "allow", inDecision, "an in-workspace subtree is allowed (resolved=%s)", inWorkspace)
+	_, outDecision := PrecheckFileAccess(newTestCtx(root), env.FileAccessClassifier, "design_assets", "/etc/design/wireframes")
+	require.Equal(t, "prompt", outDecision, "an off-workspace sensitive path prompts")
+
+	h := &designAssetsHandler{}
+
+	for _, path := range []string{
+		filepath.Join(outsideRoot, "design", "wireframes"), // absolute, outside the workspace
+		"/etc/design/wireframes",                           // sensitive system path
+	} {
+		res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": path})
+		require.Error(t, err, "path %q must fail the tool", path)
+		require.True(t, res.IsError, "path %q must be a tool failure", path)
+		require.Contains(t, res.Output, "not under design/",
+			"path %q must be refused as an off-design path, got: %s", path, res.Output)
+		_, ok := res.StructuredOut.(designAssetsOutput)
+		assert.False(t, ok, "a refused path must not produce structured output")
+	}
+}
+
 func TestDesignAssetsHandler_RootPathKeepsCounts(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -493,6 +629,145 @@ func TestNormaliseFormatFilter(t *testing.T) {
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, normaliseFormatFilter(in), "normaliseFormatFilter(%q)", in)
+	}
+}
+
+// TestDesignAssetsHandler_PendingFeedback reports the SP-140-4 §4d pending
+// feedback targets with counts (item 4.7): a fixture design/feedback/<target>.json
+// with status changes-requested + an unresolved annotation shows up as pending
+// with the right annotation/resolved/pending counts, an unresolved annotation
+// alone is pending even when the status is not changes-requested, and a
+// resolved/no-pending file does not appear in the pending list.
+func TestDesignAssetsHandler_PendingFeedback(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	daWriteValidTree(t, root)
+	daWrite(t, root, "design/feedback/login.json", daFeedbackPendingJSON)
+	daWrite(t, root, "design/feedback/home.json", daFeedbackPartialJSON)
+	daWrite(t, root, "design/feedback/sign-up.json", daFeedbackResolvedJSON)
+	h := &designAssetsHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := res.StructuredOut.(designAssetsOutput)
+	require.True(t, out.Exists)
+
+	// Every feedback file is reported in All (sorted by path), the pending
+	// subset in Pending.
+	require.Len(t, out.Feedback.All, 3)
+	assert.Equal(t, "design/feedback/home.json", out.Feedback.All[0].Path)
+	assert.Equal(t, "design/feedback/login.json", out.Feedback.All[1].Path)
+	assert.Equal(t, "design/feedback/sign-up.json", out.Feedback.All[2].Path)
+
+	// login (changes-requested, 1 unresolved) and home (1 of 3 unresolved)
+	// are pending; sign-up (resolved, no unresolved) is not.
+	require.Equal(t, 2, out.Feedback.PendingCount)
+	require.Len(t, out.Feedback.Pending, 2)
+	byTarget := map[string]design.FeedbackFileState{}
+	for _, p := range out.Feedback.Pending {
+		byTarget[p.Target] = p
+	}
+	login, ok := byTarget["design/wireframes/login.svg"]
+	require.True(t, ok, "the changes-requested login target must be pending")
+	assert.Equal(t, design.FeedbackStatusChangesRequested, login.Status)
+	assert.Equal(t, 1, login.Annotations)
+	assert.Equal(t, 0, login.Resolved)
+	assert.Equal(t, 1, login.Pending)
+
+	home, ok := byTarget["design/wireframes/home.svg"]
+	require.True(t, ok, "an unresolved annotation keeps the target pending")
+	assert.Equal(t, 3, home.Annotations)
+	assert.Equal(t, 2, home.Resolved)
+	assert.Equal(t, 1, home.Pending)
+
+	// The resolved file must not be pending.
+	for _, p := range out.Feedback.Pending {
+		assert.NotEqual(t, "design/flows/sign-up.mmd", p.Target, "a resolved file must not be pending")
+	}
+
+	// The summary names the pending targets and their unresolved counts.
+	assert.Contains(t, res.Output, "Pending feedback: 2 target(s)")
+	assert.Contains(t, res.Output, "design/wireframes/login.svg (1 unresolved)")
+	assert.Contains(t, res.Output, "design/wireframes/home.svg (1 unresolved)")
+	assert.Contains(t, res.Output, "read of its feedback file")
+}
+
+// TestDesignAssetsHandler_NoPendingFeedback pins the negative: a tree with no
+// feedback directory (and with a resolved feedback file) reports an empty,
+// non-nil pending section and says so in the summary.
+func TestDesignAssetsHandler_NoPendingFeedback(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	daWriteValidTree(t, root)
+	h := &designAssetsHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+
+	out := res.StructuredOut.(designAssetsOutput)
+	assert.Equal(t, 0, out.Feedback.PendingCount)
+	assert.Empty(t, out.Feedback.Pending)
+	assert.Empty(t, out.Feedback.All)
+	assert.Contains(t, res.Output, "No pending feedback.")
+
+	// A resolved feedback file is reported in All but not Pending.
+	daWrite(t, root, "design/feedback/sign-up.json", daFeedbackResolvedJSON)
+	res, err = h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	out = res.StructuredOut.(designAssetsOutput)
+	assert.Equal(t, 0, out.Feedback.PendingCount)
+	assert.Empty(t, out.Feedback.Pending)
+	require.Len(t, out.Feedback.All, 1)
+	assert.Contains(t, res.Output, "No pending feedback.")
+}
+
+// TestDesignAssetsHandler_FeedbackSectionIsStableJSON pins the JSON shape the
+// skill loop reads: the feedback section is always present with non-nil
+// `pending`/`all` arrays (so `pending: []` reads as "nothing to address").
+func TestDesignAssetsHandler_FeedbackSectionIsStableJSON(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	daWriteValidTree(t, root)
+	h := &designAssetsHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	out := res.StructuredOut.(designAssetsOutput)
+
+	data, err := json.Marshal(out)
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	fb, ok := raw["feedback"].(map[string]any)
+	require.True(t, ok, "feedback must be present as an object")
+	_, isSlice := fb["pending"].([]any)
+	assert.True(t, isSlice, "feedback.pending must serialize as an array, got %T", fb["pending"])
+	_, isSlice = fb["all"].([]any)
+	assert.True(t, isSlice, "feedback.all must serialize as an array, got %T", fb["all"])
+	assert.Contains(t, fb, "pendingCount")
+	assert.Equal(t, float64(0), fb["pendingCount"])
+}
+
+// TestDesignAssetsHandler_FeedbackSurvivesFormatFilter keeps the pending
+// section whole-tree under a format filter: findings and pending feedback are
+// inventory-level summaries (the skill loop's actionable list), so narrowing
+// the asset kinds must never hide pending human feedback.
+func TestDesignAssetsHandler_FeedbackSurvivesFormatFilter(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	daWriteValidTree(t, root)
+	daWrite(t, root, "design/feedback/login.json", daFeedbackPendingJSON)
+	h := &designAssetsHandler{}
+
+	for _, format := range []string{"", "wireframe", "feedback"} {
+		res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"format": format})
+		require.NoError(t, err)
+		out := res.StructuredOut.(designAssetsOutput)
+		assert.Equal(t, 1, out.Feedback.PendingCount, "format=%q must keep the pending-feedback report", format)
+		require.Len(t, out.Feedback.Pending, 1)
+		assert.Contains(t, res.Output, "Pending feedback: 1 target(s)")
 	}
 }
 

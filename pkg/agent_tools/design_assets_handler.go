@@ -35,6 +35,10 @@ func (h *designAssetsHandler) Definition() ToolDefinition {
 			"(frames, status markers), per-asset rows {path, kind, name, status?, summary?}, " +
 			"token group counts, flow node/edge counts, and the validator findings from " +
 			"design_validate (advisory, non-blocking). " +
+			"It also reports the human feedback channel: each design/feedback/<target>.json " +
+			"with its status and resolved/unresolved annotation counts, and a `pending` list " +
+			"of targets whose status is `changes-requested` or that carry unresolved " +
+			"annotations — start each pending target by reading its feedback file before editing. " +
 			"Use this to see what exists before extending a design tree rather than guessing. " +
 			"On a workspace with no design/ directory it returns {exists: false} plus scaffold " +
 			"guidance (use the design-system skill) instead of fabricating a tree.",
@@ -131,7 +135,7 @@ func (h *designAssetsHandler) Execute(ctx context.Context, env ToolEnv, args map
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_assets: %w", err)
 	}
 
-	out := buildDesignAssetsOutput(subtree, formatFilter, inv)
+	out := buildDesignAssetsOutput(root, subtree, formatFilter, inv)
 	return ToolResult{
 		Output:        renderDesignAssetsSummary(out),
 		StructuredOut: out,
@@ -158,8 +162,30 @@ type designAssetsOutput struct {
 	Findings   []findingOut   `json:"findings"`
 	BySeverity map[string]int `json:"bySeverity"`
 
+	// Feedback is the §4d human feedback channel view: one row per
+	// design/feedback/*.json, always present (possibly empty), plus the
+	// pending subset the design-system skill's loop must start on.
+	Feedback FeedbackReport `json:"feedback"`
+
 	// Guidance is the scaffold text for a missing design/ tree ("" otherwise).
 	Guidance string `json:"guidance,omitempty"`
+}
+
+// FeedbackReport is the design_assets pending-feedback section (SP-140-4 §4d):
+// every feedback file (All) plus the pending ones with their unresolved
+// annotation counts (Pending). The skill's loop starts any `changes-requested`
+// target — or one carrying unresolved annotations — with a read of its feedback
+// file, so `Pending` is the actionable list and `PendingCount` heads the
+// summary line.
+type FeedbackReport struct {
+	// PendingCount is the number of pending feedback files. Redundant with
+	// len(Pending) but explicit so a model reads the count without counting.
+	PendingCount int `json:"pendingCount"`
+	// Pending is the pending subset, sorted by path (status
+	// "changes-requested" or at least one unresolved annotation).
+	Pending []design.FeedbackFileState `json:"pending"`
+	// All is every feedback file found, sorted by path (pending or not).
+	All []design.FeedbackFileState `json:"all"`
 }
 
 // designMissingOutput builds the {exists: false} result plus scaffold guidance
@@ -174,6 +200,7 @@ func designMissingOutput(subtree, formatFilter string) designAssetsOutput {
 		TokenGroups: []design.TokenGroupCount{},
 		Flows:       []design.FlowCounts{},
 		Findings:    []findingOut{},
+		Feedback:    FeedbackReport{Pending: []design.FeedbackFileState{}, All: []design.FeedbackFileState{}},
 		BySeverity:  map[string]int{"error": 0, "warn": 0, "info": 0, "fix": 0},
 		Guidance: "No design/ directory found. To start a design workspace, " +
 			"activate the design-system skill and scaffold the tree in this order: " +
@@ -187,7 +214,7 @@ func designMissingOutput(subtree, formatFilter string) designAssetsOutput {
 // buildDesignAssetsOutput filters the scanned inventory by the optional
 // subtree and format filter and converts the findings to the shared
 // findingOut shape.
-func buildDesignAssetsOutput(subtree, formatFilter string, inv *design.Inventory) designAssetsOutput {
+func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inventory) designAssetsOutput {
 	out := designAssetsOutput{
 		Exists:      true,
 		Path:        subtree,
@@ -221,6 +248,16 @@ func buildDesignAssetsOutput(subtree, formatFilter string, inv *design.Inventory
 		}
 	}
 
+	// SP-140-4 §4d: the pending-feedback view. Like findings it is an
+	// inventory-level summary (the skill loop's actionable list), always
+	// reported whole-tree and present under any format filter so a model can
+	// never miss pending human feedback by narrowing the asset kinds. A read
+	// failure degrades to an empty section rather than failing the inventory:
+	// the validator reports bad files.
+	if states, fbErr := design.ScanFeedbackDir(root); fbErr == nil {
+		out.Feedback = buildFeedbackReport(states)
+	}
+
 	// Findings are always reported whole-tree (they are the validator's
 	// view, not the subtree's). Tally them for the summary line.
 	out.Findings = make([]findingOut, 0, len(inv.Findings))
@@ -235,6 +272,26 @@ func buildDesignAssetsOutput(subtree, formatFilter string, inv *design.Inventory
 		out.BySeverity[f.Severity.String()]++
 	}
 	return out
+}
+
+// buildFeedbackReport splits parsed feedback states into the pending subset
+// (status "changes-requested" or at least one unresolved annotation, §4d) and
+// the full list. Both slices are always non-nil so the JSON shape is stable
+// and a model can read `pending: []` as "nothing to address". Ordering is the
+// path order ScanFeedbackDir already established.
+func buildFeedbackReport(states []design.FeedbackFileState) FeedbackReport {
+	// Ensure All is never nil so the JSON shape is stable (`all: []`).
+	if states == nil {
+		states = []design.FeedbackFileState{}
+	}
+	report := FeedbackReport{Pending: []design.FeedbackFileState{}, All: states}
+	for _, s := range states {
+		if s.IsPending() {
+			report.Pending = append(report.Pending, s)
+		}
+	}
+	report.PendingCount = len(report.Pending)
+	return report
 }
 
 // filterAssets applies the optional subtree and format filters to the asset
@@ -289,7 +346,29 @@ func renderDesignAssetsSummary(out designAssetsOutput) string {
 	} else {
 		sb.WriteString(" No validator findings.")
 	}
+
+	// SP-140-4 §4d: surface the actionable pending-feedback list so the model
+	// knows which targets to start on before touching the tree.
+	if out.Feedback.PendingCount > 0 {
+		targets := make([]string, 0, len(out.Feedback.Pending))
+		for _, p := range out.Feedback.Pending {
+			targets = append(targets, fmt.Sprintf("%s (%d unresolved)", feedbackTargetLabel(p), p.Pending))
+		}
+		fmt.Fprintf(&sb, " Pending feedback: %d target(s) — %s. Start each pending target with a read of its feedback file.",
+			out.Feedback.PendingCount, strings.Join(targets, ", "))
+	} else {
+		sb.WriteString(" No pending feedback.")
+	}
 	return sb.String()
+}
+
+// feedbackTargetLabel is the human-facing name of a pending feedback row: the
+// §4d target when present, falling back to the feedback file's own path.
+func feedbackTargetLabel(state design.FeedbackFileState) string {
+	if state.Target != "" {
+		return state.Target
+	}
+	return state.Path
 }
 
 // isDesignSubtree reports whether a slash path names the design/ root or a

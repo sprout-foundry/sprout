@@ -11,8 +11,9 @@ import (
 
 // ValidateTree validates the whole design/ tree under root, SP-140-1 §1g:
 // every §1.x whole-tree validator runs (tokens, wireframes, flows, screens,
-// icons, brand, README manifest) plus the §1h git contract
-// (.gitattributes diff rule, .gitignore cache policy), and the combined
+// icons, brand, README manifest), plus the §1h git contract
+// (.gitattributes diff rule, .gitignore cache policy) and the §4d human
+// feedback channel (design/feedback/*.json), and the combined
 // findings are sorted by file, line, rule, message. root is the workspace
 // root (the parent of design/).
 //
@@ -62,6 +63,18 @@ func ValidateTree(root string) ([]Finding, error) {
 
 	findings = append(findings, ValidateBrandDir(root)...)
 	findings = append(findings, ValidateManifest(root)...)
+
+	// SP-140-4 §4d: the human feedback channel (design/feedback/*.json) is
+	// part of the tree, so the whole-tree run validates it too. The
+	// design-system skill's loop starts any `changes-requested` target by
+	// reading its feedback file, so a malformed or dangling feedback document
+	// is a tree finding like any other.
+	feedback, err := ValidateFeedbackDir(root)
+	if err != nil {
+		errs = append(errs, err)
+	} else {
+		findings = append(findings, feedback...)
+	}
 
 	// SP-140-4 §4b: the flow/wireframe bidirectionality consistency pack
 	// (non-terminal flow edges resolve to a wireframe, README screen refs

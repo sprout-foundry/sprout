@@ -52,9 +52,20 @@ export interface DesignViewProps {
   onOpenFile?: (path: string) => void;
   /** Write transport override for the detail pane's feedback write (tests/hosts). */
   writeFetch?: typeof fetch;
+  /** Consent-aware read override for the detail pane's resolution flow (§3f). */
+  readFn?: typeof fetch;
+  /** Consent-aware write override for the detail pane's resolution flow (§3f). */
+  writeFn?: typeof fetch;
 }
 
-export default function DesignView({ initialTab = 'flows', onBack, onOpenFile, writeFetch }: DesignViewProps = {}) {
+export default function DesignView({
+  initialTab = 'flows',
+  onBack,
+  onOpenFile,
+  writeFetch,
+  readFn,
+  writeFn,
+}: DesignViewProps = {}) {
   const [activeTab, setActiveTab] = useState<DesignTab>(initialTab);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReactNode>(null);
@@ -142,11 +153,18 @@ export default function DesignView({ initialTab = 'flows', onBack, onOpenFile, w
             />
           )}
           {activeTab === 'screens' && <ScreensTabContainer inventory={inventory} onSelectAsset={handleSelectAsset} />}
-          {activeTab === 'tokens' && <TokensTree onSelectAsset={handleSelectAsset} />}
+          {activeTab === 'tokens' && <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} />}
         </section>
 
         <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">
-          <DesignDetailPane path={selectedAsset} onOpenFile={onOpenFile} onDetail={setDetail} fetchFn={writeFetch}>
+          <DesignDetailPane
+            path={selectedAsset}
+            onOpenFile={onOpenFile}
+            onDetail={setDetail}
+            fetchFn={writeFetch}
+            readFn={readFn}
+            writeFn={writeFn}
+          >
             {detail}
           </DesignDetailPane>
         </aside>

@@ -13,11 +13,21 @@
  * workspace read path. See SP-140-3 §3b/§3e.
  *
  * This module keeps the inventory/read half and re-exports the write half
- * (`designApiWrite.ts`), the shared path vocabulary (`designApiPaths.ts`), and
- * the domain types, so `designApi` stays the one import site for callers and
- * every file stays under the AGENTS.md 500-line rule.
+ * (`designApiWrite.ts`), the shared path vocabulary (`designApiPaths.ts`), the
+ * read-side parsers (`designApiParse.ts`), and the domain types, so `designApi`
+ * stays the one import site for callers and every file stays under the
+ * AGENTS.md 500-line rule.
  */
 
+import { feedbackFilePath } from '../../design/feedbackWrite';
+import {
+  parseFeedback,
+  parseFeedbackJson,
+  parseFlowText,
+  parseFrames,
+  parseManifestStatuses,
+  parseTokensFile,
+} from './designApiParse';
 import {
   ASSET_EXTENSIONS,
   DESIGN_DIR,
@@ -30,9 +40,8 @@ import {
 import type {
   DesignAssetEntry,
   DesignAssetKind,
-  DesignFeedbackEntry,
+  DesignFeedbackFile,
   DesignFlowSummary,
-  DesignFrame,
   DesignInventory,
   DesignManifestSummary,
   DesignTokenGroup,
@@ -56,6 +65,15 @@ export type {
 
 export { DESIGN_DIR, SUMMARY_MAX_CHARS, designRootPath } from './designApiPaths';
 export { writeAsset, writeFeedback, writeLayout } from './designApiWrite';
+export {
+  parseFeedback,
+  parseFeedbackFile,
+  parseFeedbackJson,
+  parseFlowText,
+  parseFrames,
+  parseManifestStatuses,
+  parseTokensFile,
+} from './designApiParse';
 
 const EMPTY_MANIFEST: DesignManifestSummary = { path: 'README.md', exists: false, frames: [], chars: 0 };
 
@@ -83,33 +101,6 @@ function buildEntries(files: FilesResponse, workspaceRoot: string): DesignAssetE
     entries.push({ path: rel, name: basename(rel), kind, size: 0, modified: 0 });
   }
   return entries.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-/** Parse SP-140-4d feedback JSON. Never throws — a bad file yields zeros. */
-export function parseFeedback(text: string, innerPath: string): DesignFeedbackEntry {
-  const base: DesignFeedbackEntry = {
-    name: basename(innerPath),
-    path: innerPath,
-    status: '',
-    annotationCount: 0,
-    resolvedCount: 0,
-  };
-  if (!text) return base;
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return base;
-  }
-  if (!data || typeof data !== 'object') return base;
-  const record = data as Record<string, unknown>;
-  const annotations = Array.isArray(record.annotations) ? record.annotations : [];
-  return {
-    ...base,
-    status: typeof record.status === 'string' ? record.status : '',
-    annotationCount: annotations.length,
-    resolvedCount: annotations.filter((a) => (a as { resolved?: unknown })?.resolved === true).length,
-  };
 }
 
 /**
@@ -180,6 +171,68 @@ async function responseText(response: Response): Promise<string> {
   return typeof response.text === 'function' ? response.text() : '';
 }
 
+/** Deepest design/ subtree the inventory walk will descend, as a safety bound. */
+export const DESIGN_LIST_MAX_DEPTH = 8;
+
+/** A raw `/api/files` entry: the daemon returns absolute paths plus `is_dir`. */
+interface RawListEntry {
+  path?: string;
+  name?: string;
+  relative?: string;
+  is_dir?: boolean;
+  isDir?: boolean;
+}
+
+function isDirEntry(entry: RawListEntry): boolean {
+  return Boolean(entry.is_dir ?? entry.isDir);
+}
+
+async function listDirectory(fetchFn: typeof fetch, dir: string): Promise<RawListEntry[]> {
+  const response = await fetchFn(`/api/files?path=${encodeURIComponent(dir)}`);
+  if (!response.ok) return [];
+  const data = (await response.json()) as { files?: RawListEntry[] };
+  return Array.isArray(data?.files) ? data.files : [];
+}
+
+/**
+ * Flatten a design/ tree into the shape `buildInventory` indexes.
+ *
+ * `GET /api/files` lists one directory at a time (the same shallow listing the
+ * sidebar's file tree walks lazily), so a single root listing never carries the
+ * nested `design/**` entries the inventory needs. This walks the `design`
+ * directories breadth-first from the root listing and returns one flat entry
+ * list — directory entries kept (their trailing-slash handling is
+ * `buildEntries`'s business), files as the daemon reported them.
+ *
+ * Bounded by `DESIGN_LIST_MAX_DEPTH` and de-duplicated by path so a cyclic or
+ * pathological tree cannot spin the walk. A failed directory read ends that
+ * branch rather than failing the whole inventory.
+ */
+export async function flattenDesignTree(fetchFn: typeof fetch, rootListing: RawListEntry[]): Promise<RawListEntry[]> {
+  const designDirs = rootListing.filter((entry) => {
+    const path = (entry.path ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+    return isDirEntry(entry) && path.endsWith('/' + DESIGN_DIR);
+  });
+  const flat: RawListEntry[] = [...rootListing];
+  const seen = new Set(flat.map((entry) => entry.path ?? ''));
+  let frontier = designDirs.map((entry) => (entry.path ?? '').replace(/\\/g, '/'));
+
+  for (let depth = 0; depth < DESIGN_LIST_MAX_DEPTH && frontier.length > 0; depth += 1) {
+    const children: RawListEntry[] = [];
+    for (const dir of frontier) {
+      for (const entry of await listDirectory(fetchFn, dir)) {
+        const path = entry.path ?? '';
+        if (!path || seen.has(path)) continue;
+        seen.add(path);
+        flat.push(entry);
+        if (isDirEntry(entry)) children.push(entry);
+      }
+    }
+    frontier = children.map((entry) => (entry.path ?? '').replace(/\\/g, '/'));
+  }
+  return flat;
+}
+
 /**
  * Read a design asset's text. Default read path is GET /api/file (text body);
  * pass `readFileWithConsent` to reuse the consent-aware workspace read.
@@ -192,6 +245,25 @@ export async function readAsset(fetchFn: typeof fetch, path: string, readFn?: ty
     throw new Error(`Failed to read design asset: ${path}`);
   }
   return responseText(response);
+}
+
+/**
+ * Read and parse `target`'s SP-140-4d feedback file — the read half of the
+ * detail pane's resolution flow (SP-140-4 item 4.8). Built over the same
+ * `/api/file` read path as `readAsset` (zero new HTTP endpoints), so a
+ * consent-aware `readFn` works here too.
+ *
+ * A missing file is not an error: an asset with no annotations yet (or one
+ * whose file was never written) yields the empty document, letting the pane
+ * still offer the resolution note for a target it has no annotations for.
+ */
+export async function readFeedback(
+  fetchFn: typeof fetch,
+  target: string,
+  readFn?: typeof fetch,
+): Promise<DesignFeedbackFile> {
+  const text = await readAsset(fetchFn, feedbackFilePath(target), readFn);
+  return parseFeedbackJson(text, target);
 }
 
 /**
@@ -210,7 +282,19 @@ export async function listAssets(fetchFn: typeof fetch, readFn?: typeof fetch): 
     return buildInventory(null);
   }
 
-  const inventory = buildInventory(files);
+  // A shallow root listing only carries the `design` directory entry itself, so
+  // the nested design/** assets the inventory indexes have to be walked for.
+  // A listing that already carries them (a recursive backend, or a caller that
+  // hands `buildInventory` a flattened list directly) short-circuits: the walk
+  // only runs when the root listing alone yields no inventory.
+  let inventory = buildInventory(files);
+  if (!inventory.exists && Array.isArray(files?.files)) {
+    const flat = await flattenDesignTree(fetchFn, files.files as RawListEntry[]);
+    if (flat.length > files.files.length) {
+      files = { ...files, files: flat as FilesResponse['files'] };
+      inventory = buildInventory(files);
+    }
+  }
   if (!inventory.exists) return inventory;
 
   const reader = readFn ?? fetchFn;
@@ -260,180 +344,4 @@ export async function listAssets(fetchFn: typeof fetch, readFn?: typeof fetch): 
     flowSummaries: flows,
     feedback: fb,
   };
-}
-
-interface TokenParseResult {
-  tokenCount: number;
-  types: string[];
-}
-
-/** Count DTCG leaves (objects with `$value`) and collect `$type` values. */
-export function parseTokensFile(text: string): TokenParseResult {
-  const result: TokenParseResult = { tokenCount: 0, types: [] };
-  if (!text) return result;
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return result;
-  }
-  const types = new Set<string>();
-  const walk = (node: unknown): void => {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) return;
-    const record = node as Record<string, unknown>;
-    if ('$value' in record) {
-      result.tokenCount += 1;
-      if (typeof record.$type === 'string') types.add(record.$type);
-      return;
-    }
-    for (const [key, value] of Object.entries(record)) {
-      if (key.startsWith('$')) continue;
-      walk(value);
-    }
-  };
-  walk(data);
-  result.types = [...types];
-  return result;
-}
-
-interface FlowParseResult {
-  nodeCount: number;
-  edgeCount: number;
-  direction: string;
-}
-
-const FLOW_OPERATORS = ['-.->', '--o', '--x', 'o--', 'x--', '-->', '==>', '===', '---', '--', '=='];
-const LEADING_ID = /^[A-Za-z0-9_-]+/;
-const FLOW_KEYWORDS = ['end', 'subgraph', 'classdef', 'class ', 'style', 'linkstyle', 'click'];
-
-/** Split a statement into segments around connect operators (mermaid subset). */
-function splitFlowOperators(line: string): { segs: string[]; ops: string[] } {
-  const segs: string[] = [];
-  const ops: string[] = [];
-  let current = '';
-  let i = 0;
-  while (i < line.length) {
-    const op = FLOW_OPERATORS.find((candidate) => line.startsWith(candidate, i));
-    if (op) {
-      segs.push(current);
-      ops.push(op);
-      current = '';
-      i += op.length;
-    } else {
-      current += line[i];
-      i += 1;
-    }
-  }
-  segs.push(current);
-  return { segs, ops };
-}
-
-/**
- * Subset mermaid flowchart parser mirroring pkg/design/flowchart.go: direction
- * hint, distinct node ids, and edge count. Comments, subgraph/end, and
- * styling keywords are skipped.
- */
-export function parseFlowText(text: string): FlowParseResult {
-  const result: FlowParseResult = { nodeCount: 0, edgeCount: 0, direction: '' };
-  if (!text) return result;
-  const nodes = new Set<string>();
-
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('%%')) continue;
-    const lower = line.toLowerCase();
-    if (lower.startsWith('flowchart') || lower.startsWith('graph')) {
-      const fields = line.split(/\s+/);
-      if (fields.length >= 2) result.direction = fields[1];
-      continue;
-    }
-    if (FLOW_KEYWORDS.some((kw) => lower.startsWith(kw))) continue;
-    const { segs, ops } = splitFlowOperators(line);
-    const ids = segs.map((seg) => LEADING_ID.exec(seg.trim())?.[0] ?? '');
-    for (const id of ids) if (id) nodes.add(id);
-    for (let i = 0; i < ops.length; i += 1) {
-      if (ids[i] && ids[i + 1]) result.edgeCount += 1;
-    }
-  }
-  result.nodeCount = nodes.size;
-  return result;
-}
-
-/**
- * Status markers a manifest listing may carry, mirroring
- * `pkg/design/inventory.go`'s `parseManifestListings` (`draft`/`review`/`ready`
- * — the SP-140-1 §1e convention). A middle segment outside this set is part of
- * the summary, never a status.
- */
-const MANIFEST_STATUSES = ['draft', 'review', 'ready'] as const;
-
-/**
- * Parse the manifest's screen/flow status markers, mirroring
- * `pkg/design/inventory.go`'s `parseManifestListings`: a listing bullet of the
- * form ``- `login` — ready — sign-in entry point`` maps `login` → `ready`.
- * The dash separator may be an em dash (the template's) or a spaced ASCII
- * hyphen, matching the Go parser, and an unrecognised middle segment leaves the
- * entry without a status. Names are keyed lowercased; the value is lowercase.
- */
-export function parseManifestStatuses(text: string): Record<string, string> {
-  const statuses: Record<string, string> = {};
-  if (!text) return statuses;
-  for (const raw of text.split('\n')) {
-    const trimmed = raw.trim();
-    if (!trimmed.startsWith('- ')) continue;
-    const body = trimmed.slice(2).trim();
-    const start = body.indexOf('`');
-    if (start < 0) continue;
-    const rest = body.slice(start + 1);
-    const end = rest.indexOf('`');
-    if (end < 0) continue;
-    const name = rest.slice(0, end).trim();
-    if (!name) continue;
-    const segments = splitDashSegments(rest.slice(end + 1));
-    if (segments.length === 0) continue;
-    const marker = segments[0].toLowerCase();
-    if ((MANIFEST_STATUSES as readonly string[]).includes(marker)) statuses[name.toLowerCase()] = marker;
-  }
-  return statuses;
-}
-
-/** Split a manifest listing tail on its dash separators, dropping empties. */
-function splitDashSegments(tail: string): string[] {
-  let text = tail.trim();
-  if (!text) return [];
-  for (const dash of ['\u2014', '-']) {
-    if (text.startsWith(dash + ' ')) text = text.slice(dash.length + 1);
-    if (text.endsWith(' ' + dash)) text = text.slice(0, text.length - dash.length - 1);
-  }
-  const normalized = text.split(' \u2014 ').join('\u0000').split(' - ').join('\u0000');
-  return normalized
-    .split('\u0000')
-    .map((segment) => segment.trim())
-    .filter((segment) => segment !== '');
-}
-
-/** Parse the manifest frames: block (`name: WxH`), mirroring pkg/design/frames.go. */
-export function parseFrames(text: string): DesignFrame[] {
-  const frames: DesignFrame[] = [];
-  if (!text) return frames;
-  let inBlock = false;
-  for (const raw of text.split('\n')) {
-    if (!raw.trim()) continue;
-    const indented = raw[0] === ' ' || raw[0] === '\t';
-    const trimmed = raw.trim();
-    if (inBlock && !indented) inBlock = false;
-    if (!inBlock && !indented && trimmed === 'frames:') {
-      inBlock = true;
-      continue;
-    }
-    if (!inBlock || !indented) continue;
-    const [rawName, ...rest] = trimmed.split(':');
-    const parts = rest.join(':').trim().split('x');
-    if (!rawName?.trim() || parts.length !== 2) continue;
-    const width = Number(parts[0]);
-    const height = Number(parts[1]);
-    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) continue;
-    frames.push({ name: rawName.trim(), width, height });
-  }
-  return frames;
 }

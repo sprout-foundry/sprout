@@ -2,18 +2,21 @@
  * Right detail pane for DesignView (SP-140-3 §3a).
  *
  * Holds the pane's structure: the selected asset's heading, the open-in-editor
- * hand-off, the feedback affordance (§3e), and a slot for tab-specific detail.
- * The tab that owns the selection renders that detail (a flow's node/edge
- * source line, a screen's LivePreview split, a token's JSON) and registers it
- * through `onDetail`, so the shell never learns each tab's shape.
+ * hand-off, the feedback affordance (§3e), the resolution flow (§4d, item 4.8),
+ * and a slot for tab-specific detail. The tab that owns the selection renders
+ * that detail (a flow's node/edge source line, a screen's LivePreview split, a
+ * token's JSON) and registers it through `onDetail`, so the shell never learns
+ * each tab's shape.
  *
- * The feedback annotation affordance is mounted here because every tab's
- * selection flows through this pane's `path` — that is the asset an annotation
- * attaches to, whatever surface picked it.
+ * The feedback annotation affordance and its resolution flow are mounted here
+ * because every tab's selection flows through this pane's `path` — that is the
+ * asset an annotation attaches to (and the feedback file it is keyed on),
+ * whatever surface picked it.
  */
 
 import type { ReactNode } from 'react';
 import DesignFeedbackAffordance from './DesignFeedbackAffordance';
+import DesignFeedbackResolution from './DesignFeedbackResolution';
 
 export interface DesignDetailPaneProps {
   /** Currently selected asset path, relative to the design/ root. */
@@ -26,9 +29,20 @@ export interface DesignDetailPaneProps {
   children?: ReactNode;
   /** Test/host seam for the feedback write transport. */
   fetchFn?: typeof fetch;
+  /** Consent-aware read override for the resolution flow (§3f). */
+  readFn?: typeof fetch;
+  /** Consent-aware write override for the resolution flow (§3f). */
+  writeFn?: typeof fetch;
 }
 
-export default function DesignDetailPane({ path, onOpenFile, children, fetchFn }: DesignDetailPaneProps) {
+export default function DesignDetailPane({
+  path,
+  onOpenFile,
+  children,
+  fetchFn,
+  readFn,
+  writeFn,
+}: DesignDetailPaneProps) {
   return (
     <div className="design-detail" data-testid="design-detail-content" data-selected={path ?? ''}>
       {path ? (
@@ -42,6 +56,7 @@ export default function DesignDetailPane({ path, onOpenFile, children, fetchFn }
             </button>
           ) : null}
           <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
+          <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
           {children}
         </>
       ) : (

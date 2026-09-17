@@ -4,9 +4,13 @@
  * Pins the shell contract the later tab items build on: three tabs render
  * (Flows, Screens, Tokens), the tab state swaps the panel body, and the
  * three-pane layout (rail / canvas / detail) is present.
+ *
+ * SP-140-4 item 4.8 adds one check: a rail selection reaches the detail pane's
+ * resolution flow (§4d), i.e. the pane the shell threads the feedback read/write
+ * seams to is the one the annotation resolution lives on.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import DesignView, { DESIGN_TABS } from './DesignView';
@@ -108,5 +112,25 @@ describe('DesignView shell', () => {
     );
     fireEvent.click(screen.getByLabelText('Back to chat'));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DesignView resolution flow wiring (SP-140-4 §4d)', () => {
+  it('mounts the detail pane resolution flow for the selected asset', async () => {
+    const readFn = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 404,
+      text: async () => '',
+    } as unknown as Response);
+    renderDesign({ readFn });
+
+    expect(screen.queryByTestId('design-feedback-resolution')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('design-rail-stub-row'));
+
+    const section = await screen.findByTestId('design-feedback-resolution');
+    expect(section.getAttribute('data-target')).toBe('design/flows/');
+    // The shell's readFn seam reaches the pane's reader.
+    await waitFor(() => expect(readFn).toHaveBeenCalled());
   });
 });

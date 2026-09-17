@@ -218,7 +218,7 @@ prettier --check`).
       feedback targets with counts; skill loop starts any
       `changes-requested` target with a feedback-file read. Spec:
       SP-140-4 §4d.
-- [ ] **4.8** DesignView annotation resolution: mark annotation
+- [x] **4.8** DesignView annotation resolution: mark annotation
       `resolved` from the detail pane; agent closes the loop with a
       `resolution` note (schema fields defined in SP-140-4 §4d).
       Spec: SP-140-4 §4d.

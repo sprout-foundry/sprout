@@ -296,6 +296,131 @@
   color: var(--accent-warning, var(--text-secondary));
 }
 
+/* Feedback resolution flow (SP-140-4 §4d). Tokens only — no raw hex/rgba. */
+
+.design-detail-resolution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.design-resolution-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.design-resolution-heading {
+  margin: 0;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.design-resolution-status {
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.design-resolution-status[data-status='resolved'] {
+  color: var(--accent-success, var(--text-primary));
+}
+
+.design-resolution-count,
+.design-resolution-note {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.design-resolution-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.design-resolution-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.design-resolution-item.resolved {
+  border-color: var(--accent-success, var(--border-strong));
+}
+
+.design-resolution-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.design-resolution-area {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  text-transform: lowercase;
+}
+
+.design-resolution-text {
+  margin: 0;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.design-resolution-item.resolved .design-resolution-text {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+.design-resolution-toggle {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.design-resolution-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.design-resolution-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.design-resolution-toggle[aria-pressed='true'] {
+  color: var(--accent-success, var(--text-primary));
+  border-color: var(--accent-success, var(--border-strong));
+}
+
+.design-resolution-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* Screens tab (SP-140-3 §3c). Tokens only — no raw hex/rgba. */
 
 .design-screens {

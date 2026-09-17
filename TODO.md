@@ -273,10 +273,45 @@ prettier --check`).
 - [x] **5.10** Offline provenance check: at an arbitrary checkout, the
       hash in a generated artifact's header matches the token inputs at
       that commit (decidable from the tree alone). Spec: SP-140-5 AC.
-- [ ] **5.11** Umbrella end-to-end validation (parent SP-140 AC): fresh
+- [x] **5.11** Umbrella end-to-end validation (parent SP-140 AC): fresh
       workspace with no `design/` goes from one prompt to a validated
       `design/` tree with DesignView showing the flow graph and
       screens; every artifact opens in a non-sprout tool; drift loop
       and co-commit verified. Run after all prior items.
+      New test pkg/design/umbrella_e2e_test.go (`//go:build !js`)
+      validates the whole parent AC as ONE hermetic run: (0) a fresh
+      workspace reports no `design/` + no findings; (1) one prompt's work
+      (Scaffold + every tier + export) produces the tree; (2) design_validate
+      is clean of ERRORS (negative-control test proves a seeded dangling
+      `data-nav` trips an error) and design_assets/Scan report the
+      asset kinds, token groups, flow node/edge counts, manifest frames +
+      status; (3) the DesignView input structure is asserted in the webui's
+      OWN path↔kind vocabulary (`design/flows/*.mmd` graph → FlowsCanvas,
+      wireframes/screens → ScreensGrid, tokens → TokensTree), with the
+      rendering itself covered by the committed webui DesignView suite +
+      3.11 Playwright spec; (4) every artifact is a valid instance of a
+      standard open format — SVG parses as XML with an integer viewBox,
+      HTML is self-contained (no network refs), `.mmd` is the supported
+      mermaid subset, tokens are valid DTCG with `$type`/`$value` leaves,
+      generated CSS/TS/etc. carry the recomputable provenance banner, and
+      a whole-tree walk rejects any binary/proprietary artifact; (5) drift
+      loop: design-ahead and code-ahead report distinctly with distinct
+      remedies, design_sync apply resolves code-ahead, stays confined to
+      `design/`, and a second apply is byte-identical (no-op); (6) co-commit
+      on a throwaway git fixture: ONE commit carries both the dev revalue
+      and its design_sync adoption, `git revert` removes both, and the
+      committed artifact's `source-hash` matches the token inputs recomputed
+      from that commit's tree alone (offline). Test-only: no production
+      behaviour changed; reuses the exported surface of prior items
+      (Scaffold, ValidateTree, ResolveExportTokens/RenderArtifacts,
+      ParseFlowchart, AnalyzeDrift, AnalyzeTouchedFiles/PlanSyncApply,
+      TokenExportInputHash). Hermetic (temp workspaces + `git init` fixture);
+      determinism asserted by a byte-identical second run. Two documented
+      environment-robustness notes surfaced by this item: (a) the shared
+      `provGit`/`git show` helper trims a trailing newline, so the umbrella
+      reads committed token blobs byte-faithfully via a local raw-git helper;
+      (b) a global `core.autocrlf=input` would normalize committed token
+      blobs, so the fixture pins `core.autocrlf=false` + an eol `.gitattributes`
+      (the pre-existing 5.10 provenance suite shares fragility (a)+(b)).
 
 ---

@@ -240,7 +240,19 @@ function Sidebar({
   const ModeRailComponent = modeRail;
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
-  const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
+  // While a mode rail is active the content pane belongs to the mode: the
+  // Code section tabs the rail replaces must not render their panes, or a
+  // stale 'git' selection would show the git pane beside the mode's rail.
+  // Global sections (settings/logs/plugins) are addressed by the shared rail
+  // below the mode rail and keep rendering; with nothing selected the pane
+  // stays empty (renderContentPane's default case).
+  const isCodeSection = (section: SectionTab | undefined | null) =>
+    section != null && ALL_SECTION_TABS.some((tab) => tab.id === section);
+  const effectiveSelectedSection = ModeRailComponent
+    ? isCodeSection(selectedSection)
+      ? null
+      : (selectedSection ?? null)
+    : selectedSection || (supportsGit ? 'git' : 'files');
   // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
   // Plain object fallback avoids calling useRef when the prop is not provided

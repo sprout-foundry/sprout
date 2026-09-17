@@ -260,9 +260,9 @@ describe('Sidebar mode rail (SP-140-5)', () => {
     });
 
     act(() => {
-      container.querySelector('[data-testid="design-rail-screens"]')!.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      );
+      container
+        .querySelector('[data-testid="design-rail-screens"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onModeSectionChange).toHaveBeenCalledTimes(1);
@@ -281,14 +281,31 @@ describe('Sidebar mode rail (SP-140-5)', () => {
     });
 
     act(() => {
-      container.querySelector('[data-testid="design-rail-tokens"]')!.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      );
+      container
+        .querySelector('[data-testid="design-rail-tokens"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // The Design rail drives the design surface's section, not the sidebar's.
     expect(onSectionChange).not.toHaveBeenCalled();
-    // The git section pane is still the rendered content.
-    expect(container.querySelector('.mock-git-section')).not.toBeNull();
+    // The content pane belongs to the mode while its rail is active: the
+    // stale Code-section selection renders no Code section pane.
+    expect(container.querySelector('.mock-git-section')).toBeNull();
+    expect(container.querySelector('.mock-files-section')).toBeNull();
+  });
+
+  it('still renders global sections while a mode rail is active', () => {
+    renderSidebar({
+      modes: [codeMode, designMode],
+      activeModeId: 'design',
+      modeSection: 'flows',
+      selectedSection: 'logs',
+      ...designRailProps,
+    });
+
+    // Logs is addressed by the shared rail below the mode rail, not by the
+    // rail's own entries, so its pane keeps rendering in Design mode.
+    expect(container.querySelector('.mock-logs')).not.toBeNull();
+    expect(container.querySelector('.mock-git-section')).toBeNull();
   });
 });

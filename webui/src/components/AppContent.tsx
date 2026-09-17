@@ -1,5 +1,4 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
-import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
@@ -27,21 +26,18 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
-import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import type { WorkspaceModeId } from '../workspaces/registry';
+import type { WorkspaceShellProps } from '../workspaces/shell';
+import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
-import ContextSidebar from './ContextSidebar';
 import DesignRail from './design/DesignRail';
 import type { DesignTab } from './design/DesignView';
 import { useDesignPresence } from './design/useDesignPresence';
-import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
-import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
-import StatusBar from './StatusBar';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
@@ -408,9 +404,8 @@ const AppContent: React.FC<AppContentProps> = ({
   } = useWorkspaceMode({ hasDesignTree });
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
-  // because the rail (Sidebar) and the surface (EditorWorkspace) are
-  // siblings and must agree on it: the rail drives it, the surface renders
-  // it.
+  // because the rail (Sidebar) and the surface are siblings and must agree on
+  // it: the rail drives it, the surface renders it.
   const [designSection, setDesignSection] = useState<DesignTab>('flows');
 
   /**
@@ -426,6 +421,21 @@ const AppContent: React.FC<AppContentProps> = ({
       else if (state.currentView === 'design') onViewChange('chat');
     },
     [selectWorkspaceMode, onViewChange, state.currentView],
+  );
+
+  /**
+   * A file picked from the Design surface (a flow-edge hand-off) opens in the
+   * real editor: the mode moves to Code first so CodeShell mounts the pane the
+   * buffer lands in; handleFileClick then sets the view to the editor and
+   * opens the file. Plain handleFileClick would leave the Design surface
+   * mounted over the opened buffer.
+   */
+  const handleDesignFileOpen = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      selectWorkspaceMode('code');
+      handleFileClick(filePath, lineNumber);
+    },
+    [selectWorkspaceMode, handleFileClick],
   );
 
   /**
@@ -897,6 +907,64 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
   );
 
+  // The active mode's shell (workspaceMode.Shell) owns the <main> column and
+  // the chrome that belongs to that mode — see workspaces/shell.ts. Each
+  // shell reads only the slice of this object its mode renders.
+  const shellProps: WorkspaceShellProps = {
+    isMobile,
+    isTablet,
+    isSidebarOpen,
+    isConnected: state.isConnected,
+    currentView: state.currentView,
+    onViewChange,
+    onToggleSidebar,
+    onToggleContextPanel: handleToggleContextPanel,
+    supportsLocalTerminal,
+    isTerminalExpanded,
+    onTerminalExpandedChange,
+    showContextSidebar,
+    contextPanelRef,
+    toolExecutions: state.toolExecutions,
+    logs: state.logs,
+    subagentActivities: state.subagentActivities,
+    messages: state.messages,
+    isProcessing: state.isProcessing,
+    lastError: state.lastError,
+    queryProgress: state.queryProgress,
+    currentBuffer: currentBuffer ?? null,
+    handleOutlineNavigateToSymbol,
+    onSessionRestore: handleSessionSearchRestore,
+    chat: {
+      perChatCache,
+      activeChatId,
+      chatSessions,
+      onActiveChatChange,
+      onCreateChat,
+      onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
+      onDeleteChat,
+      onDeleteAllChats,
+      onRenameChat,
+      chatProps,
+      reviewProps,
+      diffState,
+    },
+    design: {
+      loading: designPresenceLoading,
+      present: hasDesignTree,
+      tab: designSection,
+      onTabChange: setDesignSection,
+      onBack: () => selectWorkspaceMode('code'),
+      onOpenFile: handleDesignFileOpen,
+    },
+    git: {
+      gitBranches,
+      gitStatus,
+      workspaceRoot,
+    },
+  };
+  // Capital alias so the registry-supplied component renders as a component.
+  const ModeShell = workspaceMode.Shell;
+
   return (
     <div className="app">
       {/* SP-130: blocking home-workspace gate. Renders as a full-screen
@@ -992,124 +1060,7 @@ const AppContent: React.FC<AppContentProps> = ({
           }}
         />
       </ErrorBoundary>
-      <main
-        className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
-      >
-        <HeaderBar
-          isMobile={isMobile}
-          isTablet={isTablet}
-          isSidebarOpen={isSidebarOpen}
-          isConnected={state.isConnected}
-          onToggleSidebar={onToggleSidebar}
-          onToggleContextPanel={handleToggleContextPanel}
-        />
-        <div className="main-view-content">
-          <div className="editor-view">
-            {isMobile && (
-              <div className="pane-controls pane-controls-mobile">
-                <button
-                  className="top-mobile-menu-btn"
-                  onClick={onToggleSidebar}
-                  aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                >
-                  <Menu size={16} />
-                </button>
-                {state.currentView !== 'chat' && (
-                  <button
-                    className="top-mobile-chat-btn"
-                    onClick={() => onViewChange('chat')}
-                    aria-label="Back to chat"
-                    title="Back to chat"
-                  >
-                    <MessageSquare size={16} />
-                  </button>
-                )}
-                {supportsLocalTerminal && (
-                  <button
-                    className="top-mobile-terminal-btn"
-                    onClick={() => onTerminalExpandedChange(!isTerminalExpanded)}
-                    aria-label={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
-                    title={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
-                  >
-                    <SquareTerminal size={16} />
-                  </button>
-                )}
-                {showContextSidebar && (
-                  <button
-                    className="top-mobile-context-btn"
-                    onClick={handleToggleContextPanel}
-                    aria-label="Toggle context panel"
-                    title="Toggle context panel"
-                  >
-                    <PanelRightClose size={16} />
-                  </button>
-                )}
-              </div>
-            )}
-            <ErrorBoundary panelName="Editor">
-              <EditorWorkspace
-                currentView={state.currentView}
-                perChatCache={perChatCache}
-                activeChatId={activeChatId}
-                chatSessions={chatSessions}
-                onActiveChatChange={onActiveChatChange}
-                onCreateChat={onCreateChat}
-                onCreateChatInWorktree={onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined}
-                onDeleteChat={onDeleteChat}
-                onDeleteAllChats={onDeleteAllChats}
-                onRenameChat={onRenameChat}
-                chatProps={chatProps}
-                reviewProps={reviewProps}
-                diffState={diffState}
-                handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-                onSessionRestore={handleSessionSearchRestore}
-                onViewChange={onViewChange}
-                onOpenDesignFile={handleFileClick}
-                designTab={designSection}
-                onDesignTabChange={setDesignSection}
-              />
-            </ErrorBoundary>
-          </div>
-          <div className="context-panel-container">
-            <ContextSidebar
-              isMobile={isMobile}
-              isTablet={isTablet}
-              showContextSidebar={showContextSidebar}
-              contextPanelRef={contextPanelRef}
-              currentView={state.currentView}
-              toolExecutions={state.toolExecutions}
-              logs={state.logs}
-              subagentActivities={state.subagentActivities}
-              messages={state.messages}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              queryProgress={state.queryProgress}
-            />
-          </div>
-        </div>
-        <StatusBar
-          branch={gitBranches.current || gitStatus?.branch}
-          workspacePath={workspaceRoot}
-          onWorkspaceClick={() => onToggleSidebar()}
-          buffer={
-            currentBuffer
-              ? {
-                  kind: currentBuffer.kind,
-                  file: currentBuffer.file,
-                  content: currentBuffer.content,
-                  cursorPosition: currentBuffer.cursorPosition,
-                  languageOverride: currentBuffer.languageOverride,
-                }
-              : null
-          }
-        />
-        {!supportsLocalTerminal && (
-          <ErrorBoundary panelName="Terminal">
-            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
-          </ErrorBoundary>
-        )}
-      </main>
+      <ModeShell {...shellProps} />
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

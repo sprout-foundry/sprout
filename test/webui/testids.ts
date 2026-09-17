@@ -368,6 +368,10 @@ const TESTIDS = {
   // from webui/src/components/design/* plus representative values for the
   // dynamic `${...}` row/node/anchor patterns so the coverage gate passes.
   "design-view": "design-view",
+  // Mode shell (SP-140-5 step 3): the Design mode's content column
+  // (workspaces/DesignShell → design/DesignSurface).
+  "design-surface": "design-surface",
+  "design-surface-fallback": "design-surface-fallback",
   "design-tabpanel": "design-tabpanel",
   "design-assets-rail": "design-assets-rail",
   // Mode rail (SP-140-5): the Design mode's section rail in the sidebar

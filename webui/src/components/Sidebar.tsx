@@ -47,7 +47,6 @@ import {
   Server,
   Monitor,
   Zap,
-  CircleDollarSign,
   PanelLeft,
 } from 'lucide-react';
 import SearchView from './SearchView';
@@ -548,7 +547,7 @@ function Sidebar({
           >
             {/* Main section tabs: the active mode's rail, or the Code
                 defaults filtered by capability flags (SP-140-5). Global
-                chrome below (platform nav, plugins, costs, settings, logs)
+                chrome below (platform nav, plugins, settings, logs)
                 is shared by every mode. */}
             {ModeRailComponent ? (
               <div
@@ -615,7 +614,7 @@ function Sidebar({
               </>
             )}
 
-            {/* Plugin Panels (between platform nav and costs) */}
+            {/* Plugin Panels (below platform nav) */}
             {pluginPanels.length > 0 && (
               <>
                 <div className="sidebar-icon-rail-divider" role="separator" />
@@ -641,21 +640,6 @@ function Sidebar({
                 </nav>
               </>
             )}
-
-            {/* Costs — local feature, always visible */}
-            <div role="tablist" aria-orientation="vertical">
-              <button
-                role="tab"
-                aria-selected={currentView === 'costs'}
-                className={`rail-icon ${currentView === 'costs' ? 'active' : ''}`}
-                onClick={() => onViewChange?.('costs')}
-                title="Costs"
-                aria-label="Costs"
-                data-testid="sidebar-costs-button"
-              >
-                <CircleDollarSign size={18} strokeWidth={1.5} />
-              </button>
-            </div>
 
             {/* Settings & Logs tabs */}
             <div role="tablist" aria-orientation="vertical">

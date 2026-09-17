@@ -68,7 +68,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: false,
       showContextSidebar: true,
-      currentView: 'chat',
     });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.idle).toBe('false');
@@ -79,19 +78,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: false,
       showContextSidebar: false,
-      currentView: 'chat',
-    });
-    expect(panel()).not.toBeNull();
-    expect(panel()?.dataset.idle).toBe('true');
-  });
-
-  it('desktop: costs view also keeps the mounted panel (idle)', async () => {
-    await renderSidebar({
-      ...BASE_PROPS,
-      isMobile: false,
-      isTablet: false,
-      showContextSidebar: true,
-      currentView: 'costs',
     });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.idle).toBe('true');
@@ -103,7 +89,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: false,
       showContextSidebar: true,
-      currentView: 'chat',
     });
     const before = panel();
     await renderSidebar({
@@ -111,7 +96,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: false,
       showContextSidebar: false,
-      currentView: 'chat',
     });
     const after = panel();
     // React reconciliation keeps the same DOM node because ContextSidebar
@@ -125,7 +109,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: true,
       isTablet: false,
       showContextSidebar: true,
-      currentView: 'chat',
     });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.mobile).toBe('true');
@@ -135,7 +118,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: true,
       isTablet: false,
       showContextSidebar: false,
-      currentView: 'chat',
     });
     expect(panel()).toBeNull();
   });
@@ -146,7 +128,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: true,
       showContextSidebar: true,
-      currentView: 'chat',
     });
     expect(panel()).not.toBeNull();
     expect(panel()?.dataset.tablet).toBe('true');
@@ -156,7 +137,6 @@ describe('ContextSidebar desktop stability', () => {
       isMobile: false,
       isTablet: true,
       showContextSidebar: false,
-      currentView: 'chat',
     });
     expect(panel()).toBeNull();
   });

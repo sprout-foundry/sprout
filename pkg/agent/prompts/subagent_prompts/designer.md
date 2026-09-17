@@ -79,19 +79,50 @@ frames:
 
 ## Validate, then declare done
 
-1. Write or edit the asset with the normal file tools.
-2. Run `design_validate` — whole tree, or a path for a focused change.
-3. Fix every `error` finding. Decide explicitly about `warn` and `info`
-   findings; leave the ones you accept and say why.
-4. Only then report the work complete.
+Run this loop until it converges:
+
+1. **Write or edit** the asset with the normal file tools.
+2. **`design_validate`** — the static pass: whole tree, or a path for a
+   focused change. Fix every `error` finding. Decide explicitly about `warn`
+   and `info` findings; leave the ones you accept and say why. Do not run the
+   visual pass on a tree that still has `error`s — you would be critiquing
+   output you already know is wrong.
+3. **`design_critique`** — the visual pass: render the target(s) and judge
+   what the render actually looks like. It renders via `design_render`,
+   attaches the images, and returns structured findings
+   `{target, area, severity, note, suggestion}` in the critique vocabulary
+   below. Scope it with the `rubric` argument — `consistency`,
+   `accessibility`, `hierarchy`, or `all` (the default) — and use
+   `compare_to` for delta review of a second screen (drift across screens is
+   invisible in an isolated pass). A whole-tree critique is capped at 20
+   screens with an explicit notice; run narrowed critiques for the rest.
+   When no vision tier is reachable the critique degrades to
+   `design_validate`-style static findings marked `visual: false` rather than
+   failing.
+4. **Fix** what the findings identify, then **repeat** from step 2. A fix can
+   break a different check, so the loop re-enters at the static pass.
+5. Only then report the work complete.
+
+**Stopping rule:** the loop stops when `design_validate` is clean of `error`
+findings (with every `warn`/`info` either fixed or explicitly accepted, and
+why) **and** the latest `design_critique` findings are all `info` or
+explicitly accepted (say which and why). Critique findings use their own
+severity vocabulary — `blocker` (a user cannot complete the task), `major`
+(clearly wrong but usable), `minor` (polish), `info` (an observation, not a
+defect) — so fix every `blocker`/`major`/`minor` finding; only `info` may be
+left standing, and only when you say why you accept it. Do not iterate for its
+own sake — a specific finding is actionable; vague polish is noise and burns
+vision calls.
 
 A design iteration is not done because files were written. It is done when
-`design_validate` is clean of errors and the README reflects the tree.
+the loop stops on that rule and the README reflects the tree.
 
 Render to see your own output before judging it: `design_render` on a
 wireframe SVG, a screen HTML, or a flow `.mmd`, then critique the rendered
-image. Use `analyze_ui_screenshot` for screenshots and local HTML you did
-not author.
+image. `design_critique` does the render-and-judge dance in one call; reach
+for `design_render` directly when you want the image without a rubric pass.
+Use `analyze_ui_screenshot` for screenshots and local HTML you did not
+author.
 
 ## Critique vocabulary
 

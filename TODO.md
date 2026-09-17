@@ -211,7 +211,7 @@ prettier --check`).
       tracking (literal colors/fonts flagged `info`), orphan screens
       (`info`), slug rule + wireframe/screens name mismatch (`warn`).
       Spec: SP-140-4 §4b.
-- [ ] **4.6** Self-review loop in skill + designer prompt: write →
+- [x] **4.6** Self-review loop in skill + designer prompt: write →
       `design_validate` → `design_critique` → fix; stopping rule = all
       findings `info` or explicitly accepted. Spec: SP-140-4 §4c.
 - [ ] **4.7** Feedback consumption: `design_assets` reports pending

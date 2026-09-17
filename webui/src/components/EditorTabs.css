@@ -118,13 +118,23 @@
 }
 
 .tab-externally-modified {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
   font-size: 12px;
   color: var(--accent-info, #6b9fff);
   flex-shrink: 0;
   margin-left: 2px;
   font-weight: bold;
   animation: pulse-info 2s ease-in-out infinite;
+}
+
+.tab-externally-modified:hover {
+  color: color-mix(in srgb, var(--accent-info, #6b9fff) 70%, white);
 }
 
 @keyframes pulse-info {

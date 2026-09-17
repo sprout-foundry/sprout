@@ -491,35 +491,30 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-/* ── Styled selects ───────────────────────────────────────────── */
+/* ── Styled selects ─────────────────────────────────────────────
+ * Visual base (appearance, caret, states) lives on the canonical
+ * select.styled-select recipe in App.css. This block only resizes for
+ * the sidebar's density. */
 .sidebar .styled-select {
-  width: 100%;
   min-height: 36px;
-  padding: 0 38px 0 var(--space-4);
-  background: var(--bg-surface);
-  border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
   border-radius: 10px;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
   font-weight: 550;
-  line-height: 1.2;
-  transition:
-    border-color 0.15s var(--ease-out),
-    box-shadow 0.15s var(--ease-out),
-    background 0.15s var(--ease-out),
-    color 0.15s var(--ease-out);
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237c96b8' d='M0 0l5 5 5-5z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--space-4) center;
-  background-size: 10px 6px;
+  background-color: var(--bg-surface);
   box-shadow:
     inset 0 1px 0 var(--inset-highlight-4),
     0 1px 2px rgba(2, 6, 23, 0.14);
-  cursor: pointer;
+}
+
+.sidebar .styled-select:hover:not(:disabled) {
+  background-color: var(--bg-surface);
+}
+
+.sidebar .styled-select:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow:
+    0 0 0 3px var(--accent-primary-alpha),
+    inset 0 1px 0 var(--inset-highlight-5);
 }
 
 .sidebar .styled-input {
@@ -617,25 +612,8 @@
 }
 
 .sidebar .styled-select option {
-  background: var(--sidebar-select-bg);
+  background: var(--bg-elevated);
   color: var(--text-primary);
-}
-
-.sidebar .styled-select:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-surface);
-}
-
-.sidebar .styled-select:focus {
-  outline: none;
-}
-
-.sidebar .styled-select:focus-visible {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow:
-    0 0 0 3px var(--accent-primary-alpha),
-    inset 0 1px 0 var(--inset-highlight-5);
 }
 
 .sidebar .styled-select:disabled {
@@ -1711,9 +1689,11 @@
   padding: 0 30px 0 8px;
   min-height: 32px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-elevated);
-  transition: border-color 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
 }
 
 .git-branch-select-wrap::after {
@@ -1726,12 +1706,10 @@
   transform: translateY(-50%);
   background: var(--text-tertiary);
   pointer-events: none;
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  mask-size: contain;
-  -webkit-mask-size: contain;
-  mask-repeat: no-repeat;
-  -webkit-mask-repeat: no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")
+    contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")
+    contain no-repeat;
 }
 
 .git-branch-select {
@@ -1750,7 +1728,7 @@
 }
 
 .git-branch-select option {
-  background: var(--sidebar-select-bg);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -1760,7 +1738,7 @@
 
 .git-branch-select-wrap:focus-within {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
 .git-sidebar-commit-box {
@@ -2308,6 +2286,13 @@
   border-radius: 0;
   background: transparent;
   overflow: hidden;
+}
+
+/* Breathing room between the sub-tab bar's bottom border and the panel
+ * content — without it the branch row / commit filter sit flush against
+ * the rule and the pane reads as squished. */
+.git-subtab-panel {
+  padding-top: var(--space-4);
 }
 
 .git-sidebar-tab {

@@ -1160,3 +1160,50 @@ describe('WebSocketService - control frames in cloud mode (INT-3)', () => {
     expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// DOM bridge suppression (high-frequency event types)
+// ---------------------------------------------------------------------------
+
+describe('WebSocketService - DOM bridge suppression', () => {
+  let dispatched;
+  let handler;
+
+  beforeEach(() => {
+    dispatched = [];
+    handler = (e) => dispatched.push(e.detail?.type);
+    window.addEventListener('sprout:wsevent', handler);
+  });
+
+  afterEach(() => {
+    window.removeEventListener('sprout:wsevent', handler);
+  });
+
+  it('bridges lifecycle events to the DOM', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    triggerWebSocketMessage({ type: 'agent_session_update', data: {} });
+
+    expect(dispatched).toContain('agent_session_update');
+  });
+
+  it('suppresses per-token events (stream_chunk, command_output, query_progress) on the DOM bridge', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chunk: 'x' } });
+    triggerWebSocketMessage({ type: 'command_output', data: { chunk: 'y' } });
+    triggerWebSocketMessage({ type: 'query_progress', data: {} });
+
+    // The per-callback fan-out still delivers the events (tracked via __seq etc.),
+    // but none of them reach the window bridge.
+    expect(dispatched).not.toContain('stream_chunk');
+    expect(dispatched).not.toContain('command_output');
+    expect(dispatched).not.toContain('query_progress');
+  });
+});

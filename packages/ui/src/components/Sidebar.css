@@ -106,7 +106,11 @@
 }
 
 .sidebar .sidebar-brand-button:hover {
-  background: color-mix(in srgb, var(--sidebar-bg) 78%, var(--sidebar-nav-btn-hover-bg));
+  background: color-mix(
+    in srgb,
+    var(--sidebar-bg) 78%,
+    var(--sidebar-nav-btn-hover-bg)
+  );
 }
 
 .sidebar .sidebar-brand-button:focus-visible {
@@ -137,7 +141,8 @@
 
 .sidebar .status-dot.connected {
   background: var(--accent-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-success) 18%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--accent-success) 18%, transparent);
 }
 
 .sidebar .status-dot.disconnected {
@@ -181,7 +186,7 @@
 
 /* Custom chevron arrow for the select */
 .sidebar .instance-selector::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 14px;
   top: 50%;
@@ -308,14 +313,18 @@
  * the same color flows through sidebar rail, editor tab underline, and
  * any future "active rail" surface. Theme-aware via the token swap. */
 .sidebar .rail-icon.active::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -9px;
   top: 8px;
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: color-mix(in srgb, var(--brand-active-cyan, #22d3ee) 80%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--brand-active-cyan, #22d3ee) 80%,
+    transparent
+  );
 }
 
 /* ── Platform Nav Divider ───────────────────────────────────── */
@@ -535,7 +544,7 @@
 }
 
 .sidebar .styled-select option {
-  background: var(--sidebar-select-bg);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -845,7 +854,8 @@
 
 .sidebar .search-input-wrapper:focus-within {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--accent-primary) 20%, transparent);
 }
 
 .sidebar .search-text-input {
@@ -921,7 +931,8 @@
 
 .sidebar .search-replace-input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--accent-primary) 20%, transparent);
 }
 
 .sidebar .search-replace-btn {
@@ -1539,7 +1550,7 @@
 }
 
 .git-branch-select-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 12px;
   top: 50%;
@@ -1572,7 +1583,7 @@
 }
 
 .git-branch-select option {
-  background: var(--sidebar-select-bg);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -1679,10 +1690,11 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
-  transition: background var(--t-base, 0.15s) var(--ease-out, ease),
-              border-color var(--t-base, 0.15s) var(--ease-out, ease),
-              box-shadow var(--t-base, 0.15s) var(--ease-out, ease),
-              transform var(--t-fast, 0.12s) var(--ease-out, ease);
+  transition:
+    background var(--t-base, 0.15s) var(--ease-out, ease),
+    border-color var(--t-base, 0.15s) var(--ease-out, ease),
+    box-shadow var(--t-base, 0.15s) var(--ease-out, ease),
+    transform var(--t-fast, 0.12s) var(--ease-out, ease);
 }
 
 .sidebar-action-btn:hover:not(:disabled) {
@@ -1749,8 +1761,9 @@
   border-color: var(--accent-primary);
   /* Subtle specular highlight on raised primary buttons — design-system
      spec for the btn-primary variant (preview/components-buttons.html). */
-  box-shadow: var(--shadow-subtle, 0 2px 6px rgba(2, 6, 23, 0.32)),
-              inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  box-shadow:
+    var(--shadow-subtle, 0 2px 6px rgba(2, 6, 23, 0.32)),
+    inset 0 1px 0 var(--inset-highlight-10, rgba(255, 255, 255, 0.1));
 }
 
 .sidebar-action-btn.primary:hover:not(:disabled) {
@@ -1924,7 +1937,15 @@
 }
 
 .git-sidebar-file-row.selected {
-  background: color-mix(in srgb, var(--accent-primary-alpha, color-mix(in srgb, var(--accent-primary) 18%, transparent)) 70%, transparent);
+  background: color-mix(
+    in srgb,
+    var(
+        --accent-primary-alpha,
+        color-mix(in srgb, var(--accent-primary) 18%, transparent)
+      )
+      70%,
+    transparent
+  );
 }
 
 .git-sidebar-file-path {
@@ -1953,7 +1974,9 @@
   color: var(--text-tertiary);
   border-radius: 7px;
   cursor: pointer;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
 }
 
 .git-section-icon-btn:hover,
@@ -2025,4 +2048,3 @@
   background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-elevated));
   color: var(--accent-primary);
 }
-

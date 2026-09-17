@@ -31,6 +31,7 @@ type BackgroundProcess struct {
 	Kind       string // "shell" (default), "automate", etc.
 	StartedAt  time.Time
 	LastPolled time.Time
+	ttl        time.Duration // per-session TTL override; 0 = manager default
 	done       chan struct{} // closed when process exits
 	exitCode   int
 	mu         sync.Mutex
@@ -147,6 +148,11 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		return "", fmt.Errorf("command cannot be empty")
 	}
 
+	var ttl time.Duration
+	if opts != nil {
+		ttl = opts.TTL
+	}
+
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
@@ -250,6 +256,7 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		Kind:       kind,
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
+		ttl:        ttl,
 		exitCode:   -1,
 		done:       make(chan struct{}),
 		publisher:  publisher,

@@ -20,11 +20,18 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
 // StartOptions configures optional behavior when starting a background process.
 type StartOptions struct {
 	EventBus *events.EventBus // non-nil to enable output-chunk streaming for automate sessions
+
+	// TTL caps how long a running session may live before the cleanup pass
+	// reaps it. Zero uses the manager default (2h). A TTL is a safety net,
+	// not a liveness signal: a running process is never reaped for being
+	// *unpolled* — only for exceeding its TTL.
+	TTL time.Duration
 }
 
 // GetOutputPath returns the output file path under the lock.
@@ -146,7 +153,16 @@ func (m *BackgroundProcessManager) cleanupLoop() {
 	}
 }
 
-// cleanup removes exited processes (after 5 min idle) and kills expired ones.
+// cleanup removes exited processes (after 5 min idle) and applies TTL expiry.
+//
+// Running sessions are NOT reaped for being unpolled: LastPolled measures
+// the agent's attention, not the process's health, and watcher sessions
+// (gh run watch, tail -f, wait-loops) are silent for hours by design. A
+// running session survives until its TTL (default 2h) elapses regardless
+// of polling; when the TTL fires, a pid probe decides — an actually-alive
+// process is left running and its TTL window is extended (the TTL is a
+// periodic re-confirmation, not a hard kill), while a dead-but-unreaped
+// process is cleaned up immediately.
 func (m *BackgroundProcessManager) cleanup() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -161,38 +177,73 @@ func (m *BackgroundProcessManager) cleanup() {
 		if lastUsed.IsZero() {
 			lastUsed = proc.StartedAt
 		}
+		ttl := proc.ttl
+		if ttl <= 0 {
+			ttl = m.expiry
+		}
 		proc.mu.Unlock()
 
-		if isExited && now.Sub(lastUsed) > 5*time.Minute {
-			// Exited process idle for > 5 minutes — delete
-			_ = os.Remove(proc.OutputPath)
-			toDelete = append(toDelete, id)
+		if isExited {
+			if now.Sub(lastUsed) > 5*time.Minute {
+				// Exited process idle for > 5 minutes — delete
+				_ = os.Remove(proc.OutputPath)
+				toDelete = append(toDelete, id)
+			}
 			continue
 		}
 
-		// Check for inactivity expiry (2 hours)
-		if !isExited && now.Sub(lastUsed) > m.expiry {
-			// Nil out process fields BEFORE killing so the monitor goroutine's
-			// exit handler becomes a no-op on state updates.
-			proc.mu.Lock()
-			p := proc.Process
-			proc.Process = nil
-			proc.Cmd = nil
-			proc.mu.Unlock()
-			if p != nil {
-				_ = killProcessGroup(p)
-			}
-			// Don't call cmd.Wait() — the monitor goroutine may still be
-			// waiting. It will see nil fields and skip its state changes.
-			_ = os.Remove(proc.OutputPath)
-			toDelete = append(toDelete, id)
+		if now.Sub(lastUsed) < ttl {
+			// TTL window not elapsed — nothing to do.
 			continue
 		}
+
+		// TTL elapsed. Decide by actual liveness, not by polling.
+		if pid := proc.GetPID(); pid > 0 && pidalive.IsAlive(pid) {
+			// Alive: renew the window so a long-running quiet watcher
+			// survives indefinitely while its process lives. Renewal
+			// happens on every cleanup pass after TTL elapses, so the
+			// effective behavior is "reap when the process dies".
+			proc.mu.Lock()
+			proc.LastPolled = now
+			proc.mu.Unlock()
+			continue
+		}
+
+		// Dead (or unreapable pid): clean up. Nil out process fields BEFORE
+		// killing so the monitor goroutine's exit handler becomes a no-op on
+		// state updates.
+		proc.mu.Lock()
+		p := proc.Process
+		proc.Process = nil
+		proc.Cmd = nil
+		proc.mu.Unlock()
+		if p != nil {
+			_ = killProcessGroup(p)
+		}
+		// Don't call cmd.Wait() — the monitor goroutine may still be
+		// waiting. It will see nil fields and skip its state changes.
+		_ = os.Remove(proc.OutputPath)
+		toDelete = append(toDelete, id)
 	}
 
 	for _, id := range toDelete {
 		delete(m.processes, id)
 	}
+}
+
+// KeepAlive renews a session's activity timer so the cleanup pass treats
+// it as recently used. Used by `sprout shell-bg keepalive` and by agents
+// that know a session is a long-lived watcher. No-op error when the
+// session is unknown.
+func (m *BackgroundProcessManager) KeepAlive(sessionID string) error {
+	proc, exists := m.GetProcess(sessionID)
+	if !exists {
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+	proc.mu.Lock()
+	proc.LastPolled = time.Now()
+	proc.mu.Unlock()
+	return nil
 }
 
 // maxLiveOwnerSkipAge bounds how long orphan cleanup will keep sparing a

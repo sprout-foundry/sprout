@@ -925,8 +925,7 @@
   outline: none;
 }
 
-.sidebar .styled-input:focus-visible,
-.sidebar .styled-select:focus-visible {
+.sidebar .styled-input:focus-visible {
   outline: none;
   border-color: var(--border-focus);
   /* 3-px alpha halo per the design-system inputs spec

@@ -652,7 +652,9 @@ describe('handleSave', () => {
     });
 
     expect(setup.setters.setSaving).toHaveBeenCalledWith(true);
-    expect(mockSaveBuffer).toHaveBeenCalledWith('buf-1');
+    // Cmd+S is an explicit user resolution: handleSave must force through
+    // any pending external-change conflict.
+    expect(mockSaveBuffer).toHaveBeenCalledWith('buf-1', { force: true });
     expect(setup.setters.setSaving).toHaveBeenCalledWith(false);
   });
 

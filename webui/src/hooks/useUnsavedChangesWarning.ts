@@ -4,7 +4,7 @@ import type { EditorBuffer } from '../types/editor';
 
 interface UseUnsavedChangesWarningParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
-  _buffers: Map<string, EditorBuffer>;
+  buffers: Map<string, EditorBuffer>;
   activeBufferId: string | null;
 }
 
@@ -14,16 +14,18 @@ interface UseUnsavedChangesWarningParams {
  *
  * Effect 1: Registers a beforeunload event listener that checks if any real
  * file buffer has isModified === true. If so, triggers the browser's native
- * "Leave site?" dialog.
+ * "Leave site?" dialog. This is the last line of defense for unsaved work —
+ * layout persistence stores paths/cursor/scroll but never buffer content,
+ * so a reload with modified buffers loses those edits.
  *
  * Effect 2: Updates document.title to reflect the active buffer:
- *   - Modified file: "● filename — sprout"
- *   - Clean file:    "filename — sprout"
- *   - Other / none:  "sprout — AI Code Editor"
+ *   - Modified file: "● filename — ledit"
+ *   - Clean file:    "filename — ledit"
+ *   - Other / none:  "ledit — AI Code Editor"
  */
 export function useUnsavedChangesWarning({
   buffersRef,
-  _buffers,
+  buffers,
   activeBufferId,
 }: UseUnsavedChangesWarningParams): void {
   // Effect 1: Warn on beforeunload if any file buffer is modified
@@ -44,19 +46,16 @@ export function useUnsavedChangesWarning({
     return () => window.removeEventListener('beforeunload', handler);
   }, [buffersRef]);
 
-  // Effect 2: Update document.title based on active buffer's modified state.
-  // Use buffersRef to avoid re-running on every keystroke (Map identity changes
-  // on content updates, but isModified only changes on save or edit).
-  // We still depend on activeBufferId since that's a meaningful change.
+  // Effect 2: Update document.title based on active buffer's modified state
   useEffect(() => {
-    const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : undefined;
+    const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : undefined;
 
     if (!activeBuffer || activeBuffer.kind !== 'file') {
-      document.title = 'sprout — AI Code Editor';
+      document.title = 'ledit — AI Code Editor';
       return;
     }
 
-    const indicator = activeBuffer.isModified ? '* ' : '';
-    document.title = `${indicator}${activeBuffer.file.name} — sprout`;
-  }, [activeBufferId, buffersRef]);
+    const indicator = activeBuffer.isModified ? '● ' : '';
+    document.title = `${indicator}${activeBuffer.file.name} — ledit`;
+  }, [activeBufferId, buffers]);
 }

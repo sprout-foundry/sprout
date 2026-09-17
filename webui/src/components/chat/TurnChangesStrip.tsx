@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronRight, FileDiff, Undo2, X } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
-import { showThemedConfirm } from '../ThemedDialog';
-import { useLog } from '../../utils/log';
+import type { FileEdit } from '@sprout/ui';
+import { ChevronDown, ChevronRight, FileDiff, Undo2, X } from 'lucide-react';
 import { getChangeDiff, revertChanges } from '../../services/api/changesApi';
 import { clientFetch } from '../../services/clientSession';
-import type { FileEdit } from '@sprout/ui';
+import { classifyChangeOp, describeRevertOutcome } from '../../utils/changes';
+import { useLog } from '../../utils/log';
+import { showThemedConfirm } from '../ThemedDialog';
 import './TurnChangesStrip.css';
 
 /** Safety margin subtracted from the first event's server timestamp before
@@ -38,15 +39,14 @@ interface TurnChangesStripProps {
   onReviewChange: (path: string, diff: { stats?: string; diff?: string }) => void;
 }
 
-const OP_CHIP: Record<string, string> = {
-  created: 'op-create',
-  write: 'op-create',
-  modified: 'op-edit',
-  edit: 'op-edit',
-  deleted: 'op-delete',
-  delete: 'op-delete',
-  shell_bulk: 'op-bulk',
-};
+// Op chip class per action, derived from the shared vocabulary so the
+// two change UIs (strip + panel) can't drift apart on colors/labels.
+const OP_CHIP_CLASS: Record<string, string> = Object.fromEntries(
+  ['create', 'created', 'write', 'edit', 'modified', 'delete', 'deleted', 'bulk', 'shell_bulk'].map((op) => [
+    op,
+    `op-${classifyChangeOp(op)}`,
+  ]),
+);
 
 function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChange }: TurnChangesStripProps) {
   const [expanded, setExpanded] = useState(false);
@@ -102,7 +102,9 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
       // so an unadjusted floor can miss the change that emitted the event.
       const since = new Date(Date.parse(firstServerTs) - SINCE_MARGIN_MS).toISOString();
       const res = await revertChanges(clientFetch, { since });
-      log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
+      const outcome = describeRevertOutcome(res);
+      if (outcome.level === 'error') log.error(outcome.message, { title: 'Agent Changes' });
+      else log.info(outcome.message, { title: 'Agent Changes' });
       setDismissedFor(queryId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -161,7 +163,7 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
         <div className="tcs-body">
           {turnEdits.map((e) => (
             <div key={`${e.path}-${e.action}`} className="tcs-row">
-              <span className={`tcs-op ${OP_CHIP[e.action] ?? 'op-edit'}`}>{e.action}</span>
+              <span className={`tcs-op ${OP_CHIP_CLASS[e.action] ?? 'op-edit'}`}>{e.action}</span>
               <button
                 type="button"
                 className="tcs-path"

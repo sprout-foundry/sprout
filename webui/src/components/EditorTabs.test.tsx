@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { notificationBus } from '../services/notificationBus';
 import EditorTabs from './EditorTabs';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ vi.mock('lucide-react', () => {
     'Plus',
     'GitBranch',
     'Pencil',
+    'RefreshCw',
     'Trash2',
     'ImageIcon',
     'Video',
@@ -100,6 +102,14 @@ vi.mock('./ThemedDialog', () => ({
   showThemedConfirm: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../services/fileAccess', () => ({
+  readFileWithConsent: vi.fn(),
+}));
+
+vi.mock('../services/notificationBus', () => ({
+  notificationBus: { notify: vi.fn() },
+}));
+
 let rafId = 0;
 beforeAll(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -146,9 +156,11 @@ const mockSwitchPane = vi.fn();
 const mockReorderBuffers = vi.fn();
 const mockMoveBufferToPane = vi.fn();
 const mockToggleBufferPin = vi.fn();
+const mockReloadBufferFromDisk = vi.fn();
 
 const defaultMockEditorManager = {
   buffers: new Map<string, any>(),
+  buffersRef: { current: new Map<string, any>() },
   panes: [{ id: 'pane-1', bufferId: null, isActive: true }],
   activeBufferId: null,
   activePaneId: 'pane-1',
@@ -158,6 +170,7 @@ const defaultMockEditorManager = {
   reorderBuffers: mockReorderBuffers,
   moveBufferToPane: mockMoveBufferToPane,
   toggleBufferPin: mockToggleBufferPin,
+  reloadBufferFromDisk: mockReloadBufferFromDisk,
 };
 
 const mockUseEditorManager = useEditorManager as vi.MockedFunction<typeof useEditorManager>;
@@ -1114,5 +1127,140 @@ describe('EditorTabs chat session delete context menu', () => {
       .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
       .find((item) => item.textContent?.includes('Delete Chat'));
     expect(deleteItem).toBeUndefined();
+  });
+});
+
+describe('reload from disk affordances', () => {
+  test('conflicted buffer shows a reload badge button that reloads from disk on click', async () => {
+    const { readFileWithConsent } = await import('../services/fileAccess');
+    const buf = makeMockBuffer('buf-1', 'pane-1', {
+      isModified: true,
+      externallyModified: true,
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    (readFileWithConsent as any).mockResolvedValue({ ok: true, text: async () => 'disk version' });
+
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const badge = container!.querySelector('.tab-externally-modified') as HTMLButtonElement;
+    expect(badge).toBeTruthy();
+    expect(badge.getAttribute('aria-label')).toContain('Reload');
+
+    await act(async () => {
+      badge.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockReloadBufferFromDisk).toHaveBeenCalledWith('buf-1', 'disk version');
+  });
+
+  test('badge click on a conflicted buffer acknowledges the modified state and notifies', async () => {
+    const { readFileWithConsent } = await import('../services/fileAccess');
+    const buf = makeMockBuffer('buf-1', 'pane-1', {
+      isModified: true,
+      externallyModified: true,
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    (readFileWithConsent as any).mockResolvedValue({ ok: true, text: async () => 'disk' });
+
+    renderEditorTabs({ paneId: 'pane-1' });
+    const badge = container!.querySelector('.tab-externally-modified') as HTMLButtonElement;
+
+    await act(async () => {
+      badge.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The modified-buffer branch of the handler fires the disclosure toast.
+    expect((notificationBus as any).notify).toHaveBeenCalledWith(
+      'info',
+      'Reloaded from disk',
+      expect.stringContaining('discarded'),
+      expect.anything(),
+    );
+  });
+
+  test('clean buffer shows no badge (auto-reload owns it)', () => {
+    const buf = makeMockBuffer('buf-1', 'pane-1', { isModified: false });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+    expect(container!.querySelector('.tab-externally-modified')).toBeNull();
+  });
+
+  test('context menu offers "Reload from disk" for a conflicted file tab', () => {
+    const buf = makeMockBuffer('buf-1', 'pane-1', {
+      isModified: true,
+      externallyModified: true,
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const texts = menus.flatMap((m) => getMenuTexts(m));
+    expect(texts.some((t) => t.includes('Reload from disk'))).toBe(true);
+  });
+
+  test('context menu hides "Reload from disk" for a modified buffer without a conflict', () => {
+    const buf = makeMockBuffer('buf-1', 'pane-1', {
+      isModified: true,
+      externallyModified: false,
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const texts = menus.flatMap((m) => getMenuTexts(m));
+    expect(texts.some((t) => t.includes('Reload from disk'))).toBe(false);
+  });
+
+  test('context menu shows "Reload from disk" for a clean file tab (harmless refresh)', () => {
+    const buf = makeMockBuffer('buf-1', 'pane-1', { isModified: false });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      buffersRef: { current: new Map([['buf-1', buf]]) },
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    fireContextMenu(tab, 100, 200);
+
+    const menus = getContextMenuElements();
+    const texts = menus.flatMap((m) => getMenuTexts(m));
+    expect(texts.some((t) => t.includes('Reload from disk'))).toBe(true);
   });
 });

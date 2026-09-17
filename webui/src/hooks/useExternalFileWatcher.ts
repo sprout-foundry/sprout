@@ -92,17 +92,23 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
 
       for (const result of response.modified) {
         const deleted = result.size === 0 && result.mod_time === 0;
-        mtimes.set(result.path, result.mod_time);
 
         if (!seenOnce.has(result.path)) {
           seenOnce.add(result.path);
+          mtimes.set(result.path, result.mod_time);
           continue;
         }
 
-        // Skip notification if this file was just saved from editor (within cooldown)
+        // Skip notification if this file was just saved from editor (within cooldown).
+        // Crucially, the new mtime is NOT learned while suppressed: the next poll
+        // re-reports the change after the cooldown expires. Learning it here would
+        // swallow a write that landed during the window (e.g. the agent or a build
+        // tool touching the file seconds after the editor saved) — the change would
+        // then surface only on the *following* write, reading as a random revert.
         const lastFired = cooldowns.get(result.path) || 0;
         if (now - lastFired < COOLDOWN_MS) continue;
 
+        mtimes.set(result.path, result.mod_time);
         cooldowns.set(result.path, now);
 
         document.dispatchEvent(

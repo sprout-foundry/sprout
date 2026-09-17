@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { Check } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import './Dropdown.css';
 
@@ -24,11 +25,20 @@ interface DropdownProps {
   isOpen: boolean;
 }
 
+/**
+ * Modal picker shown for agent dropdown prompts (ui:show_dropdown).
+ * ARIA: the search input acts as an editable combobox whose popup is a
+ * listbox (WAI-ARIA APG combobox pattern). DOM focus stays on the input
+ * while aria-activedescendant points at the highlighted option, so screen
+ * readers announce options as the user arrows through them.
+ */
 function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps): JSX.Element | null {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filteredItems, setFilteredItems] = useState(items);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   // Filter items based on search query
   useEffect(() => {
@@ -54,6 +64,14 @@ function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps)
       searchInputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Keep the highlighted option visible while navigating with the keyboard.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const active = list.querySelector(`#${CSS.escape(`${listboxId}-opt-${selectedIndex}`)}`);
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, listboxId]);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
@@ -99,28 +117,27 @@ function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps)
     onSelect(item);
   };
 
-  const getItemCountDisplay = () => {
-    if (!options.showCounts) return '';
-    return `${filteredItems.length} items`;
-  };
-
-  const getMaxHeight = () => {
-    if (options.maxHeight) return `${options.maxHeight}px`;
-    return '400px'; // default max height
-  };
+  const countDisplay = options.showCounts ? `${filteredItems.length} items` : '';
+  const maxHeight = options.maxHeight ? `${options.maxHeight}px` : '400px';
 
   if (!isOpen) return null;
 
   return (
     <div className="dropdown-overlay" onClick={onCancel}>
-      <div className="dropdown-container" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="dropdown-container"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={options.prompt}
+      >
         {/* Header */}
         <div className="dropdown-header">
           <div className="dropdown-prompt">{options.prompt}</div>
-          {getItemCountDisplay() && <div className="dropdown-count">{getItemCountDisplay()}</div>}
+          {countDisplay && <div className="dropdown-count">{countDisplay}</div>}
         </div>
 
-        {/* Search */}
+        {/* Search — editable combobox controlling the listbox below */}
         <div className="dropdown-search">
           <input
             ref={searchInputRef}
@@ -130,33 +147,65 @@ function Dropdown({ items, options, onSelect, onCancel, isOpen }: DropdownProps)
             onKeyDown={handleKeyDown}
             placeholder={options.searchPrompt || 'Search...'}
             className="dropdown-search-input"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listboxId}
+            aria-activedescendant={filteredItems.length > 0 ? `${listboxId}-opt-${selectedIndex}` : undefined}
+            aria-autocomplete="list"
+            aria-label={options.searchPrompt || 'Search options'}
           />
         </div>
 
         {/* Items */}
-        <div className="dropdown-items" style={{ maxHeight: getMaxHeight() }}>
+        <div
+          ref={listRef}
+          id={listboxId}
+          className="dropdown-items"
+          role="listbox"
+          aria-label={options.prompt}
+          style={{ maxHeight }}
+        >
           {filteredItems.length === 0 ? (
             <div className="dropdown-no-results">No matching items found</div>
           ) : (
-            filteredItems.map((item, index) => (
-              <div
-                key={item.id}
-                className={`dropdown-item ${index === selectedIndex ? 'selected' : ''}`}
-                onClick={() => handleItemClick(item, index)}
-              >
-                <div className="dropdown-item-display">{item.display}</div>
-              </div>
-            ))
+            filteredItems.map((item, index) => {
+              const isSelected = index === selectedIndex;
+              return (
+                <div
+                  key={item.id}
+                  id={`${listboxId}-opt-${index}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  className={`dropdown-item ${isSelected ? 'selected' : ''}`}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  onClick={() => handleItemClick(item, index)}
+                >
+                  <span className="dropdown-item-display">{item.display}</span>
+                  {isSelected && (
+                    <span className="dropdown-item-check" aria-hidden="true">
+                      <Check size={16} />
+                    </span>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
 
         {/* Footer */}
-        <div className="dropdown-footer">
+        <div className="dropdown-footer" aria-hidden="true">
           <div className="dropdown-help">
-            <span>↑↓ Navigate</span>
-            <span>Enter Select</span>
-            <span>Esc Cancel</span>
-            <span>Search Filter</span>
+            <span>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> Navigate
+            </span>
+            <span>
+              <kbd>↵</kbd> Select
+            </span>
+            <span>
+              <kbd>Esc</kbd> Cancel
+            </span>
+            <span>Type to filter</span>
           </div>
         </div>
       </div>

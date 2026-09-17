@@ -17,6 +17,8 @@ import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
+import { readFileWithConsent } from '../services/fileAccess';
+import { notificationBus } from '../services/notificationBus';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
@@ -74,6 +76,7 @@ function EditorTabs({
     moveBufferToPane,
     toggleBufferPin,
     openWorkspaceBuffer,
+    reloadBufferFromDisk,
   } = useEditorManager();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -384,6 +387,60 @@ function EditorTabs({
     action();
   };
 
+  // ── Reload from disk ──────────────────────────────────────────
+  // Badge click / context-menu action: take the on-disk version of the
+  // file, discarding this buffer's unsaved edits. Two regimes:
+  //  - clean buffer: read + reloadBufferFromDisk (silent, cursor-free —
+  //    the buffer is not mounted in any view if inactive; if active, the
+  //    `file:auto-reloaded` pipeline in useEditorFileIO applies a ranged
+  //    CodeMirror replacement that maps the cursor through the diff).
+  //  - modified buffer with an external conflict: same reload, plus the
+  //    conflict flag clears — this click IS the arbitration. Guarded so
+  //    it never runs for a modified buffer WITHOUT a pending conflict,
+  //    where it would silently destroy typed work (that case belongs to
+  //    the conflict dialog).
+  const reloadFromDisk = useCallback(
+    async (bufferId: string) => {
+      const buf = buffersRef.current.get(bufferId);
+      if (!buf || buf.kind !== 'file') return;
+      if (buf.file.path.startsWith('__workspace/')) return;
+      if (buf.isModified && !buf.externallyModified) return;
+
+      try {
+        const response = await readFileWithConsent(buf.file.path);
+        if (!response.ok) {
+          notificationBus.notify('warning', 'Reload Failed', `Could not read ${buf.file.name} from disk.`, 5000);
+          return;
+        }
+        const content = await response.text();
+
+        // Re-validate after the async read: the buffer may have been
+        // closed, switched, or typed into meanwhile.
+        const fresh = buffersRef.current.get(bufferId);
+        if (!fresh || fresh.kind !== 'file') return;
+        if (fresh.isModified && !fresh.externallyModified) return;
+
+        reloadBufferFromDisk(bufferId, content);
+        document.dispatchEvent(
+          new CustomEvent('file:auto-reloaded', {
+            detail: { bufferId, content },
+          }),
+        );
+        if (fresh.isModified) {
+          notificationBus.notify(
+            'info',
+            'Reloaded from disk',
+            `${fresh.file.name} reloaded — unsaved changes were discarded in favor of the disk version.`,
+            5000,
+          );
+        }
+      } catch (err) {
+        notificationBus.notify('error', 'Reload Failed', String(err instanceof Error ? err.message : err), 5000);
+      }
+    },
+    [buffersRef, reloadBufferFromDisk],
+  );
+
   return (
     <div className={`editor-tabs ${compact ? 'compact' : ''}`}>
       <div
@@ -494,13 +551,17 @@ function EditorTabs({
                       </span>
                     )}
                     {buffer.externallyModified && (
-                      <span
+                      <button
                         className="tab-externally-modified"
-                        title="File changed on disk"
-                        aria-label="Changed on disk"
+                        title="File changed on disk — click to reload from disk"
+                        aria-label={`Reload ${buffer.file.name} from disk (changed externally)`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void reloadFromDisk(buffer.id);
+                        }}
                       >
                         <RefreshCw size={11} aria-hidden="true" />
-                      </span>
+                      </button>
                     )}
                     {/* Pin button hidden on chat tabs — pin/unpin a chat
                      * isn't a typical workflow, and the pinned-default-chat
@@ -601,6 +662,22 @@ function EditorTabs({
               <Eye size={14} />
               <span>Reveal tab</span>
             </button>
+            {/* Take the on-disk version: shown for file buffers with an
+             * external-change conflict (click = arbitration) or a clean
+             * buffer (harmless refresh). Deliberately NOT shown for a
+             * modified buffer without a conflict — that would silently
+             * destroy unsaved edits; the conflict dialog owns that case. */}
+            {activeContextBuffer.kind === 'file' &&
+              !activeContextBuffer.file.path.startsWith('__workspace/') &&
+              (!activeContextBuffer.isModified || activeContextBuffer.externallyModified) && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleContextAction(() => void reloadFromDisk(activeContextBuffer.id))}
+                >
+                  <RefreshCw size={14} />
+                  <span>Reload from disk{activeContextBuffer.isModified ? ' (discard my changes)' : ''}</span>
+                </button>
+              )}
             {availablePaneTargets.map((pane, index) => (
               <button
                 key={pane.id}

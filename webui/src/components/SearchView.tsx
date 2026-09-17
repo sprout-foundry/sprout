@@ -127,6 +127,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     setSemanticThreshold,
     indexStatus,
     isBuilding,
+    embeddingsEnabled,
     expandedFiles,
     toggleFile,
     handleSearchChange,
@@ -185,18 +186,20 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         >
           <span className="option-icon">.*</span>
         </button>
-        <button
-          className={`search-option-btn ${semanticMode ? 'active' : ''}`}
-          onClick={toggleSemanticMode}
-          title="Semantic search (finds code by meaning, not exact text)"
-          aria-pressed={semanticMode}
-        >
-          <Brain size={14} />
-        </button>
+        {embeddingsEnabled && (
+          <button
+            className={`search-option-btn ${semanticMode ? 'active' : ''}`}
+            onClick={toggleSemanticMode}
+            title="Semantic search (experimental — finds code by meaning, not exact text)"
+            aria-pressed={semanticMode}
+          >
+            <Brain size={14} />
+          </button>
+        )}
       </div>
 
       {/* Semantic index status indicator */}
-      {semanticMode && indexStatus && (
+      {semanticMode && embeddingsEnabled && indexStatus && (
         <div className="search-semantic-status">
           {isBuilding || indexStatus.building ? (
             <>
@@ -223,7 +226,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       )}
 
       {/* Semantic threshold control */}
-      {semanticMode && (
+      {semanticMode && embeddingsEnabled && (
         <div className="search-semantic-threshold">
           <label className="search-semantic-threshold-label">
             Min relevance: {(semanticThreshold * 100).toFixed(0)}%

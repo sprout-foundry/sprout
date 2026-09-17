@@ -615,3 +615,344 @@ func TestValueSlug(t *testing.T) {
 	assert.Equal(t, "v13", valueSlug("13px"))
 	assert.Equal(t, "value", valueSlug("---"))
 }
+
+// -----------------------------------------------------------------------------
+// §5b apply half — PlanSyncApply (TODO item 5.4)
+//
+// The apply planning core is pure: given a report (and a reader for current
+// design-file bytes) it returns the safe-subset writes plus the proposals. These
+// tests cover the three §5b fixtures at the core level, the §5e design/-only
+// confinement, and the inferred-proposal behaviour.
+// -----------------------------------------------------------------------------
+
+// syncFileReader returns a SyncFileReader over root.
+func syncFileReader(root string) SyncFileReader {
+	return func(rel string) ([]byte, bool) {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, false
+		}
+		return data, true
+	}
+}
+
+// syncApplyPlanFor analyses the touched files and plans the apply.
+func syncApplyPlanFor(t *testing.T, root string, touched []SyncFileInput) *SyncApplyPlan {
+	t.Helper()
+	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: touched})
+	require.NoError(t, err)
+	return PlanSyncApply(rep, syncFileReader(root))
+}
+
+func TestPlanSyncApply_NilReportIsAnEmptyPlan(t *testing.T) {
+	plan := PlanSyncApply(nil, nil)
+	require.NotNil(t, plan)
+	assert.Equal(t, "apply", plan.Mode)
+	assert.Empty(t, plan.Writes)
+	assert.Empty(t, plan.Proposals)
+	assert.True(t, plan.IsConfinedToDesign())
+	assert.NotEmpty(t, plan.Notes)
+}
+
+func TestPlanSyncApply_EmptyReportIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+	plan := syncApplyPlanFor(t, root, nil)
+	assert.Empty(t, plan.Writes, "nothing to apply is a valid, empty plan")
+	assert.Empty(t, plan.Proposals)
+	assert.Equal(t, 0, plan.AppliedCount)
+}
+
+// Fixture 1: a literal token revalue → the DTCG entry is rewritten in the named
+// file; the write is design/-confined; a second plan over the updated tree is a
+// byte-identical (no-op) rewrite.
+func TestPlanSyncApply_LiteralRevalueRewritesDTCGEntry(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary: #ff0000; }\n")},
+	})
+	require.Len(t, plan.Writes, 1)
+	w := plan.Writes[0]
+	assert.Equal(t, "design/tokens/color.tokens.json", w.Path)
+	assert.Equal(t, SyncPlanningUpdateToken, w.Op)
+	assert.Equal(t, "color.brand.primary", w.Token)
+	assert.False(t, w.Created)
+	assert.True(t, plan.IsConfinedToDesign())
+
+	// The planned bytes carry the new value and leave the other entry alone.
+	assert.Contains(t, string(w.Content), "#ff0000")
+	assert.Contains(t, string(w.Content), `"dimension"`, "the unrelated dimension entries survive")
+	assert.Contains(t, string(w.Content), "8px")
+
+	// Write it, then re-analyze: the value now matches, so the plan re-produces
+	// byte-identical content (an idempotent, no-op rewrite).
+	syncWrite(t, root, w.Path, string(w.Content))
+	plan2 := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary: #ff0000; }\n")},
+	})
+	require.Len(t, plan2.Writes, 1)
+	assert.Equal(t, w.Content, plan2.Writes[0].Content, "a second apply rewrites byte-identical bytes (no-op)")
+}
+
+// Fixture 2: a new route/screen → a skeleton wireframe + a flow edge, both with
+// draft status; the second plan is a no-op.
+func TestPlanSyncApply_StructuralCreatesWireframeAndFlowEdge(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	router := `export const routes = [
+  { path: "/check-deposit", element: <CheckDeposit /> },
+];` + "\n"
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{{Path: "src/routes.tsx", Content: []byte(router)}})
+	require.Len(t, plan.Writes, 2, "one wireframe + one flow edge")
+
+	var wf, flow *SyncApplyWrite
+	for i := range plan.Writes {
+		switch plan.Writes[i].Op {
+		case SyncPlanningAddWireframe:
+			wf = &plan.Writes[i]
+		case SyncPlanningAddFlowEdge:
+			flow = &plan.Writes[i]
+		}
+	}
+	require.NotNil(t, wf)
+	require.NotNil(t, flow)
+
+	assert.Equal(t, "design/wireframes/check-deposit.svg", wf.Path)
+	assert.Equal(t, "check-deposit", wf.Stem)
+	assert.Equal(t, FlowDraftStatus, wf.Status, "a §5b-created wireframe is a draft")
+	assert.True(t, wf.Created)
+	assert.Contains(t, string(wf.Content), "check-deposit")
+	assert.Contains(t, string(wf.Content), FlowDraftStatus)
+
+	assert.Equal(t, "design/flows/sign-up.mmd", flow.Path)
+	assert.Equal(t, FlowDraftStatus, flow.Status)
+	assert.Contains(t, flow.Edge, "check-deposit")
+	assert.Contains(t, string(flow.Content), flow.Edge)
+	assert.Contains(t, string(flow.Content), "login --> home", "the existing edge is preserved")
+
+	// Apply, then re-analyze: nothing further to plan.
+	syncWrite(t, root, wf.Path, string(wf.Content))
+	syncWrite(t, root, flow.Path, string(flow.Content))
+	plan2 := syncApplyPlanFor(t, root, []SyncFileInput{{Path: "src/routes.tsx", Content: []byte(router)}})
+	assert.Empty(t, plan2.Writes, "a second apply is a no-op")
+	assert.Empty(t, plan2.Proposals)
+}
+
+// Fixture 3: raw-hex styling → an inferred proposal; apply plans NO write for it.
+func TestPlanSyncApply_InferredDeltaIsAProposalNotAWrite(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/Badge.tsx", Content: []byte("export const Badge = () => <div style={{color:'#ff00ff'}} />;\n")},
+	})
+	assert.Empty(t, plan.Writes, "no token may be created without the literal/structural confidence bar")
+	require.Len(t, plan.Proposals, 1)
+	p := plan.Proposals[0]
+	assert.Equal(t, DeltaBasisInferred, p.Basis)
+	assert.Equal(t, "new-token", p.ProposalKind)
+	assert.Contains(t, p.Reason, "inferred")
+	assert.True(t, plan.IsConfinedToDesign())
+}
+
+// A bare `{token.path}` reference (a structural token delta) carries no
+// concrete value, so it is a proposal rather than an empty-value write.
+func TestPlanSyncApply_BareTokenReferenceIsAProposal(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/card.css", Content: []byte(".btn { color: {color.neutral.border}; }\n")},
+	})
+	assert.Empty(t, plan.Writes, "a value-less token delta must not be invented")
+	require.Len(t, plan.Proposals, 1)
+	assert.Contains(t, plan.Proposals[0].Reason, "no concrete value")
+}
+
+// §5e: every write in a plan produced from a mixed report is design/-confined.
+func TestPlanSyncApply_AllWritesConfinedToDesign(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{--color-brand-primary:#ff0000;}\n.btn{background:#ff00ff;padding:13px;}\n")},
+		{Path: "src/routes.tsx", Content: []byte(`{ path: "/check-deposit", element: <CheckDeposit /> }` + "\n")},
+	})
+	require.NotEmpty(t, plan.Writes)
+	assert.True(t, plan.IsConfinedToDesign())
+	for _, w := range plan.Writes {
+		assert.True(t, designConfinedPath(w.Path), "write %q must be inside design/", w.Path)
+	}
+	for _, p := range plan.WritePaths {
+		assert.True(t, designConfinedPath(p), "write path %q must be inside design/", p)
+	}
+}
+
+// The plan writes each file once (dedup) even when several deltas name it.
+func TestPlanSyncApply_DedupsWritesPerFile(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+	syncWrite(t, root, "design/wireframes/login.svg",
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><rect id="go" data-nav="home"/></svg>`)
+
+	plan := syncApplyPlanFor(t, root, []SyncFileInput{
+		{Path: "src/a.tsx", Content: []byte(`<Link to="/settings">S</Link>` + "\n")},
+		{Path: "src/b.tsx", Content: []byte(`<Link to="/settings">S</Link>` + "\n")},
+	})
+	seen := map[string]int{}
+	for _, w := range plan.Writes {
+		seen[w.Path]++
+	}
+	for p, n := range seen {
+		assert.Equal(t, 1, n, "file %q written once", p)
+	}
+}
+
+// Determinism: the same report plans byte-identical writes across runs and
+// across touched-file input order.
+func TestPlanSyncApply_Deterministic(t *testing.T) {
+	root := t.TempDir()
+	syncWriteFixtureTree(t, root)
+	inputs := []SyncFileInput{
+		{Path: "src/theme.css", Content: []byte(":root{--color-brand-primary:#ff0000;}\n.btn{background:#ff00ff;padding:13px;}\n")},
+		{Path: "src/routes.tsx", Content: []byte(`{ path: "/check-deposit", element: <CheckDeposit /> }` + "\n")},
+	}
+	var reference string
+	for run := 0; run < 6; run++ {
+		ordered := append([]SyncFileInput{}, inputs...)
+		if run%2 == 1 {
+			ordered[0], ordered[1] = ordered[1], ordered[0]
+		}
+		plan := syncApplyPlanFor(t, root, ordered)
+		data, err := json.Marshal(plan.Writes)
+		require.NoError(t, err)
+		got := string(data)
+		if run == 0 {
+			reference = got
+			continue
+		}
+		assert.Equal(t, reference, got, "run %d drifted", run+1)
+	}
+}
+
+// The created skeleton wireframe is well-formed XML and parses as a wireframe
+// (structure-only; no text is expected yet).
+func TestSkeletonWireframeSVGIsWellFormed(t *testing.T) {
+	svg := skeletonWireframeSVG("check-deposit")
+	findings := ValidateWireframe("design/wireframes/check-deposit.svg", []byte(svg),
+		[]string{"login", "home", "check-deposit"}, []Frame{{Name: "mobile", Width: 390, Height: 844}})
+	for _, f := range findings {
+		assert.NotEqual(t, "svg_wellformed", f.Rule, "the skeleton must be well-formed XML: %s", f.Message)
+		assert.NotEqual(t, SeverityError, f.Severity, "no hard error from the skeleton: %s", f.Message)
+	}
+	assert.Contains(t, svg, FlowDraftStatus)
+}
+
+// appendFlowEdge is idempotent and preserves existing content.
+func TestAppendFlowEdge(t *testing.T) {
+	base := []byte("flowchart TD\n  login --> home\n")
+	got := string(appendFlowEdge(base, "home --> check-deposit"))
+	assert.Equal(t, "flowchart TD\n  login --> home\n  home --> check-deposit\n", got)
+	// An already-present edge is not re-added.
+	assert.Equal(t, string(base), string(appendFlowEdge(base, "login --> home")))
+	// A document with no declaration gains one.
+	got = string(appendFlowEdge([]byte("  a --> b\n"), "b --> c"))
+	assert.True(t, strings.HasPrefix(got, "flowchart TD\n"))
+}
+
+// rewriteDTCEntry / addDTCEntry are surgical and deterministic.
+func TestRewriteAndAddDTCEntry(t *testing.T) {
+	doc := []byte("{\"color\":{\"brand\":{\"primary\":{\"$type\":\"color\",\"$value\":\"#0055ff\"}}}}")
+
+	out, ok, err := rewriteDTCEntry(doc, "color.brand.primary", SyncDelta{Evidence: "--x: #ff0000; (line 1)"})
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Contains(t, string(out), "#ff0000")
+	assert.Contains(t, string(out), `"$type": "color"`)
+
+	// An absent entry reports ok=false (the caller adds it).
+	_, ok, err = rewriteDTCEntry(doc, "color.brand.secondary", SyncDelta{Evidence: "--x: #ff0000; (line 1)"})
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	added, err := addDTCEntry(doc, "color.brand.secondary", SyncDelta{Evidence: "--x: #ff0000; (line 1)"})
+	require.NoError(t, err)
+	assert.Contains(t, string(added), "secondary")
+	assert.Contains(t, string(added), "#ff0000")
+	// Adding over an existing entry refuses rather than clobbering.
+	_, err = addDTCEntry(doc, "color.brand.primary", SyncDelta{Evidence: "--x: #ff0000; (line 1)"})
+	assert.Error(t, err)
+}
+
+// Re-encoding is deterministic (sorted keys, stable indent): two rewrites of the
+// same logical document produce identical bytes.
+func TestEncodeDTCDocumentDeterministic(t *testing.T) {
+	in := []byte("{\"b\":{\"y\":{\"$value\":\"1\"},\"x\":{\"$value\":\"2\"}},\"a\":{\"$value\":\"3\"}}")
+	d1, err := decodeDTCDocument(in)
+	require.NoError(t, err)
+	d2, err := decodeDTCDocument(in)
+	require.NoError(t, err)
+	b1, err := encodeDTCDocument(d1)
+	require.NoError(t, err)
+	b2, err := encodeDTCDocument(d2)
+	require.NoError(t, err)
+	assert.Equal(t, string(b1), string(b2))
+	// Keys are sorted.
+	assert.Less(t, strings.Index(string(b1), `"a"`), strings.Index(string(b1), `"b"`))
+}
+
+// TestDesignConfinedPath pins the §5e confinement predicate: only paths that
+// genuinely resolve inside design/ pass, and every escaping shape is rejected.
+func TestDesignConfinedPath(t *testing.T) {
+	inside := []string{
+		"design/tokens/color.tokens.json",
+		"design/wireframes/login.svg",
+		"design/flows/sign-up.mmd",
+		"./design/x.json",
+		"src/../design/x.json", // resolves inside design/
+	}
+	outside := []string{
+		"",
+		".",
+		"designx/x.json", // a sibling of design/, not design/
+		"../design/x.json",
+		"design/../src/x.json",
+		"design/tokens/../../src/x.json",
+		"/abs/design/x.json",
+		"src/x.json",
+		"design-evil/x.json",
+	}
+	for _, p := range inside {
+		assert.True(t, designConfinedPath(p), "%q must be confined to design/", p)
+	}
+	for _, p := range outside {
+		assert.False(t, designConfinedPath(p), "%q must NOT be confined to design/", p)
+	}
+}
+
+// TestPlanSyncApply_RefusesEscapingWrite pins the §5e hard assertion at the pure
+// core: a delta that names an escaping path (traversal, sibling, absolute) is
+// dropped and reported, never planned.
+func TestPlanSyncApply_RefusesEscapingWrite(t *testing.T) {
+	for _, bad := range []string{"../design/x.tokens.json", "designx/x.tokens.json", "/abs/design/x.tokens.json"} {
+		report := &SyncReport{Mode: "apply", Deltas: []SyncDelta{{
+			Delta:       "token revalued",
+			Kind:        DeltaKindToken,
+			Basis:       DeltaBasisLiteral,
+			Confidence:  ConfidenceHigh,
+			DesignFiles: []string{bad},
+			SafeToApply: true,
+			Token:       "color.brand.primary",
+			TokenFile:   bad,
+			TokenEntry:  "color.brand.primary",
+			Evidence:    "--x: #ff0000; (line 1)",
+		}}}
+		plan := PlanSyncApply(report, nil)
+		assert.Empty(t, plan.Writes, "escaping path %q must not be written", bad)
+		assert.True(t, plan.IsConfinedToDesign())
+		require.NotEmpty(t, plan.Proposals)
+	}
+}

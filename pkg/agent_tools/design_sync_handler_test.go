@@ -24,7 +24,8 @@ import (
 // cover the ToolHandler seam: argument resolution, the touched-file default via
 // the sanctioned ListChanges seam and the explicit `files` override, Gate-1
 // prechecks (including off-workspace denial), the structured report, determinism
-// through the real filesystem, and the explicit refusal of apply mode (item 5.4).
+// through the real filesystem, and the apply-mode happy paths, proposals, §5e
+// design/-confinement, and Gate-1 on write paths (item 5.4).
 // ---------------------------------------------------------------------------
 
 // dsWrite writes rel (slash-separated) under root with parent directories.
@@ -473,7 +474,7 @@ func TestDesignSyncHandler_MissingTouchedFileIsSkipped(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Mode handling — apply is item 5.4 and must refuse explicitly
+// Mode handling — analyze (item 5.3) and apply (item 5.4)
 // ---------------------------------------------------------------------------
 
 func TestDesignSyncHandler_ModeDefaultsToAnalyze(t *testing.T) {
@@ -487,27 +488,235 @@ func TestDesignSyncHandler_ModeDefaultsToAnalyze(t *testing.T) {
 	require.NoError(t, err)
 	out := dsOutput(t, res)
 	assert.Equal(t, SyncModeAnalyze, out.Report.Mode)
+	assert.Nil(t, out.Apply, "analyze mode carries no apply result")
 }
 
-func TestDesignSyncHandler_ApplyModeRefusedExplicitly(t *testing.T) {
+// TestDesignSyncHandler_ApplyModeLiteralRewritesTokenFile is the §5b fixture 1
+// apply half: a token revalue in code → apply rewrites the DTCG entry, and a
+// second run is a no-op.
+func TestDesignSyncHandler_ApplyModeLiteralRewritesTokenFile(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{ --color-brand-primary: #ff0000; }\n")
+	before := dsTreeSnapshot(t, root)
+	h := &designSyncHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out := dsOutput(t, res)
+	require.NotNil(t, out.Apply, "apply mode carries the apply result")
+	assert.True(t, out.Apply.ImplementationUntouched, "§5e: apply never rewrites the implementation")
+	assert.Equal(t, []string{"design/tokens/color.tokens.json"}, out.Apply.Applied)
+	assert.Equal(t, 0, out.Apply.ProposalCount)
+
+	// The DTCG entry now carries the code's value.
+	tokenFile := dsReadFile(t, root, "design/tokens/color.tokens.json")
+	assert.Contains(t, tokenFile, "#ff0000")
+	assert.Contains(t, tokenFile, `"primary"`)
+	assert.Contains(t, res.Output, "design_sync (apply)")
+	assert.Contains(t, res.Output, "design/")
+
+	// The AC hard assertion: the workspace diff is confined to design/.
+	dsAssertDiffConfinedToDesign(t, before, dsTreeSnapshot(t, root))
+
+	// SECOND RUN: analyze reports the same declared var, but apply is a no-op —
+	// the file is unchanged and nothing more is written.
+	afterFirst := dsReadFile(t, root, "design/tokens/color.tokens.json")
+	res2, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.NoError(t, err)
+	out2 := dsOutput(t, res2)
+	require.NotNil(t, out2.Apply)
+	assert.Equal(t, afterFirst, dsReadFile(t, root, "design/tokens/color.tokens.json"),
+		"a second apply leaves the token file byte-identical")
+	require.Len(t, out2.Apply.Plan.Writes, 1, "the plan re-derives the same, byte-identical write")
+	assert.Equal(t, out.Apply.Plan.Writes[0].Content, out2.Apply.Plan.Writes[0].Content,
+		"the second plan's content is byte-identical (no-op)")
+}
+
+// TestDesignSyncHandler_ApplyModeStructuralCreatesWireframeAndFlow is the §5b
+// fixture 2 apply half: a new route/screen → apply creates a skeleton wireframe
+// and a flow edge, both with draft status.
+func TestDesignSyncHandler_ApplyModeStructuralCreatesWireframeAndFlow(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/routes.tsx", `export const routes = [
+  { path: "/login", element: <Login /> },
+  { path: "/check-deposit", element: <CheckDeposit /> },
+];
+`)
+	before := dsTreeSnapshot(t, root)
+	h := &designSyncHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/routes.tsx", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	out := dsOutput(t, res)
+	require.NotNil(t, out.Apply)
+
+	assert.Contains(t, out.Apply.Applied, "design/wireframes/check-deposit.svg")
+	assert.Contains(t, out.Apply.Applied, "design/flows/sign-up.mmd")
+
+	wf := dsReadFile(t, root, "design/wireframes/check-deposit.svg")
+	assert.Contains(t, wf, "viewBox", "the skeleton is a viewBox-only SVG")
+	assert.Contains(t, wf, design.FlowDraftStatus, "the created wireframe carries draft status")
+	assert.Contains(t, wf, "check-deposit")
+
+	flow := dsReadFile(t, root, "design/flows/sign-up.mmd")
+	assert.Contains(t, flow, "check-deposit", "the flow edge was added")
+	assert.Contains(t, flow, "login --> home", "the existing edge survives")
+
+	dsAssertDiffConfinedToDesign(t, before, dsTreeSnapshot(t, root))
+
+	// SECOND RUN: no-op.
+	res2, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/routes.tsx", "mode": "apply"})
+	require.NoError(t, err)
+	out2 := dsOutput(t, res2)
+	require.NotNil(t, out2.Apply)
+	assert.Empty(t, out2.Apply.Applied, "a second apply has nothing left to write")
+	assert.Empty(t, out2.Apply.Plan.Writes)
+}
+
+// TestDesignSyncHandler_ApplyModeInferredStaysAProposal is the §5b fixture 3
+// apply half: raw-hex styling → apply does NOT auto-create a token.
+func TestDesignSyncHandler_ApplyModeInferredStaysAProposal(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/Badge.tsx", "export const Badge = () => <div style={{color:'#ff00ff'}} />;\n")
+	h := &designSyncHandler{}
+
+	before := dsTreeSnapshot(t, root)
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/Badge.tsx", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	out := dsOutput(t, res)
+	require.NotNil(t, out.Apply)
+
+	assert.Empty(t, out.Apply.Applied, "an inferred delta is never auto-applied")
+	require.Equal(t, 1, out.Apply.ProposalCount)
+	require.Len(t, out.Apply.Plan.Proposals, 1)
+	assert.Equal(t, design.DeltaBasisInferred, out.Apply.Plan.Proposals[0].Basis)
+	assert.Equal(t, "new-token", out.Apply.Plan.Proposals[0].ProposalKind)
+	// Nothing was written at all: the tree is byte-identical.
+	assert.Equal(t, before, dsTreeSnapshot(t, root), "an inferred-only apply writes nothing")
+	assert.Contains(t, res.Output, "proposal")
+}
+
+// TestDesignSyncHandler_ApplyModeConfinesWritesToDesign is the AC hard
+// assertion: after apply on a mixed set, the workspace diff is confined to
+// design/.
+func TestDesignSyncHandler_ApplyModeConfinesWritesToDesign(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	// A UI file with all three bases: a literal revalue, a new route, and raw
+	// hex/magic spacing.
+	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n.btn{background:#ff00ff;padding:13px;}\n")
+	dsWrite(t, root, "src/routes.tsx", `{ path: "/check-deposit", element: <CheckDeposit /> }`+"\n")
+
+	before := dsTreeSnapshot(t, root)
+	h := &designSyncHandler{}
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/theme.css,src/routes.tsx", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	out := dsOutput(t, res)
+	require.NotNil(t, out.Apply)
+
+	// At least one write happened, so the confinement check is meaningful.
+	require.NotEmpty(t, out.Apply.Applied)
+	assert.True(t, out.Apply.Plan.IsConfinedToDesign())
+	for _, p := range out.Apply.Applied {
+		assert.True(t, designSyncDesignFile(p), "applied path %q must be inside design/", p)
+	}
+
+	// The hard assertion: every changed file is under design/.
+	after := dsTreeSnapshot(t, root)
+	changed := dsChangedPaths(before, after)
+	require.NotEmpty(t, changed, "apply should have written something")
+	for _, p := range changed {
+		assert.True(t, strings.HasPrefix(p, "design/"),
+			"design_sync --apply modified a file outside design/: %s", p)
+	}
+	// The touched code file itself is untouched.
+	assert.Contains(t, dsReadFile(t, root, "src/theme.css"), "#ff0000", "the implementation is not rewritten (§5e)")
+	assert.Contains(t, dsReadFile(t, root, "src/routes.tsx"), "/check-deposit")
+}
+
+// TestDesignSyncHandler_ApplyModeRefusesOffWorkspaceWrite proves §5e is
+// enforced even when a delta somehow names a non-design path: the plan refuses
+// it and the handler does not write outside design/.
+func TestDesignSyncHandler_ApplyModeRefusesOffWorkspaceWrite(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	dsFixtureTree(t, root)
 	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n")
 
-	// Snapshot the tree so we can assert apply wrote nothing.
-	before := dsTreeSnapshot(t, root)
+	// A hand-built report whose literal delta names a non-design token file:
+	// the pure core drops (refuses) the write, the handler writes nothing.
+	report := &design.SyncReport{
+		Mode: SyncModeApply,
+		Deltas: []design.SyncDelta{{
+			Delta:       "token color.brand.primary revalued in code",
+			Kind:        design.DeltaKindToken,
+			Basis:       design.DeltaBasisLiteral,
+			Confidence:  design.ConfidenceHigh,
+			DesignFiles: []string{"src/theme.css"},
+			SafeToApply: true,
+			Token:       "color.brand.primary",
+			TokenFile:   "src/theme.css", // off-design, must be refused
+			TokenEntry:  "color.brand.primary",
+			CodeFiles:   []string{"src/theme.css"},
+			Evidence:    "--color-brand-primary: #ff0000; (line 1)",
+		}},
+	}
+	plan := design.PlanSyncApply(report, nil)
+	assert.Empty(t, plan.Writes, "a non-design write is dropped")
+	require.Len(t, plan.Proposals, 1, "the refused delta is reported, not written")
+	assert.Contains(t, plan.Proposals[0].Reason, "outside design/")
+	assert.True(t, plan.IsConfinedToDesign())
 
-	h := &designSyncHandler{}
-	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
-		map[string]any{"files": "src/theme.css", "mode": "apply"})
-	require.Error(t, err, "apply is item 5.4 and must refuse explicitly")
-	require.True(t, res.IsError)
-	assert.Contains(t, res.Output, "mode=apply is not available yet")
-	assert.Contains(t, res.Output, "not available")
-	assert.Equal(t, before, dsTreeSnapshot(t, root), "a refused apply writes nothing")
+	// The handler path treats the refusal as a proposal, writing nothing.
+	before := dsTreeSnapshot(t, root)
+	applied, err := writeSyncPlan(newTestCtx(root), newTestEnv(t, root), plan)
+	require.NoError(t, err)
+	assert.Empty(t, applied)
+	assert.Equal(t, before, dsTreeSnapshot(t, root))
 }
 
+// TestDesignSyncHandler_ApplyModeGate1Deny proves Gate-1 is enforced on the
+// apply path too: a deny scoped to the design/ token file blocks the write.
+func TestDesignSyncHandler_ApplyModeGate1Deny(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n")
+	h := &designSyncHandler{}
+
+	env := newTestEnv(t, root)
+	// Deny the token file write (a path-scoped deny), leaving the touched code
+	// path allowed.
+	env.FileAccessClassifier = dsDenyPathClassifier{substr: "color.tokens.json"}
+
+	before := dsTreeSnapshot(t, root)
+	res, err := h.Execute(newTestCtx(root), env,
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.Error(t, err, "a Gate-1 deny on an apply write path is a hard failure")
+	require.True(t, res.IsError)
+	assert.Contains(t, res.Output, "design_sync blocked")
+	assert.Equal(t, before, dsTreeSnapshot(t, root), "a denied apply writes nothing")
+}
+
+// TestDesignSyncHandler_ApplyModeUnknownModeStillErrors guards the mode switch.
 func TestDesignSyncHandler_UnknownModeIsAnError(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -518,6 +727,75 @@ func TestDesignSyncHandler_UnknownModeIsAnError(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, res.IsError)
 	assert.Contains(t, res.Output, "unknown mode")
+}
+
+// dsReadFile reads a workspace-relative file (slash path) as a string.
+func dsReadFile(t *testing.T, root, rel string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	require.NoError(t, err, "reading %s", rel)
+	return string(data)
+}
+
+// dsChangedPaths returns the workspace-relative slash paths whose content
+// differs between two snapshots (or that appear in only one).
+func dsChangedPaths(before, after []string) []string {
+	parse := func(entries []string) map[string]string {
+		out := map[string]string{}
+		for _, e := range entries {
+			idx := strings.Index(e, "=")
+			if idx < 0 {
+				continue
+			}
+			out[e[:idx]] = e[idx+1:]
+		}
+		return out
+	}
+	b, a := parse(before), parse(after)
+	seen := map[string]bool{}
+	for k := range b {
+		seen[k] = true
+	}
+	for k := range a {
+		seen[k] = true
+	}
+	var changed []string
+	for k := range seen {
+		if b[k] != a[k] {
+			changed = append(changed, k)
+		}
+	}
+	sort.Strings(changed)
+	return changed
+}
+
+// dsAssertDiffConfinedToDesign asserts that every path changed between two
+// snapshots is inside design/ — the SP-140-5 AC hard assertion that
+// design_sync --apply never modifies files outside design/.
+func dsAssertDiffConfinedToDesign(t *testing.T, before, after []string) {
+	t.Helper()
+	changed := dsChangedPaths(before, after)
+	require.NotEmpty(t, changed, "apply should have changed something")
+	for _, p := range changed {
+		assert.True(t, strings.HasPrefix(p, "design/"),
+			"design_sync --apply modified a file outside design/: %s", p)
+	}
+}
+
+// TestDesignSyncHandler_AnalyzeModeStillWritesNothing re-asserts that adding
+// apply did not make analyze write: analyze is read-only.
+func TestDesignSyncHandler_AnalyzeModeStillWritesNothing(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n")
+	before := dsTreeSnapshot(t, root)
+
+	h := &designSyncHandler{}
+	_, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
+		map[string]any{"files": "src/theme.css", "mode": "analyze"})
+	require.NoError(t, err)
+	assert.Equal(t, before, dsTreeSnapshot(t, root))
 }
 
 // ---------------------------------------------------------------------------
@@ -693,4 +971,146 @@ func TestDesignSyncHandler_NotInSharedList(t *testing.T) {
 	assert.NotContains(t, string(all), "&designSyncHandler{}",
 		"design_sync must be registered via registerDesignSyncTools(), not the shared list")
 	assert.Contains(t, string(all), "registerDesignSyncTools()")
+}
+
+// TestDesignSyncHandler_ApplyModeIsChangeTrackerVisible proves §5b's "All
+// writes are ordinary workspace file edits — ChangeTracker-visible, revertible":
+// every write apply performs is recorded through the same TrackFileWrite seam
+// write_file uses, with the pre-write original captured (so the edit is
+// revertible).
+func TestDesignSyncHandler_ApplyModeIsChangeTrackerVisible(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{ --color-brand-primary: #ff0000; }\n")
+
+	type tracked struct{ path, original, content string }
+	var trackedWrites []tracked
+	env := newTestEnv(t, root)
+	env.ToolFuncs = &ToolFuncSet{
+		TrackFileWrite: func(filePath, originalContent, content string) error {
+			trackedWrites = append(trackedWrites, tracked{filePath, originalContent, content})
+			return nil
+		},
+	}
+
+	h := &designSyncHandler{}
+	res, err := h.Execute(newTestCtx(root), env,
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	require.Len(t, trackedWrites, 1, "every apply write is tracked")
+	tr := trackedWrites[0]
+	assert.True(t, strings.HasSuffix(filepath.ToSlash(tr.path), "design/tokens/color.tokens.json"))
+	assert.Contains(t, tr.original, "#0055ff", "the pre-write original is captured for revert")
+	assert.Contains(t, tr.content, "#ff0000", "the tracked content is the post-write bytes")
+}
+
+// TestDesignSyncHandler_ApplyModeTrackedWriteOriginalIsEmptyForCreate proves
+// the create case: a new wireframe is tracked with an empty original, so a
+// revert deletes it.
+func TestDesignSyncHandler_ApplyModeTrackedWriteOriginalIsEmptyForCreate(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/routes.tsx", `{ path: "/check-deposit", element: <CheckDeposit /> }`+"\n")
+
+	originals := map[string]string{}
+	env := newTestEnv(t, root)
+	env.ToolFuncs = &ToolFuncSet{
+		TrackFileWrite: func(filePath, originalContent, content string) error {
+			originals[filepath.Base(filePath)] = originalContent
+			return nil
+		},
+	}
+
+	h := &designSyncHandler{}
+	_, err := h.Execute(newTestCtx(root), env, map[string]any{"files": "src/routes.tsx", "mode": "apply"})
+	require.NoError(t, err)
+
+	require.Contains(t, originals, "check-deposit.svg")
+	assert.Empty(t, originals["check-deposit.svg"], "a created file's tracked original is empty (revert deletes it)")
+}
+
+// TestDesignSyncHandler_ApplyModeGate1DenyOnTouchedCodePath proves the
+// dispatch-level Gate-1 still covers the touched code paths in apply mode.
+func TestDesignSyncHandler_ApplyModeGate1DenyOnTouchedCodePath(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n")
+
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = dsDenyPathClassifier{substr: "/src/"}
+
+	before := dsTreeSnapshot(t, root)
+	h := &designSyncHandler{}
+	res, err := h.Execute(newTestCtx(root), env,
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	assert.Contains(t, res.Output, "design_sync blocked")
+	assert.Equal(t, before, dsTreeSnapshot(t, root))
+}
+
+var _ = design.SyncModeApplyConst
+
+// TestDesignSyncHandler_ApplyModeRollsBackOnWriteFailure proves a failure
+// part-way through the plan leaves no half-applied state: the writes already
+// applied are rolled back (created files removed, updated files restored).
+//
+// The structural plan writes the wireframe then the flow edge; denying the
+// flow-file write makes the second write fail, so the first must be undone.
+func TestDesignSyncHandler_ApplyModeRollsBackOnWriteFailure(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/routes.tsx", `{ path: "/check-deposit", element: <CheckDeposit /> }`+"\n")
+	before := dsTreeSnapshot(t, root)
+
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = dsDenyPathClassifier{substr: "sign-up.mmd"}
+
+	h := &designSyncHandler{}
+	res, err := h.Execute(newTestCtx(root), env,
+		map[string]any{"files": "src/routes.tsx", "mode": "apply"})
+	require.Error(t, err, "a denied write path fails the apply")
+	require.True(t, res.IsError)
+	assert.Contains(t, res.Output, "design_sync blocked")
+
+	// The structured result reports an empty applied set, matching the tree.
+	if out, ok := res.StructuredOut.(designSyncOutput); ok && out.Apply != nil {
+		assert.Empty(t, out.Apply.Applied, "a rolled-back apply reports nothing applied")
+	}
+
+	// The tree is byte-identical: the wireframe write was rolled back.
+	assert.Equal(t, before, dsTreeSnapshot(t, root),
+		"a failed apply must leave no half-applied state")
+}
+
+// TestDesignSyncHandler_ApplyModePromptVerdictFallsThrough proves the write path
+// mirrors write_file's Gate-1 contract: only an explicit deny is a hard
+// refusal; a "prompt" (no classifier / no verdict) falls through to the
+// workspace-confined resolver, which admits a design/ path inside the workspace.
+func TestDesignSyncHandler_ApplyModePromptVerdictFallsThrough(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dsFixtureTree(t, root)
+	dsWrite(t, root, "src/theme.css", ":root{--color-brand-primary:#ff0000;}\n")
+
+	// A nil classifier yields "prompt": the write must still land (a design/
+	// path inside the workspace), not be silently dropped.
+	env := newTestEnv(t, root)
+	env.FileAccessClassifier = nil
+
+	h := &designSyncHandler{}
+	res, err := h.Execute(newTestCtx(root), env,
+		map[string]any{"files": "src/theme.css", "mode": "apply"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	out := dsOutput(t, res)
+	require.NotNil(t, out.Apply)
+	assert.Equal(t, []string{"design/tokens/color.tokens.json"}, out.Apply.Applied)
+	assert.Contains(t, dsReadFile(t, root, "design/tokens/color.tokens.json"), "#ff0000")
 }

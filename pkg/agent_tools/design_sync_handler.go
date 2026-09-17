@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/design"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // designSyncHandler implements ToolHandler for the design_sync tool
@@ -21,27 +23,36 @@ import (
 // dev turn runs at its end so the semantic layer (design/) adopts what the
 // implementation learned.
 //
-// Scope note — this file is TODO item 5.3, the ANALYZE half only. Analyze mode
-// reads the touched UI code files and the design/ tree and returns a structured
-// sync report: the detected semantic deltas, each
-// {delta, kind, basis, confidence, designFiles} with the three bases §5b fixes —
-// literal (a token var renamed/revalued; maps 1:1 to a DTCG entry, safe to
-// apply), structural (a new route/screen/nav target; maps to wireframe/flow
-// changes), and inferred (raw hex / magic spacing with no token counterpart; a
-// proposal). The report shape is what item 5.4's apply mode consumes: it carries
-// the design files each delta would touch, and marks inferred deltas as
-// proposals.
+// Both halves of §5b are implemented here:
 //
-// Apply mode (5.4) is deliberately NOT implemented here. `mode=apply` is
-// rejected with an explicit, actionable error naming the item that owns it,
-// rather than silently doing nothing or, worse, half-writing the tree.
+//   - Analyze mode (item 5.3) reads the touched UI code files and the design/
+//     tree and returns a structured sync report: the detected semantic deltas,
+//     each {delta, kind, basis, confidence, designFiles} with the three bases
+//     §5b fixes — literal (a token var renamed/revalued; maps 1:1 to a DTCG
+//     entry, safe to apply), structural (a new route/screen/nav target; maps to
+//     wireframe/flow changes), and inferred (raw hex / magic spacing with no
+//     token counterpart; a proposal).
 //
-// The pure analysis lives in pkg/design/sync.go (AnalyzeTouchedFiles); this
+//   - Apply mode (item 5.4) writes the report's *safe subset* into design/:
+//     literal token renames/revalues (the referenced DTCG entry), structural
+//     skeleton wireframes (draft status) and flow-edge additions. Inferred
+//     deltas are marked as proposals and NOT auto-applied.
+//
+// §5e is enforced structurally: apply writes design files and NEVER rewrites
+// the implementation. Every path in the plan is design/-confined, the handler
+// refuses (rather than writes) any path that would escape design/, and there is
+// no operation anywhere on this path that edits implementation code. The
+// semantic layer is *invited to adopt*; enforcement lives in review/critique,
+// not here.
+//
+// The pure halves live in pkg/design (AnalyzeTouchedFiles, PlanSyncApply); this
 // handler is the thin ToolEnv-facing wrapper: it resolves the touched-file set
 // (the explicit `files` argument, else the turn's ChangeTracker set via the
 // sanctioned env.ResolveToolFuncs().ListChanges seam), runs Gate-1
-// PrecheckFileAccess on every path it reads, loads each file's bytes, and hands
-// the analysis its input. Analyze mode writes nothing.
+// PrecheckFileAccess on every path it reads *and writes*, loads each file's
+// bytes, and — for apply — performs the plan's writes through the
+// workspace-confined resolver (filesystem.SafeResolvePathForWriteWithBypass), so
+// they are ordinary ChangeTracker-visible, revertible workspace edits.
 //
 // The tool is pure Go with no browser/vision dependency, but SP-140 invariant 7
 // keeps only design_assets and design_validate on the WASM roster; it is
@@ -82,8 +93,14 @@ func (h *designSyncHandler) Definition() ToolDefinition {
 			"in v1. " +
 			"mode=analyze writes no files and reads only: it runs the file-access precheck on " +
 			"every path it touches. " +
-			"mode=apply (which writes the safe subset into design/) is a separate item and is " +
-			"not available yet; calling it returns a clear error saying so.",
+			"mode=apply writes the report's SAFE SUBSET into design/: literal token " +
+			"renames/revalues (rewriting the referenced DTCG entry in design/tokens/), " +
+			"structural skeleton wireframes with `draft` status, and flow-edge additions. " +
+			"Inferred deltas are marked as proposals and NOT auto-applied — it never creates " +
+			"tokens without the literal/structural confidence bar. Apply writes are confined " +
+			"to design/ (SP-140-5 §5e: it never rewrites the implementation to match design/); " +
+			"a write that would leave design/ is refused. All writes are ordinary workspace " +
+			"file edits — ChangeTracker-visible and revertible.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "files",
@@ -95,7 +112,7 @@ func (h *designSyncHandler) Definition() ToolDefinition {
 				Name:        "mode",
 				Type:        "string",
 				Required:    false,
-				Description: "`analyze` (default) returns the sync report and writes nothing. `apply` (writes the safe subset into design/) is a separate implementation item and is not available yet.",
+				Description: "`analyze` (default) returns the sync report and writes nothing. `apply` writes the report's safe subset (literal token renames/revalues, structural wireframe/flow additions) into design/ and reports inferred deltas as proposals; writes are confined to design/ and never touch implementation code.",
 			},
 		},
 		Required: nil,
@@ -125,8 +142,7 @@ func (h *designSyncHandler) Validate(args map[string]any) error {
 // polluting the pure analysis result.
 type designSyncOutput struct {
 	// Report is the pure analyze result (SP-140-5 §5b): the ordered semantic
-	// deltas and their design-file work set. Item 5.4's apply mode consumes
-	// exactly this.
+	// deltas and their design-file work set.
 	Report *design.SyncReport `json:"report"`
 	// TouchedSource records where the touched-file set came from:
 	// "argument" (explicit `files`) or "changes" (the turn's ChangeTracker set
@@ -135,8 +151,104 @@ type designSyncOutput struct {
 	// TouchedFiles are the analysed code paths, sorted (the report's own list
 	// is per-delta; this is the run-level view).
 	TouchedFiles []string `json:"touchedFiles"`
+	// Apply is the apply-mode result (item 5.4): the plan of safe-subset writes
+	// and the proposals left alone. It is nil for an analyze run.
+	Apply *designSyncApplyOutput `json:"apply,omitempty"`
 	// Notes carries run-level caveats (e.g. "no changed files this session").
 	Notes []string `json:"notes,omitempty"`
+}
+
+// designSyncApplyOutput is the apply-mode structured result (SP-140-5 §5b
+// apply half): the safe-subset plan, the design files actually written, and the
+// proposals apply deliberately left to the agent/user.
+type designSyncApplyOutput struct {
+	// Plan is the pure apply plan (writes + proposals, design/-confined).
+	Plan *design.SyncApplyPlan `json:"plan"`
+	// Applied are the design/ paths written, sorted. Empty when there was
+	// nothing safe to apply — a second apply after a first is a no-op.
+	Applied []string `json:"applied"`
+	// ProposalCount is the number of deltas left as proposals (inferred ones,
+	// plus any unsafe/unplannable delta); also on the plan, surfaced here so a
+	// consumer reading only the top level sees the split.
+	ProposalCount int `json:"proposalCount"`
+	// OutsideDesign is the set of paths the plan refused because a write would
+	// have escaped design/ (§5e). Always empty in practice; present so a caller
+	// can assert the invariant.
+	OutsideDesign []string `json:"outsideDesign,omitempty"`
+	// ImplementationUntouched states the §5e invariant explicitly: apply writes
+	// design files and never rewrites the implementation. Always true.
+	ImplementationUntouched bool `json:"implementationUntouched"`
+}
+
+// applySyncPlan plans and performs the report's safe subset (§5b apply half).
+//
+// It reads current design-file bytes through a workspace-confined reader (so
+// the planned content is derived from exactly what is on disk), plans the
+// writes with the pure core, refuses any plan write outside design/ (§5e), then
+// performs the writes as ordinary workspace file edits. Inferred deltas are
+// left as proposals and nothing is written for them.
+func (h *designSyncHandler) applySyncPlan(ctx context.Context, env ToolEnv, root string, report *design.SyncReport, out designSyncOutput) (ToolResult, error) {
+	reader := syncDesignFileReader(root)
+	plan := design.PlanSyncApply(report, reader)
+
+	if !plan.IsConfinedToDesign() {
+		msg := "design_sync: refusing to apply — the plan would write outside design/ (SP-140-5 §5e)"
+		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_sync: apply plan escapes design/")
+	}
+
+	applied, writeErr := writeSyncPlan(ctx, env, plan)
+
+	// On failure writeSyncPlan rolled back whatever it had applied, so nothing
+	// remains in the tree: report an empty applied set so the structured result
+	// matches reality (the plan still shows what was intended).
+	reported := applied
+	if writeErr != nil {
+		reported = nil
+	}
+	applyOut := &designSyncApplyOutput{
+		Plan:                    plan,
+		Applied:                 reported,
+		ProposalCount:           plan.ProposalCount,
+		OutsideDesign:           plan.Refused,
+		ImplementationUntouched: true,
+	}
+	out.Apply = applyOut
+
+	if writeErr != nil {
+		// A failed write is a hard failure: the plan is reported so the caller
+		// can see what was intended and that the tree was rolled back.
+		msg := fmt.Sprintf("design_sync apply failed (rolled back): %v", writeErr)
+		return ToolResult{Output: msg, StructuredOut: out, IsError: true}, fmt.Errorf("design_sync: %w", writeErr)
+	}
+
+	return ToolResult{
+		Output:        renderDesignSyncApplySummary(out),
+		StructuredOut: out,
+		IsError:       false,
+	}, nil
+}
+
+// syncDesignFileReader returns the workspace-confined design-file reader the
+// pure apply core uses for current bytes. A design/ path is read from disk; a
+// path outside design/ (the plan never emits one, but the reader stays
+// defensive) is treated as absent, so no non-design bytes can ever reach a
+// plan. A missing file reports (nil,false) — a create.
+func syncDesignFileReader(root string) design.SyncFileReader {
+	return func(rel string) ([]byte, bool) {
+		if !designSyncDesignFile(rel) {
+			return nil, false
+		}
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		info, err := os.Stat(abs)
+		if err != nil || info.IsDir() {
+			return nil, false
+		}
+		data, readErr := os.ReadFile(abs)
+		if readErr != nil {
+			return nil, false
+		}
+		return data, true
+	}
 }
 
 func (h *designSyncHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
@@ -147,14 +259,8 @@ func (h *designSyncHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 
 	mode := normaliseSyncMode(stringArg(args, "mode"))
 	switch mode {
-	case SyncModeAnalyze:
-		// The item-5.3 path.
-	case SyncModeApply:
-		// Item 5.4 owns apply. Refuse explicitly rather than pretending.
-		msg := "design_sync: mode=apply is not available yet — apply mode (writing the safe " +
-			"subset into design/) is a separate implementation item (SP-140-5 §5b apply half). " +
-			"Run mode=analyze (the default) to get the report the apply half will consume."
-		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_sync: apply mode not implemented")
+	case SyncModeAnalyze, SyncModeApply:
+		// Both halves are implemented (analyze item 5.3, apply item 5.4).
 	default:
 		msg := fmt.Sprintf("design_sync: unknown mode %q (want %q or %q)", mode, SyncModeAnalyze, SyncModeApply)
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_sync: unknown mode %q", mode)
@@ -168,10 +274,10 @@ func (h *designSyncHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_sync: %w", resolveErr)
 	}
 
-	// Gate-1 precheck (SP-140 invariant 7): analyze mode reads the touched code
-	// paths and the design/ tree, so every one of them is prechecked before any
-	// I/O. The design/ root is checked first so a workspace-level deny is
-	// caught even before probing the tree.
+	// Gate-1 precheck (SP-140 invariant 7): every path the tool touches — the
+	// touched code paths it reads and the design/ tree it reads (and, in apply
+	// mode, writes) — is prechecked before any I/O. The design/ root is checked
+	// first so a workspace-level deny is caught even before probing the tree.
 	gatePaths := append([]string{design.DirName}, touched...)
 	for _, gate := range gatePaths {
 		_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "design_sync", gate)
@@ -191,7 +297,7 @@ func (h *designSyncHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		msg := fmt.Sprintf("design_sync failed: %v", err)
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_sync: %w", err)
 	}
-	report.Mode = SyncModeAnalyze
+	report.Mode = mode
 
 	out := designSyncOutput{
 		Report:        report,
@@ -211,11 +317,109 @@ func (h *designSyncHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 			len(skipped), strings.Join(skipped, ", ")))
 	}
 
+	if mode == SyncModeApply {
+		return h.applySyncPlan(ctx, env, root, report, out)
+	}
+
 	return ToolResult{
 		Output:        renderDesignSyncSummary(out),
 		StructuredOut: out,
 		IsError:       false,
 	}, nil
+}
+
+// writeSyncPlan performs the plan's writes as ordinary workspace file edits and
+// returns the applied-path set. Every write path is re-checked against Gate-1
+// (a deny OR an unresolved prompt is a hard refusal, not a skip) and resolved
+// through the workspace-confined resolver, so a plan can never write outside the
+// workspace or outside design/ (§5e). The parent directory is created as needed
+// (a new wireframe/flow file). Files are written whole, which is what makes the
+// edit ChangeTracker-visible and revertible.
+//
+// Each write is recorded with the agent's ChangeTracker through the same
+// TrackFileWrite seam write_file uses (§5b: "All writes are ordinary workspace
+// file edits — ChangeTracker-visible, revertible"). Tracking is best-effort: a
+// tracking failure must not fail the write itself.
+//
+// On a failure part-way through, the writes already applied are rolled back
+// (originals restored, created files removed) so the tree is never left in a
+// half-applied state; the error names the failing path.
+//
+// A path that would escape design/ is refused here as a second, independent
+// guard (PlanSyncApply already drops such writes): §5e is enforced at both
+// layers, and this one is the one that performs I/O.
+func writeSyncPlan(ctx context.Context, env ToolEnv, plan *design.SyncApplyPlan) ([]string, error) {
+	applied := make([]string, 0, len(plan.Writes))
+	// restore records what to undo for each applied write: a created file is
+	// deleted, an updated file is rewritten with its captured original.
+	type undo struct {
+		abs      string
+		created  bool
+		original []byte
+	}
+	var undos []undo
+
+	rollback := func() {
+		for i := len(undos) - 1; i >= 0; i-- {
+			u := undos[i]
+			if u.created {
+				_ = os.Remove(u.abs)
+				continue
+			}
+			_ = os.WriteFile(u.abs, u.original, 0o644)
+		}
+	}
+
+	for _, w := range plan.Writes {
+		if !designSyncDesignFile(w.Path) {
+			rollback()
+			return applied, fmt.Errorf("refusing to write %q: design_sync --apply is confined to design/ (§5e)", w.Path)
+		}
+		// Gate-1 on every write path (the dispatch-level precheck covers
+		// design/ wholesale and the touched code paths; this covers the exact
+		// file, including one created by the plan). Mirrors write_file's
+		// contract: a "deny" is a hard refusal; a "prompt" falls through to the
+		// workspace-confined resolver below, which is the enforcement point for
+		// paths with no verdict (a design/ path is inside the workspace, so the
+		// resolver admits it; an escaping path is refused by the resolver).
+		_, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "design_sync", w.Path)
+		if decision == "deny" {
+			rollback()
+			return applied, fmt.Errorf("design_sync blocked: %s is denied by the active file-access policy", w.Path)
+		}
+		abs, resolveErr := filesystem.SafeResolvePathForWriteWithBypass(ctx, w.Path)
+		if resolveErr != nil {
+			rollback()
+			return applied, fmt.Errorf("resolving %s for write: %w", w.Path, resolveErr)
+		}
+		if mkErr := os.MkdirAll(filepath.Dir(abs), 0o755); mkErr != nil {
+			rollback()
+			return applied, fmt.Errorf("creating directory for %s: %w", w.Path, mkErr)
+		}
+		// Capture pre-write content for change tracking BEFORE the write
+		// mutates the file, so recovery can restore it. A read miss (new file)
+		// is the create case: original stays empty. Read unconditionally so the
+		// rollback has the bytes even without a tracker.
+		var original []byte
+		created := true
+		if data, readErr := os.ReadFile(abs); readErr == nil {
+			original = data
+			created = false
+		}
+		if writeErr := os.WriteFile(abs, w.Content, 0o644); writeErr != nil {
+			rollback()
+			return applied, fmt.Errorf("writing %s: %w", w.Path, writeErr)
+		}
+		undos = append(undos, undo{abs: abs, created: created, original: original})
+		// Session change tracking (best-effort), mirroring write_file.
+		if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
+			if trackErr := fn(abs, string(original), string(w.Content)); trackErr != nil {
+				log.Printf("[design_sync] change tracking failed for %q: %v", w.Path, trackErr)
+			}
+		}
+		applied = append(applied, w.Path)
+	}
+	return applied, nil
 }
 
 // normaliseSyncMode trims and lowercases the mode argument, defaulting to
@@ -399,6 +603,39 @@ func loadSyncInputs(root string, touched []string) (inputs []design.SyncFileInpu
 	}
 	sort.Strings(skipped)
 	return inputs, skipped
+}
+
+// renderDesignSyncApplySummary builds the human/agent-readable summary line for
+// an apply run: what was written into design/, and what was left as a proposal.
+func renderDesignSyncApplySummary(out designSyncOutput) string {
+	var sb strings.Builder
+	sb.WriteString("design_sync (apply): ")
+	if out.Apply == nil {
+		sb.WriteString("no apply result.")
+		return sb.String()
+	}
+	applied := out.Apply.Applied
+	if len(applied) == 0 {
+		sb.WriteString("nothing to apply — design/ is already in sync with the safe subset of the report.")
+	} else {
+		fmt.Fprintf(&sb, "wrote %d design file(s) in design/", len(applied))
+		sb.WriteString(" (")
+		if len(applied) <= 5 {
+			sb.WriteString(strings.Join(applied, ", "))
+		} else {
+			sb.WriteString(strings.Join(applied[:5], ", "))
+			fmt.Fprintf(&sb, ", +%d more", len(applied)-5)
+		}
+		sb.WriteString(").")
+	}
+	if n := out.Apply.ProposalCount; n > 0 {
+		fmt.Fprintf(&sb, " %d inferred proposal(s) left for the agent/user to resolve via normal file edits.", n)
+	}
+	sb.WriteString(" Apply writes design files only — the implementation is never rewritten (SP-140-5 §5e).")
+	if len(out.Notes) > 0 {
+		sb.WriteString(" " + strings.Join(out.Notes, " "))
+	}
+	return sb.String()
 }
 
 // renderDesignSyncSummary builds the human/agent-readable summary line for the

@@ -1,10 +1,18 @@
 // @ts-nocheck
 /**
- * SP-140-3 item 3.3 — Sidebar Design nav affordance.
+ * SP-140-5 — the Design mode's rail in the sidebar icon rail.
  *
- * The design nav item is visible ONLY when the workspace has a `design/`
- * directory, and clicking it routes to the design view. Follows the
- * Sidebar.costsNav.test.tsx lightweight-mock pattern.
+ * Repurposed from the pre-SP-140-5 design-nav-button test: that button is
+ * gone — Design is reached from the top-left mode switcher, and while the
+ * Design mode is active the shell passes that mode's rail component
+ * (`modeRail` prop; see workspaces/rail.ts) and the Sidebar renders it in
+ * place of the Code section tabs. What this file pins is that seam: the
+ * rail component renders its mode's entries, an entry selection fires
+ * `onModeSectionChange`, and a mode without a rail (Code) renders no rail
+ * at all.
+ *
+ * Same lightweight-mock pattern as Sidebar.costsNav.test.tsx (Sidebar's
+ * context hooks throw without their providers).
  */
 
 import { act, createElement } from 'react';
@@ -14,17 +22,19 @@ import { createRoot, type Root } from 'react-dom/client';
 // Mocks — MUST be set up BEFORE importing Sidebar
 // ---------------------------------------------------------------------------
 
-let mockDesignPresent = false;
-
-vi.mock('./design/useDesignPresence', () => ({
-  __esModule: true,
-  useDesignPresence: () => ({ present: mockDesignPresent, loading: false }),
-}));
-
 vi.mock('../contexts/PlatformNavContext', () => ({
   __esModule: true,
   PlatformNavProvider: ({ children }) => children,
-  usePlatformNav: () => ({ platformNavItems: [] }),
+  usePlatformNav: () => ({
+    platformNavItems: [],
+  }),
+}));
+
+// The probe is irrelevant to the rail seam; report absent so no design
+// surface is expected.
+vi.mock('./design/useDesignPresence', () => ({
+  __esModule: true,
+  useDesignPresence: () => ({ present: false, loading: false }),
 }));
 
 vi.mock('../contexts/ThemeContext', () => ({
@@ -40,7 +50,9 @@ vi.mock('../contexts/ThemeContext', () => ({
 
 vi.mock('../contexts/HotkeyContext', () => ({
   __esModule: true,
-  useHotkeys: () => ({ applyPreset: vi.fn() }),
+  useHotkeys: () => ({
+    applyPreset: vi.fn(),
+  }),
 }));
 
 vi.mock('../contexts/EditorManagerContext', () => ({
@@ -62,6 +74,7 @@ vi.mock('../contexts/NotificationContext', () => ({
 }));
 
 vi.mock('../config/mode', () => ({
+  __esModule: true,
   isCloud: false,
   supportsSettings: true,
   supportsLocalTerminal: false,
@@ -69,15 +82,14 @@ vi.mock('../config/mode', () => ({
   supportsWorkspaceSwitching: false,
 }));
 
-vi.mock('./SettingsPanel', () => ({ default: () => createElement('div', { className: 'mock-settings' }) }));
-vi.mock('./FileTree', () => ({ default: () => createElement('div', { className: 'mock-filetree' }) }));
-vi.mock('./SearchView', () => ({ default: () => createElement('div', { className: 'mock-search' }) }));
-vi.mock('./GitSidebarPanel', () => ({ default: () => createElement('div', { className: 'mock-git' }) }));
-vi.mock('./AgentChangesPanel', () => ({ default: () => createElement('div', { className: 'mock-changes' }) }));
+// Mock leaf components to keep the render cheap.
 vi.mock('./SproutLogo', () => ({ default: () => createElement('svg', { className: 'mock-logo' }) }));
-vi.mock('./LocationSwitcher', () => ({ default: () => createElement('div', { className: 'mock-location' }) }));
-vi.mock('./ResizeHandle', () => ({ default: () => createElement('div', { className: 'mock-resize-handle' }) }));
-
+vi.mock('./LocationSwitcher', () => ({
+  default: () => createElement('div', { className: 'mock-location-switcher' }),
+}));
+vi.mock('./ResizeHandle', () => ({
+  default: () => createElement('div', { className: 'mock-resize-handle' }),
+}));
 vi.mock('./SidebarFilesSection', () => ({
   default: vi.fn(() => createElement('div', { className: 'mock-files-section' })),
 }));
@@ -95,6 +107,7 @@ vi.mock('./AutomationsPanel', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  __esModule: true,
   ApiService: {
     getInstance: vi.fn(() => ({
       getProviders: vi.fn().mockResolvedValue({
@@ -107,8 +120,13 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-vi.mock('../hooks/useSidebarEventHandlers', () => ({ useSidebarEventHandlers: vi.fn() }));
+vi.mock('../hooks/useSidebarEventHandlers', () => ({
+  __esModule: true,
+  useSidebarEventHandlers: vi.fn(),
+}));
+
 vi.mock('../hooks/useSidebarModel', () => ({
+  __esModule: true,
   useSidebarModel: () => ({
     selectedProvider: 'openai',
     selectedModelState: 'gpt-4',
@@ -130,13 +148,22 @@ vi.mock('../hooks/useSidebarModel', () => ({
   }),
 }));
 
-vi.mock('../utils/log', () => ({ useLog: () => vi.fn(), debugLog: vi.fn() }));
+vi.mock('../utils/log', () => ({
+  __esModule: true,
+  useLog: () => vi.fn(),
+  debugLog: vi.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Import AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
+import DesignRail from './design/DesignRail';
 import Sidebar from './Sidebar';
+
+// ---------------------------------------------------------------------------
+// Test setup
+// ---------------------------------------------------------------------------
 
 let container: HTMLDivElement;
 let root: Root;
@@ -146,7 +173,6 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  mockDesignPresent = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -170,47 +196,99 @@ const minimalProps = {
   onViewChange: vi.fn(),
 };
 
-describe('Sidebar Design nav affordance', () => {
-  it('hides the design nav item when the workspace has no design/ directory', () => {
-    mockDesignPresent = false;
-    act(() => {
-      root.render(createElement(Sidebar, minimalProps));
-    });
-    expect(container.querySelector('[data-testid="sidebar-design-button"]')).toBeNull();
+const codeMode = { id: 'code', label: 'Code' };
+const designMode = { id: 'design', label: 'Design' };
+// The public seam is the `modeRail` prop: the shell computes the active
+// mode's rail (AppContent: `workspaceMode.id === 'design' ? DesignRail :
+// undefined`) and hands the component down. Tests exercise that seam
+// directly rather than the mode registry's shape.
+const designRailProps = { modeRail: DesignRail };
+
+/** Render Sidebar with the given extra props and return the container. */
+function renderSidebar(extraProps = {}) {
+  act(() => {
+    root.render(createElement(Sidebar, { ...minimalProps, ...extraProps }));
+  });
+  return container;
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('Sidebar mode rail (SP-140-5)', () => {
+  it('renders no mode rail while a mode without a rail (Code) is active', () => {
+    renderSidebar({ modes: [codeMode], activeModeId: 'code' });
+
+    expect(container.querySelector('[data-testid="sidebar-mode-rail"]')).toBeNull();
+    // The section rail itself is still there — the mode rail is an addition,
+    // not a replacement.
+    expect(container.querySelector('[data-testid="sidebar-icon-rail"]')).not.toBeNull();
   });
 
-  it('shows the design nav item when design/ exists', () => {
-    mockDesignPresent = true;
-    act(() => {
-      root.render(createElement(Sidebar, minimalProps));
+  it('renders the active mode rail with its entries, current section marked', () => {
+    renderSidebar({
+      modes: [codeMode, designMode],
+      activeModeId: 'design',
+      modeSection: 'flows',
+      ...designRailProps,
     });
-    const btn = container.querySelector('[data-testid="sidebar-design-button"]');
-    expect(btn).not.toBeNull();
-    expect(btn.getAttribute('aria-label')).toBe('Design');
-    expect(btn.getAttribute('role')).toBe('tab');
-    expect(btn.getAttribute('aria-selected')).toBe('false');
+
+    const rail = container.querySelector('[data-testid="sidebar-mode-rail"]');
+    expect(rail).not.toBeNull();
+    expect(rail.querySelectorAll('[role="tab"]')).toHaveLength(3);
+
+    const flows = container.querySelector('[data-testid="design-rail-flows"]');
+    const screens = container.querySelector('[data-testid="design-rail-screens"]');
+    const tokens = container.querySelector('[data-testid="design-rail-tokens"]');
+    expect(flows).not.toBeNull();
+    expect(screens).not.toBeNull();
+    expect(tokens).not.toBeNull();
+    expect(flows!.getAttribute('aria-selected')).toBe('true');
+    expect(screens!.getAttribute('aria-selected')).toBe('false');
+    expect(tokens!.getAttribute('aria-selected')).toBe('false');
   });
 
-  it('clicking the design nav item calls onViewChange("design")', () => {
-    mockDesignPresent = true;
-    const onViewChange = vi.fn();
-    act(() => {
-      root.render(createElement(Sidebar, { ...minimalProps, onViewChange }));
+  it('fires onModeSectionChange when a rail entry is picked', () => {
+    const onModeSectionChange = vi.fn();
+    renderSidebar({
+      modes: [codeMode, designMode],
+      activeModeId: 'design',
+      modeSection: 'flows',
+      onModeSectionChange,
+      ...designRailProps,
     });
-    const btn = container.querySelector('[data-testid="sidebar-design-button"]');
+
     act(() => {
-      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector('[data-testid="design-rail-screens"]')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
-    expect(onViewChange).toHaveBeenCalledWith('design');
+
+    expect(onModeSectionChange).toHaveBeenCalledTimes(1);
+    expect(onModeSectionChange).toHaveBeenCalledWith('screens');
   });
 
-  it('marks the design nav item active when currentView is "design"', () => {
-    mockDesignPresent = true;
-    act(() => {
-      root.render(createElement(Sidebar, { ...minimalProps, currentView: 'design' }));
+  it('a rail selection leaves the section state untouched', () => {
+    const onSectionChange = vi.fn();
+    renderSidebar({
+      modes: [codeMode, designMode],
+      activeModeId: 'design',
+      modeSection: 'flows',
+      selectedSection: 'git',
+      onSectionChange,
+      ...designRailProps,
     });
-    const btn = container.querySelector('[data-testid="sidebar-design-button"]');
-    expect(btn.classList.contains('active')).toBe(true);
-    expect(btn.getAttribute('aria-selected')).toBe('true');
+
+    act(() => {
+      container.querySelector('[data-testid="design-rail-tokens"]')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+
+    // The Design rail drives the design surface's section, not the sidebar's.
+    expect(onSectionChange).not.toHaveBeenCalled();
+    // The git section pane is still the rendered content.
+    expect(container.querySelector('.mock-git-section')).not.toBeNull();
   });
 });

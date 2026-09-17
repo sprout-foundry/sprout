@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
 import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -23,9 +23,9 @@ import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
 import ModeSwitcher from '../workspaces/ModeSwitcher';
+import type { ModeRailProps } from '../workspaces/rail';
 import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
 import AutomationsPanel from './AutomationsPanel';
-import { useDesignPresence } from './design/useDesignPresence';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
@@ -48,7 +48,6 @@ import {
   Monitor,
   Zap,
   CircleDollarSign,
-  Palette,
   PanelLeft,
 } from 'lucide-react';
 import SearchView from './SearchView';
@@ -98,6 +97,12 @@ interface SidebarProps {
   activeModeId?: WorkspaceModeId;
   /** Switch modes (the top-left switcher). */
   onSelectMode?: (id: WorkspaceModeId) => void;
+  /** The active mode's rail component, or undefined for the Code default. */
+  modeRail?: ComponentType<ModeRailProps>;
+  /** Active entry id within the mode's rail. */
+  modeSection?: string;
+  /** Fired when the user picks an entry in the mode's rail. */
+  onModeSectionChange?: (id: string) => void;
   selectedSection?: SectionTab;
   onSectionChange?: (section: SectionTab) => void;
   onFileClick?: (filePath: string, lineNumber?: number) => void;
@@ -187,6 +192,9 @@ function Sidebar({
   modes = [],
   activeModeId = 'code',
   onSelectMode,
+  modeRail,
+  modeSection,
+  onModeSectionChange,
   selectedSection,
   onSectionChange,
   onFileClick,
@@ -226,10 +234,10 @@ function Sidebar({
     [platformNavItems],
   );
   const fileTreeRef = useRef<FileTreeHandle | null>(null);
-  // SP-140-3 §3a: the design nav item is visible only when the workspace has
-  // a design/ directory. The view route is equally gated (EditorWorkspace),
-  // so a workspace without a design tree can never reach the DesignView chunk.
-  const { present: designPresent } = useDesignPresence();
+  // SP-140-5: the active mode's rail, rendered in place of the Code section
+  // tabs. The prop name starts with a lowercase letter, which JSX would
+  // parse as an intrinsic (HTML) element, so it is aliased before use.
+  const ModeRailComponent = modeRail;
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
@@ -332,6 +340,18 @@ function Sidebar({
       onSelectMode?.(id);
     },
     [onSelectMode],
+  );
+
+  /**
+   * Section selection from the active mode's rail. Optional for the same
+   * reason as `selectMode`: Sidebar is rendered in hosts without workspace
+   * state, and a rail without a handler is a read-only indicator there.
+   */
+  const handleModeSectionChange = useCallback(
+    (id: string) => {
+      onModeSectionChange?.(id);
+    },
+    [onModeSectionChange],
   );
 
   const handleLogoToggle = useCallback(() => {
@@ -514,24 +534,41 @@ function Sidebar({
             aria-label="Sidebar navigation"
             data-testid="sidebar-icon-rail"
           >
-            {/* Main section tabs: filtered by capability flags */}
-            <div role="tablist" aria-orientation="vertical">
-              {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={effectiveSelectedSection === tab.id}
-                  aria-controls="sidebar-tabpanel"
-                  className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
-                  onClick={() => handleSectionTabClick(tab.id)}
-                  title={tab.label}
-                  aria-label={tab.label}
-                  data-testid={`sidebar-${tab.id}-tab`}
-                >
-                  <tab.icon size={18} strokeWidth={1.5} />
-                </button>
-              ))}
-            </div>
+            {/* Main section tabs: the active mode's rail, or the Code
+                defaults filtered by capability flags (SP-140-5). Global
+                chrome below (platform nav, plugins, costs, settings, logs)
+                is shared by every mode. */}
+            {ModeRailComponent ? (
+              <div
+                className={`sidebar-mode-rail ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
+                data-testid="sidebar-mode-rail"
+                data-section={modeSection ?? ''}
+              >
+                <ModeRailComponent
+                  activeId={modeSection ?? ''}
+                  onSelect={handleModeSectionChange}
+                  collapsed={effectiveSidebarCollapsed}
+                />
+              </div>
+            ) : (
+              <div role="tablist" aria-orientation="vertical">
+                {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={effectiveSelectedSection === tab.id}
+                    aria-controls="sidebar-tabpanel"
+                    className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
+                    onClick={() => handleSectionTabClick(tab.id)}
+                    title={tab.label}
+                    aria-label={tab.label}
+                    data-testid={`sidebar-${tab.id}-tab`}
+                  >
+                    <tab.icon size={18} strokeWidth={1.5} />
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Platform Nav Items (between main sections and settings) */}
             {sortedPlatformNavItems.length > 0 && (
@@ -591,23 +628,6 @@ function Sidebar({
                   })}
                 </nav>
               </>
-            )}
-
-            {/* Design — visible only when the workspace has a design/ tree */}
-            {designPresent && (
-              <div role="tablist" aria-orientation="vertical">
-                <button
-                  role="tab"
-                  aria-selected={currentView === 'design'}
-                  className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
-                  onClick={() => onViewChange?.('design')}
-                  title="Design"
-                  aria-label="Design"
-                  data-testid="sidebar-design-button"
-                >
-                  <Palette size={18} strokeWidth={1.5} />
-                </button>
-              </div>
             )}
 
             {/* Costs — local feature, always visible */}

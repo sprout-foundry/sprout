@@ -75,33 +75,55 @@ test.afterAll(async () => {
 test.describe.configure({ mode: "serial" });
 test.setTimeout(120_000);
 
-/** Load the webui and switch to the Design surface via the sidebar rail. */
+/**
+ * Load the webui and switch to the Design surface via the top-left mode
+ * switcher (SP-140-5: Design is a workspace mode, not a rail icon).
+ */
 async function openDesignView(target: Page = page): Promise<void> {
   await target.goto(vite.url, { waitUntil: "networkidle" });
-  await expect(target.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
+
+  // The active mode persists per instance, so a reload inside this serial run
+  // may come back already in Design. Wait for the shell to mount either way,
+  // then switch only if we are not already there.
+  const designView = target.getByTestId("design-view");
+  const codeShell = target.getByTestId(TESTIDS["chat-shell"]);
+  await expect(designView.or(codeShell).first()).toBeVisible({
     timeout: 30_000,
   });
 
-  const designNav = target.getByTestId("sidebar-design-button");
-  await expect(designNav).toBeVisible({ timeout: 30_000 });
-  await designNav.click();
-  await expect(target.getByTestId("design-view")).toBeVisible({
-    timeout: 30_000,
-  });
+  if (!(await designView.isVisible())) {
+    await switchToDesignMode(target);
+  }
+
+  await expect(designView).toBeVisible({ timeout: 30_000 });
+}
+
+/** Pick the Design option in the top-left mode switcher. */
+async function switchToDesignMode(target: Page = page): Promise<void> {
+  const trigger = target.getByTestId(TESTIDS["sidebar-brand-trigger"]);
+  await expect(trigger).toBeVisible({ timeout: 30_000 });
+  await trigger.click();
+  const designOption = target.getByTestId(
+    TESTIDS["sidebar-brand-option-design"],
+  );
+  await expect(designOption).toBeVisible({ timeout: 30_000 });
+  await designOption.click();
 }
 
 test.describe("SP-140-3 DesignView", () => {
-  test("a workspace with a design/ tree exposes the Design nav and opens the view", async () => {
+  test("a workspace with a design/ tree exposes the Design mode and opens the view", async () => {
     await page.goto(vite.url, { waitUntil: "networkidle" });
     await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
       timeout: 30_000,
     });
 
     // Presence is directory presence (SP-140-3 §3a), so a seeded design/ tree
-    // is what makes the nav affordance appear at all.
-    await expect(page.getByTestId("sidebar-design-button")).toBeVisible({
-      timeout: 30_000,
-    });
+    // is what offers the Design mode at all (top-left switcher, SP-140-5).
+    await page.getByTestId(TESTIDS["sidebar-brand-trigger"]).click();
+    await expect(
+      page.getByTestId(TESTIDS["sidebar-brand-option-design"]),
+    ).toBeVisible({ timeout: 30_000 });
+    await page.keyboard.press("Escape");
 
     // The fixture really is on disk (guards a seeding mistake masquerading as
     // a UI regression).
@@ -119,10 +141,12 @@ test.describe("SP-140-3 DesignView", () => {
       "data-active-tab",
       "flows",
     );
-    // The three tabs of the shell are all reachable.
-    await expect(page.getByTestId("design-tab-flows")).toBeVisible();
-    await expect(page.getByTestId("design-tab-screens")).toBeVisible();
-    await expect(page.getByTestId("design-tab-tokens")).toBeVisible();
+    // The mode's rail (in the sidebar) lists the surface's sections.
+    await expect(page.getByTestId(TESTIDS["design-rail-flows"])).toBeVisible();
+    await expect(
+      page.getByTestId(TESTIDS["design-rail-screens"]),
+    ).toBeVisible();
+    await expect(page.getByTestId(TESTIDS["design-rail-tokens"])).toBeVisible();
   });
 
   test("Flows tab renders the fixture flow graph with wireframe imagery", async () => {
@@ -194,8 +218,12 @@ test.describe("SP-140-3 DesignView", () => {
     // An edge that renders must not sit on top of its nodes: dagre must lay out
     // against the rendered (wireframe-derived) dimensions, not the defaults, or
     // a tall node overlaps its neighbour. Assert the boxes are disjoint.
-    const login = await page.getByTestId("design-flow-node-login").boundingBox();
-    const inbox = await page.getByTestId("design-flow-node-inbox").boundingBox();
+    const login = await page
+      .getByTestId("design-flow-node-login")
+      .boundingBox();
+    const inbox = await page
+      .getByTestId("design-flow-node-inbox")
+      .boundingBox();
     if (!login || !inbox) throw new Error("flow nodes have no bounding box");
     const disjoint =
       login.x + login.width <= inbox.x || inbox.x + inbox.width <= login.x;
@@ -277,7 +305,10 @@ test.describe("SP-140-3 DesignView", () => {
     if (!box) throw new Error("flow node has no bounding box");
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40);
+    await page.mouse.move(
+      box.x + box.width / 2 + 60,
+      box.y + box.height / 2 + 40,
+    );
     await page.mouse.up();
 
     // The sidecar is the canvas's only write (SP-140 invariant 2): positions
@@ -296,11 +327,9 @@ test.describe("SP-140-3 DesignView", () => {
       .toContain("derivedFrom");
   });
 
-
-
   test("Screens tab renders the fixture cards with their README statuses", async () => {
     await openDesignView();
-    await page.getByTestId("design-tab-screens").click();
+    await page.getByTestId(TESTIDS["design-rail-screens"]).click();
 
     const grid = page.getByTestId("design-screens-grid");
     await expect(grid).toBeVisible({ timeout: 30_000 });
@@ -334,7 +363,7 @@ test.describe("SP-140-3 DesignView", () => {
 
   test("opening a screen from the detail pane opens it in the editor", async () => {
     await openDesignView();
-    await page.getByTestId("design-tab-screens").click();
+    await page.getByTestId(TESTIDS["design-rail-screens"]).click();
     await expect(page.getByTestId("design-screens-cards")).toBeVisible({
       timeout: 30_000,
     });
@@ -375,7 +404,7 @@ test.describe("SP-140-3 DesignView", () => {
 
   test("Tokens tab renders the fixture DTCG files grouped, with a path filter", async () => {
     await openDesignView();
-    await page.getByTestId("design-tab-tokens").click();
+    await page.getByTestId(TESTIDS["design-rail-tokens"]).click();
 
     const tree = page.getByTestId("design-tokens-tree");
     await expect(tree).toBeVisible({ timeout: 30_000 });

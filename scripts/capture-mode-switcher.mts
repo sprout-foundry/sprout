@@ -48,6 +48,9 @@ await shot('switcher-open');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 
+// 1b. Code mode after the switcher closes: the Code rail (Git/Files/Search).
+await shot('code-rail');
+
 // 2. Switch to Design.
 await page.getByTestId('sidebar-brand-trigger').click();
 await page.waitForTimeout(400);
@@ -55,13 +58,13 @@ await page.getByTestId('sidebar-brand-option-design').click();
 await page.waitForTimeout(3000);
 await shot('design-flows');
 
-// 3. Screens tab.
-await page.getByTestId('design-tab-screens').click();
+// 3. Screens entry on the Design rail.
+await page.getByTestId('design-rail-screens').click();
 await page.waitForTimeout(1500);
 await shot('design-screens');
 
-// 4. Tokens tab.
-await page.getByTestId('design-tab-tokens').click();
+// 4. Tokens entry on the Design rail.
+await page.getByTestId('design-rail-tokens').click();
 await page.waitForTimeout(1500);
 await shot('design-tokens');
 

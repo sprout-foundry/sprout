@@ -481,12 +481,15 @@ func GetAllChangesMetadata() ([]ChangeLog, error) {
 		}
 
 		revisionPath := filepath.Join(GetRevisionsDir(), metadata.RequestHash)
-		tier, instructions, response := loadRevisionTextForTier(revisionPath)
+		// Tier-only probe: the manifest never surfaces instructions or
+		// the LLM response, so reading those (potentially large) files
+		// per change was pure waste — the dominant cost of manifest
+		// loads on long histories.
+		tier := loadRevisionTierOnly(revisionPath)
+		hasConversation := tier != "" && fileExists(filepath.Join(revisionPath, "conversation.json"))
 
 		changes = append(changes, ChangeLog{
 			RequestHash:      metadata.RequestHash,
-			Instructions:     instructions,
-			Response:         response,
 			FileRevisionHash: metadata.FileRevisionHash,
 			Filename:         metadata.Filename,
 			OriginalCode:     origSentinel,
@@ -498,7 +501,7 @@ func GetAllChangesMetadata() ([]ChangeLog, error) {
 			OriginalPrompt:   metadata.OriginalPrompt,
 			LLMMessage:       metadata.LLMMessage,
 			AgentModel:       metadata.AgentModel,
-			HasConversation:  fileExists(filepath.Join(revisionPath, "conversation.json")),
+			HasConversation:  hasConversation,
 			Tier:             tier,
 		})
 	}
@@ -550,7 +553,17 @@ func GetChangedFilesSince(since time.Time) ([]string, error) {
 //   - hot: all files present (conversation.json + instructions + response)
 //   - warm: conversation.json missing, the other two present
 //   - "": revision dir exists but has neither — treat as missing
+//
+// loadRevisionTierOnly is the cheap variant for callers that need the
+// tier alone: one stat instead of reading instructions.txt and the
+// (often hundreds-of-KB) llm_response.txt. Manifest-scale callers —
+// GetAllChangesMetadata and every /api/changes/* list the WebUI panel
+// issues — must use this; reading full LLM responses per change made
+// those endpoints ~0.5s at 4k stored changes.
 func loadRevisionTextForTier(revisionPath string) (tier, instructions, response string) {
+	if _, err := os.Stat(filepath.Join(revisionPath, "instructions.txt")); err != nil {
+		return "", "", ""
+	}
 	instructionsBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "instructions.txt"))
 	if err != nil {
 		return "", "", ""
@@ -563,6 +576,16 @@ func loadRevisionTextForTier(revisionPath string) (tier, instructions, response 
 		return "hot", instructions, response
 	}
 	return "warm", instructions, response
+}
+
+func loadRevisionTierOnly(revisionPath string) string {
+	if _, err := os.Stat(filepath.Join(revisionPath, "instructions.txt")); err != nil {
+		return ""
+	}
+	if fileExists(filepath.Join(revisionPath, "conversation.json")) {
+		return "hot"
+	}
+	return "warm"
 }
 
 func fileExists(path string) bool {

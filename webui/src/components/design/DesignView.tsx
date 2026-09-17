@@ -50,9 +50,11 @@ export interface DesignViewProps {
   onBack?: () => void;
   /** Called when a design asset should open in the editor. */
   onOpenFile?: (path: string) => void;
+  /** Write transport override for the detail pane's feedback write (tests/hosts). */
+  writeFetch?: typeof fetch;
 }
 
-export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }: DesignViewProps = {}) {
+export default function DesignView({ initialTab = 'flows', onBack, onOpenFile, writeFetch }: DesignViewProps = {}) {
   const [activeTab, setActiveTab] = useState<DesignTab>(initialTab);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReactNode>(null);
@@ -144,7 +146,7 @@ export default function DesignView({ initialTab = 'flows', onBack, onOpenFile }:
         </section>
 
         <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">
-          <DesignDetailPane path={selectedAsset} onOpenFile={onOpenFile} onDetail={setDetail}>
+          <DesignDetailPane path={selectedAsset} onOpenFile={onOpenFile} onDetail={setDetail} fetchFn={writeFetch}>
             {detail}
           </DesignDetailPane>
         </aside>

@@ -211,6 +211,91 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+/* Feedback affordance (SP-140-3 §3e). Tokens only — no raw hex/rgba. */
+
+.design-detail-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.design-feedback-open {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.design-feedback-open:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-feedback-open:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.design-feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.design-feedback-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+}
+
+.design-feedback-note {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.design-feedback-area {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.design-feedback-note:focus-visible,
+.design-feedback-area:focus-visible {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.design-feedback-target,
+.design-feedback-error {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.design-feedback-error {
+  color: var(--accent-warning, var(--text-secondary));
+}
+
 /* Screens tab (SP-140-3 §3c). Tokens only — no raw hex/rgba. */
 
 .design-screens {

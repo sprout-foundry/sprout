@@ -172,7 +172,7 @@ prettier --check`).
       swatches, typography/spacing specimens, search/filter by token
       path, detail pane opens `.tokens.json` in editor. Read-only.
       Spec: SP-140-3 §3d.
-- [ ] **3.9** Feedback write path stub: annotation affordance in the
+- [x] **3.9** Feedback write path stub: annotation affordance in the
       detail pane writing `design/feedback/<target>.json` per the
       SP-140-4d schema (including `resolved`/`resolution` fields).
       Spec: SP-140-3 §3e.

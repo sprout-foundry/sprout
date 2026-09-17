@@ -53,14 +53,14 @@ const validTokenJSON = `{
 
 const validWireframeBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
   <text x="24" y="64" font-size="28">Login</text>
-  <rect id="submit" x="24" y="200" width="342" height="52" data-nav="home" />
+  <rect id="submit" fill="#fff" x="24" y="200" width="342" height="52" data-nav="home" /><!-- {color.semantic.surface} -->
 </svg>`
 
 const validHomeWireframeBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
   <text x="24" y="64" font-size="28">Home</text>
 </svg>`
 
-const validFlowBody = "flowchart TD\n  login --> home\n"
+const validFlowBody = "flowchart TD\n  login --> home\n  home --> home\n"
 
 const validScreenHTML = `<!DOCTYPE html>
 <html>

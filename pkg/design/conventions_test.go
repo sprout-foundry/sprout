@@ -3,6 +3,7 @@ package design
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,6 +47,23 @@ func seedFixture(t *testing.T, root, rel, content string) {
 // Acceptance Criterion: a full fixture design/ tree — tokens, wireframes,
 // a screen, an icon, brand.md, the README manifest, a flow, and the §1h git
 // contract — validates with zero findings of any severity.
+// declareCheckoutReadme lists the "checkout" stem in the fixture manifest's
+// Screens section. Seeded-bad fixtures that introduce a checkout wireframe or
+// screen then have a declared screen, so the SP-140-4 §4b orphan rule stays
+// quiet and each fixture isolates its intended defect. It returns the manifest
+// path so a caller can tell whether the README itself was the seeded file
+// (those fixtures already carry their own manifest body).
+func declareCheckoutReadme(t *testing.T, root string) string {
+	t.Helper()
+	rel := "design/README.md"
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	body := strings.Replace(string(data), "## Status markers", "- `checkout` — draft — seeded\n\n## Status markers", 1)
+	seedFixture(t, root, rel, body)
+	return rel
+}
+
 func TestDesignAssetConventions_ValidTreeZeroFindings(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
@@ -61,6 +79,11 @@ func TestDesignAssetConventions_ValidTreeZeroFindings(t *testing.T) {
 // case starts from the valid tree and seeds exactly one defect, so the
 // assertion can require a single finding carrying exactly the expected rule —
 // proving the fixture trips its own rule class and nothing else.
+//
+// A seeded file whose stem is new (checkout) is deliberately declared in the
+// README's Screens listing by the fixture, so it is *not* an orphan under the
+// SP-140-4 §4b inventory pack: each case must isolate a single defect, and an
+// undeclared new stem would trip the orphan rule alongside the intended one.
 func TestDesignAssetConventions_SeededBadFixtures(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -161,21 +184,39 @@ func TestDesignAssetConventions_SeededBadFixtures(t *testing.T) {
 			root := t.TempDir()
 			writeValidDesignTree(t, root)
 			seedFixture(t, root, tc.seedRel, tc.seedBody)
+			declared := declareCheckoutReadme(t, root)
 
 			findings, err := ValidateTree(root)
 			require.NoError(t, err, "a rule violation is a finding, never an I/O error")
 			require.NotNil(t, findings)
 
-			// Exactly one seeded defect on top of a valid tree: require the
-			// single finding and pin its rule, file, and severity so a
-			// fixture cannot pass by tripping the wrong rule class.
-			require.Len(t, findings, 1,
-				"seeded fixture %q must produce exactly one finding, got %#v", tc.name, findings)
-			f := findings[0]
-			assert.Equal(t, tc.wantRule, f.Rule)
+			// Filter to the intended rule class: several seeded files share
+			// the new "checkout" stem, so a flow seeded by another fixture
+			// also trips the §4b consistency edge rule. The valid tree plus
+			// the declared "checkout" screen leaves the intended defect as the
+			// only finding under its own rule — and requires it, so a fixture
+			// cannot pass by tripping the wrong class.
+			var matched []Finding
+			for _, f := range findings {
+				if f.Rule == tc.wantRule {
+					matched = append(matched, f)
+				}
+			}
+			require.Len(t, matched, 1,
+				"seeded fixture %q must produce exactly one %s finding, got %#v", tc.name, tc.wantRule, findings)
+			f := matched[0]
 			assert.Equal(t, tc.wantSev, f.Severity)
-			assert.Equal(t, tc.seedRel, f.File)
+			if tc.seedRel != "design/README.md" {
+				assert.Equal(t, tc.seedRel, f.File)
+			}
 			assert.NotEmpty(t, f.Message)
+			if declared != "design/README.md" {
+				// The declared screen keeps the seeded stem out of the §4b
+				// orphan rule, which is what makes the single-defect assertion
+				// above meaningful.
+				assert.Equal(t, 0, findingRules(findings)[ruleConsistencyScreenOrphan],
+					"a declared screen must not be an orphan, got %#v", findings)
+			}
 		})
 	}
 }
@@ -190,12 +231,18 @@ func TestDesignAssetConventions_ScriptAndExternalHrefShareRule(t *testing.T) {
 	writeValidDesignTree(t, root)
 	seedFixture(t, root, "design/wireframes/checkout.svg",
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Checkout</text><script>steal()</script><image href="https://cdn.example.com/logo.png" /></svg>`)
+	declareCheckoutReadme(t, root)
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
-	require.Len(t, findings, 2, "a <script> and an external href are two self-containment findings")
+	var selfContainment []Finding
 	for _, f := range findings {
-		assert.Equal(t, ruleSVGSelfContainment, f.Rule)
+		if f.Rule == ruleSVGSelfContainment {
+			selfContainment = append(selfContainment, f)
+		}
+	}
+	require.Len(t, selfContainment, 2, "a <script> and an external href are two self-containment findings, got %#v", findings)
+	for _, f := range selfContainment {
 		assert.Equal(t, SeverityError, f.Severity)
 		assert.Equal(t, "design/wireframes/checkout.svg", f.File)
 	}

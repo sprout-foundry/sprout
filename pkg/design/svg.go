@@ -245,6 +245,11 @@ func ValidateWireframe(relPath string, content []byte, knownStems []string, fram
 	// embedded data URI size (advisory warn, SP-140-1 §1h binary hygiene).
 	findings = append(findings, ValidateDataURISizes(relPath, content)...)
 
+	// literal fill/stroke/font-family values not backed by a {token.path}
+	// comment (advisory info, SP-140-4 §4b "Token usage"): wireframes are
+	// low-fidelity drafts so literals are allowed, but they are tracked for sync.
+	findings = append(findings, validateTokenUsage(relPath, content)...)
+
 	return finalizeWireframeFindings(findings)
 }
 

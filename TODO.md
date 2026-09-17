@@ -258,7 +258,7 @@ prettier --check`).
       becomes a sync section; designer prompt drops "hand off" for "keep
       the tree truthful". Also carries §5c's "skill and persona prompts
       explain the design-ahead vs code-ahead difference". Spec: SP-140-5 §5d.
-- [ ] **5.7** Co-commit rule + `design:` commit-type convention in the
+- [x] **5.7** Co-commit rule + `design:` commit-type convention in the
       skill's sync section; test that a fixture loop produces one commit
       carrying code + design adoption and that reverting removes both.
       Spec: SP-140-5 §5f.

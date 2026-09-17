@@ -187,3 +187,7 @@ docs/embed.md
 .scratch
 # Local audit working notes (not for the public repo)
 webui/docs/WEBUI-AUDIT-2026-09-11.md
+
+# SP-140 PR screenshots (design-assets branch only; see .github PR body)
+!docs/pr-assets/
+!docs/pr-assets/*.png

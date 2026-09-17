@@ -5,11 +5,17 @@ import { ApiService, type SproutSettings, type ProviderOption } from '../../serv
 import type { SubagentTypeInfo } from '../../services/api/types';
 import { debugLog } from '../../utils/log';
 import { getNestedValue } from './settingsHelpers';
-import type { SettingsSubTab } from './types';
 
 interface UseSettingsStateReturn {
-  activeSubTab: SettingsSubTab;
-  setActiveSubTab: (v: SettingsSubTab) => void;
+  /** Bump to re-run the layer/provenance fetch (e.g. after a non-session
+   *  save so the displayed values match what was just written). */
+  layerFetchTick: number;
+  bumpLayerFetchTick: () => void;
+  /** True while a providers-consuming subsection is active; gates the
+   *  subagent-types / provider-info fetches that used to key off a
+   *  legacy flat tab id. */
+  providersSectionActive: boolean;
+  setProvidersSectionActive: (v: boolean) => void;
   /** Force a re-fetch of the current provider/model info shown in the
    *  Providers tab — used after the inline switcher persists changes. */
   refreshCurrentProviderInfo: () => void;
@@ -116,7 +122,8 @@ export function useSettingsState(
   onSettingsChanged: (settings: SproutSettings) => void,
   _onRequestProviderSetup?: () => void,
 ): UseSettingsStateReturn {
-  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
+  const [layerFetchTick, setLayerFetchTick] = useState(0);
+  const [providersSectionActive, setProvidersSectionActive] = useState(false);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
   const [configViewLayer, setConfigViewLayer] = useState<'session' | 'workspace' | 'global'>('session');
@@ -257,15 +264,16 @@ export function useSettingsState(
         cancelled = true;
       };
     }
-  }, [activeSubTab, configViewLayer]);
+  }, [configViewLayer, layerFetchTick]);
 
-  // Fetch subagent type / persona definitions when the subagents tab is
-  // active. (The provider catalog is supplied by ProviderCatalogContext;
-  // this fetch only needs the persona-specific fields.) Callers that just
-  // need fresh providers should call refreshSubagentProviders below, which
-  // refreshes the catalog rather than re-hitting this endpoint.
+  // Fetch subagent type / persona definitions when a providers-consuming
+  // subsection is active. (The provider catalog is supplied by
+  // ProviderCatalogContext; this fetch only needs the persona-specific
+  // fields.) Callers that just need fresh providers should call
+  // refreshSubagentProviders below, which refreshes the catalog rather than
+  // re-hitting this endpoint.
   useEffect(() => {
-    if (activeSubTab !== 'subagents' && activeSubTab !== 'providers') return;
+    if (!providersSectionActive) return;
     let cancelled = false;
     (async () => {
       try {
@@ -279,18 +287,18 @@ export function useSettingsState(
     return () => {
       cancelled = true;
     };
-  }, [activeSubTab, api]);
+  }, [providersSectionActive, api]);
 
   // Bug B fix: when the Providers tab is opened while the catalog is empty
   // (e.g. user opened Settings during a brief disconnect), nudge the catalog
   // to load so the UI doesn't appear broken. This is a no-op when data is
   // already present, a fetch is in-flight, or the connection is down.
   useEffect(() => {
-    if (activeSubTab !== 'providers') return;
+    if (!providersSectionActive) return;
     if (catalog.providers.length === 0 && !catalog.isLoading) {
       catalog.ensureLoaded();
     }
-  }, [activeSubTab, catalog]);
+  }, [providersSectionActive, catalog]);
 
   // ProviderSettingsTab calls this after adding a custom provider so the
   // new entry appears in dropdowns immediately. Routing through the shared
@@ -315,7 +323,7 @@ export function useSettingsState(
     setCurrentProviderRefreshTick((n) => n + 1);
   }, []);
   useEffect(() => {
-    if (activeSubTab !== 'providers') return;
+    if (!providersSectionActive) return;
 
     // Fast path: use cached data if available and still fresh (within 5s)
     // and no explicit invalidation (tick === 0). This eliminates the
@@ -355,11 +363,13 @@ export function useSettingsState(
     return () => {
       cancelled = true;
     };
-  }, [activeSubTab, api, currentProviderRefreshTick]);
+  }, [providersSectionActive, api, currentProviderRefreshTick]);
 
   return {
-    activeSubTab,
-    setActiveSubTab,
+    layerFetchTick,
+    bumpLayerFetchTick: () => setLayerFetchTick((n) => n + 1),
+    providersSectionActive,
+    setProvidersSectionActive,
     refreshCurrentProviderInfo,
     refreshSubagentProviders,
     configViewLayer,

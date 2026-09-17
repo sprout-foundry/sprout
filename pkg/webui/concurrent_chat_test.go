@@ -530,6 +530,13 @@ func TestChatSessionDeleteConcurrentWithQuery(t *testing.T) {
 
 	ws := setupConcurrentTestServer(t)
 
+	// Delete spawns releaseAgents → async agent Shutdown, which flushes
+	// history/state into the (temp) state dir. Wait for that teardown
+	// before returning so the writes land before t.TempDir cleanup, not
+	// during its RemoveAll walk ("TempDir RemoveAll cleanup: directory
+	// not empty" — the flake this test hit in CI).
+	t.Cleanup(ws.waitForAgentTeardown)
+
 	// Create a chat session to delete/query concurrently.
 	chatX := createChatSession(t, ws, testConcurrentClientID, "Chat X")
 

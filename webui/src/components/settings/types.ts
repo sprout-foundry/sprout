@@ -26,21 +26,12 @@ export interface MutationContext {
 }
 
 /**
- * Legacy flat tab IDs — kept for backward compatibility with useSettingsState.
- * New code should use SettingsSection / SettingsSubsection from SECTION_GROUPS.
+ * Legacy flat tab IDs — removed. useSettingsState keys its fetch effects off
+ * the config layer, a layerFetchTick (re-fetch after non-session saves), and
+ * a providersSectionActive flag set by the panel when a providers-consuming
+ * subsection renders. Add per-subsection data needs as explicit hooks there
+ * rather than reviving flat tab ids.
  */
-export type SettingsSubTab =
-  | 'general'
-  | 'security'
-  | 'credentials'
-  | 'performance'
-  | 'subagents'
-  | 'commit-review'
-  | 'pdf-ocr'
-  | 'mcp'
-  | 'providers'
-  | 'skills'
-  | 'embeddings';
 
 export interface EditorPreferences {
   autoSaveEnabled: boolean;
@@ -175,38 +166,6 @@ export function scopeToLayer(scope: SectionDef['scope']): 'session' | 'workspace
   if (scope === 'session' || scope === 'runtime') return 'session';
   if (scope === 'workspace') return 'workspace';
   return 'global';
-}
-
-/**
- * Map a subsection ID to the legacy SettingsSubTab used by useSettingsState.
- * This keeps the internal fetch effects in useSettingsState working.
- */
-export function subsectionToLegacyTab(subsectionId: SettingsSubsection): SettingsSubTab {
-  const map: Record<SettingsSubsection, SettingsSubTab> = {
-    'agent-general': 'general',
-    'agent-behavior': 'security',
-    'agent-subagents': 'subagents',
-    'agent-skills': 'skills',
-    'agent-memory': 'general',
-    'workspace-embeddings': 'embeddings',
-    'workspace-mcp': 'mcp',
-    'workspace-lsp': 'general',
-    'env-providers': 'providers',
-    'env-local-llm': 'general',
-    // env-github is self-contained (localStorage PAT + api.github.com fetch);
-    // it has no settings-layer state of its own, so route through 'general'
-    // like env-local-llm so any session-layer fetch still fires.
-    'env-github': 'general',
-    // env-advanced is the collapsed Advanced tab (SP-091-10 / SP-017). It
-    // renders Performance + Commit & Review + OCR side-by-side. Route its
-    // legacy fetch effect through 'performance' as a representative
-    // global-scope ancestor so any state-layer fetch fires correctly.
-    'env-advanced': 'performance',
-    'editor-preferences': 'general',
-    'editor-notifications': 'general',
-    'experimental-computer-use': 'general',
-  };
-  return map[subsectionId];
 }
 
 export type { SproutSettings, ProviderOption };

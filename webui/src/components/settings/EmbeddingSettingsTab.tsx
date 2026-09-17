@@ -43,9 +43,15 @@ export default function EmbeddingSettingsTab({
 
   // Embedding-dependent controls (status, model info, auto-build, duplicate
   // detection tuning, exclude paths, rebuild) only make sense once the index
-  // is enabled. Collapse them when it is off so the panel never shows controls
-  // that would appear to work but do nothing.
-  const isEnabled = !!(settings && getNestedValue(settings, 'embedding_index.enabled'));
+  // is enabled. The backend requires both enabled && experimental (SP-137);
+  // the toggle above writes both. Collapse the panel's dependent controls
+  // when the effective gate is off so nothing shows that would appear to
+  // work but do nothing.
+  const isEnabled = !!(
+    settings &&
+    getNestedValue(settings, 'embedding_index.enabled') &&
+    getNestedValue(settings, 'embedding_index.experimental')
+  );
 
   const rawExclude = settings ? (getNestedValue(settings, 'embedding_index.exclude_paths') as unknown) : [];
   const persistedExclude: string[] = Array.isArray(rawExclude) ? rawExclude : [];
@@ -84,8 +90,14 @@ export default function EmbeddingSettingsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch status on mount and poll while building
+  // Fetch status on mount and poll while building. Only fetch when the
+  // index is enabled — an off-by-default experimental index has nothing to
+  // report and the endpoint would just answer "available: false".
   useEffect(() => {
+    if (!isEnabled) {
+      setStatus(null);
+      return;
+    }
     let cancelled = false;
 
     const init = async () => {
@@ -108,8 +120,8 @@ export default function EmbeddingSettingsTab({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isEnabled intentionally not a dep; fetch is init-once when enabled
+  }, [isEnabled]);
 
   const handleRebuild = async () => {
     setIsRebuilding(true);
@@ -211,8 +223,11 @@ export default function EmbeddingSettingsTab({
         </div>
       )}
 
-      {/* Configuration */}
-      {renderToggle('embedding_index.enabled', 'Enable embedding index')}
+      {/* Configuration — the enable toggle is the deliberate-action opt-in
+          path, so it sets the experimental gate alongside enabled, matching
+          what /index and EnableEmbeddingIndex persist (SP-137). Saving only
+          `enabled` leaves `experimental` unset and the index stays off. */}
+      {renderToggle('embedding_index.experimental', 'Enable embedding index (experimental)')}
       {isEnabled && renderToggle('embedding_index.auto_index', 'Auto-build on startup')}
       {isEnabled && renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
 

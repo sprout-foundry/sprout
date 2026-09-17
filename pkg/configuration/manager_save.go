@@ -142,17 +142,42 @@ func (m *Manager) RefreshAPIKeys() error {
 // changes made externally (e.g., editing config.yaml) take effect without
 // restarting the daemon.  Running agents and tools are NOT affected — only
 // subsequent queries will see the new configuration.
+//
+// The re-read mirrors how the manager was constructed: a layered manager
+// (workspaceDir set, configFileName = workspace.json) re-reads global +
+// workspace layers; a single-dir or env-based manager re-reads its own file.
+// Reloading a layered manager from its save file alone would silently drop
+// every global-layer value from memory, so the layer paths are recomputed
+// exactly as NewManagerWithLayers did.
 func (m *Manager) Reload() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var cfg *Config
 	var err error
-	if m.configDir != "" {
-		configPath := filepath.Join(m.configDir, ConfigFileName)
-		cfg, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
-	} else {
-		cfg, err = Load()
+	switch {
+	case m.configFileName == WorkspaceConfigFileName:
+		// Layered manager: save target is the workspace layer. Recompute both
+		// layer paths the same way NewManagerWithLayers did. WorkspaceConfigDir
+		// is stored in configDir; its parent is the workspace root.
+		workspaceDir := m.configDir
+		workspacePath := ResolveWorkspaceConfigFile(workspaceDir, isHomeDir(filepath.Dir(workspaceDir)))
+		globalPath := ""
+		if globalDir, globalErr := getDefaultConfigDir(); globalErr == nil {
+			globalPath = filepath.Join(globalDir, ConfigFileName)
+		}
+		cfg, err = LoadConfigWithLayers(globalPath, workspacePath, "", globalDirFor(workspaceDir))
+	default:
+		if m.configDir != "" {
+			fileName := m.configFileName
+			if fileName == "" {
+				fileName = ConfigFileName
+			}
+			configPath := filepath.Join(m.configDir, fileName)
+			cfg, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
+		} else {
+			cfg, err = Load()
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("reload config: %w", err)
@@ -173,4 +198,15 @@ func (m *Manager) Reload() error {
 	m.apiKeys = keys
 
 	return nil
+}
+
+// globalDirFor returns the "true global" providers dir argument for
+// LoadConfigWithLayers when the global layer lives at the home/XDG default.
+// The workspace save dir is never the global dir, so passing it directly
+// would double-load workspace-scoped providers as global ones.
+func globalDirFor(workspaceDir string) string {
+	if globalDir, err := getDefaultConfigDir(); err == nil && globalDir != workspaceDir {
+		return globalDir
+	}
+	return workspaceDir
 }

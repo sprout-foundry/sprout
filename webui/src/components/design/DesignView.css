@@ -449,3 +449,248 @@
   height: 6px;
   opacity: 0.6;
 }
+
+/* Tokens tab (SP-140-3 §3d). Tokens only — no raw hex/rgba.
+   Token *values* are data: a swatch paints them through an inline style
+   (`background: <token value>`), and never through a literal in this file. */
+
+.design-tokens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.design-tokens-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.design-tokens-search {
+  flex: 1;
+  min-width: 180px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.design-tokens-search:focus-visible {
+  outline: none;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.design-tokens-summary {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+}
+
+.design-tokens-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.design-tokens-file {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.design-tokens-file-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.design-tokens-file-meta {
+  font-size: var(--text-xs, 12px);
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.design-tokens-section {
+  padding: var(--space-2) var(--space-3);
+}
+
+.design-tokens-section-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.design-tokens-group {
+  margin-bottom: var(--space-2);
+}
+
+.design-tokens-group-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.design-tokens-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.design-tokens-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm, 0.875rem);
+  text-align: left;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.design-tokens-row:hover {
+  background: var(--bg-hover);
+}
+
+.design-tokens-row.selected {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border-color: var(--border-strong);
+}
+
+.design-tokens-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.design-tokens-path {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.design-tokens-type {
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.design-tokens-value {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Inline swatch: the background comes from the token's own value (inline
+   style); the border keeps a light value visible against the surface. */
+.design-token-swatch {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.design-token-swatch-lg {
+  width: 40px;
+  height: 40px;
+}
+
+/* Typography specimen: the family/size/weight are painted from the token
+   values by inline style, one line per face in the family. */
+.design-token-font-specimen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+.design-token-font-line {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.design-token-font-meta {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+}
+
+/* Spacing specimen: a bar whose width is the token's own dimension value. */
+.design-token-space-bar {
+  flex: 0 0 auto;
+  height: 8px;
+  min-width: 2px;
+  max-width: 160px;
+  background: var(--accent-primary-alpha);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+}
+
+.design-tokens-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.design-tokens-detail-row {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+}
+
+.design-tokens-detail-label {
+  flex: 0 0 72px;
+  color: var(--text-tertiary);
+}
+
+.design-tokens-detail-value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.design-tokens-schema {
+  margin: 0;
+  padding: var(--space-2);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.design-tokens-alias {
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+}
+
+.design-tokens-alias.is-dangling {
+  color: var(--accent-warning, var(--text-secondary));
+}

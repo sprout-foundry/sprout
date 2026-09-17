@@ -281,3 +281,42 @@ describe('sidecar ↔ designApi interface', () => {
     expect(sidecarStaleness(FLOW, reread, graphOf(FLOW), 'top-down').stale).toBe(false);
   });
 });
+
+describe('canvas persistence round trip (item 3.6)', () => {
+  /** The sidecar a drag persists, then re-reads on the next load. */
+  const persisted = (positions: Record<string, { x: number; y: number }>) =>
+    parseLayoutSidecarText(
+      JSON.stringify(buildLayoutSidecar(graphOf(FLOW), FLOW, { layoutHint: 'left-right', positions }), null, 2),
+    );
+
+  it('reuses dragged positions on the next load while the `.mmd` is untouched', () => {
+    const dragged = { cart: { x: 300, y: 40 }, pay: { x: 700, y: 40 }, done: { x: 1100, y: 40 } };
+    const resolved = resolveFlowLayout(FLOW, graphOf(FLOW), persisted(dragged), 'left-right');
+
+    expect(resolved.regenerated).toBe(false);
+    expect(resolved.positions).toEqual(dragged);
+  });
+
+  it('regenerates the layout when the `.mmd` drifts from the recorded hash', () => {
+    const dragged = { cart: { x: 300, y: 40 }, pay: { x: 700, y: 40 }, done: { x: 1100, y: 40 } };
+    const edited = `${FLOW}\n  done --> refund[Refund]`;
+
+    const resolved = resolveFlowLayout(edited, graphOf(edited), persisted(dragged), 'left-right');
+
+    expect(resolved.regenerated).toBe(true);
+    // The node that already existed is re-laid-out; nothing keeps its drag.
+    expect(resolved.positions.cart).not.toEqual(dragged.cart);
+    // The regenerated sidecar records the edited flow's hash, so the next load
+    // is fresh rather than regenerating on every visit.
+    expect(resolved.sidecar.derivedFrom).toBe(derivedFromHash(edited));
+    expect(resolveFlowLayout(edited, graphOf(edited), resolved.sidecar, 'left-right').regenerated).toBe(false);
+  });
+
+  it('regenerates when the sidecar is missing entirely', () => {
+    const resolved = resolveFlowLayout(FLOW, graphOf(FLOW), null, 'top-down');
+    expect(resolved.regenerated).toBe(true);
+    expect(resolved.sidecar.derivedFrom).toBe(derivedFromHash(FLOW));
+    expect(resolved.sidecar.layoutHint).toBe('top-down');
+    expect(layoutFlowGraph(graphOf(FLOW), { layoutHint: 'top-down' })).toEqual(resolved.positions);
+  });
+});

@@ -72,93 +72,94 @@ prettier --check`).
 
 ## SP-140-2 — Designer Persona & Tools (`roadmap/SP-140-2-persona-tools.md`) — depends on 1.x
 
-- [ ] **2.1** `pkg/personas/configs/designer.json` catalog entry (id
+- [x] **2.1** `pkg/personas/configs/designer.json` catalog entry (id
       `designer`, aliases `ux`/`design`, delegatable, `git_write`
       capability, explicit `allowed_tools` array — no default-set
       mechanism exists; listing not-yet-registered tools is harmless)
       + catalog loader conflict tests. Spec: SP-140-2 §2a.
-- [ ] **2.2** Designer system prompt
+- [x] **2.2** Designer system prompt
       `pkg/agent/prompts/subagent_prompts/designer.md` (+ update the
       static index `pkg/agent/prompts/subagent_prompts/README.md`;
       add `IDDesigner` constant in `pkg/personas/ids.go`): directory
       contract, format charter, validate-then-declare-done workflow,
       critique vocabulary. Spec: SP-140-2 §2a.
-- [ ] **2.3** `design_assets` tool: inventory JSON (manifest summary,
+- [x] **2.3** `design_assets` tool: inventory JSON (manifest summary,
       per-asset rows, token group counts, flow node/edge counts,
       cached validator findings); `{exists: false}` + scaffold guidance
       when no `design/`. Spec: SP-140-2 §2c.
-- [ ] **2.4** Shared render helper extracted from
+- [x] **2.4** Shared render helper extracted from
       `analyze_ui_screenshot_handler.go`: extends input detection
       (`IsHTMLInput` → renderable-input check covering `.svg`) or takes
       an explicit render-mode arg, so SVG renders to PNG instead of
       falling through to the raw `image/svg+xml` vision branch; local
       file rendering passes `allow_file_url: true` in `BrowseOptions`.
       Spec: SP-140-2 §2c.
-- [ ] **2.5** `design_render` tool (`//go:build !js` + WASM stub
+- [x] **2.5** `design_render` tool (`//go:build !js` + WASM stub
       mirroring `all_vision.go`): SVG/HTML via the shared helper,
       mermaid via standalone HTML with pinned vendored mermaid script
       in `pkg/agent_tools/design/` (keep LICENSE/NOTICE; exempt from
       500-line rule); images attached via SP-137 path;
       `analysis_prompt` passthrough; `.mmd` source never mutated.
       Gate-1 precheck. Spec: SP-140-2 §2c.
-- [ ] **2.6** `design_import_sketch` tool (`//go:build !js` + WASM
+- [x] **2.6** `design_import_sketch` tool (`//go:build !js` + WASM
       stub): thin gatekeeper (path validation, Gate-1 precheck,
       target conventions in prompt); vision tier does extraction;
       output reminds the agent to run `design_validate` (the tool does
       not write files). Spec: SP-140-2 §2c.
-- [ ] **2.7** `design-system` skill at
+- [x] **2.7** `design-system` skill at
       `pkg/skills/library/design-system/SKILL.md`: full workflow (brief →
       tokens → wireframes → flows → screens, validate between each),
       greenfield scaffold sequence (README first, then tokens, … ;
       appends to existing `.gitattributes`), brownfield inventory.
       Persona-agnostic. Spec: SP-140-2 §2b.
-- [ ] **2.8** Prompt guidance: static conditional section in
+- [x] **2.8** Prompt guidance: static conditional section in
       `system_prompt.md` + minimal `system_prompt.lite.md` (when
       `design/` exists: read README first, use `design_assets`, route
       to designer/skill) — static prose, no runtime injection; keep
       prompt-consistency tests green. Spec: SP-140-2 §2d.
-- [ ] **2.9** Gate-1 negative tests: off-workspace path denial for
+- [x] **2.9** Gate-1 negative tests: off-workspace path denial for
       `design_assets`/`design_render`/`design_import_sketch` (native
       builds). Spec: SP-140-2 §2e.
-- [ ] **2.10** WASM variant of `design_assets` per the `all_*_wasm.go`
+- [x] **2.10** WASM variant of `design_assets` per the `all_*_wasm.go`
       pattern + tool-roster smoke test (SP-112-9 pattern); confirm
       `design_render`/`design_import_sketch` are excluded from the
       WASM roster. Spec: SP-140-2 AC + SP-140 invariant 7.
-- [ ] **2.11** Scripted-client end-to-end tests: `design_render`
+- [x] **2.11** Scripted-client end-to-end tests: `design_render`
       fixture SVG/HTML round trip (images flow the seed tool-result
       path); `design_import_sketch` as a scripted *agent* turn (vision
       scripted client + `write_file` + `design_validate`) producing
       validated `design/wireframes/login.svg`. Spec: SP-140-2 AC.
+      → `pkg/agent/design_e2e_test.go` (build tag `!js`).
 
 ---
 
 ## SP-140-3 — WebUI DesignView (`roadmap/SP-140-3-designview.md`) — depends on 1.x; parallel with 2.x
 
-- [ ] **3.1** Vendored npm deps: add `@xyflow/react`, `dagre`, `mermaid`
+- [x] **3.1** Vendored npm deps: add `@xyflow/react`, `dagre`, `mermaid`
       to `webui/package.json` (net-new; no CDN references anywhere).
       Spec: SP-140-3 §3g.
-- [ ] **3.2** `webui/src/services/api/designApi.ts` (alongside
+- [x] **3.2** `webui/src/services/api/designApi.ts` (alongside
       `filesApi.ts`, export line in `services/api/index.ts`) over
       existing workspace-file APIs: `listAssets`, `readAsset`,
       `writeLayout`, `writeFeedback` — zero new HTTP endpoints.
       Spec: SP-140-3 §3f.
-- [ ] **3.3** DesignView shell: `webui/src/components/design/DesignView.tsx`
+- [x] **3.3** DesignView shell: `webui/src/components/design/DesignView.tsx`
       wired into the `EditorWorkspace.tsx` view branch + a nav
       affordance in `Sidebar.tsx` (`currentView: 'design'`; `ViewType`
       open union, no type change); visible only when `design/` exists;
       lazy-loaded dynamic-import chunk (verify zero bundle impact
       otherwise); three tabs (Flows, Screens, Tokens). Shell only —
       tabs are separate components (500-line rule). Spec: SP-140-3 §3a.
-- [ ] **3.4** Layout-derivation pure functions: `.mmd` → dagre → node
+- [x] **3.4** Layout-derivation pure functions: `.mmd` → dagre → node
       positions, in `webui/src/design/layout.ts` + `sidecar.ts`.
       Runner: `cd webui && npx vitest run src/design/*.test.ts*`
       (explicit globs; never bare vitest). Spec: SP-140-3 §3b.
-- [ ] **3.5** Flows canvas component (`FlowsCanvas.tsx`): React Flow
+- [x] **3.5** Flows canvas component (`FlowsCanvas.tsx`): React Flow
       rendering with wireframe SVG imagery in nodes (object URLs),
       labeled boxes for flows without wireframes, edge labels visible,
       pan/zoom, node/edge select → detail pane. Canvas never writes
       `.mmd`. Spec: SP-140-3 §3b.
-- [ ] **3.6** Canvas persistence: drag-reposition writes
+- [x] **3.6** Canvas persistence: drag-reposition writes
       `design/flows/<name>.layout.json` sidecar `{nodes, layoutHint,
       derivedFrom}`; hash drift on `.mmd` edit regenerates layout on
       next load. Spec: SP-140-3 §3b.

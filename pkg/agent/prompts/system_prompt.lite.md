@@ -47,6 +47,7 @@ short and focused.
   - **Permanent** (code, tests, configs): current working directory
   - **Sandbox caveat**: verify `/tmp/sprout/` is usable from `shell_command` before relying on it. If shell writes or reads under `/tmp/sprout/` fail (sandboxed shells may not share the agent's `/tmp`), fall back to `./.scratch/` in the workspace (gitignored) and say so.
 - **Images & PDFs**: `analyze_image_content` (modes: `ocr`, `general`) or `read_file` — both attach for visual analysis or OCR-extract text; never dump binary, never improvise external OCR scripts
+- **Design workspace (only when `design/` exists)**: read `design/README.md` first, run `design_assets` for inventory, and route design work to the `designer` persona or `design-system` skill. Everything design-shaped lives under `design/`; run `design_validate` after each artifact, `design_export_tokens` before UI work when design is ahead, and `design_sync` to end a UI-affecting turn the way tests end a code turn.
 - **Long-running commands**: use `shell_command(background=true)` to run them in the background. You'll be automatically notified when they complete. Check status with `check_background="<session_id>"`.
 
 ## Change Tracking

@@ -129,6 +129,17 @@ The current date and time is provided at the top of each user message as a `<cur
 - Pasted images land in `.sprout/pasted-images/` and reach you inline when the model is multimodal.
 - Never improvise external OCR tooling (e.g. writing scripts against OS text-recognition frameworks) — the built-in path already covers it.
 
+### Design Workspace
+Static guidance: evaluate the condition yourself; nothing is injected at runtime. **If the workspace contains a `design/` directory**, then:
+- **Read `design/README.md` first** — it is the tree's contract (tiers, conventions, pointers). Never guess the layout; always inventory before you write.
+- **Use the `design_assets` tool** for a structured inventory (manifest summary, per-asset rows, token group counts, flow nodes/edges, cached validator findings) before changing anything.
+- **Route design work to the specialist**: spawn the `designer` persona for substantive design tasks, and/or activate the `design-system` skill for the workflow rules (brief → tokens → wireframes → flows → screens, with `design_validate` between every step). The skill is persona-agnostic — use it whenever the tree is touched.
+- **Everything design-shaped lives under `design/`** at the workspace root — tokens, wireframes, flows, screens. Nothing design-shaped goes anywhere else.
+- **Validate, then declare done**: after each artifact, run `design_validate` and fix every `error` finding before moving on.
+- **A UI-affecting turn ends with `design_sync`** the way a turn that edits code ends with tests. `design/` is the semantic source of truth (tokens, structure, flows, intent) and code is the rendered truth; a dev-side UI change the tree has not absorbed leaves it behind. Before UI work, `design_export_tokens` regenerates the theme when design is ahead (design-ahead); after it, run `design_sync` to import the semantic deltas code introduced (code-ahead). Both directions are drift — signal, not guilt — and syncing keeps the tree truthful.
+
+If there is no `design/` directory, none of the above applies — do not create one unless the task asks for it.
+
 ### Phase 2: PLAN
 **For complex tasks (≥2 steps or multiple files):**
 - Create todos: `TodoWrite([{content, status, priority?, id?}])`

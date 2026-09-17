@@ -110,6 +110,31 @@ func TestValidateTreeValid(t *testing.T) {
 	assert.Empty(t, findings, "a valid design tree must yield zero findings, got %#v", findings)
 }
 
+func TestValidateTreeFeedbackFinding(t *testing.T) {
+	root := t.TempDir()
+	writeValidDesignTree(t, root)
+	// A §4d feedback file whose target does not resolve to any known stem:
+	// the whole-tree run must surface it (the feedback validator is wired
+	// into ValidateTree), with the correct file and advisory severity.
+	path := filepath.Join(root, DirName, FeedbackSubdir, "login.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path,
+		[]byte(fbDoc("design/wireframes/nowhere.svg", "changes-requested", fbAnnotation)), 0o644))
+
+	findings, err := ValidateTree(root)
+	require.NoError(t, err)
+
+	rules := findingRules(findings)
+	assert.Equal(t, 1, rules[ruleFeedbackTargetDangling],
+		"ValidateTree must surface the feedback dangling-target finding, got %#v", findings)
+	for _, f := range findings {
+		if f.Rule == ruleFeedbackTargetDangling {
+			assert.Equal(t, "design/feedback/login.json", f.File)
+			assert.Equal(t, SeverityInfo, f.Severity)
+		}
+	}
+}
+
 func TestValidateTreeMissingDesignDir(t *testing.T) {
 	root := t.TempDir()
 

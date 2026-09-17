@@ -214,7 +214,7 @@ prettier --check`).
 - [x] **4.6** Self-review loop in skill + designer prompt: write →
       `design_validate` → `design_critique` → fix; stopping rule = all
       findings `info` or explicitly accepted. Spec: SP-140-4 §4c.
-- [ ] **4.7** Feedback consumption: `design_assets` reports pending
+- [x] **4.7** Feedback consumption: `design_assets` reports pending
       feedback targets with counts; skill loop starts any
       `changes-requested` target with a feedback-file read. Spec:
       SP-140-4 §4d.

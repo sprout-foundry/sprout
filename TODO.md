@@ -222,7 +222,7 @@ prettier --check`).
       `resolved` from the detail pane; agent closes the loop with a
       `resolution` note (schema fields defined in SP-140-4 §4d).
       Spec: SP-140-4 §4d.
-- [ ] **4.9** Seeded-fixture tests for each consistency rule (right
+- [x] **4.9** Seeded-fixture tests for each consistency rule (right
       severity) + feedback round-trip test + cache render-count test +
       21-screen cap test. Spec: SP-140-4 AC.
 

@@ -180,7 +180,7 @@ prettier --check`).
       Runner: `cd webui && npx vitest run <explicit globs>` (never bare
       vitest; `scripts/vitest-safe.sh` runs packages/ui tests, not
       webui). Spec: SP-140-3 AC.
-- [ ] **3.11** Playwright e2e `test/webui/design_view.spec.ts`:
+- [x] **3.11** Playwright e2e `test/webui/design_view.spec.ts`:
       chrome-channel launch per AGENTS.md; own stack with pre-seeded
       `workspaceDir` fixture (standard `start-stack.mjs` boots a fresh
       workspace with no `design/`): open fixture workspace → flow
@@ -191,12 +191,11 @@ prettier --check`).
 
 ## SP-140-4 — Visual Loop (`roadmap/SP-140-4-visual-loop.md`) — depends on 2.x and 3.x
 
-- [ ] **4.1** `design_critique` tool core: render target(s) via
+- [x] **4.1** `design_critique` tool core: render target(s) via
       `design_render`, images via SP-137 path, structured rubric prompt
       (hierarchy, affordance, consistency, spacing rhythm, contrast,
-      touch targets), structured findings `{target, area, severity,
-      note, suggestion}`. Spec: SP-140-4 §4a.
-- [ ] **4.2** Critique degradation: non-vision primary → static findings
+      touch targets), structured findings `{target, area, severity, note,
+      suggestion}`. Spec: SP-140-4 §4a.- [ ] **4.2** Critique degradation: non-vision primary → static findings
       with `visual: false`, never fails the turn (SP-137 tier order).
       Spec: SP-140-4 §4a.
 - [ ] **4.3** Critique cache + cost cap: PNG cache under

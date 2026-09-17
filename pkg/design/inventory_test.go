@@ -67,12 +67,14 @@ func TestScanValidTree(t *testing.T) {
 	require.Len(t, inv.TokenGroups, 1)
 	assert.Equal(t, TokenGroupCount{Group: "color", Tokens: 2}, inv.TokenGroups[0])
 
-	// Flow node/edge counts: login -> home is 2 nodes, 1 edge.
+	// Flow node/edge counts: login -> home plus the self-loop home -> home is
+	// 2 nodes and 2 edges (the self-loop keeps every wireframe stem referenced
+	// by a flow, so the §4b inventory pack sees no orphan).
 	require.Len(t, inv.Flows, 1)
 	assert.Equal(t, "design/flows/sign-up.mmd", inv.Flows[0].Path)
 	assert.Equal(t, "sign-up", inv.Flows[0].Name)
 	assert.Equal(t, 2, inv.Flows[0].Nodes)
-	assert.Equal(t, 1, inv.Flows[0].Edges)
+	assert.Equal(t, 2, inv.Flows[0].Edges)
 
 	// Findings: the valid tree validates clean.
 	assert.Empty(t, inv.Findings)

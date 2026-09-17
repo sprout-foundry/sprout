@@ -49,9 +49,9 @@ var manifestSectionHeadingRe = regexp.MustCompile(`^#{1,6}\s+(.*\S)\s*$`)
 // bullet (`- \`login\` — draft — sign-in`).
 var manifestBulletNameRe = regexp.MustCompile("^[-*]\\s+`([^`]+)`")
 
-// ValidateConsistency runs the flow/wireframe bidirectionality consistency pack
-// over the whole design tree under root, SP-140-4 §4b. It covers the
-// cross-artifact checks the per-artifact validators cannot see:
+// ValidateConsistency runs the cross-artifact consistency packs over the whole
+// design tree under root, SP-140-4 §4b. It covers the cross-artifact checks the
+// per-artifact validators cannot see:
 //
 //   - ruleConsistencyFlowEdgeWireframe: every non-terminal node referenced by
 //     a flow edge has a wireframe counterpart (a terminal state is exempt);
@@ -62,9 +62,14 @@ var manifestBulletNameRe = regexp.MustCompile("^[-*]\\s+`([^`]+)`")
 // The third bullet of §4b ("every data-nav target exists") is the existing
 // ruleSVGDataNavDangling hard rule (svg.go); it is emitted through
 // ValidateWireframesDir/ValidateWireframe and is covered by this pack's tests
-// rather than re-implemented here. A workspace with no design/ tree yields no
-// findings. Findings are sorted by file, line, rule, message; the result is
-// never nil.
+// rather than re-implemented here.
+//
+// It also runs the screen-inventory and naming packs of §4b (orphan screens,
+// screens/ ↔ wireframes/ name mismatches, duplicate screen names), which live
+// in inventory_rules.go alongside this pack because they share the same
+// cross-artifact dispatch point and finding schema. A workspace with no design/
+// tree yields no findings. Findings are sorted by file, line, rule, message;
+// the result is never nil.
 func ValidateConsistency(root string) []Finding {
 	findings := []Finding{}
 
@@ -96,6 +101,14 @@ func ValidateConsistency(root string) []Finding {
 		flowStems:      flowStems,
 	}
 	findings = append(findings, validateReadmeScreenRefs(root, readmeAssets)...)
+
+	// SP-140-4 §4b screen inventory + naming packs (inventory_rules.go): orphan
+	// screens (info) and screens/ ↔ wireframes/ name mismatches (warn). They
+	// share this dispatch point so design_validate and the static critique pick
+	// them up with the bidirectionality pack.
+	findings = append(findings, ValidateInventory(root)...)
+	findings = append(findings, screenSlugViolations(root)...)
+	findings = append(findings, screenNameMismatches(root)...)
 
 	sortFindings(findings)
 	return findings

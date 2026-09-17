@@ -12,8 +12,12 @@ import (
 // validWireframeSVG is a self-contained wireframe that satisfies every hard
 // and advisory rule against a mobile frame and a resolvable data-nav target,
 // so a consistent run yields zero findings.
+// The literal font-family is backed by a {token.path} comment (SP-140-4 §4b
+// "Token usage"), so the otherwise-clean fixture also satisfies the
+// token-usage rule: a wireframe may use a literal value when the intended
+// token is recorded in a comment beside it.
 const validWireframeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28" font-family="Inter">Login</text>
+  <text x="24" y="64" font-size="28" font-family="Inter"><!-- {typography.body.font-family} -->Login</text>
   <rect id="submit" x="24" y="200" width="342" height="52" data-nav="home" />
 </svg>`
 

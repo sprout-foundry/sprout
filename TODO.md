@@ -207,7 +207,7 @@ prettier --check`).
       every `data-nav` target exists; every flow edge has a wireframe
       counterpart unless terminal; README screen references exist.
       Spec: SP-140-4 §4b.
-- [ ] **4.5** Consistency rule pack — inventory & naming: token-usage
+- [x] **4.5** Consistency rule pack — inventory & naming: token-usage
       tracking (literal colors/fonts flagged `info`), orphan screens
       (`info`), slug rule + wireframe/screens name mismatch (`warn`).
       Spec: SP-140-4 §4b.

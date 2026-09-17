@@ -52,9 +52,12 @@ const dvTestTokenJSON = `{
   }
 }`
 
+// The literal fill is backed by a {token.path} comment (SP-140-4 §4b "Token
+// usage"), so the clean fixture also satisfies the token-usage rule: literal
+// values are allowed when the intended token is recorded alongside.
 const dvTestLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
   <text x="24" y="64" font-size="28">Login</text>
-  <rect id="submit" x="24" y="200" width="342" height="52" data-nav="home" />
+  <rect id="submit" fill="#fff" x="24" y="200" width="342" height="52" data-nav="home"><!-- {color.semantic.surface} --></rect>
 </svg>`
 
 const dvTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
@@ -178,9 +181,13 @@ func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	dvWriteValidTree(t, root)
-	// Seed a bad wireframe: a dangling data-nav target.
+	// Seed a bad wireframe: a dangling data-nav target. The stem is new, so
+	// declare it in the README's Screens listing to keep it out of the §4b
+	// orphan rule and let this fixture pin the dangling data-nav class alone.
 	dvWrite(t, root, "design/wireframes/signup.svg",
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Sign up</text><rect id="go" data-nav="nowhere" /></svg>`)
+	dvWrite(t, root, "design/README.md", strings.Replace(dvTestManifest,
+		"## Flows", "- `signup` — draft — seeded\n\n## Flows", 1))
 	h := &designValidateHandler{}
 
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
@@ -424,6 +431,44 @@ func TestDesignValidateHandler_ReadOnly(t *testing.T) {
 	}))
 
 	require.Equal(t, before, after, "design_validate must never write to the tree")
+}
+
+// ---------------------------------------------------------------------------
+// §4b inventory & naming consistency pack (SP-140-4 item 4.5)
+// ---------------------------------------------------------------------------
+
+// TestDesignValidateHandler_ConsistencyPackFindings proves design_validate (a
+// whole-tree run) surfaces the §4b inventory/naming/token rules introduced by
+// SP-140-4 item 4.5, each with its specified severity: literal token usage
+// (info), an orphan screen (info), and a screen name mismatch (warn).
+func TestDesignValidateHandler_ConsistencyPackFindings(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dvWriteValidTree(t, root)
+	// Token usage + orphan: a wireframe with a literal fill and no token
+	// comment, declared nowhere.
+	dvWrite(t, root, "design/wireframes/billing.svg",
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text fill="#ff0000">Billing</text></svg>`)
+	// Naming mismatch: a delivered screen with no wireframe counterpart.
+	dvWrite(t, root, "design/screens/receipt.html",
+		`<!DOCTYPE html><html><head><style>body{width:390px}</style></head><body>x</body></html>`)
+	h := &designValidateHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "consistency findings are advisory — they never block a turn")
+
+	out := res.StructuredOut.(findingsOutput)
+	require.Equal(t, 1, out.BySeverity["warn"], "the naming mismatch is the one warn, got %#v", out.Findings)
+	require.GreaterOrEqual(t, out.BySeverity["info"], 2, "token usage + orphan are infos, got %#v", out.Findings)
+
+	byRule := map[string]string{}
+	for _, f := range out.Findings {
+		byRule[f.Rule] = f.Severity
+	}
+	require.Equal(t, "info", byRule["svg_token_usage"], "got %#v", out.Findings)
+	require.Equal(t, "info", byRule["consistency_screen_orphan"], "got %#v", out.Findings)
+	require.Equal(t, "warn", byRule["consistency_screen_name_mismatch"], "got %#v", out.Findings)
 }
 
 func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {

@@ -89,6 +89,13 @@ make build-all               # WASM shell + embedded Web UI + Go binary
 | `npx playwright test --project=webui test/webui/<spec>.spec.ts` | Web UI e2e (backend + Vite stack auto-starts) |
 | `make vet && make fmt-check && make lint` | Pre-PR gates |
 
+**Web UI development with hot reload:** run the backend
+(`./sprout agent --daemon`) next to the Vite dev server
+(`cd webui && npm run dev`) and edit `webui/src/**` with instant HMR at
+http://localhost:3000 — no UI rebuild needed. `./sprout serve` swaps in a
+canned-response mock LLM so no provider credentials are required. Full
+instructions and gotchas: [webui/DEVELOPMENT.md](webui/DEVELOPMENT.md).
+
 Agent guidance for working in this repo: [AGENTS.md](AGENTS.md). Contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md). Authoritative specs: [roadmap/](roadmap/) (`SP-###.md`).
 
 ## Architecture in 30 seconds

@@ -41,6 +41,7 @@ export type {
   DesignAssetKind,
   DesignLayoutSidecar,
   DesignFeedbackFile,
+  DesignFeedbackAnnotation,
   DesignFeedbackEntry,
   DesignTokenGroup,
   DesignFlowSummary,

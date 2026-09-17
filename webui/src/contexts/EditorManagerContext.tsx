@@ -80,7 +80,10 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
+  saveBuffer: (
+    bufferId: string,
+    options?: { force?: boolean },
+  ) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;

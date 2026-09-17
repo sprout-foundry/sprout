@@ -9,6 +9,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { INSTANCE_PID_STORAGE_KEY } from '../constants/app';
+import CodeShell from './CodeShell';
+import DesignShell from './DesignShell';
 import { DEFAULT_WORKSPACE_MODE, WORKSPACE_MODES, availableModes, resolveWorkspaceMode } from './registry';
 import {
   persistWorkspaceMode,
@@ -41,6 +43,14 @@ describe('registry', () => {
       expect(mode.hint).not.toBe('');
       expect(mode.icon).toBeTruthy();
     }
+  });
+
+  it('gives every mode a shell component', () => {
+    for (const mode of WORKSPACE_MODES) {
+      expect(typeof mode.Shell).toBe('function');
+    }
+    expect(WORKSPACE_MODES.find((m) => m.id === 'code')?.Shell).toBe(CodeShell);
+    expect(WORKSPACE_MODES.find((m) => m.id === 'design')?.Shell).toBe(DesignShell);
   });
 });
 

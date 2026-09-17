@@ -11,15 +11,19 @@
  * inside a shared frame. That is what keeps a mode from feeling bolted on: it
  * owns its region instead of competing with another mode's chrome.
  *
- * This module holds *metadata* only — labels, icons, availability. The surfaces
- * themselves are components rendered by the shell, kept out of here so this
- * file has no dependency on the view tree and cannot form an import cycle.
+ * This module holds mode *identity* — labels, icons, availability — plus the
+ * mode's shell component, which composes its surface and its own chrome. The
+ * surfaces stay inside their shells, not here.
  *
- * Adding a mode is: one entry here, one rail, one surface. No new
- * `currentView === 'x'` exception in the shell.
+ * Adding a mode is: one entry here, one rail, one shell. No new
+ * `currentView === 'x'` exception in the app.
  */
 
 import { Code2, Palette, type LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
+import CodeShell from './CodeShell';
+import DesignShell from './DesignShell';
+import type { WorkspaceShellProps } from './shell';
 
 /** Stable identifier for a mode. Persisted, so treat these as a wire format. */
 // The open union mirrors `ViewType` (types/app.ts): known ids complete, and a
@@ -53,6 +57,12 @@ export interface WorkspaceMode {
    * wondering what broke.
    */
   available: (ctx: WorkspaceModeContext) => boolean;
+  /**
+   * The mode's shell: the content column plus the chrome that belongs to it.
+   * The app renders the active mode's shell directly, so a mode's chrome is
+   * composed by the mode instead of suppressed out of shared components.
+   */
+  Shell: ComponentType<WorkspaceShellProps>;
 }
 
 /** The mode new sessions start in. */
@@ -72,6 +82,7 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [
     icon: Code2,
     hint: 'Chat, editor, git, terminal',
     available: () => true,
+    Shell: CodeShell,
   },
   {
     id: 'design',
@@ -79,6 +90,7 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [
     icon: Palette,
     hint: 'Flows, screens, tokens',
     available: (ctx) => ctx.hasDesignTree,
+    Shell: DesignShell,
   },
 ];
 

@@ -2,16 +2,18 @@
  * Right detail pane for DesignView (SP-140-3 §3a).
  *
  * Holds the pane's structure: the selected asset's heading, the open-in-editor
- * hand-off, and a slot for tab-specific detail. The tab that owns the
- * selection renders that detail (a flow's node/edge source line, a screen's
- * LivePreview split, a token's JSON) and registers it through `onDetail`, so
- * the shell never learns each tab's shape.
+ * hand-off, the feedback affordance (§3e), and a slot for tab-specific detail.
+ * The tab that owns the selection renders that detail (a flow's node/edge
+ * source line, a screen's LivePreview split, a token's JSON) and registers it
+ * through `onDetail`, so the shell never learns each tab's shape.
  *
- * The feedback annotation affordance (§3e) and the remaining tab detail
- * renderers arrive with items 3.7–3.9; this pane is the seam they attach to.
+ * The feedback annotation affordance is mounted here because every tab's
+ * selection flows through this pane's `path` — that is the asset an annotation
+ * attaches to, whatever surface picked it.
  */
 
 import type { ReactNode } from 'react';
+import DesignFeedbackAffordance from './DesignFeedbackAffordance';
 
 export interface DesignDetailPaneProps {
   /** Currently selected asset path, relative to the design/ root. */
@@ -22,9 +24,11 @@ export interface DesignDetailPaneProps {
   onDetail?: (content: ReactNode) => void;
   /** Tab-supplied detail content. */
   children?: ReactNode;
+  /** Test/host seam for the feedback write transport. */
+  fetchFn?: typeof fetch;
 }
 
-export default function DesignDetailPane({ path, onOpenFile, children }: DesignDetailPaneProps) {
+export default function DesignDetailPane({ path, onOpenFile, children, fetchFn }: DesignDetailPaneProps) {
   return (
     <div className="design-detail" data-testid="design-detail-content" data-selected={path ?? ''}>
       {path ? (
@@ -37,6 +41,7 @@ export default function DesignDetailPane({ path, onOpenFile, children }: DesignD
               Open in editor
             </button>
           ) : null}
+          <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
           {children}
         </>
       ) : (

@@ -34,7 +34,13 @@ func (h *designValidateHandler) Definition() ToolDefinition {
 			"advisory — they never block the turn — so run this after creating or editing " +
 			"design assets and fix the error-severity findings before declaring a design done. " +
 			"Severity `fix` findings are machine-applicable: append the exact line they name " +
-			"(never replace existing rules).",
+			"(never replace existing rules). " +
+			"It also reports design↔code drift direction (SP-140-5 §5c) as two distinct advisory " +
+			"rows with distinct remedies: `design-ahead` (design/ changed, generated/code behind — " +
+			"the healthy state of an active project; remedy: regenerate the theme with " +
+			"design_export_tokens) and `code-ahead` (implementation changed, semantic layer behind — " +
+			"remedy: run design_sync to import the deltas). Drift is signal, not guilt: those rows " +
+			"are info/warn only, never errors.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
@@ -108,7 +114,19 @@ func (h *designValidateHandler) Execute(ctx context.Context, env ToolEnv, args m
 		findings = []design.Finding{}
 	}
 
+	// SP-140-5 §5c: drift direction. design_validate reports the two drift
+	// directions (design-ahead vs code-ahead) as advisory rows AND as advisory
+	// findings, so a validator run names the state and its remedy rather than
+	// leaving it to be inferred. Drift is signal, never an error: the drift
+	// findings are info/warn only, and the row section is always present with
+	// both directions.
+	driftReport := designDriftReport(ctx, env, root)
+	driftOut := buildDesignDriftOut(driftReport)
+	driftFindings := design.DriftDirectionFindings(driftReport)
+	findings = append(findings, driftFindings...)
+
 	structured := buildFindingsOutput(findings)
+	structured.Drift = driftOut
 	return ToolResult{
 		Output:        renderFindingsSummary(root, structured),
 		StructuredOut: structured,
@@ -133,6 +151,13 @@ type findingsOutput struct {
 	Findings   []findingOut   `json:"findings"`
 	Count      int            `json:"count"`
 	BySeverity map[string]int `json:"bySeverity"`
+
+	// Drift is the SP-140-5 §5c drift-direction section: design-ahead and
+	// code-ahead as two distinct rows with distinct remedies, always both,
+	// always advisory. The same rows appear as advisory findings (rules
+	// drift_design_ahead / drift_code_ahead), so a consumer reading either the
+	// section or the finding list sees the direction and its remedy.
+	Drift designDriftOut `json:"drift"`
 }
 
 // buildFindingsOutput converts validator findings into the structured output
@@ -161,6 +186,17 @@ func buildFindingsOutput(findings []design.Finding) findingsOutput {
 // advisory: a run full of error-severity findings still reports success —
 // only tool/I-O failure (handled above) sets IsError.
 func renderFindingsSummary(root string, out findingsOutput) string {
+	driftSuffix := ""
+	if design.FileExists(root) {
+		if line := design.DriftSummaryLine(&design.DriftReport{
+			Rows:             driftRows(out.Drift),
+			DesignAheadCount: out.Drift.DesignAheadCount,
+			CodeAheadCount:   out.Drift.CodeAheadCount,
+			Synced:           out.Drift.Synced,
+		}); line != "" {
+			driftSuffix = " " + line
+		}
+	}
 	if out.Count == 0 {
 		// Distinguish "clean tree" from "no design/ at all" so the agent
 		// knows to scaffold first.
@@ -168,7 +204,7 @@ func renderFindingsSummary(root string, out findingsOutput) string {
 			return "design_validate: No design/ directory found — nothing to validate. " +
 				"Use the design-system skill to scaffold one."
 		}
-		return "design_validate: 0 findings — the design/ tree satisfies the conventions."
+		return "design_validate: 0 findings — the design/ tree satisfies the conventions." + driftSuffix
 	}
 	var parts []string
 	for _, sev := range []string{"error", "warn", "info", "fix"} {
@@ -180,7 +216,27 @@ func renderFindingsSummary(root string, out findingsOutput) string {
 			parts = append(parts, fmt.Sprintf("%d %s(s)", n, sev))
 		}
 	}
-	return fmt.Sprintf("design_validate: %d finding(s) — %s", out.Count, strings.Join(parts, ", "))
+	return fmt.Sprintf("design_validate: %d finding(s) — %s", out.Count, strings.Join(parts, ", ")) + driftSuffix
+}
+
+// driftRows converts the tool-layer drift rows back into the pure
+// design.DriftDirectionRow shape so the shared summary renderer can be reused
+// (one vocabulary, one formatter).
+func driftRows(out designDriftOut) []design.DriftDirectionRow {
+	rows := make([]design.DriftDirectionRow, 0, len(out.Rows))
+	for _, r := range out.Rows {
+		rows = append(rows, design.DriftDirectionRow{
+			Direction: r.Direction,
+			Ahead:     r.Ahead,
+			Synced:    r.Synced,
+			Count:     r.Count,
+			Summary:   r.Summary,
+			Remedy:    r.Remedy,
+			NextStep:  r.NextStep,
+			Advisory:  r.Advisory,
+		})
+	}
+	return rows
 }
 
 func (h *designValidateHandler) Aliases() []string      { return nil }

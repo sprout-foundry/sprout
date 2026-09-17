@@ -40,6 +40,13 @@ func (h *designAssetsHandler) Definition() ToolDefinition {
 			"of targets whose status is `changes-requested` or that carry unresolved " +
 			"annotations — start each pending target by reading its feedback file before editing. " +
 			"Use this to see what exists before extending a design tree rather than guessing. " +
+			"It also reports design↔code drift direction (SP-140-5 §5c) as two distinct advisory " +
+			"rows with distinct remedies: `design-ahead` (design/ changed, generated/code behind — " +
+			"the healthy state of an active project; remedy: regenerate the theme with " +
+			"design_export_tokens, e.g. \"2 screens ahead of build\") and `code-ahead` " +
+			"(implementation changed, semantic layer behind — the state design_sync exists to fix; " +
+			"remedy: run design_sync to import N semantic deltas). Drift is signal, not guilt: " +
+			"both rows are advisory (info/warn), never errors. " +
 			"On a workspace with no design/ directory it returns {exists: false} plus scaffold " +
 			"guidance (use the design-system skill) instead of fabricating a tree.",
 		Parameters: []ParameterDef{
@@ -135,7 +142,7 @@ func (h *designAssetsHandler) Execute(ctx context.Context, env ToolEnv, args map
 		return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_assets: %w", err)
 	}
 
-	out := buildDesignAssetsOutput(root, subtree, formatFilter, inv)
+	out := buildDesignAssetsOutput(root, subtree, formatFilter, inv, buildDesignDriftOut(designDriftReport(ctx, env, root)))
 	return ToolResult{
 		Output:        renderDesignAssetsSummary(out),
 		StructuredOut: out,
@@ -166,6 +173,12 @@ type designAssetsOutput struct {
 	// design/feedback/*.json, always present (possibly empty), plus the
 	// pending subset the design-system skill's loop must start on.
 	Feedback FeedbackReport `json:"feedback"`
+
+	// Drift is the SP-140-5 §5c drift-direction view: design-ahead and
+	// code-ahead as two distinct rows with distinct remedies, always both,
+	// always advisory. It is the same vocabulary design_validate reports, so
+	// the two surfaces cannot disagree.
+	Drift designDriftOut `json:"drift"`
 
 	// Guidance is the scaffold text for a missing design/ tree ("" otherwise).
 	Guidance string `json:"guidance,omitempty"`
@@ -201,6 +214,7 @@ func designMissingOutput(subtree, formatFilter string) designAssetsOutput {
 		Flows:       []design.FlowCounts{},
 		Findings:    []findingOut{},
 		Feedback:    FeedbackReport{Pending: []design.FeedbackFileState{}, All: []design.FeedbackFileState{}},
+		Drift:       buildDesignDriftOut(nil),
 		BySeverity:  map[string]int{"error": 0, "warn": 0, "info": 0, "fix": 0},
 		Guidance: "No design/ directory found. To start a design workspace, " +
 			"activate the design-system skill and scaffold the tree in this order: " +
@@ -213,8 +227,10 @@ func designMissingOutput(subtree, formatFilter string) designAssetsOutput {
 
 // buildDesignAssetsOutput filters the scanned inventory by the optional
 // subtree and format filter and converts the findings to the shared
-// findingOut shape.
-func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inventory) designAssetsOutput {
+// findingOut shape. drift is the §5c drift-direction section, computed by the
+// caller (it needs the ToolEnv for the change-tracker seam) and reported
+// whole-tree like findings and feedback.
+func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inventory, drift designDriftOut) designAssetsOutput {
 	out := designAssetsOutput{
 		Exists:      true,
 		Path:        subtree,
@@ -223,6 +239,7 @@ func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inv
 		Assets:      filterAssets(inv.Assets, subtree, formatFilter),
 		TokenGroups: inv.TokenGroups,
 		Flows:       inv.Flows,
+		Drift:       drift,
 		BySeverity:  map[string]int{"error": 0, "warn": 0, "info": 0, "fix": 0},
 	}
 
@@ -359,6 +376,16 @@ func renderDesignAssetsSummary(out designAssetsOutput) string {
 	} else {
 		sb.WriteString(" No pending feedback.")
 	}
+
+	// SP-140-5 §5c: the drift-direction line, naming both directions and their
+	// remedies so the model reads the state from the text too. Always present
+	// (a synced report says so), because the two-row shape is the point.
+	sb.WriteString(" " + design.DriftSummaryLine(&design.DriftReport{
+		Rows:             driftRows(out.Drift),
+		DesignAheadCount: out.Drift.DesignAheadCount,
+		CodeAheadCount:   out.Drift.CodeAheadCount,
+		Synced:           out.Drift.Synced,
+	}))
 	return sb.String()
 }
 

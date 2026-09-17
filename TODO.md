@@ -246,13 +246,18 @@ prettier --check`).
       token renames/revalues, wireframe/sidecar updates, flow edge
       additions), mark inferred as proposals; never modify files outside
       `design/`; Gate-1 on touched paths. Spec: SP-140-5 §5b, §5e.
-- [ ] **5.5** Drift direction reporting in `design_assets` +
+- [x] **5.5** Drift direction reporting in `design_assets` +
       `design_validate`: design-ahead vs code-ahead as distinct rows
       with distinct remedies. Spec: SP-140-5 §5c.
+      (5.5 ships the rows + remedies on both tool surfaces; §5c's
+      "skill and persona prompts explain the difference" is the 5.6
+      prompt/skill wiring, deferred there. The difference is currently
+      explained in the design_assets/design_validate tool Descriptions.)
 - [ ] **5.6** Loop in the definition of done: prompt/skill wiring —
       UI-affecting turns end with `design_sync`; skill's handoff section
       becomes a sync section; designer prompt drops "hand off" for "keep
-      the tree truthful". Spec: SP-140-5 §5d.
+      the tree truthful". Also carries §5c's "skill and persona prompts
+      explain the design-ahead vs code-ahead difference". Spec: SP-140-5 §5d.
 - [ ] **5.7** Co-commit rule + `design:` commit-type convention in the
       skill's sync section; test that a fixture loop produces one commit
       carrying code + design adoption and that reverting removes both.

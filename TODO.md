@@ -253,7 +253,7 @@ prettier --check`).
       "skill and persona prompts explain the difference" is the 5.6
       prompt/skill wiring, deferred there. The difference is currently
       explained in the design_assets/design_validate tool Descriptions.)
-- [ ] **5.6** Loop in the definition of done: prompt/skill wiring —
+- [x] **5.6** Loop in the definition of done: prompt/skill wiring —
       UI-affecting turns end with `design_sync`; skill's handoff section
       becomes a sync section; designer prompt drops "hand off" for "keep
       the tree truthful". Also carries §5c's "skill and persona prompts

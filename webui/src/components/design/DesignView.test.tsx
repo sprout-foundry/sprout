@@ -18,7 +18,34 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
+import type * as designApiModule from '../../services/api/designApi';
+import type { DesignInventory } from '../../services/api/types/design';
 import DesignView, { DESIGN_TABS, type DesignTab } from './DesignView';
+
+// The shell fetches the inventory itself; a fixture with one asset per class
+// gives the tests real rows to select (the shell-stage stub row is gone).
+vi.mock('../../services/api/designApi', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof designApiModule;
+  const entry = (path: string, kind: string) => ({
+    path,
+    name: path.split('/').pop(),
+    kind,
+    size: 128,
+    modified: 0,
+    status: '',
+  });
+  const inventory: DesignInventory = {
+    exists: true,
+    wireframes: [],
+    layouts: [],
+    screens: [entry('screens/inbox.html', 'screen')],
+    flows: [entry('flows/sign-up.mmd', 'flow')],
+    tokenFiles: [entry('tokens/colors.json', 'tokens')],
+    flowSummaries: [],
+    feedback: [],
+  };
+  return { ...actual, listAssets: vi.fn().mockResolvedValue(inventory) };
+});
 
 function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
   return render(
@@ -107,19 +134,19 @@ describe('DesignView shell', () => {
     expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', '');
   });
 
-  it('rail selection flows into the detail pane and can open the asset in the editor', () => {
+  it('rail selection flows into the detail pane and can open the asset in the editor', async () => {
     const onOpenFile = vi.fn();
     renderDesign({ onOpenFile });
 
     expect(screen.queryByText('Open in editor')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('design-rail-stub-row'));
+    fireEvent.click(await screen.findByTestId('design-rail-row-flows/sign-up.mmd'));
 
     const detail = screen.getByTestId('design-detail-content');
-    expect(detail).toHaveAttribute('data-selected', 'flows/');
+    expect(detail).toHaveAttribute('data-selected', 'flows/sign-up.mmd');
 
     fireEvent.click(screen.getByText('Open in editor'));
-    expect(onOpenFile).toHaveBeenCalledWith('flows/');
+    expect(onOpenFile).toHaveBeenCalledWith('flows/sign-up.mmd');
   });
 
   it('renders the back affordance only when onBack is provided', () => {
@@ -148,10 +175,10 @@ describe('DesignView resolution flow wiring (SP-140-4 §4d)', () => {
 
     expect(screen.queryByTestId('design-feedback-resolution')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('design-rail-stub-row'));
+    fireEvent.click(await screen.findByTestId('design-rail-row-flows/sign-up.mmd'));
 
     const section = await screen.findByTestId('design-feedback-resolution');
-    expect(section.getAttribute('data-target')).toBe('design/flows/');
+    expect(section.getAttribute('data-target')).toBe('design/flows/sign-up.mmd');
     // The shell's readFn seam reaches the pane's reader.
     await waitFor(() => expect(readFn).toHaveBeenCalled());
   });

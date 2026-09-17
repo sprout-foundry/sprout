@@ -29,13 +29,6 @@ const RAIL_LABELS: Record<DesignTab, string> = {
   tokens: 'Tokens',
 };
 
-/** Placeholder stem per tab, used for the shell-stage row's selection path. */
-const RAIL_STUBS: Record<DesignTab, string> = {
-  flows: 'flows/',
-  screens: 'screens/',
-  tokens: 'tokens/',
-};
-
 /** The inventory slice the rail lists for a tab. */
 export function assetsForTab(tab: DesignTab, inventory?: DesignInventory | null): DesignAssetEntry[] {
   if (!inventory) return [];
@@ -52,19 +45,7 @@ export default function DesignAssetsRail({ tab, inventory, selected, onSelect }:
     <div className="design-rail" data-testid="design-assets-rail" data-tab={tab}>
       <h2 className="design-rail-heading">{label}</h2>
       {assets.length === 0 ? (
-        <>
-          <p className="design-rail-placeholder">No {label.toLowerCase()} in this workspace.</p>
-          {onSelect && (
-            <button
-              type="button"
-              className="design-rail-stub-row"
-              onClick={() => onSelect(RAIL_STUBS[tab])}
-              data-testid="design-rail-stub-row"
-            >
-              {label} (placeholder)
-            </button>
-          )}
-        </>
+        <p className="design-rail-placeholder">No {label.toLowerCase()} in this workspace.</p>
       ) : (
         <ul className="design-rail-list">
           {assets.map((asset) => (

@@ -158,7 +158,7 @@ export default function TokensTree({
   if (!inventory || !inventory.exists) {
     return (
       <div className="design-tab-body" data-testid="design-tokens-tree" data-inventory="missing">
-        <p className="design-tab-placeholder">No design/ tree to browse.</p>
+        <p className="design-tab-placeholder">Couldn&apos;t load the design inventory.</p>
       </div>
     );
   }

@@ -230,7 +230,7 @@ prettier --check`).
 
 ## SP-140-5 — Design↔Code Sync (`roadmap/SP-140-5-sync.md`) — core after 1.x; full value after 4.x
 
-- [ ] **5.1** `design_export_tokens` tool: DTCG → CSS variables / TS /
+- [x] **5.1** `design_export_tokens` tool: DTCG → CSS variables / TS /
       Tailwind `@theme` (also swift/kotlin), deterministic
       byte-identical output, targets `design/generated/`. Spec:
       SP-140-5 §5a.

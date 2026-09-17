@@ -26,6 +26,15 @@ type tokenNode struct {
 	typeIsStr  bool
 	valueStr   string
 	valueIsStr bool
+	// rawValue is the leaf's $value as decoded JSON (string, float64, bool,
+	// nil, map[string]any, or []any). The validator never needs it — only a
+	// string $value is examined for aliases — but token export
+	// (pkg/design/export.go, SP-140-5 §5a) resolves and renders every value
+	// type, so the parser retains the decoded value here.
+	rawValue any
+	// rawPresent reports whether a $value was seen at all, distinguishing a
+	// JSON null value from an absent one.
+	rawPresent bool
 }
 
 // parseTokensDocument parses W3C DTCG token JSON (SP-140-1 §1a) into a
@@ -172,12 +181,27 @@ func parseTokenObject(dec *json.Decoder, content []byte, key, path string, line 
 // checkAliases' !valueIsStr guard never attempts an alias walk on them.
 // A non-string $type likewise sets hasType without typeIsStr, which the
 // structure rules report separately.
+//
+// rawValue additionally records the decoded JSON value of any scalar
+// $value (string, number, bool, or null), which token export needs to
+// render numeric and boolean tokens; structured object/array values keep
+// rawValue nil (rawPresent true) and are re-read from the source by the
+// exporter rather than retained here.
 func recordMeta(node *tokenNode, dec *json.Decoder, key string, valTok json.Token) error {
 	switch key {
 	case "$value":
 		node.leaf = true
-		if s, ok := valTok.(string); ok {
-			node.valueStr, node.valueIsStr = s, true
+		node.rawPresent = true
+		switch v := valTok.(type) {
+		case string:
+			node.valueStr, node.valueIsStr = v, true
+			node.rawValue = v
+		case json.Delim:
+			// Object or array $value: structured, not scalar. Retained as
+			// nil here; export resolves structured values from the node's
+			// parsed JSON subtree (see rawLeafValue in export.go).
+		default:
+			node.rawValue = v
 		}
 	case "$type":
 		node.hasType = true

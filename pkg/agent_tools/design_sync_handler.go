@@ -4,7 +4,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -510,65 +509,6 @@ func splitPathList(s string) []string {
 			out = append(out, t)
 		}
 	}
-	return out
-}
-
-// listChangesEnvelope is the subset of the list_changes JSON output the sync
-// tool reads: the per-file rows' `path` field, plus a bulk row's nested
-// `bulk_items[].path` list (a shell command that touched many files is one
-// `bulk` row carrying its members). The full envelope is wider (diffs,
-// timestamps); only the paths matter here, so the parse is deliberately
-// tolerant of the rest.
-type listChangesEnvelope struct {
-	Files []struct {
-		Path      string `json:"path"`
-		Op        string `json:"op"`
-		BulkItems []struct {
-			Path string `json:"path"`
-		} `json:"bulk_items"`
-	} `json:"files"`
-}
-
-// parseListChangesPaths extracts the changed paths from a list_changes JSON
-// string (§5b: the sanctioned seam is "string output, parsed"). It is
-// deliberately tolerant: a non-JSON or unexpected payload yields no paths
-// rather than an error, because analyze mode degrades to "nothing to analyse"
-// better than it fails a turn. Paths are deduped and sorted.
-func parseListChangesPaths(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	var env listChangesEnvelope
-	if err := json.Unmarshal([]byte(raw), &env); err != nil {
-		// Tolerant by design: a malformed payload yields no paths (an empty
-		// touched set), because analyze mode degrades to "nothing to analyse"
-		// rather than failing a dev turn.
-		return nil
-	}
-	seen := map[string]bool{}
-	out := make([]string, 0, len(env.Files))
-	add := func(p string) {
-		p = strings.TrimSpace(p)
-		if p == "" || seen[p] {
-			return
-		}
-		seen[p] = true
-		out = append(out, p)
-	}
-	for _, f := range env.Files {
-		// A bulk entry (a shell command that touched many files) lists its
-		// members in nested bulk_items; those are the real paths, and the
-		// row's own `path` is empty for a bulk row.
-		for _, b := range f.BulkItems {
-			add(b.Path)
-		}
-		if len(f.BulkItems) > 0 {
-			continue
-		}
-		add(f.Path)
-	}
-	sort.Strings(out)
 	return out
 }
 

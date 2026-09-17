@@ -203,7 +203,7 @@ prettier --check`).
       header (skip re-render on unchanged content); whole-tree critique
       capped at 20 screens with explicit notice (tool arg, not CLI
       flag). Spec: SP-140-4 §4e.
-- [ ] **4.4** Consistency rule pack — flow/wireframe bidirectionality:
+- [x] **4.4** Consistency rule pack — flow/wireframe bidirectionality:
       every `data-nav` target exists; every flow edge has a wireframe
       counterpart unless terminal; README screen references exist.
       Spec: SP-140-4 §4b.

@@ -1611,3 +1611,41 @@ func TestDesignCritiqueHandler_ContextCancelled(t *testing.T) {
 	res, _ := h.Execute(ctx, env, map[string]any{"target": "design/wireframes/login.svg"})
 	_ = res
 }
+
+// TestDesignCritiqueHandler_NoVisionStaticFlowConsistency is the SP-140-4 §4b
+// wiring case: the flow/wireframe bidirectionality rule rides the standard
+// validator dispatch, so the item-4.2 static degradation surfaces it as a
+// consistency finding with the mapped severity (warn → major) — no change to
+// the critique handler itself.
+func TestDesignCritiqueHandler_NoVisionStaticFlowConsistency(t *testing.T) {
+	root := t.TempDir()
+	// home -> profile -> home makes "profile" non-terminal with no wireframe,
+	// so the §4b flow-edge rule fires as a consistency warn.
+	dcWriteTree(t, root)
+	dcWrite(t, root, "design/flows/sign-up.mmd",
+		"flowchart TD\n  login --> home\n  home --> profile\n  profile --> home\n")
+	env, _ := dcCritiqueEnvNoVision(t, root)
+
+	h := &designCritiqueHandler{}
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/flows/sign-up.mmd"})
+	require.NoError(t, err, "a non-vision flow critique must not fail the turn")
+	require.False(t, res.IsError, "output: %s", res.Output)
+
+	out, ok := res.StructuredOut.(critiqueOutput)
+	require.True(t, ok)
+	assert.False(t, out.Visual)
+
+	var flowEdge *critiqueFinding
+	for i := range out.Findings {
+		if out.Findings[i].Rule == "consistency_flow_edge_wireframe" {
+			flowEdge = &out.Findings[i]
+			break
+		}
+	}
+	require.NotNil(t, flowEdge, "the §4b flow-edge rule must surface through the static pass")
+	assert.Equal(t, "design/flows/sign-up.mmd", flowEdge.Target)
+	assert.Equal(t, "major", flowEdge.Severity, "a consistency warn maps to a critique major")
+	assert.Equal(t, "consistency", flowEdge.Area)
+	assert.Contains(t, flowEdge.Note, "profile")
+	assert.NotEmpty(t, flowEdge.Suggestion, "the new rule carries a concrete fix")
+}

@@ -63,6 +63,13 @@ func ValidateTree(root string) ([]Finding, error) {
 	findings = append(findings, ValidateBrandDir(root)...)
 	findings = append(findings, ValidateManifest(root)...)
 
+	// SP-140-4 §4b: the flow/wireframe bidirectionality consistency pack
+	// (non-terminal flow edges resolve to a wireframe, README screen refs
+	// exist) runs last, after the per-artifact validators, so its cross-file
+	// findings are picked up by every tree-wide consumer (design_validate and
+	// design_critique's static pass).
+	findings = append(findings, ValidateConsistency(root)...)
+
 	// SP-140-1 §1h: the design tree's git contract (.gitattributes diff rule,
 	// .gitignore cache policy). A workspace without design/ contributes
 	// nothing here, so a missing tree stays finding-free.
@@ -153,7 +160,12 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		return validateIconSVG(rel, data, isSprite), nil
 
 	case strings.HasPrefix(rel, DirName+"/flows/") && strings.HasSuffix(rel, ".mmd"):
-		return ValidateFlows(rel, data, assetStems(root, "wireframes", ".svg")), nil
+		// §1c per-file rules, then the §4b bidirectionality pack so a
+		// single-file flow run surfaces its non-terminal edge findings too.
+		stems := assetStems(root, "wireframes", ".svg")
+		findings := ValidateFlows(rel, data, stems)
+		findings = append(findings, flowBidirectionalityFindings(rel, data, stems)...)
+		return findings, nil
 
 	case strings.HasPrefix(rel, DirName+"/screens/") && strings.HasSuffix(rel, ".html"):
 		return validateScreen(rel, data, manifestFrames(root)), nil

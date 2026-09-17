@@ -102,8 +102,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
       currentView:
-        ['chat', 'editor', 'git'].includes(parsed.currentView) ||
-        getPluginViewIds().includes(parsed.currentView)
+        ['chat', 'editor', 'git'].includes(parsed.currentView) || getPluginViewIds().includes(parsed.currentView)
           ? parsed.currentView
           : 'chat',
       messages: parsedMessages,

@@ -15,6 +15,7 @@ Guidance for AI agents working in this repository.
 - WebUI unit (vitest, jsdom): `make test-webui-vitest` (runs `webui/src/**/*.test.*`).
 - WebUI e2e (Playwright, `test/webui/*.spec.ts`): `npx playwright test --project=webui test/webui/<spec>.spec.ts`. The backend + Vite stack auto-starts (`test/webui/start-stack.mjs`).
 - **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
+- **Browser-dependent Go tests** (`pkg/agent/design_e2e_test.go` render cases) skip when no headless browser is reachable. Set `SPROUT_REQUIRE_BROWSER=1` to turn that skip into a failure — CI does this on Linux, where Chromium is installed, so "the render path ran" is asserted rather than hidden behind a green suite that skipped it.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Multi-chat happy paths can't run on the standard stack — pin shared-mode UX in e2e and cover multi-chat logic in vitest.
 - Known local-only failure: `TestOnboardingComplete_LocalProviderPersistsConfig` (pkg/webui) panics loading real local-LLM weights when none are installed — confirm it fails on a clean tree before investigating.
 

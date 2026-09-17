@@ -23,6 +23,12 @@ export interface DesignAssetEntry {
   kind: DesignAssetKind;
   size: number;
   modified: number;
+  /**
+   * README status marker (`draft`/`review`/`ready`, SP-140-1 §1e) when the
+   * manifest lists this asset; '' when unlisted. Populated by `listAssets`
+   * for screens (the Screens tab's status chip).
+   */
+  status?: string;
 }
 
 export interface DesignTokenGroup {

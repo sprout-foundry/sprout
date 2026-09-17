@@ -163,7 +163,7 @@ prettier --check`).
       `design/flows/<name>.layout.json` sidecar `{nodes, layoutHint,
       derivedFrom}`; hash drift on `.mmd` edit regenerates layout on
       next load. Spec: SP-140-3 §3b.
-- [ ] **3.7** Screens tab (`ScreensGrid.tsx`): SVG thumbnail grid with
+- [x] **3.7** Screens tab (`ScreensGrid.tsx`): SVG thumbnail grid with
       README status chips, device-frame-aware sizing from README
       `frames:`, click → detail pane instantiating `LivePreview` as a
       controlled component with `onContentChange` wired to designApi

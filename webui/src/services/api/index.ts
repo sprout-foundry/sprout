@@ -69,3 +69,4 @@ export * as sessionApi from './sessionApi';
 export * as miscApi from './miscApi';
 export * as editApprovalApi from './editApprovalApi';
 export * as designApi from './designApi';
+export * as designApiWrite from './designApiWrite';

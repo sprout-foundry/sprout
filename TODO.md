@@ -270,7 +270,7 @@ prettier --check`).
       (designer persona, SP-137 scripted pattern) → export → dev turn →
       `design_sync` → tree reflects the tweak; next design turn builds
       on it. Spec: SP-140-5 AC.
-- [ ] **5.10** Offline provenance check: at an arbitrary checkout, the
+- [x] **5.10** Offline provenance check: at an arbitrary checkout, the
       hash in a generated artifact's header matches the token inputs at
       that commit (decidable from the tree alone). Spec: SP-140-5 AC.
 - [ ] **5.11** Umbrella end-to-end validation (parent SP-140 AC): fresh

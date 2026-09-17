@@ -48,7 +48,7 @@ export interface FlowsCanvasContainerProps extends DesignTabProps {
    */
   onPersistLayout?: (name: string, sidecar: DesignLayoutSidecar) => void;
   /** Fired when a node/edge pick should open its source in the editor. */
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, lineNumber?: number) => void;
   /** Render the built-in status line; off when DesignView supplies its own. */
   showChrome?: boolean;
   /** Test seam: transport for the asset reads and the sidecar write. */
@@ -170,7 +170,12 @@ export function FlowsCanvasContainer({
       const text = texts[active.path] ?? '';
       const lines = text.split('\n');
       const index = lines.findIndex((line: string) => line.includes(identity));
-      onOpenFile(index < 0 ? active.path : `${active.path}#L${index + 1}`);
+      // The line number travels as its own argument (the `handleFileClick`
+      // signature), never appended to the path: the editor resolves the path
+      // verbatim, so `foo.mmd#L4` would be requested as a file that does not
+      // exist.
+      if (index < 0) onOpenFile(active.path);
+      else onOpenFile(active.path, index + 1);
     },
     [active, onOpenFile, texts],
   );

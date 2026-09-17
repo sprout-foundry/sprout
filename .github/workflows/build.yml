@@ -52,6 +52,26 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Install Chromium (headless browser for design_render / analyze_ui_screenshot)
+      # The render-tier tests (pkg/agent/design_e2e_test.go) rasterize real SVG
+      # and HTML through webcontent's headless browser. Without a browser the
+      # rod launcher self-provisions one: a slow, network-dependent download
+      # inside a test run. Installing it here keeps that deterministic, and
+      # SPROUT_REQUIRE_BROWSER below makes the tests fail rather than skip if a
+      # browser really is absent — so "the render path ran" is asserted, not
+      # assumed from a green suite that skipped it.
+      #
+      # The binary must land on a path webcontent.systemBrowserPaths() probes
+      # (/usr/bin/chromium or /usr/bin/chromium-browser); the Ubuntu
+      # `chromium-browser` package is a snap stub that does not, so use
+      # `chromium` and verify the path rod will actually find.
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y chromium
+        test -x /usr/bin/chromium || { echo "chromium not at /usr/bin/chromium"; ls -la /usr/bin/chromium*; exit 1; }
+        /usr/bin/chromium --version
+
     - name: Install MLX C library (macOS)
       if: runner.os == 'macOS' && runner.arch == 'ARM64'
       run: brew install mlx-c
@@ -122,6 +142,12 @@ jobs:
         TEST_PARALLEL: "2"
         TEST_RACE: ""
         TEST_COVER: ${{ runner.os == 'Windows' && 'no' || '' }}
+        # Linux installs a browser in the step above, so require it there: the
+        # render-tier tests then fail instead of skipping, and "the render path
+        # ran" is asserted rather than assumed from a green suite that skipped
+        # it. Unset elsewhere so a runner without a browser skips (visibility
+        # is provided by the requirement on the platform we control).
+        SPROUT_REQUIRE_BROWSER: ${{ runner.os == 'Linux' && '1' || '' }}
       run: make test-coverage
 
     - name: Display coverage summary

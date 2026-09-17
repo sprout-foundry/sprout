@@ -6,6 +6,15 @@
  * as a pure function of workspace state. Kept separate from the canvas so the
  * heavy presentational module stays under the AGENTS.md 500-line rule.
  *
+ * Persistence (§3b, item 3.6): this adapter owns the *write* side. A drag
+ * repositions nodes → `FlowsCanvas` reports the new layout through
+ * `onLayoutPersist` → this container writes `design/flows/<name>.layout.json`
+ * via `designApi.writeLayout` (name keyed off the active flow). Hash drift is
+ * handled on the read side by item 3.4: the canvas resolves the sidecar
+ * through `resolveFlowLayout`, which discards a sidecar whose `derivedFrom`
+ * no longer matches the `.mmd` and re-derives the dagre layout. The `.mmd`
+ * itself is never written — the canvas owns derived position data only.
+ *
  * `flows` accepts either the inventory entries (the canvas reads their text
  * itself) or fully resolved `FlowCanvasFlow` values. Flow assets arrive as
  * `.mmd` files with no text on the inventory, so the union keeps the caller
@@ -15,7 +24,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
-import { readAsset } from '../../services/api/designApi';
+import { parseLayoutSidecarText } from '../../design/sidecar';
+import { readAsset, writeLayout } from '../../services/api/designApi';
 import type { DesignAssetEntry, DesignLayoutSidecar } from '../../services/api/types';
 import type { DesignTabProps } from './DesignTabProps';
 import FlowsCanvas, { EMPTY_ASSETS, EMPTY_WIREFRAMES, selectCanvasFlow, type FlowCanvasFlow } from './FlowsCanvas';
@@ -31,13 +41,17 @@ export interface FlowsCanvasContainerProps extends DesignTabProps {
   activeFlowPath?: string | null;
   /** `design_render` orientation hint shown/laid out for the active flow. */
   layoutHint?: string | null;
-  /** Persist a dragged layout (item 3.6 seam; no write without it). */
+  /**
+   * Override the sidecar write-back (item 3.6). Defaults to persisting through
+   * `designApi.writeLayout`; passing a callback lets a host (or a test) observe
+   * or replace the write.
+   */
   onPersistLayout?: (name: string, sidecar: DesignLayoutSidecar) => void;
   /** Fired when a node/edge pick should open its source in the editor. */
   onOpenFile?: (path: string) => void;
   /** Render the built-in status line; off when DesignView supplies its own. */
   showChrome?: boolean;
-  /** Test seam: transport for the asset reads. */
+  /** Test seam: transport for the asset reads and the sidecar write. */
   fetchFn?: typeof fetch;
   /**
    * Presentational-canvas override: when supplied, the flow text is taken from
@@ -122,22 +136,27 @@ export function FlowsCanvasContainer({
     : undefined;
   const sidecar = useMemo(() => {
     const text = sidecarPath ? (texts[sidecarPath] ?? '') : '';
-    return text ? parseSidecarText(text) : null;
+    return text ? parseLayoutSidecarText(text) : null;
   }, [sidecarPath, texts]);
 
-  const handleLayoutChange = useCallback(
-    (next: DesignLayoutSidecar) => {
-      if (!active?.name || !onPersistLayout) return;
-      onPersistLayout(active.name, next);
-    },
-    [active, onPersistLayout],
-  );
+  // A drag ends in the sidecar write. A re-derived layout (hash drift) is
+  // deliberately *not* written here: the shell re-lists assets when the
+  // inventory changes, so persisting on load would also rewrite the very file
+  // that triggered the re-list.
   const handleLayoutPersist = useCallback(
     (next: DesignLayoutSidecar) => {
-      if (!active?.name || !onPersistLayout) return;
-      onPersistLayout(active.name, next);
+      const name = active?.name;
+      if (!name) return;
+      if (onPersistLayout) {
+        onPersistLayout(name, next);
+        return;
+      }
+      void writeLayout(transport, name, next, transport).catch(() => {
+        // A failed write leaves the canvas on its derived state; the next drag
+        // retries and the sidecar is disposable (SP-140 invariant 2).
+      });
     },
-    [active, onPersistLayout],
+    [active, onPersistLayout, transport],
   );
 
   // Click-through (§3b): the flow source is the only file that carries node and
@@ -165,21 +184,9 @@ export function FlowsCanvasContainer({
       sidecar={sidecar}
       layoutHint={layoutHint}
       onSelectAsset={onSelectAsset}
-      onLayoutChange={handleLayoutChange}
       onLayoutPersist={handleLayoutPersist}
       showChrome={showChrome}
       onOpenSource={onOpenFile ? handleOpenSource : undefined}
     />
   );
-}
-
-/** Parse sidecar text defensively; unreadable JSON degrades to "no sidecar". */
-function parseSidecarText(text: string): DesignLayoutSidecar | null {
-  try {
-    const value = JSON.parse(text) as DesignLayoutSidecar;
-    if (!value || typeof value !== 'object' || typeof value.nodes !== 'object') return null;
-    return value;
-  } catch {
-    return null;
-  }
 }

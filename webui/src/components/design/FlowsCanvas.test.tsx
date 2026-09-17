@@ -141,6 +141,7 @@ vi.mock('../../contexts/SproutAdapterContext', async () => {
 });
 
 const mockedReadAsset = vi.mocked(readAsset);
+const mockedWriteLayout = vi.mocked(writeLayout);
 
 // `reports` declares its label on its own line: the shared mermaid subset
 // parser reads bracket labels only from the statement's leading segment, and a
@@ -372,6 +373,62 @@ describe('FlowsCanvas empty and layout seams', () => {
     expect(onLayoutPersist).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: expect.objectContaining({ login: { x: 400, y: 300 } }) }),
     );
+    // The sidecar carries the `.mmd` content hash so a later edit can be
+    // detected as drift and regenerate the layout on load.
+    expect(onLayoutPersist.mock.calls[0][0].derivedFrom).toBe(FLOW_HASH);
+  });
+
+  it('records the resolved orientation hint on the persisted sidecar', () => {
+    const onLayoutPersist = vi.fn();
+    render(<FlowsCanvas {...baseProps} layoutHint="left-right" onLayoutPersist={onLayoutPersist} />);
+
+    const dragged = { ...nodeProps('login'), position: { x: 400, y: 300 } };
+    act(() => flowProps().onNodeDragStop?.(new MouseEvent('mouseup'), dragged, [dragged]));
+
+    expect(onLayoutPersist.mock.calls[0][0]).toMatchObject({ layoutHint: 'left-right', derivedFrom: FLOW_HASH });
+  });
+
+  it('discards stale sidecar positions on load and persists the regenerated layout on drag', () => {
+    const onLayoutChange = vi.fn();
+    const onLayoutPersist = vi.fn();
+    render(
+      <FlowsCanvas
+        {...baseProps}
+        sidecar={{ nodes: { login: { x: 900, y: 900 } }, layoutHint: 'LR', derivedFrom: 'deadbeef' }}
+        onLayoutChange={onLayoutChange}
+        onLayoutPersist={onLayoutPersist}
+      />,
+    );
+
+    // Drifted hash (the `.mmd` was edited): the canvas re-derives instead of
+    // honoring the recorded coordinates.
+    expect(onLayoutChange).toHaveBeenCalledTimes(1);
+    expect(nodeProps('login').position).not.toEqual({ x: 900, y: 900 });
+
+    // A drag on top of the regenerated layout carries the *current* `.mmd`
+    // hash, so the next load reuses it rather than regenerating again.
+    const dragged = { ...nodeProps('login'), position: { x: 21, y: 22 } };
+    act(() => flowProps().onNodeDragStop?.(new MouseEvent('mouseup'), dragged, [dragged]));
+    expect(onLayoutPersist.mock.calls[0][0]).toMatchObject({ derivedFrom: FLOW_HASH });
+  });
+
+  it('keeps a fresh sidecar position without regenerating', () => {
+    const onLayoutChange = vi.fn();
+    render(
+      <FlowsCanvas
+        {...baseProps}
+        sidecar={{
+          nodes: { login: { x: 12, y: 13 }, dash: { x: 14, y: 15 }, reports: { x: 16, y: 17 } },
+          layoutHint: 'LR',
+          derivedFrom: FLOW_HASH,
+        }}
+        onLayoutChange={onLayoutChange}
+      />,
+    );
+
+    expect(nodeProps('login').position).toEqual({ x: 12, y: 13 });
+    // Hash matches: no regeneration, so nothing to report.
+    expect(onLayoutChange).not.toHaveBeenCalled();
   });
 
   it('keeps a dragged position when React Flow reports a settled position change', () => {
@@ -488,6 +545,138 @@ describe('FlowsCanvasContainer wiring', () => {
     act(() => flowProps().onNodeDragStop?.(new MouseEvent('mouseup'), dragged, [dragged]));
 
     expect(onPersistLayout).toHaveBeenCalledWith('app', expect.objectContaining({ nodes: expect.any(Object) }));
+    // The override replaces the write outright — nothing hits designApi.
+    expect(mockedWriteLayout).not.toHaveBeenCalled();
+  });
+
+  it('writes the sidecar through designApi with the dragged positions by default', async () => {
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => (path === 'flows/app.mmd' ? FLOW_TEXT : ''));
+    mockedWriteLayout.mockResolvedValue(undefined as never);
+
+    render(<FlowsCanvasContainer flows={flows} />);
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+
+    const dragged = { ...nodeProps('login'), position: { x: 11, y: 12 } };
+    act(() => flowProps().onNodeDragStop?.(new MouseEvent('mouseup'), dragged, [dragged]));
+
+    // Name keyed off the active flow; the `.mmd` hash rides along so a later
+    // edit regenerates the layout on load.
+    expect(mockedWriteLayout.mock.calls[0][0]).toBeDefined();
+    expect(mockedWriteLayout.mock.calls[0][1]).toBe('app');
+    expect(mockedWriteLayout.mock.calls[0][2]).toMatchObject({
+      nodes: expect.objectContaining({ login: { x: 11, y: 12 } }),
+      derivedFrom: FLOW_HASH,
+    });
+    // Nothing is written on load — only a reposition persists (the read path
+    // regenerates in memory).
+    expect(mockedWriteLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not write the sidecar when nothing has been dragged', async () => {
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => (path === 'flows/app.mmd' ? FLOW_TEXT : ''));
+
+    render(<FlowsCanvasContainer flows={flows} />);
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+
+    expect(mockedWriteLayout).not.toHaveBeenCalled();
+  });
+
+  it('reuses fresh sidecar positions and leaves the sidecar alone', async () => {
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => {
+      if (path === 'flows/app.mmd') return FLOW_TEXT;
+      if (path === 'flows/app.layout.json') {
+        return JSON.stringify({
+          nodes: { login: { x: 41, y: 42 }, dash: { x: 51, y: 52 }, reports: { x: 61, y: 62 } },
+          layoutHint: 'LR',
+          derivedFrom: FLOW_HASH,
+        });
+      }
+      return '';
+    });
+
+    render(
+      <FlowsCanvasContainer
+        flows={flows}
+        layouts={[{ path: 'flows/app.layout.json', name: 'app.layout.json', kind: 'layout', size: 0, modified: 0 }]}
+      />,
+    );
+
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+    expect(nodeProps('login').position).toEqual({ x: 41, y: 42 });
+    expect(nodeProps('reports').position).toEqual({ x: 61, y: 62 });
+    expect(mockedWriteLayout).not.toHaveBeenCalled();
+  });
+
+  it('regenerates the layout when the `.mmd` hash drifts from the sidecar', async () => {
+    // The sidecar was recorded against a different `.mmd` revision — the
+    // recorded hash no longer matches, so its positions are discarded.
+    const staleSidecar = JSON.stringify({
+      nodes: { login: { x: 900, y: 900 }, dash: { x: 901, y: 901 }, reports: { x: 902, y: 902 } },
+      layoutHint: 'LR',
+      derivedFrom: 'deadbeef',
+    });
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => {
+      if (path === 'flows/app.mmd') return FLOW_TEXT;
+      if (path === 'flows/app.layout.json') return staleSidecar;
+      return '';
+    });
+
+    render(
+      <FlowsCanvasContainer
+        flows={flows}
+        layouts={[{ path: 'flows/app.layout.json', name: 'app.layout.json', kind: 'layout', size: 0, modified: 0 }]}
+      />,
+    );
+
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+    // Fresh dagre positions: `login` leads `dash` on the LR axis, and nothing
+    // sits at the stale coordinates.
+    expect(nodeProps('login').position.x).toBeLessThan(nodeProps('dash').position.x);
+    expect(nodeProps('login').position).not.toEqual({ x: 900, y: 900 });
+    // Regeneration is in-memory on load; the stale sidecar is not rewritten.
+    expect(mockedWriteLayout).not.toHaveBeenCalled();
+  });
+
+  it('regenerates when the orientation hint changed even though the `.mmd` is untouched', async () => {
+    const vertical = JSON.stringify({
+      nodes: { login: { x: 10, y: 10 }, dash: { x: 10, y: 300 }, reports: { x: 10, y: 600 } },
+      layoutHint: 'TB',
+      derivedFrom: FLOW_HASH,
+    });
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => {
+      if (path === 'flows/app.mmd') return FLOW_TEXT;
+      if (path === 'flows/app.layout.json') return vertical;
+      return '';
+    });
+
+    render(
+      <FlowsCanvasContainer
+        flows={flows}
+        layouts={[{ path: 'flows/app.layout.json', name: 'app.layout.json', kind: 'layout', size: 0, modified: 0 }]}
+        layoutHint="left-right"
+      />,
+    );
+
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+    expect(nodeProps('login').position.x).toBeLessThan(nodeProps('dash').position.x);
+  });
+
+  it('keeps the canvas stable when the sidecar write fails', async () => {
+    mockedReadAsset.mockImplementation(async (_fetchFn, path) => (path === 'flows/app.mmd' ? FLOW_TEXT : ''));
+    mockedWriteLayout.mockRejectedValue(new Error('offline'));
+
+    render(<FlowsCanvasContainer flows={flows} />);
+    await waitFor(() => expect((rf.nodes as MockNode[]).length).toBeGreaterThan(0));
+
+    const before = nodeProps('login').position;
+    const dragged = { ...nodeProps('login'), position: { x: 7, y: 8 } };
+    act(() => flowProps().onNodeDragStop?.(new MouseEvent('mouseup'), dragged, [dragged]));
+
+    // The rejected write is swallowed (no unhandled rejection) and leaves the
+    // rendered layout as it was; the next drag retries, since the sidecar is
+    // disposable (SP-140 invariant 2).
+    expect(mockedWriteLayout).toHaveBeenCalledTimes(1);
+    expect(nodeProps('login').position).toEqual(before);
   });
 
   it('opens the flow source at the picked statement line through onOpenFile', async () => {

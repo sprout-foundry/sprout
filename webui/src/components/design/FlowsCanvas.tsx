@@ -8,11 +8,13 @@
  * surface in the detail pane through the shared tab props.
  *
  * The canvas owns *derived* state only (SP-140 invariant 2): positions come
- * from `design/layout.ts` (or the `design/flows/<name>.layout.json` sidecar
- * when it covers the flow). It never writes a `.mmd` — authoring flow semantics
- * stays with the agent (SP-140-3 §3b round-trip rule) — and this item does not
- * write the sidecar either: repositioning is reported through the
- * `onLayoutChange` seam and item 3.6 persists it via `designApi.writeLayout`.
+ * from `design/layout.ts`, reusing the `design/flows/<name>.layout.json`
+ * sidecar only when it covers the flow and its `derivedFrom` hash still
+ * matches the `.mmd` (`resolveFlowLayout`) — a drifted hash regenerates the
+ * layout on load. A drag reports the repositioned sidecar through
+ * `onLayoutPersist`; the write itself belongs to `FlowsCanvasContainer`
+ * (`designApi.writeLayout`, item 3.6), so this component stays a pure function
+ * of its props and never writes a `.mmd` (SP-140-3 §3b round-trip rule).
  *
  * Data arrives through props (`flows`, `wireframes`, `assets`, `sidecar`, …) so
  * the component is a pure function of workspace state and stays unit-testable
@@ -97,11 +99,15 @@ export interface FlowsCanvasProps extends DesignTabProps {
   /** Fired with the asset to inspect in the detail pane. */
   onSelectAsset?: (path: string) => void;
   /**
-   * Fired once with the first rendered layout (fresh sidecar + positions) so
-   * item 3.6 can persist a regenerated layout.
+   * Fired once with the first rendered layout (fresh sidecar + positions) when
+   * the layout had to be re-derived. Read-only notification: persistence runs
+   * through `onLayoutPersist` on the container.
    */
   onLayoutChange?: (sidecar: DesignLayoutSidecar) => void;
-  /** Fired when the user finishes dragging a node with the new positions. */
+  /**
+   * Fired when the user finishes dragging a node, with the repositioned
+   * sidecar (`design/flows/<name>.layout.json`, item 3.6).
+   */
   onLayoutPersist?: (sidecar: DesignLayoutSidecar) => void;
   /**
    * Fired with a node/edge id when the pick should also open the flow source

@@ -262,7 +262,7 @@ prettier --check`).
       skill's sync section; test that a fixture loop produces one commit
       carrying code + design adoption and that reverting removes both.
       Spec: SP-140-5 §5f.
-- [ ] **5.8** `design_brief` tool: reads the design tree for a screen
+- [x] **5.8** `design_brief` tool: reads the design tree for a screen
       (wireframe, flow edges, tokens, README purpose, pending feedback)
       and returns a structured brief; writes no files (contract, not
       generator); Gate-1. Spec: SP-140-5 §5g.

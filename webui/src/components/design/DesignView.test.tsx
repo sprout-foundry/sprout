@@ -53,29 +53,49 @@ vi.mock('../../services/api/designApi', async (importOriginal) => {
   return { ...actual, listAssets: vi.fn().mockResolvedValue(inventory) };
 });
 
-/** Renders DesignView inside the workspace provider (the app's composition). */
+/**
+ * Renders DesignView inside the workspace provider (the app's composition).
+ * Returns a `rerenderTab` helper to switch the provider's section (the
+ * mode-rail click path) plus the sidebar-selection simulator.
+ */
 function renderWorkspace(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
   let select: ((path: string | null) => void) | null = null;
+  let currentTab: DesignTab = 'flows';
+  let viewProps = props;
+
   function SelectionGrabber() {
     const workspace = useDesignWorkspace();
     if (workspace) select = workspace.select;
     return null;
   }
-  render(
-    <SproutAdapterProvider>
-      <DesignWorkspaceProvider tab="flows" active>
-        <SelectionGrabber />
-        <DesignView {...props} />
-      </DesignWorkspaceProvider>
-    </SproutAdapterProvider>,
-  );
-  /** Simulates a sidebar assets-pane row click. */
-  const selectFromSidebar = (path: string | null) => {
-    act(() => {
-      select?.(path);
-    });
+
+  function tree(tab: DesignTab) {
+    return (
+      <SproutAdapterProvider>
+        <DesignWorkspaceProvider tab={tab} active>
+          <SelectionGrabber />
+          <DesignView {...viewProps} tab={tab} />
+        </DesignWorkspaceProvider>
+      </SproutAdapterProvider>
+    );
+  }
+
+  const rendered = render(tree(currentTab));
+  return {
+    selectFromSidebar: (path: string | null) => {
+      act(() => {
+        select?.(path);
+      });
+    },
+    rerenderTab: (tab: DesignTab) => {
+      currentTab = tab;
+      rendered.rerender(tree(tab));
+    },
+    setProps: (next: Partial<React.ComponentProps<typeof DesignView>>) => {
+      viewProps = { ...viewProps, ...next };
+      rendered.rerender(tree(currentTab));
+    },
   };
-  return { selectFromSidebar };
 }
 
 function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
@@ -178,6 +198,18 @@ describe('DesignView shell', () => {
 
     fireEvent.click(screen.getByText('Open in editor'));
     expect(onOpenFile).toHaveBeenCalledWith('flows/sign-up.mmd');
+  });
+
+  it('selection is section-scoped: another section does not keep filling the pane', async () => {
+    const { selectFromSidebar, rerenderTab } = renderWorkspace();
+    selectFromSidebar('flows/sign-up.mmd');
+    expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', 'flows/sign-up.mmd');
+
+    // Switching to Screens leaves the flow selection behind: the pane goes
+    // idle rather than showing a flows asset on the Screens tab.
+    rerenderTab('screens');
+    expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', '');
+    expect(screen.getByTestId('design-detail-pane')).toHaveAttribute('data-idle', 'true');
   });
 });
 

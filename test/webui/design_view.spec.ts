@@ -185,9 +185,12 @@ test.describe("SP-140-3 DesignView", () => {
     await expect(login).toContainText("Login");
     await expect(inbox).toContainText("Inbox");
 
-    // The rail lists the flow source the canvas is drawing.
+    // The sidebar's assets pane (not the surface) lists the flow source the
+    // canvas is drawing — the unified-layout contract.
     await expect(
-      page.getByTestId(`design-rail-row-design/flows/${FIXTURE_FLOW}.mmd`),
+      page
+        .getByTestId("sidebar-container")
+        .getByTestId(`design-rail-row-design/flows/${FIXTURE_FLOW}.mmd`),
     ).toBeVisible();
   });
 

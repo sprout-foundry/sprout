@@ -31,7 +31,7 @@ import { designRootPath, readAsset, writeAsset } from '../../services/api/design
 import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
 import LivePreview from '../LivePreview';
 import type { DesignTabProps } from './DesignTabProps';
-import { assetDisplayName } from './DesignAssetsRail';
+import { assetDisplayName } from './assetNames';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */

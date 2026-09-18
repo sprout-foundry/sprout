@@ -360,6 +360,22 @@ const TESTIDS = {
   "design-screen-thumb-login": "design-screen-thumb-login", // pattern design-screen-thumb-${card.name}
   "design-screen-thumb-box-login": "design-screen-thumb-box-login", // pattern design-screen-thumb-box-${card.name}
   // Feedback write path (SP-140-4d)
+  // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
+  "design-feedback-annotations": "design-feedback-annotations",
+  "design-feedback-count": "design-feedback-count",
+  "design-feedback-empty": "design-feedback-empty",
+  "design-feedback-loading": "design-feedback-loading",
+  "design-feedback-resolution": "design-feedback-resolution",
+  "design-feedback-resolution-error": "design-feedback-resolution-error",
+  "design-feedback-resolution-note": "design-feedback-resolution-note",
+  "design-feedback-resolution-save": "design-feedback-resolution-save",
+  "design-feedback-resolution-written": "design-feedback-resolution-written",
+  "design-feedback-status": "design-feedback-status",
+  // Dynamic row testid patterns `design-feedback-{annotation,area,toggle}-${annotation.id}`.
+  // Representative registered values (match the template literals).
+  "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
+  "design-feedback-area-abc123": "design-feedback-area-abc123",
+  "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
   "design-feedback-affordance": "design-feedback-affordance",
   "design-feedback-form": "design-feedback-form",
   "design-feedback-add": "design-feedback-add",

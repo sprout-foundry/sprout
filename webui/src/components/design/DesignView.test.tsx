@@ -2,25 +2,31 @@
  * SP-140-3 item 3.3 — DesignView shell.
  *
  * Pins the shell contract the later tab items build on: the shell-controlled
- * `tab` prop drives the panel body (Flows, Screens, Tokens), and the
- * three-pane layout (rail / canvas / detail) is present.
+ * `tab` prop drives the panel body (Flows, Screens, Tokens).
  *
  * SP-140-5: the in-view tab strip was removed — the mode's rail (the
  * sidebar) is the section control and drives `tab` from the shell — so
  * these tests drive the `tab` prop (and rerender with it) rather than
  * clicking tabs.
  *
- * SP-140-4 item 4.8 adds one check: a rail selection reaches the detail pane's
+ * SP-140-5 (unified layout): the assets rail lives in the sidebar's content
+ * pane, backed by DesignWorkspaceContext. Selection tests go through the
+ * provider — the same path the sidebar pane uses — instead of clicking
+ * rows that used to sit in the surface. Standalone (no provider) the view
+ * fetches and selects internally, which is what these tests render.
+ *
+ * SP-140-4 item 4.8 adds one check: a selection reaches the detail pane's
  * resolution flow (§4d), i.e. the pane the shell threads the feedback read/write
  * seams to is the one the annotation resolution lives on.
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import type * as designApiModule from '../../services/api/designApi';
 import type { DesignInventory } from '../../services/api/types/design';
 import DesignView, { DESIGN_TABS, type DesignTab } from './DesignView';
+import { DesignWorkspaceProvider, useDesignWorkspace } from './DesignWorkspaceContext';
 
 // The shell fetches the inventory itself; a fixture with one asset per class
 // gives the tests real rows to select (the shell-stage stub row is gone).
@@ -46,6 +52,31 @@ vi.mock('../../services/api/designApi', async (importOriginal) => {
   };
   return { ...actual, listAssets: vi.fn().mockResolvedValue(inventory) };
 });
+
+/** Renders DesignView inside the workspace provider (the app's composition). */
+function renderWorkspace(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
+  let select: ((path: string | null) => void) | null = null;
+  function SelectionGrabber() {
+    const workspace = useDesignWorkspace();
+    if (workspace) select = workspace.select;
+    return null;
+  }
+  render(
+    <SproutAdapterProvider>
+      <DesignWorkspaceProvider tab="flows" active>
+        <SelectionGrabber />
+        <DesignView {...props} />
+      </DesignWorkspaceProvider>
+    </SproutAdapterProvider>,
+  );
+  /** Simulates a sidebar assets-pane row click. */
+  const selectFromSidebar = (path: string | null) => {
+    act(() => {
+      select?.(path);
+    });
+  };
+  return { selectFromSidebar };
+}
 
 function renderDesign(props: Partial<React.ComponentProps<typeof DesignView>> = {}) {
   return render(
@@ -126,41 +157,27 @@ describe('DesignView shell', () => {
     expect(screen.getByTestId('design-tabpanel')).toHaveAttribute('aria-label', 'tokens panel');
   });
 
-  it('renders the left rail and right detail pane', () => {
+  it('renders no in-surface assets rail: the sidebar owns the asset browser', () => {
     renderDesign();
-    expect(screen.getByTestId('design-assets-rail')).toBeInTheDocument();
+    expect(screen.queryByTestId('design-assets-rail')).not.toBeInTheDocument();
     expect(screen.getByTestId('design-detail-pane')).toBeInTheDocument();
     // No asset selected yet.
     expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', '');
   });
 
-  it('rail selection flows into the detail pane and can open the asset in the editor', async () => {
+  it('a selection from the shared workspace reaches the detail pane and opens in the editor', async () => {
     const onOpenFile = vi.fn();
-    renderDesign({ onOpenFile });
+    const { selectFromSidebar } = renderWorkspace({ onOpenFile });
 
     expect(screen.queryByText('Open in editor')).not.toBeInTheDocument();
 
-    fireEvent.click(await screen.findByTestId('design-rail-row-flows/sign-up.mmd'));
+    selectFromSidebar('flows/sign-up.mmd');
 
     const detail = screen.getByTestId('design-detail-content');
     expect(detail).toHaveAttribute('data-selected', 'flows/sign-up.mmd');
 
     fireEvent.click(screen.getByText('Open in editor'));
     expect(onOpenFile).toHaveBeenCalledWith('flows/sign-up.mmd');
-  });
-
-  it('renders the back affordance only when onBack is provided', () => {
-    const onBack = vi.fn();
-    const { rerender } = renderDesign();
-    expect(screen.queryByLabelText('Back to chat')).not.toBeInTheDocument();
-
-    rerender(
-      <SproutAdapterProvider>
-        <DesignView onBack={onBack} />
-      </SproutAdapterProvider>,
-    );
-    fireEvent.click(screen.getByLabelText('Back to chat'));
-    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -171,11 +188,11 @@ describe('DesignView resolution flow wiring (SP-140-4 §4d)', () => {
       status: 404,
       text: async () => '',
     } as unknown as Response);
-    renderDesign({ readFn });
+    const { selectFromSidebar } = renderWorkspace({ readFn });
 
     expect(screen.queryByTestId('design-feedback-resolution')).toBeNull();
 
-    fireEvent.click(await screen.findByTestId('design-rail-row-flows/sign-up.mmd'));
+    selectFromSidebar('flows/sign-up.mmd');
 
     const section = await screen.findByTestId('design-feedback-resolution');
     expect(section.getAttribute('data-target')).toBe('design/flows/sign-up.mmd');

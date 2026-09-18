@@ -156,6 +156,12 @@ export interface ScreensGridProps extends DesignTabProps {
   /** Design inventory from the shell; absent while it is still loading. */
   inventory?: DesignInventory | null;
   /**
+   * Selection driven from outside the grid (the sidebar's assets pane via the
+   * shared workspace context). When provided it wins over the grid's own
+   * click state, so a sidebar row and a card highlight stay one selection.
+   */
+  selectedPath?: string | null;
+  /**
    * Override the screen read. Defaults to the container's `readAsset` path;
    * supplying it lets a host (or a test) hand already-read text straight in.
    */
@@ -171,6 +177,7 @@ export interface ScreensGridProps extends DesignTabProps {
 
 export default function ScreensGrid({
   inventory = null,
+  selectedPath,
   contentByPath,
   fetchFn,
   onSelectAsset,
@@ -181,6 +188,12 @@ export default function ScreensGrid({
   const [selected, setSelected] = useState<string | null>(null);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+
+  // External selection (sidebar assets pane) drives the same downstream
+  // behavior as a card click — highlight, detail pane, preview mount.
+  useEffect(() => {
+    if (selectedPath !== undefined) setSelected(selectedPath);
+  }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);
   const cards = useMemo(
@@ -363,6 +376,7 @@ export default function ScreensGrid({
  */
 export function ScreensTabContainer({
   inventory,
+  selectedPath,
   onSelectAsset,
   fetchFn,
   readFn,
@@ -389,6 +403,7 @@ export function ScreensTabContainer({
   return (
     <ScreensGrid
       inventory={inventory}
+      selectedPath={selectedPath}
       onSelectAsset={onSelectAsset}
       // A consent-aware read override wins over the plain transport.
       fetchFn={readFn ?? transport}

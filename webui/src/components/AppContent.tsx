@@ -35,6 +35,7 @@ import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
 import DesignRail from './design/DesignRail';
+import { DesignWorkspaceProvider } from './design/DesignWorkspaceContext';
 import type { DesignTab } from './design/DesignView';
 import { useDesignPresence } from './design/useDesignPresence';
 import ErrorBoundary from './ErrorBoundary';
@@ -960,7 +961,6 @@ const AppContent: React.FC<AppContentProps> = ({
       present: hasDesignTree,
       tab: designSection,
       onTabChange: setDesignSection,
-      onBack: () => selectWorkspaceMode('code'),
       onOpenFile: handleDesignFileOpen,
     },
     git: {
@@ -986,88 +986,90 @@ const AppContent: React.FC<AppContentProps> = ({
         />
       )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
-      <ErrorBoundary panelName="Sidebar">
-        <Sidebar
-          isConnected={state.isConnected}
-          instances={instances}
-          selectedInstancePID={selectedInstancePID}
-          isSwitchingInstance={isSwitchingInstance}
-          onInstanceChange={handleInstanceChange}
-          provider={state.provider}
-          model={state.model}
-          selectedModel={state.model}
-          onModelChange={onModelChange}
-          currentView={state.currentView}
-          onViewChange={onViewChange}
-          onFileClick={handleFileClick}
-          stats={stats}
-          recentFiles={recentFiles}
-          recentLogs={recentLogs}
-          isMobileMenuOpen={isSidebarOpen}
-          onMobileMenuToggle={onToggleSidebar}
-          isMobile={isMobile}
-          sidebarCollapsed={sidebarCollapsed}
-          onSidebarToggle={onSidebarToggle}
-          modes={workspaceModes}
-          activeModeId={workspaceMode.id}
-          onSelectMode={handleSelectMode}
-          modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
-          modeSection={designSection}
-          onModeSectionChange={(id) => setDesignSection(id as DesignTab)}
-          selectedSection={selectedSection}
-          onSectionChange={onSectionChange}
-          sidebarWidth={sidebarWidth}
-          sidebarWidthRef={sidebarWidthRef}
-          onSidebarWidthChange={onSidebarWidthChange}
-          onSidebarWidthPersist={onSidebarWidthPersist}
-          onSidebarWidthReset={onSidebarWidthReset}
-          onProviderChange={onProviderChange}
-          gitPanel={{
-            gitStatus,
-            gitBranches,
-            workspaceRoot,
-            selectedFiles,
-            activeDiffSelectionKey,
-            commitMessage,
-            isLoading: isGitLoading,
-            isActing: isGitActing,
-            isGeneratingCommitMessage,
-            isReviewLoading,
-            actionError: gitActionError,
-            actionWarning: gitActionWarning,
-            onCommitMessageChange: setCommitMessage,
-            onGenerateCommitMessage: handleGenerateCommitMessage,
-            onCommit: handleGitCommitClick,
-            onRunReview: handleRunReview,
-            onCheckoutBranch: handleCheckoutBranch,
-            onCreateBranch: handleCreateBranch,
-            onPull: handlePull,
-            onPush: handlePush,
-            onPullRequest: handleCreatePullRequest,
-            onRefresh: refreshGitStatus,
-            onToggleFileSelection: handleToggleFileSelection,
-            onToggleSectionSelection: handleToggleSectionSelection,
-            onClearSelection: clearSelectedFiles,
-            onSelectFiles: handleSelectFiles,
-            onPreviewFile: handlePreviewGitFile,
-            onStageSelected: handleStageSelected,
-            onUnstageSelected: handleUnstageSelected,
-            onDiscardSelected: handleDiscardSelected,
-            onStageFile: handleStageFile,
-            onUnstageFile: handleUnstageFile,
-            onDiscardFile: handleDiscardFile,
-            onSectionAction: handleSectionAction,
-            onOpenFile: handleFileClick,
-            onLoadCommits: handleLoadCommits,
-            onLoadCommitDetail: handleLoadCommitDetail,
-            onLoadCommitFileDiff: handleLoadCommitFileDiff,
-            onCheckoutCommit: handleCheckoutCommit,
-            onRevertCommit: handleRevertCommit,
-            openWorkspaceBuffer,
-          }}
-        />
-      </ErrorBoundary>
-      <ModeShell {...shellProps} />
+      <DesignWorkspaceProvider tab={designSection} active={workspaceMode.id === 'design'}>
+        <ErrorBoundary panelName="Sidebar">
+          <Sidebar
+            isConnected={state.isConnected}
+            instances={instances}
+            selectedInstancePID={selectedInstancePID}
+            isSwitchingInstance={isSwitchingInstance}
+            onInstanceChange={handleInstanceChange}
+            provider={state.provider}
+            model={state.model}
+            selectedModel={state.model}
+            onModelChange={onModelChange}
+            currentView={state.currentView}
+            onViewChange={onViewChange}
+            onFileClick={handleFileClick}
+            stats={stats}
+            recentFiles={recentFiles}
+            recentLogs={recentLogs}
+            isMobileMenuOpen={isSidebarOpen}
+            onMobileMenuToggle={onToggleSidebar}
+            isMobile={isMobile}
+            sidebarCollapsed={sidebarCollapsed}
+            onSidebarToggle={onSidebarToggle}
+            modes={workspaceModes}
+            activeModeId={workspaceMode.id}
+            onSelectMode={handleSelectMode}
+            modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
+            modeSection={designSection}
+            onModeSectionChange={(id) => setDesignSection(id as DesignTab)}
+            selectedSection={selectedSection}
+            onSectionChange={onSectionChange}
+            sidebarWidth={sidebarWidth}
+            sidebarWidthRef={sidebarWidthRef}
+            onSidebarWidthChange={onSidebarWidthChange}
+            onSidebarWidthPersist={onSidebarWidthPersist}
+            onSidebarWidthReset={onSidebarWidthReset}
+            onProviderChange={onProviderChange}
+            gitPanel={{
+              gitStatus,
+              gitBranches,
+              workspaceRoot,
+              selectedFiles,
+              activeDiffSelectionKey,
+              commitMessage,
+              isLoading: isGitLoading,
+              isActing: isGitActing,
+              isGeneratingCommitMessage,
+              isReviewLoading,
+              actionError: gitActionError,
+              actionWarning: gitActionWarning,
+              onCommitMessageChange: setCommitMessage,
+              onGenerateCommitMessage: handleGenerateCommitMessage,
+              onCommit: handleGitCommitClick,
+              onRunReview: handleRunReview,
+              onCheckoutBranch: handleCheckoutBranch,
+              onCreateBranch: handleCreateBranch,
+              onPull: handlePull,
+              onPush: handlePush,
+              onPullRequest: handleCreatePullRequest,
+              onRefresh: refreshGitStatus,
+              onToggleFileSelection: handleToggleFileSelection,
+              onToggleSectionSelection: handleToggleSectionSelection,
+              onClearSelection: clearSelectedFiles,
+              onSelectFiles: handleSelectFiles,
+              onPreviewFile: handlePreviewGitFile,
+              onStageSelected: handleStageSelected,
+              onUnstageSelected: handleUnstageSelected,
+              onDiscardSelected: handleDiscardSelected,
+              onStageFile: handleStageFile,
+              onUnstageFile: handleUnstageFile,
+              onDiscardFile: handleDiscardFile,
+              onSectionAction: handleSectionAction,
+              onOpenFile: handleFileClick,
+              onLoadCommits: handleLoadCommits,
+              onLoadCommitDetail: handleLoadCommitDetail,
+              onLoadCommitFileDiff: handleLoadCommitFileDiff,
+              onCheckoutCommit: handleCheckoutCommit,
+              onRevertCommit: handleRevertCommit,
+              openWorkspaceBuffer,
+            }}
+          />
+        </ErrorBoundary>
+        <ModeShell {...shellProps} />
+      </DesignWorkspaceProvider>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

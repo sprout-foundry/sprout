@@ -47,8 +47,6 @@ export interface WorkspaceShellDesign {
   /** The active section, driven by the mode's rail. */
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
-  /** Leave Design (back to Code mode). */
-  onBack?: () => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
 }
 

@@ -43,7 +43,6 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
         present={design.present}
         tab={design.tab}
         onTabChange={design.onTabChange}
-        onBack={design.onBack}
         onOpenFile={design.onOpenFile}
       />
     </ErrorBoundary>

@@ -55,6 +55,7 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
+import DesignAssetsPane from './design/DesignAssetsPane';
 interface SidebarProps {
   isConnected: boolean;
   instances?: SproutInstance[];
@@ -240,17 +241,16 @@ function Sidebar({
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   // While a mode rail is active the content pane belongs to the mode: the
-  // Code section tabs the rail replaces must not render their panes, or a
-  // stale 'git' selection would show the git pane beside the mode's rail.
-  // Global sections (settings/logs/plugins) are addressed by the shared rail
-  // below the mode rail and keep rendering; with nothing selected the pane
-  // stays empty (renderContentPane's default case).
+  // mode's own section (flows/screens/tokens for Design) drives the pane, and
+  // the Code section tabs the rail replaces must not render theirs — a stale
+  // 'git' selection would show the git pane beside the mode's rail. Global
+  // sections (settings/logs/plugins) are addressed by the shared rail below
+  // the mode rail and keep rendering; with nothing selected the pane stays
+  // empty (renderContentPane's default case).
   const isCodeSection = (section: SectionTab | undefined | null) =>
     section != null && ALL_SECTION_TABS.some((tab) => tab.id === section);
   const effectiveSelectedSection = ModeRailComponent
-    ? isCodeSection(selectedSection)
-      ? null
-      : (selectedSection ?? null)
+    ? (modeSection ?? (isCodeSection(selectedSection) ? null : (selectedSection ?? null)))
     : selectedSection || (supportsGit ? 'git' : 'files');
   // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
@@ -412,6 +412,13 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
+      case 'flows':
+      case 'screens':
+      case 'tokens':
+        // Design mode's sections: the assets browser for the active section,
+        // rendered from the shared DesignWorkspaceContext. Outside a provider
+        // (hosts without the workspace shell) the pane renders nothing.
+        return <DesignAssetsPane />;
       case 'automations':
         return (
           <AutomationsPanel

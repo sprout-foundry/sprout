@@ -17,49 +17,6 @@
   color: var(--text-primary);
 }
 
-.design-view-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-}
-
-.design-view-title {
-  margin: 0;
-  font-size: var(--text-lg, 1.125rem);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.design-view-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.design-view-back:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.design-view-back:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
 .design-view-body {
   display: flex;
   flex: 1;

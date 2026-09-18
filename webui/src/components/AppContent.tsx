@@ -459,6 +459,10 @@ const AppContent: React.FC<AppContentProps> = ({
     if (modeViewSyncedRef.current) return;
     if (designPresenceLoading) return; // probe still in flight
     modeViewSyncedRef.current = true;
+    // Both branches key on the literal 'design' view id, so only the Design
+    // surface's route is ever touched here: Code-owned routes (chat/editor/
+    // git, plugin views included) match neither branch and are never reset.
+    // Resetting foreign views on mode switch is handleSelectMode's job.
     if (workspaceMode.id === 'design' && state.currentView !== 'design') onViewChange('design');
     else if (workspaceMode.id !== 'design' && state.currentView === 'design') onViewChange('chat');
   }, [designPresenceLoading, workspaceMode.id, state.currentView, onViewChange]);

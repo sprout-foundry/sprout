@@ -298,16 +298,13 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
-		enhancedQuery, err := a.processImagesViaOCR(query)
-		if err != nil {
-			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
-			return nil, query, nil
-		}
-		return nil, enhancedQuery, nil
+	// Non-vision primary: delegate to a vision model when one exists;
+	// otherwise fall back to steering the model at analyze_image_content.
+	enhanced, delegated := a.processImagesByDelegation(query, paths)
+	if delegated {
+		a.Logger().Debug("[img] Delegated %d pasted image(s) to a vision model\n", len(paths))
 	}
-
-	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
+	return nil, enhanced, nil
 }
 
 func extractPastedImagePaths(query string) []string {
@@ -332,6 +329,43 @@ func extractPastedImagePaths(query string) []string {
 	return paths
 }
 
+// processImagesByDelegation is the inline chat path's delegation rung
+// (SP-140 Phase 3): the primary model cannot see, so pasted images are
+// described by the best available vision model and the structured,
+// provenance-labeled descriptions are injected into the query. Falls back
+// to the analyze-tool prompt when no delegation client exists — the model
+// can still help itself via analyze_image_content.
+func (a *Agent) processImagesByDelegation(query string, paths []string) (string, bool) {
+	if !tools.HasVisionCapability() {
+		return a.buildNonVisionImageToolPrompt(query, paths), false
+	}
+
+	var b strings.Builder
+	delegated := 0
+	for i, path := range paths {
+		delegate, err := tools.DelegateImageDescriptions(a.InterruptCtx(), nil, path)
+		if err != nil {
+			a.Logger().Debug("[WARN] image delegation failed for %s: %v\n", path, err)
+			b.WriteString(fmt.Sprintf("[image %d of %d: %s — description unavailable]\n", i+1, len(paths), filepath.Base(path)))
+			continue
+		}
+		delegated++
+		b.WriteString(fmt.Sprintf("[image %d of %d: %s — described via %s/%s]\n%s\n\n",
+			i+1, len(paths), filepath.Base(path), delegate.Provider, delegate.Model, delegate.Description))
+	}
+
+	if delegated == 0 {
+		return a.buildNonVisionImageToolPrompt(query, paths), false
+	}
+
+	b.WriteString("\nOriginal user request (images above were described by a separate vision model; call analyze_image_content for higher-fidelity analysis):\n")
+	b.WriteString(query)
+	return b.String(), true
+}
+
+// buildNonVisionImageToolPrompt steers a non-multimodal model to the
+// analyze_image_content tool. Kept as the final fallback when delegation
+// itself is unavailable (no vision client at all).
 func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) string {
 	var b strings.Builder
 	b.WriteString("OCR Trigger Policy (MANDATORY): The active model is non-multimodal. ")
@@ -556,7 +590,7 @@ func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []pl
 
 	a.Logger().Debug("[img] OCR fallback processed %d overflow image(s)\n", len(overflowPlaceholders))
 
-	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback)\n"
+	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback — descriptions via remote vision model)\n"
 	cleanedQuery += enhanced
 
 	return cleanedQuery

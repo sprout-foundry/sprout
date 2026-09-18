@@ -340,8 +340,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const handleSessionSearchRestore = useCallback(
     async (sessionId: string, chatId?: string) => {
       try {
-        // chatId scopes the restore to that chat (empty = active chat,
-        // the pre-existing Costs-page behavior).
+        // chatId scopes the restore to that chat (empty = active chat).
         const response = await apiService.restoreSession(sessionId, chatId);
         if (response.messages?.length) {
           window.dispatchEvent(
@@ -998,7 +997,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 reviewProps={reviewProps}
                 diffState={diffState}
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-                onSessionRestore={handleSessionSearchRestore}
                 onViewChange={onViewChange}
               />
             </ErrorBoundary>
@@ -1009,7 +1007,6 @@ const AppContent: React.FC<AppContentProps> = ({
               isTablet={isTablet}
               showContextSidebar={showContextSidebar}
               contextPanelRef={contextPanelRef}
-              currentView={state.currentView}
               toolExecutions={state.toolExecutions}
               logs={state.logs}
               subagentActivities={state.subagentActivities}

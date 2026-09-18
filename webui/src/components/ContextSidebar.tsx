@@ -1,6 +1,6 @@
 import type { ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import React from 'react';
-import type { QueryProgress, ViewType } from '../types/app';
+import type { QueryProgress } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -9,7 +9,6 @@ export interface ContextSidebarProps {
   isTablet: boolean;
   showContextSidebar: boolean;
   contextPanelRef: React.RefObject<ContextPanelHandle>;
-  currentView: ViewType;
   toolExecutions: ToolExecution[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
@@ -24,9 +23,9 @@ export interface ContextSidebarProps {
  *
  * Desktop: ALWAYS mounted so the main-content column never reflows when
  * the user moves between chat and file buffers. When `showContextSidebar`
- * is false (file buffer focused, costs view) the panel renders in idle
- * mode — rail visible but disabled, empty body. The user can still
- * collapse it to the 52px rail (persisted) whenever they want the space.
+ * is false (file buffer focused) the panel renders in idle mode — rail
+ * visible but disabled, empty body. The user can still collapse it to the
+ * 52px rail (persisted) whenever they want the space.
  *
  * Mobile/tablet: the panel is an overlay, so the old behavior of
  * unmounting when no chat is focused is preserved.
@@ -36,7 +35,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   isTablet,
   showContextSidebar,
   contextPanelRef,
-  currentView,
   toolExecutions,
   logs,
   subagentActivities,
@@ -45,7 +43,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   lastError,
   queryProgress,
 }) => {
-  const overlayHidden = !showContextSidebar || currentView === 'costs';
+  const overlayHidden = !showContextSidebar;
   const panelProps = {
     context: 'chat' as const,
     toolExecutions,

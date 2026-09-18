@@ -160,7 +160,7 @@ test.describe("SP-140-3 DesignView", () => {
     // before the graph settles, so the status line is the stable readiness
     // signal: flow name, node/edge counts, and the declared orientation.
     await expect(page.getByTestId("design-flows-status")).toContainText(
-      `${FIXTURE_FLOW} · 2 nodes · 1 edges · LR`,
+      `${FIXTURE_FLOW} · 2 nodes · 1 edge · LR`,
     );
 
     const graph = page.getByTestId("design-flow-graph");

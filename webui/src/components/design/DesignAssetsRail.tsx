@@ -37,6 +37,16 @@ export function assetsForTab(tab: DesignTab, inventory?: DesignInventory | null)
   return inventory.tokenFiles;
 }
 
+/**
+ * Display name for a rail row: the asset's human name without its
+ * serialization extension. The design surface is about the artifact, not the
+ * file format — `.mmd`/`.html`/`.svg` leakage reads as a file manager, and the
+ * full path stays available as the row's title tooltip.
+ */
+export function assetDisplayName(name: string): string {
+  return name.replace(/\.(mmd|html|svg|png|jpg|jpeg|webp|tokens\.json)$/i, '');
+}
+
 export default function DesignAssetsRail({ tab, inventory, selected, onSelect }: DesignAssetsRailProps) {
   const label = RAIL_LABELS[tab];
   const assets = assetsForTab(tab, inventory);
@@ -57,7 +67,7 @@ export default function DesignAssetsRail({ tab, inventory, selected, onSelect }:
                 data-testid={`design-rail-row-${asset.path}`}
                 title={asset.path}
               >
-                {asset.name}
+                {assetDisplayName(asset.name)}
               </button>
             </li>
           ))}

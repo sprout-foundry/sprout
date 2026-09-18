@@ -17,6 +17,12 @@
 import type { ReactNode } from 'react';
 import DesignFeedbackAffordance from './DesignFeedbackAffordance';
 import DesignFeedbackResolution from './DesignFeedbackResolution';
+import { assetDisplayName } from './DesignAssetsRail';
+
+/** The pane heading shows the artifact name; the path stays as a caption. */
+function detailName(path: string): string {
+  return assetDisplayName(path.split('/').pop() ?? path);
+}
 
 export interface DesignDetailPaneProps {
   /** Currently selected asset path, relative to the design/ root. */
@@ -47,9 +53,12 @@ export default function DesignDetailPane({
     <div className="design-detail" data-testid="design-detail-content" data-selected={path ?? ''}>
       {path ? (
         <>
-          <h2 className="design-detail-heading" title={path}>
-            {path}
-          </h2>
+          <div className="design-detail-title">
+            <h2 className="design-detail-heading">{detailName(path)}</h2>
+            <p className="design-detail-path" title={path}>
+              {path}
+            </p>
+          </div>
           {onOpenFile ? (
             <button type="button" className="design-detail-open" onClick={() => onOpenFile(path)}>
               Open in editor
@@ -60,7 +69,9 @@ export default function DesignDetailPane({
           {children}
         </>
       ) : (
-        <p className="design-detail-placeholder">Select an asset to inspect it.</p>
+        <div className="design-detail-empty">
+          <p className="design-detail-placeholder">Select an asset to inspect it.</p>
+        </div>
       )}
     </div>
   );

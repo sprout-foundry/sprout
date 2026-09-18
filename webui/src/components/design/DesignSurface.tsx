@@ -36,11 +36,10 @@ export interface DesignSurfaceProps {
   /** The active section, driven by the mode's rail. */
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
-  onBack?: () => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
 }
 
-const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, onTabChange, onBack, onOpenFile }) => {
+const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, onTabChange, onOpenFile }) => {
   if (loading) return <SurfaceFallback />;
 
   // No design/ tree: AppContent moves us back to Code; hold the fallback
@@ -51,7 +50,7 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, on
     <div className="design-surface" data-testid="design-surface">
       <ErrorBoundary panelName="Design">
         <Suspense fallback={<SurfaceFallback />}>
-          <DesignView onBack={onBack} onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} />
+          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} />
         </Suspense>
       </ErrorBoundary>
     </div>

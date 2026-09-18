@@ -255,7 +255,7 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 	}
 
 	// Only intercept binary content for multimodal models
-	if a.client == nil || !a.client.SupportsVision() {
+	if a.client == nil || !api.ResolveVisionCapability(a.client).AcceptsImages {
 		result, err := handleFetchURL(ctx, a, args)
 		return nil, result, utils.WrapError(err, "fetch URL")
 	}

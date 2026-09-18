@@ -71,6 +71,20 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 		analysisMode = v
 	}
 
+	// SP-140: a multimodal primary that calls this tool wants to LOOK at
+	// the image — hand it the pixels directly instead of routing the image
+	// through a second vision model and describing the description. The
+	// tool's analysis JSON would only add a stale intermediary layer; the
+	// model can extract anything that JSON would have contained.
+	if env.PrimaryAcceptsImages != nil && env.PrimaryAcceptsImages() {
+		if attachment := buildImageAttachment(ctx, imagePath); len(attachment.Images) > 0 {
+			attachment.Output = inlineVisionToolNote(imagePath, analysisMode)
+			return attachment, nil
+		}
+		// Attachment failed (too large, unreadable, not an image) — fall
+		// through to the delegated-analysis path below.
+	}
+
 	result, err := AnalyzeImage(ctx, imagePath, analysisPrompt, analysisMode)
 	if err != nil {
 		return ToolResult{Output: result, IsError: true}, err
@@ -89,6 +103,17 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	attachment.Output = result
 	return attachment, nil
+}
+
+// inlineVisionToolNote is the text companion for a pixel attachment when
+// the primary model receives the image directly. Short on purpose: the
+// model can see; the note only explains why no analysis JSON accompanies it.
+func inlineVisionToolNote(imagePath, analysisMode string) string {
+	note := fmt.Sprintf("[image attached inline: %s — you are viewing the actual pixels; no third-party analysis was run", imagePath)
+	if analysisMode == "ocr" {
+		note += "; you were asked for OCR — read the text from the image directly"
+	}
+	return note + "]"
 }
 
 // buildImageAttachment reads a local image file and returns a ToolResult

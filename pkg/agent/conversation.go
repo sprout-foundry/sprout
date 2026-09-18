@@ -8,7 +8,6 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -234,7 +233,8 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 const maxTotalImagePayloadBytesDefault = 20 * 1024 * 1024
 
 // Matches the placeholder inserted by the console when a user pastes an image.
-var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
+// Legacy paste placeholder regex lives in pkg/console (legacyPastedImageRe);
+// parsing goes through console.ParsePastedImagePlaceholders (SP-140).
 
 // Fallback longest-edge cap for embedded images (1568px, per Anthropic recommendation).
 const visionEmbedMaxEdgePxDefault = 1568
@@ -308,25 +308,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 }
 
 func extractPastedImagePaths(query string) []string {
-	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
-	if len(uniqueMatches) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(uniqueMatches))
-	paths := make([]string, 0, len(uniqueMatches))
-	for _, loc := range uniqueMatches {
-		filePath := strings.TrimSpace(query[loc[2]:loc[3]])
-		if filePath == "" {
-			continue
-		}
-		if _, exists := seen[filePath]; exists {
-			continue
-		}
-		seen[filePath] = struct{}{}
-		paths = append(paths, filePath)
-	}
-	return paths
+	return console.ParsePastedImagePlaceholders(query)
 }
 
 // processImagesByDelegation is the inline chat path's delegation rung
@@ -368,9 +350,10 @@ func (a *Agent) processImagesByDelegation(query string, paths []string) (string,
 // itself is unavailable (no vision client at all).
 func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) string {
 	var b strings.Builder
-	b.WriteString("OCR Trigger Policy (MANDATORY): The active model is non-multimodal. ")
+	b.WriteString("Image Analysis Policy: The active model is non-multimodal. ")
 	b.WriteString("Before answering, call analyze_image_content for each pasted image path below. ")
-	b.WriteString("Use analysis_mode=\"ocr\" first, then run additional image analysis as needed.\n")
+	b.WriteString("Use the default mode (general) first — it describes layout, text, and UI structure. ")
+	b.WriteString("Only follow with analysis_mode=\"ocr\" if you need verbatim text extraction.\n")
 	b.WriteString("Pasted image paths:\n")
 	for _, path := range paths {
 		b.WriteString("- ")
@@ -401,21 +384,17 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	var images []api.ImageData
 	totalBytes := 0
 
-	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
-	if len(uniqueMatches) == 0 {
+	imagePaths := console.ParsePastedImagePlaceholders(query)
+	if len(imagePaths) == 0 {
 		return nil, query, nil
 	}
 
 	var placeholders []placeholderInfo
-	seen := make(map[string]struct{}, len(uniqueMatches))
-	for _, loc := range uniqueMatches {
-		fullMatch := query[loc[0]:loc[1]]
-		filePath := query[loc[2]:loc[3]]
-		if _, exists := seen[filePath]; exists {
-			continue
-		}
-		seen[filePath] = struct{}{}
-		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
+	for _, filePath := range imagePaths {
+		placeholders = append(placeholders, placeholderInfo{
+			fullMatch: console.PastedImagePlaceholder(filePath),
+			filePath:  filePath,
+		})
 	}
 
 	inlinePlaceholders, overflowPlaceholders := a.splitPlaceholdersWithBatchSplit(placeholders, caps, maxImageCount, maxTotalImagePayloadBytes)

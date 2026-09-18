@@ -209,13 +209,6 @@ type visionSupportingClient struct {
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Tracks supportsVision for test parity with prod
-// clients — most clients gate both methods on the same model capabilities.
-func (v *visionSupportingClient) SupportsConversationalVision() bool {
-	return v.supportsVision
-}
-
 // VisionCapabilities returns the per-provider vision limits.
 // SP-103-D3: the mock returns safe defaults for test parity.
 func (v *visionSupportingClient) VisionCapabilities() api.VisionCapabilities {

@@ -186,7 +186,7 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 	if a == nil || a.client == nil {
 		return false
 	}
-	if !a.effectiveVisionSupport() {
+	if !api.ResolveVisionCapability(a.client).AcceptsImages {
 		return false
 	}
 
@@ -289,7 +289,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && a.effectiveConversationalVision(c) {
+	if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
 		return a.processImagesAsMultimodal(query)
 	}
 
@@ -298,7 +298,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && a.effectiveVisionSupport() {
+	if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
 		enhancedQuery, err := a.processImagesViaOCR(query)
 		if err != nil {
 			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
@@ -308,27 +308,6 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 	}
 
 	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
-}
-
-// effectiveConversationalVision reports whether the model is suitable for
-// inline multimodal chat messages, consulting probe ground truth when
-// available. If the probe says the model has no vision, we skip the
-// conversational path regardless of config flags.
-func (a *Agent) effectiveConversationalVision(c api.ClientInterface) bool {
-	if probe := a.probeVisionResult(); probe != nil && !*probe {
-		return false
-	}
-	return supportsConversationalVision(c)
-}
-
-// supportsConversationalVision reports whether the client's vision capability
-// is suitable for inline multimodal chat. Falls back to true when the client
-// doesn't implement SupportsConversationalVision (older or non-Ollama clients).
-func supportsConversationalVision(c api.ClientInterface) bool {
-	if typed, ok := c.(interface{ SupportsConversationalVision() bool }); ok {
-		return typed.SupportsConversationalVision()
-	}
-	return c.SupportsVision()
 }
 
 func extractPastedImagePaths(query string) []string {
@@ -527,7 +506,7 @@ func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, 
 		sizes[i] = int(stat.Size())
 	}
 
-	result := BatchSplit(sizes, caps)
+	result := tools.BatchSplit(sizes, caps)
 
 	inline = make([]placeholderInfo, 0, len(result.InlineIndices))
 	overflow = make([]placeholderInfo, 0, len(result.OverflowIndices))

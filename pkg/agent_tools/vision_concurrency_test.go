@@ -85,11 +85,6 @@ func (m *concurrentMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 }
 func (m *concurrentMock) SupportsVision() bool { return true }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (m *concurrentMock) SupportsConversationalVision() bool {
-	return false
-}
 func (m *concurrentMock) GetVisionModel() string          { return "mock-vision" }
 func (m *concurrentMock) GetLastTPS() float64             { return 0 }
 func (m *concurrentMock) GetAverageTPS() float64          { return 0 }

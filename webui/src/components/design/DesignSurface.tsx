@@ -40,14 +40,7 @@ export interface DesignSurfaceProps {
   onOpenFile?: (path: string, lineNumber?: number) => void;
 }
 
-const DesignSurface: React.FC<DesignSurfaceProps> = ({
-  loading,
-  present,
-  tab,
-  onTabChange,
-  onBack,
-  onOpenFile,
-}) => {
+const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, onTabChange, onBack, onOpenFile }) => {
   if (loading) return <SurfaceFallback />;
 
   // No design/ tree: AppContent moves us back to Code; hold the fallback

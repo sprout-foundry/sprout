@@ -121,9 +121,6 @@ func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/embedding-index", ws.handleAPIEmbeddingIndex)
-	mux.HandleFunc("/api/costs/summary", ws.handleCostsSummary)
-	mux.HandleFunc("/api/costs/history", ws.handleCostsHistory)
-	mux.HandleFunc("/api/costs/detail", ws.handleCostsDetail)
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)

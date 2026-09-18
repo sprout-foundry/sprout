@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-11T13:37:51Z",
+  "updated_at": "2026-09-17T14:19:46Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -408,7 +408,16 @@
         },
         {
           "id": "deepseek-flash",
-          "name": "deepseek-flash"
+          "name": "deepseek-flash",
+          "description": "DeepSeek-V4.1 Flash - Flagship multimodal MoE model with 552B backbone parameters and native image understanding. Supersedes V4 Flash and V4 Pro; supports thinking and non-thinking modes with a controllable reasoning effort",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "deepseek-reasoner",
@@ -428,13 +437,13 @@
         {
           "id": "deepseek-v4-flash",
           "name": "DeepSeek V4 Flash",
-          "description": "DeepSeek-V4 Flash - Cost-effective model with 1M context, optimized for speed",
+          "description": "DeepSeek-V4 Flash - Retired; requests to this legacy name are served by DeepSeek-V4.1 Flash and billed at the Flash price",
           "context_length": 1000000,
           "tags": [
             "tools"
           ],
-          "input_cost": 0.08707999999999999,
-          "output_cost": 0.17415999999999998
+          "input_cost": 0.07,
+          "output_cost": 0.14
         },
         {
           "id": "deepseek-v4-flash-max",
@@ -449,7 +458,7 @@
         {
           "id": "deepseek-v4-flash-vision-exp",
           "name": "DeepSeek V4 Flash Vision Exp",
-          "description": "DeepSeek-V4 Flash Vision Exp - Experimental multimodal version of V4 Flash with image understanding, matching V4 Flash on text capabilities including agents, reasoning, and world knowledge",
+          "description": "DeepSeek-V4 Flash Vision Exp - Retired; requests to this legacy name are served by DeepSeek-V4.1 Flash and billed at the Flash price",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -505,8 +514,8 @@
       "signup_url": "https://ollama.com/",
       "api_key_label": "Ollama API Key",
       "api_key_help": "Your Ollama cloud API key for remote model access.",
-      "default_model": "deepseek-v3.1:671b",
-      "recommended_model": "deepseek-v3.1:671b",
+      "default_model": "deepseek-v4-flash",
+      "recommended_model": "deepseek-v4-flash",
       "recommended_model_why": "Largest available open model.",
       "models": [
         {
@@ -518,8 +527,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.08707999999999999,
-          "output_cost": 0.17415999999999998
+          "input_cost": 0.07,
+          "output_cost": 0.14
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -529,7 +538,9 @@
           "tags": [
             "tools",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.22,
+          "output_cost": 0.66
         },
         {
           "id": "deepseek-v4-flash:preview",
@@ -550,8 +561,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.954738,
-          "output_cost": 1.909476
+          "input_cost": 1.5999999999999999,
+          "output_cost": 3.1999999999999997
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -561,7 +572,9 @@
           "tags": [
             "tools",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.66,
+          "output_cost": 1.98
         },
         {
           "id": "deepseek-v4-pro:preview",
@@ -576,6 +589,13 @@
         {
           "id": "deepseek-v4.1-flash",
           "name": "deepseek-v4.1-flash",
+          "description": "DeepSeek V4.1 Flash - multimodal MoE model (552B backbone) with 1M context and KV cache compression",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
           "input_cost": 0.15,
           "output_cost": 0.6
         },
@@ -588,7 +608,9 @@
             "tools",
             "vision",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.14,
+          "output_cost": 0.4
         },
         {
           "id": "glm-5.1",
@@ -598,8 +620,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1,
+          "output_cost": 3.2
         },
         {
           "id": "glm-5.2",
@@ -609,8 +631,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.4,
+          "output_cost": 4.4
         },
         {
           "id": "glm-5.3",
@@ -646,7 +668,9 @@
           "tags": [
             "tools",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.15,
+          "output_cost": 0.6
         },
         {
           "id": "gpt-oss:20b",
@@ -656,7 +680,9 @@
           "tags": [
             "tools",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.07,
+          "output_cost": 0.3
         },
         {
           "id": "kimi-k2.6",
@@ -679,8 +705,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.71,
-          "output_cost": 3.5
+          "input_cost": 0.95,
+          "output_cost": 4
         },
         {
           "id": "kimi-k3",
@@ -691,8 +717,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 2.34,
-          "output_cost": 11.7
+          "input_cost": 3,
+          "output_cost": 15
         },
         {
           "id": "minimax-m2.7",
@@ -713,8 +739,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "mistral-large-3:675b",
@@ -723,7 +749,9 @@
           "context_length": 262144,
           "tags": [
             "tools"
-          ]
+          ],
+          "input_cost": 0.5,
+          "output_cost": 1.5
         },
         {
           "id": "nemotron-3-nano:30b",
@@ -732,7 +760,9 @@
           "context_length": 131072,
           "tags": [
             "tools"
-          ]
+          ],
+          "input_cost": 0.06,
+          "output_cost": 0.24
         },
         {
           "id": "nemotron-3-super",
@@ -741,7 +771,9 @@
           "context_length": 262144,
           "tags": [
             "tools"
-          ]
+          ],
+          "input_cost": 0.015,
+          "output_cost": 0.6
         },
         {
           "id": "nemotron-3-ultra",
@@ -751,7 +783,9 @@
           "tags": [
             "tools",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.1,
+          "output_cost": 3
         },
         {
           "id": "qwen3.5:397b",
@@ -762,7 +796,9 @@
             "tools",
             "vision",
             "reasoning"
-          ]
+          ],
+          "input_cost": 0.6,
+          "output_cost": 3.6
         }
       ]
     },
@@ -1216,7 +1252,7 @@
         },
         {
           "id": "anthropic/claude-opus-5",
-          "name": "Claude Opus 5",
+          "name": "Anthropic: Claude Opus 5",
           "description": "Claude Opus 5 is Anthropic’s flagship model for demanding reasoning, coding, and long-horizon agentic work. It is particularly strong at end-to-end software tasks, code review and bug finding, visual analysis...",
           "context_length": 1000000,
           "tags": [
@@ -1242,7 +1278,7 @@
         },
         {
           "id": "anthropic/claude-opus-5:batch",
-          "name": "Claude Opus 5 (batch)",
+          "name": "Anthropic: Claude Opus 5 (batch)",
           "description": "Claude Opus 5 is Anthropic’s flagship model for demanding reasoning, coding, and long-horizon agentic work. It is particularly strong at end-to-end software tasks, code review and bug finding, visual analysis...",
           "context_length": 1000000,
           "tags": [
@@ -1680,8 +1716,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08707999999999999,
-          "output_cost": 0.17415999999999998
+          "input_cost": 0.07,
+          "output_cost": 0.14
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1693,8 +1729,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.065,
-          "output_cost": 0.18
+          "input_cost": 0.06,
+          "output_cost": 0.12
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -1747,8 +1783,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.954738,
-          "output_cost": 1.909476
+          "input_cost": 1.5999999999999999,
+          "output_cost": 3.1999999999999997
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -1760,8 +1796,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.65868,
-          "output_cost": 1.97604
+          "input_cost": 0.5808,
+          "output_cost": 1.7424
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813:batch",
@@ -1908,9 +1944,7 @@
             "vision",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 1.25,
-          "output_cost": 10
+          ]
         },
         {
           "id": "google/gemini-2.5-pro:batch",
@@ -2313,8 +2347,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.041999999999999996,
-          "output_cost": 0.22
+          "input_cost": 0.09,
+          "output_cost": 0.3
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -2345,16 +2379,14 @@
         {
           "id": "google/gemma-4-31b-it:batch",
           "name": "Google: Gemma 4 31B (batch)",
-          "description": "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with text output. Features a 256K token context window, configurable thinking/reasoning mode, native function...",
+          "description": "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with text output. Features a 256K token context window, configurable thinking/reasoning mode, native function calling and low-latency deployment.",
           "context_length": 262144,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.39,
-          "output_cost": 0.9700000000000001
+          ]
         },
         {
           "id": "google/gemma-4-31b-it:free",
@@ -2396,8 +2428,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.06
+          "input_cost": 0.08,
+          "output_cost": 0.11
         },
         {
           "id": "ibm-granite/granite-4.0-h-micro",
@@ -2593,6 +2625,28 @@
           ]
         },
         {
+          "id": "inference-net/schematron-v2-small",
+          "name": "Inference.net: Schematron V2 Small",
+          "description": "Schematron V2 Small is a 3B-parameter HTML-to-JSON extraction model from Inference.net. It prioritizes extraction quality for complex schemas and long pages. Extraction instructions must be supplied through a JSON schema...",
+          "context_length": 128000,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.22999999999999998
+        },
+        {
+          "id": "inference-net/schematron-v2-turbo",
+          "name": "Inference.net: Schematron V2 Turbo",
+          "description": "Schematron V2 Turbo is a 3B-parameter HTML-to-JSON extraction model from Inference.net. It prioritizes throughput for high-volume extraction workloads. Extraction instructions must be supplied through a JSON schema in response_format rather...",
+          "context_length": 128000,
+          "tags": [
+            "structured_output"
+          ],
+          "input_cost": 0.03,
+          "output_cost": 0.15
+        },
+        {
           "id": "kwaipilot/kat-coder-air-v2.5",
           "name": "Kwaipilot: KAT-Coder-Air V2.5",
           "description": "KAT-Coder-Air V2.5 is a flagship-level Agentic Coding model that can directly hand over an entire issue or an entire business workflow to it, allowing it to autonomously locate and make...",
@@ -2725,8 +2779,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 0.696
+          "input_cost": 0.1875,
+          "output_cost": 0.6525
         },
         {
           "id": "meta-llama/llama-4-scout",
@@ -2747,8 +2801,7 @@
           "description": "Llama Guard 4 is a Llama 4 Scout-derived multimodal pretrained model, fine-tuned for content safety classification. Similar to previous versions, it can be used to classify content in both LLM...",
           "context_length": 163840,
           "tags": [
-            "vision",
-            "structured_output"
+            "vision"
           ],
           "input_cost": 0.18,
           "output_cost": 0.18
@@ -2893,7 +2946,7 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.55,
+          "input_cost": 0.39999999999999997,
           "output_cost": 2.2
         },
         {
@@ -2940,8 +2993,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2
+          "input_cost": 0.27,
+          "output_cost": 1.08
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -3299,14 +3352,14 @@
           "id": "mistralai/mistral-small-3.2-24b-instruct",
           "name": "Mistral: Mistral Small 3.2 24B",
           "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
-          "context_length": 131072,
+          "context_length": 256000,
           "tags": [
             "tools",
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.075,
-          "output_cost": 0.19999999999999998
+          "input_cost": 0.09375,
+          "output_cost": 0.25
         },
         {
           "id": "mistralai/mixtral-8x22b-instruct",
@@ -3407,8 +3460,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.71,
-          "output_cost": 3.5
+          "input_cost": 0.7062,
+          "output_cost": 3.21
         },
         {
           "id": "moonshotai/kimi-k2.7-code:batch",
@@ -3433,8 +3486,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.34,
-          "output_cost": 11.7
+          "input_cost": 3,
+          "output_cost": 15
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -3570,8 +3623,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.049999999999999996,
-          "output_cost": 0.19999999999999998
+          "input_cost": 0.06,
+          "output_cost": 0.24
         },
         {
           "id": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -3604,8 +3657,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08499999999999999,
-          "output_cost": 0.39999999999999997
+          "input_cost": 0.08,
+          "output_cost": 0.44999999999999996
         },
         {
           "id": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -3659,8 +3712,7 @@
           "context_length": 131072,
           "tags": [
             "vision",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
           "input_cost": 0.19999999999999998,
           "output_cost": 0.19999999999999998
@@ -3812,9 +3864,7 @@
           "tags": [
             "tools",
             "structured_output"
-          ],
-          "input_cost": 10,
-          "output_cost": 30
+          ]
         },
         {
           "id": "openai/gpt-4-turbo:batch",
@@ -4823,14 +4873,12 @@
         {
           "id": "openai/gpt-oss-20b:batch",
           "name": "OpenAI: gpt-oss-20b (batch)",
-          "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for...",
+          "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for low-latency reasoning and agentic workloads.",
           "context_length": 131072,
           "tags": [
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 0.049999999999999996,
-          "output_cost": 0.19999999999999998
+          ]
         },
         {
           "id": "openai/gpt-oss-20b:free",
@@ -5280,8 +5328,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.22749999999999998,
-          "output_cost": 0.9099999999999999
+          "input_cost": 0.12,
+          "output_cost": 0.24
         },
         {
           "id": "qwen/qwen3-235b-a22b",
@@ -5305,8 +5353,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.88
+          "input_cost": 0.0875,
+          "output_cost": 0.35
         },
         {
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
@@ -5343,8 +5391,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.3
+          "input_cost": 0.04815,
+          "output_cost": 0.19305
         },
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
@@ -5532,8 +5580,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6
+          "input_cost": 0.13,
+          "output_cost": 0.52
         },
         {
           "id": "qwen/qwen3-vl-30b-a3b-thinking",
@@ -5628,8 +5676,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3125,
-          "output_cost": 1.25
+          "input_cost": 0.1625,
+          "output_cost": 1.3
         },
         {
           "id": "qwen/qwen3.5-397b-a17b",
@@ -5862,8 +5910,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.42,
-          "output_cost": 3
+          "input_cost": 0.21400000000000002,
+          "output_cost": 2.5500000000000003
         },
         {
           "id": "qwen/qwen3.8-flash",
@@ -6053,6 +6101,17 @@
           ]
         },
         {
+          "id": "stealth/union-alpha",
+          "name": "Union Alpha",
+          "description": "Union Alpha is a multimodal model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks. Union Alpha is a stealth model....",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "structured_output"
+          ]
+        },
+        {
           "id": "stepfun/step-3.5-flash",
           "name": "StepFun: Step 3.5 Flash",
           "description": "Step 3.5 Flash is StepFun's most capable open-source foundation model. Built on a sparse Mixture of Experts (MoE) architecture, it selectively activates only 11B of its 196B parameters per token....",
@@ -6195,7 +6254,6 @@
           "description": "UnslopNemo v4.1 is the latest addition from the creator of Rocinante, designed for adventure writing and role-play scenarios.",
           "context_length": 1024000,
           "tags": [
-            "tools",
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
@@ -6209,8 +6267,7 @@
           "tags": [
             "tools",
             "vision",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
           "input_cost": 1,
           "output_cost": 4.05
@@ -6231,15 +6288,13 @@
         {
           "id": "thinkingmachines/inkling-small:batch",
           "name": "Thinking Machines: Inkling Small (batch)",
-          "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
+          "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of the Inkling family, offering strong reasoning at a lower cost.",
           "context_length": 524288,
           "tags": [
             "tools",
             "vision",
             "reasoning"
-          ],
-          "input_cost": 0.5,
-          "output_cost": 1.2
+          ]
         },
         {
           "id": "thinkingmachines/inkling-small:free",
@@ -6586,8 +6641,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.966,
-          "output_cost": 3.036
+          "input_cost": 1.4,
+          "output_cost": 4.4
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -6605,8 +6660,8 @@
         {
           "id": "z-ai/glm-5.2:free",
           "name": "Z.ai: GLM 5.2 (free)",
-          "description": "GLM-5.2 free tier from Z.ai. Large-scale reasoning model suited for long-horizon agent workflows and software engineering, available at no cost with a 128K-token context window.",
-          "context_length": 128000,
+          "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
+          "context_length": 32768,
           "tags": [
             "reasoning"
           ]
@@ -6635,8 +6690,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.5
+          "input_cost": 0.09,
+          "output_cost": 0.3
         },
         {
           "id": "z-ai/glm-5.3-flash:batch",
@@ -6695,8 +6750,8 @@
         },
         {
           "id": "~anthropic/claude-haiku-latest",
-          "name": "Anthropic Claude Haiku Latest",
-          "description": "This model always redirects to the latest model in the Anthropic Claude Haiku family.",
+          "name": "Anthropic: Claude Haiku Latest",
+          "description": "This model always redirects to the latest model in the Claude Haiku family.",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -6723,8 +6778,8 @@
         },
         {
           "id": "~anthropic/claude-sonnet-latest",
-          "name": "Anthropic Claude Sonnet Latest",
-          "description": "This model always redirects to the latest model in the Anthropic Claude Sonnet family.",
+          "name": "Anthropic: Claude Sonnet Latest",
+          "description": "This model always redirects to the latest model in the Claude Sonnet family.",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -6736,8 +6791,35 @@
           "output_cost": 10
         },
         {
+          "id": "~deepseek/deepseek-flash-latest",
+          "name": "DeepSeek: DeepSeek Flash Latest",
+          "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.15,
+          "output_cost": 0.6
+        },
+        {
+          "id": "~deepseek/deepseek-pro-latest",
+          "name": "DeepSeek: DeepSeek Pro Latest",
+          "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.5808,
+          "output_cost": 1.7424
+        },
+        {
           "id": "~deepseek/deepseek-v4-flash-latest",
-          "name": "DeepSeek V4 Flash Latest",
+          "name": "DeepSeek: DeepSeek V4 Flash Latest",
           "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
           "context_length": 1310720,
           "tags": [
@@ -6745,13 +6827,13 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.049999999999999996,
-          "output_cost": 0.16
+          "input_cost": 0.03,
+          "output_cost": 0.13
         },
         {
           "id": "~google/gemini-flash-latest",
-          "name": "Google Gemini Flash Latest",
-          "description": "This model always redirects to the latest model in the Google Gemini Flash family.",
+          "name": "Google: Gemini Flash Latest",
+          "description": "This model always redirects to the latest model in the Gemini Flash family.",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -6764,8 +6846,8 @@
         },
         {
           "id": "~google/gemini-pro-latest",
-          "name": "Google Gemini Pro Latest",
-          "description": "This model always redirects to the latest model in the Google Gemini Pro family.",
+          "name": "Google: Gemini Pro Latest",
+          "description": "This model always redirects to the latest model in the Gemini Pro family.",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -6778,8 +6860,8 @@
         },
         {
           "id": "~moonshotai/kimi-latest",
-          "name": "MoonshotAI Kimi Latest",
-          "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
+          "name": "MoonshotAI: Kimi Latest",
+          "description": "This model always redirects to the latest model in the Kimi family.",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -6787,13 +6869,13 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.34,
-          "output_cost": 11.7
+          "input_cost": 2.0999999999999996,
+          "output_cost": 10.950000000000001
         },
         {
           "id": "~openai/gpt-astra-latest",
-          "name": "OpenAI GPT Astra Latest",
-          "description": "This model always redirects to the latest model in the OpenAI GPT Astra family.",
+          "name": "OpenAI: GPT Astra Latest",
+          "description": "This model always redirects to the latest model in the GPT Astra family.",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -6814,14 +6896,12 @@
             "vision",
             "reasoning",
             "structured_output"
-          ],
-          "input_cost": 2,
-          "output_cost": 10
+          ]
         },
         {
           "id": "~openai/gpt-luna-latest",
-          "name": "OpenAI GPT Luna Latest",
-          "description": "This model always redirects to the latest model in the OpenAI GPT Luna family.",
+          "name": "OpenAI: GPT Luna Latest",
+          "description": "This model always redirects to the latest model in the GPT Luna family.",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -6834,8 +6914,8 @@
         },
         {
           "id": "~openai/gpt-mini-latest",
-          "name": "OpenAI GPT Mini Latest",
-          "description": "This model always redirects to the latest model in the OpenAI GPT Mini family.",
+          "name": "OpenAI: GPT Mini Latest",
+          "description": "This model always redirects to the latest model in the GPT Mini family.",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -6848,8 +6928,8 @@
         },
         {
           "id": "~openai/gpt-sol-latest",
-          "name": "OpenAI GPT Sol Latest",
-          "description": "This model always redirects to the latest model in the OpenAI GPT Sol family.",
+          "name": "OpenAI: GPT Sol Latest",
+          "description": "This model always redirects to the latest model in the GPT Sol family.",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -6862,8 +6942,8 @@
         },
         {
           "id": "~openai/gpt-terra-latest",
-          "name": "OpenAI GPT Terra Latest",
-          "description": "This model always redirects to the latest model in the OpenAI GPT Terra family.",
+          "name": "OpenAI: GPT Terra Latest",
+          "description": "This model always redirects to the latest model in the GPT Terra family.",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -6912,8 +6992,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.9700000000000001,
-          "output_cost": 3.3077
+          "input_cost": 0.8775,
+          "output_cost": 2.9699999999999998
         }
       ]
     },
@@ -8164,8 +8244,20 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.4,
-          "output_cost": 2.9999999999999996
+          "input_cost": 0.2,
+          "output_cost": 2.5
+        },
+        {
+          "id": "Qwen/Qwen3.8-Flash",
+          "name": "Qwen/Qwen3.8-Flash",
+          "description": "Qwen's fast, low-cost model with a one-million-token context window, billed at a flat rate across the entire window.",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "structured_output"
+          ],
+          "input_cost": 0.113,
+          "output_cost": 0.382
         },
         {
           "id": "Qwen/Qwen3.8-Max",
@@ -8393,8 +8485,8 @@
       "api_key_label": "Chutes API Key",
       "api_key_help": "Create a Chutes key, then pick one of available coding-capable models.",
       "recommended": true,
-      "default_model": "qwen/qwen3.5-27b",
-      "recommended_model": "qwen/qwen3.5-27b",
+      "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
+      "recommended_model": "deepseek-ai/DeepSeek-V3.2-TEE",
       "recommended_model_why": "Current coding/reasoning default from checked-in Chutes catalog.",
       "models": [
         {
@@ -8528,8 +8620,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.35,
-          "output_cost": 2.75
+          "input_cost": 0.32,
+          "output_cost": 2.5
         },
         {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",

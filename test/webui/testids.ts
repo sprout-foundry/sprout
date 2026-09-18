@@ -56,7 +56,6 @@ const TESTIDS = {
   // Sidebar
   "sidebar-container": "sidebar-container",
   "sidebar-brand": "sidebar-brand",
-  "sidebar-costs-button": "sidebar-costs-button",
   "sidebar-settings-toggle": "sidebar-settings-toggle",
   "sidebar-icon-rail": "sidebar-icon-rail",
   "sidebar-git-tab": "sidebar-git-tab",
@@ -185,48 +184,6 @@ const TESTIDS = {
   "export-redact-secrets": "export-redact-secrets",
   "export-cancel": "export-cancel",
   "export-download": "export-download",
-
-  // Costs page
-  "costs-page": "costs-page",
-  "costs-time-range-all": "costs-time-range-all",
-  "costs-time-range-month": "costs-time-range-30d",
-  "costs-time-range-week": "costs-time-range-7d",
-  "costs-loading": "costs-loading",
-  "costs-error": "costs-error",
-  "costs-empty": "costs-empty",
-  "costs-summary-total": "costs-summary-total",
-  "costs-token-value": "costs-token-value",
-  "costs-billing-breakdown": "costs-billing-breakdown",
-  "costs-billing-pay_per_token": "costs-billing-pay_per_token",
-  "costs-billing-subscription": "costs-billing-subscription",
-  "costs-billing-free": "costs-billing-free",
-  "costs-stale-banner": "costs-stale-banner",
-  "costs-back-btn": "costs-back-btn",
-  "cost-summary-cards": "cost-summary-cards",
-  "cost-card-this-month": "cost-card-month",
-  "cost-card-this-week": "cost-card-week",
-  "cost-card-today": "cost-card-today",
-  "cost-card-month-value": "cost-card-month-value",
-  "by-model-chart": "by-model-chart",
-  "by-model-empty": "by-model-empty",
-  "by-model-row-0": "by-model-row-0",
-  "daily-spend-chart": "daily-spend-chart",
-  "daily-spend-empty": "daily-spend-empty",
-  "daily-spend-bar-2025-01-01": "daily-spend-bar-2025-01-01",
-  "top-sessions-table": "top-sessions-table",
-  "top-sessions-skeleton-row-0": "top-sessions-skeleton-row-0",
-  "top-sessions-sort-provider": "sort-provider",
-  "top-sessions-row-abc123": "row-abc123",
-
-  // Provider table
-  "provider-table": "provider-table",
-  "provider-row-openai": "provider-row-openai",
-  "provider-delta-openai-up": "provider-delta-openai-up",
-  "provider-skeleton-row-0": "provider-skeleton-row-0",
-  // Dynamic row testid pattern `provider-billing-${row.provider}` in
-  // ProviderTable.tsx. Representative registered value (matches the
-  // template literal so the coverage check passes).
-  "provider-billing-row": "provider-billing-row",
 
   // Workspace browser / gate
   "workspace-browser": "workspace-browser",
@@ -389,6 +346,22 @@ const TESTIDS = {
   "design-tab-screens": "design-tab-screens",
   "design-tab-tokens": "design-tab-tokens",
   // Feedback write path (SP-140-4d)
+  // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
+  "design-feedback-annotations": "design-feedback-annotations",
+  "design-feedback-count": "design-feedback-count",
+  "design-feedback-empty": "design-feedback-empty",
+  "design-feedback-loading": "design-feedback-loading",
+  "design-feedback-resolution": "design-feedback-resolution",
+  "design-feedback-resolution-error": "design-feedback-resolution-error",
+  "design-feedback-resolution-note": "design-feedback-resolution-note",
+  "design-feedback-resolution-save": "design-feedback-resolution-save",
+  "design-feedback-resolution-written": "design-feedback-resolution-written",
+  "design-feedback-status": "design-feedback-status",
+  // Dynamic row testid patterns `design-feedback-{annotation,area,toggle}-${annotation.id}`.
+  // Representative registered values (match the template literals).
+  "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
+  "design-feedback-area-abc123": "design-feedback-area-abc123",
+  "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
   "design-feedback-affordance": "design-feedback-affordance",
   "design-feedback-form": "design-feedback-form",
   "design-feedback-add": "design-feedback-add",

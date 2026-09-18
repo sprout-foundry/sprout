@@ -190,13 +190,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.12,
+        "cached_input_cost": 0.06,
         "context_length": 1048576,
         "description": "MiniMax-M3 - frontier multimodal coding model with 1M context window",
         "id": "MiniMax-M3",
-        "input_cost": 0.6,
+        "input_cost": 0.3,
         "name": "MiniMax M3",
-        "output_cost": 2.4,
+        "output_cost": 1.2,
         "tags": [
           "coding",
           "tools",

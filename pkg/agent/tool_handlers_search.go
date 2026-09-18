@@ -262,6 +262,19 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 
 	// Probe the URL to check Content-Type
 	kind, _ := tools.ProbeURLContentType(url)
+	if !kind.IsBinary() && kind != tools.ResponseKindUnknown {
+		// Definitively text/HTML — use existing text handler
+		result, err := handleFetchURL(ctx, a, args)
+		return nil, result, utils.WrapError(err, "fetch URL")
+	}
+	if kind == tools.ResponseKindUnknown {
+		// Missing/unrecognized Content-Type (S3 signed URLs, CDN links,
+		// extension-less media endpoints): magic-byte sniff before giving
+		// up on the visual path.
+		if sniffed, _, ok := tools.SniffURLContent(ctx, url); ok {
+			kind = sniffed
+		}
+	}
 	if !kind.IsBinary() {
 		// Text/HTML — use existing text handler
 		result, err := handleFetchURL(ctx, a, args)

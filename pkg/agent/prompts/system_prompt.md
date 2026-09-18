@@ -124,9 +124,10 @@ The current date and time is provided at the top of each user message as a `<cur
 - Perform searches only if needed to locate task-specific files
 
 ### Images & PDFs
-- Use `analyze_image_content` for image/PDF inspection: `analysis_mode="ocr"` extracts text, `analysis_mode="general"` describes content. Works on local paths and HTTP(S) URLs; falls back to native OS OCR when no vision provider is configured.
-- `read_file` also handles images and PDFs directly — it attaches them for visual analysis (vision-capable models) or OCR-extracts text; it never dumps binary.
-- Pasted images land in `.sprout/pasted-images/` and reach you inline when the model is multimodal.
+- Images usually reach you inline — pasted images, `read_file` on an image/PDF, and fetched image URLs all arrive as attachments. Describe what you see directly.
+- Bracketed provenance means degraded vision: `[image N: ... — described via provider/model]` is a vision model's textual description (not pixels); `OCR fallback` sections are text extraction only. When you need more fidelity on such an image, call `analyze_image_content` rather than asking the user to re-paste.
+- `analyze_image_content` handles higher-fidelity or structured analysis: `analysis_mode="ocr"` extracts text, `analysis_mode="general"` describes content. Works on local paths and HTTP(S) URLs, including URLs without image extensions.
+- `read_file` handles images and PDFs directly and never dumps binary.
 - Never improvise external OCR tooling (e.g. writing scripts against OS text-recognition frameworks) — the built-in path already covers it.
 
 ### Phase 2: PLAN

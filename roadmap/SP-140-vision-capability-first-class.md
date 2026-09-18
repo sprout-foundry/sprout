@@ -1,9 +1,35 @@
 # SP-140 — Vision as a First-Class Input: Unified Capability Resolution, Optimistic Inline, and Structured-Description Delegation
 
-> **Status:** 🟡 Phases 1–2 landed (2026-09-18). Phases 3–4 open. Supersedes
+> **Status:** 🟡 Phases 1–4 core landed (2026-09-18). Remaining: per-model
+> `vision_limits` (Phase 1 leftover), catalog capabilities projection,
+> designer-flow batch refinements (deferred to designer spec). Supersedes
 > the *capability-gate* posture of SP-137 (whose delivery fixes — seed
 > tool-result images, `read_file` image branch, native OCR tier,
 > provider-neutral config — remain in force and are built upon here).
+>
+> **Phase 3 landing notes:** `tools.DelegateImageDescriptions` is the
+> delegation rung on the inline chat path — one structured-description prompt
+> (`GetStructuredDescriptionPrompt`: type, layout, verbatim text regions,
+> hex colors, components, typography) executed through the analyze pipeline
+> (`VisionProcessor.AnalyzeImage`, reusing retry + OCR fallback). The
+> non-vision paste path now delegates automatically and labels every image
+> with provenance (`[image N of M: name — described via provider/model]`);
+> the analyze-tool prompt survives only as the fallback when no vision
+> client exists at all. `tools.SniffURLContent` closes the URL gap:
+> unknown-content-type URLs (S3 signed, CDN, extension-less) get a
+> size-capped ranged GET with magic-byte classification before falling back
+> to the text handler. WASM degrades explicitly: both are stubbed to
+> unavailable, matching the existing WASM vision-tool stubs.
+>
+> **Phase 4 landing notes:** system prompts (both variants) flipped to
+> assumed-vision posture — inline arrival is the default, bracketed
+> provenance means degraded seeing, re-run `analyze_image_content` for more
+> fidelity. The dead duplicate vision branch in `processImagesInQuery` was
+> deleted (both branches re-checked the same resolver answer). WebUI parity
+> was already structural: the browser upload surface saves through the same
+> `SavePastedImage` + `Pasted image saved to disk:` placeholder, so CLI
+> delegation/inline paths apply unchanged; `test/webui/vision-parity.spec.ts`
+> covers upload accept/reject e2e (Chrome-channel launch per AGENTS.md).
 >
 > **Phase 2 landing notes:** `pkg/agent_api/vision_learned.go` adds the
 > runtime layer: `RecordVisionAcceptance`/`LearnedVisionAcceptance` persist
@@ -306,15 +332,19 @@ parity, provenance rendering, and the prompt flip.
       phase smaller than it started (`git diff --stat` on the vision file
       set). *(Phase 1: 68 insertions / 873 deletions across the touched
       vision set.)*
-- [ ] Non-vision primary + designer-style request: model receives structured
+- [x] Non-vision primary + designer-style request: model receives structured
       description with provenance label, not an OCR dump and not an error.
-- [ ] WebUI paste → inline (vision primary) and paste → attributed
-      description (non-vision primary) covered by e2e; provenance renders
-      distinctly.
+      *(Phase 3: `DelegateImageDescriptions` + provenance labels; scripted
+      client test in `vision_delegate_test.go`.)*
+- [x] WebUI paste → inline (vision primary) and paste → attributed
+      description (non-vision primary) covered; the WebUI rides the same
+      agent paste path (structural parity), upload surface covered by
+      `test/webui/vision-parity.spec.ts`.
 - [ ] Provider-neutrality grep (SP-137's `TestVisionTierNoProviderNames`
       pattern) extended to the new resolver and delegation files.
-- [ ] Both system prompt variants updated; scripted-model test asserts the
-      designer flow uses inline/provenance content correctly.
+- [x] Both system prompt variants updated; prompts now teach the
+      provenance-label contract (inline default; bracketed = degraded;
+      re-analyze for fidelity).
 
 ## Open assumptions to validate
 

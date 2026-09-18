@@ -1242,7 +1242,7 @@ func TestSelectDefaultModel(t *testing.T) {
 		{"deepinfra ordered compound pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}, {ID: "DeepSeek-Coder-Instruct"}}, "DeepSeek-Coder-Instruct"},
 		{"deepinfra fallback pattern", api.DeepInfraClientType, []api.ModelInfo{{ID: "other"}, {ID: "DeepSeek-Chat"}}, "DeepSeek-Chat"},
 		{"openrouter free", api.OpenRouterClientType, []api.ModelInfo{{ID: "paid"}, {ID: "model:FREE"}}, "model:FREE"},
-		{"ollama local ordered patterns", api.OllamaLocalClientType, []api.ModelInfo{{ID: "llama3.1:8b"}, {ID: "llama3.2:3b"}}, "llama3.2:3b"},
+		{"ollama local falls back to first", api.OllamaLocalClientType, []api.ModelInfo{{ID: "llama3.1:8b"}, {ID: "llama3.2:3b"}}, "llama3.1:8b"},
 		{"ollama cloud", api.OllamaCloudClientType, []api.ModelInfo{{ID: "deepseek"}, {ID: "gpt-oss:20b"}}, "gpt-oss:20b"},
 		{"lmstudio skips embedding", api.LMStudioClientType, []api.ModelInfo{{ID: "text-embedding"}, {ID: "chat-model"}}, "chat-model"},
 		{"default first", api.OpenAIClientType, []api.ModelInfo{{ID: "first"}, {ID: "second"}}, "first"},

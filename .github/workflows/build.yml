@@ -61,16 +61,17 @@ jobs:
       # browser really is absent — so "the render path ran" is asserted, not
       # assumed from a green suite that skipped it.
       #
-      # The binary must land on a path webcontent.systemBrowserPaths() probes
-      # (/usr/bin/chromium or /usr/bin/chromium-browser); the Ubuntu
-      # `chromium-browser` package is a snap stub that does not, so use
-      # `chromium` and verify the path rod will actually find.
+      # The binary must land on a path webcontent.systemBrowserPaths() probes.
+      # Ubuntu's `chromium`/`chromium-browser` packages are snap transitional
+      # stubs (candidate 2:1snap1) that install no real binary, so install
+      # Google Chrome from the dl.google.com apt repo instead and verify the
+      # path rod will actually find.
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y chromium
-        test -x /usr/bin/chromium || { echo "chromium not at /usr/bin/chromium"; ls -la /usr/bin/chromium*; exit 1; }
-        /usr/bin/chromium --version
+        sudo apt-get install -y google-chrome-stable
+        test -x /usr/bin/google-chrome-stable || { echo "chrome not at /usr/bin/google-chrome-stable"; exit 1; }
+        /usr/bin/google-chrome-stable --version
 
     - name: Install MLX C library (macOS)
       if: runner.os == 'macOS' && runner.arch == 'ARM64'

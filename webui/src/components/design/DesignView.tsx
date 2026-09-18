@@ -159,6 +159,11 @@ export default function DesignView({
           aria-label={`${activeTab} panel`}
           data-testid="design-tabpanel"
         >
+          {!selectedAsset && (
+            <div className="design-view-hint" role="status">
+              Select an asset from the rail to inspect it
+            </div>
+          )}
           {activeTab === 'flows' && (
             <FlowsCanvasContainer
               flows={inventory ? inventory.flows : []}
@@ -178,7 +183,12 @@ export default function DesignView({
           )}
         </section>
 
-        <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">
+        <aside
+          className="design-view-detail"
+          aria-label="Design detail"
+          data-testid="design-detail-pane"
+          data-idle={!selectedAsset}
+        >
           <DesignDetailPane
             path={selectedAsset}
             onOpenFile={onOpenFile}

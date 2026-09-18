@@ -25,9 +25,11 @@ type VisionCapability struct {
 // ResolveVisionCapability resolves vision capability for a client.
 //
 // Precedence:
-//  1. Published probe data for the model (authoritative when present —
-//     it is ground truth collected by the registry pipeline).
-//  2. The client's own declaration (config tags / provider flag).
+//  1. Runtime-learned observation for the provider/model pair (see
+//     vision_learned.go) — recorded when the provider accepted or
+//     capability-rejected images on the wire.
+//  2. Published probe data for the model (registry ground truth).
+//  3. The client's own declaration (config tags / provider flag).
 //
 // No conversational refinement: OCR-only models are declared vision-capable
 // by their clients and flow inline like any other vision model. The prior
@@ -41,7 +43,10 @@ func ResolveVisionCapability(c ClientInterface) VisionCapability {
 
 	accepts := c.SupportsVision()
 	source := "declared"
-	if probe := visionProbeFor(c); probe != nil {
+	if learned := LearnedVisionAcceptance(c.GetProvider(), c.GetModel()); learned != nil {
+		accepts = *learned
+		source = "runtime"
+	} else if probe := visionProbeFor(c); probe != nil {
 		accepts = *probe
 		source = "probe"
 	}

@@ -97,6 +97,15 @@ func (p *GenericProvider) warmModelsCache() {
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	resp, err := p.sendChatRequestImpl(ctx, messages, tools, reasoning, disableThinking)
+	return p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
+		return p.sendChatRequestImpl(ctx, msgs, tools, reasoning, disableThinking)
+	})
+}
+
+// sendChatRequestImpl is the plain chat path; SendChatRequest wraps it with
+// vision-capability verification (SP-140 Phase 2).
+func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Snapshot model under lock to prevent races with SetModel.
 	p.mu.RLock()
 	currentModel := p.model

@@ -94,6 +94,33 @@ func TestAttachPastedImages_SkipsNonVisionClient(t *testing.T) {
 	}
 }
 
+// TestAttachPastedImages_LearnedVisionOverridesDeclaration (SP-140 Phase 2):
+// a client that declares no vision still receives pasted images once the
+// runtime cache records that the provider/model pair accepts them —
+// declared-false is no longer a silent drop for models known to see.
+func TestAttachPastedImages_LearnedVisionOverridesDeclaration(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	provider, err := NewSproutProvider(nil, &MockClient{model: "text-model"})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	client := sp.currentClient()
+	api.RecordVisionAcceptance(client.GetProvider(), client.GetModel(), true)
+
+	sp.RegisterPastedImages(map[string][]api.ImageData{
+		"_current": {{Base64: "dGVzdA==", Type: "image/png"}},
+	})
+
+	messages := []core.Message{{Role: "user", Content: "describe image"}}
+	out := sp.attachPastedImages(messages)
+
+	if len(out[0].Images) != 1 {
+		t.Errorf("learned-vision client should receive images, got %d", len(out[0].Images))
+	}
+}
+
 // TestSeedQueryRegistersPastedImages is a regression test for the webui
 // image-paste bug. seed_query.go must register pasted images with the
 // sproutProvider via registerPastedImagesWithProvider; before the fix, the

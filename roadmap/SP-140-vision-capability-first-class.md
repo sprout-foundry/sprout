@@ -1,9 +1,25 @@
 # SP-140 — Vision as a First-Class Input: Unified Capability Resolution, Optimistic Inline, and Structured-Description Delegation
 
-> **Status:** 🟡 Phase 1 landed (2026-09-18). Phases 2–4 open. Supersedes the
-> *capability-gate* posture of SP-137 (whose delivery fixes — seed tool-result
-> images, `read_file` image branch, native OCR tier, provider-neutral config —
-> remain in force and are built upon here).
+> **Status:** 🟡 Phases 1–2 landed (2026-09-18). Phases 3–4 open. Supersedes
+> the *capability-gate* posture of SP-137 (whose delivery fixes — seed
+> tool-result images, `read_file` image branch, native OCR tier,
+> provider-neutral config — remain in force and are built upon here).
+>
+> **Phase 2 landing notes:** `pkg/agent_api/vision_learned.go` adds the
+> runtime layer: `RecordVisionAcceptance`/`LearnedVisionAcceptance` persist
+> per provider-model observations to a hand-editable
+> `<state-dir>/vision-capabilities.json` (positive TTL 30d, negative 7d), and
+> `IsVisionCapabilityRejection` conservatively classifies capability-shaped
+> 4xx errors (keyword match on the body; 5xx/auth/network never learn).
+> `GenericProvider.reconcileVisionCapability` wraps both chat paths:
+> image-bearing successes record known-true; capability rejections record
+> known-false and retry once text-only with images stripped and a bracketed
+> note, so the turn completes instead of erroring (the full delegation
+> reroute lands with Phase 3). The resolver's top precedence is now
+> runtime-learned > probe > declared, and the paste/read_file/fetch_url
+> attach gates route through the resolver, so a model the runtime has seen
+> accept images gets them even when config says otherwise — the silent-drop
+> failure mode is gone.
 >
 > **Phase 1 landing notes:** `api.ResolveVisionCapability` shipped with
 > probe→declared precedence; `SupportsConversationalVision` deleted from both
@@ -271,15 +287,16 @@ parity, provenance rendering, and the prompt flip.
       the `SupportsConversationalVision` interface method no longer exist
       (`grep` clean), and the test fakes shrink accordingly. *(Phase 1,
       2026-09-18.)*
-- [ ] Config rule 3 (silent optimism) is gone; unlisted-model behavior is
+- [x] Config rule 3 (silent optimism) is gone; unlisted-model behavior is
       optimistic-unknown **with verification**, covered by a scripted-client
       test where the provider 400s images and the turn still completes via
-      delegation.
-- [ ] Runtime capability cache persists across restarts, expires per TTL,
+      delegation. *(Phase 2, 2026-09-18: verify-and-remember shipped with
+      text-only reretry; the "via delegation" upgrade is Phase 3.)*
+- [x] Runtime capability cache persists across restarts, expires per TTL,
       and is a plain hand-editable JSON file in the state dir (no dedicated
-      debug command — the file is the surface).
-- [ ] Transient errors never write known-false (classifier table tested
-      against recorded provider error bodies, synthetic).
+      debug command — the file is the surface). *(Phase 2.)*
+- [x] Transient errors never write known-false (classifier table tested
+      against recorded provider error bodies, synthetic). *(Phase 2.)*
 - [ ] Per-model vision limits: `glm-4.5v` and `glm-5v-turbo` resolve
       different `MaxImageCount`/byte budgets without provider-config edits to
       shared fields.

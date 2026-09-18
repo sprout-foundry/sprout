@@ -409,7 +409,8 @@ export default function FlowsCanvas({
     <div className="design-flows" data-testid="design-flows-canvas" data-flow={flowName}>
       {showChrome ? (
         <p className="design-flows-status" data-testid="design-flows-status">
-          {flowName} · {graph.nodes.length} nodes · {graph.edges.length} edges · {canvasOrientation(graph, sidecar)}
+          {flowName} · {graph.nodes.length} {graph.nodes.length === 1 ? 'node' : 'nodes'} ·{' '}
+          {graph.edges.length} {graph.edges.length === 1 ? 'edge' : 'edges'} · {canvasOrientation(graph, sidecar)}
         </p>
       ) : null}
       <div className="design-flows-viewport" data-testid="design-flow-graph">

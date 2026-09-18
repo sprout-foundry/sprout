@@ -1,5 +1,13 @@
 /* DesignView shell layout (SP-140-3 §3a). Tokens only — no raw hex/rgba. */
 
+/* The mode shell's wrapper: without an explicit height the surface's
+   height:100% child collapses to content height and the canvas rides its
+   min-height, leaving most of the window empty below the fold. */
+.design-surface {
+  height: 100%;
+  min-height: 0;
+}
+
 .design-view {
   display: flex;
   flex-direction: column;
@@ -93,12 +101,44 @@
   overflow-wrap: anywhere;
 }
 
+/* Detail pane header: artifact name prominent, path as a quiet caption. */
+.design-detail-title {
+  margin-bottom: var(--space-2);
+}
+
+.design-detail-title .design-detail-heading {
+  margin: 0;
+  font-size: var(--text-md, 1rem);
+}
+
+.design-detail-path {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* Empty detail state: centered rather than a line of text pinned to the
+   pane's top-left corner. */
+.design-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  text-align: center;
+}
+
 .design-rail-placeholder,
 .design-detail-placeholder,
 .design-tab-placeholder {
   margin: 0;
   font-size: var(--text-sm, 0.875rem);
   color: var(--text-tertiary);
+}
+
+.design-detail-empty .design-detail-placeholder {
+  font-size: var(--text-md, 1rem);
 }
 
 .design-rail-stub-row {
@@ -396,8 +436,8 @@
 
 .design-screens-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -522,9 +562,9 @@
 
 .design-flows-status {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -557,7 +597,8 @@
 
 .design-flows .react-flow__edge-text {
   fill: var(--text-primary);
-  font-size: var(--text-xs, 12px);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 500;
 }
 
 .design-flow-node {
@@ -769,7 +810,7 @@
 }
 
 .design-tokens-value {
-  font-size: var(--text-xs, 12px);
+  font-size: var(--text-sm, 0.875rem);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
@@ -778,8 +819,8 @@
    style); the border keeps a light value visible against the surface. */
 .design-token-swatch {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }

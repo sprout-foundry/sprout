@@ -74,7 +74,8 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 async function openDesign(): Promise<void> {
   await page.goto(vite.url, { waitUntil: 'networkidle' });
   await page.getByTestId('chat-shell').waitFor({ timeout: 30_000 });
-  await page.getByTestId('sidebar-design-button').click();
+  await page.getByTestId('sidebar-brand-trigger').click();
+  await page.getByTestId('sidebar-brand-option-design').click();
   await page.getByTestId('design-view').waitFor({ timeout: 30_000 });
 }
 
@@ -91,19 +92,19 @@ await page.waitForTimeout(1500);
 await shot('flows');
 
 // 2. Screens tab — the thumbnail grid with README status chips.
-await page.getByTestId('design-tab-screens').click();
+await page.getByTestId('design-rail-screens').click();
 await page.getByTestId('design-screens-cards').waitFor({ timeout: 30_000 });
 await page.waitForTimeout(1200);
 await shot('screens');
 
 // 3. Tokens tab — the grouped DTCG tree with colour swatches.
-await page.getByTestId('design-tab-tokens').click();
+await page.getByTestId('design-rail-tokens').click();
 await page.getByTestId('design-tokens-tree').waitFor({ timeout: 30_000 });
 await page.waitForTimeout(1200);
 await shot('tokens');
 
 // 4. Feedback pane — annotate a screen, showing the §4d write path.
-await page.getByTestId('design-tab-screens').click();
+await page.getByTestId('design-rail-screens').click();
 await page.getByTestId('design-screen-card-login').click();
 await page.getByTestId('design-feedback-affordance').waitFor({ timeout: 30_000 });
 await page.waitForTimeout(800);

@@ -17,7 +17,7 @@
 import type { ReactNode } from 'react';
 import DesignFeedbackAffordance from './DesignFeedbackAffordance';
 import DesignFeedbackResolution from './DesignFeedbackResolution';
-import { assetDisplayName } from './DesignAssetsRail';
+import { assetDisplayName } from './assetNames';
 
 /** The pane heading shows the artifact name; the path stays as a caption. */
 function detailName(path: string): string {

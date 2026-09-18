@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { listAssets } from '../../services/api/designApi';
 import type { DesignInventory } from '../../services/api/types';
+import { assetMatchesSection } from './assetNames';
 import { useDesignWorkspace } from './DesignWorkspaceContext';
 import DesignDetailPane from './DesignDetailPane';
 import { FlowsCanvasContainer } from './FlowsCanvasContainer';
@@ -91,7 +92,10 @@ export default function DesignView({
   const fetchFn = useSproutFetch();
 
   const inventory = workspace ? workspace.inventory : fallbackInventory;
-  const selectedAsset = workspace ? workspace.selected : fallbackSelected;
+  const rawSelected = workspace ? workspace.selected : fallbackSelected;
+  // Selection is section-scoped: switching from Screens (screen selected) to
+  // Tokens must not leave the previous section's asset in the detail pane.
+  const selectedAsset = rawSelected && assetMatchesSection(rawSelected, activeTab) ? rawSelected : null;
 
   useEffect(() => {
     if (workspace) return;
@@ -170,7 +174,7 @@ export default function DesignView({
           {activeTab === 'screens' && (
             <ScreensTabContainer
               inventory={inventory}
-              selectedPath={workspace ? workspace.selected : undefined}
+              selectedPath={selectedAsset}
               onSelectAsset={handleSelectAsset}
               onSelectTab={changeTab}
             />

@@ -13,7 +13,7 @@
 
 import type { DesignAssetEntry, DesignInventory } from '../../services/api/types';
 import { useDesignWorkspace } from './DesignWorkspaceContext';
-import { assetDisplayName } from './DesignAssetsRail';
+import { assetDisplayName } from './assetNames';
 
 /** The inventory slice for a section. Shared with DesignAssetsRail's logic. */
 function entriesFor(tab: string, inventory: DesignInventory | null): DesignAssetEntry[] {

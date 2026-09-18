@@ -80,12 +80,8 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 	return models[0].ID
 }
 
-// getDefaultModelPatterns returns auto-selection preferences from the embedded provider config. Ollama is special-cased.
+// getDefaultModelPatterns returns auto-selection preferences from the embedded provider config.
 func (a *Agent) getDefaultModelPatterns(provider api.ClientType) []string {
-	if provider == api.OllamaClientType || provider == api.OllamaLocalClientType {
-		return []string{"llama3.2", "llama3.1"}
-	}
-
 	providerFactory := providers.NewProviderFactory()
 	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
 		return nil

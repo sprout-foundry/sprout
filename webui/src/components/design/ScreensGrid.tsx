@@ -31,6 +31,7 @@ import { designRootPath, readAsset, writeAsset } from '../../services/api/design
 import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
 import LivePreview from '../LivePreview';
 import type { DesignTabProps } from './DesignTabProps';
+import { assetDisplayName } from './DesignAssetsRail';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -297,7 +298,7 @@ export default function ScreensGrid({
                   </span>
                   <span className="design-screen-meta">
                     <span className="design-screen-name" title={card.path}>
-                      {card.name}
+                      {assetDisplayName(card.name)}
                     </span>
                     {card.frame ? (
                       <span className="design-screen-frame" data-testid={`design-screen-frame-${card.name}`}>

@@ -308,9 +308,12 @@ export default function TokensTree({
       )}
 
       {!selectedToken ? (
-        <pre className="design-tokens-schema" data-testid="design-tokens-schema">
-          {tokenSchemaText()}
-        </pre>
+        <details className="design-tokens-schema-wrap">
+          <summary className="design-tokens-schema-summary">DTCG token schema reference</summary>
+          <pre className="design-tokens-schema" data-testid="design-tokens-schema">
+            {tokenSchemaText()}
+          </pre>
+        </details>
       ) : null}
     </div>
   );

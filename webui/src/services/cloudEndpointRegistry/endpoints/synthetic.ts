@@ -207,27 +207,6 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     description: 'Workspace symbols via LSP (not available in browser mode)',
   },
   {
-    path: '/api/costs/summary',
-    methods: ['GET'],
-    category: 'synthetic',
-    syntheticResponse: { total_cost: 0, query_count: 0, token_in: 0, token_out: 0 },
-    description: 'Cost summary (not available in browser mode)',
-  },
-  {
-    path: '/api/costs/history',
-    methods: ['GET'],
-    category: 'synthetic',
-    syntheticResponse: { entries: [] },
-    description: 'Cost history (not available in browser mode)',
-  },
-  {
-    path: '/api/costs/detail',
-    methods: ['GET'],
-    category: 'synthetic',
-    syntheticResponse: { details: [] },
-    description: 'Cost detail (not available in browser mode)',
-  },
-  {
     path: '/api/sessions/search',
     methods: ['GET'],
     category: 'synthetic',

@@ -44,7 +44,6 @@ import {
   Server,
   Monitor,
   Zap,
-  CircleDollarSign,
   Palette,
 } from 'lucide-react';
 import SearchView from './SearchView';
@@ -528,7 +527,7 @@ function Sidebar({
               </>
             )}
 
-            {/* Plugin Panels (between platform nav and costs) */}
+            {/* Plugin Panels (below platform nav) */}
             {pluginPanels.length > 0 && (
               <>
                 <div className="sidebar-icon-rail-divider" role="separator" />
@@ -571,21 +570,6 @@ function Sidebar({
                 </button>
               </div>
             )}
-
-            {/* Costs — local feature, always visible */}
-            <div role="tablist" aria-orientation="vertical">
-              <button
-                role="tab"
-                aria-selected={currentView === 'costs'}
-                className={`rail-icon ${currentView === 'costs' ? 'active' : ''}`}
-                onClick={() => onViewChange?.('costs')}
-                title="Costs"
-                aria-label="Costs"
-                data-testid="sidebar-costs-button"
-              >
-                <CircleDollarSign size={18} strokeWidth={1.5} />
-              </button>
-            </div>
 
             {/* Settings & Logs tabs */}
             <div role="tablist" aria-orientation="vertical">

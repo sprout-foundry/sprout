@@ -61,6 +61,28 @@ export function useSearchState(
   } | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
 
+  // Semantic search is an experimental, opt-in feature backed by the
+  // embedding index (SP-137: enabled && experimental, off by default).
+  // When the gate is off the Brain toggle is hidden entirely, so no
+  // status probing, index auto-builds, or semantic queries can fire.
+  const [embeddingsEnabled, setEmbeddingsEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    apiService
+      .getSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        const ei = settings.embedding_index;
+        setEmbeddingsEnabled(!!(ei && ei.enabled && ei.experimental));
+      })
+      .catch(() => {
+        if (!cancelled) setEmbeddingsEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiService]);
+
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ── Core search function ─────────────────────────────────────
@@ -86,6 +108,12 @@ export function useSearchState(
 
       try {
         if (semanticMode) {
+          if (!embeddingsEnabled) {
+            setSemanticResults([]);
+            setSemanticNote('Semantic search requires enabling the experimental embedding index in Settings.');
+            setResults(null);
+            return;
+          }
           const response = await apiService.searchSemantic(query, {
             top_k: 20,
             threshold: semanticThreshold,
@@ -124,7 +152,17 @@ export function useSearchState(
         setIsSearching(false);
       }
     },
-    [semanticMode, caseSensitive, wholeWord, useRegex, excludePatterns, semanticThreshold, apiService, log],
+    [
+      semanticMode,
+      embeddingsEnabled,
+      caseSensitive,
+      wholeWord,
+      useRegex,
+      excludePatterns,
+      semanticThreshold,
+      apiService,
+      log,
+    ],
   );
 
   // ── Debounced search trigger ─────────────────────────────────
@@ -184,7 +222,7 @@ export function useSearchState(
   // ── Semantic index status polling ────────────────────────────
 
   useEffect(() => {
-    if (!semanticMode) return;
+    if (!semanticMode || !embeddingsEnabled) return;
 
     const checkAndBuild = async () => {
       try {
@@ -227,7 +265,7 @@ export function useSearchState(
     };
 
     checkAndBuild();
-  }, [semanticMode, apiService]);
+  }, [semanticMode, embeddingsEnabled, apiService]);
 
   // ── Filter results by exclude patterns ───────────────────────
 
@@ -405,6 +443,7 @@ export function useSearchState(
     setSemanticThreshold,
     indexStatus,
     isBuilding,
+    embeddingsEnabled,
     // Expansion
     expandedFiles,
     toggleFile,

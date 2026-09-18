@@ -6,7 +6,6 @@ import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
-import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
 import NotificationCenter from './NotificationCenter';
 import './StatusBar.css';
 
@@ -34,25 +33,6 @@ interface WebuiStatusBarProps {
    * Typically used to open a workspace picker or focus the sidebar.
    */
   onWorkspaceClick?: () => void;
-  /**
-   * SP-053-3b: chat stats blob (provider/model/tokens/cost). When non-empty,
-   * the right section renders ChatStatusBarItems instead of editor metadata
-   * so the user always sees what they're spending while a chat is active.
-   */
-  chatStats?: Record<string, unknown> | null;
-  /**
-   * WebSocket connection state — forwarded to ChatStatusBarItems so the
-   * status bar shows a "disconnected" pill when events have stopped
-   * flowing. Without this the user has no feedback about the drop.
-   */
-  isConnected?: boolean;
-  /**
-   * Fired when the user clicks the model name in the chat status segment.
-   * Passes the active provider name so the caller can open the model
-   * picker scoped to that provider. Without this, the model name renders
-   * as plain text (no click affordance).
-   */
-  onModelClick?: (provider: string) => void;
 }
 
 // Simple SVG icon for notification bell (similar to existing inline SVGs)
@@ -87,9 +67,6 @@ function StatusBar({
   indentation,
   workspacePath,
   onWorkspaceClick,
-  chatStats,
-  isConnected,
-  onModelClick,
 }: WebuiStatusBarProps): JSX.Element {
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
@@ -141,20 +118,6 @@ function StatusBar({
     return result.lineEnding;
   }, [buffer?.file, buffer?.kind]);
 
-  // SP-053-3b: chat stats outrank editor metadata in the right section.
-  // When a chat is active and has any stats payload, render the chat
-  // segments (provider · model · ctx · cost); otherwise fall through to
-  // the shared StatusBar's editor metadata defaults.
-  // Render the chat status segment whenever stats are non-empty OR the
-  // user is explicitly disconnected — the disconnected pill is the only
-  // feedback that events have stopped flowing, so we render it even
-  // when there's no other chat metadata to show.
-  const hasChatStats = chatStats != null && Object.keys(chatStats).length > 0;
-  const showChatSegment = hasChatStats || isConnected === false;
-  const chatRightItems = showChatSegment ? (
-    <ChatStatusBarItems stats={chatStats} isConnected={isConnected} onModelClick={onModelClick} />
-  ) : undefined;
-
   return (
     <div className="statusbar-wrapper" data-testid="status-bar">
       {workspaceName && (
@@ -199,8 +162,7 @@ function StatusBar({
         encoding={encoding}
         lineEnding={lineEnding}
         indentation={indentation}
-        showRightSection={buffer != null || showChatSegment}
-        rightItems={chatRightItems}
+        showRightSection={buffer != null}
       />
       <div
         ref={bellIconRef}

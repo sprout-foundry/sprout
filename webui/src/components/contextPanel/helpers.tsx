@@ -84,26 +84,10 @@ export const getStatusIcon = (status: string): ReactNode => {
 
 // ── Formatting utilities ───────────────────────────────────────────
 
-// formatDuration lives in utils/format (single source of truth); re-exported
-// here so existing consumers of './helpers' keep working unchanged.
-export { formatDuration } from '../../utils/format';
-
-export const formatRelativeTime = (value: string) => {
-  const date = new Date(value);
-  const diffMs = Date.now() - date.getTime();
-  const diffSecs = Math.max(0, Math.floor(diffMs / 1000));
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffSecs < 60) return `${diffSecs}s ago`;
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+// formatDuration and formatRelativeTime live in utils/format (single
+// source of truth); re-exported here so existing consumers of './helpers'
+// keep working unchanged.
+export { formatDuration, formatRelativeTime } from '../../utils/format';
 
 export const formatTime = (value: Date) => {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

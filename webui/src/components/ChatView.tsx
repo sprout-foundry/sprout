@@ -21,6 +21,7 @@ import InlineTodoSummary from './InlineTodoSummary';
 import { ToolTimelineBar } from './chat/ToolTimelineBar';
 import { TurnChangesStrip } from './chat/TurnChangesStrip';
 import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
+import ChatMetricsStrip from './chat/ChatMetricsStrip';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
@@ -60,6 +61,7 @@ function Chat(props: ChatProps): JSX.Element {
     onRequestProviderSetup,
     stats,
     isConnected,
+    onModelClick,
     backendReachable,
     onRetryConnection,
     outputVerbosity = 'default',
@@ -530,6 +532,7 @@ function Chat(props: ChatProps): JSX.Element {
           ) : null}
 
           <div className="input-container" ref={inputContainerRef}>
+            <ChatMetricsStrip stats={stats} isConnected={isConnected} onModelClick={onModelClick} />
             <ToolTimelineBar toolExecutions={filteredToolExecutions} />
             {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
               <div className="thinking-indicator" role="status" aria-live="polite">

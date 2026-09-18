@@ -129,6 +129,7 @@ vi.mock('./search/useSearchState', () => {
         setSemanticThreshold: vi.fn(),
         indexStatus: null,
         isBuilding: false,
+        embeddingsEnabled: false,
         expandedFiles,
         toggleFile,
         handleSearchChange: vi.fn(),

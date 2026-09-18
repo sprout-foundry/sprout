@@ -268,6 +268,12 @@ export function useLayoutPersistence({
         const next = new Map(prev);
         let changed = false;
         next.forEach((buf, id) => {
+          // Modified buffers survive the switch: they may hold unsaved edits
+          // that only exist in this browser session, and deleting them here
+          // destroyed user work whenever a worktree/workspace switch fired
+          // in the background. The user closes them manually (with the
+          // confirm dialog) or auto-save flushes them to disk on cadence.
+          if (buf.isModified) return;
           if (
             (buf.kind === 'file' && buf.isClosable !== false && !buf.isPinned) ||
             (buf.kind === 'chat' && buf.isClosable === true)

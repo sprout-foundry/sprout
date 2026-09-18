@@ -8,6 +8,7 @@ import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/ed
 
 import { BufferManagerProvider, useBufferManager as useBufferContext } from './BufferManagerContext';
 import type { PaneBridge } from './BufferManagerContext';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { EditorSettingsProvider, useEditorSettings as useSettings } from './EditorSettingsContext';
 import { PaneManagerProvider, usePaneManager as usePaneContext } from './PaneManagerContext';
 
@@ -79,7 +80,10 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
+  saveBuffer: (
+    bufferId: string,
+    options?: { force?: boolean },
+  ) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
@@ -212,6 +216,16 @@ const CombinedContextProvider: React.FC<{
   const settings = useSettings();
   const pane = usePaneContext();
   const buffer = useBufferContext();
+
+  // Warn on tab close with modified buffers; keep document.title in sync
+  // with the active buffer's modified dot. Restored after the hook-consolidation
+  // refactor dropped it: layout persistence stores paths, not content, so a
+  // reload silently discarded unsaved edits.
+  useUnsavedChangesWarning({
+    buffersRef: buffer.buffersRef,
+    buffers: buffer.buffers,
+    activeBufferId: pane.activeBufferId,
+  });
 
   // Store closeBuffer for PaneManager to use. Synchronous render-time
   // assignment is required because PaneManager reads through this ref in

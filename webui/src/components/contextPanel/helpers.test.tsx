@@ -395,18 +395,22 @@ describe('formatRelativeTime', () => {
     vi.useRealTimers();
   });
 
-  it('returns "10s ago" for 10 seconds ago', () => {
+  // Canonical implementation lives in utils/format (re-exported here);
+  // behavior pins below keep the re-export honest. "just now" covers
+  // everything under a minute; the old second-granularity ladder is gone.
+
+  it('returns "just now" for 10 seconds ago', () => {
     const now = Date.now();
     vi.setSystemTime(now);
     const date = new Date(now - 10000).toISOString();
-    expect(formatRelativeTime(date)).toBe('10s ago');
+    expect(formatRelativeTime(date)).toBe('just now');
   });
 
-  it('returns "0s ago" for current time', () => {
+  it('returns "just now" for current time', () => {
     const now = Date.now();
     vi.setSystemTime(now);
     const date = new Date(now).toISOString();
-    expect(formatRelativeTime(date)).toBe('0s ago');
+    expect(formatRelativeTime(date)).toBe('just now');
   });
 
   it('returns "1m ago" for 1 minute ago', () => {
@@ -449,18 +453,18 @@ describe('formatRelativeTime', () => {
     expect(result).toBeTruthy();
   });
 
-  it('returns "0s ago" for future date (negative diff clamped)', () => {
+  it('returns "just now" for future date (negative diff)', () => {
     const now = Date.now();
     vi.setSystemTime(now);
     const future = new Date(now + 5000).toISOString();
-    expect(formatRelativeTime(future)).toBe('0s ago');
+    expect(formatRelativeTime(future)).toBe('just now');
   });
 
   it('handles ISO date strings', () => {
     const now = Date.now();
     vi.setSystemTime(now);
     const date = new Date(now - 30000).toISOString();
-    expect(formatRelativeTime(date)).toBe('30s ago');
+    expect(formatRelativeTime(date)).toBe('just now');
   });
 });
 

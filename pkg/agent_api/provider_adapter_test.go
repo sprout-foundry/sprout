@@ -46,11 +46,6 @@ func (m *mockClient) GetModelContextLimit() (int, error)                  { retu
 func (m *mockClient) ListModels(ctx context.Context) ([]ModelInfo, error) { return nil, nil }
 func (m *mockClient) SupportsVision() bool                                { return false }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (m *mockClient) SupportsConversationalVision() bool {
-	return false
-}
 func (m *mockClient) GetVisionModel() string { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{
@@ -297,13 +292,6 @@ type enhancedMockClient struct {
 
 func (m *enhancedMockClient) GetModel() string     { return m.modelFlag }
 func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag }
-
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Falls back to SupportsVision() for test mocks
-// that don't need the OCR-only distinction.
-func (m *enhancedMockClient) SupportsConversationalVision() bool {
-	return m.supportsVisionFlag
-}
 
 // VisionCapabilities returns a configurable value so per-provider delegation
 // tests can verify the provider adapter forwards the underlying table

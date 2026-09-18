@@ -872,7 +872,6 @@ func (c *testContextLimitClient) GetAverageTPS() float64             { return 0 
 func (c *testContextLimitClient) GetTPSStats() map[string]float64    { return nil }
 func (c *testContextLimitClient) ResetTPSStats()                     {}
 func (c *testContextLimitClient) SupportsVision() bool               { return false }
-func (c *testContextLimitClient) SupportsConversationalVision() bool { return false }
 func (c *testContextLimitClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }

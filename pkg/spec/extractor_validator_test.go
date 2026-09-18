@@ -47,11 +47,6 @@ func (m *mockAgentClient) GetModelContextLimit() (int, error)                   
 func (m *mockAgentClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (m *mockAgentClient) SupportsVision() bool                                    { return false }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (m *mockAgentClient) SupportsConversationalVision() bool {
-	return false
-}
 func (m *mockAgentClient) GetVisionModel() string { return "" }
 func (m *mockAgentClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil

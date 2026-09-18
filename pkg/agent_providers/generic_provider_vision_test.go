@@ -289,33 +289,6 @@ func TestSupportsVision_ProviderDisabled_OverridesSetModel(t *testing.T) {
 	}
 }
 
-func TestSupportsConversationalVision_DelegatesToSupportsVision(t *testing.T) {
-	config := visionTestConfig()
-	config.Models.SupportsVision = true
-	config.Models.ModelInfo = []ModelInfo{
-		{ID: "default-model", Tags: []string{"vision"}},
-	}
-
-	provider, err := NewGenericProvider(config)
-	if err != nil {
-		t.Fatalf("failed to create provider: %v", err)
-	}
-
-	// When SupportsVision returns true, SupportsConversationalVision should too.
-	if !provider.SupportsConversationalVision() {
-		t.Fatal("expected SupportsConversationalVision() == true when SupportsVision() == true")
-	}
-
-	// Flip to a model without vision tag.
-	if err := provider.SetModel("other-model"); err != nil {
-		t.Fatalf("SetModel failed: %v", err)
-	}
-	// "other-model" is not in catalog, so it trusts provider flag → true.
-	if !provider.SupportsConversationalVision() {
-		t.Fatal("expected SupportsConversationalVision() == true for unknown model (trusts provider flag)")
-	}
-}
-
 func TestGetVisionModel_UsesConfigVisionModel(t *testing.T) {
 	config := visionTestConfig()
 	config.Models.VisionModel = "gpt-4o"

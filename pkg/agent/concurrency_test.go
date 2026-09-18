@@ -380,11 +380,6 @@ func (c *testRaceMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, e
 }
 func (c *testRaceMockClient) SupportsVision() bool { return true }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (c *testRaceMockClient) SupportsConversationalVision() bool {
-	return false
-}
 func (c *testRaceMockClient) GetVisionModel() string { return "" }
 func (c *testRaceMockClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return &api.ChatResponse{}, nil

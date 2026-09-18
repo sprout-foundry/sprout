@@ -1,13 +1,14 @@
-// Package agent — batch splitting with fallback.
+// BatchSplit — SP-103-D2, merged here from the agent package (SP-140).
 //
-// Provides proactive batch splitting for vision images to avoid provider
-// 400 (context overflow) errors. The splitter considers both image count
-// and total payload bytes, routing overflow images to the existing OCR
-// fallback path so the model still gets text descriptions of images that
-// exceed the provider's inline limits.
-package agent
+// Proactive batch splitting for vision images to avoid provider 400
+// (context overflow) errors. Considers both image count and total payload
+// bytes so overflow images can be routed to the OCR fallback path instead
+// of failing the request.
+package tools
 
-import api "github.com/sprout-foundry/sprout/pkg/agent_api"
+import (
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+)
 
 // BatchSplitResult describes how a set of images should be split between
 // inline multimodal processing and OCR fallback.
@@ -20,10 +21,8 @@ type BatchSplitResult struct {
 	OverflowIndices []int
 }
 
-// BatchSplit proactively determines which images fit within the provider's
-// vision context window based on count and total payload size. Unlike a
-// simple count-based split, it also considers total payload bytes to avoid
-// provider 400 (context overflow) errors when embedding many/large images.
+// BatchSplit determines which images fit within the provider's vision
+// context window based on count and total payload size.
 //
 // caps should already be resolved through VisionCapabilitiesOrDefault
 // before calling this function so that zero-valued fields are replaced

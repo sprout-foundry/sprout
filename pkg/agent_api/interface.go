@@ -28,12 +28,6 @@ type ClientInterface interface {
 	GetModelContextLimit() (int, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
-	// SupportsConversationalVision reports whether the model is suitable as
-	// the inline multimodal target for chat-format vision messages. Some
-	// models (OCR-only, e.g. glm-ocr) accept image input but produce
-	// extraction outputs unsuitable for free-form multimodal conversation.
-	// Defaults to true when SupportsVision() is true.
-	SupportsConversationalVision() bool
 	// VisionCapabilities returns the per-provider vision limits (max bytes
 	// per image, max images per request, max dimension, supported detail
 	// tiers). Zero-valued fields mean "unknown — use default". Concrete

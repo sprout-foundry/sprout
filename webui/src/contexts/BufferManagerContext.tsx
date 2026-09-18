@@ -1,9 +1,12 @@
 import { showThemedPrompt } from '@sprout/ui';
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
+import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
+import { resolveEditorFilePath } from '../services/lspClientService';
+import { notificationBus } from '../services/notificationBus';
 import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
 import { debugLog } from '../utils/log';
-import { resolveEditorFilePath } from '../services/lspClientService';
 import { writeFileWithFetch } from './fileWriteHelpers';
 import { useSproutFetch } from './SproutAdapterContext';
 
@@ -29,6 +32,9 @@ export interface PaneBridge {
 
 interface BufferManagerContextValue {
   buffers: Map<string, EditorBuffer>;
+  /** Ref mirror of `buffers` — read latest map inside event handlers without
+   *  re-subscribing (used by the beforeunload unsaved-changes guard). */
+  buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   openFile: (file: EditorFileEntry) => string;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
@@ -58,7 +64,10 @@ interface BufferManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
+  saveBuffer: (
+    bufferId: string,
+    options?: { force?: boolean },
+  ) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
@@ -620,9 +629,20 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
   // Save buffer
   const saveBuffer = useCallback(
-    async (bufferId: string) => {
+    async (bufferId: string, options?: { force?: boolean }) => {
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.kind !== 'file') return;
+
+      // Never let a background save (auto-save, save-all) write over an
+      // external change the user has not arbitrated yet — the auto-save
+      // interval would otherwise clobber the agent's/build's edit ~30s
+      // after the conflict dialog opens. An explicit save (Cmd+S) passes
+      // force:true and counts as the user's resolution, so a keep-mine
+      // author can still land their version.
+      if (buffer.externallyModified && !options?.force) {
+        debugLog(`[saveBuffer] Skipped ${buffer.file.path}: external change unresolved`);
+        return;
+      }
 
       // Handle virtual workspace buffers (untitled files created via Ctrl+N)
       if (buffer.file.path.startsWith('__workspace/')) {
@@ -674,6 +694,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       }
 
       // Normal save for existing files
+      const savedSourceContent = buffer.content;
       let contentToSave = buffer.content;
       let formattedContent: string | undefined;
       if (isFormatOnSaveEnabled && isFormattable(buffer.file.path)) {
@@ -694,6 +715,16 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         }
       }
 
+      // Announce the save BEFORE the write so the external file watcher
+      // learns the new mtime and enters its cooldown before the fsnotify
+      // echo / next poll can flag our own write as an external change.
+      // (Same contract as useEditorFileIO.handleSave.)
+      document.dispatchEvent(
+        new CustomEvent('file:editor-saved', {
+          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+        }),
+      );
+
       try {
         const response = await writeFileWithFetch(sproutFetch, buffer.file.path, contentToSave);
 
@@ -704,19 +735,49 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
             throw new Error(data.error || 'Save validation failed');
           }
           if (data.message === 'File saved successfully' || data.success === true) {
+            const serverMtime = typeof data.mod_time === 'number' ? data.mod_time : undefined;
             setBuffers((prev) => {
               const newBuffers = new Map(prev);
               const buf = newBuffers.get(bufferId);
               if (buf) {
+                // True when the user typed while the HTTP roundtrip was in
+                // flight: disk now holds the pre-typing snapshot
+                // (contentToSave), the buffer holds the newer text.
+                const editedDuringSave = buf.content !== savedSourceContent;
                 newBuffers.set(bufferId, {
                   ...buf,
-                  originalContent: formattedContent ?? buf.content,
-                  isModified: false,
+                  // Format-on-save: disk holds the formatted text, so sync
+                  // the buffer content with it. Skipping this left the view
+                  // holding the unformatted text while originalContent
+                  // advanced — isModified computed true forever and
+                  // auto-save rewrote the file every interval. Skipped when
+                  // the user typed during the save (their newer edits win
+                  // and stay flagged modified against the disk snapshot).
+                  ...(formattedContent && !editedDuringSave ? { content: formattedContent } : {}),
+                  // originalContent is what disk NOW holds (the snapshot we
+                  // wrote), not the buffer's latest content — otherwise
+                  // keystrokes typed during the roundtrip get marked clean
+                  // and silently vanish from the dirty state.
+                  originalContent: contentToSave,
+                  isModified: editedDuringSave,
+                  // A completed save (forced or not) resolves any pending
+                  // external-change conflict: disk now holds this buffer's
+                  // content by definition.
+                  externallyModified: false,
+                  diskContent: null,
+                  ...(serverMtime != null ? { file: { ...buf.file, modified: serverMtime } } : {}),
                 });
               }
               return newBuffers;
             });
-            return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined, formattedContent };
+            // Re-announce with the authoritative server mtime once the HTTP
+            // response lands.
+            document.dispatchEvent(
+              new CustomEvent('file:editor-saved', {
+                detail: { path: buffer.file.path, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+              }),
+            );
+            return { mod_time: serverMtime, formattedContent };
           }
         }
       } catch (error) {
@@ -743,6 +804,19 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer) return;
       if (buffer.isClosable === false) return;
+
+      // An unresolved external change plus unsaved edits: closing used to
+      // auto-save straight through the conflict (clobbering the disk edit
+      // the user never arbitrated). Refuse and point at the two exits.
+      if (buffer.isModified && buffer.externallyModified) {
+        notificationBus.notify(
+          'warning',
+          'File conflict unresolved',
+          `${buffer.file.name} changed on disk. Reload it or save (Cmd+S) to resolve before closing.`,
+          6000,
+        );
+        return;
+      }
 
       if (buffer.isModified && isAutoSaveEnabled) {
         try {
@@ -873,9 +947,25 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     return () => clearInterval(intervalId);
   }, [isAutoSaveEnabled, autoSaveInterval]);
 
+  // ── External file change detection ─────────────────────────────
+  // Polls disk mtimes for open file buffers; on an external write,
+  // clean buffers auto-reload from disk and modified buffers get the
+  // conflict dialog (via useEditorFileIO's file_externally_modified
+  // listener). This layer was silently dropped in the hook-consolidation
+  // refactor — without it the editor never learns that the agent or a
+  // build changed an open file, and a later save clobbers those edits.
+  useExternalFileWatcher({ buffers });
+
+  useAutoReloadCleanBuffers({
+    buffersRef,
+    reloadBufferFromDisk,
+    setBufferExternallyModified,
+  });
+
   const value = React.useMemo<BufferManagerContextValue>(
     () => ({
       buffers,
+      buffersRef,
       openFile,
       openWorkspaceBuffer,
       openCompareBuffer,
@@ -902,6 +992,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     }),
     [
       buffers,
+      buffersRef,
       openFile,
       openWorkspaceBuffer,
       openCompareBuffer,

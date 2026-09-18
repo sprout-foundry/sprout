@@ -135,7 +135,12 @@ export default function SidebarGitSection({
 
       {/* Changes sub-tab: working tree panel */}
       {gitSubTab === 'changes' && (
-        <div id="git-panel-current-changes" role="tabpanel" aria-labelledby="git-tab-current-changes">
+        <div
+          id="git-panel-current-changes"
+          role="tabpanel"
+          aria-labelledby="git-tab-current-changes"
+          className="git-subtab-panel"
+        >
           <GitSidebarPanel {...gitPanel} />
         </div>
       )}
@@ -146,7 +151,7 @@ export default function SidebarGitSection({
           id="git-panel-commit-history"
           role="tabpanel"
           aria-labelledby="git-tab-commit-history"
-          className="history-pane"
+          className="history-pane git-subtab-panel"
         >
           <GitHistoryPanel
             onLoadCommits={gitPanel.onLoadCommits}
@@ -162,7 +167,7 @@ export default function SidebarGitSection({
 
       {/* Worktrees sub-tab: WorktreePanel */}
       {gitSubTab === 'worktrees' && (
-        <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees">
+        <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees" className="git-subtab-panel">
           <WorktreePanel onClose={() => setGitSubTab('changes')} />
         </div>
       )}

@@ -43,8 +43,8 @@ import { useLog, debugLog, warn } from '../utils/log';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
 import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from './useAutoReloadCleanBuffers';
-import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
 import type { CMViewAPI } from './useCMView';
+import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,6 +57,26 @@ const MIN_INDENTED_LINES_FOR_DETECTION = 3;
 // initial loads, buffer switches). Prevents CodeMirror from recording
 // these in the undo/redo stack.
 const suppressHistoryAnnotations = [Transaction.addToHistory.of(false)];
+
+/**
+ * Compute the minimal CodeMirror change spanning the difference between two
+ * document strings (common prefix/suffix trim). Replacing only the differing
+ * range lets CodeMirror map the selection through the edit — a full-document
+ * swap instead drops the cursor at the same offset in entirely different text
+ * (the "cursor jumped to the bottom" symptom) and discards selection context.
+ */
+function computeRangedChange(current: string, next: string): { from: number; to: number; insert: string } {
+  let from = 0;
+  const minLen = Math.min(current.length, next.length);
+  while (from < minLen && current.charCodeAt(from) === next.charCodeAt(from)) from++;
+  let endCur = current.length;
+  let endNext = next.length;
+  while (endCur > from && endNext > from && current.charCodeAt(endCur - 1) === next.charCodeAt(endNext - 1)) {
+    endCur--;
+    endNext--;
+  }
+  return { from, to: endCur, insert: next.slice(from, endNext) };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,8 +435,8 @@ export function useEditorFileIO(
 
       // Notify the external file watcher and auto-reload cooldown *before*
       // the HTTP roundtrip. The server-side fsnotify fires as soon as it
-      // writes the file, and the WebSocket "file_content_changed" event can
-      // reach the browser *before* the HTTP save response.
+      // writes the file, so the mtime poll can observe our own write before
+      // this save's response arrives.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
           detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },
@@ -424,7 +444,10 @@ export function useEditorFileIO(
       );
 
       try {
-        const saveResult = await saveBuffer(buf.id);
+        // force:true — an explicit Cmd+S is the user's resolution of any
+        // pending external-change conflict; saveBuffer also clears the
+        // conflict flag on success.
+        const saveResult = await saveBuffer(buf.id, { force: true });
         const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
         // If format-on-save was applied, update the CodeMirror view with the formatted content.
@@ -676,6 +699,128 @@ export function useEditorFileIO(
   }, [buffer?.id, buffer?.file?.path, buffer?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // paneId is stable per pane instance; the guards above handle edge cases
 
+  // Ref to prevent rapid-fire duplicate auto-reload events for the same buffer.
+  // Holds `${bufferId}\u0000${content}` — content identity, not just length.
+  const lastReloadKeyRef = useRef<string>('');
+
+  // ── External content applier ───────────────────────────────────
+  // Applies externally-sourced disk content (clean-buffer auto-reload via
+  // `file:auto-reloaded`, or the conflict dialog's "reload" choice) to the
+  // active pane: ranged CodeMirror replacement so the cursor/selection map
+  // through the differing span, plus the follow-up refreshes (diff gutter,
+  // indent/line-ending, diagnostics) and an honest store sync.
+  const applyExternalFileContent = useCallback(
+    async (expectedBufferId: string, content: string): Promise<void> => {
+      // Re-validate: user may have switched buffers while the event/dialog
+      // was in flight.
+      const activeBuffer = bufferRef.current;
+      if (!activeBuffer || activeBuffer.id !== expectedBufferId) return;
+
+      // Skip duplicate rapid-fire events for the same content. Keyed by
+      // content IDENTITY, not length — two different contents of equal
+      // length must not dedupe against each other (a length-keyed check
+      // could leave the CodeMirror view and the buffer holding different
+      // text, which reads as mystery reverts on the next sync).
+      const lastContent = lastReloadKeyRef.current;
+      const separatorIdx = lastContent.indexOf('\u0000');
+      if (
+        separatorIdx >= 0 &&
+        lastContent.slice(0, separatorIdx) === expectedBufferId &&
+        lastContent.slice(separatorIdx + 1) === content
+      ) {
+        return;
+      }
+      lastReloadKeyRef.current = `${expectedBufferId}\u0000${content}`;
+
+      // Skip if content hasn't actually changed to avoid resetting cursor/selection
+      // when the file content is the same as what's already in the editor.
+      const view = cmViewApiRef.current?.view;
+      const currentContent = view?.state.doc.toString();
+      if (currentContent === content) return;
+
+      if (view && currentContent !== undefined) {
+        cmViewApiRef.current?.withExternalUpdate(() => {
+          view.dispatch({
+            changes: computeRangedChange(currentContent, content),
+            annotations: suppressHistoryAnnotations,
+          });
+          setLocalContent(content);
+
+          // The cursor listener skips external updates, so refresh the
+          // selection readout from the post-change view state directly
+          // (same shaping as useEditorCursor's update listener).
+          const ranges = view.state.selection.ranges;
+          if (ranges.length > 1) {
+            const totalChars = ranges.reduce((sum, r) => sum + (r.to - r.from), 0);
+            setSelectionInfo({ charCount: totalChars, selectionCount: ranges.length });
+          } else if (ranges.length === 1 && !ranges[0].empty) {
+            setSelectionInfo({ charCount: ranges[0].to - ranges[0].from, selectionCount: 1 });
+          } else {
+            setSelectionInfo(null);
+          }
+        });
+      } else {
+        setLocalContent(content);
+        setSelectionInfo(null);
+      }
+
+      // Store sync: the auto-reload path arrives with the store already
+      // updated (reloadBufferFromDisk); the dialog-reload path does not, so
+      // sync here. Both converge: originalContent = content first so
+      // updateBufferContent computes a clean isModified.
+      setBufferOriginalContent(expectedBufferId, content);
+      updateBufferContent(expectedBufferId, content);
+
+      // Refresh diff gutter after external content application
+      if (bufferRef.current?.file?.path && cmViewApiRef.current?.view) {
+        try {
+          const diffResponse = await apiService.getGitDiff(bufferRef.current.file.path);
+          if (diffResponse.diff && diffResponse.diff.trim()) {
+            updateDiffGutter(cmViewApiRef.current?.view, diffResponse.diff);
+          } else {
+            clearDiffGutter(cmViewApiRef.current?.view);
+          }
+        } catch (err) {
+          debugLog('[useEditorFileIO] Failed to re-fetch git diff after auto-reload:', err);
+          if (cmViewApiRef.current?.view) clearDiffGutter(cmViewApiRef.current?.view);
+        }
+      }
+
+      // Re-detect indentation
+      applyIndentDetection(content);
+
+      // Re-detect line ending
+      const lineEndingResult = detectLineEnding(content);
+      setLineEnding(lineEndingResult.lineEnding);
+
+      // Refresh diagnostics
+      const buf = bufferRef.current;
+      if (buf && buf.file?.path && cmViewApiRef.current?.view) {
+        fetchDiagnosticsRef.current(buf.file.path, content);
+      }
+    },
+    // Safe: refs + stable context setters; the rest is read at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [applyIndentDetection, setBufferOriginalContent, updateBufferContent],
+  );
+
+  // ── Auto-reload sync listener ──────────────────────────────────
+  // Syncs the CodeMirror view when a clean buffer is auto-reloaded
+  // by useAutoReloadCleanBuffers (dispatched via `file:auto-reloaded`).
+
+  useEffect(() => {
+    if (!buffer) return;
+
+    const handleAutoReloaded = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
+      if (detail.bufferId !== buffer.id) return;
+      void applyExternalFileContent(detail.bufferId, detail.content);
+    };
+
+    document.addEventListener('file:auto-reloaded', handleAutoReloaded);
+    return () => document.removeEventListener('file:auto-reloaded', handleAutoReloaded);
+  }, [buffer?.id, applyExternalFileContent]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── External file change listener ──────────────────────────────
   // Shows conflict dialog when the buffer has unsaved changes and the
   // file is modified externally. Clean (unmodified) buffers are
@@ -709,17 +854,22 @@ export function useEditorFileIO(
       if (!currentBuffer.isModified) return;
 
       if (detail.deleted) {
+        // Flag the conflict up front (before the dialog resolves): a pending
+        // or dismissed dialog must still gate auto-save — "ignore" means
+        // "decide later", never "silently clobber the disk edit".
+        setBufferExternallyModified(currentBuffer.id, '', detail.mtime);
         showFileChangeDialog(currentBuffer.file.name, { deleted: true, hasUnsavedChanges: true })
-          .then((action) => {
+          .then((_action) => {
             // Re-validate: user may have switched files during the dialog.
             if (bufferRef.current?.id !== currentBuffer.id) return;
             // Re-check modification state after async dialog.
             const currentBuf = bufferRef.current;
             if (!currentBuf || !currentBuf.isModified) return;
-            if (action === 'keep-mine') {
-              setBufferExternallyModified(currentBuffer.id, '');
-            }
-            // 'ignore': user dismissed the dialog; buffer stays as-is with no action needed.
+            // keep-mine: the conflict flag stays set so auto-save keeps
+            // gating until the user resolves via an explicit Cmd+S (which
+            // saveBuffer clears) or a reload.
+            // 'ignore': user dismissed the dialog; the flag stays set for
+            // the same reason.
           })
           .catch((err) => {
             debugLog('[useEditorFileIO] File change dialog error:', err);
@@ -739,6 +889,11 @@ export function useEditorFileIO(
           if (bufferRef.current?.id !== currentBuffer.id) return;
 
           const editorContent = bufferRef.current?.content || '';
+
+          // Flag the conflict before the dialog opens (see the deleted
+          // branch): the pending window itself must gate auto-save.
+          setBufferExternallyModified(currentBuffer.id, diskContent, detail.mtime);
+
           const action = await showFileChangeDialog(currentBuffer.file.name, {
             deleted: false,
             hasUnsavedChanges: true,
@@ -752,13 +907,28 @@ export function useEditorFileIO(
           if (!currentBuf || !currentBuf.isModified) return;
 
           if (action === 'reload') {
-            if (loadFileRef.current) {
-              await loadFileRef.current(filePath);
+            // Re-read at resolution time — the dialog may have been open a
+            // while and the file may have changed again. Apply with the
+            // ranged applier instead of loadFile's full-document swap:
+            // same disk-wins semantics, but the cursor maps through the
+            // differing span instead of being re-anchored from a stale
+            // line/column of the old document.
+            try {
+              const fresh = await readFileWithConsent(filePath);
+              if (fresh.ok) {
+                const freshContent = await fresh.text();
+                await applyExternalFileContent(currentBuffer.id, freshContent);
+              } else if (loadFileRef.current) {
+                await loadFileRef.current(filePath);
+              }
+              clearBufferExternallyModified(currentBuffer.id);
+            } catch (err) {
+              debugLog('[useEditorFileIO] Failed to reload externally modified file:', err);
             }
-            clearBufferExternallyModified(currentBuffer.id);
-          } else if (action === 'keep-mine') {
-            setBufferExternallyModified(currentBuffer.id, diskContent);
           } else if (action === 'show-diff') {
+            // keep-mine / show-diff / ignore: the conflict flag was set
+            // before the dialog and intentionally stays — auto-save remains
+            // gated until the user reloads or force-saves.
             try {
               const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
               if (!diffText) return;
@@ -791,11 +961,6 @@ export function useEditorFileIO(
                   modeOptions: ['combined'],
                 },
               });
-
-              const bufferRefId = bufferRef.current?.id;
-              if (bufferRefId) {
-                setBufferExternallyModified(bufferRefId, diskContent);
-              }
             } catch (err) {
               debugLog('[useEditorFileIO] Failed to generate diff:', err);
               notificationBus.notify('warning', 'Diff Generation', 'Failed to generate diff for external changes');
@@ -813,81 +978,11 @@ export function useEditorFileIO(
     buffer?.id,
     buffer?.kind,
     buffer?.file?.path,
+    applyExternalFileContent,
     clearBufferExternallyModified,
     setBufferExternallyModified,
     openWorkspaceBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Ref to prevent rapid-fire duplicate auto-reload events for the same buffer
-  const lastReloadKeyRef = useRef<string>('');
-
-  // ── Auto-reload sync listener ──────────────────────────────────
-  // Syncs the CodeMirror view when a clean buffer is auto-reloaded
-  // by useAutoReloadCleanBuffers (dispatched via `file:auto-reloaded`).
-
-  useEffect(() => {
-    if (!buffer) return;
-
-    const handleAutoReloaded = async (e: Event) => {
-      const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
-      if (detail.bufferId !== buffer.id) return;
-
-      // Skip duplicate rapid-fire events for the same content.
-      const reloadKey = `${detail.bufferId}:${detail.content.length}`;
-      if (lastReloadKeyRef.current === reloadKey) return;
-      lastReloadKeyRef.current = reloadKey;
-
-      // Skip if content hasn't actually changed to avoid resetting cursor/selection
-      // when the file content is the same as what's already in the editor.
-      const currentContent = cmViewApiRef.current?.view?.state.doc.toString();
-      if (currentContent === detail.content) return;
-
-      if (cmViewApiRef.current?.view) {
-        cmViewApiRef.current?.withExternalUpdate(() => {
-          cmViewApiRef.current?.dispatch({
-            changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: detail.content },
-            annotations: suppressHistoryAnnotations,
-          });
-          setLocalContent(detail.content);
-          setSelectionInfo(null);
-        });
-      } else {
-        setLocalContent(detail.content);
-        setSelectionInfo(null);
-      }
-
-      // Refresh diff gutter after auto-reload
-      if (bufferRef.current && bufferRef.current.file?.path && cmViewApiRef.current?.view) {
-        try {
-          const diffResponse = await apiService.getGitDiff(bufferRef.current.file.path);
-          if (diffResponse.diff && diffResponse.diff.trim()) {
-            updateDiffGutter(cmViewApiRef.current?.view, diffResponse.diff);
-          } else {
-            clearDiffGutter(cmViewApiRef.current?.view);
-          }
-        } catch (err) {
-          debugLog('[useEditorFileIO] Failed to re-fetch git diff after auto-reload:', err);
-          if (cmViewApiRef.current?.view) clearDiffGutter(cmViewApiRef.current?.view);
-        }
-      }
-
-      // Re-detect indentation on auto-reload
-      applyIndentDetection(detail.content);
-
-      // Re-detect line ending on auto-reload
-      const lineEndingResult = detectLineEnding(detail.content);
-      setLineEnding(lineEndingResult.lineEnding);
-
-      // Refresh diagnostics after auto-reload
-      const buf = bufferRef.current;
-      if (buf && buf.file?.path && cmViewApiRef.current?.view) {
-        fetchDiagnosticsRef.current(buf.file.path, detail.content);
-      }
-    };
-
-    document.addEventListener('file:auto-reloaded', handleAutoReloaded);
-    return () => document.removeEventListener('file:auto-reloaded', handleAutoReloaded);
-  }, [buffer?.id, applyIndentDetection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync original content to unsaved-line highlight extension ──
   useEffect(() => {

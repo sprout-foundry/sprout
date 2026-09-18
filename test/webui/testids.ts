@@ -43,6 +43,11 @@ const TESTIDS = {
   "chat-tool-timeline": "chat-tool-timeline",
   "chat-subagent-feed": "chat-subagent-feed",
   "turn-changes-strip": "turn-changes-strip",
+<<<<<<< HEAD
+=======
+  "diff-view": "diff-view",
+  "chat-metrics-strip": "chat-metrics-strip",
+>>>>>>> origin/main
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",
@@ -54,7 +59,10 @@ const TESTIDS = {
   // Sidebar
   "sidebar-container": "sidebar-container",
   "sidebar-brand": "sidebar-brand",
+<<<<<<< HEAD
   "sidebar-costs-button": "sidebar-costs-button",
+=======
+>>>>>>> origin/main
   "sidebar-settings-toggle": "sidebar-settings-toggle",
   "sidebar-icon-rail": "sidebar-icon-rail",
   "sidebar-git-tab": "sidebar-git-tab",
@@ -62,7 +70,10 @@ const TESTIDS = {
   "sidebar-search-tab": "sidebar-search-tab",
   "sidebar-automations-tab": "sidebar-automations-tab",
   "sidebar-logs-tab": "sidebar-logs-tab",
+<<<<<<< HEAD
   "sidebar-design-button": "sidebar-design-button",
+=======
+>>>>>>> origin/main
 
   // SP-092-3: Past sessions hint
   "past-sessions-hint": "past-sessions-hint",
@@ -183,6 +194,7 @@ const TESTIDS = {
   "export-redact-secrets": "export-redact-secrets",
   "export-cancel": "export-cancel",
   "export-download": "export-download",
+<<<<<<< HEAD
 
   // Costs page
   "costs-page": "costs-page",
@@ -225,6 +237,8 @@ const TESTIDS = {
   // ProviderTable.tsx. Representative registered value (matches the
   // template literal so the coverage check passes).
   "provider-billing-row": "provider-billing-row",
+=======
+>>>>>>> origin/main
 
   // Workspace browser / gate
   "workspace-browser": "workspace-browser",
@@ -353,6 +367,7 @@ const TESTIDS = {
   "mobile-peer-surfaces": "mobile-peer-surfaces",
   "mobile-chat-surface": "mobile-chat-surface",
   "mobile-editor-surface": "mobile-editor-surface",
+<<<<<<< HEAD
 
   // Design (SP-140-3 DesignView / design workspace surface). Static testids
   // from webui/src/components/design/* plus representative values for the
@@ -427,6 +442,8 @@ const TESTIDS = {
   "token-font-line": "token-font-line",
   "token-font-meta": "token-font-meta",
   "token-space-bar": "token-space-bar",
+=======
+>>>>>>> origin/main
 } as const;
 
 // Derived set for O(1) coverage lookups

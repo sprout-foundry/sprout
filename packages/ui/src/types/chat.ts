@@ -248,6 +248,12 @@ export interface ChatProps {
   // Status bar
   stats?: Record<string, unknown>;
   isConnected?: boolean;
+  /**
+   * Clicking the model name in the chat metrics strip opens the model
+   * picker scoped to this provider. Without it the model renders as
+   * plain text.
+   */
+  onModelClick?: (provider: string) => void;
   // Backend reachability (cloud mode)
   backendReachable?: boolean;
   onRetryConnection?: () => void;

@@ -26,12 +26,15 @@ import {
   Inbox,
   CircleAlert,
   Clock,
+  Copy,
+  Check,
   FilePlus,
   FilePen,
   FileMinus,
   FolderCog,
+  Filter,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
 import type {
   SessionChangeEntry,
@@ -39,7 +42,11 @@ import type {
   SessionSummaryResponse,
   TimelineItem,
 } from '../services/api/changesApi';
+import { changeOpLabel, classifyChangeOp, describeRevertOutcome } from '../utils/changes';
+import { copyToClipboard } from '../utils/clipboard';
+import { formatRelativeTime } from '../utils/format';
 import { useLog } from '../utils/log';
+import DiffView from './DiffView';
 import { showThemedConfirm } from './ThemedDialog';
 import './AgentChangesPanel.css';
 
@@ -59,29 +66,16 @@ interface AgentChangesPanelProps {
 type Tab = 'session' | 'timeline';
 
 const opIcon = (op: string) => {
-  switch (op) {
+  const cls = `op-icon op-${classifyChangeOp(op)}`;
+  switch (classifyChangeOp(op)) {
     case 'create':
-      return <FilePlus size={14} className="op-icon op-create" />;
+      return <FilePlus size={14} className={cls} />;
     case 'delete':
-      return <FileMinus size={14} className="op-icon op-delete" />;
+      return <FileMinus size={14} className={cls} />;
     case 'bulk':
-      return <FolderCog size={14} className="op-icon op-bulk" />;
+      return <FolderCog size={14} className={cls} />;
     default:
-      return <FilePen size={14} className="op-icon op-edit" />;
-  }
-};
-
-const opLabel = (op: string) => {
-  switch (op) {
-    case 'create':
-      return 'Created';
-    case 'delete':
-      return 'Deleted';
-    case 'bulk':
-      return 'Build output';
-    case 'edit':
-    default:
-      return 'Modified';
+      return <FilePen size={14} className={cls} />;
   }
 };
 
@@ -91,17 +85,6 @@ const opLabel = (op: string) => {
 function formatBulkCount(n?: number): string {
   if (!n || n <= 0) return '';
   return new Intl.NumberFormat(undefined).format(n) + ' file' + (n === 1 ? '' : 's');
-}
-
-function formatRelativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const delta = Math.floor((now - then) / 1000);
-  if (delta < 5) return 'just now';
-  if (delta < 60) return `${delta}s ago`;
-  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
-  return `${Math.floor(delta / 86400)}d ago`;
 }
 
 function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps): JSX.Element {
@@ -115,13 +98,21 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   const [changes, setChanges] = useState<SessionChangeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set([0])); // newest expanded
+  // Expanded blocks are keyed by the block's started_at timestamp, not
+  // its position: blocks render newest-first, so a position index shifts
+  // every time a new block arrives and expanded state would jump to a
+  // different turn.
+  const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(new Set());
+  const [filterQuery, setFilterQuery] = useState('');
 
   // Diff modal state
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffPath, setDiffPath] = useState<string>('');
   const [diffText, setDiffText] = useState<string>('');
+  const [diffOp, setDiffOp] = useState<string>('');
+  const [diffTool, setDiffTool] = useState<string>('');
   const [diffLoading, setDiffLoading] = useState(false);
+  const [diffCopied, setDiffCopied] = useState(false);
 
   // Timeline-tab state
   const [timelineSince, setTimelineSince] = useState<string>('7d');
@@ -155,6 +146,38 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     void loadSession();
   }, [loadSession]);
 
+  // Newest block starts expanded. Keyed by timestamp (see expandedBlocks)
+  // so the default-open state follows the block itself across reloads.
+  useEffect(() => {
+    if (!summary || summary.blocks.length === 0) return;
+    const newest = summary.blocks[summary.blocks.length - 1];
+    setExpandedBlocks((prev) => {
+      if (prev.size > 0 && prev.has(newest.started_at)) return prev;
+      if (prev.size > 0) return prev; // don't fight a user who collapsed things
+      const next = new Set(prev);
+      next.add(newest.started_at);
+      return next;
+    });
+  }, [summary]);
+
+  // Cross-tab revert refresh: the server publishes agent_changes_reverted
+  // after a successful revert (changes_api.go) so every tab's panel can
+  // reload. This tab's own revert already calls loadSession(); the
+  // debounced reload here covers the other tabs.
+  useEffect(() => {
+    const handler = () => {
+      if (reloadTimer.current !== undefined) {
+        window.clearTimeout(reloadTimer.current);
+      }
+      reloadTimer.current = window.setTimeout(() => {
+        reloadTimer.current = undefined;
+        void loadSession();
+      }, 150);
+    };
+    window.addEventListener('agent-changes-reverted', handler);
+    return () => window.removeEventListener('agent-changes-reverted', handler);
+  }, [loadSession]);
+
   // Live updates: when a file_changed event arrives, refresh + flash
   // Escape closes the diff viewer overlay while it's open. Window-level
   // listener because the overlay div doesn't carry focus.
@@ -173,13 +196,14 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   useEffect(() => {
     const handler = (ev: Event) => {
       const detail = (ev as CustomEvent).detail as { path?: string } | undefined;
-      if (detail?.path) {
-        setFlashedPaths((prev) => new Set(prev).add(detail.path!));
+      const changedPath = detail?.path;
+      if (changedPath) {
+        setFlashedPaths((prev) => new Set(prev).add(changedPath));
         // Clear the flash after the animation duration.
         setTimeout(() => {
           setFlashedPaths((prev) => {
             const next = new Set(prev);
-            next.delete(detail.path!);
+            next.delete(changedPath);
             return next;
           });
         }, 1200);
@@ -218,6 +242,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
       setDiffOpen(true);
       setDiffLoading(true);
       setDiffText('');
+      setDiffOp('');
+      setDiffTool('');
+      setDiffCopied(false);
       try {
         const res = await apiService.getAgentChangeDiff(path);
         if (token !== diffTokenRef.current) return;
@@ -225,6 +252,8 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           setDiffText(`(no tracked change for ${path})`);
         } else {
           setDiffText(res.diff || '(empty diff)');
+          setDiffOp(res.op || '');
+          setDiffTool(res.tool || '');
         }
       } catch (err) {
         if (token !== diffTokenRef.current) return;
@@ -239,6 +268,17 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     [apiService],
   );
 
+  const handleCopyDiff = useCallback(async () => {
+    if (!diffText) return;
+    try {
+      await copyToClipboard(diffText);
+      setDiffCopied(true);
+      setTimeout(() => setDiffCopied(false), 1500);
+    } catch {
+      log.error('Copy failed', { title: 'Agent Changes' });
+    }
+  }, [diffText, log]);
+
   // ── Revert actions ─────────────────────────────────────────────
 
   const revertOne = useCallback(
@@ -252,14 +292,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
       if (!ok) return;
       try {
         const res = await apiService.revertAgentChanges({ file: path });
-        if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
-          // Nothing actionable happened (disabled tracking, stale
-          // snapshot, no record). Surface the server's reason instead
-          // of a silent success log.
-          log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
-        } else {
-          log.info(`Revert: ${res.summary}`, { title: 'Agent Changes' });
-        }
+        const outcome = describeRevertOutcome(res);
+        if (outcome.level === 'error') log.error(outcome.message, { title: 'Agent Changes' });
+        else log.info(outcome.message, { title: 'Agent Changes' });
         await loadSession();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -282,11 +317,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     if (!ok) return;
     try {
       const res = await apiService.revertAgentChanges({ scope: 'all' });
-      if ((res.restored ?? 0) + (res.failed ?? 0) === 0 && res.summary) {
-        log.error(`Revert did nothing: ${res.summary}`, { title: 'Agent Changes' });
-      } else {
-        log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
-      }
+      const outcome = describeRevertOutcome(res);
+      if (outcome.level === 'error') log.error(outcome.message, { title: 'Agent Changes' });
+      else log.info(`Revert all: ${res.summary}`, { title: 'Agent Changes' });
       await loadSession();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -315,36 +348,51 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     }
   }, [tab, loadTimeline]);
 
-  const toggleBlock = (idx: number) => {
+  const toggleBlock = (key: string) => {
     setExpandedBlocks((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
+  // Client-side path filter over the fetched manifest — instant, and the
+  // session endpoint's own path_pattern param would just re-fetch what we
+  // already have.
+  const normalizedFilter = filterQuery.trim().toLowerCase();
+  const matchesFilter = useCallback(
+    (path: string) => !normalizedFilter || path.toLowerCase().includes(normalizedFilter),
+    [normalizedFilter],
+  );
+
   // Renderer for activity blocks (session tab)
-  const renderBlock = (block: SessionSummaryBlock, idx: number) => {
-    const expanded = expandedBlocks.has(idx);
-    const blockFiles = block.files;
+  const renderBlock = (block: SessionSummaryBlock, idx: number, isNewest: boolean) => {
+    const expanded = expandedBlocks.has(block.started_at);
+    const blockFiles = block.files.filter((f) => matchesFilter(f.path));
+    if (normalizedFilter && blockFiles.length === 0) return null;
     const toolList = Object.entries(block.tools)
       .map(([t, n]) => `${t} ×${n}`)
       .join(', ');
     return (
-      <div key={idx} className="changes-block">
+      <div key={block.started_at + '-' + idx} className="changes-block">
         <button
           type="button"
           className="changes-block-header"
-          onClick={() => toggleBlock(idx)}
+          onClick={() => toggleBlock(block.started_at)}
           aria-expanded={expanded}
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span className="changes-block-title">
-            Block {idx + 1} · {blockFiles.length} file{blockFiles.length === 1 ? '' : 's'}
+            {isNewest ? 'Latest activity' : formatRelativeTime(block.started_at)} · {blockFiles.length} file
+            {blockFiles.length === 1 ? '' : 's'}
           </span>
           <span className="changes-block-meta">
-            <Clock size={12} /> {formatRelativeTime(block.started_at)}
+            {isNewest && (
+              <>
+                <Clock size={12} /> {formatRelativeTime(block.started_at)}
+              </>
+            )}
           </span>
           <span className="changes-block-tools">{toolList}</span>
         </button>
@@ -368,7 +416,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                     {opIcon(f.op)}
                     <span className="changes-file-path changes-file-path--bulk">{f.path}</span>
                     <span className="changes-file-op">
-                      {opLabel(f.op)}
+                      {changeOpLabel(f.op)}
                       {count ? ` · ${formatBulkCount(count)}` : ''}
                     </span>
                   </div>
@@ -385,7 +433,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                   >
                     {f.path}
                   </button>
-                  <span className="changes-file-op">{opLabel(f.op)}</span>
+                  <span className="changes-file-op">{changeOpLabel(f.op)}</span>
                   <div className="changes-file-actions">
                     <button
                       type="button"
@@ -500,9 +548,34 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                   <Undo2 size={14} /> Revert all
                 </button>
               </div>
+              {summary.blocks.length > 3 && (
+                <div className="changes-filter">
+                  <Filter size={12} aria-hidden="true" />
+                  <input
+                    type="text"
+                    className="changes-filter-input"
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                    placeholder="Filter by path…"
+                    aria-label="Filter changed files by path"
+                  />
+                  {filterQuery && (
+                    <button
+                      type="button"
+                      className="changes-action-btn"
+                      onClick={() => setFilterQuery('')}
+                      title="Clear filter"
+                      aria-label="Clear filter"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="changes-blocks">
-                {/* Newest blocks first */}
-                {[...summary.blocks].reverse().map((block, idx) => renderBlock(block, idx))}
+                {/* Newest blocks first; keyed by timestamp so expand
+                    state stays with its block as new ones arrive. */}
+                {[...summary.blocks].reverse().map((block, idx) => renderBlock(block, idx, idx === 0))}
               </div>
             </>
           )}
@@ -586,12 +659,26 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           >
             <div className="changes-diff-header">
               <FileText size={14} /> <span title={diffPath}>{diffPath}</span>
+              {diffOp && <span className={`changes-op-chip op-${diffOp}`}>{diffOp}</span>}
+              {diffTool && <span className="changes-tool-chip">{diffTool}</span>}
               <div style={{ flex: 1 }} />
+              <button
+                type="button"
+                className="changes-action-btn"
+                onClick={() => void handleCopyDiff()}
+                disabled={diffLoading}
+                title="Copy diff"
+                aria-label="Copy diff"
+              >
+                {diffCopied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
               <button type="button" className="changes-action-btn" onClick={() => setDiffOpen(false)}>
                 Close
               </button>
             </div>
-            <pre className="changes-diff-body">{diffLoading ? 'Loading…' : diffText}</pre>
+            <div className="changes-diff-body">
+              {diffLoading ? <div className="changes-loading">Loading…</div> : <DiffView diff={diffText} />}
+            </div>
           </div>
         </div>
       )}

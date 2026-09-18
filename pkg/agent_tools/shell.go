@@ -165,7 +165,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 			dir = wd
 		}
 
-		bspSessionID, err := bpm.Start(ctx, command, dir)
+		bspSessionID, err := bpm.StartWithOptions(ctx, command, dir, "shell", &StartOptions{TTL: backgroundSessionTTL})
 		if err != nil {
 			return "", fmt.Errorf("execute background command: %w", err)
 		}
@@ -181,6 +181,13 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 
 	return "", fmt.Errorf("background command requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 }
+
+// backgroundSessionTTL is the TTL applied to agent-started background shell
+// sessions. Higher than the manager default (2h) because agent-driven
+// watchers (CI watches, log followers) legitimately run for hours; the
+// cleanup pass now probes liveness at TTL boundaries rather than reaping
+// unpolled sessions, so this only bounds truly-leaked processes.
+const backgroundSessionTTL = 8 * time.Hour
 
 // maxBackgroundWaitSeconds caps the wait_seconds parameter on
 // CheckBackgroundOutputWait. Picked to match Claude Code's default Bash

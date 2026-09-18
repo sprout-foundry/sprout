@@ -2,6 +2,48 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.4] - 2026-09-17
+
+- fix(test): wait for agent teardown before temp-dir cleanup in concurrent delete test (daefd65a9)
+- feat(webui): clickable reload badge and context-menu reload for conflicted tabs (802313017)
+- fix(webui): stop save/auto-save from clobbering external file changes (4d18473f7)
+- docs: document hot-reload WebUI development workflow (3059c96e6)
+- feat(webui): move LLM metrics out of the app footer into the chat (27ca0778c)
+- perf(history): stop reading LLM responses on manifest loads (863baf522)
+- fix(changes): bound diff computation and rendering that locked up the WebUI (9e93356b6)
+- refactor(webui): deduplicate change-tracking utilities (eac3f93be)
+- feat(webui): improve the agent change-tracking panel (cb9f07554)
+- docs: refocus README on setup/development, tighten AGENTS.md (0464628a9)
+- refactor(webui): remove the legacy settings subtab shim (f081bff40)
+- feat(webui): gate semantic search behind the experimental embedding opt-in (0b650bbb0)
+- fix(webui): layered settings writes reload the live config manager (b9083d4b2)
+- fix(config): Manager.Reload re-reads the workspace layer (f0f58a32c)
+- docs: Update changelog for v0.18.3 (f06d00e28)
+
+## [v0.18.3] - 2026-09-16
+
+- feat(webui): rewire external file change detection into buffer manager (978b1d9d3)
+- fix(webui): protect unsaved editor work on workspace switch and reload (68c983e6e)
+- perf(webui): throttle stream-chunk re-renders and prune DOM-bridge traffic (9b997e06a)
+- fix(webui): pad git sub-tab panels so content clears the tab bar (de73f4136)
+- feat(webui): unify select styling and modernize dropdown visuals (caedb6e33)
+- fix(localmodel): skip model dirs with corrupt config.json instead of panicking (ca1aad5aa)
+- Merge remote-tracking branch 'origin/main' (1b4e41aec)
+- fix(tools): background session expiry probes liveness instead of polling (c1bf81b58)
+- docs: Update changelog for v0.18.2 (b9f3eb016)
+
+## [v0.18.2] - 2026-09-15
+
+- fix(catalog): current deepinfra recommendation and staleness policy (ebe5e5f51)
+- chore(deps): bump github.com/sprout-foundry/seed to v1.4.2 (78e971782)
+- ci: run the Windows suite in a parallel lane, off the release critical path (cb462f466)
+- fix(localmodel): model picker serves the full catalog in every build (90239da16)
+- fix(webui): no render in lifecycle — move hook mount into each test (f6a70c10f)
+- fix(release): ship real UI to macos-build; verify badge lifecycle end-to-end (a0dcdc659)
+- fix(ui): render toolRefs with no text marker as inline chat badges (a5e76c09c)
+- fix(release): build darwin/arm64 natively on a self-hosted Mac runner (d7e674a89)
+- docs: Update changelog for v0.18.1 (45390d0f8)
+
 ## [v0.18.1] - 2026-09-15
 
 - docs: update changelog for v0.18.1 (2aade74d0)

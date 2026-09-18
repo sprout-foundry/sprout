@@ -36,7 +36,6 @@ import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
 import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
-import Status from './Status';
 import StatusBar from './StatusBar';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import Terminal from './Terminal';
@@ -309,7 +308,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // the provider setup flow instead — opening ModelSelectionModal for
   // "editor" would fail at the /api/providers/models?provider=editor
   // fetch since there's no such provider on the backend.
-  const handleStatusBarModelClick = useCallback(
+  const handleChatModelClick = useCallback(
     (provider: string) => {
       const p = provider || state.provider || '';
       if (!p || p === 'editor') {
@@ -341,8 +340,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const handleSessionSearchRestore = useCallback(
     async (sessionId: string, chatId?: string) => {
       try {
-        // chatId scopes the restore to that chat (empty = active chat,
-        // the pre-existing Costs-page behavior).
+        // chatId scopes the restore to that chat (empty = active chat).
         const response = await apiService.restoreSession(sessionId, chatId);
         if (response.messages?.length) {
           window.dispatchEvent(
@@ -761,6 +759,7 @@ const AppContent: React.FC<AppContentProps> = ({
       onToolPillClick: handleToolPillClick,
       stats: state.stats,
       isConnected: state.isConnected,
+      onModelClick: handleChatModelClick,
       backendReachable,
       onRetryConnection,
       subagentActivities: state.subagentActivities,
@@ -795,6 +794,7 @@ const AppContent: React.FC<AppContentProps> = ({
       handleToolPillClick,
       state.stats,
       state.isConnected,
+      handleChatModelClick,
       backendReachable,
       onRetryConnection,
       state.subagentActivities,
@@ -997,7 +997,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 reviewProps={reviewProps}
                 diffState={diffState}
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-                onSessionRestore={handleSessionSearchRestore}
                 onViewChange={onViewChange}
                 onOpenDesignFile={handleFileClick}
               />
@@ -1009,7 +1008,6 @@ const AppContent: React.FC<AppContentProps> = ({
               isTablet={isTablet}
               showContextSidebar={showContextSidebar}
               contextPanelRef={contextPanelRef}
-              currentView={state.currentView}
               toolExecutions={state.toolExecutions}
               logs={state.logs}
               subagentActivities={state.subagentActivities}
@@ -1020,7 +1018,6 @@ const AppContent: React.FC<AppContentProps> = ({
             />
           </div>
         </div>
-        <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar
           branch={gitBranches.current || gitStatus?.branch}
           workspacePath={workspaceRoot}
@@ -1036,9 +1033,6 @@ const AppContent: React.FC<AppContentProps> = ({
                 }
               : null
           }
-          chatStats={state.stats}
-          isConnected={state.isConnected}
-          onModelClick={handleStatusBarModelClick}
         />
         {!supportsLocalTerminal && (
           <ErrorBoundary panelName="Terminal">

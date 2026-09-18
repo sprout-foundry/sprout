@@ -420,10 +420,47 @@ func collectFileChangeSpan(changes []TrackedFileChange, abs string) (string, str
 	return firstOriginal, lastNew, op, lastTool, true
 }
 
+// Bounds for unified-diff rendering. The tracker stores full file
+// contents, and go-difflib's Myers diff is O((N+M)·D) — without caps a
+// rewritten minified/lock/generated file costs seconds-to-minutes of CPU
+// on the caller's goroutine, which blocks the WebUI diff endpoint and
+// starves the daemon (the "diff view lockup"). Both bounds were chosen
+// so the worst case finishes in milliseconds.
+const (
+	// maxDiffInputLines caps each side before Myers runs. Larger files
+	// are head-truncated first: a diff of the first N lines is still
+	// useful, and the truncation notice tells the reader what happened.
+	maxDiffInputLines = 20000
+	// maxDiffOutputLines caps the rendered diff (difflib can EXPLODE
+	// output: a whole-file rewrite of an N-line file yields ~2N+ hunk
+	// lines even when inputs are small).
+	maxDiffOutputLines = 4000
+)
+
+// headTruncateLines caps s at max lines, appending a notice line when
+// truncated. Matches difflib.SplitLines' semantics (every line keeps
+// its trailing \n).
+func headTruncateLines(s string, max int, what string) string {
+	lines := strings.SplitAfter(s, "\n")
+	if len(lines) <= max {
+		return s
+	}
+	// SplitAfter yields a trailing "" element when s ends in \n; the
+	// first max elements are then exactly max real lines.
+	kept := strings.Join(lines[:max], "")
+	if !strings.HasSuffix(kept, "\n") {
+		kept += "\n"
+	}
+	return kept + fmt.Sprintf("... (%s truncated at %d lines for diffing)\n", what, max)
+}
+
 func buildUnifiedDiff(path, before, after string) string {
 	if before == after {
 		return "(no textual difference)"
 	}
+	before = headTruncateLines(before, maxDiffInputLines, "before-side")
+	after = headTruncateLines(after, maxDiffInputLines, "after-side")
+
 	d := difflib.UnifiedDiff{
 		A:        difflib.SplitLines(before),
 		B:        difflib.SplitLines(after),
@@ -435,7 +472,22 @@ func buildUnifiedDiff(path, before, after string) string {
 	if err != nil {
 		return fmt.Sprintf("(diff failed: %v)", err)
 	}
-	return out
+	return truncateDiffLines(out, maxDiffOutputLines)
+}
+
+// truncateDiffLines caps a rendered unified diff at max lines. The cut
+// is inserted before the closing hunk so the result stays a parseable
+// diff; a trailing notice explains the omission.
+func truncateDiffLines(diff string, max int) string {
+	lines := strings.SplitAfter(diff, "\n")
+	if len(lines) <= max {
+		return diff
+	}
+	kept := strings.Join(lines[:max], "")
+	if !strings.HasSuffix(kept, "\n") {
+		kept += "\n"
+	}
+	return kept + fmt.Sprintf("\\ No newline at end of file\n... (diff truncated at %d lines; total %d)\n", max, len(lines)-1)
 }
 
 // ---------------------------------------------------------------------------

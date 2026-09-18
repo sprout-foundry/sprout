@@ -10,6 +10,7 @@ import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
 import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
+import { getPluginViewIds } from '../services/pluginRegistry';
 import { useFileHandler } from '../hooks/useFileHandler';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
@@ -417,7 +418,15 @@ const AppContent: React.FC<AppContentProps> = ({
     (id: WorkspaceModeId) => {
       selectWorkspaceMode(id);
       if (id === 'design') onViewChange('design');
-      else if (state.currentView === 'design') onViewChange('chat');
+      else if (
+        // The target mode is Code. Reset the view only when the current view
+        // belongs to some other mode's surface (design today, future modes
+        // later); chat/editor/git and plugin views are Code's own routes and
+        // switching back to Code must not yank the user out of them.
+        !['chat', 'editor', 'git', ...getPluginViewIds()].includes(state.currentView)
+      ) {
+        onViewChange('chat');
+      }
     },
     [selectWorkspaceMode, onViewChange, state.currentView],
   );

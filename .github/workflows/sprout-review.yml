@@ -36,9 +36,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Resolve PR head ref (issue_comment events carry no head.ref)
+        if: github.event_name == 'issue_comment'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}" --jq '.pull_request.url' | sed 's|.*/pulls/||')
+          head=$(gh api "repos/${{ github.repository }}/pulls/${pr}" --jq '.head.ref')
+          echo "head=${head}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.event.issue.pull_request.head.ref }}
+          ref: ${{ steps.pr.outputs.head || github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - uses: sprout-foundry/sprout-agent@v1

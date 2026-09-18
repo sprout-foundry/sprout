@@ -2,6 +2,22 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.5] - 2026-09-18
+
+- Merge branch 'main' of github.com:sprout-foundry/sprout (c1f430f68)
+- feat(vision): delegation tier, URL sniffing, assumed-vision prompts (2b840c41c)
+- feat(vision): runtime capability learning with optimistic delivery (a4b6d8722)
+- refactor(providers): treat ollama as a plain provider, no special-casing (6accd42c7)
+- refactor(vision): single capability resolver, delete conversational-vision split (b7bfa2231)
+- roadmap: add SP-140 vision-first-class spec (6da67f061)
+- fix(ci): resolve the PR head ref for issue_comment-triggered reviews (23b11c11b)
+- chore: refresh provider catalog (#75) (16d000e4c)
+- fix(pricing): pricing and model audit (#76) (c310e95ac)
+- style(webui): prettier join currentView check after costs removal (dc1b0a5ba)
+- Merge remote-tracking branch 'origin/main' (01485d3d1)
+- refactor(webui): remove the Costs page and /api/costs endpoints (8d6c7809e)
+- docs: Update changelog for v0.18.4 (b906d4508)
+
 ## [v0.18.4] - 2026-09-17
 
 - fix(test): wait for agent teardown before temp-dir cleanup in concurrent delete test (daefd65a9)

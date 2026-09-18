@@ -16,7 +16,7 @@ import React from 'react';
  *     display:none, not unmount — chat state survives file opens).
  *
  * The editor manager is mocked with a controllable active buffer kind
- * (same pattern as EditorWorkspace.costs.test.tsx); jsdom matchMedia
+ * (focused-mock pattern); jsdom matchMedia
  * reports mobile (<768px) so the mobile branch renders.
  */
 

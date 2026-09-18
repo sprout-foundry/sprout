@@ -2,8 +2,7 @@
 /**
  * Sidebar provider-selection behavior tests.
  *
- * Uses the same focused-mock pattern as Sidebar.platformNav.test.tsx and
- * Sidebar.costsNav.test.tsx: heavy child panels and the model/event-handler
+ * Uses the same focused-mock pattern as Sidebar.platformNav.test.tsx: heavy child panels and the model/event-handler
  * hooks are mocked so the jsdom worker doesn't OOM. The real useSidebarModel
  * pulls ProviderCatalogContext + settings effects that churn under jsdom;
  * mocking it lets these tests verify the provider-selection wiring in the

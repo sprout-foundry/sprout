@@ -38,6 +38,20 @@ const (
 	// CalculateOutputBudget inflates the input estimate by this percent to
 	// get a worst-case figure to budget output against.
 	EstimationErrorPercent = 30
+	// BiasReservePercent caps the estimation-bias reserve at a share of the
+	// REMAINING space once the 30% input inflation would eat more than that.
+	// Set above EstimationErrorPercent so the cap is inert in the regime the
+	// inflation was calibrated for: it binds only when input exceeds ~57% of
+	// the window (0.4·remaining < 0.3·estimate). Below that line budgets are
+	// bit-identical to the uncapped math — including the historical cold-
+	// estimate case (est 116K vs real 156K on a 200K window, fully absorbed).
+	// Above it, the uncapped reserve grew to 50K+ tokens and starved
+	// ordinary big-prompt turns into finish=output_limit-at-the-floor (the
+	// failures this file's history documents); the cap yields instead, and a
+	// genuinely wrong cold estimate then fails loudly via the provider's
+	// rejection + seed's overflow-recovery compaction rather than silently
+	// truncating the response.
+	BiasReservePercent = 40
 	// BaseCushionPercent is a small fixed cushion (percent of context limit)
 	// for output-side rounding/formatting slop, on top of the estimation
 	// error margin above.
@@ -253,45 +267,42 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	// Calculate remaining space
 	remaining := contextLimit - inputTokens
 
-	// EstimateTokens is a heuristic (not a real BPE tokenizer): on tool-heavy
-	// prompts it has been observed to underestimate the true token count by
-	// 25-34%. Rather than reserving a buffer *on top of* the already-remaining
-	// space (which double-counts the same risk and, being additive, collapses
-	// to nothing once input crosses ~64% of a 200K window — see the
-	// "no premature collapse" regression test), inflate the input estimate
-	// itself to a worst-case figure and budget output against that.
-	worstCaseInput := inputTokens + (inputTokens*EstimationErrorPercent)/100
+	// Reserve for estimation bias, capped at a share of the remaining
+	// space. EstimateTokens is a heuristic (not a real BPE tokenizer): it
+	// has been observed to underestimate the true token count by 25-34% on
+	// tool-heavy prompts and to run HOT on prose/reasoning-heavy history.
+	// Inflating the estimate by EstimationErrorPercent captures the
+	// underestimate regime, but uncapped the reserve grows to 50K+ tokens
+	// on a 200K window and starved ordinary big-prompt turns (the
+	// finish=output_limit-at-the-floor failures this file's history
+	// documents). The cap bounds the posture: while remaining is large the
+	// full 30% inflation applies; as it shrinks the reserve yields rather
+	// than eating the response.
+	biasReserve := min(
+		(inputTokens*EstimationErrorPercent)/100,
+		(remaining*BiasReservePercent)/100,
+	)
 
 	// Small fixed cushion for output-side rounding/formatting slop, separate
 	// from the estimation-error margin above. Scales gently with window size
-	// but stays modest — the worst-case input inflation already carries most
-	// of the safety margin.
+	// but stays modest — the bias reserve already carries most of the safety
+	// margin.
 	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
 
-	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput := remaining - biasReserve - cushion
 
 	// Hard cap: max_tokens must never cause input + output to exceed
 	// the context limit. This is the last line of defense against
 	// estimation errors that slip past the margins above.
 	maxOutput = min(maxOutput, remaining)
 
-	// Taper zone: the worst-case math (estimate inflated by the observed
-	// error band plus cushion) has exhausted itself. The old behavior
-	// dropped to the MinOutputTokens floor here, which decapitated turns
-	// whose REAL remaining space was still large — the heuristic runs hot
-	// on prose/reasoning-heavy history, so a 9-15% bias was enough to
-	// reach this zone tens of thousands of tokens before the physical
-	// ceiling (finish=output_limit at exactly the floor value, prompts
-	// 80K-134K on a 200K window). Budget a proportionate share of the
-	// remaining space instead: the reserve left for estimation bias is
-	// the unspent quarter, and a true overflow fails loudly through the
-	// provider's rejection + recovery path rather than silently.
+	// Below the minimum viable output, fall back to the floor — but only
+	// when the real remaining space cannot cover it either. A reasoning
+	// turn needs thinking + one tool batch + prose; if the estimate was
+	// right and even the floor overflows, the provider rejects and seed's
+	// overflow-recovery compaction fires.
 	if maxOutput < MinOutputTokens {
-		proportional := (remaining * 3) / 4
-		if proportional < MinOutputTokens {
-			return min(MinOutputTokens, remaining), true
-		}
-		return proportional, true
+		return min(MinOutputTokens, remaining), true
 	}
 
 	return maxOutput, true
@@ -320,24 +331,22 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 
 	remaining := contextLimit - totalInput
 
-	// Only inflate the heuristic portion — the anchored portion is already
-	// a real measurement with no estimation error.
-	worstCaseHeuristic := heuristicInput + (heuristicInput*EstimationErrorPercent)/100
-	worstCaseInput := anchoredInput + worstCaseHeuristic
+	// Bias reserve on the heuristic portion only — the anchored portion is
+	// a real measurement with no estimation error. Same cap as
+	// CalculateOutputBudget so the two variants agree in the taper zone.
+	biasReserve := min(
+		(heuristicInput*EstimationErrorPercent)/100,
+		(remaining*BiasReservePercent)/100,
+	)
 
 	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
 
-	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput := remaining - biasReserve - cushion
 	maxOutput = min(maxOutput, remaining)
 
-	// Same taper-zone fix as CalculateOutputBudget: proportional share of
-	// the remaining space instead of a fixed floor drop.
+	// Same floor semantics as CalculateOutputBudget.
 	if maxOutput < MinOutputTokens {
-		proportional := (remaining * 3) / 4
-		if proportional < MinOutputTokens {
-			return min(MinOutputTokens, remaining), true
-		}
-		return proportional, true
+		return min(MinOutputTokens, remaining), true
 	}
 
 	return maxOutput, true

@@ -392,49 +392,53 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ## SP-140-7 — Human Co-Editing (`roadmap/SP-140-7-co-editing.md`) — depends on 6.1 (live tree), 6.f wiring (agent panel)
 
-- [ ] **7.1** Safe-write seam: `/api/file` POST accepts opt-in
+- [x] **7.1** Safe-write seam: `/api/file` POST accepts opt-in
       `baseMtime`/`baseHash`; mismatch → 409 with current revision,
       nothing written; omitted → behavior unchanged (Code mode
       regression-pinned). `designApiWrite` gains
-      `writeAssetIfUnchanged` (+ feedback/layout/token safe variants)
-      threading the loaded revision. Spec: SP-140-7 §7a.
-- [ ] **7.2** Incoming-change awareness: design surfaces subscribe to
+      `writeAssetIfUnchanged` (+ `DesignWriteConflictError`,
+      `force` for the Keep-mine path) threading the loaded revision.
+      Spec: SP-140-7 §7a.
+- [x] **7.2** Incoming-change awareness: design surfaces subscribe to
       the `agent-file-changed` bridge filtered to `design/`; not-editing
-      → silent asset refetch (merged with 6.1's fetch path); editing →
-      non-blocking conflict banner (Review = base→mine vs base→theirs
-      split; Keep mine = guarded-bypass write + restore action; Take
-      theirs = reload); "agent working" indicator on the health strip
-      from `isProcessing`. Spec: SP-140-7 §7b.
-- [ ] **7.3** Token editing: structured leaf editors in `TokensTree`
-      (color swatch+hex, dimension number+unit); surgical DTCG edit
-      (parse → one `$value` → canonical stringify) via the safe write;
-      light client validation only (authoritative check is
-      `design_validate` via the strip); alias warning from a `tokenRefs`
-      addition to the §6b status payload. Depends on 7.1. Spec:
-      SP-140-7 §7c.
-- [ ] **7.4** Screen status curation: draft/review/ready menu on cards
-      + detail pane; structured README manifest rewrite (marker lines
-      only, via `parseManifestStatuses`); unparsable manifest → open in
-      editor, never clobbered. Depends on 7.1. Spec: SP-140-7 §7d.
-- [ ] **7.5** Drag-and-drop gestures (each a pure gesture→write model +
-      pointer adapter): pin drag persists `at` coords; screen card
-      reorder persists README `Screens:` order (needs `listAssets` to
-      expose manifest order; grid follows it). Explicitly not built:
-      token-drag-onto-wireframe (prefill instead), asset moves, OS
-      drop. Spec: SP-140-7 §7e.
-- [ ] **7.6** Review parity + co-commit doc: test pinning that webui
-      writes appear in the per-turn strip beside agent edits;
-      one-paragraph co-commit note in the design-system skill's sync
-      section; ChangeTracker scope unchanged (no HTTP-write tracking).
-      Spec: SP-140-7 §7f.
+      → silent asset refetch; editing + diverged → non-blocking conflict
+      banner (Review = side-by-side compare; Keep mine = guarded-bypass
+      write + restore action; Take theirs = reload); identical text =
+      silent refresh. Spec: SP-140-7 §7b.
+- [x] **7.3** Token editing: structured leaf editor in the Tokens detail
+      pane (color well + text; unit-preserving coercion); surgical DTCG
+      edit (parse → one `$value` → canonical stringify) via the safe
+      write; alias warning from the 6.2 `tokenRefs` payload; a §7a
+      conflict surfaces reload-and-retry (no forced write on the
+      semantic layer). Depends on 7.1. Spec: SP-140-7 §7c.
+- [x] **7.4** Screen status curation: draft/review/ready/clear menu on
+      the screen detail; structured README manifest rewrite (marker
+      lines only, the parseManifestStatuses vocabulary); unparsable
+      manifest → open in editor, never clobbered (zero-writes
+      asserted). Depends on 7.1. Spec: SP-140-7 §7d.
+- [x] **7.5** Drag-and-drop gestures (each a pure gesture→write model +
+      thin adapter): pin drag persists `at` coords (coordinate-only,
+      pointer capture); screen card reorder persists README `Screens:`
+      order (order-only rewrite; statuses/summaries/frames byte-stable;
+      unmentioned stems trail). Explicitly not built: token-drag-onto-
+      wireframe (prefill instead), asset moves, OS drop. Spec:
+      SP-140-7 §7e.
+- [x] **7.6** Review parity + co-commit doc: Go test pinning that webui
+      writes publish the same `file_changed` event agent writes publish
+      (the per-turn strip treats both identically); co-commit bullet in
+      the design-system skill covering human edits from Design mode;
+      ChangeTracker scope unchanged (no HTTP-write tracking). Spec:
+      SP-140-7 §7f.
 
 ---
 
 ## Status
 
-SP-140-6 items 6.1–6.8 and SP-140-7 items 7.1–7.6 are open (specs
-drafted 2026-09-19, not started). SP-140-1…5 are complete on
-`feat-design-workspace` (sections above).
+SP-140-6 (loop surface, items 6.1–6.8) and SP-140-7 (human co-editing,
+items 7.1–7.6) shipped on `feat-design-workspace` 2026-09-19. Deferred
+from 6.8 with rationale: the Playwright strip→finding→pin e2e (needs the
+seeded-stack harness; component coverage covers the flows).
+SP-140-1…5 are complete on `feat-design-workspace` (sections above).
 The bg-sessions inactivity-expiry item
 (quiet watchers killed by the 2h LastPolled expiry) shipped in
 `bg-sessions: activity-based expiry`: running sessions are no longer reaped

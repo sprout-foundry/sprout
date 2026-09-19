@@ -323,9 +323,115 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ---
 
+## SP-140-6 — The Loop Surface (`roadmap/SP-140-6-loop-surface.md`) — depends on 3.x/4.x/5.x (shipped)
+
+- [x] **6.1** Live tree: `DesignWorkspaceProvider` refetches the
+      inventory on window focus, on a 30 s interval while Design mode is
+      active, and via a manual refresh control; a refetch that no longer
+      sees the selected asset clears selection; the fetch stays gated on
+      `active` (asserted: no design fetches from a Code-mode session).
+      Stale-response safety: a monotonic fetch sequence means a slow
+      older response can never overwrite a newer one. Spec: SP-140-6 §6a.
+- [x] **6.2** Design status endpoint: pure `pkg/design/status.go`
+      (`BuildDesignStatus` — aggregation only over the exported
+      `ValidateTree`, drift, and `ScanFeedbackDir` surfaces, capped
+      findings list, deterministic order) + read-only
+      `GET /api/design/status` handler mounted via a new
+      `registerDesignRoutes` group in `pkg/webui/routes.go`;
+      no-`design/` workspaces return `{exists: false}` with 200.
+      Cross-check test: endpoint values equal what `design_validate` /
+      `design_assets` report for the same fixture tree. Spec:
+      SP-140-6 §6b.
+- [ ] **6.3** Health strip atop the design surface: validate tally
+      chips, the two drift rows (only ahead rows render; synced shows a
+      quiet mark), pending-feedback count, refresh control; every
+      chip's click-through lands on the surface it names (finding →
+      asset selection, design-ahead → Tokens, code-ahead → agent panel
+      prefill, pending → annotated asset). Token-only CSS; testid
+      registry entries. Depends on 6.2. Spec: SP-140-6 §6c.
+- [x] **6.4** Critique findings sidecar: `design_critique` writes
+      `design/.cache/renders/findings/<target-slug>.findings.json`
+      (`target`, `rubric`, `sourceHash`, `generated`, `findings[]`
+      with blocker/major/minor/info severity; `visual: false` for
+      non-vision runs); keyed on the target label, not the artifact
+      stem (artifact stems collide across tiers — wireframes/login.svg
+      and screens/login.html both render to renders/login.png);
+      derived output — `design_validate` does not emit findings for it.
+      Spec: SP-140-6 §6d.
+- [ ] **6.5** Annotation pins: pin layer over the detail pane's
+      screen preview and wireframe nodes rendering each §4d annotation
+      at its `at` coordinates, colored by area from palette tokens,
+      open vs resolved visually distinct; pin click focuses the
+      annotation in the pane; grid cards show pending counts;
+      click-to-place during "Add feedback" records the clicked point
+      as `at` (center default preserved when placement is skipped).
+      Spec: SP-140-6 §6e.
+- [ ] **6.6** Agent presence: DesignShell agent panel (collapsible;
+      bottom sheet on mobile) rendering from the `WorkspaceShellProps`
+      chat payload the shell already receives — no second query client;
+      "Ask the designer" prefill affordances on assets and remedy rows
+      (seed the input, never auto-send); stays inside the lazy design
+      chunk. Spec: SP-140-6 §6f.
+- [ ] **6.7** Loop results in the detail pane: last critique from the
+      §6d sidecar with a stale marker (`generated` < asset mtime) and
+      a "no critique recorded" prefill when absent; code-ahead assets
+      show the "Adopt via agent" prefill (UI performs no `design/`
+      writes — asserted). Depends on 6.2 + 6.4. Spec: SP-140-6 §6g.
+- [ ] **6.8** Umbrella: Playwright spec covering strip → finding →
+      detail pane → pin; house-rule sweep (prettier, 500-line rule,
+      lazy-chunk boundary via `designChunk.test.ts`, testid forward
+      references); `make vet && make fmt-check && make lint &&
+      make build-all`, `go test ./...`, webui vitest green. Spec:
+      SP-140-6 §6h + AC.
+
+---
+
+## SP-140-7 — Human Co-Editing (`roadmap/SP-140-7-co-editing.md`) — depends on 6.1 (live tree), 6.f wiring (agent panel)
+
+- [ ] **7.1** Safe-write seam: `/api/file` POST accepts opt-in
+      `baseMtime`/`baseHash`; mismatch → 409 with current revision,
+      nothing written; omitted → behavior unchanged (Code mode
+      regression-pinned). `designApiWrite` gains
+      `writeAssetIfUnchanged` (+ feedback/layout/token safe variants)
+      threading the loaded revision. Spec: SP-140-7 §7a.
+- [ ] **7.2** Incoming-change awareness: design surfaces subscribe to
+      the `agent-file-changed` bridge filtered to `design/`; not-editing
+      → silent asset refetch (merged with 6.1's fetch path); editing →
+      non-blocking conflict banner (Review = base→mine vs base→theirs
+      split; Keep mine = guarded-bypass write + restore action; Take
+      theirs = reload); "agent working" indicator on the health strip
+      from `isProcessing`. Spec: SP-140-7 §7b.
+- [ ] **7.3** Token editing: structured leaf editors in `TokensTree`
+      (color swatch+hex, dimension number+unit); surgical DTCG edit
+      (parse → one `$value` → canonical stringify) via the safe write;
+      light client validation only (authoritative check is
+      `design_validate` via the strip); alias warning from a `tokenRefs`
+      addition to the §6b status payload. Depends on 7.1. Spec:
+      SP-140-7 §7c.
+- [ ] **7.4** Screen status curation: draft/review/ready menu on cards
+      + detail pane; structured README manifest rewrite (marker lines
+      only, via `parseManifestStatuses`); unparsable manifest → open in
+      editor, never clobbered. Depends on 7.1. Spec: SP-140-7 §7d.
+- [ ] **7.5** Drag-and-drop gestures (each a pure gesture→write model +
+      pointer adapter): pin drag persists `at` coords; screen card
+      reorder persists README `Screens:` order (needs `listAssets` to
+      expose manifest order; grid follows it). Explicitly not built:
+      token-drag-onto-wireframe (prefill instead), asset moves, OS
+      drop. Spec: SP-140-7 §7e.
+- [ ] **7.6** Review parity + co-commit doc: test pinning that webui
+      writes appear in the per-turn strip beside agent edits;
+      one-paragraph co-commit note in the design-system skill's sync
+      section; ChangeTracker scope unchanged (no HTTP-write tracking).
+      Spec: SP-140-7 §7f.
+
+---
+
 ## Status
 
-No active items as of 2026-09-15. The bg-sessions inactivity-expiry item
+SP-140-6 items 6.1–6.8 and SP-140-7 items 7.1–7.6 are open (specs
+drafted 2026-09-19, not started). SP-140-1…5 are complete on
+`feat-design-workspace` (sections above).
+The bg-sessions inactivity-expiry item
 (quiet watchers killed by the 2h LastPolled expiry) shipped in
 `bg-sessions: activity-based expiry`: running sessions are no longer reaped
 for being unpolled — cleanup probes pid liveness at TTL boundaries, renews

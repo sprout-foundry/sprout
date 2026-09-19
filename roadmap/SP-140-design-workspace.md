@@ -1,8 +1,10 @@
 # SP-140 — Design Workspace: Agent-Native UX Design on Open Formats
 
-> **Status (2026-09-15):** Draft. Umbrella spec for SP-140-1 … SP-140-5.
-> No phases started. This spec is the coordination point: directory contract,
-> phase map, cross-spec invariants, and the open-format charter.
+> **Status (2026-09-19):** Draft. Umbrella spec for SP-140-1 … SP-140-5
+> (all shipped on `feat-design-workspace`) and SP-140-6 — the loop
+> surface (drafted 2026-09-19, not started). This spec is the
+> coordination point: directory contract, phase map, cross-spec
+> invariants, and the open-format charter.
 
 ## Problem
 
@@ -115,6 +117,8 @@ external tools equal citizens.
 | 3 | SP-140-3 | WebUI DesignView + canvas (React Flow over mermaid, screen nodes, tokens viewer) | 140-1 (140-2 for end-to-end) |
 | 4 | SP-140-4 | Visual loop: render→critique, consistency checks, human annotations | 140-2, 140-3 |
 | 5 | SP-140-5 | Design↔code sync (continuous, bidirectional): token export (CSS vars / TS / Tailwind `@theme`), screen scaffold briefs (`design_brief`), `design_sync` code→design import, directional drift reporting | 140-1 (140-4 for full value) |
+| 6 | SP-140-6 | Loop surface: agent state in the design space — live inventory, `/api/design/status` + health strip, annotation pins, agent panel in Design mode, critique findings sidecar | 140-3/4/5 |
+| 7 | SP-140-7 | Human co-editing: revision-checked writes (409 seam), incoming-change conflict UX, structured token/status editing, classified drag-and-drop gestures, review parity with agent edits | 140-6 (7.1 needs 6.a/6.f; 7.3 needs 6.b) |
 
 Phases 2 and 3 are independent of each other and can proceed in parallel
 after Phase 1. Only Phase 5's token export (SP-140-5 §5a) needs Phase 1
@@ -189,7 +193,8 @@ exists; the drift reporting (§5c) additionally needs Phase 2's
 
 ## Acceptance criteria (umbrella)
 
-- [ ] All five child specs shipped.
+- [ ] All five child specs shipped (SP-140-6 extends the shipped surface;
+      its own ACs live in its spec).
 - [ ] End-to-end: a fresh workspace with no `design/` directory goes from
       one prompt ("design a mobile check-deposit flow for this bank app")
       to a validated `design/` tree (tokens, wireframes, flow) with the

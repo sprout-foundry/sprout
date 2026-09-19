@@ -26,6 +26,21 @@ function detailName(path: string): string {
   return assetDisplayName(path.split('/').pop() ?? path);
 }
 
+/**
+ * §4d feedback and §6g critique flows are asset-scoped (screens, wireframes,
+ * flows — any artifact a reviewer can annotate per SP-140-4): only token
+ * selections skip them, because a DTCG file's detail pane is an editor, not
+ * a review target. Hosts spell screen paths two ways — design-root-relative
+ * (`screens/login.html`, the workspace context's selection) and
+ * `design/`-prefixed (status findings, some tests) — so accept both.
+ */
+function isAnnotatableAsset(path: string): boolean {
+  if (path.includes('/tokens/') || path.startsWith('tokens/') || path.endsWith('.tokens.json')) {
+    return false;
+  }
+  return true;
+}
+
 export interface DesignDetailPaneProps {
   /** Currently selected asset path, relative to the design/ root. */
   path?: string | null;
@@ -75,11 +90,19 @@ export default function DesignDetailPane({
               Open in editor
             </button>
           ) : null}
-          <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
-          <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
+          {/* §4d feedback flows are asset-scoped, tokens excluded
+              (see isAnnotatableAsset). */}
+          {isAnnotatableAsset(path) ? (
+            <>
+              <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
+              <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
+            </>
+          ) : null}
           {children}
           {/* §6g: last critique + drift context. Advisory; last in the pane. */}
-          <LoopResults path={path} assetModified={assetModified} codeAhead={codeAhead} onAskAgent={onAskAgent} />
+          {isAnnotatableAsset(path) ? (
+            <LoopResults path={path} assetModified={assetModified} codeAhead={codeAhead} onAskAgent={onAskAgent} />
+          ) : null}
         </>
       ) : (
         <div className="design-detail-empty">

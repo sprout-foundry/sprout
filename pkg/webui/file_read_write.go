@@ -67,6 +67,10 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 
 	canonicalPath, err := canonicalizePath(path, workspaceRoot, false)
 	if err != nil {
+		if _, notExist := err.(*pathNotExistError); notExist {
+			writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
+			return
+		}
 		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
@@ -74,6 +78,10 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	// Check if file exists and is not a directory
 	info, err := os.Stat(canonicalPath)
 	if err != nil {
+		// 404, not 400: clients (readAsset in webui) treat 404 as "absent
+		// file" — the §4d feedback flow depends on a missing file yielding
+		// the empty document, not a transport error. A missing file is a
+		// normal state for optional sidecars (design/feedback/*).
 		writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
 		return
 	}

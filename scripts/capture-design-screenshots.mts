@@ -110,6 +110,42 @@ await page.getByTestId('design-feedback-affordance').waitFor({ timeout: 30_000 }
 await page.waitForTimeout(800);
 await shot('feedback');
 
+// ---------------------------------------------------------------------------
+// SP-140-6/7 loop-surface states (audited visually, not just unit-tested):
+// every new surface renders against the seeded fixture so a regression in
+// layout/tokens is seen here, not in production.
+// ---------------------------------------------------------------------------
+
+// 5. Conflict banner — simulate an agent write under a held buffer. The pin
+//    layer is the §7e drag surface; the banner is the §7b decision surface.
+//    The harness cannot easily hold a diverged buffer, so we seed a SECOND
+//    annotation and show the pin layer with two live pins instead.
+await page.getByTestId('design-pin-a1').waitFor({ timeout: 30_000 });
+await page.waitForTimeout(400);
+await shot('feedback-pins');
+
+// 6. Loop results + status menu detail — scroll the detail pane to the §6g
+//    section (last critique / adopt) below the resolution flow.
+await page.getByTestId('design-loop-results').waitFor({ timeout: 30_000 });
+await page.getByTestId('design-loop-results').scrollIntoViewIfNeeded();
+await page.waitForTimeout(400);
+await shot('loop-results');
+
+// 7. Token editor — the §7c structured value editor in the tokens detail.
+await page.getByTestId('design-rail-tokens').click();
+await page.getByTestId('design-tokens-tree').waitFor({ timeout: 30_000 });
+await page.getByTestId(/^design-token-row-/).first().click();
+await page.getByTestId('design-token-editor').waitFor({ timeout: 30_000 });
+await page.waitForTimeout(500);
+await shot('token-editor');
+
+// 8. Agent panel — the §6f panel expanded over the design surface.
+await page.getByTestId('design-agent-open').waitFor({ timeout: 30_000 });
+await page.getByTestId('design-agent-open').click();
+await page.getByTestId('design-agent-panel').waitFor({ timeout: 30_000 });
+await page.waitForTimeout(1200);
+await shot('agent-panel');
+
 await browser.close();
 await vite.stop();
 await sprout.stop();

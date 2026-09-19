@@ -967,3 +967,318 @@
 .design-tokens-alias.is-dangling {
   color: var(--accent-warning, var(--text-secondary));
 }
+
+/* ---------------------------------------------------------------------------
+ * Health strip (SP-140-6 §6c) — the design surface's loop-status bar.
+ * --------------------------------------------------------------------------- */
+
+.design-surface {
+  display: flex;
+  flex-direction: column;
+}
+
+.design-health {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-xs, 4px) var(--space-md, 12px);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  min-height: 28px;
+  flex: 0 0 auto;
+}
+
+.design-health-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.design-health-chip,
+.design-health-ok,
+.design-health-synced,
+.design-health-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.6;
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 var(--space-sm, 8px);
+  white-space: nowrap;
+}
+
+.design-health-chip {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+}
+
+.design-health-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-health-chip-errors {
+  border-color: var(--accent-danger, var(--border-strong));
+  color: var(--accent-danger, inherit);
+}
+
+.design-health-chip-warnings {
+  border-color: var(--accent-warning, var(--border-default));
+  color: var(--accent-warning, inherit);
+}
+
+.design-health-chip-infos,
+.design-health-chip-drift,
+.design-health-chip-feedback {
+  border-color: var(--accent-info, var(--border-default));
+  color: var(--accent-info, var(--text-primary, inherit));
+}
+
+.design-health-ok,
+.design-health-synced {
+  color: var(--accent-success, var(--text-secondary));
+}
+
+.design-health-muted {
+  color: var(--text-secondary);
+}
+
+.design-health-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px;
+}
+
+.design-health-refresh:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+.design-health-refresh.busy {
+  animation: design-health-spin 1s linear infinite;
+}
+
+@keyframes design-health-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Annotation pins (SP-140-6 §6e) — the pin layer over a rendered screen.
+ * --------------------------------------------------------------------------- */
+
+.design-screen-preview {
+  position: relative;
+}
+
+.design-pins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.design-pins-placing {
+  pointer-events: auto;
+  cursor: crosshair;
+  outline: 1px dashed var(--accent-info, var(--border-strong));
+}
+
+.design-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--accent-info, var(--bg-primary));
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+  padding: 1px 3px;
+  pointer-events: auto;
+  font-size: var(--text-sm, 11px);
+  line-height: 1.4;
+}
+
+/* Open annotations read as urgent; resolved ones quiet down. */
+.design-pin-resolved {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+  opacity: 0.75;
+}
+
+.design-pin-selected {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+/* Area hues from the house palette tokens only (§6h: no raw hex). */
+.design-pin-area-hierarchy {
+  background: var(--accent-warning);
+  color: var(--text-primary, inherit);
+}
+
+.design-pin-area-contrast,
+.design-pin-area-touch-targets {
+  background: var(--accent-danger, var(--accent-warning));
+  color: var(--text-primary, inherit);
+}
+
+.design-pin-area-consistency {
+  background: var(--accent-primary);
+  color: var(--text-primary, invert);
+}
+
+.design-pin-badge {
+  font-family: var(--font-mono, monospace);
+}
+
+.design-screen-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--accent-warning);
+  color: var(--text-primary, inherit);
+  font-size: var(--text-sm, 11px);
+  padding: 0 4px;
+}
+
+.design-feedback-place {
+  margin: var(--space-xs, 4px) 0;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-feedback-place:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+/* ---------------------------------------------------------------------------
+ * Agent panel (SP-140-6 §6f) — agent presence inside the Design shell.
+ * --------------------------------------------------------------------------- */
+
+/* The shell's body becomes a row: the surface grows, the panel is a fixed
+ * side column. Only active while Design mode's shell is mounted. */
+.main-content.design-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.design-shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.design-shell-body > .design-surface {
+  flex: 1;
+  min-width: 0;
+}
+
+.design-agent-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 40vw);
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  min-height: 0;
+}
+
+.design-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.design-agent-title {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+}
+
+.design-agent-close {
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.design-agent-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+.design-agent-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.design-agent-chat > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Collapsed: the ask-the-designer affordance. */
+.design-agent-fab {
+  position: absolute;
+  right: var(--space-md, 12px);
+  bottom: var(--space-md, 12px);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-float);
+}
+
+.design-agent-fab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+/* Mobile: the panel overlays the surface instead of squeezing it. */
+@media (max-width: 768px) {
+  .design-agent-panel {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(92vw, 420px);
+    z-index: 30;
+    box-shadow: var(--shadow-float);
+  }
+}

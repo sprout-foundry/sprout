@@ -104,9 +104,10 @@ type DesignStatus struct {
 	Summary string `json:"summary"`
 }
 
-// statusFindingSort orders findings deterministically (file, line, severity,
-// rule, message) before capping, so the capped list is stable across runs and
-// machines regardless of map iteration inside the scanners.
+// statusFindingSort orders findings deterministically before capping, using
+// the validator's own canonical key order (file, line, rule, message — the
+// same precedence as sortFindings in tokens.go), so the capped "first N" IS
+// the validator's first N and past-cap drops agree with design_validate.
 func statusFindingSort(findings []Finding) {
 	sort.Slice(findings, func(i, j int) bool {
 		if findings[i].File != findings[j].File {
@@ -114,9 +115,6 @@ func statusFindingSort(findings []Finding) {
 		}
 		if findings[i].Line != findings[j].Line {
 			return findings[i].Line < findings[j].Line
-		}
-		if findings[i].Severity != findings[j].Severity {
-			return findings[i].Severity < findings[j].Severity
 		}
 		if findings[i].Rule != findings[j].Rule {
 			return findings[i].Rule < findings[j].Rule
@@ -242,6 +240,11 @@ func countTokenRefs(root string) map[string]int {
 func BuildDesignStatus(root string, touched []SyncFileInput) *DesignStatus {
 	status := &DesignStatus{Exists: FileExists(root)}
 	if !status.Exists {
+		// Zeroed sections still marshal as real arrays/objects, not nulls —
+		// the TS contract (designStatusApi.ts) types findings/pending as
+		// non-optional arrays and consumers iterate them after an exists check.
+		status.Validation = StatusValidation{Findings: []StatusFinding{}}
+		status.Feedback = StatusFeedback{Pending: []StatusFeedbackEntry{}}
 		status.Drift.Synced = true
 		status.Summary = "No design/ tree in this workspace."
 		return status
@@ -257,6 +260,12 @@ func BuildDesignStatus(root string, touched []SyncFileInput) *DesignStatus {
 
 	fbStates, fbErr := ScanFeedbackDir(root)
 	status.Feedback = statusFeedback(fbStates, fbErr)
+	if fbErr != nil {
+		// A feedback read failure must not read as "no pending feedback"
+		// (the same never-false-clean rule as the validation walk above).
+		status.Summary = fmt.Sprintf("design status incomplete: feedback scan failed: %v", fbErr)
+		return status
+	}
 
 	status.TokenRefs = countTokenRefs(root)
 	status.Summary = statusSummary(status)

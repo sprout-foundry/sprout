@@ -279,27 +279,7 @@ func extractKeyCommentsFromDiff(diff string) string {
 
 // isImportantComment determines if a comment is important enough to highlight
 func isImportantComment(comment string) bool {
-	commentUpper := strings.ToUpper(comment)
-
-	// Keywords that indicate important context
-	importantKeywords := []string{
-		"CRITICAL", "IMPORTANT", "NOTE:", "WARNING", "TODO:", "FIXME",
-		"HACK", "XXX", "BUG", "SECURITY", "FIX", "WORKAROUND",
-		"BECAUSE", "REASON:", "WHY:", "INTENT:", "PURPOSE:",
-	}
-
-	for _, keyword := range importantKeywords {
-		if strings.Contains(commentUpper, keyword) {
-			return true
-		}
-	}
-
-	// Multi-line comments are usually important
-	if strings.HasPrefix(comment, "//") && len(comment) > 50 {
-		return true
-	}
-
-	return false
+	return codereview.IsImportantComment(comment)
 }
 
 // categorizeChanges analyzes the diff and categorizes the types of changes

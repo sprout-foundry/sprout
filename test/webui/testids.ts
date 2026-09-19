@@ -474,6 +474,11 @@ const TESTIDS = {
   "design-token-saved": "design-token-saved",
   "design-token-conflict": "design-token-conflict",
   "design-token-error": "design-token-error",
+  // SP-140-7 status menu (§7d, ScreenStatusMenu.tsx)
+  "design-status-menu-login": "design-status-menu-login", // pattern design-status-menu-${stem}
+  "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}
+  "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
+  "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
 } as const;
 
 // Derived set for O(1) coverage lookups

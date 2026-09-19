@@ -53,6 +53,7 @@ import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
 import ConflictBanner from './ConflictBanner';
 import type { DesignTabProps } from './DesignTabProps';
+import ScreenStatusMenu from './ScreenStatusMenu';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -491,7 +492,11 @@ export default function ScreensGrid({
 
       {selectedCard ? (
         <div className="design-screen-detail" data-testid="design-screen-detail">
-          <h3 className="design-detail-heading">{selectedCard.name}</h3>
+          <h3 className="design-detail-heading">
+            {selectedCard.name}
+            {/* §7d: status curation — structured manifest rewrite. */}
+            <ScreenStatusMenu stem={selectedCard.name.replace(/\.[^.]+$/, '')} />
+          </h3>
           {error ? (
             <p className="design-tab-placeholder" data-testid="design-screen-error">
               {error}

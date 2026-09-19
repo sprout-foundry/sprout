@@ -1539,3 +1539,42 @@
   color: var(--accent-danger, var(--accent-warning));
   font-size: var(--text-sm, 12px);
 }
+
+/* ---------------------------------------------------------------------------
+ * Screen status menu (SP-140-7 §7d)
+ * --------------------------------------------------------------------------- */
+
+.design-status-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  margin-left: var(--space-sm, 8px);
+  vertical-align: middle;
+}
+
+.design-status-option {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 1px var(--space-xs, 4px);
+  cursor: pointer;
+  font-size: var(--text-sm, 11px);
+  text-transform: capitalize;
+}
+
+.design-status-option:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary, inherit);
+}
+
+.design-status-option.active {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.design-status-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

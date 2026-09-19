@@ -224,11 +224,6 @@ func (m *MockLLMProvider) SupportsVision() bool {
 	return false
 }
 
-// SupportsConversationalVision returns false; the mock never participates in inline multimodal turns.
-func (m *MockLLMProvider) SupportsConversationalVision() bool {
-	return false
-}
-
 // VisionCapabilities returns the safe defaults. Required by api.ClientInterface; keeps mock-routed requests harmless.
 func (m *MockLLMProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilitiesDefault()

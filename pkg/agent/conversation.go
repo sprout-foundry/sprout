@@ -8,7 +8,6 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -186,7 +185,7 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 	if a == nil || a.client == nil {
 		return false
 	}
-	if !a.effectiveVisionSupport() {
+	if !api.ResolveVisionCapability(a.client).AcceptsImages {
 		return false
 	}
 
@@ -234,7 +233,8 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 const maxTotalImagePayloadBytesDefault = 20 * 1024 * 1024
 
 // Matches the placeholder inserted by the console when a user pastes an image.
-var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
+// Legacy paste placeholder regex lives in pkg/console (legacyPastedImageRe);
+// parsing goes through console.ParsePastedImagePlaceholders (SP-140).
 
 // Fallback longest-edge cap for embedded images (1568px, per Anthropic recommendation).
 const visionEmbedMaxEdgePxDefault = 1568
@@ -289,7 +289,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && a.effectiveConversationalVision(c) {
+	if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
 		return a.processImagesAsMultimodal(query)
 	}
 
@@ -298,66 +298,62 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && a.effectiveVisionSupport() {
-		enhancedQuery, err := a.processImagesViaOCR(query)
-		if err != nil {
-			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
-			return nil, query, nil
-		}
-		return nil, enhancedQuery, nil
+	// Non-vision primary: delegate to a vision model when one exists;
+	// otherwise fall back to steering the model at analyze_image_content.
+	enhanced, delegated := a.processImagesByDelegation(query, paths)
+	if delegated {
+		a.Logger().Debug("[img] Delegated %d pasted image(s) to a vision model\n", len(paths))
 	}
-
-	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
-}
-
-// effectiveConversationalVision reports whether the model is suitable for
-// inline multimodal chat messages, consulting probe ground truth when
-// available. If the probe says the model has no vision, we skip the
-// conversational path regardless of config flags.
-func (a *Agent) effectiveConversationalVision(c api.ClientInterface) bool {
-	if probe := a.probeVisionResult(); probe != nil && !*probe {
-		return false
-	}
-	return supportsConversationalVision(c)
-}
-
-// supportsConversationalVision reports whether the client's vision capability
-// is suitable for inline multimodal chat. Falls back to true when the client
-// doesn't implement SupportsConversationalVision (older or non-Ollama clients).
-func supportsConversationalVision(c api.ClientInterface) bool {
-	if typed, ok := c.(interface{ SupportsConversationalVision() bool }); ok {
-		return typed.SupportsConversationalVision()
-	}
-	return c.SupportsVision()
+	return nil, enhanced, nil
 }
 
 func extractPastedImagePaths(query string) []string {
-	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
-	if len(uniqueMatches) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(uniqueMatches))
-	paths := make([]string, 0, len(uniqueMatches))
-	for _, loc := range uniqueMatches {
-		filePath := strings.TrimSpace(query[loc[2]:loc[3]])
-		if filePath == "" {
-			continue
-		}
-		if _, exists := seen[filePath]; exists {
-			continue
-		}
-		seen[filePath] = struct{}{}
-		paths = append(paths, filePath)
-	}
-	return paths
+	return console.ParsePastedImagePlaceholders(query)
 }
 
+// processImagesByDelegation is the inline chat path's delegation rung
+// (SP-140 Phase 3): the primary model cannot see, so pasted images are
+// described by the best available vision model and the structured,
+// provenance-labeled descriptions are injected into the query. Falls back
+// to the analyze-tool prompt when no delegation client exists — the model
+// can still help itself via analyze_image_content.
+func (a *Agent) processImagesByDelegation(query string, paths []string) (string, bool) {
+	if !tools.HasVisionCapability() {
+		return a.buildNonVisionImageToolPrompt(query, paths), false
+	}
+
+	var b strings.Builder
+	delegated := 0
+	for i, path := range paths {
+		delegate, err := tools.DelegateImageDescriptions(a.InterruptCtx(), nil, path)
+		if err != nil {
+			a.Logger().Debug("[WARN] image delegation failed for %s: %v\n", path, err)
+			b.WriteString(fmt.Sprintf("[image %d of %d: %s — description unavailable]\n", i+1, len(paths), filepath.Base(path)))
+			continue
+		}
+		delegated++
+		b.WriteString(fmt.Sprintf("[image %d of %d: %s — described via %s/%s]\n%s\n\n",
+			i+1, len(paths), filepath.Base(path), delegate.Provider, delegate.Model, delegate.Description))
+	}
+
+	if delegated == 0 {
+		return a.buildNonVisionImageToolPrompt(query, paths), false
+	}
+
+	b.WriteString("\nOriginal user request (images above were described by a separate vision model; call analyze_image_content for higher-fidelity analysis):\n")
+	b.WriteString(query)
+	return b.String(), true
+}
+
+// buildNonVisionImageToolPrompt steers a non-multimodal model to the
+// analyze_image_content tool. Kept as the final fallback when delegation
+// itself is unavailable (no vision client at all).
 func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) string {
 	var b strings.Builder
-	b.WriteString("OCR Trigger Policy (MANDATORY): The active model is non-multimodal. ")
+	b.WriteString("Image Analysis Policy: The active model is non-multimodal. ")
 	b.WriteString("Before answering, call analyze_image_content for each pasted image path below. ")
-	b.WriteString("Use analysis_mode=\"ocr\" first, then run additional image analysis as needed.\n")
+	b.WriteString("Use the default mode (general) first — it describes layout, text, and UI structure. ")
+	b.WriteString("Only follow with analysis_mode=\"ocr\" if you need verbatim text extraction.\n")
 	b.WriteString("Pasted image paths:\n")
 	for _, path := range paths {
 		b.WriteString("- ")
@@ -388,21 +384,17 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	var images []api.ImageData
 	totalBytes := 0
 
-	uniqueMatches := pastedImagePlaceholderRe.FindAllStringSubmatchIndex(query, -1)
-	if len(uniqueMatches) == 0 {
+	imagePaths := console.ParsePastedImagePlaceholders(query)
+	if len(imagePaths) == 0 {
 		return nil, query, nil
 	}
 
 	var placeholders []placeholderInfo
-	seen := make(map[string]struct{}, len(uniqueMatches))
-	for _, loc := range uniqueMatches {
-		fullMatch := query[loc[0]:loc[1]]
-		filePath := query[loc[2]:loc[3]]
-		if _, exists := seen[filePath]; exists {
-			continue
-		}
-		seen[filePath] = struct{}{}
-		placeholders = append(placeholders, placeholderInfo{fullMatch: fullMatch, filePath: filePath})
+	for _, filePath := range imagePaths {
+		placeholders = append(placeholders, placeholderInfo{
+			fullMatch: console.PastedImagePlaceholder(filePath),
+			filePath:  filePath,
+		})
 	}
 
 	inlinePlaceholders, overflowPlaceholders := a.splitPlaceholdersWithBatchSplit(placeholders, caps, maxImageCount, maxTotalImagePayloadBytes)
@@ -527,7 +519,7 @@ func (a *Agent) splitPlaceholdersWithBatchSplit(placeholders []placeholderInfo, 
 		sizes[i] = int(stat.Size())
 	}
 
-	result := BatchSplit(sizes, caps)
+	result := tools.BatchSplit(sizes, caps)
 
 	inline = make([]placeholderInfo, 0, len(result.InlineIndices))
 	overflow = make([]placeholderInfo, 0, len(result.OverflowIndices))
@@ -577,7 +569,7 @@ func (a *Agent) appendOCRFallback(cleanedQuery string, overflowPlaceholders []pl
 
 	a.Logger().Debug("[img] OCR fallback processed %d overflow image(s)\n", len(overflowPlaceholders))
 
-	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback)\n"
+	cleanedQuery += "\n\n## Additional Image Analysis (OCR fallback — descriptions via remote vision model)\n"
 	cleanedQuery += enhanced
 
 	return cleanedQuery

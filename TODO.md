@@ -1,8 +1,11 @@
 # TODO
 
-Active work tracked here. Each item is scoped for a single agent run
-via the workflow automation (~1-4 hours of focused work). Only items that are
-approved and ready to assign are listed.
+Active work tracked here. Each item is a small, independently committable
+unit for the workflow automation (~30 min – 2 h). Every item cites its spec
+section — read the cited spec before starting. Validation gate for every
+item: `make vet && make fmt-check && make lint && make build-all` and
+`go test ./...` clean (webui items additionally: `cd webui && npx
+prettier --check`).
 
 ---
 

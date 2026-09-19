@@ -5,6 +5,7 @@ import (
 	"os"
 
 	core "github.com/sprout-foundry/seed/core"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -193,6 +194,10 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.EmbeddingMgr = agent.GetEmbeddingManager()
 	env.VisionProcessor = agent.GetVisionProcessor()
 	env.WebBrowser = tools.NewBrowserAdapter()
+	env.PrimaryAcceptsImages = func() bool {
+		c := agent.getClient()
+		return c != nil && api.ResolveVisionCapability(c).AcceptsImages
+	}
 	env.SkillLoader = newSkillLoaderAdapter(agent)
 	env.SearchEngine = newSearchEngineAdapter(agent)
 	env.RepoMapDefaultDepth = agent.contextProfile.RepoMapDefaultDepth

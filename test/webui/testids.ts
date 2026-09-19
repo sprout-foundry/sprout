@@ -67,11 +67,11 @@ const TESTIDS = {
   "sidebar-collapse-toggle": "sidebar-collapse-toggle",
   // Workspace mode switcher (top-left). Derived ids: <testId>-trigger,
   // <testId>-menu, <testId>-option-<mode>.
-  "sidebar-brand": "sidebar-brand",
   "sidebar-brand-trigger": "sidebar-brand-trigger",
   "sidebar-brand-menu": "sidebar-brand-menu",
   "sidebar-brand-option-code": "sidebar-brand-option-code",
   "sidebar-brand-option-design": "sidebar-brand-option-design",
+  "sidebar-design-button": "sidebar-design-button",
 
   // SP-092-3: Past sessions hint
   "past-sessions-hint": "past-sessions-hint",
@@ -331,6 +331,7 @@ const TESTIDS = {
   "design-surface-fallback": "design-surface-fallback",
   "design-tabpanel": "design-tabpanel",
   "design-assets-rail": "design-assets-rail",
+  "design-rail-stub-row": "design-rail-stub-row",
   // Mode rail (SP-140-5): the Design mode's section rail in the sidebar
   // (workspaces/rail.ts contract). Entries follow the pattern
   // design-rail-${id} (DesignRail.tsx).
@@ -376,6 +377,11 @@ const TESTIDS = {
   "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
   "design-feedback-area-abc123": "design-feedback-area-abc123",
   "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
+  // Representative seeded-feedback fixture ids used by
+  // DesignFeedbackResolution.test.tsx (annotation a1, area hierarchy).
+  "design-feedback-annotation-a1": "design-feedback-annotation-a1",
+  "design-feedback-toggle-a1": "design-feedback-toggle-a1",
+  "design-feedback-area-hierarchy": "design-feedback-area-hierarchy",
   "design-feedback-affordance": "design-feedback-affordance",
   "design-feedback-form": "design-feedback-form",
   "design-feedback-add": "design-feedback-add",
@@ -385,21 +391,6 @@ const TESTIDS = {
   "design-feedback-target": "design-feedback-target",
   "design-feedback-written": "design-feedback-written",
   "design-feedback-error": "design-feedback-error",
-  // Feedback resolution flow (SP-140-4d, item 4.8)
-  "design-feedback-annotations": "design-feedback-annotations",
-  "design-feedback-count": "design-feedback-count",
-  "design-feedback-empty": "design-feedback-empty",
-  "design-feedback-loading": "design-feedback-loading",
-  "design-feedback-resolution": "design-feedback-resolution",
-  "design-feedback-resolution-error": "design-feedback-resolution-error",
-  "design-feedback-resolution-note": "design-feedback-resolution-note",
-  "design-feedback-resolution-save": "design-feedback-resolution-save",
-  "design-feedback-resolution-written": "design-feedback-resolution-written",
-  "design-feedback-status": "design-feedback-status",
-  // Per-annotation rows (pattern design-feedback-{annotation,toggle,area}-${id})
-  "design-feedback-annotation-a1": "design-feedback-annotation-a1",
-  "design-feedback-toggle-a1": "design-feedback-toggle-a1",
-  "design-feedback-area-hierarchy": "design-feedback-area-hierarchy",
   // Tokens tab (DTCG tree)
   "design-tokens-tree": "design-tokens-tree",
   "design-tokens-count": "design-tokens-count",

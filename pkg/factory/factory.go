@@ -94,12 +94,6 @@ func (t *TestClient) SupportsVision() bool {
 	return false
 }
 
-// SupportsConversationalVision returns false; the test client never
-// participates in inline multimodal turns.
-func (t *TestClient) SupportsConversationalVision() bool {
-	return false
-}
-
 // VisionCapabilities returns the test client's vision limits — the safe
 // defaults. TestClient never participates in real vision requests, but
 // the method is required to satisfy api.ClientInterface.

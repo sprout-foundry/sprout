@@ -573,8 +573,7 @@ func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error)
 	return TieredModelInfos(tensorTotalSystemRAM()), nil
 }
 
-func (p *LocalProvider) SupportsVision() bool               { return false }
-func (p *LocalProvider) SupportsConversationalVision() bool { return false }
+func (p *LocalProvider) SupportsVision() bool { return false }
 func (p *LocalProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }

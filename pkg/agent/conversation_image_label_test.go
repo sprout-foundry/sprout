@@ -40,9 +40,9 @@ func TestProcessImagesAsMultimodal_MultipleImages_NumberedLabels(t *testing.T) {
 		}
 	}
 
-	query := "Pasted image saved to disk: ./.sprout/pasted-images/alpha.png\n" +
-		"Pasted image saved to disk: ./.sprout/pasted-images/beta.png\n" +
-		"Pasted image saved to disk: ./.sprout/pasted-images/gamma.png\n" +
+	query := "[image: ./.sprout/pasted-images/alpha.png]\n" +
+		"[image: ./.sprout/pasted-images/beta.png]\n" +
+		"[image: ./.sprout/pasted-images/gamma.png]\n" +
 		"Compare these three screenshots."
 
 	a := &Agent{client: &visionSupportingClient{supportsVision: true}}
@@ -64,8 +64,8 @@ func TestProcessImagesAsMultimodal_MultipleImages_NumberedLabels(t *testing.T) {
 	}
 
 	// The original placeholder text should be gone.
-	if strings.Contains(cleaned, "Pasted image saved to disk:") {
-		t.Errorf("placeholder should be removed, got: %q", cleaned)
+	if strings.Contains(cleaned, "[image: ./") {
+		t.Errorf("placeholder should be replaced, got: %q", cleaned)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestProcessImagesAsMultimodal_SingleImage_SimpleLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	query := "Pasted image saved to disk: ./.sprout/pasted-images/solo.png — what is this?"
+	query := "[image: ./.sprout/pasted-images/solo.png] — what is this?"
 	a := &Agent{client: &visionSupportingClient{supportsVision: true}}
 	_, cleaned, err := a.processImagesAsMultimodal(query)
 	if err != nil {

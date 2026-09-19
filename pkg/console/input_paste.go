@@ -68,7 +68,7 @@ func (ir *InputReader) finalizePaste() bool {
 				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
 			} else {
 				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
-				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
+				placeholder := PastedImagePlaceholder(savedPath) + " "
 				// Insert placeholder at cursor position
 				before := ir.line[:ir.cursorPos]
 				after := ir.line[ir.cursorPos:]

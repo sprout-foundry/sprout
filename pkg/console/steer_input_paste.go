@@ -38,7 +38,7 @@ func (r *SteerInputReader) endPaste() {
 				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
 			} else {
 				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
-				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
+				placeholder := PastedImagePlaceholder(savedPath) + " "
 				r.insertAtCursor([]byte(placeholder))
 				return
 			}

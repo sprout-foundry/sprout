@@ -198,11 +198,16 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	if requestData.BaseMTime != nil || requestData.BaseHash != nil {
 		info, statErr := os.Stat(canonicalPath)
 		if statErr != nil {
-			// The file the caller read is gone: that is a conflict — an
-			// unconditional write would silently re-create it.
+			// The file the caller read is gone (or unreadable): that is a
+			// conflict — an unconditional write would silently re-create it.
+			// The message distinguishes deletion from other stat failures.
+			reason := "The file was deleted after it was read; nothing was written."
+			if !os.IsNotExist(statErr) {
+				reason = "The file could not be read to verify the base revision; nothing was written."
+			}
 			writeJSON(w, http.StatusConflict, map[string]interface{}{
 				"error":   "base_file_missing",
-				"message": "The file was deleted after it was read; nothing was written.",
+				"message": reason,
 				"path":    canonicalPath,
 			})
 			return

@@ -205,7 +205,7 @@ func localMaxOutputTokens(model localBudgetModel, prompt string) int {
 	input := len(model.TokenizerEncode(prompt))
 	budget, ok := api.CalculateOutputBudget(model.ContextLength(), input)
 	if !ok || budget <= 0 {
-		return api.MinOutputTokens
+		return min(api.MinOutputTokens, localMaxOutputCap)
 	}
 	if budget > localMaxOutputCap {
 		return localMaxOutputCap

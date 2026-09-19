@@ -245,6 +245,30 @@ func TestCalculateOutputBudget(t *testing.T) {
 			maxOutput: 28700,
 		},
 		{
+			// Regression: the provider-reported req-482 shape. Real prompt
+			// 133,589 tokens on a 200K window; the heuristic ran ~10% hot
+			// (est ~146K). worst-case math: 146000*1.3 + 10000 cushion ≈
+			// 199.8K → maxOutput ≈ 200, which is below the floor. The old
+			// code returned exactly 512 here; the taper must hand back a
+			// proportionate share of the real remaining space (54K → ~40K).
+			name:         "taper zone - slightly hot estimate keeps real headroom",
+			contextLimit: 200000,
+			inputTokens:  146000,
+			wantOK:       true,
+			minOutput:    40000,
+			maxOutput:    41000,
+		},
+		{
+			// Same shape on the 128K profile (ai-128k): real ~80K prompt,
+			// estimate ~88K. Old code pinned 512; proportional budget now.
+			name:         "taper zone - 128k window",
+			contextLimit: 128000,
+			inputTokens:  88000,
+			wantOK:       true,
+			minOutput:    29000,
+			maxOutput:    31000,
+		},
+		{
 			// Regression test for the original "context window exceeded" error
 			// (see git history: estimated 116145 tokens, actual 156146 — a
 			// 34.4% underestimate — caused input+output to total 200001 with
@@ -312,9 +336,9 @@ func TestCalculateOutputBudgetNoPrematureCollapse(t *testing.T) {
 				t.Errorf("CalculateOutputBudget(%d, %d) = %d, want at least %d (premature collapse to floor)",
 					contextLimit, tt.inputTokens, result, tt.minOutput)
 			}
-			// The taper may land exactly on the floor late in the window
-			// (70% case), but must never dip below it — that would recreate
-			// the silent decapitation.
+			// Under the proportional taper the 70% case returns ¾ of the
+			// remaining space, well above the floor — but it must never dip
+			// below the floor, which would recreate the decapitation.
 			if result < MinOutputTokens {
 				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed below the emergency floor (%d) far from the real ceiling",
 					contextLimit, tt.inputTokens, result, MinOutputTokens)

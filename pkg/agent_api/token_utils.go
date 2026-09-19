@@ -10,15 +10,17 @@ const (
 	// DefaultBufferTokens is the safety buffer for estimation errors
 	DefaultBufferTokens = 1000
 	// MinOutputTokens is the emergency output floor when the window is
-	// (nearly) full by estimate. Sized for a workable agentic response —
-	// a tool-call batch plus prose — not a decorative constant. If the
-	// estimate was right and input+floor overflows the window, the provider
-	// rejects and seed's context-overflow recovery compaction fires, which
-	// is strictly better than silently sawing every response off at a tiny
-	// floor when the heuristic merely overestimated the prompt size
-	// (observed as finish=output_limit at exactly the old 512 value on
-	// 80K–134K-token prompts with plenty of real headroom).
-	MinOutputTokens = 8192
+	// nearly full by estimate. Sized for a reasoning-model turn: thinking
+	// tokens are billed against max_tokens on OpenAI-compatible stacks, so
+	// the floor must cover reasoning + one tool-call batch + prose, not
+	// just prose. If the estimate was right and input+floor overflows the
+	// window, the provider rejects and seed's context-overflow recovery
+	// compaction fires, which is strictly better than silently sawing
+	// every response off at a tiny floor when the heuristic merely
+	// overestimated the prompt size (observed as finish=output_limit at
+	// exactly the old 512 value on 80K–134K-token prompts with plenty of
+	// real headroom).
+	MinOutputTokens = 16384
 	// ToolTokenEstimate is the approximate token count per tool definition
 	ToolTokenEstimate = 200
 	// SystemInstructionBuffer accounts for system prompt overhead
@@ -273,15 +275,23 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	// estimation errors that slip past the margins above.
 	maxOutput = min(maxOutput, remaining)
 
-	// Below the minimum viable output, fall back to a small fixed floor —
-	// but only once the real (non-worst-case) remaining space also can't
-	// comfortably cover it. This should only bite in the final stretch
-	// before the actual ceiling, not at moderate context usage.
+	// Taper zone: the worst-case math (estimate inflated by the observed
+	// error band plus cushion) has exhausted itself. The old behavior
+	// dropped to the MinOutputTokens floor here, which decapitated turns
+	// whose REAL remaining space was still large — the heuristic runs hot
+	// on prose/reasoning-heavy history, so a 9-15% bias was enough to
+	// reach this zone tens of thousands of tokens before the physical
+	// ceiling (finish=output_limit at exactly the floor value, prompts
+	// 80K-134K on a 200K window). Budget a proportionate share of the
+	// remaining space instead: the reserve left for estimation bias is
+	// the unspent quarter, and a true overflow fails loudly through the
+	// provider's rejection + recovery path rather than silently.
 	if maxOutput < MinOutputTokens {
-		if remaining < MinOutputTokens {
-			return remaining, true
+		proportional := (remaining * 3) / 4
+		if proportional < MinOutputTokens {
+			return min(MinOutputTokens, remaining), true
 		}
-		return MinOutputTokens, true // Minimum viable output
+		return proportional, true
 	}
 
 	return maxOutput, true
@@ -320,11 +330,14 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 	maxOutput := contextLimit - worstCaseInput - cushion
 	maxOutput = min(maxOutput, remaining)
 
+	// Same taper-zone fix as CalculateOutputBudget: proportional share of
+	// the remaining space instead of a fixed floor drop.
 	if maxOutput < MinOutputTokens {
-		if remaining < MinOutputTokens {
-			return remaining, true
+		proportional := (remaining * 3) / 4
+		if proportional < MinOutputTokens {
+			return min(MinOutputTokens, remaining), true
 		}
-		return MinOutputTokens, true
+		return proportional, true
 	}
 
 	return maxOutput, true

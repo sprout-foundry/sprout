@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import type { ConflictState } from '../../design/conflictModel';
 import { decideConflict, restoreAgentVersion, shouldSurfaceConflict } from '../../design/conflictModel';
+import { reorderManifestScreens, moveItem } from '../../design/gridReorder';
 import {
   onPinPlacePoint,
   onPinPlacementArm,
@@ -40,6 +41,7 @@ import {
   readAsset,
   writeAsset,
   readFeedback,
+  writeFeedback,
   writeAssetIfUnchanged,
 } from '../../services/api/designApi';
 import type {
@@ -365,6 +367,67 @@ export default function ScreensGrid({
     setConflictResolved(false);
   }, [conflict, heldPath]);
 
+  // §7e pin drag: persist one annotation's new coordinates. Coordinate-only,
+  // human-authored — the one field the gesture maps to. The write goes
+  // through the plain feedback write (the pane owns this file's edits); a
+  // failure reverts to the previous coordinates by simply not committing.
+  const persistPinMove = useCallback(
+    async (assetPath: string, id: string, at: { x: number; y: number }) => {
+      try {
+        const file = await readFeedback(transport, designRelativePath(assetPath));
+        if (!file) return;
+        const annotationsNext = (file.annotations ?? []).map((annotation) =>
+          annotation.id === id ? { ...annotation, at } : annotation,
+        );
+        await writeFeedback(transport, file.target || designRootPath(assetPath), {
+          ...file,
+          annotations: annotationsNext,
+        });
+        setAnnotations(annotationsNext);
+      } catch {
+        // Advisory surface: a failed drag persists nothing; the pin stays.
+      }
+    },
+    [transport],
+  );
+
+  // §7e grid reorder: dragging a card to a new slot persists the manifest's
+  // Screens listing order through the §7a seam. The grid's visible order is
+  // the manifest's; a failed write just leaves the order untouched.
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const handleCardDragOver = useCallback((event: React.DragEvent<HTMLUListElement>) => {
+    event.preventDefault();
+  }, []);
+  const handleCardDrop = useCallback(
+    (event: React.DragEvent<HTMLUListElement>) => {
+      event.preventDefault();
+      const from = dragFrom;
+      setDragFrom(null);
+      if (from === null || !inventory) return;
+      const targetLi = (event.target as HTMLElement).closest('li');
+      const items = Array.from(event.currentTarget.children);
+      const to = items.indexOf(targetLi as HTMLLIElement);
+      if (to < 0 || to === from) return;
+
+      const orderedCards = moveItem(cards, from, to);
+      const orderedStems = orderedCards.map((card) => screenStem(card));
+      void (async () => {
+        try {
+          const manifestPath = 'README.md';
+          const response = await transport(`/api/file?path=${encodeURIComponent(designRootPath(manifestPath))}`);
+          if (!response.ok) return;
+          const manifest = await response.text();
+          const { text: rewritten, changed } = reorderManifestScreens(manifest, orderedStems);
+          if (!changed) return;
+          await writeAssetIfUnchanged(transport, manifestPath, rewritten);
+        } catch {
+          // The visible order follows the manifest; a failed write is a no-op.
+        }
+      })();
+    },
+    [dragFrom, inventory, cards, transport],
+  );
+
   const handleContentChange = useCallback(
     (path: string, content: string) => {
       if (!onEditAsset) return;
@@ -404,12 +467,23 @@ export default function ScreensGrid({
       {cards.length === 0 ? (
         <p className="design-tab-placeholder">No screens in this workspace.</p>
       ) : (
-        <ul className="design-screens-grid" data-testid="design-screens-cards">
-          {cards.map((card) => {
+        <ul
+          className="design-screens-grid"
+          data-testid="design-screens-cards"
+          onDragOver={handleCardDragOver}
+          onDrop={handleCardDrop}
+        >
+          {cards.map((card, cardIndex) => {
             const content = contentFor(card.path);
             const status = card.status;
             return (
-              <li key={card.path}>
+              <li
+                key={card.path}
+                draggable
+                onDragStart={(event) => setDragFrom(cardIndex)}
+                onDragEnd={() => setDragFrom(null)}
+                className={dragFrom === cardIndex ? 'dragging' : ''}
+              >
                 <button
                   type="button"
                   className={`design-screen-card${card.path === selected ? ' selected' : ''}`}
@@ -530,6 +604,7 @@ export default function ScreensGrid({
                 publishPinPlacePoint(at);
                 setPlaceMode(false);
               }}
+              onPinMove={(id, at) => void persistPinMove(selectedCard.path, id, at)}
             />
           </div>
         </div>

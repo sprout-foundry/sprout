@@ -38,33 +38,180 @@ export const FIXTURE_FLOW = "sign-up";
 /** Token file stems under `design/tokens/`. */
 export const FIXTURE_TOKEN_FILES = ["color", "spacing"] as const;
 
-function wireframeSvg(label: string, height: number, nav?: string): string {
-  const navAttr = nav ? ` data-nav="${nav}"` : "";
+const BRAND = "#2f6f4f";
+
+/**
+ * The wireframes: the flow's node imagery. Structured like real low-fi
+ * wireframes (device chrome, labeled blocks, one brand accent on the primary
+ * action) rather than bare rectangles — they are what the canvas renders, and
+ * the screens below implement them. `data-nav` wiring is the §4a contract:
+ * login's primary action navigates to inbox, and the validator treats a
+ * dangling target as a hard error.
+ */
+function loginWireframeSvg(): string {
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FIXTURE_FRAMES.mobile.width} ${height}">`,
-    `<text x="24" y="64" font-size="28">${label}</text>`,
-    `<rect id="field" x="24" y="140" width="342" height="48"/>`,
-    `<rect id="submit" x="24" y="200" width="342" height="52"${navAttr}/>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FIXTURE_FRAMES.mobile.width} ${FIXTURE_FRAMES.mobile.height}" font-family="system-ui, sans-serif">`,
+    '  <rect width="390" height="844" fill="#ffffff"/>',
+    '  <rect x="0" y="0" width="390" height="44" fill="#fafbfa"/>',
+    '  <text x="24" y="28" font-size="14" fill="#5b6b62">9:41</text>',
+    '  <circle cx="23" cy="92" r="14" fill="#2f6f4f"/>',
+    '  <text x="45" y="97" font-size="16" font-weight="600" fill="#1a2420">Sprout</text>',
+    '  <text x="24" y="180" font-size="28" font-weight="700" fill="#1a2420">Welcome back</text>',
+    '  <text x="24" y="208" font-size="14" fill="#5b6b62">Sign in to continue to your workspace.</text>',
+    '  <text x="24" y="264" font-size="12" fill="#5b6b62">EMAIL</text>',
+    '  <rect x="24" y="274" width="342" height="48" rx="12" fill="#f4f6f4" stroke="#e3e8e4"/>',
+    '  <text x="40" y="303" font-size="14" fill="#9aa8a0">you@example.com</text>',
+    '  <text x="24" y="352" font-size="12" fill="#5b6b62">PASSWORD</text>',
+    '  <rect x="24" y="362" width="342" height="48" rx="12" fill="#f4f6f4" stroke="#e3e8e4"/>',
+    '  <text x="40" y="391" font-size="14" fill="#9aa8a0">••••••••</text>',
+    `  <rect id="submit" x="24" y="440" width="342" height="52" rx="12" fill="${BRAND}" data-nav="inbox"/>`,
+    '  <text x="195" y="472" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">Sign in</text>',
+    '  <text x="195" y="524" font-size="13" fill="#2f6f4f" text-anchor="middle">Create an account</text>',
     "</svg>",
     "",
   ].join("\n");
 }
 
-function screenHtml(title: string, nav?: string): string {
-  const navAttr = nav ? ` data-nav="${nav}"` : "";
+function inboxWireframeSvg(): string {
+  const row = (y: number, name: string, snippet: string, unread: boolean): string[] => [
+    `  <circle cx="48" cy="${y + 28}" r="18" fill="#eef2ef"/>`,
+    `  <text x="48" y="${y + 33}" font-size="13" font-weight="600" fill="#2f6f4f" text-anchor="middle">${name[0]}</text>`,
+    `  <text x="78" y="${y + 24}" font-size="14" font-weight="${unread ? 600 : 400}" fill="#1a2420">${name}</text>`,
+    `  <text x="78" y="${y + 44}" font-size="12" fill="#5b6b62">${snippet}</text>`,
+    `  <text x="366" y="${y + 24}" font-size="11" fill="#9aa8a0" text-anchor="end">${unread ? "now" : "2h"}</text>`,
+    ...(unread ? [`  <circle cx="370" cy="${y + 40}" r="4" fill="${BRAND}"/>`] : []),
+    `  <line x1="24" y1="${y + 68}" x2="366" y2="${y + 68}" stroke="#eef1ee"/>`,
+  ];
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FIXTURE_FRAMES.mobile.width} ${FIXTURE_FRAMES.mobile.height}" font-family="system-ui, sans-serif">`,
+    '  <rect width="390" height="844" fill="#ffffff"/>',
+    '  <rect x="0" y="0" width="390" height="44" fill="#fafbfa"/>',
+    '  <text x="24" y="28" font-size="14" fill="#5b6b62">9:41</text>',
+    '  <text x="24" y="100" font-size="24" font-weight="700" fill="#1a2420">Inbox</text>',
+    '  <circle cx="342" cy="92" r="16" fill="#2f6f4f"/>',
+    '  <text x="342" y="97" font-size="16" fill="#ffffff" text-anchor="middle">+</text>',
+    ...row(140, "Amara Okafor", "Render pass is ready for review", true),
+    ...row(216, "Ben Ito", "Re: spacing tokens for the cards", true),
+    ...row(292, "Carla Ruiz", "Sprint board updated", false),
+    ...row(368, "Dev Anand", "Field study notes from Thursday", false),
+    "</svg>",
+    "",
+  ].join("\n");
+}
+
+/**
+ * The screens: self-contained, styled with the same values the fixture's DTCG
+ * token files declare (brand #2f6f4f, surface #ffffff, space 4/8/16/24) — the
+ * demo content should look like what the tool and its token pipeline produce.
+ */
+function loginScreenHtml(): string {
   return [
     "<!doctype html>",
     '<html lang="en">',
     "<head>",
     '<meta charset="utf-8">',
-    `<title>${title}</title>`,
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    "<title>Sign in — Sprout</title>",
     "<style>",
-    "body { margin: 0; font-family: system-ui, sans-serif; }",
-    ".card { width: 342px; margin: 24px; }",
+    ":root {",
+    "  --brand: #2f6f4f; --brand-ink: #ffffff; --surface: #ffffff;",
+    "  --ink: #1a2420; --ink-soft: #5b6b62; --line: #e3e8e4; --field: #f4f6f4;",
+    "  --radius: 12px;",
+    "  --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-5: 32px;",
+    "}",
+    "* { box-sizing: border-box; }",
+    "body {",
+    "  margin: 0;",
+    "  font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;",
+    "  background: var(--surface); color: var(--ink);",
+    "}",
+    ".phone { max-width: 390px; min-height: 100vh; margin: 0 auto; display: flex; flex-direction: column; padding: var(--space-5) var(--space-4); }",
+    ".brand { display: flex; align-items: center; gap: 10px; margin-top: var(--space-4); }",
+    ".brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--brand); }",
+    ".brand-name { font-size: 16px; font-weight: 600; }",
+    "h1 { font-size: 28px; line-height: 1.2; margin: 72px 0 8px; }",
+    ".sub { margin: 0 0 var(--space-5); font-size: 14px; color: var(--ink-soft); }",
+    "label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--ink-soft); margin: var(--space-4) 0 var(--space-2); }",
+    "input { width: 100%; height: 48px; padding: 0 var(--space-3); font-size: 15px; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: var(--radius); }",
+    "input:focus { outline: none; border-color: var(--brand); background: var(--surface); }",
+    "button { width: 100%; height: 52px; margin-top: var(--space-5); font-size: 16px; font-weight: 600; color: var(--brand-ink); background: var(--brand); border: none; border-radius: var(--radius); cursor: pointer; }",
+    ".alt { margin: var(--space-3) 0 0; text-align: center; font-size: 13px; }",
+    ".alt a { color: var(--brand); text-decoration: none; font-weight: 600; }",
     "</style>",
     "</head>",
     "<body>",
-    `<div class="card"><h1>${title}</h1><button type="button"${navAttr}>Continue</button></div>`,
+    '<main class="phone">',
+    '  <div class="brand"><span class="brand-mark"></span><span class="brand-name">Sprout</span></div>',
+    "  <h1>Welcome back</h1>",
+    '  <p class="sub">Sign in to continue to your workspace.</p>',
+    '  <form>',
+    '    <label for="email">Email</label>',
+    '    <input id="email" type="email" placeholder="you@example.com" autocomplete="email">',
+    '    <label for="password">Password</label>',
+    '    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">',
+    '    <button type="button" data-nav="inbox">Sign in</button>',
+    "  </form>",
+    '  <p class="alt">New here? <a href="#">Create an account</a></p>',
+    "</main>",
+    "</body>",
+    "</html>",
+    "",
+  ].join("\n");
+}
+
+function inboxScreenHtml(): string {
+  const row = (name: string, initial: string, snippet: string, time: string, unread: boolean): string =>
+    [
+      '<li class="row">',
+      `  <span class="avatar">${initial}</span>`,
+      '  <span class="body">',
+      `    <span class="top"><span class="who${unread ? " unread" : ""}">${name}</span><span class="time">${time}</span></span>`,
+      `    <span class="snippet">${snippet}</span>`,
+      "  </span>",
+      ...(unread ? ['  <span class="dot"></span>'] : []),
+      "</li>",
+    ].join("");
+  return [
+    "<!doctype html>",
+    '<html lang="en">',
+    "<head>",
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    "<title>Inbox — Sprout</title>",
+    "<style>",
+    ":root {",
+    "  --brand: #2f6f4f; --surface: #ffffff; --ink: #1a2420; --ink-soft: #5b6b62;",
+    "  --line: #eef1ee; --tint: #eef2ef; --radius: 12px;",
+    "  --space-3: 16px; --space-4: 24px;",
+    "}",
+    "* { box-sizing: border-box; }",
+    "body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--ink); }",
+    ".phone { max-width: 390px; min-height: 100vh; margin: 0 auto; padding: var(--space-4); }",
+    ".bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }",
+    "h1 { font-size: 24px; margin: 0; }",
+    ".compose { width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 18px; line-height: 32px; text-align: center; }",
+    "ul { list-style: none; margin: 0; padding: 0; }",
+    ".row { display: flex; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }",
+    ".avatar { flex: 0 0 36px; height: 36px; border-radius: 50%; background: var(--tint); color: var(--brand); font-size: 13px; font-weight: 600; line-height: 36px; text-align: center; }",
+    ".body { flex: 1; min-width: 0; }",
+    ".top { display: flex; justify-content: space-between; gap: var(--space-3); }",
+    ".who { font-size: 14px; font-weight: 500; }",
+    ".who.unread { font-weight: 700; }",
+    ".time { font-size: 11px; color: var(--ink-soft); }",
+    ".snippet { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
+    ".dot { flex: 0 0 8px; height: 8px; margin-top: 14px; border-radius: 50%; background: var(--brand); }",
+    "</style>",
+    "</head>",
+    "<body>",
+    '<main class="phone">',
+    '  <div class="bar"><h1>Inbox</h1><span class="compose">+</span></div>',
+    "  <ul>",
+    row("Amara Okafor", "A", "Render pass is ready for review", "now", true),
+    row("Ben Ito", "B", "Re: spacing tokens for the cards", "now", true),
+    row("Carla Ruiz", "C", "Sprint board updated", "2h", false),
+    row("Dev Anand", "D", "Field study notes from Thursday", "2h", false),
+    "  </ul>",
+    "</main>",
     "</body>",
     "</html>",
     "",
@@ -161,18 +308,11 @@ const SPACING_TOKENS = JSON.stringify(
 /** The whole synthetic tree, as design-root-relative POSIX paths → contents. */
 export const FIXTURE_DESIGN_TREE: Record<string, string> = {
   "design/README.md": MANIFEST,
-  "design/wireframes/login.svg": wireframeSvg(
-    "Login",
-    FIXTURE_FRAMES.mobile.height,
-    "inbox",
-  ),
-  "design/wireframes/inbox.svg": wireframeSvg(
-    "Inbox",
-    FIXTURE_FRAMES.mobile.height,
-  ),
+  "design/wireframes/login.svg": loginWireframeSvg(),
+  "design/wireframes/inbox.svg": inboxWireframeSvg(),
   [`design/flows/${FIXTURE_FLOW}.mmd`]: FLOW_MMD,
-  "design/screens/login.html": screenHtml("Login", "inbox"),
-  "design/screens/inbox.html": screenHtml("Inbox"),
+  "design/screens/login.html": loginScreenHtml(),
+  "design/screens/inbox.html": inboxScreenHtml(),
   "design/tokens/color.tokens.json": COLOR_TOKENS,
   "design/tokens/spacing.tokens.json": SPACING_TOKENS,
   // SP-140-1 §1h git contract: keeps `design_validate` clean if a later spec

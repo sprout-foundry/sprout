@@ -129,12 +129,37 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeSessionTerminated,
 		events.EventTypeDriftDetected,
 		events.EventTypeSessionChanged,
+		events.EventTypeAutomateSessionStarted,
+		events.EventTypeAutomateSessionEnded,
+		events.EventTypeAutomateOutputChunk,
+		events.EventTypeAutomateBudgetUpdate,
 	} {
 		if _, ok := allowedOutboundMessageTypes[eventType]; !ok {
 			// Build the test name from the constant so the failure tells you
 			// which event is missing.
 			t.Errorf("events.EventType %q is not in allowedOutboundMessageTypes — add it to the registry", eventType)
 		}
+	}
+}
+
+// Regression: automate.* lifecycle events were published by the agent and
+// workflow layers but never registered in allowedOutboundMessageTypes, so
+// every automate frame was dropped at the SafeConn gate. The AutomationsPanel
+// therefore never saw session_started/session_ended and (post-6d94e49ad, which
+// removed polling) never refreshed. Pin the four types explicitly so a future
+// registry edit can't silently reintroduce the drop.
+func TestOutboundRegistry_AutomateEventsForwarded(t *testing.T) {
+	for _, msgType := range []string{
+		events.EventTypeAutomateSessionStarted,
+		events.EventTypeAutomateSessionEnded,
+		events.EventTypeAutomateOutputChunk,
+		events.EventTypeAutomateBudgetUpdate,
+	} {
+		t.Run(msgType, func(t *testing.T) {
+			if !validateOutboundMessageType(msgType) {
+				t.Errorf("validateOutboundMessageType(%q) = false, want true — automate frames are dropped otherwise", msgType)
+			}
+		})
 	}
 }
 

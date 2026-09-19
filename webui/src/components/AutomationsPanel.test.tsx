@@ -581,7 +581,12 @@ describe('AutomationsPanel', () => {
     const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
     expect(call![1]?.method).toBe('POST');
     const body = JSON.parse((call![1]!.body as string) || '{}');
-    expect(body.workflow).toBe('my-test');
+    // The API resolves workflows by filename, so the request must carry
+    // the filename (not the display name). The first request is an
+    // UNCONFIRMED probe — `approved` is only sent from the approval
+    // dialog's retry, so the server can tell us whether to gate.
+    expect(body.workflow).toBe('mt.json');
+    expect(body.approved).toBeUndefined();
     expect(body.budget_usd).toBe(5);
     expect(body.heartbeat).toBe(60);
   });
@@ -605,7 +610,7 @@ describe('AutomationsPanel', () => {
     });
     const call = vi.mocked(clientFetch).mock.calls.find((c) => c[0] === '/api/automate/run');
     const body = JSON.parse((call![1]!.body as string) || '{}');
-    expect(body.workflow).toBe('my-test');
+    expect(body.workflow).toBe('mt.json');
     expect(body.budget_usd).toBeUndefined();
     expect(body.heartbeat).toBeUndefined();
   });
@@ -639,20 +644,14 @@ describe('AutomationsPanel', () => {
     });
   });
 
-  it('does nothing when confirm returns false', async () => {
-    vi.stubGlobal(
-      'confirm',
-      vi.fn(() => false),
-    );
+  it('launches an ungated workflow immediately on Run (no confirm round-trip)', async () => {
+    // requires_approval: false workflows run without a confirmation
+    // prompt — the modal's Run button IS the confirmation, matching the
+    // CLI's skip-prompt semantics for auto-approved workflows.
     mockFetchSequence(
-      wfResp([
-        {
-          name: 'my-test',
-          description: '',
-          filename: 'mt.json',
-          file_path: '/a/mt.json',
-        },
-      ]),
+      wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
+      runResp('sid', 'my-test'),
+      seResp([]),
     );
     render(<AutomationsPanel />);
     await waitFor(() => {
@@ -661,8 +660,117 @@ describe('AutomationsPanel', () => {
     fireEvent.click(screen.getByLabelText('Run my-test'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
-    expect(screen.getByText('Run Workflow')).toBeInTheDocument();
-    expect(vi.mocked(clientFetch).mock.calls.filter((c) => c[0] === '/api/automate/run')).toHaveLength(0);
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Running' })).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(vi.mocked(clientFetch).mock.calls.filter((c) => c[0] === '/api/automate/run')).toHaveLength(1);
+    expect(screen.queryByText('Approve Workflow')).not.toBeInTheDocument();
+  });
+
+  // ── Approval Gate (requires_approval) ────────────────────────
+  //
+  // The server answers a gated workflow with
+  // {requires_approval: true, workflow, summary} and does NOT launch.
+  // Pre-fix the panel treated any ok response as a successful launch, so
+  // it closed the modal, switched tabs, and left the user staring at an
+  // empty Running list — the "it confirmed but nothing happened" report.
+
+  it('shows the approval dialog instead of launching when the server gates the run', async () => {
+    mockFetchSequence(
+      wfResp([{ name: 'my-test', description: 'Needs a nod', filename: 'mt.json', file_path: '/a/mt.json' }]),
+      mr(true, {
+        requires_approval: true,
+        workflow: 'mt.json',
+        summary: { description: 'Needs a nod', allowed_paths: [{ path: '/srv/data', mode: 'read_write' }] },
+      }),
+    );
+    render(<AutomationsPanel />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Approve Workflow')).toBeInTheDocument();
+    });
+    // The dialog surfaces what the workflow will touch.
+    expect(screen.getByText('/srv/data [read_write]')).toBeInTheDocument();
+    // Crucially it did NOT switch to Running — nothing launched yet.
+    expect(screen.getByRole('tab', { name: 'Available' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('launches with approved=true after the user confirms the dialog', async () => {
+    mockFetchSequence(
+      wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
+      mr(true, { requires_approval: true, workflow: 'mt.json', summary: {} }),
+      runResp('sid', 'my-test'),
+      seResp([]),
+    );
+    render(<AutomationsPanel />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(screen.getByText('Approve Workflow')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Approve & Run/ }));
+
+    await waitFor(() => {
+      const calls = vi.mocked(clientFetch).mock.calls.filter((c) => c[0] === '/api/automate/run');
+      expect(calls).toHaveLength(2);
+    });
+    const calls = vi.mocked(clientFetch).mock.calls.filter((c) => c[0] === '/api/automate/run');
+    // Call 1 is the unconfirmed probe (no `approved` — that's what made
+    // the server return the gate). Call 2 is the confirmed retry and must
+    // carry approved: true.
+    expect(JSON.parse((calls[0][1]!.body as string) || '{}').approved).toBeUndefined();
+    expect(JSON.parse((calls[1][1]!.body as string) || '{}').approved).toBe(true);
+    // Dialog closed and we moved on to Running.
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Running' })).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  it('dismisses the approval dialog on Cancel without launching', async () => {
+    mockFetchSequence(
+      wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
+      mr(true, { requires_approval: true, workflow: 'mt.json', summary: {} }),
+    );
+    render(<AutomationsPanel />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(screen.getByText('Approve Workflow')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Approve Workflow')).not.toBeInTheDocument();
+    // Exactly one POST — the original probe. No second launch attempt.
+    expect(vi.mocked(clientFetch).mock.calls.filter((c) => c[0] === '/api/automate/run')).toHaveLength(1);
+  });
+
+  it('reports a launch failure without clobbering the session-list error', async () => {
+    mockFetchSequence(
+      wfResp([{ name: 'my-test', description: '', filename: 'mt.json', file_path: '/a/mt.json' }]),
+      errResp(500), // POST run fails
+      seResp([]), // sessions fetch succeeds
+    );
+    render(<AutomationsPanel />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Run my-test')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('Run my-test'));
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to run workflow: Internal server error')).toBeInTheDocument();
+    });
   });
 
   it('shows error on Running tab when run fails and session fetch also fails', async () => {

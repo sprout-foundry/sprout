@@ -58,11 +58,20 @@ const TESTIDS = {
   "sidebar-brand": "sidebar-brand",
   "sidebar-settings-toggle": "sidebar-settings-toggle",
   "sidebar-icon-rail": "sidebar-icon-rail",
+  "sidebar-mode-rail": "sidebar-mode-rail",
   "sidebar-git-tab": "sidebar-git-tab",
   "sidebar-files-tab": "sidebar-files-tab",
   "sidebar-search-tab": "sidebar-search-tab",
   "sidebar-automations-tab": "sidebar-automations-tab",
   "sidebar-logs-tab": "sidebar-logs-tab",
+  "sidebar-collapse-toggle": "sidebar-collapse-toggle",
+  // Workspace mode switcher (top-left). Derived ids: <testId>-trigger,
+  // <testId>-menu, <testId>-option-<mode>.
+  "sidebar-brand-trigger": "sidebar-brand-trigger",
+  "sidebar-brand-menu": "sidebar-brand-menu",
+  "sidebar-brand-option-code": "sidebar-brand-option-code",
+  "sidebar-brand-option-design": "sidebar-brand-option-design",
+  "sidebar-design-button": "sidebar-design-button",
 
   // SP-092-3: Past sessions hint
   "past-sessions-hint": "past-sessions-hint",
@@ -311,6 +320,108 @@ const TESTIDS = {
   "mobile-peer-surfaces": "mobile-peer-surfaces",
   "mobile-chat-surface": "mobile-chat-surface",
   "mobile-editor-surface": "mobile-editor-surface",
+
+  // Design (SP-140-3 DesignView / design workspace surface). Static testids
+  // from webui/src/components/design/* plus representative values for the
+  // dynamic `${...}` row/node/anchor patterns so the coverage gate passes.
+  "design-view": "design-view",
+  // Mode shell (SP-140-5 step 3): the Design mode's content column
+  // (workspaces/DesignShell → design/DesignSurface).
+  "design-surface": "design-surface",
+  "design-surface-fallback": "design-surface-fallback",
+  "design-tabpanel": "design-tabpanel",
+  "design-assets-rail": "design-assets-rail",
+  "design-rail-stub-row": "design-rail-stub-row",
+  // Mode rail (SP-140-5): the Design mode's section rail in the sidebar
+  // (workspaces/rail.ts contract). Entries follow the pattern
+  // design-rail-${id} (DesignRail.tsx).
+  "design-rail": "design-rail",
+  "design-rail-flows": "design-rail-flows",
+  "design-rail-screens": "design-rail-screens",
+  "design-rail-tokens": "design-rail-tokens",
+  "design-detail-pane": "design-detail-pane",
+  "design-detail-content": "design-detail-content",
+  // Flows canvas
+  "design-flows-canvas": "design-flows-canvas",
+  "design-flows-status": "design-flows-status",
+  "design-flow-graph": "design-flow-graph",
+  "design-flow-node-login": "design-flow-node-login", // pattern design-flow-node-${data.flowNodeId}
+  "design-flow-node-image-login": "design-flow-node-image-login", // pattern design-flow-node-image-${data.flowNodeId}
+  "design-rail-row-design-wireframes-login-svg":
+    "design-rail-row-design-wireframes-login-svg", // pattern design-rail-row-${asset.path}
+  // Screens tab
+  "design-screens-grid": "design-screens-grid",
+  "design-screens-cards": "design-screens-cards",
+  "design-screen-detail": "design-screen-detail",
+  "design-screen-error": "design-screen-error",
+  "design-screen-placeholder": "design-screen-placeholder",
+  "design-screen-card-login": "design-screen-card-login", // pattern design-screen-card-${card.name}
+  "design-screen-frame-login": "design-screen-frame-login", // pattern design-screen-frame-${card.name}
+  "design-screen-status-login": "design-screen-status-login", // pattern design-screen-status-${card.name}
+  "design-screen-thumb-login": "design-screen-thumb-login", // pattern design-screen-thumb-${card.name}
+  "design-screen-thumb-box-login": "design-screen-thumb-box-login", // pattern design-screen-thumb-box-${card.name}
+  // Feedback write path (SP-140-4d)
+  // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
+  "design-feedback-annotations": "design-feedback-annotations",
+  "design-feedback-count": "design-feedback-count",
+  "design-feedback-empty": "design-feedback-empty",
+  "design-feedback-loading": "design-feedback-loading",
+  "design-feedback-resolution": "design-feedback-resolution",
+  "design-feedback-resolution-error": "design-feedback-resolution-error",
+  "design-feedback-resolution-note": "design-feedback-resolution-note",
+  "design-feedback-resolution-save": "design-feedback-resolution-save",
+  "design-feedback-resolution-written": "design-feedback-resolution-written",
+  "design-feedback-status": "design-feedback-status",
+  // Dynamic row testid patterns `design-feedback-{annotation,area,toggle}-${annotation.id}`.
+  // Representative registered values (match the template literals).
+  "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
+  "design-feedback-area-abc123": "design-feedback-area-abc123",
+  "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
+  // Representative seeded-feedback fixture ids used by
+  // DesignFeedbackResolution.test.tsx (annotation a1, area hierarchy).
+  "design-feedback-annotation-a1": "design-feedback-annotation-a1",
+  "design-feedback-toggle-a1": "design-feedback-toggle-a1",
+  "design-feedback-area-hierarchy": "design-feedback-area-hierarchy",
+  "design-feedback-affordance": "design-feedback-affordance",
+  "design-feedback-form": "design-feedback-form",
+  "design-feedback-add": "design-feedback-add",
+  "design-feedback-area": "design-feedback-area",
+  "design-feedback-note": "design-feedback-note",
+  "design-feedback-submit": "design-feedback-submit",
+  "design-feedback-target": "design-feedback-target",
+  "design-feedback-written": "design-feedback-written",
+  "design-feedback-error": "design-feedback-error",
+  // Tokens tab (DTCG tree)
+  "design-tokens-tree": "design-tokens-tree",
+  "design-tokens-count": "design-tokens-count",
+  "design-tokens-empty": "design-tokens-empty",
+  "design-tokens-search": "design-tokens-search",
+  "design-tokens-hint": "design-tokens-hint",
+  "design-tokens-schema": "design-tokens-schema",
+  "design-tokens-token-detail": "design-tokens-token-detail",
+  "design-token-open": "design-token-open",
+  "design-token-schema-hint": "design-token-schema-hint",
+  "design-token-detail-swatch": "design-token-detail-swatch",
+  "design-token-detail-value": "design-token-detail-value",
+  "design-token-detail-resolved": "design-token-detail-resolved",
+  "design-token-detail-alias": "design-token-detail-alias",
+  "design-token-file-colors": "design-token-file-colors", // pattern design-token-file-${grouping.file.name}
+  "design-token-file-count-colors": "design-token-file-count-colors", // pattern design-token-file-count-${grouping.file.name}
+  "design-token-section-color": "design-token-section-color", // pattern design-token-section-${section}
+  "design-token-group-buttons": "design-token-group-buttons", // pattern design-token-group-${group}
+  "design-token-row-colors-color-brand-primary":
+    "design-token-row-colors-color-brand-primary", // pattern design-token-row-${token.fileName}-${token.path}
+  "design-token-type-colors-color-brand-primary":
+    "design-token-type-colors-color-brand-primary", // pattern design-token-type-${token.fileName}-${token.path}
+  // TokenSpecimens.tsx specimen surfaces (read-only DTCG value display)
+  "token-swatch": "token-swatch",
+  "token-specimen-color": "token-specimen-color",
+  "token-specimen-typography": "token-specimen-typography",
+  "token-specimen-spacing": "token-specimen-spacing",
+  "token-specimen-value": "token-specimen-value",
+  "token-font-line": "token-font-line",
+  "token-font-meta": "token-font-meta",
+  "token-space-bar": "token-space-bar",
 } as const;
 
 // Derived set for O(1) coverage lookups

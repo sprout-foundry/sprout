@@ -13,6 +13,7 @@ Guidance for AI agents working in this repository.
 
 - Go unit: `go test ./...`; smoke: `make test-smoke`; WebUI unit: `make test-webui-vitest`; WebUI e2e: `npx playwright test --project=webui test/webui/<spec>.spec.ts` (backend + Vite stack auto-starts).
 - **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
+- **Browser-dependent Go tests** (`pkg/agent/design_e2e_test.go` render cases) skip when no headless browser is reachable. Set `SPROUT_REQUIRE_BROWSER=1` to turn that skip into a failure — CI does this on Linux, where Chromium is installed, so "the render path ran" is asserted rather than hidden behind a green suite that skipped it.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Pin shared-mode UX in e2e; cover multi-chat logic in vitest.
 - Local-LLM selection skips model dirs with a corrupt `config.json` (`validModelConfig` in pkg/localmodel) — if a local model panics at load, check the local model store's `config.json` files for truncated downloads before debugging code.
 - Pre-push gates: `make vet && make fmt-check && make lint && make lint-go-new && make build-all`. Details: `docs/internal/ci-pipeline.md`.
@@ -52,7 +53,7 @@ Guidance for AI agents working in this repository.
 
 - **NEVER commit incident writeups, debugging narratives, or references to specific incidents** (no `INCIDENT-YYYY-MM-DD` files/ids) — this is a public repo.
 - **NEVER commit user-identifying data**: session IDs, workspace/host paths, customer domains, infra identifiers (pool/tenant IDs), credentials, transcripts, or tool-output excerpts from real sessions. Test fixtures must be synthetic.
-- Comments and commit messages describe the *mechanism*, never the *incident*: "a JWT inside a serialized JSON string", not "session X's token dump".
+- Comments and commit messages describe the _mechanism_, never the _incident_: "a JWT inside a serialized JSON string", not "session X's token dump".
 - If debugging requires real session data, keep it out of the tree entirely (read from state dirs at runtime in throwaway local tests, delete before commit).
 
 ## Integration with Sprout Foundry

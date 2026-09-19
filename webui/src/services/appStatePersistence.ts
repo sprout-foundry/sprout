@@ -101,8 +101,12 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       model: typeof parsed.model === 'string' ? parsed.model || '' : '',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
+      // `design` is a restorable view like the others: it was omitted when the
+      // design surface landed, so a reload dropped a user out of the design
+      // workspace. The active workspace mode also consults this on boot.
       currentView:
-        ['chat', 'editor', 'git'].includes(parsed.currentView) || getPluginViewIds().includes(parsed.currentView)
+        ['chat', 'editor', 'git', 'design'].includes(parsed.currentView) ||
+        getPluginViewIds().includes(parsed.currentView)
           ? parsed.currentView
           : 'chat',
       messages: parsedMessages,

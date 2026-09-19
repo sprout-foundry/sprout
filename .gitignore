@@ -69,7 +69,9 @@ tool_calls.log
 e2e_results.csv
 
 # Common build and dependency directories
-node_modules/
+# (no trailing slash: the pattern must also match a stray node_modules symlink,
+# which a directory-only pattern lets into commits)
+node_modules
 vendor/
 dist/
 build/
@@ -81,7 +83,7 @@ temp/
 
 # WebUI
 webui/build/
-webui/node_modules/
+webui/node_modules
 
 # Desktop build artifacts (pre-built Electron releases, cross-compiled backends)
 desktop/dist/
@@ -135,6 +137,10 @@ webui/public/wasm/
 !desktop/resources/icons/png/*.png
 !pkg/webui/static/placeholder
 !pkg/webui/logo-mark.svg
+# Documentation screenshots referenced by PR bodies (see scripts/capture-design-screenshots.mts).
+# Scoped to this directory so the general *.png rule still ignores debug shots elsewhere.
+!docs/pr-assets/
+!docs/pr-assets/*.png
 
 # Windows ADS metadata artifacts
 *:Zone.Identifier
@@ -181,6 +187,9 @@ docs/embed.md
 
 # Compiled WASM binary build artifact (produced by make build-wasm/build-all)
 /wasm
+# Ad-hoc native WASM build output (scripts/build-wasm.sh writes embedding.wasm;
+# a bare `go build -o embedding-wasm ./cmd/embedding-wasm` drops this name).
+/embedding-wasm
 .scratch
 # Local audit working notes (not for the public repo)
 webui/docs/WEBUI-AUDIT-2026-09-11.md

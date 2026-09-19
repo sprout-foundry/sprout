@@ -270,6 +270,12 @@ type Agent struct {
 	// BackgroundProcessManager provides background shell execution for CLI mode.
 	// Lazy-initialized on first use when terminalManager is nil.
 	backgroundProcessManager *tools.BackgroundProcessManager
+	// backgroundProcessManagerMu guards backgroundProcessManager. This is a
+	// PER-AGENT lock on purpose: the field it guards is per-agent, so a
+	// package-level sync.Once (the previous implementation) initialized only
+	// the FIRST agent to ask and handed every later agent its own still-nil
+	// pointer — StartWithOptions then locked a nil mutex and panicked.
+	backgroundProcessManagerMu sync.Mutex
 
 	// passwordPrompter handles interactive password prompts for shell commands (sudo, passwd, ssh-keygen).
 	// Set at startup based on the execution surface (WebUI prompter, CLI prompter, or nil).

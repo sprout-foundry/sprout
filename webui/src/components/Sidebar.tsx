@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
 import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -15,13 +15,18 @@ import {
   SIDEBAR_COLLAPSED_WIDTH,
   clampSidebarWidth,
 } from '../hooks/useSidebarState';
+import { useUIScale } from '../hooks/useUIScale';
 import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import type { ViewType } from '../types/app';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
+import ModeSwitcher from '../workspaces/ModeSwitcher';
+import type { ModeRailProps } from '../workspaces/rail';
+import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
 import AutomationsPanel from './AutomationsPanel';
+import { useDesignPresence } from './design/useDesignPresence';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
@@ -43,6 +48,8 @@ import {
   Server,
   Monitor,
   Zap,
+  PanelLeft,
+  Palette,
 } from 'lucide-react';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
@@ -50,8 +57,7 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
-import { useUIScale } from '../hooks/useUIScale';
-
+import DesignAssetsPane from './design/DesignAssetsPane';
 interface SidebarProps {
   isConnected: boolean;
   instances?: SproutInstance[];
@@ -87,6 +93,18 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
+  /** Workspace modes offered for the current workspace, in switcher order. */
+  modes?: WorkspaceMode[];
+  /** The active mode's id. */
+  activeModeId?: WorkspaceModeId;
+  /** Switch modes (the top-left switcher). */
+  onSelectMode?: (id: WorkspaceModeId) => void;
+  /** The active mode's rail component, or undefined for the Code default. */
+  modeRail?: ComponentType<ModeRailProps>;
+  /** Active entry id within the mode's rail. */
+  modeSection?: string;
+  /** Fired when the user picks an entry in the mode's rail. */
+  onModeSectionChange?: (id: string) => void;
   selectedSection?: SectionTab;
   onSectionChange?: (section: SectionTab) => void;
   onFileClick?: (filePath: string, lineNumber?: number) => void;
@@ -173,6 +191,12 @@ function Sidebar({
   onMobileMenuToggle,
   sidebarCollapsed,
   onSidebarToggle,
+  modes = [],
+  activeModeId = 'code',
+  onSelectMode,
+  modeRail,
+  modeSection,
+  onModeSectionChange,
   selectedSection,
   onSectionChange,
   onFileClick,
@@ -212,10 +236,31 @@ function Sidebar({
     [platformNavItems],
   );
   const fileTreeRef = useRef<FileTreeHandle | null>(null);
+  // SP-140-5: the active mode's rail, rendered in place of the Code section
+  // tabs. The prop name starts with a lowercase letter, which JSX would
+  // parse as an intrinsic (HTML) element, so it is aliased before use.
+  const ModeRailComponent = modeRail;
+  // SP-140-3 §3a: the design nav item is visible only when the workspace has
+  // a design/ directory. The view route is equally gated (EditorWorkspace),
+  // so a workspace without a design tree can never reach the DesignView chunk.
+  const { present: designPresent } = useDesignPresence();
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
-  const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
-  // Use props for width or fall back to default
+  // While a mode rail is active the content pane belongs to the mode: Code
+  // sections (git/files/search) yield to the mode's section, but the global
+  // sections (logs/settings/plugin panels — addressed by the shared rail
+  // below the mode rail) keep rendering in every mode. Picking a mode
+  // section releases a global pane back to the mode (handleModeSectionChange
+  // clears the selection); picking a global entry claims it back.
+  const isCodeSection = (section: SectionTab | undefined | null) =>
+    section != null && ALL_SECTION_TABS.some((tab) => tab.id === section);
+  const isGlobalSection = (section: SectionTab | undefined | null) =>
+    !!section && (section === 'logs' || section === 'settings' || pluginPanels.some((panel) => panel.id === section));
+  const effectiveSelectedSection = ModeRailComponent
+    ? isGlobalSection(selectedSection)
+      ? selectedSection
+      : (modeSection ?? null)
+    : selectedSection || (supportsGit ? 'git' : 'files'); // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
   // Plain object fallback avoids calling useRef when the prop is not provided
   const effectiveSidebarWidthRef = sidebarWidthRef ?? { current: effectiveSidebarWidth };
@@ -303,6 +348,35 @@ function Sidebar({
     setSettingsFocusTarget: modelState.setSettingsFocusTarget,
   });
 
+  /**
+   * Mode selection from the top-left switcher. Optional because Sidebar is also
+   * rendered in hosts that don't own workspace state (tests, storybook-style
+   * harnesses); without a handler the switcher simply doesn't render options
+   * that do nothing.
+   */
+  const selectMode = useCallback(
+    (id: string) => {
+      onSelectMode?.(id);
+    },
+    [onSelectMode],
+  );
+
+  /**
+   * Section selection from the active mode's rail. Optional for the same
+   * reason as `selectMode`: Sidebar is rendered in hosts without workspace
+   * state, and a rail without a handler is a read-only indicator there.
+   */
+  const handleModeSectionChange = useCallback(
+    (id: string) => {
+      // A mode-section pick releases a global pane (logs/settings/plugin
+      // panel) back to the mode's own content; without this the global pane
+      // would stick until manually re-picked.
+      if (isGlobalSection(selectedSection)) onSectionChange?.('' as SectionTab);
+      onModeSectionChange?.(id);
+    },
+    [onModeSectionChange, onSectionChange, selectedSection],
+  );
+
   const handleLogoToggle = useCallback(() => {
     if (isMobile) {
       finalOnMobileMenuToggle?.();
@@ -350,6 +424,13 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
+      case 'flows':
+      case 'screens':
+      case 'tokens':
+        // Design mode's sections: the assets browser for the active section,
+        // rendered from the shared DesignWorkspaceContext. Outside a provider
+        // (hosts without the workspace shell) the pane renders nothing.
+        return <DesignAssetsPane />;
       case 'automations':
         return (
           <AutomationsPanel
@@ -427,18 +508,19 @@ function Sidebar({
             : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }
         }
       >
-        {/* Pinned global header: instance selector */}
+        {/* Pinned global header: mode switcher (top-left) + location selector */}
         <div className="sidebar-pinned-header">
-          <button
-            type="button"
-            className="sidebar-brand sidebar-brand-button"
-            onClick={handleLogoToggle}
-            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            data-testid="sidebar-brand"
-          >
-            <SproutLogo showWordmark={false} compact />
-          </button>
+          <ModeSwitcher
+            modes={modes}
+            activeId={activeModeId}
+            onSelect={selectMode}
+            triggerLabel="Switch mode"
+            trigger={({ open }) => (
+              <span className={`sidebar-brand-mark${open ? ' is-open' : ''}`}>
+                <SproutLogo showWordmark={false} compact />
+              </span>
+            )}
+          />
           {!effectiveSidebarCollapsed ? (
             <>
               {supportsWorkspaceSwitching ? (
@@ -458,6 +540,19 @@ function Sidebar({
               )}
             </>
           ) : null}
+          {/* Collapse/expand now lives beside the switcher: the logo's click
+              moved to opening the mode menu, and a control that vanishes when
+              the rail is collapsed would strand a collapsed user. */}
+          <button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={handleLogoToggle}
+            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-collapse-toggle"
+          >
+            <PanelLeft size={16} aria-hidden="true" />
+          </button>
         </div>
 
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
@@ -469,24 +564,41 @@ function Sidebar({
             aria-label="Sidebar navigation"
             data-testid="sidebar-icon-rail"
           >
-            {/* Main section tabs: filtered by capability flags */}
-            <div role="tablist" aria-orientation="vertical">
-              {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={effectiveSelectedSection === tab.id}
-                  aria-controls="sidebar-tabpanel"
-                  className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
-                  onClick={() => handleSectionTabClick(tab.id)}
-                  title={tab.label}
-                  aria-label={tab.label}
-                  data-testid={`sidebar-${tab.id}-tab`}
-                >
-                  <tab.icon size={18} strokeWidth={1.5} />
-                </button>
-              ))}
-            </div>
+            {/* Main section tabs: the active mode's rail, or the Code
+                defaults filtered by capability flags (SP-140-5). Global
+                chrome below (platform nav, plugins, settings, logs)
+                is shared by every mode. */}
+            {ModeRailComponent ? (
+              <div
+                className={`sidebar-mode-rail ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
+                data-testid="sidebar-mode-rail"
+                data-section={modeSection ?? ''}
+              >
+                <ModeRailComponent
+                  activeId={modeSection ?? ''}
+                  onSelect={handleModeSectionChange}
+                  collapsed={effectiveSidebarCollapsed}
+                />
+              </div>
+            ) : (
+              <div role="tablist" aria-orientation="vertical">
+                {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={effectiveSelectedSection === tab.id}
+                    aria-controls="sidebar-tabpanel"
+                    className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
+                    onClick={() => handleSectionTabClick(tab.id)}
+                    title={tab.label}
+                    aria-label={tab.label}
+                    data-testid={`sidebar-${tab.id}-tab`}
+                  >
+                    <tab.icon size={18} strokeWidth={1.5} />
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Platform Nav Items (between main sections and settings) */}
             {sortedPlatformNavItems.length > 0 && (
@@ -546,6 +658,23 @@ function Sidebar({
                   })}
                 </nav>
               </>
+            )}
+
+            {/* Design — visible only when the workspace has a design/ tree */}
+            {designPresent && (
+              <div role="tablist" aria-orientation="vertical">
+                <button
+                  role="tab"
+                  aria-selected={currentView === 'design'}
+                  className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
+                  onClick={() => onViewChange?.('design')}
+                  title="Design"
+                  aria-label="Design"
+                  data-testid="sidebar-design-button"
+                >
+                  <Palette size={18} strokeWidth={1.5} />
+                </button>
+              </div>
             )}
 
             {/* Settings & Logs tabs */}

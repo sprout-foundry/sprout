@@ -115,6 +115,24 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	// monotonic seq; the final chunk has is_final=true.
 	events.EventTypeCommandOutput:        {},
 	events.EventTypeCommandOutputDropped: {},
+
+	// Automate workflow lifecycle (SP-065-2e). The AutomationsPanel and
+	// AutomationsSessionDetail subscribe to these over the `automate`
+	// channel to refresh session state and stream workflow output.
+	//
+	// These were published by the agent/workflow layer but never
+	// registered here, so every automate frame was dropped at this gate
+	// (or panicked outright under SPROUT_DEV=1). Registering them is
+	// half the fix — the client-side bridge in useWebSocketEventHandler
+	// must also forward them to the automateEvents bus.
+	//
+	// Delivery is gated by channel opt-in, not just this allowlist:
+	// shouldForwardEventToConnection only forwards automate.* to
+	// connections that sent {type:"subscribe",data:{channel:"automate"}}.
+	events.EventTypeAutomateSessionStarted: {},
+	events.EventTypeAutomateSessionEnded:   {},
+	events.EventTypeAutomateOutputChunk:    {},
+	events.EventTypeAutomateBudgetUpdate:   {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it

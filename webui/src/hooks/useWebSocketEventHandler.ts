@@ -2,6 +2,7 @@ import type { WsEvent } from '@sprout/events';
 import type { Message, ToolExecution } from '@sprout/ui';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
+import { emitAutomate, type AutomateEventType, type AutomateEventPayload } from '../services/automateEvents';
 import { fetchChatSessionMessages } from '../services/chatSessions';
 import { getServerErrorCode } from '../services/errorCodes';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
@@ -117,6 +118,33 @@ export function useWebSocketEventHandler({
       const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
       if (filteredEvents.includes(event.type)) return;
 
+      const eventData = (event.data ?? {}) as Record<string, unknown>;
+
+      // Automate workflow lifecycle → the automateEvents pub-sub bus.
+      //
+      // AutomationsPanel and AutomationsSessionDetail subscribe via
+      // subscribeAutomate() and were relying on this dispatch. The only
+      // caller that ever emitted here lived in useEventHandler.ts, which
+      // was deleted as "dead code" in 1dfd28e22 — silently stranding both
+      // panels, since 6d94e49ad had already removed their polling
+      // fallback. They rendered whatever they fetched on tab switch and
+      // never updated again.
+      //
+      // Routed ABOVE the native-chat short-circuit and the per-chat
+      // filter on purpose:
+      //  - automate events carry no chat_id/client_id (the server targets
+      //    them by `automate` channel subscription — see
+      //    shouldForwardEventToConnection), so the per-chat filter would
+      //    never match them and they'd fall through to the unknown-event
+      //    branch.
+      //  - they are not chat streaming events, so the NATIVE_CHAT_ENABLED
+      //    short-circuit doesn't apply; the Automations panel exists in
+      //    --native-chat dists too and must still receive them.
+      if (event.type.startsWith('automate.')) {
+        emitAutomate(event.type as AutomateEventType, eventData as AutomateEventPayload);
+        return;
+      }
+
       // Compile-time short-circuit (R-4): in a --native-chat dist the shell
       // provides the chat loop natively, so the webui's chat-event streaming
       // entry is never wired up — chat events (query_started / stream_chunk /
@@ -139,7 +167,6 @@ export function useWebSocketEventHandler({
         'agent_message',
         'error',
       ]);
-      const eventData = (event.data ?? {}) as Record<string, unknown>;
       if (
         perChatEvents.has(event.type) &&
         eventData.chat_id &&

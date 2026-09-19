@@ -1,0 +1,52 @@
+{
+  "personas": [
+    {
+      "id": "designer",
+      "name": "Designer",
+      "description": "Open-format UX design specialist: design tokens (DTCG), SVG wireframes, mermaid flows, screens, and brand assets under design/. Validates before declaring done. Carries the 'git_write' capability so a design iteration commits like any other contributor.",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/designer.md",
+      "aliases": [
+        "ux",
+        "design"
+      ],
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "commit",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "write_structured_file",
+        "patch_structured_file",
+        "search",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "browse_url",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
+        "todo_write",
+        "todo_read",
+        "list_skills",
+        "activate_skill",
+        "list_changes",
+        "recover_file",
+        "revert_my_changes",
+        "repo_map",
+        "list_directory",
+        "request_clarification",
+        "register_preview_port",
+        "design_validate",
+        "design_assets",
+        "design_render",
+        "design_import_sketch"
+      ],
+      "capabilities": [
+        "git_write"
+      ],
+      "delegatable": true,
+      "enabled": true,
+      "_rules_source": "inherit:DefaultAutoApproveRules"
+    }
+  ]
+}

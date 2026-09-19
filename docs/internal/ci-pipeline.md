@@ -6,9 +6,17 @@ CI (`.github/workflows/build.yml`) matrix-tests on ubuntu/macOS/Windows, then ru
 
 ```bash
 make vet && make fmt-check && make lint && make build-all   # fast (~30s)
+make lint-go-new                                            # new-code Go lint gate (golangci-lint)
 SKIP_NETWORK_TESTS=1 make test-coverage                      # slow (~15min)
 make prepare-grammars && bash scripts/wasm-tool-roster-smoke.sh   # WASM
 ```
+
+Go lint: `.golangci.yml` (golangci-lint v2, standard set + gosec minus
+structural G301/G304/G306). `make lint-go` runs the full repo and surfaces
+the historical backlog; CI runs the official golangci-lint-action with
+`only-new-issues: true` so PRs block only on issues they introduce. Ramp
+the full gate in by clearing `make lint-go` findings and switching CI to
+the full run.
 
 ## `//go:embed` of gitignored directories
 

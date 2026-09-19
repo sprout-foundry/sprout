@@ -725,10 +725,9 @@ func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
 		return
 	}
 	contextLimit := sp.getContextLimit()
-	maxOutput, budgetOK := api.CalculateOutputBudgetAnchored(contextLimit, total-heuristic, heuristic)
-	if !budgetOK {
-		sp.setMaxTokensHint(0)
-		return
-	}
+	// The !ok case (estimate says input fills the window) now returns the
+	// remaining window instead of a sentinel; pinning a tiny floor here
+	// decapitated responses (finish=output_limit at exactly the floor).
+	maxOutput, _ := api.CalculateOutputBudgetAnchored(contextLimit, total-heuristic, heuristic)
 	sp.setMaxTokensHint(maxOutput)
 }

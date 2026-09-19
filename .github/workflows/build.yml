@@ -9,6 +9,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# pull-requests: read lets golangci-lint-action diff new-issue detection
+# against the PR base via the GitHub API.
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   # Primary gate: linux + macOS run the full pipeline (lint, build, vitest,
   # unit tests with coverage, smoke). Windows is deliberately NOT in this
@@ -28,6 +34,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
+      with:
+        # Full history so golangci-lint's only-new-issues diff is accurate.
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -82,6 +91,20 @@ jobs:
 
     - name: Check gofmt
       run: make fmt-check
+
+    - name: Lint Go (new code only)
+      # New-code gate: the repo predates golangci-lint, so a full-repo gate
+      # would block every PR on the historical backlog (431 findings as of
+      # 2026-09-19, see `make lint-go`). only-new-issues diffs against the
+      # PR base or the push range. Needs a full fetch for accurate diffs
+      # and pull-requests: read for the GitHub-API diff path.
+      uses: golangci/golangci-lint-action@v9
+      with:
+        # v2.13.2: prebuilt binaries must be built with a Go version >= the
+        # repo's toolchain (go.mod: 1.26.6). v2.5.0 shipped go1.25 builds and
+        # exits with "language version lower than targeted" on every run.
+        version: v2.13.2
+        only-new-issues: true
 
     - name: Set up Node.js
       uses: actions/setup-node@v5
@@ -233,6 +256,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
+      with:
+        # Full history so golangci-lint's only-new-issues diff is accurate.
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -261,6 +287,13 @@ jobs:
 
     - name: Check gofmt
       run: make fmt-check
+
+    - name: Lint Go (new code only)
+      # Same new-code gate as the `test` job — see the note there.
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.13.2
+        only-new-issues: true
 
     - name: Set up Node.js
       uses: actions/setup-node@v5

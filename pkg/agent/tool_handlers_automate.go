@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -15,10 +14,6 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
-
-// backgroundProcessManagerOnce ensures thread-safe lazy initialization of
-// the BackgroundProcessManager to prevent data races.
-var backgroundProcessManagerOnce sync.Once
 
 // automateSproutDirKey is a context key for the workspace-aware sprout
 // directory. The WebUI API layer sets this before calling RunAutomateWorkflow
@@ -311,14 +306,19 @@ func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]
 	return string(resultJSON), nil
 }
 
-// getOrCreateBackgroundProcessManager lazily initializes the background process manager.
-// Thread-safe via sync.Once to prevent data races.
+// getOrCreateBackgroundProcessManager lazily initializes the background process
+// manager for THIS agent.
+//
+// The lock must be per-agent, not a package-level sync.Once: the guarded field
+// lives on the Agent, so a package-level Once would initialize only the first
+// agent to ask and return nil for every other one. Callers then invoke
+// bpm.StartWithOptions on a nil receiver, which panics at m.mu.Lock().
 func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessManager {
-	backgroundProcessManagerOnce.Do(func() {
-		if a.backgroundProcessManager == nil {
-			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
-		}
-	})
+	a.backgroundProcessManagerMu.Lock()
+	defer a.backgroundProcessManagerMu.Unlock()
+	if a.backgroundProcessManager == nil {
+		a.backgroundProcessManager = tools.NewBackgroundProcessManager()
+	}
 	return a.backgroundProcessManager
 }
 

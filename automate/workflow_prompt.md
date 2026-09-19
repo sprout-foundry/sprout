@@ -13,13 +13,13 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 1. **Read `TODO.md`** from your current working directory and identify the first incomplete `[ ]` item. Do not read any other `TODO.md` file.
 2. **Delegate implementation** to orchestrator using run_subagent. Your prompt to the orchestrator MUST include the following instructions verbatim (this is critical — the orchestrator often skips delegation without explicit direction):
 
-   "You are the orchestrator for this task. You MUST delegate all implementation, testing, and review work to specialized subagents. Do NOT write code, tests, or perform reviews yourself. Follow this exact sequence using run_subagent (serialized, NOT parallel):
+   "You are the orchestrator for this task. You can write the code and write the tests, but you MUST delegate the review work to specialized subagents. Do NOT perform reviews yourself. Follow this exact sequence using run_subagent (serialized, NOT parallel):
 
    a) **Activate relevant skills first:** Use activate_skill for any relevant skill (e.g., `project-planning`, `browse-debugging`) before delegating.
 
-   b) **Write code:** Delegate to `coder` persona with the feature/task description, relevant file paths, and acceptance criteria. Wait for completion.
+   b) **Write code:** Delegate to `coder` persona with the feature/task description (or directly for minimal scope items) relevant file paths, and acceptance criteria. Wait for completion.
 
-   c) **Verify build:** Run the project build command (e.g., `go build ./...` or `make build-all`). If it fails, delegate a fix to `coder` with the specific error. Repeat until build passes.
+   c) **Verify build:** Run the project build command (e.g., `go build ./...` or `make build-all`). If it fails, delegate a fix to `coder` with the specific error or address if minimal. Repeat until build passes.
 
    d) **Write tests:** Delegate to `tester` persona to write comprehensive tests for the new or modified code. Wait for completion.
 
@@ -46,7 +46,7 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 
 ## Rules
 
-- Process at most 200 TODO items per session
+- Process at most 1000 TODO items per session
 - **Do NOT stop early.** Keep working through `[ ]` items until they are all `[x]` or you hit an unrecoverable error. A failed subagent, a broken build, or budget pressure are NOT stop conditions — fix, retry, or skip-and-move-on (see failure rule below) and continue to the next item.
 - If a subagent fails or the build cannot be fixed after 2 attempts, log the failure in your next iteration summary and continue to the next item. Do not stop — move on.
 - Do NOT use `git add .` or `git add -A` — only stage specific files you created or modified

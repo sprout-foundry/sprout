@@ -36,6 +36,17 @@ export type {
   ProvidersResponse,
   SessionSearchResult,
   SessionSearchResponse,
+  DesignInventory,
+  DesignAssetEntry,
+  DesignAssetKind,
+  DesignLayoutSidecar,
+  DesignFeedbackFile,
+  DesignFeedbackAnnotation,
+  DesignFeedbackEntry,
+  DesignTokenGroup,
+  DesignFlowSummary,
+  DesignManifestSummary,
+  DesignWriteResult,
 } from './types';
 
 export { SSHWorkspaceOpenError } from './types';
@@ -58,3 +69,5 @@ export * as onboardingApi from './onboardingApi';
 export * as sessionApi from './sessionApi';
 export * as miscApi from './miscApi';
 export * as editApprovalApi from './editApprovalApi';
+export * as designApi from './designApi';
+export * as designApiWrite from './designApiWrite';

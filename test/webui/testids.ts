@@ -58,11 +58,19 @@ const TESTIDS = {
   "sidebar-brand": "sidebar-brand",
   "sidebar-settings-toggle": "sidebar-settings-toggle",
   "sidebar-icon-rail": "sidebar-icon-rail",
+  "sidebar-mode-rail": "sidebar-mode-rail",
   "sidebar-git-tab": "sidebar-git-tab",
   "sidebar-files-tab": "sidebar-files-tab",
   "sidebar-search-tab": "sidebar-search-tab",
   "sidebar-automations-tab": "sidebar-automations-tab",
   "sidebar-logs-tab": "sidebar-logs-tab",
+  "sidebar-collapse-toggle": "sidebar-collapse-toggle",
+  // Workspace mode switcher (top-left). Derived ids: <testId>-trigger,
+  // <testId>-menu, <testId>-option-<mode>.
+  "sidebar-brand-trigger": "sidebar-brand-trigger",
+  "sidebar-brand-menu": "sidebar-brand-menu",
+  "sidebar-brand-option-code": "sidebar-brand-option-code",
+  "sidebar-brand-option-design": "sidebar-brand-option-design",
   "sidebar-design-button": "sidebar-design-button",
 
   // SP-092-3: Past sessions hint
@@ -317,9 +325,20 @@ const TESTIDS = {
   // from webui/src/components/design/* plus representative values for the
   // dynamic `${...}` row/node/anchor patterns so the coverage gate passes.
   "design-view": "design-view",
+  // Mode shell (SP-140-5 step 3): the Design mode's content column
+  // (workspaces/DesignShell → design/DesignSurface).
+  "design-surface": "design-surface",
+  "design-surface-fallback": "design-surface-fallback",
   "design-tabpanel": "design-tabpanel",
   "design-assets-rail": "design-assets-rail",
   "design-rail-stub-row": "design-rail-stub-row",
+  // Mode rail (SP-140-5): the Design mode's section rail in the sidebar
+  // (workspaces/rail.ts contract). Entries follow the pattern
+  // design-rail-${id} (DesignRail.tsx).
+  "design-rail": "design-rail",
+  "design-rail-flows": "design-rail-flows",
+  "design-rail-screens": "design-rail-screens",
+  "design-rail-tokens": "design-rail-tokens",
   "design-detail-pane": "design-detail-pane",
   "design-detail-content": "design-detail-content",
   // Flows canvas
@@ -341,10 +360,6 @@ const TESTIDS = {
   "design-screen-status-login": "design-screen-status-login", // pattern design-screen-status-${card.name}
   "design-screen-thumb-login": "design-screen-thumb-login", // pattern design-screen-thumb-${card.name}
   "design-screen-thumb-box-login": "design-screen-thumb-box-login", // pattern design-screen-thumb-box-${card.name}
-  // Tab buttons (pattern design-tab-${tab.id})
-  "design-tab-flows": "design-tab-flows",
-  "design-tab-screens": "design-tab-screens",
-  "design-tab-tokens": "design-tab-tokens",
   // Feedback write path (SP-140-4d)
   // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
   "design-feedback-annotations": "design-feedback-annotations",
@@ -362,6 +377,11 @@ const TESTIDS = {
   "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
   "design-feedback-area-abc123": "design-feedback-area-abc123",
   "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
+  // Representative seeded-feedback fixture ids used by
+  // DesignFeedbackResolution.test.tsx (annotation a1, area hierarchy).
+  "design-feedback-annotation-a1": "design-feedback-annotation-a1",
+  "design-feedback-toggle-a1": "design-feedback-toggle-a1",
+  "design-feedback-area-hierarchy": "design-feedback-area-hierarchy",
   "design-feedback-affordance": "design-feedback-affordance",
   "design-feedback-form": "design-feedback-form",
   "design-feedback-add": "design-feedback-add",

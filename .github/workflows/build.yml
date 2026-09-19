@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - main
+  # No branch filter: stacked PRs (base = another feature branch) must run
+  # the same gates as PRs targeting main.
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -51,6 +51,27 @@ jobs:
 
     - name: Install dependencies
       run: go mod download
+
+    - name: Install Chromium (headless browser for design_render / analyze_ui_screenshot)
+      # The render-tier tests (pkg/agent/design_e2e_test.go) rasterize real SVG
+      # and HTML through webcontent's headless browser. Without a browser the
+      # rod launcher self-provisions one: a slow, network-dependent download
+      # inside a test run. Installing it here keeps that deterministic, and
+      # SPROUT_REQUIRE_BROWSER below makes the tests fail rather than skip if a
+      # browser really is absent — so "the render path ran" is asserted, not
+      # assumed from a green suite that skipped it.
+      #
+      # The binary must land on a path webcontent.systemBrowserPaths() probes.
+      # Ubuntu's `chromium`/`chromium-browser` packages are snap transitional
+      # stubs (candidate 2:1snap1) that install no real binary, so install
+      # Google Chrome from the dl.google.com apt repo instead and verify the
+      # path rod will actually find.
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        test -x /usr/bin/google-chrome-stable || { echo "chrome not at /usr/bin/google-chrome-stable"; exit 1; }
+        /usr/bin/google-chrome-stable --version
 
     - name: Install MLX C library (macOS)
       if: runner.os == 'macOS' && runner.arch == 'ARM64'
@@ -122,6 +143,12 @@ jobs:
         TEST_PARALLEL: "2"
         TEST_RACE: ""
         TEST_COVER: ${{ runner.os == 'Windows' && 'no' || '' }}
+        # Linux installs a browser in the step above, so require it there: the
+        # render-tier tests then fail instead of skipping, and "the render path
+        # ran" is asserted rather than assumed from a green suite that skipped
+        # it. Unset elsewhere so a runner without a browser skips (visibility
+        # is provided by the requirement on the platform we control).
+        SPROUT_REQUIRE_BROWSER: ${{ runner.os == 'Linux' && '1' || '' }}
       run: make test-coverage
 
     - name: Display coverage summary

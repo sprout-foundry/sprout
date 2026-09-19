@@ -249,6 +249,24 @@ describe('resolveFlowLayout', () => {
     const sidecar = { nodes: dragged, layoutHint: 'LR', derivedFrom: derivedFromHash(FLOW) };
     expect(resolveFlowLayout(FLOW, graph, sidecar, '').positions).toEqual(dragged);
   });
+
+  it('lays out against the rendered node dimensions when given them', () => {
+    const graph = graphOf(FLOW);
+    const dimensions = {
+      cart: { width: 208, height: 156 },
+      pay: { width: 208, height: 156 },
+      done: { width: 208, height: 156 },
+    };
+
+    const withDims = resolveFlowLayout(FLOW, graph, null, 'LR', dimensions);
+    const withDefaults = resolveFlowLayout(FLOW, graph, null, 'LR');
+
+    expect(withDims.positions).toEqual(layoutFlowGraph(graph, { layoutHint: 'LR', dimensions }));
+    // Taller nodes must be spaced further apart, or a wireframe node overlaps
+    // its neighbour and the edge between them collapses to a zero-height path.
+    const spread = (p: Record<string, { x: number }>) => p.done.x - p.cart.x;
+    expect(spread(withDims.positions)).toBeGreaterThan(spread(withDefaults.positions));
+  });
 });
 
 describe('sidecar ↔ designApi interface', () => {

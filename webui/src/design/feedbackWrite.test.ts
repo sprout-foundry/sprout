@@ -8,6 +8,8 @@
  * `resolution` note and the per-annotation `resolved` flag.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { DesignFeedbackFile } from '../services/api/types';
 import {
@@ -319,5 +321,41 @@ describe('annotation helpers', () => {
 
   it('exposes the §4d resolved marker', () => {
     expect(RESOLVED_FEEDBACK_STATUS).toBe('resolved');
+  });
+
+  // The Go reader is a second implementation of this schema
+  // (pkg/design/feedback.go), and the two are only pinned together by the
+  // fixture `pkg/design/testdata/webui-feedback/new-annotation.json`, which
+  // `pkg/design/feedback_contract_test.go` feeds to that reader. This guard
+  // fails when the builder's output drifts from the committed fixture, so the
+  // cross-language test cannot silently pass against a stale document.
+  describe('cross-language contract fixture', () => {
+    const fixturePath = path.resolve(__dirname, '../../../pkg/design/testdata/webui-feedback/new-annotation.json');
+    const artifact = JSON.parse(fs.readFileSync(fixturePath, 'utf8')) as {
+      target: string;
+      filename: string;
+      document: DesignFeedbackFile;
+    };
+
+    const built = buildFeedbackFile(
+      'design/wireframes/login.svg',
+      'Primary CTA reads as secondary; swap emphasis',
+      'hierarchy',
+      '2026-09-15T10:36:47Z',
+      { x: 0.42, y: 0.18 },
+    );
+
+    it('matches the document the builder produces today', () => {
+      expect(artifact.document).toEqual(built);
+      expect(artifact.target).toBe('design/wireframes/login.svg');
+    });
+
+    it('matches the filename the builder derives today', () => {
+      expect(artifact.filename).toBe(`${feedbackWriteTarget(artifact.target)}.json`);
+    });
+
+    it('is still the pending status the Go reader keys on', () => {
+      expect(artifact.document.status).toBe(PENDING_FEEDBACK_STATUS);
+    });
   });
 });

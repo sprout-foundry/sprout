@@ -18,7 +18,7 @@
  */
 
 import type { DesignLayoutSidecar } from '../services/api/types';
-import type { FlowGraph, FlowPoint } from './layout';
+import type { FlowDimensions, FlowGraph, FlowPoint } from './layout';
 import { collapseLayout, isPoint, layoutFlowGraph, normaliseLayoutHint, resolveFlowDirection } from './layout';
 
 export type { DesignLayoutSidecar } from '../services/api/types';
@@ -206,6 +206,7 @@ export function resolveFlowLayout(
   graph: FlowGraph,
   sidecar: DesignLayoutSidecar | null | undefined,
   layoutHint?: string | null,
+  dimensions?: Record<string, Partial<FlowDimensions>>,
 ): ResolvedFlowLayout {
   const stored = sidecar?.nodes ?? {};
   const covered = graph.nodes.every((node) => isPoint(stored[node.id]));
@@ -219,7 +220,11 @@ export function resolveFlowLayout(
     };
   }
   return {
-    positions: layoutFlowGraph(graph, { layoutHint: layoutHint ?? undefined }),
+    // The dimensions are what the canvas actually renders (wireframe-derived
+    // sizes), so dagre must lay out against them: with the defaults a node
+    // drawing a tall wireframe overlapped its neighbour and the edge between
+    // them collapsed to a zero-height path.
+    positions: layoutFlowGraph(graph, { layoutHint: layoutHint ?? undefined, dimensions }),
     sidecar: buildLayoutSidecar(graph, mmdText, { layoutHint }),
     regenerated: true,
   };

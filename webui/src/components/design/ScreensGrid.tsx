@@ -31,6 +31,7 @@ import { designRootPath, readAsset, writeAsset } from '../../services/api/design
 import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
 import LivePreview from '../LivePreview';
 import type { DesignTabProps } from './DesignTabProps';
+import { assetDisplayName } from './assetNames';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -155,6 +156,12 @@ export interface ScreensGridProps extends DesignTabProps {
   /** Design inventory from the shell; absent while it is still loading. */
   inventory?: DesignInventory | null;
   /**
+   * Selection driven from outside the grid (the sidebar's assets pane via the
+   * shared workspace context). When provided it wins over the grid's own
+   * click state, so a sidebar row and a card highlight stay one selection.
+   */
+  selectedPath?: string | null;
+  /**
    * Override the screen read. Defaults to the container's `readAsset` path;
    * supplying it lets a host (or a test) hand already-read text straight in.
    */
@@ -170,6 +177,7 @@ export interface ScreensGridProps extends DesignTabProps {
 
 export default function ScreensGrid({
   inventory = null,
+  selectedPath,
   contentByPath,
   fetchFn,
   onSelectAsset,
@@ -180,6 +188,12 @@ export default function ScreensGrid({
   const [selected, setSelected] = useState<string | null>(null);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+
+  // External selection (sidebar assets pane) drives the same downstream
+  // behavior as a card click — highlight, detail pane, preview mount.
+  useEffect(() => {
+    if (selectedPath !== undefined) setSelected(selectedPath);
+  }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);
   const cards = useMemo(
@@ -245,7 +259,7 @@ export default function ScreensGrid({
         data-screen-selected=""
         data-inventory="missing"
       >
-        <p className="design-tab-placeholder">No design/ tree to browse.</p>
+        <p className="design-tab-placeholder">Couldn&apos;t load the design inventory.</p>
       </div>
     );
   }
@@ -285,19 +299,35 @@ export default function ScreensGrid({
                     data-testid={`design-screen-thumb-box-${card.name}`}
                   >
                     {content ? (
-                      <img
-                        className="design-screen-thumb-image"
-                        src={thumbnailUrl(card.path)}
-                        alt=""
-                        data-testid={`design-screen-thumb-${card.name}`}
-                      />
+                      card.kind === 'screen' ? (
+                        // An HTML screen cannot be an <img>: the browser refuses
+                        // to decode it, which left every screen card on the
+                        // empty placeholder forever (wireframes — SVG — were
+                        // the only thumbs that ever rendered). Render the read
+                        // HTML in a scriptless sandboxed iframe, scaled down.
+                        <iframe
+                          className="design-screen-thumb-frame"
+                          title={card.name}
+                          sandbox=""
+                          srcDoc={content}
+                          loading="lazy"
+                          data-testid={`design-screen-thumb-${card.name}`}
+                        />
+                      ) : (
+                        <img
+                          className="design-screen-thumb-image"
+                          src={thumbnailUrl(card.path)}
+                          alt=""
+                          data-testid={`design-screen-thumb-${card.name}`}
+                        />
+                      )
                     ) : (
                       <span className="design-screen-thumb-empty" aria-hidden="true" />
                     )}
                   </span>
                   <span className="design-screen-meta">
                     <span className="design-screen-name" title={card.path}>
-                      {card.name}
+                      {assetDisplayName(card.name)}
                     </span>
                     {card.frame ? (
                       <span className="design-screen-frame" data-testid={`design-screen-frame-${card.name}`}>
@@ -362,6 +392,7 @@ export default function ScreensGrid({
  */
 export function ScreensTabContainer({
   inventory,
+  selectedPath,
   onSelectAsset,
   fetchFn,
   readFn,
@@ -388,6 +419,7 @@ export function ScreensTabContainer({
   return (
     <ScreensGrid
       inventory={inventory}
+      selectedPath={selectedPath}
       onSelectAsset={onSelectAsset}
       // A consent-aware read override wins over the plain transport.
       fetchFn={readFn ?? transport}

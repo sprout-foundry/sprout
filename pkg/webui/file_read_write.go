@@ -26,11 +26,15 @@ type fileRevision struct {
 }
 
 func fileRevisionFor(path string) (fileRevision, error) {
-	info, err := os.Stat(path)
+	// path is the canonicalizePath-verified resolution of the request path —
+	// the same value handleFileRead/handleFileWrite use directly and
+	// unsuppressed. gosec's interprocedural taint analysis cannot see the
+	// sanitizer across this helper's boundary, hence the two annotations.
+	info, err := os.Stat(path) //nolint:gosec // G703: canonical, sanitizer-verified path
 	if err != nil {
 		return fileRevision{}, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G703: canonical, sanitizer-verified path
 	if err != nil {
 		return fileRevision{}, err
 	}

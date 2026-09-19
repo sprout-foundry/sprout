@@ -111,3 +111,21 @@ func GetUIElementPrompt() string {
 func GetOCRPrompt() string {
 	return "Extract all text from this image. Return only the extracted text."
 }
+
+// GetStructuredDescriptionPrompt returns the delegation prompt (SP-140
+// Phase 3): when the primary model cannot see, a vision model describes
+// the image with this prompt and the description is injected into the
+// conversation as attributed text. Structured for design work — layout,
+// regions, palette, typography — not prose.
+func GetStructuredDescriptionPrompt() string {
+	return `Describe this image for a software engineer who cannot see it. Be precise and compact. Cover, in this order:
+
+1. **Type**: screenshot, diagram, photo, mockup, chart, sketch.
+2. **Layout**: overall structure (grid, columns, nav placement, sections) and spatial relationships between regions.
+3. **Text regions**: every visible text string, verbatim, with its location (e.g. "heading top-left: 'Settings'").
+4. **Colors**: background, primary/accent colors, text colors — hex when determinable.
+5. **Components/UI**: buttons, inputs, cards, icons, menus — with state (selected, disabled, hover) where visible.
+6. **Typography**: size/weight/contrast hierarchy where it matters.
+
+Omit categories that don't apply. No preamble, no summary — description only.`
+}

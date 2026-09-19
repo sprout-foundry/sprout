@@ -26,6 +26,7 @@ import ModeSwitcher from '../workspaces/ModeSwitcher';
 import type { ModeRailProps } from '../workspaces/rail';
 import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
 import AutomationsPanel from './AutomationsPanel';
+import { useDesignPresence } from './design/useDesignPresence';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
@@ -48,6 +49,7 @@ import {
   Monitor,
   Zap,
   PanelLeft,
+  Palette,
 } from 'lucide-react';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
@@ -238,6 +240,10 @@ function Sidebar({
   // tabs. The prop name starts with a lowercase letter, which JSX would
   // parse as an intrinsic (HTML) element, so it is aliased before use.
   const ModeRailComponent = modeRail;
+  // SP-140-3 §3a: the design nav item is visible only when the workspace has
+  // a design/ directory. The view route is equally gated (EditorWorkspace),
+  // so a workspace without a design tree can never reach the DesignView chunk.
+  const { present: designPresent } = useDesignPresence();
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   // While a mode rail is active the content pane belongs to the mode: Code
@@ -652,6 +658,23 @@ function Sidebar({
                   })}
                 </nav>
               </>
+            )}
+
+            {/* Design — visible only when the workspace has a design/ tree */}
+            {designPresent && (
+              <div role="tablist" aria-orientation="vertical">
+                <button
+                  role="tab"
+                  aria-selected={currentView === 'design'}
+                  className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
+                  onClick={() => onViewChange?.('design')}
+                  title="Design"
+                  aria-label="Design"
+                  data-testid="sidebar-design-button"
+                >
+                  <Palette size={18} strokeWidth={1.5} />
+                </button>
+              </div>
             )}
 
             {/* Settings & Logs tabs */}

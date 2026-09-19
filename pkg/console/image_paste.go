@@ -6,11 +6,75 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
 
 // MaxPastedImageSize is the maximum size of a pasted image before rejection (10 MB).
 const MaxPastedImageSize = 10 * 1024 * 1024
+
+// PastedImagePlaceholder is the canonical in-query marker for a pasted
+// image. Bracketed so paths with spaces (macOS screenshots: "Screenshot
+// 2026-09-18 at 2.53.42 PM.png", including a U+202F before AM/PM) survive
+// intact; the parser pairs with it. SP-140.
+func PastedImagePlaceholder(path string) string {
+	return "[image: " + path + "]"
+}
+
+// pastedImageBracketPrefix / suffix delimit the canonical placeholder.
+const (
+	pastedImageBracketPrefix = "[image: "
+	pastedImageBracketSuffix = "]"
+)
+
+// ParsePastedImagePlaceholders extracts pasted-image paths from a query.
+// Accepts both the canonical bracketed form ("[image: /path with spaces.png]")
+// and the legacy free-form marker ("Pasted image saved to disk: /path.png").
+// The bracketed form is matched to the closing bracket so spaces and
+// non-breaking spaces inside the path are preserved verbatim; the legacy
+// form can only capture up to the first space (historical limitation).
+func ParsePastedImagePlaceholders(query string) []string {
+	var paths []string
+	seen := make(map[string]struct{})
+
+	add := func(p string) {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return
+		}
+		if _, dup := seen[p]; dup {
+			return
+		}
+		seen[p] = struct{}{}
+		paths = append(paths, p)
+	}
+
+	rest := query
+	for {
+		start := strings.Index(rest, pastedImageBracketPrefix)
+		if start == -1 {
+			break
+		}
+		afterStart := rest[start+len(pastedImageBracketPrefix):]
+		end := strings.Index(afterStart, pastedImageBracketSuffix)
+		if end == -1 {
+			break
+		}
+		add(afterStart[:end])
+		rest = afterStart[end+len(pastedImageBracketSuffix):]
+	}
+
+	// Legacy fallback: unbracketed marker (only up to the first space).
+	for _, m := range legacyPastedImageRe.FindAllStringSubmatch(query, -1) {
+		add(m[1])
+	}
+	return paths
+}
+
+// legacyPastedImageRe matches the pre-SP-140 free-form placeholder. It
+// cannot span spaces; bracketed placeholders supersede it.
+var legacyPastedImageRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
 
 // PastedImageDirName is the subdirectory (relative to CWD) where pasted images are saved.
 const PastedImageDirName = ".sprout/pasted-images"

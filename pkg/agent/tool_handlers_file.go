@@ -200,7 +200,7 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 		}
 
 		if a != nil {
-			if c := a.getClient(); c != nil && c.SupportsVision() {
+			if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
 				images, text, err := handleReadPDFFileMultimodal(ctx, a, cleanPath)
 				if err != nil {
 					return nil, "", agenterrors.NewTool("read_file", "failed to read PDF file", err).WithDetail("path", path)
@@ -218,7 +218,7 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 	}
 
 	// Only use image path for files with image extensions and when model supports vision
-	if !isImageExtension(path) || a == nil || a.client == nil || !a.client.SupportsVision() {
+	if !isImageExtension(path) || a == nil || a.client == nil || !api.ResolveVisionCapability(a.client).AcceptsImages {
 		result, err := handleReadFile(ctx, a, args)
 		if err != nil {
 			return nil, result, agenterrors.NewTool("read_file", "handle read file", err).WithDetail("path", path)

@@ -259,12 +259,7 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 
 // isProviderReady checks if a provider is ready to use (has API key if needed)
 func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager, provider api.ClientType) bool {
-	// Built-in providers that don't need API keys
-	if provider == api.OllamaLocalClientType {
-		return true
-	}
-
-	// Local providers that don't need API keys or cloud credentials.
+	// Local provider that doesn't need API keys or cloud credentials.
 	if provider == api.SproutLocalClientType {
 		return true
 	}
@@ -379,7 +374,7 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 	}
 
 	// Check if provider needs API key but doesn't have one
-	if !p.isProviderReady(configManager, provider) && provider != api.OllamaLocalClientType {
+	if !p.isProviderReady(configManager, provider) {
 		// Check if this is a custom provider that doesn't require an API key
 		config := configManager.GetConfig()
 		if config.CustomProviders != nil {

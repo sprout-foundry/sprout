@@ -58,7 +58,6 @@ func (m *countingMock) GetProvider() string                                 { re
 func (m *countingMock) GetModelContextLimit() (int, error)                  { return 128000, nil }
 func (m *countingMock) ListModels(context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (m *countingMock) SupportsVision() bool                                { return true }
-func (m *countingMock) SupportsConversationalVision() bool                  { return true }
 func (m *countingMock) GetVisionModel() string                              { return "mock-vision" }
 func (m *countingMock) GetLastTPS() float64                                 { return 0 }
 func (m *countingMock) GetAverageTPS() float64                              { return 0 }

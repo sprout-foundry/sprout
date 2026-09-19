@@ -423,6 +423,7 @@ func (f *StatusFooter) Resize() {
 		// Compute wrapped overflow: each padded footer row wraps to
 		// ceil(oldCols/newCols) rows at the new width.
 		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
+		newTop := newRows - reserved - overflow + 1
 
 		// The stale footer rows sit at OLD-geometry positions (they were
 		// drawn for the old height). On a GROW rows keep their absolute
@@ -442,11 +443,21 @@ func (f *StatusFooter) Resize() {
 		// two, downward to the end of the screen. The union still wipes
 		// the stranded old rows on a grow, which a new-geometry-only
 		// window misses (the pre-fix macOS symptom).
-		oldTop := oldRows - reserved + 1
-		newTop := newRows - reserved - overflow + 1
+		//
+		// BOTTOM-ANCHORED terminals break the grow half of that union.
+		// Termux's TerminalBuffer.resize anchors content to the bottom and
+		// pulls rows down out of the transcript on a grow, so the rows at
+		// oldTop hold freshly pulled-down conversation lines, not the
+		// stranded footer — clearing them eats visible history on every
+		// soft-keyboard resize. There the stale footer is always inside
+		// the new-geometry window, so clear only newTop. The DA2 probe
+		// fingerprints Termux natively and through ssh.
 		clearTop := newTop
-		if oldTop < clearTop {
-			clearTop = oldTop
+		if !bottomAnchoredResize() {
+			oldTop := oldRows - reserved + 1
+			if oldTop < clearTop {
+				clearTop = oldTop
+			}
 		}
 		if clearTop < 1 {
 			clearTop = 1

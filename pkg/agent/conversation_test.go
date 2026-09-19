@@ -276,8 +276,8 @@ func TestExtractPastedImagePaths(t *testing.T) {
 		}
 	})
 
-	t.Run("single match", func(t *testing.T) {
-		got := extractPastedImagePaths("Pasted image saved to disk: /tmp/image.png\nDescribe it")
+	t.Run("bracketed placeholder", func(t *testing.T) {
+		got := extractPastedImagePaths("[image: /tmp/image.png]\nDescribe it")
 		if len(got) != 1 {
 			t.Fatalf("got %d paths, want 1", len(got))
 		}
@@ -286,10 +286,27 @@ func TestExtractPastedImagePaths(t *testing.T) {
 		}
 	})
 
+	// macOS screenshot names contain spaces and a U+202F before AM/PM.
+	t.Run("bracketed path with spaces and U+202F", func(t *testing.T) {
+		path := "/Users/alanp/Desktop/Screenshot 2026-09-18 at 2.53.42\u202fPM.png"
+		got := extractPastedImagePaths("[image: " + path + "] what is this?")
+		if len(got) != 1 || got[0] != path {
+			t.Fatalf("got %q, want [%q]", got, path)
+		}
+	})
+
+	// Legacy free-form marker (pre-SP-140 queries, WebUI payloads) still parses.
+	t.Run("legacy marker still parses", func(t *testing.T) {
+		got := extractPastedImagePaths("Pasted image saved to disk: /tmp/image.png\nDescribe it")
+		if len(got) != 1 || got[0] != "/tmp/image.png" {
+			t.Fatalf("got %v", got)
+		}
+	})
+
 	t.Run("multiple unique paths", func(t *testing.T) {
 		got := extractPastedImagePaths(
-			"Pasted image saved to disk: /tmp/a.png\n" +
-				"Look at this. Pasted image saved to disk: /tmp/b.jpg\n" +
+			"[image: /tmp/a.png]\n" +
+				"Look at this. [image: /tmp/b.jpg]\n" +
 				"Describe both.")
 		if len(got) != 2 {
 			t.Fatalf("got %d paths, want 2", len(got))
@@ -301,15 +318,15 @@ func TestExtractPastedImagePaths(t *testing.T) {
 
 	t.Run("duplicate paths are deduped", func(t *testing.T) {
 		got := extractPastedImagePaths(
-			"Pasted image saved to disk: /tmp/a.png\n" +
-				"Again: Pasted image saved to disk: /tmp/a.png")
+			"[image: /tmp/a.png]\n" +
+				"Again: [image: /tmp/a.png]")
 		if len(got) != 1 {
 			t.Fatalf("got %d paths, want 1 (deduped)", len(got))
 		}
 	})
 
 	t.Run("path with relative path", func(t *testing.T) {
-		got := extractPastedImagePaths("Pasted image saved to disk: ./.sprout/pasted-images/img.png")
+		got := extractPastedImagePaths("[image: ./.sprout/pasted-images/img.png]")
 		if len(got) != 1 {
 			t.Fatalf("got %d paths, want 1", len(got))
 		}
@@ -360,8 +377,11 @@ func TestBuildNonVisionImageToolPrompt(t *testing.T) {
 	a := &Agent{}
 	prompt := a.buildNonVisionImageToolPrompt("what is this?", []string{"/tmp/img.png", "/tmp/img2.jpg"})
 
-	if !strings.Contains(prompt, "OCR Trigger Policy") {
-		t.Error("expected OCR trigger policy in prompt")
+	if !strings.Contains(prompt, "Image Analysis Policy") {
+		t.Error("expected image analysis policy in prompt")
+	}
+	if !strings.Contains(prompt, "general") {
+		t.Error("expected prompt to prefer general mode first")
 	}
 	if !strings.Contains(prompt, "/tmp/img.png") || !strings.Contains(prompt, "/tmp/img2.jpg") {
 		t.Error("expected image paths in prompt")

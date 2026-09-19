@@ -66,8 +66,8 @@ func findProviderWithAPIKey(configManager *configuration.Manager) (api.ClientTyp
 
 	// Try each provider in order of priority
 	for _, provider := range availableProviders {
-		// Skip local providers that don't need API keys (handled elsewhere)
-		if provider == api.OllamaLocalClientType || provider == api.LMStudioClientType || provider == api.TestClientType {
+		// Skip providers that don't need API keys (nothing to look up)
+		if !configuration.RequiresAPIKey(string(provider)) {
 			continue
 		}
 

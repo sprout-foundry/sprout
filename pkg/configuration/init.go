@@ -220,8 +220,8 @@ func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 	fmt.Println("[bot] Skip provider setup:")
 	fmt.Println("  0. Skip provider setup — use as editor only (no AI features needed)")
 	fmt.Println("     Select this if you just want to try the editor or use a local model")
-	fmt.Println("     like Ollama without configuring an API key now. You can always")
-	fmt.Println("     set up an AI provider later.")
+	fmt.Println("     like LM Studio or the built-in local model without configuring")
+	fmt.Println("     an API key now. You can always set up an AI provider later.")
 	fmt.Println()
 
 	// Check which providers have API keys already

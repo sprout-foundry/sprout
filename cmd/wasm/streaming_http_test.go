@@ -606,11 +606,6 @@ func (m *mockClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (m *mockClient) SupportsConversationalVision() bool {
-	return false
-}
 func (m *mockClient) GetVisionModel() string { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil

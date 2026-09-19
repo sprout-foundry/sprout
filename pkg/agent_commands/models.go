@@ -264,7 +264,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 				// Fallback to legacy format
 				fmt.Printf("   Cost: ~$%.2f/M tokens\n", model.Cost)
 			}
-		} else if model.Provider == "Ollama (Local)" {
+		} else if freeLocalRuntimeDisplay(model.Provider) {
 			fmt.Printf("   Cost: FREE (local)\n")
 		} else {
 			fmt.Printf("   Cost: N/A\n")
@@ -310,7 +310,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 				fmt.Printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
 			} else if model.Cost > 0 {
 				fmt.Printf(" - ~$%.2f/M tokens", model.Cost)
-			} else if model.Provider == "Ollama (Local)" {
+			} else if freeLocalRuntimeDisplay(model.Provider) {
 				fmt.Printf(" - FREE")
 			} else {
 				fmt.Printf(" - N/A")
@@ -397,9 +397,19 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	return m.setModel(chosen, chatAgent)
 }
 
+// freeLocalRuntimeDisplay reports whether the provider display name belongs
+// to a free local runtime (no per-token pricing exists for its models).
+func freeLocalRuntimeDisplay(provider string) bool {
+	switch provider {
+	case "Ollama (Local)", "LM Studio", "Local (Offline)":
+		return true
+	}
+	return false
+}
+
 // modelDetailString renders the right-aligned detail column for the
 // model picker: pricing tier + context length when available. Falls
-// back to "FREE" for local Ollama and "N/A" when nothing is known.
+// back to "FREE" for free local runtimes and "N/A" when nothing is known.
 func modelDetailString(model api.ModelInfo) string {
 	parts := []string{}
 
@@ -409,7 +419,7 @@ func modelDetailString(model api.ModelInfo) string {
 		parts = append(parts, fmt.Sprintf("$%.2f/$%.2f", model.InputCost, model.OutputCost))
 	case model.Cost > 0:
 		parts = append(parts, fmt.Sprintf("$%.2f/M", model.Cost))
-	case strings.Contains(model.Provider, "Ollama"):
+	case freeLocalRuntimeDisplay(model.Provider):
 		parts = append(parts, "FREE")
 	}
 

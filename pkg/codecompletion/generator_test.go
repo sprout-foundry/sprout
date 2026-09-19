@@ -43,8 +43,7 @@ func (m *mockCompletionClient) GetModelContextLimit() (int, error) { return 4096
 func (m *mockCompletionClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *mockCompletionClient) SupportsVision() bool               { return false }
-func (m *mockCompletionClient) SupportsConversationalVision() bool { return false }
+func (m *mockCompletionClient) SupportsVision() bool { return false }
 func (m *mockCompletionClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilitiesDefault()
 }

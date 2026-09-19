@@ -467,7 +467,7 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 		return messages
 	}
 
-	if !sp.currentClient().SupportsVision() {
+	if !api.ResolveVisionCapability(sp.currentClient()).AcceptsImages {
 		return messages
 	}
 
@@ -630,7 +630,7 @@ func (sp *sproutProvider) Info() core.ProviderInfo {
 	return core.ProviderInfo{
 		Model:       client.GetModel(),
 		ContextSize: ctxLimit,
-		HasVision:   client.SupportsVision(),
+		HasVision:   api.ResolveVisionCapability(client).AcceptsImages,
 	}
 }
 

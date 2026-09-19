@@ -16,12 +16,6 @@ type visionMockClient struct {
 
 func (v *visionMockClient) SupportsVision() bool { return true }
 
-// SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
-func (v *visionMockClient) SupportsConversationalVision() bool {
-	return false
-}
-
 // TestAttachPastedImages_AttachesToFirstUserMessage is the core regression
 // test for the webui image-paste bug. The sproutProvider must attach images
 // registered via RegisterPastedImages to the first user message in every
@@ -97,6 +91,33 @@ func TestAttachPastedImages_SkipsNonVisionClient(t *testing.T) {
 
 	if len(out[0].Images) != 0 {
 		t.Errorf("non-vision client should not receive images, got %d", len(out[0].Images))
+	}
+}
+
+// TestAttachPastedImages_LearnedVisionOverridesDeclaration (SP-140 Phase 2):
+// a client that declares no vision still receives pasted images once the
+// runtime cache records that the provider/model pair accepts them —
+// declared-false is no longer a silent drop for models known to see.
+func TestAttachPastedImages_LearnedVisionOverridesDeclaration(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	provider, err := NewSproutProvider(nil, &MockClient{model: "text-model"})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	client := sp.currentClient()
+	api.RecordVisionAcceptance(client.GetProvider(), client.GetModel(), true)
+
+	sp.RegisterPastedImages(map[string][]api.ImageData{
+		"_current": {{Base64: "dGVzdA==", Type: "image/png"}},
+	})
+
+	messages := []core.Message{{Role: "user", Content: "describe image"}}
+	out := sp.attachPastedImages(messages)
+
+	if len(out[0].Images) != 1 {
+		t.Errorf("learned-vision client should receive images, got %d", len(out[0].Images))
 	}
 }
 

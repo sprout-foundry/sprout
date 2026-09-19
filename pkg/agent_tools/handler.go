@@ -131,6 +131,12 @@ type ToolEnv struct {
 	// TTY (no WebUI client). Tools use this to decide whether to render
 	// rich CLI output (boxes, colors) for the user.
 	IsInteractiveCLI bool
+	// PrimaryAcceptsImages reports whether the agent's primary model takes
+	// inline image parts (SP-140). When true, vision tools attach raw
+	// pixels in their tool result instead of routing the image through a
+	// second vision model. Nil/absent means unknown — tools fall back to
+	// their legacy (analyze/OCR) behavior.
+	PrimaryAcceptsImages func() bool
 	// VisionProcessor, when set, lets vision-dependent tools analyze
 	// images and UI screenshots without holding an *Agent reference.
 	// Nil means the tool must report "vision unavailable".

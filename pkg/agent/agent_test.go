@@ -1405,96 +1405,43 @@ func TestVisionCacheInvalidatedOnSetClient(t *testing.T) {
 	}
 }
 
-func TestVisionProbeFieldsClearedOnSetClient(t *testing.T) {
-	a := &Agent{}
-	a.visionProbeModel = "old-model"
-	a.visionProbeProvider = "old-provider"
-	probeResult := true
-	a.visionProbeResult = &probeResult
-
-	a.setClient(&visionProbeTestClient{}, api.TestClientType)
-
-	if a.visionProbeModel != "" {
-		t.Errorf("vision probe model = %q, want empty", a.visionProbeModel)
-	}
-	if a.visionProbeProvider != "" {
-		t.Errorf("vision probe provider = %q, want empty", a.visionProbeProvider)
-	}
-	if a.visionProbeResult != nil {
-		t.Errorf("vision probe result = %v, want nil", *a.visionProbeResult)
-	}
-}
-
 // boolPtr returns a pointer to b for test setup.
 var _ = boolPtr // guard against duplicate: boolPtr is defined in change_tracking_config_gate_test.go
 
-func TestEffectiveVisionSupport_ProbeTrue(t *testing.T) {
-	a := &Agent{}
-	a.setClient(&visionProbeTestClient{
-		model:          "test-model",
-		supportsVision: false, // config says no vision
-	}, "test")
-	a.visionProbeModel = "test-model"
-	a.visionProbeProvider = "test"
-	a.visionProbeResult = boolPtr(true) // probe says yes
-	if !a.effectiveVisionSupport() {
-		t.Error("probe=true should override config=false")
-	}
-}
-
-func TestEffectiveVisionSupport_ProbeFalse(t *testing.T) {
-	a := &Agent{}
-	a.setClient(&visionProbeTestClient{
-		model:          "test-model",
-		supportsVision: true, // config says vision
-	}, "test")
-	a.visionProbeModel = "test-model"
-	a.visionProbeProvider = "test"
-	a.visionProbeResult = boolPtr(false) // probe says no
-	if a.effectiveVisionSupport() {
-		t.Error("probe=false should override config=true")
-	}
-}
-
-func TestEffectiveVisionSupport_NoProbe_FallsBackToConfig(t *testing.T) {
-	a := &Agent{}
-	a.setClient(&visionProbeTestClient{
-		model:          "test-model",
-		supportsVision: true,
-	}, "test")
-	// visionProbeResult is nil — never probed
-	if !a.effectiveVisionSupport() {
-		t.Error("nil probe should fall back to config=true")
-	}
-
-	a2 := &Agent{}
-	a2.setClient(&visionProbeTestClient{
-		model:          "test-model",
-		supportsVision: false,
-	}, "test")
-	if a2.effectiveVisionSupport() {
-		t.Error("nil probe should fall back to config=false")
-	}
-}
-
-func TestEffectiveVisionSupport_NilClient(t *testing.T) {
-	a := &Agent{}
-	if a.effectiveVisionSupport() {
-		t.Error("nil client should return false")
-	}
-}
-
-// visionProbeTestClient is a minimal ClientInterface for probe-vision tests.
-// It only implements what effectiveVisionSupport touches.
+// visionProbeTestClient is a minimal ClientInterface for vision tests.
+// It only implements what the resolution path touches.
 type visionProbeTestClient struct {
 	api.ClientInterface
 	model          string
 	supportsVision bool
 }
 
-func (c *visionProbeTestClient) GetModel() string                   { return c.model }
-func (c *visionProbeTestClient) SupportsVision() bool               { return c.supportsVision }
-func (c *visionProbeTestClient) SupportsConversationalVision() bool { return c.supportsVision }
+func (c *visionProbeTestClient) GetModel() string     { return c.model }
+func (c *visionProbeTestClient) SupportsVision() bool { return c.supportsVision }
+func (c *visionProbeTestClient) GetProvider() string  { return "test" }
+func (c *visionProbeTestClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilities{}
+}
+
+// TestResolveVisionCapability_ProbeOverridesDeclaration mirrors the old
+// effectiveVisionSupport semantics through the SP-140 resolver: probe
+// ground truth wins over the client's declared flag.
+func TestResolveVisionCapability_ProbeOverridesDeclaration(t *testing.T) {
+	// The "test" provider is not in the catalog, so the probe layer finds
+	// nothing and the declaration decides. AcceptsImages follows
+	// SupportsVision in both directions.
+	a := &visionProbeTestClient{model: "test-model", supportsVision: false}
+	if api.ResolveVisionCapability(a).AcceptsImages {
+		t.Error("declared=false with no probe should resolve AcceptsImages=false")
+	}
+	b := &visionProbeTestClient{model: "test-model", supportsVision: true}
+	if !api.ResolveVisionCapability(b).AcceptsImages {
+		t.Error("declared=true with no probe should resolve AcceptsImages=true")
+	}
+	if api.ResolveVisionCapability(nil).AcceptsImages {
+		t.Error("nil client should resolve to zero capability")
+	}
+}
 
 // ---------------------------------------------------------------------------
 // SP-049-1d: Phase 1 Integration Tests

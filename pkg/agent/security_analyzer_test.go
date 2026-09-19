@@ -421,10 +421,6 @@ func (m *mockSecurityAnalyzerClient) GetTPSStats() map[string]float64 {
 
 func (m *mockSecurityAnalyzerClient) ResetTPSStats() {}
 
-func (m *mockSecurityAnalyzerClient) SupportsConversationalVision() bool {
-	return false
-}
-
 func (m *mockSecurityAnalyzerClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
@@ -1019,11 +1015,10 @@ func (m *mockPromptCapturingClient) SupportsVision() bool { return false }
 func (m *mockPromptCapturingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPromptCapturingClient) GetLastTPS() float64                { return 100.0 }
-func (m *mockPromptCapturingClient) GetAverageTPS() float64             { return 100.0 }
-func (m *mockPromptCapturingClient) GetTPSStats() map[string]float64    { return nil }
-func (m *mockPromptCapturingClient) ResetTPSStats()                     {}
-func (m *mockPromptCapturingClient) SupportsConversationalVision() bool { return false }
+func (m *mockPromptCapturingClient) GetLastTPS() float64             { return 100.0 }
+func (m *mockPromptCapturingClient) GetAverageTPS() float64          { return 100.0 }
+func (m *mockPromptCapturingClient) GetTPSStats() map[string]float64 { return nil }
+func (m *mockPromptCapturingClient) ResetTPSStats()                  {}
 func (m *mockPromptCapturingClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
@@ -1066,11 +1061,10 @@ func (m *mockCallCountingClient) SupportsVision() bool { return false }
 func (m *mockCallCountingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockCallCountingClient) GetLastTPS() float64                { return 100.0 }
-func (m *mockCallCountingClient) GetAverageTPS() float64             { return 100.0 }
-func (m *mockCallCountingClient) GetTPSStats() map[string]float64    { return nil }
-func (m *mockCallCountingClient) ResetTPSStats()                     {}
-func (m *mockCallCountingClient) SupportsConversationalVision() bool { return false }
+func (m *mockCallCountingClient) GetLastTPS() float64             { return 100.0 }
+func (m *mockCallCountingClient) GetAverageTPS() float64          { return 100.0 }
+func (m *mockCallCountingClient) GetTPSStats() map[string]float64 { return nil }
+func (m *mockCallCountingClient) ResetTPSStats()                  {}
 func (m *mockCallCountingClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
@@ -1391,11 +1385,10 @@ func (m *mockPhase2CountingClient) SupportsVision() bool { return false }
 func (m *mockPhase2CountingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return m.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
-func (m *mockPhase2CountingClient) GetLastTPS() float64                { return 100.0 }
-func (m *mockPhase2CountingClient) GetAverageTPS() float64             { return 100.0 }
-func (m *mockPhase2CountingClient) GetTPSStats() map[string]float64    { return nil }
-func (m *mockPhase2CountingClient) ResetTPSStats()                     {}
-func (m *mockPhase2CountingClient) SupportsConversationalVision() bool { return false }
+func (m *mockPhase2CountingClient) GetLastTPS() float64             { return 100.0 }
+func (m *mockPhase2CountingClient) GetAverageTPS() float64          { return 100.0 }
+func (m *mockPhase2CountingClient) GetTPSStats() map[string]float64 { return nil }
+func (m *mockPhase2CountingClient) ResetTPSStats()                  {}
 func (m *mockPhase2CountingClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }

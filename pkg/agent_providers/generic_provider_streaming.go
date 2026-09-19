@@ -17,6 +17,15 @@ import (
 
 // SendChatRequestStream sends a streaming chat request
 func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	resp, err := p.sendChatRequestStreamImpl(ctx, messages, tools, reasoning, disableThinking, callback)
+	return p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
+		return p.sendChatRequestStreamImpl(ctx, msgs, tools, reasoning, disableThinking, callback)
+	})
+}
+
+// sendChatRequestStreamImpl is the plain streaming path;
+// SendChatRequestStream wraps it with vision-capability verification.
+func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	// Snapshot model under lock for all logging calls below — prevents races
 	// with SetModel or the background warmModelsCache goroutine.
 	p.mu.RLock()

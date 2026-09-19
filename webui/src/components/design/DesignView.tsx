@@ -150,7 +150,9 @@ export default function DesignView({
   const activeFlowPath = flows.some((flow) => flow.path === selectedAsset) ? selectedAsset : (flows[0]?.path ?? null);
 
   // §6g: the selected asset's inventory `modified` (stale-marker input).
-  const selectedEntry = inventory?.assets.find((asset) => asset.path === selectedAsset) ?? null;
+  // `assets` can be absent on partial inventories (tests, hosts) — optional
+  // chain the array too.
+  const selectedEntry = inventory?.assets?.find((asset) => asset.path === selectedAsset) ?? null;
 
   // §6c/§6g: the drift rows ride the same status the health strip reads. The
   // pane only needs the code-ahead row; refetch on selection change.

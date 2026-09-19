@@ -1452,3 +1452,90 @@
 .design-conflict-base {
   grid-column: 1 / -1;
 }
+
+/* ---------------------------------------------------------------------------
+ * Token value editor (SP-140-7 §7c) — structured editing on the DTCG file.
+ * --------------------------------------------------------------------------- */
+
+.design-token-editor {
+  margin-top: var(--space-sm, 8px);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-sm, 8px);
+}
+
+.design-token-editor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+}
+
+.design-token-color-well {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  cursor: pointer;
+}
+
+.design-token-input {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  padding: 4px var(--space-sm, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm, 12px);
+  min-width: 160px;
+}
+
+.design-token-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.design-token-warn {
+  color: var(--accent-warning);
+  font-size: var(--text-sm, 12px);
+  margin: var(--space-xs, 4px) 0 0;
+}
+
+.design-token-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-xs, 4px);
+  flex-wrap: wrap;
+}
+
+.design-token-save {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 3px var(--space-md, 12px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-token-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.design-token-save:not(:disabled):hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-token-saved {
+  color: var(--accent-success);
+  font-size: var(--text-sm, 12px);
+}
+
+.design-token-conflict,
+.design-token-error {
+  color: var(--accent-danger, var(--accent-warning));
+  font-size: var(--text-sm, 12px);
+}

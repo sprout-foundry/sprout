@@ -464,6 +464,16 @@ const TESTIDS = {
   "design-conflict-restore": "design-conflict-restore",
   "design-conflict-side-text": "design-conflict-side-text", // repeated node
   "design-conflict-base-toggle": "design-conflict-base-toggle",
+  // SP-140-7 token value editor (§7c, TokenValueEditor.tsx)
+  "design-token-editor": "design-token-editor",
+  "design-token-color-well": "design-token-color-well",
+  "design-token-input": "design-token-input",
+  "design-token-warn": "design-token-warn",
+  "design-token-refs": "design-token-refs",
+  "design-token-save": "design-token-save",
+  "design-token-saved": "design-token-saved",
+  "design-token-conflict": "design-token-conflict",
+  "design-token-error": "design-token-error",
 } as const;
 
 // Derived set for O(1) coverage lookups

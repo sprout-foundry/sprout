@@ -294,11 +294,18 @@ describe('TokensTree detail pane and open-file hand-off', () => {
     expect(screen.queryByTestId('design-tokens-token-detail')).toBeNull();
   });
 
-  it('is read-only: no editable field in the detail pane', () => {
+  it('edits only through the structured value editor (§7c); no free-form fields', () => {
     renderTree({ onOpenFile: vi.fn() });
     fireEvent.click(screen.getByTestId('design-token-row-color-color.brand.primary'));
     const detail = screen.getByTestId('design-tokens-token-detail');
-    expect(detail.querySelectorAll('input, textarea, [contenteditable="true"]').length).toBe(0);
+    // SP-140-7 §7c replaces the old read-only contract: the pane has exactly
+    // the structured editor's inputs (value text + color well) — no other
+    // editable field may appear.
+    const editable = detail.querySelectorAll('input, textarea, [contenteditable="true"]');
+    expect(editable.length).toBe(2);
+    const testids = Array.from(editable).map((el) => el.getAttribute('data-testid'));
+    expect(testids).toContain('design-token-input');
+    expect(testids).toContain('design-token-color-well');
   });
 });
 

@@ -252,8 +252,12 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	}
 
-	numPredict, ok := CalculateOutputBudget(contextLimit, totalTokens)
-	if !ok {
+	numPredict, _ := CalculateOutputBudget(contextLimit, totalTokens)
+	// 0 means unlimited on Ollama — wrong direction when the estimate says
+	// input fills num_ctx (the same estimate-overestimate case as the hosted
+	// providers). Keep a small explicit budget so the local server still
+	// truncates at a known line instead of drifting.
+	if numPredict <= 0 {
 		numPredict = MinOutputTokens
 	}
 	maxPredict := getOllamaMaxPredictCap(contextLimit)

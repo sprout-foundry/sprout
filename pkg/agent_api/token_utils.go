@@ -9,8 +9,16 @@ import (
 const (
 	// DefaultBufferTokens is the safety buffer for estimation errors
 	DefaultBufferTokens = 1000
-	// MinOutputTokens is the minimum output tokens to reserve
-	MinOutputTokens = 512
+	// MinOutputTokens is the emergency output floor when the window is
+	// (nearly) full by estimate. Sized for a workable agentic response —
+	// a tool-call batch plus prose — not a decorative constant. If the
+	// estimate was right and input+floor overflows the window, the provider
+	// rejects and seed's context-overflow recovery compaction fires, which
+	// is strictly better than silently sawing every response off at a tiny
+	// floor when the heuristic merely overestimated the prompt size
+	// (observed as finish=output_limit at exactly the old 512 value on
+	// 80K–134K-token prompts with plenty of real headroom).
+	MinOutputTokens = 8192
 	// ToolTokenEstimate is the approximate token count per tool definition
 	ToolTokenEstimate = 200
 	// SystemInstructionBuffer accounts for system prompt overhead
@@ -214,6 +222,15 @@ func EstimateInputTokensWireView(messages []Message, tools []Tool) int {
 // CalculateOutputBudget calculates the safe output token budget given context constraints.
 // It returns the maximum tokens that can be requested for completion.
 // If the input exceeds the context limit, returns 0 and an error message.
+//
+// The !ok return is NOT "no budget": it means the estimate says input already
+// fills the window, but the heuristic has been observed to overestimate by
+// 80K+ tokens against the provider's true prompt count on real conversations
+// (finish=output_limit at exactly the floor value, prompt far below the
+// limit). The 512-token emergency floor then silently decapitated every
+// response. ok=false now reports the full remaining window as the budget —
+// the provider still owns the hard ceiling, and seed's context-overflow
+// recovery can actually fire when the estimate was right.
 func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	if contextLimit <= 0 {
 		contextLimit = 32000 // Default fallback
@@ -221,7 +238,14 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 
 	// Check if input already exceeds context
 	if inputTokens >= contextLimit {
-		return 0, false
+		// The estimate says the prompt fills the window, but this estimate
+		// can overestimate badly (heuristic vs real tokenizer). Pinning the
+		// output to the emergency floor here caused every serious truncation
+		// (finish=output_limit at exactly MinOutputTokens with prompts far
+		// below the provider's true limit). Report the full remaining window
+		// as the budget: the provider clamps the real overflow, and callers
+		// with overflow recovery can still fire when the estimate was right.
+		return max(contextLimit-inputTokens, 0), false
 	}
 
 	// Calculate remaining space
@@ -279,7 +303,9 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 
 	totalInput := anchoredInput + heuristicInput
 	if totalInput >= contextLimit {
-		return 0, false
+		// Same overestimate defense as CalculateOutputBudget: report the
+		// remaining window (0) instead of a sentinel floor.
+		return max(contextLimit-totalInput, 0), false
 	}
 
 	remaining := contextLimit - totalInput

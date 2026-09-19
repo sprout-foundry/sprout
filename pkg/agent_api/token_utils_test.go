@@ -217,12 +217,15 @@ func TestCalculateOutputBudget(t *testing.T) {
 			maxOutput:    0,
 		},
 		{
+			// Floor branch: remaining (1500) < floor (8192), so the budget is
+			// the remaining space — proportionate to the tiny window, not the
+			// fixed floor.
 			name:         "small context minimum output",
 			contextLimit: 2000,
 			inputTokens:  500,
 			wantOK:       true,
-			minOutput:    MinOutputTokens, // buffer = 20% of 2000 = 400, floored to 4000 >= remaining (1500), returns min
-			maxOutput:    MinOutputTokens,
+			minOutput:    1500,
+			maxOutput:    1500,
 		},
 		{
 			name:         "budget never exceeds remaining context",
@@ -309,9 +312,17 @@ func TestCalculateOutputBudgetNoPrematureCollapse(t *testing.T) {
 				t.Errorf("CalculateOutputBudget(%d, %d) = %d, want at least %d (premature collapse to floor)",
 					contextLimit, tt.inputTokens, result, tt.minOutput)
 			}
-			if result <= MinOutputTokens {
-				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed to/below the emergency floor (%d) far from the real ceiling",
+			// The taper may land exactly on the floor late in the window
+			// (70% case), but must never dip below it — that would recreate
+			// the silent decapitation.
+			if result < MinOutputTokens {
+				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed below the emergency floor (%d) far from the real ceiling",
 					contextLimit, tt.inputTokens, result, MinOutputTokens)
+			}
+			// The floor itself must be a workable agentic budget — the old
+			// 512 value sawed responses off mid-tool-call.
+			if MinOutputTokens < 4096 {
+				t.Errorf("MinOutputTokens = %d, want a workable agentic budget (>= 4096)", MinOutputTokens)
 			}
 		})
 	}
@@ -460,4 +471,30 @@ func TestCalculateOutputBudgetAnchored(t *testing.T) {
 				anchoredResult, halfResult)
 		}
 	})
+}
+
+// TestCalculateOutputBudgetOverestimateNoFloorPin is a regression test for
+// the provider-reported truncation pattern: finish=output_limit with
+// generation cut at exactly MinOutputTokens (512) while the real prompt was
+// far below the context limit. The heuristic estimate claimed the input
+// filled the window, the function returned !ok, and every caller pinned
+// max_tokens to the 512-token floor — decapitating responses on
+// 80K–134K-token prompts. The !ok return must now report the remaining
+// window (0) so callers fall through to a sane budget instead of the floor.
+func TestCalculateOutputBudgetOverestimateNoFloorPin(t *testing.T) {
+	result, ok := CalculateOutputBudget(200000, 210000)
+	if ok {
+		t.Errorf("expected ok=false when estimate exceeds the window")
+	}
+	if result != 0 {
+		t.Errorf("CalculateOutputBudget(200000, 210000) = %d, want 0 (remaining window, not a floor sentinel)", result)
+	}
+
+	anchoredResult, anchoredOK := CalculateOutputBudgetAnchored(200000, 210000, 0)
+	if anchoredOK {
+		t.Errorf("expected ok=false from anchored variant when estimate exceeds the window")
+	}
+	if anchoredResult != 0 {
+		t.Errorf("CalculateOutputBudgetAnchored(200000, 210000, 0) = %d, want 0", anchoredResult)
+	}
 }

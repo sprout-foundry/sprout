@@ -1,0 +1,23 @@
+{
+  "description": "Produced by scripts/gen-feedback-fixture.mts from the real webui builder. Do not hand-edit; regenerate after changing feedbackWrite.ts.",
+  "target": "design/wireframes/login.svg",
+  "filename": "login.json",
+  "document": {
+    "target": "design/wireframes/login.svg",
+    "status": "changes-requested",
+    "resolution": "",
+    "annotations": [
+      {
+        "id": "a1",
+        "at": {
+          "x": 0.42,
+          "y": 0.18
+        },
+        "area": "hierarchy",
+        "note": "Primary CTA reads as secondary; swap emphasis",
+        "resolved": false,
+        "created": "2026-09-15T10:36:47Z"
+      }
+    ]
+  }
+}

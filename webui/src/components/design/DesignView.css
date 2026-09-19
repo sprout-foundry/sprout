@@ -1,5 +1,13 @@
 /* DesignView shell layout (SP-140-3 §3a). Tokens only — no raw hex/rgba. */
 
+/* The mode shell's wrapper: without an explicit height the surface's
+   height:100% child collapses to content height and the canvas rides its
+   min-height, leaving most of the window empty below the fold. */
+.design-surface {
+  height: 100%;
+  min-height: 0;
+}
+
 .design-view {
   display: flex;
   flex-direction: column;
@@ -7,85 +15,6 @@
   min-height: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
-}
-
-.design-view-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-}
-
-.design-view-title {
-  margin: 0;
-  font-size: var(--text-lg, 1.125rem);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.design-view-back {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.design-view-back:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.design-view-back:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-primary);
-}
-
-.design-view-tabs {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-left: auto;
-}
-
-.design-view-tab {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.design-view-tab:hover {
-  background: var(--bg-tertiary, var(--bg-secondary));
-  color: var(--text-primary);
-}
-
-.design-view-tab.active {
-  background: var(--bg-tertiary, var(--bg-secondary));
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-.design-view-tab:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .design-view-body {
@@ -104,11 +33,30 @@
 }
 
 .design-view-canvas {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: auto;
   background: var(--bg-primary);
+}
+
+/* Idle hint: floating pill at the canvas's bottom edge, so an empty detail
+   pane never needs to squat on 280px of width doing nothing. */
+.design-view-hint {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  box-shadow: var(--shadow-elevated);
+  pointer-events: none;
 }
 
 .design-view-detail {
@@ -118,6 +66,20 @@
   padding: var(--space-3);
   border-left: 1px solid var(--border-default);
   background: var(--bg-secondary);
+  transition:
+    flex-basis 0.18s ease,
+    opacity 0.18s ease;
+}
+
+/* Nothing selected: the pane yields its width to the canvas instead of
+   showing a static "select something" stub. Content stays mounted (the
+   pane contract and its data-selected wiring are test-observable). */
+.design-view-detail[data-idle='true'] {
+  flex-basis: 0px;
+  padding: 0;
+  border-left-width: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .design-rail-heading,
@@ -129,12 +91,44 @@
   overflow-wrap: anywhere;
 }
 
+/* Detail pane header: artifact name prominent, path as a quiet caption. */
+.design-detail-title {
+  margin-bottom: var(--space-2);
+}
+
+.design-detail-title .design-detail-heading {
+  margin: 0;
+  font-size: var(--text-md, 1rem);
+}
+
+.design-detail-path {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* Empty detail state: centered rather than a line of text pinned to the
+   pane's top-left corner. */
+.design-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  text-align: center;
+}
+
 .design-rail-placeholder,
 .design-detail-placeholder,
 .design-tab-placeholder {
   margin: 0;
   font-size: var(--text-sm, 0.875rem);
   color: var(--text-tertiary);
+}
+
+.design-detail-empty .design-detail-placeholder {
+  font-size: var(--text-md, 1rem);
 }
 
 .design-rail-stub-row {
@@ -432,8 +426,8 @@
 
 .design-screens-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -455,20 +449,27 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-subtle);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .design-screen-card:hover {
   background: var(--bg-hover);
   border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-elevated);
 }
 
 .design-screen-card.selected {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+  box-shadow:
+    0 0 0 2px var(--accent-primary-alpha),
+    var(--shadow-elevated);
 }
 
 .design-screen-card:focus-visible {
@@ -493,6 +494,17 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* HTML screens render in a scriptless sandboxed iframe. pointer-events off —
+   the card is the click target, and an iframe would otherwise swallow it. */
+.design-screen-thumb-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: var(--bg-primary);
+  pointer-events: none;
 }
 
 .design-screen-thumb-empty {
@@ -558,9 +570,9 @@
 
 .design-flows-status {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -591,9 +603,18 @@
   background: var(--bg-primary);
 }
 
+.design-flows .react-flow__edge-path {
+  stroke-width: 1.75;
+}
+
+.design-flows .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2.5;
+}
+
 .design-flows .react-flow__edge-text {
   fill: var(--text-primary);
-  font-size: var(--text-xs, 12px);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 500;
 }
 
 .design-flow-node {
@@ -604,18 +625,28 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-subtle);
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.design-flow-node:hover {
+  border-color: var(--border-strong);
 }
 
 /* Mid-drag the node follows the cursor, so it must paint over its neighbours. */
 .design-flow-node.is-dragging {
   z-index: 1;
-  box-shadow: 0 4px 12px var(--accent-primary-alpha);
+  box-shadow: var(--shadow-float);
 }
 
 .design-flow-node.selected {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+  box-shadow:
+    0 0 0 2px var(--accent-primary-alpha),
+    var(--shadow-elevated);
 }
 
 .design-flow-node.has-image {
@@ -805,7 +836,7 @@
 }
 
 .design-tokens-value {
-  font-size: var(--text-xs, 12px);
+  font-size: var(--text-sm, 0.875rem);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
@@ -814,15 +845,15 @@
    style); the border keeps a light value visible against the surface. */
 .design-token-swatch {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
 }
 
 .design-token-swatch-lg {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
 }
 
 /* Typography specimen: the family/size/weight are painted from the token
@@ -894,6 +925,38 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
+}
+
+/* Collapsible schema reference: closed by default so an unselected token
+   shows guidance, not a dense spec wall (PR-review critique). */
+.design-tokens-schema-wrap {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.design-tokens-schema-summary {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.design-tokens-schema-summary:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.design-tokens-schema-wrap[open] .design-tokens-schema-summary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.design-tokens-schema-wrap .design-tokens-schema {
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .design-tokens-alias {

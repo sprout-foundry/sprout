@@ -9,6 +9,12 @@ prettier --check`).
 
 ---
 
+## SP-140 — Design Workspace (all items shipped on `feat-design-workspace`)
+
+The following items were completed on the design-workspace branch. Every item
+is marked `[x]` and carries a summary of what landed; the SP-140 specs under
+`roadmap/` remain the authority for the contract.
+
 ## SP-140-1 — Format Charter (`roadmap/SP-140-1-formats.md`)
 
 - [x] **1.1** Scaffold the `design/` directory contract (tokens/, brand/,
@@ -315,6 +321,10 @@ prettier --check`).
       blobs, so the fixture pins `core.autocrlf=false` + an eol `.gitattributes`
       (the pre-existing 5.10 provenance suite shares fragility (a)+(b)).
 
+---
+
+## Status
+
 No active items as of 2026-09-15. The bg-sessions inactivity-expiry item
 (quiet watchers killed by the 2h LastPolled expiry) shipped in
 `bg-sessions: activity-based expiry`: running sessions are no longer reaped
@@ -323,5 +333,4 @@ alive sessions, reaps only dead ones; per-session `TTL` on StartOptions
 (agent shell sessions default 8h) and `sprout shell-bg keepalive ID` provide
 the explicit escape hatches. Covered by background_expiry_test.go and
 TestShellBgKeepalive_*.
-
 ---

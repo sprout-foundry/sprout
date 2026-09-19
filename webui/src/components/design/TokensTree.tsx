@@ -158,7 +158,7 @@ export default function TokensTree({
   if (!inventory || !inventory.exists) {
     return (
       <div className="design-tab-body" data-testid="design-tokens-tree" data-inventory="missing">
-        <p className="design-tab-placeholder">No design/ tree to browse.</p>
+        <p className="design-tab-placeholder">Couldn&apos;t load the design inventory.</p>
       </div>
     );
   }
@@ -308,9 +308,12 @@ export default function TokensTree({
       )}
 
       {!selectedToken ? (
-        <pre className="design-tokens-schema" data-testid="design-tokens-schema">
-          {tokenSchemaText()}
-        </pre>
+        <details className="design-tokens-schema-wrap">
+          <summary className="design-tokens-schema-summary">DTCG token schema reference</summary>
+          <pre className="design-tokens-schema" data-testid="design-tokens-schema">
+            {tokenSchemaText()}
+          </pre>
+        </details>
       ) : null}
     </div>
   );

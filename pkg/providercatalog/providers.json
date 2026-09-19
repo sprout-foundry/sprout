@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-17T14:19:46Z",
+  "updated_at": "2026-09-19T13:12:39Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -366,8 +366,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.6,
-          "output_cost": 2.4
+          "input_cost": 0.3,
+          "output_cost": 1.2
         },
         {
           "id": "MiniMax-VL-01",
@@ -397,8 +397,8 @@
           "name": "DeepSeek Chat",
           "description": "DeepSeek Chat - General purpose chat model (alias for V4 Flash non-thinking)",
           "context_length": 1000000,
-          "input_cost": 0.2574,
-          "output_cost": 1.0287
+          "input_cost": 0.32,
+          "output_cost": 0.8899999999999999
         },
         {
           "id": "deepseek-coder",
@@ -442,8 +442,8 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.07,
-          "output_cost": 0.14
+          "input_cost": 0.0434,
+          "output_cost": 0.0868
         },
         {
           "id": "deepseek-v4-flash-max",
@@ -465,8 +465,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.66
+          "input_cost": 0.21559999999999999,
+          "output_cost": 0.6468
         },
         {
           "id": "deepseek-v4-pro",
@@ -527,8 +527,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.07,
-          "output_cost": 0.14
+          "input_cost": 0.0434,
+          "output_cost": 0.0868
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -561,8 +561,8 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 1.5999999999999999,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.422298,
+          "output_cost": 0.844596
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -1602,8 +1602,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.2574,
-          "output_cost": 1.0287
+          "input_cost": 0.32,
+          "output_cost": 0.8899999999999999
         },
         {
           "id": "deepseek/deepseek-chat-v3-0324",
@@ -1716,8 +1716,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.07,
-          "output_cost": 0.14
+          "input_cost": 0.0434,
+          "output_cost": 0.0868
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1729,8 +1729,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.12
+          "input_cost": 0.04,
+          "output_cost": 0.08
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -1746,6 +1746,17 @@
           "output_cost": 0.33
         },
         {
+          "id": "deepseek/deepseek-v4-flash-0731:free",
+          "name": "DeepSeek: DeepSeek V4 Flash 0731 (free)",
+          "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows....",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
           "id": "deepseek/deepseek-v4-flash-vision-exp",
           "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
           "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
@@ -1756,8 +1767,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.66
+          "input_cost": 0.21559999999999999,
+          "output_cost": 0.6468
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
@@ -1783,8 +1794,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.5999999999999999,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.422298,
+          "output_cost": 0.844596
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -1796,8 +1807,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5808,
-          "output_cost": 1.7424
+          "input_cost": 0.57816,
+          "output_cost": 1.73448
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813:batch",
@@ -2817,8 +2828,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.1
+          "input_cost": 0.35,
+          "output_cost": 1.5
         },
         {
           "id": "meta/muse-glimmer-30b:batch",
@@ -3190,9 +3201,7 @@
             "tools",
             "vision",
             "structured_output"
-          ],
-          "input_cost": 0.5,
-          "output_cost": 1.5
+          ]
         },
         {
           "id": "mistralai/mistral-large-2512:batch",
@@ -3486,8 +3495,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 3,
-          "output_cost": 15
+          "input_cost": 1.7,
+          "output_cost": 8.5
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -3681,8 +3690,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.625,
-          "output_cost": 3.125
+          "input_cost": 0.6,
+          "output_cost": 2.4
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:batch",
@@ -3737,7 +3746,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08,
+          "input_cost": 0.07,
           "output_cost": 0.19999999999999998
         },
         {
@@ -4841,8 +4850,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.037,
-          "output_cost": 0.16999999999999998
+          "input_cost": 0.15,
+          "output_cost": 0.6
         },
         {
           "id": "openai/gpt-oss-120b:batch",
@@ -5240,6 +5249,20 @@
           ]
         },
         {
+          "id": "prism-ml/ternary-bonsai-2-27b",
+          "name": "PrismML: Ternary Bonsai 2 27B",
+          "description": "Bonsai 2 27B is a 27B-parameter reasoning model from PrismML derived from Qwen3.8-27B. It supports coding, mathematics, tool calling, and image understanding with a 262K-token context window. Ternary compression shrinks...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.075,
+          "output_cost": 0.5
+        },
+        {
           "id": "qwen/qwen-2.5-72b-instruct",
           "name": "Qwen2.5 72B Instruct",
           "description": "Qwen2.5 72B is the latest series of Qwen large language models. Qwen2.5 brings the following improvements upon Qwen2: - Significantly more knowledge and has greatly improved capabilities in coding and...",
@@ -5580,8 +5603,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.13,
-          "output_cost": 0.52
+          "input_cost": 0.19999999999999998,
+          "output_cost": 0.7
         },
         {
           "id": "qwen/qwen3-vl-30b-a3b-thinking",
@@ -5912,6 +5935,18 @@
           ],
           "input_cost": 0.21400000000000002,
           "output_cost": 2.5500000000000003
+        },
+        {
+          "id": "qwen/qwen3.8-27b:free",
+          "name": "Qwen: Qwen3.8 27B (free)",
+          "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ]
         },
         {
           "id": "qwen/qwen3.8-flash",
@@ -6332,6 +6367,18 @@
           ]
         },
         {
+          "id": "unbiased/pareto",
+          "name": "Pareto",
+          "description": "Pareto is a multimodal composite model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks.",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision"
+          ],
+          "input_cost": 2.5,
+          "output_cost": 7.5
+        },
+        {
           "id": "undi95/remm-slerp-l2-13b",
           "name": "ReMM SLERP 13B",
           "description": "A recreation trial of the original MythoMax-L2-B13 but with updated models. #merge",
@@ -6549,8 +6596,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43,
-          "output_cost": 1.75
+          "input_cost": 0.5,
+          "output_cost": 2
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -6641,8 +6688,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.4,
-          "output_cost": 4.4
+          "input_cost": 0.5544,
+          "output_cost": 1.7424
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -6676,8 +6723,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.4,
-          "output_cost": 4.4
+          "input_cost": 0.9099999999999999,
+          "output_cost": 2.8600000000000003
         },
         {
           "id": "z-ai/glm-5.3-flash",
@@ -6706,6 +6753,20 @@
           ],
           "input_cost": 0.075,
           "output_cost": 0.25
+        },
+        {
+          "id": "z-ai/glm-5.3-flashx",
+          "name": "Z.ai: GLM 5.3 FlashX",
+          "description": "GLM-5.3-FlashX is the high-speed variant of Z.ai's GLM-5.3-Flash, a native multimodal model delivering inference speeds of up to 200 tokens/s. Built on the same hybrid sparse and linear attention architecture...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.37,
+          "output_cost": 1.25
         },
         {
           "id": "z-ai/glm-5.3:batch",
@@ -6801,8 +6862,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6
+          "input_cost": 0.13,
+          "output_cost": 0.52
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -6814,8 +6875,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5808,
-          "output_cost": 1.7424
+          "input_cost": 0.57816,
+          "output_cost": 1.73448
         },
         {
           "id": "~deepseek/deepseek-v4-flash-latest",
@@ -6827,8 +6888,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
-          "output_cost": 0.13
+          "input_cost": 0.04,
+          "output_cost": 0.08
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -6869,8 +6930,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.0999999999999996,
-          "output_cost": 10.950000000000001
+          "input_cost": 1.7,
+          "output_cost": 8.5
         },
         {
           "id": "~openai/gpt-astra-latest",
@@ -6992,8 +7053,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.8775,
-          "output_cost": 2.9699999999999998
+          "input_cost": 0.8917999999999999,
+          "output_cost": 2.8028
         }
       ]
     },
@@ -7217,7 +7278,7 @@
         },
         {
           "id": "deepseek-ai/DeepSeek-V3.1-Terminus",
-          "name": "deepseek-ai/DeepSeek-V3.1-Terminus",
+          "name": "DeepSeek V3.1 Terminus",
           "description": "DeepSeek-V3.1 Terminus is an update to DeepSeek V3.1 that maintains the model's original capabilities while addressing issues reported by users, including language consistency and agent capabilities, further optimizing the model's performance in coding and search agents. It is a large hybrid reasoning model (671B parameters, 37B active) that supports both thinking and non-thinking modes. It extends the DeepSeek-V3 base with a two-phase long-context training process. Users can control the reasoning behaviour with the reasoning enabled boolean. Learn more in our docs  The model improves tool use, code generation, and reasoning efficiency, achieving performance comparable to DeepSeek-R1 on difficult benchmarks while responding more quickly. It supports structured tool calling, code agents, and search agents, making it suitable for research, coding, and agentic workflows.",
           "context_length": 163840,
           "tags": [
@@ -7346,7 +7407,7 @@
         },
         {
           "id": "google/gemini-3-pro-image",
-          "name": "google/gemini-3-pro-image",
+          "name": "Gemini 3 Pro Image",
           "description": "Nano Banana Pro (Gemini 3 Pro Image) is designed to tackle the most challenging image generation by incorporating state-of-the-art reasoning capabilities. It is the best model for complex and multi-turn image generation and editing.",
           "context_length": 131072
         },
@@ -7516,6 +7577,7 @@
         {
           "id": "Gryphe/MythoMax-L2-13b",
           "name": "Gryphe/MythoMax-L2-13b",
+          "description": "MythoMax L2 13B is a merge of several instruction- and roleplay-tuned Llama 2 13B models, tuned for creative writing and conversation.",
           "context_length": 4096,
           "tags": [
             "structured_output"
@@ -7701,7 +7763,7 @@
         },
         {
           "id": "MiniMaxAI/MiniMax-M2.7",
-          "name": "MiniMaxAI/MiniMax-M2.7",
+          "name": "MiniMax M2.7",
           "description": "MiniMax-M2.7 is MiniMax's first model deeply participating in its own evolution. M2.7 is capable of building complex agent harnesses and completing highly elaborate productivity tasks, leveraging Agent Teams, complex Skills, and dynamic tool search.",
           "context_length": 196608,
           "tags": [
@@ -7775,7 +7837,7 @@
         },
         {
           "id": "moonshotai/Kimi-K2.5",
-          "name": "moonshotai/Kimi-K2.5",
+          "name": "Kimi K2.5",
           "description": "Kimi K2.5 is an open-source, native multimodal agentic model built through continual pretraining on approximately 15 trillion mixed visual and text tokens atop Kimi-K2-Base. It seamlessly integrates vision and language understanding with advanced agentic capabilities, instant and thinking modes, as well as conversational and agentic paradigms.",
           "context_length": 262144,
           "tags": [
@@ -8002,7 +8064,7 @@
         },
         {
           "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
-          "name": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+          "name": "Qwen3 235B A22B Thinking 2507",
           "description": "Qwen3-235B-A22B-Thinking-2507 is the Qwen3's new model with scaling the thinking capability of Qwen3-235B-A22B, improving both the quality and depth of reasoning.",
           "context_length": 262144,
           "tags": [
@@ -8274,6 +8336,7 @@
         {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "name": "Sao10K/L3-8B-Lunaris-v1-Turbo",
+          "description": "Lunaris is an 8B Llama 3 roleplay and creative-writing model from Sao10K, served in a faster Turbo configuration.",
           "context_length": 8192,
           "tags": [
             "structured_output"
@@ -8400,7 +8463,7 @@
         },
         {
           "id": "zai-org/GLM-4.7-Flash",
-          "name": "zai-org/GLM-4.7-Flash",
+          "name": "GLM-4.7 Flash",
           "description": "GLM-4.7-Flash is a 30B-A3B MoE model. As the strongest model in the 30B class, GLM-4.7-Flash offers a new option for lightweight deployment that balances performance and efficiency.",
           "context_length": 202752,
           "tags": [
@@ -8411,7 +8474,7 @@
         },
         {
           "id": "zai-org/GLM-5",
-          "name": "zai-org/GLM-5",
+          "name": "GLM-5",
           "description": "GLM-5 is an advanced, open-source large language model designed for developers tackling the toughest challenges. It excels at long-context reasoning, multi-step tool orchestration, and complex systems engineering, making it the ideal choice for powering sophisticated agents and applications that require high-level cognitive tasks.",
           "context_length": 202752,
           "tags": [
@@ -8535,8 +8598,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.58,
-          "output_cost": 3.4
+          "input_cost": 0.5,
+          "output_cost": 2.85
         },
         {
           "id": "moonshotai/Kimi-K3-TEE",
@@ -8620,8 +8683,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.32,
-          "output_cost": 2.5
+          "input_cost": 0.24,
+          "output_cost": 2.2
         },
         {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",

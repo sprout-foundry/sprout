@@ -101,7 +101,7 @@ Each runner should:
 2. run `npm ci` in the repo root and `webui/`
 3. run `npm run desktop:dist`
 
-This repo now includes a `desktop-release.yml` workflow to produce platform-native desktop installers on Linux, macOS, and Windows.
+A `desktop-release.yml` workflow previously produced platform-native desktop installers on Linux, macOS, and Windows; desktop CI is suspended pending SP-080 re-prioritization (the workflow was removed from `.github/workflows/` — restore it from git history when resuming desktop builds).
 
 For signed macOS builds, configure these CI secrets:
 

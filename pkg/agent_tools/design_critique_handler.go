@@ -465,6 +465,9 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 	var attachment ToolResult
 	var visionAnalysis string
 	var visionErr error
+	// The §6d findings sidecars need the per-artifact target record (the
+	// artifacts slice alone cannot answer "which target is this PNG?").
+	artifactTargets := make([]critiqueTarget, 0, 4)
 	for _, t := range targets {
 		// Gate-1 precheck per discovered child. A deny fails the tool (the
 		// same contract as the requested-target precheck); a "prompt" verdict
@@ -494,6 +497,7 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 			out.RenderCount++
 		}
 		out.Artifacts = append(out.Artifacts, artifact)
+		artifactTargets = append(artifactTargets, t)
 		if out.Screen == "" && t.Screen != "" {
 			out.Screen = t.Screen
 		}
@@ -584,6 +588,11 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 	out.Count = len(out.Findings)
 	out.BySeverity = tallySeverities(out.Findings)
+	// §6d: persist the findings beside the artifacts so the last critique of
+	// each screen is reviewable in the DesignView detail pane (SP-140-6 §6g).
+	// Best-effort — the sidecars are derived output; their failure never
+	// fails a critique whose pixels and tool output already succeeded.
+	writeCritiqueFindingsSidecars(ctx, env, &out, artifactTargets)
 	attachment.Output = buildCritiqueSummary(out, len(attachment.Images) > 0, visionAnalysis, visionErr)
 	attachment.StructuredOut = out
 	return attachment, nil

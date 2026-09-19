@@ -15,7 +15,7 @@ Guidance for AI agents working in this repository.
 - **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Pin shared-mode UX in e2e; cover multi-chat logic in vitest.
 - Local-LLM selection skips model dirs with a corrupt `config.json` (`validModelConfig` in pkg/localmodel) — if a local model panics at load, check the local model store's `config.json` files for truncated downloads before debugging code.
-- Pre-push gates: `make vet && make fmt-check && make lint && make build-all`. Details: `docs/internal/ci-pipeline.md`.
+- Pre-push gates: `make vet && make fmt-check && make lint && make lint-go-new && make build-all`. Details: `docs/internal/ci-pipeline.md`.
 
 ## Critical Git Rules
 

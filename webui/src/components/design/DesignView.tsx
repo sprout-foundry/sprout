@@ -21,10 +21,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { listAssets } from '../../services/api/designApi';
+import { fetchDesignStatus, type DesignStatusDriftRow } from '../../services/api/designStatusApi';
 import type { DesignInventory } from '../../services/api/types';
 import { assetMatchesSection } from './assetNames';
-import { useDesignWorkspace } from './DesignWorkspaceContext';
 import DesignDetailPane from './DesignDetailPane';
+import { useDesignWorkspace } from './DesignWorkspaceContext';
 import { FlowsCanvasContainer } from './FlowsCanvasContainer';
 import { ScreensTabContainer } from './ScreensGrid';
 import TokensTree from './TokensTree';
@@ -56,6 +57,8 @@ export interface DesignViewProps {
   onTabChange?: (tab: DesignTab) => void;
   /** Called when a design asset should open in the editor. */
   onOpenFile?: (path: string, lineNumber?: number) => void;
+  /** Prefill the shell's agent panel (§6f/§6g). */
+  onAskAgent?: (prompt: string) => void;
   /** Write transport override for the detail pane's feedback write (tests/hosts). */
   writeFetch?: typeof fetch;
   /** Consent-aware read override for the detail pane's resolution flow (§3f). */
@@ -68,6 +71,7 @@ export default function DesignView({
   tab,
   onTabChange,
   onOpenFile,
+  onAskAgent,
   writeFetch,
   readFn,
   writeFn,
@@ -145,6 +149,23 @@ export default function DesignView({
   const flows = inventory?.flows ?? [];
   const activeFlowPath = flows.some((flow) => flow.path === selectedAsset) ? selectedAsset : (flows[0]?.path ?? null);
 
+  // §6g: the selected asset's inventory `modified` (stale-marker input).
+  const selectedEntry = inventory?.assets.find((asset) => asset.path === selectedAsset) ?? null;
+
+  // §6c/§6g: the drift rows ride the same status the health strip reads. The
+  // pane only needs the code-ahead row; refetch on selection change.
+  const [codeAhead, setCodeAhead] = useState<DesignStatusDriftRow | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const status = await fetchDesignStatus(fetchFn);
+      if (!cancelled) setCodeAhead(status?.drift?.codeAhead ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchFn, selectedAsset]);
+
   return (
     <div className="design-view" data-testid="design-view" data-active-tab={activeTab}>
       <div className="design-view-body">
@@ -197,6 +218,9 @@ export default function DesignView({
             fetchFn={writeFetch}
             readFn={readFn}
             writeFn={writeFn}
+            assetModified={selectedEntry?.modified}
+            codeAhead={codeAhead}
+            onAskAgent={onAskAgent}
           >
             {detail}
           </DesignDetailPane>

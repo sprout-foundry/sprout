@@ -1282,3 +1282,106 @@
     box-shadow: var(--shadow-float);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Loop results (SP-140-6 §6g) — last critique + drift context in the pane.
+ * --------------------------------------------------------------------------- */
+
+.design-loop-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-sm, 8px);
+  padding-top: var(--space-sm, 8px);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.design-loop-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-xs, 4px);
+}
+
+.design-loop-meta {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 4px);
+  align-items: center;
+}
+
+.design-loop-empty {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.design-loop-stale {
+  color: var(--accent-warning);
+}
+
+.design-loop-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs, 4px);
+}
+
+.design-loop-finding {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 4px);
+  align-items: baseline;
+  font-size: var(--text-sm, 12px);
+  padding: 2px var(--space-xs, 4px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.design-loop-severity {
+  font-weight: 600;
+}
+
+.design-loop-finding.severity-blocker .design-loop-severity,
+.design-loop-finding.severity-major .design-loop-severity {
+  color: var(--accent-danger, var(--accent-warning));
+}
+
+.design-loop-finding.severity-minor .design-loop-severity {
+  color: var(--accent-warning);
+}
+
+.design-loop-finding.severity-info .design-loop-severity {
+  color: var(--accent-info);
+}
+
+.design-loop-area {
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+
+.design-loop-suggestion {
+  color: var(--text-secondary);
+}
+
+.design-loop-ask {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-loop-ask:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}

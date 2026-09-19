@@ -74,7 +74,7 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, on
       </ErrorBoundary>
       <ErrorBoundary panelName="Design">
         <Suspense fallback={<SurfaceFallback />}>
-          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} />
+          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} onAskAgent={onAskAgent} />
         </Suspense>
       </ErrorBoundary>
     </div>

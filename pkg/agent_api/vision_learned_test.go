@@ -65,6 +65,15 @@ func TestLearnedVisionAcceptance_TTLExpiry(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
+	// Filesystems with coarse mtime granularity (some Android/FUSE layers)
+	// can give this write the same timestamp as the preceding
+	// RecordVisionAcceptance write, and the cache's mtime check would then
+	// serve the fresh data instead of the stale fixture. Force a distinct
+	// mtime so the expiry assertions hold everywhere.
+	stale := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(path, stale, stale); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
 
 	if got := LearnedVisionAcceptance("prov", "stale-true"); got != nil {
 		t.Errorf("positive entry past 30d TTL should expire, got %v", *got)

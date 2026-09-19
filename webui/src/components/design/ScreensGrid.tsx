@@ -27,13 +27,21 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
+import type { ConflictState } from '../../design/conflictModel';
+import { decideConflict, restoreAgentVersion, shouldSurfaceConflict } from '../../design/conflictModel';
 import {
   onPinPlacePoint,
   onPinPlacementArm,
   pendingCountForStem,
   publishPinPlacePoint,
 } from '../../design/pinPlacement';
-import { designRootPath, readAsset, writeAsset, readFeedback } from '../../services/api/designApi';
+import {
+  designRootPath,
+  readAsset,
+  writeAsset,
+  readFeedback,
+  writeAssetIfUnchanged,
+} from '../../services/api/designApi';
 import type {
   DesignAssetEntry,
   DesignFrame,
@@ -43,6 +51,7 @@ import type {
 import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
+import ConflictBanner from './ConflictBanner';
 import type { DesignTabProps } from './DesignTabProps';
 import './DesignView.css';
 
@@ -204,11 +213,20 @@ export default function ScreensGrid({
   // placement mode (the detail pane's affordance asks; the preview answers).
   const [annotations, setAnnotations] = useState<DesignFeedbackAnnotation[]>([]);
   const [placeMode, setPlaceMode] = useState(false);
+  // §7b conflict state: held while an agent write lands under the buffer.
+  const [conflict, setConflict] = useState<ConflictState | null>(null);
+  const [conflictResolved, setConflictResolved] = useState(false);
 
   // External selection (sidebar assets pane) drives the same downstream
   // behavior as a card click — highlight, detail pane, preview mount.
   useEffect(() => {
-    if (selectedPath !== undefined) setSelected(selectedPath);
+    if (selectedPath !== undefined) {
+      setSelected(selectedPath);
+      // A different asset invalidates the held conflict (§7b: the banner is
+      // per-asset for the life of the selection).
+      setConflict(null);
+      setConflictResolved(false);
+    }
   }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);
@@ -284,6 +302,67 @@ export default function ScreensGrid({
       offPoint();
     };
   }, []);
+
+  // §7b incoming-change awareness: the shell's agent-file-changed bridge
+  // names the path an agent just wrote. When it is the asset this pane holds
+  // an edited buffer for, fetch the disk text and hold the conflict; identical
+  // text means nothing to decide.
+  const selectedCardForConflict = cards.find((card) => card.path === selected) ?? null;
+  const heldPath = selectedCardForConflict?.path ?? null;
+  const heldText = heldPath ? contentFor(heldPath) : '';
+  useEffect(() => {
+    let ignore = false;
+    const handler = (event: Event) => {
+      const changedPath = (event as CustomEvent).detail?.path as string | undefined;
+      if (!changedPath || !heldPath) return;
+      const normalized = changedPath.startsWith('design/') ? changedPath : `design/${changedPath}`;
+      if (normalized !== designRootPath(heldPath)) return;
+      void (async () => {
+        try {
+          const diskText = await readAsset(transport, designRelativePath(heldPath));
+          if (!ignore && shouldSurfaceConflict(heldText, diskText)) {
+            setConflict({ theirs: diskText, mine: heldText });
+            setConflictResolved(false);
+          }
+        } catch {
+          // The incoming write may not be readable yet; the next event wins.
+        }
+      })();
+    };
+    window.addEventListener('agent-file-changed', handler);
+    return () => {
+      ignore = true;
+      window.removeEventListener('agent-file-changed', handler);
+    };
+  }, [heldPath, heldText, transport]);
+
+  // §7b decisions.
+  const handleKeepMine = useCallback(async () => {
+    if (!conflict || !heldPath) return;
+    try {
+      await writeAssetIfUnchanged(transport, heldPath, conflict.mine, { force: true });
+    } catch {
+      // The force write failing leaves the conflict held; the banner stays.
+      return;
+    }
+    setConflictResolved(true);
+  }, [conflict, heldPath, transport]);
+
+  const handleTakeTheirs = useCallback(() => {
+    if (!conflict || !heldPath) return;
+    const { text } = decideConflict(conflict, 'take-theirs');
+    setTexts((current) => ({ ...current, [heldPath]: text }));
+    setConflict(null);
+    setConflictResolved(false);
+  }, [conflict, heldPath]);
+
+  const handleRestoreAgent = useCallback(() => {
+    if (!conflict || !heldPath) return;
+    const text = restoreAgentVersion(conflict);
+    setTexts((current) => ({ ...current, [heldPath]: text }));
+    setConflict(null);
+    setConflictResolved(false);
+  }, [conflict, heldPath]);
 
   const handleContentChange = useCallback(
     (path: string, content: string) => {
@@ -418,6 +497,17 @@ export default function ScreensGrid({
               {error}
             </p>
           ) : null}
+          {conflict && (
+            <ConflictBanner
+              conflict={conflict}
+              path={selectedCard.path}
+              base={texts[selectedCard.path] ?? ''}
+              onKeepMine={handleKeepMine}
+              onTakeTheirs={handleTakeTheirs}
+              onRestoreAgent={conflictResolved ? handleRestoreAgent : null}
+              resolved={conflictResolved}
+            />
+          )}
           <div className="design-screen-preview">
             <LivePreview
               content={contentFor(selectedCard.path)}

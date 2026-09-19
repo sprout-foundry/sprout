@@ -64,7 +64,14 @@ export type {
 } from './types';
 
 export { DESIGN_DIR, SUMMARY_MAX_CHARS, designRootPath } from './designApiPaths';
-export { writeAsset, writeFeedback, writeLayout } from './designApiWrite';
+export {
+  writeAsset,
+  writeAssetIfUnchanged,
+  writeFeedback,
+  writeLayout,
+  DesignWriteConflictError,
+} from './designApiWrite';
+export type { SafeWriteOptions, WriteConflict } from './designApiWrite';
 export {
   parseFeedback,
   parseFeedbackFile,

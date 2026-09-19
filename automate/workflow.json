@@ -12,34 +12,34 @@
     "usd": 10
   },
     "continue_on_error": true,
-    "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator/orchestrator use DeepSeek V4 Flash; subagents use qwen3.6-27b via ai-worker.",
+    "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator/orchestrator use DeepSeek V4 Flash; subagents use glm-5.3-flash via zai-coding.",
     "initial": {
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
     "coder": {
-    "provider": "ai-worker",
-    "model": "qwen3.6-27b"
+    "provider": "zai-coding",
+    "model": "glm-5.3-flash"
     },
       "debugger": {
-      "model": "qwen3.6-27b",
-      "provider": "ai-worker"
+      "model": "glm-5.3-flash",
+      "provider": "zai-coding"
     },
       "orchestrator": {
-      "model": "glm-5.3",
+      "model": "glm-5.3-flash",
       "provider": "zai-coding"
     },
       "reviewer": {
-      "model": "qwen3.6-27b",
-      "provider": "ai-worker"
+      "model": "glm-5.3-flash",
+      "provider": "zai-coding"
     },
       "tester": {
-      "model": "qwen3.6-27b",
-      "provider": "ai-worker"
+      "model": "glm-5.3-flash",
+      "provider": "zai-coding"
     }
   },
     "max_iterations": 0,
-    "model": "glm-5.3",
+    "model": "glm-5.3-flash",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "zai-coding"

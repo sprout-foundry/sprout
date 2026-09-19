@@ -4,7 +4,7 @@
 // constants — no React, no state.
 
 import type { WsEvent } from '@sprout/events';
-import type { LogEntry } from '@sprout/ui';
+import type { LogEntry, Message } from '@sprout/ui';
 import type React from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 
@@ -113,3 +113,19 @@ export const createLogEntry = (event: WsEvent): LogEntry => ({
   level: 'info',
   category: 'system',
 });
+
+/**
+ * Returns the index of the last message that is a valid append target for
+ * primary-agent content (a non-subagent assistant message). Inline
+ * subagent-run messages (isSubagentRun) render their content inside the
+ * subagent's collapsible block — appending primary output into them makes
+ * it look like the subagent produced it. Returns -1 when no such message
+ * exists (caller should create a new primary assistant message).
+ */
+export const lastPrimaryAssistantIndex = (messages: Message[]): number => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.type === 'assistant' && !m.isSubagentRun) return i;
+  }
+  return -1;
+};

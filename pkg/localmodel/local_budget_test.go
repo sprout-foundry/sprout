@@ -35,24 +35,33 @@ func TestLocalMaxOutputTokens_NotCappedAtDefault512(t *testing.T) {
 }
 
 // A small context still budgets correctly (window minus input, cushioned),
-// and never collapses below the minimum viable output.
+// and never collapses below the minimum viable output. With a tiny window
+// the budget is the remaining space (proportionate), not the fixed floor.
 func TestLocalMaxOutputTokens_SmallContext(t *testing.T) {
 	m := &fakeBudgetModel{promptTokens: 3000, ctxLength: 8192}
 	got := localMaxOutputTokens(m, "prompt")
-	if got < api.MinOutputTokens {
-		t.Fatalf("budget below MinOutputTokens (%d): %d", api.MinOutputTokens, got)
+	if got < 512 {
+		t.Fatalf("budget below viable output: %d", got)
 	}
 	if got > 8192-3000 {
 		t.Fatalf("budget exceeds physical window remainder: %d", got)
 	}
 }
 
-// A nearly-full window floors at MinOutputTokens rather than zero.
+// A nearly-full window budgets the exact remaining space — the local
+// server clamps num_predict to num_ctx anyway, so an inflated floor would
+// be fictitious. Only an estimate at/over the window falls back to
+// MinOutputTokens.
 func TestLocalMaxOutputTokens_NearlyFullWindow(t *testing.T) {
 	m := &fakeBudgetModel{promptTokens: 8000, ctxLength: 8192}
 	got := localMaxOutputTokens(m, "prompt")
-	if got != api.MinOutputTokens {
-		t.Fatalf("nearly-full window must floor at MinOutputTokens, got %d", got)
+	if got != 8192-8000 {
+		t.Fatalf("nearly-full window must budget the remaining space (%d), got %d", 8192-8000, got)
+	}
+
+	over := &fakeBudgetModel{promptTokens: 9000, ctxLength: 8192}
+	if got := localMaxOutputTokens(over, "prompt"); got != api.MinOutputTokens {
+		t.Fatalf("over-window estimate must fall back to MinOutputTokens, got %d", got)
 	}
 }
 

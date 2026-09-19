@@ -308,4 +308,25 @@ describe('Sidebar mode rail (SP-140-5)', () => {
     expect(container.querySelector('.mock-logs')).not.toBeNull();
     expect(container.querySelector('.mock-git-section')).toBeNull();
   });
+
+  it('a mode-section pick releases a global pane back to the mode', () => {
+    const onSectionChange = vi.fn();
+    renderSidebar({
+      modes: [codeMode, designMode],
+      activeModeId: 'design',
+      modeSection: 'flows',
+      selectedSection: 'logs',
+      onSectionChange,
+      ...designRailProps,
+    });
+
+    // Clicking a mode-rail entry clears the global selection: the pane
+    // returns to the mode's assets instead of sticking on Logs.
+    act(() => {
+      container
+        .querySelector('[data-testid="design-rail-screens"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSectionChange).toHaveBeenCalledWith('');
+  });
 });

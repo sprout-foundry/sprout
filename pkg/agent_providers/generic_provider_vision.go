@@ -9,6 +9,40 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+// reconcileVisionCapability is the SP-140 Phase 2 verify-and-remember hook
+// wrapping both GenericProvider chat paths. Image-bearing requests record
+// what the provider actually did: capability-shaped 4xx rejections write a
+// short-TTL known-false entry and trigger one text-only retry (with images
+// stripped and annotated) so the turn completes instead of erroring;
+// successes write a long-TTL known-true entry. The resolver reads these as
+// its top-precedence layer, so misconfigured providers self-correct on
+// first contact. Recording is best-effort and never alters the response
+// contract beyond the rejection retry.
+func (p *GenericProvider) reconcileVisionCapability(messages []api.Message, resp *api.ChatResponse, err error, retry func([]api.Message) (*api.ChatResponse, error)) (*api.ChatResponse, error) {
+	if !api.MessagesHaveImages(messages) {
+		return resp, err
+	}
+
+	if err != nil {
+		if !api.IsVisionCapabilityRejection(err) {
+			return resp, err // transient/auth/other — never learn from these
+		}
+		api.RecordVisionAcceptance(p.GetProvider(), p.GetModel(), false)
+
+		// Reroute, don't fail: strip the images, tell the model why, retry
+		// once. If the retry also fails, surface the ORIGINAL capability
+		// error — it is the more accurate diagnosis.
+		stripped := api.StripImagesWithNote(messages)
+		if resp2, err2 := retry(stripped); err2 == nil {
+			return resp2, nil
+		}
+		return resp, err
+	}
+
+	api.RecordVisionAcceptance(p.GetProvider(), p.GetModel(), true)
+	return resp, nil
+}
+
 // SupportsVision returns whether the current model can accept image input.
 //
 // Resolution:
@@ -47,15 +81,6 @@ func (p *GenericProvider) SupportsVision() bool {
 
 	// No per-model info — trust the provider-level flag.
 	return true
-}
-
-// SupportsConversationalVision returns whether the active model is suitable
-// for inline multimodal chat messages. Currently equivalent to
-// SupportsVision() because all GenericProvider entries that opt into vision
-// are chat-format models; OCR-only clients (like OllamaLocalClient) override
-// this method to return false for OCR-only tags.
-func (p *GenericProvider) SupportsConversationalVision() bool {
-	return p.SupportsVision()
 }
 
 // GetVisionModel returns the vision model

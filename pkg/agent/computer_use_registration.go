@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
@@ -107,7 +108,7 @@ func (a *Agent) checkComputerUseActivation() error {
 	if support := computer_use.CheckPlatformSupport(); !support.Supported {
 		return errors.NewTool("computer_use", fmt.Sprintf("computer use is unavailable on this machine: %s", support.Reason), nil)
 	}
-	if a.client != nil && !a.effectiveVisionSupport() {
+	if a.client != nil && !api.ResolveVisionCapability(a.client).AcceptsImages {
 		return errors.NewTool("computer_use", fmt.Sprintf("computer_user requires a vision-capable provider; %q has no vision support — switch to a model that accepts images", a.GetProvider()), nil)
 	}
 	return nil

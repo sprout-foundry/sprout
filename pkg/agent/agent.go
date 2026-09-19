@@ -58,12 +58,6 @@ func (a *Agent) invalidateVisionCache() {
 	a.visionProcMu.Lock()
 	a.visionProc = nil
 	a.visionProcMu.Unlock()
-
-	a.visionProbeMu.Lock()
-	a.visionProbeModel = ""
-	a.visionProbeProvider = ""
-	a.visionProbeResult = nil
-	a.visionProbeMu.Unlock()
 }
 
 // LifetimeCtx returns a lazily-initialized, process-scoped context for background goroutines.
@@ -386,14 +380,6 @@ type Agent struct {
 	// Background rollup worker. Lazily initialized via rollupOnce for test compatibility.
 	rollupOnce sync.Once
 	rollupW    *rollupWorker
-
-	// visionProbe caches the registry-sourced probe result for the current
-	// model+provider so the vision decision doesn't re-fetch on every
-	// message. Invalidated when the model or provider changes.
-	visionProbeMu       sync.RWMutex
-	visionProbeModel    string
-	visionProbeProvider string
-	visionProbeResult   *bool
 
 	// slashCommands holds the command registry for this agent. Stored as any to avoid circular import.
 	slashCommands any

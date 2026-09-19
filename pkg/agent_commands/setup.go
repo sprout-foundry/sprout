@@ -154,9 +154,9 @@ func (s *SetupCommand) printWarnings(cfg *configuration.Config, mgr *configurati
 
 	// Check for missing credentials on active provider
 	if cfg.LastUsedProvider != "" && !configuration.HasProviderAuth(strings.ToLower(cfg.LastUsedProvider)) {
-		// Check if it's a provider that doesn't need keys (e.g., ollama-local)
+		// Providers that don't need keys are legitimately keyless.
 		pt := chatAgent.GetProviderType()
-		if string(pt) != "ollama-local" {
+		if configuration.RequiresAPIKey(string(pt)) {
 			warnings = append(warnings, fmt.Sprintf("No credentials for active provider %q", cfg.LastUsedProvider))
 		}
 	}

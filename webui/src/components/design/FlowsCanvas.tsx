@@ -54,7 +54,7 @@ import {
   parkingSpot,
 } from './flowCanvasModel';
 import { applyDragPreview, clearDragPreview, dragPreviewOf, resetNodeTransform } from './flowDragPreview';
-import FlowCanvasNodeView, { type FlowCanvasNode } from './FlowsCanvasNode';
+import FlowCanvasNodeView, { handleIdFor, type FlowCanvasNode, type FlowHandleSide } from './FlowsCanvasNode';
 import './DesignView.css';
 
 /** One flow available to the canvas: its `.mmd` path and source text. */
@@ -173,8 +173,8 @@ export default function FlowsCanvas({
     [graph, wireframes, wireframeText],
   );
   const layout = useMemo(
-    () => resolveFlowLayout(flowText, graph, sidecar, layoutHint),
-    [flowText, graph, sidecar, layoutHint],
+    () => resolveFlowLayout(flowText, graph, sidecar, layoutHint, dimensions),
+    [flowText, graph, sidecar, layoutHint, dimensions],
   );
   const wireframeFor = useMemo(() => matchWireframeAssets(graph, wireframes), [graph, wireframes]);
   const flowName = useMemo(
@@ -185,12 +185,20 @@ export default function FlowsCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowCanvasNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  /**
+   * A node click's hand-off (§3b, item 3.5): fill the detail pane with the
+   * flow that owns the node. It deliberately does NOT open the flow source —
+   * that is the pane's explicit "Open in editor" affordance (and the edge
+   * click's `#L` line hand-off). Opening on select unmounted the canvas, so a
+   * click that should show node detail instead navigated the user out of the
+   * design surface.
+   */
   const selectNode = useCallback(
     (flowNodeId: string) => {
+      if (!flowNodeId) return;
       onSelectAsset?.(activeFlow?.path ?? '');
-      if (flowNodeId) onOpenSource?.(flowNodeId);
     },
-    [onSelectAsset, onOpenSource, activeFlow],
+    [onSelectAsset, activeFlow],
   );
 
   const selectedNodes = useRef<Set<string>>(new Set());
@@ -251,11 +259,13 @@ export default function FlowsCanvas({
     if (layout.regenerated) onLayoutChange?.(layout.sidecar);
   }, [layout, onLayoutChange]);
 
+  const edgeSides = useMemo(() => handleIds(canvasOrientation(graph, sidecar)), [graph, sidecar]);
+
   useEffect(() => {
     const next: FlowCanvasNode[] = graph.nodes.map((node) => {
       const id = nodeIdFor(node.id);
       const box = dimensions[node.id] ?? boxDimensionsForLabel(node.label);
-      const handle = handleIds(canvasOrientation(graph, sidecar));
+      const handle = edgeSides;
       return {
         id,
         type: 'flowNode',
@@ -271,13 +281,15 @@ export default function FlowsCanvas({
           wireframePath: wireframeFor[node.id] ?? '',
           wireframeText: wireframeFor[node.id] ? (wireframeText[wireframeFor[node.id]] ?? '') : '',
           group: node.group,
+          sourceSide: handle.source as FlowHandleSide,
+          targetSide: handle.target as FlowHandleSide,
           dragging: draggingNodes.has(id),
           onNodeClick: (nodeId: string) => selectNode(nodeId),
         },
       };
     });
     setNodes(next);
-  }, [graph, dimensions, positions, wireframeFor, wireframeText, selectNode, sidecar, draggingNodes, setNodes]);
+  }, [graph, dimensions, positions, wireframeFor, wireframeText, selectNode, edgeSides, draggingNodes, setNodes]);
 
   useEffect(() => {
     setEdges((current) => {
@@ -288,13 +300,23 @@ export default function FlowsCanvas({
           id,
           source: nodeIdFor(edge.source),
           target: nodeIdFor(edge.target),
+          // React Flow pairs an edge with its endpoints by handle id; without
+          // these it looks for the first `source`/`target` handle and drops the
+          // edge when the target node has none (SP-140-3 §3b edge rendering).
+          sourceHandle: handleIdFor('source', edgeSides.source as FlowHandleSide),
+          targetHandle: handleIdFor('target', edgeSides.target as FlowHandleSide),
           label: edge.label || undefined,
           selected: selectedIds.has(id),
           markerEnd: edge.directed ? { type: MarkerType.ArrowClosed } : undefined,
+          // `smoothstep` rather than the default bezier: with a horizontal
+          // orientation both endpoints share a `y`, and the bezier then
+          // collapses to a zero-height path the browser treats as invisible.
+          // The orthogonal curve also matches how mermaid draws `LR`/`TB`.
+          type: 'smoothstep',
         } satisfies Edge;
       });
     });
-  }, [graph, setEdges]);
+  }, [graph, edgeSides, setEdges]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowCanvasNode) => node.data.onNodeClick(node.data.flowNodeId),
@@ -311,7 +333,11 @@ export default function FlowsCanvas({
       const operator = operators[Number.isFinite(index) ? index % Math.max(1, operators.length) : 0]?.operator ?? '';
       setEdges((current) => current.map((candidate) => ({ ...candidate, selected: candidate.id === edge.id })));
       onSelectAsset?.(`${activeFlow?.path ?? ''}#${edgeDetailLabel(graph, source, target, operator)}`);
-      onOpenSource?.(`${source}->${target}`);
+      // The source hand-off carries a single node id so `handleOpenSource` can
+      // find a line that literally contains it. The `a->b` pair form matched no
+      // source line (edges render as `a --> b`), so the anchor silently fell
+      // back to the top of the file.
+      onOpenSource?.(source);
     },
     [graph, onSelectAsset, onOpenSource, activeFlow, setEdges],
   );

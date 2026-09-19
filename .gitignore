@@ -135,6 +135,10 @@ webui/public/wasm/
 !desktop/resources/icons/png/*.png
 !pkg/webui/static/placeholder
 !pkg/webui/logo-mark.svg
+# Documentation screenshots referenced by PR bodies (see scripts/capture-design-screenshots.mts).
+# Scoped to this directory so the general *.png rule still ignores debug shots elsewhere.
+!docs/pr-assets/
+!docs/pr-assets/*.png
 
 # Windows ADS metadata artifacts
 *:Zone.Identifier

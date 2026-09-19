@@ -49,7 +49,7 @@ export interface DesignViewProps {
   /** Called when the user leaves DesignView (back to chat). */
   onBack?: () => void;
   /** Called when a design asset should open in the editor. */
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, lineNumber?: number) => void;
   /** Write transport override for the detail pane's feedback write (tests/hosts). */
   writeFetch?: typeof fetch;
   /** Consent-aware read override for the detail pane's resolution flow (§3f). */

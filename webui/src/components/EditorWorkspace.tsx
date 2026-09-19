@@ -56,7 +56,7 @@ export interface EditorWorkspaceProps {
   /** Called when the user clicks Back from a non-chat view. */
   onViewChange?: (view: ViewType) => void;
   /** SP-140-3: open a design asset path in the editor (Sidebar's file handler). */
-  onOpenDesignFile?: (path: string) => void;
+  onOpenDesignFile?: (path: string, lineNumber?: number) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which

@@ -4,45 +4,34 @@
     "heartbeat_seconds": 600
   },
   "budget": {
-      "warn_at": [
-      0.5,
-      0.8
-    ],
+    "warn_at": [0.5, 0.8],
     "on_exceed": "truncate",
     "usd": 10
   },
-    "continue_on_error": true,
-    "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator/orchestrator use DeepSeek V4 Flash; subagents use glm-5.3-flash via zai-coding.",
-    "initial": {
+  "continue_on_error": true,
+  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator/orchestrator use DeepSeek V4 Flash; subagents use glm-5.3-flash via zai-coding.",
+  "initial": {
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
-    "coder": {
-    "provider": "zai-coding",
-    "model": "glm-5.3-flash"
-    },
       "debugger": {
-      "model": "glm-5.3-flash",
-      "provider": "zai-coding"
-    },
+        "model": "glm-5.3-flash",
+        "provider": "zai-coding"
+      },
       "orchestrator": {
-      "model": "glm-5.3-flash",
-      "provider": "zai-coding"
-    },
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "provider": "deepinfra"
+      },
       "reviewer": {
-      "model": "glm-5.3-flash",
-      "provider": "zai-coding"
+        "model": "inception/mercury-2.5",
+        "provider": "openrouter"
+      }
     },
-      "tester": {
-      "model": "glm-5.3-flash",
-      "provider": "zai-coding"
-    }
-  },
-    "max_iterations": 0,
-    "model": "glm-5.3-flash",
+    "max_iterations": 10000,
+    "provider": "deepinfra",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
     "persona": "coordinator",
-    "prompt_file": "automate/workflow_prompt.md",
-    "provider": "zai-coding"
+    "prompt_file": "automate/workflow_prompt.md"
   },
   "no_web_ui": true,
   "subagent_timeout_seconds": 10800

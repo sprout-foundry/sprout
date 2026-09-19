@@ -18,7 +18,9 @@
 //
 // Everything is hermetic: the scripted client never touches a provider, the
 // vision analysis is local (macOS native OCR) or degrades to a brief, and the
-// browser render is skipped when Chrome is unavailable.
+// browser render skips when Chrome is unavailable — unless
+// SPROUT_REQUIRE_BROWSER is set, which turns that skip into a failure so a
+// browser-equipped job can assert the rendered path actually ran.
 
 package agent
 
@@ -203,6 +205,31 @@ func de2eHasDesignTool(t *testing.T, ag *Agent, name string) bool {
 	return registry.HasTool(name)
 }
 
+// de2eSkipOrFailNoBrowser handles a render that failed because no headless
+// browser is available.
+//
+// A skip is the right answer locally (a dev machine may have no Chrome), but
+// a *silent* skip is how browser-dependent coverage evaporates in CI: the
+// suite reports green while the render path went unexercised. Setting
+// SPROUT_REQUIRE_BROWSER=1 — which the job that installs Chromium does —
+// converts the skip into a failure, so "these tests ran" becomes assertable
+// rather than assumed.
+func de2eSkipOrFailNoBrowser(t *testing.T, output string) {
+	t.Helper()
+	if os.Getenv("SPROUT_REQUIRE_BROWSER") != "" {
+		t.Fatalf("no usable headless browser, but SPROUT_REQUIRE_BROWSER is set "+
+			"(this environment is expected to provide one): %s", output)
+	}
+	t.Skipf("no usable headless browser in this environment: %s", output)
+}
+
+// de2eBrowserUnavailable reports whether a tool output names the missing-browser
+// failure, which is how the render helper surfaces errNoBrowser.
+func de2eBrowserUnavailable(output string) bool {
+	return strings.Contains(output, "browser not available") ||
+		strings.Contains(output, "failed to run browser")
+}
+
 // ---------------------------------------------------------------------------
 // design_render — fixture SVG round trip through the seed tool-result path
 // ---------------------------------------------------------------------------
@@ -248,9 +275,8 @@ func TestDesignRenderE2E_SVGRoundTripCarriesImageThroughSeedToolResult(t *testin
 	if strings.Contains(output, "unknown tool") || strings.Contains(output, "Pre-execute hook rejected") {
 		t.Fatalf("design_render was not dispatched to a handler: %s", output)
 	}
-	if strings.Contains(output, "browser not available") ||
-		strings.Contains(output, "failed to run browser") {
-		t.Skipf("no usable headless browser in this environment: %s", output)
+	if de2eBrowserUnavailable(output) {
+		de2eSkipOrFailNoBrowser(t, output)
 	}
 	if strings.Contains(output, "design_render blocked") || strings.Contains(output, "unsupported source") {
 		t.Fatalf("design_render rejected the in-workspace fixture: %s", output)
@@ -327,9 +353,8 @@ func TestDesignRenderE2E_HTMLSourceRendersViaBrowser(t *testing.T) {
 	}
 
 	toolMsg, output := de2eToolMessage(t, ag, "render_html_1")
-	if strings.Contains(output, "browser not available") ||
-		strings.Contains(output, "failed to run browser") {
-		t.Skipf("no usable headless browser in this environment: %s", output)
+	if de2eBrowserUnavailable(output) {
+		de2eSkipOrFailNoBrowser(t, output)
 	}
 	if strings.Contains(output, "unsupported source") || strings.Contains(output, "design_render blocked") {
 		t.Fatalf("design_render rejected the HTML fixture: %s", output)
@@ -367,9 +392,8 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 	}
 
 	_, output := de2eToolMessage(t, ag, "render_nv_1")
-	if strings.Contains(output, "browser not available") ||
-		strings.Contains(output, "failed to run browser") {
-		t.Skipf("no usable headless browser in this environment: %s", output)
+	if de2eBrowserUnavailable(output) {
+		de2eSkipOrFailNoBrowser(t, output)
 	}
 
 	// §2c: a non-vision primary must not fail the tool — it returns the

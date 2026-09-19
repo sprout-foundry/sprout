@@ -19,7 +19,8 @@ import (
 // This file contains three concerns:
 //  1. Output-text truncation (limitVisionOutputText)
 //  2. Vision-output persistence helpers (persistVisionFullText*, resolveVisionOutputDirectory*, sanitizeVisionFileComponent)
-//  3. Small file/path utilities (classifyPDFProcessingErrorCode, GetFileExtension, GetBaseName, IsHTMLInput)
+//  3. Small file/path utilities (classifyPDFProcessingErrorCode, GetFileExtension,
+//     GetBaseName, IsHTMLInput, IsRenderableInput)
 
 // ============================================================================
 // Output Text Handling
@@ -243,4 +244,68 @@ func IsHTMLInput(path string) bool {
 	}
 	ext := strings.ToLower(GetFileExtension(path))
 	return ext == ".html" || ext == ".htm"
+}
+
+// ---------------------------------------------------------------------------
+// Renderable input detection (shared browser-render path)
+// ---------------------------------------------------------------------------
+
+// RenderMode selects how the shared browser-render helper treats its input.
+//
+// It exists so tools that know their source format (design_render's SVG,
+// HTML, and mermaid paths) can render without a content sniff, while
+// tools whose input is user-supplied (analyze_ui_screenshot) keep their
+// existing HTML-only auto-detection semantics.
+type RenderMode int
+
+const (
+	// RenderModeAuto infers behaviour from the input path: http(s) URLs,
+	// local .html/.htm, and local .svg sources are rendered via the
+	// browser; anything else falls through to the caller's non-render
+	// branch. This is the default for analyze_ui_screenshot.
+	RenderModeAuto RenderMode = iota
+	// RenderModeBrowser forces the browser-render path regardless of the
+	// input extension or content type. A URL is browsed as-is; a local
+	// path is converted to a file:// URL and browsed with
+	// allow_file_url: true.
+	RenderModeBrowser
+	// RenderModeImage forces the non-render path: the caller analyzes the
+	// input directly (via AnalyzeImage or an equivalent) and the browser
+	// is never invoked.
+	RenderModeImage
+)
+
+// String renders the mode for error messages and tests.
+func (m RenderMode) String() string {
+	switch m {
+	case RenderModeAuto:
+		return "auto"
+	case RenderModeBrowser:
+		return "browser"
+	case RenderModeImage:
+		return "image"
+	default:
+		return "unknown"
+	}
+}
+
+// IsRenderableInput reports whether path should be rendered via the browser
+// before analysis. It is a superset of IsHTMLInput: in addition to
+// http(s) URLs serving HTML and local .html/.htm files, it treats local
+// .svg sources as renderable so SVG is rasterized to PNG instead of
+// falling through to the raw image/svg+xml vision branch.
+//
+// RenderModeBrowser callers may bypass this check entirely (see
+// renderInputToPNG); RenderModeImage callers never reach it.
+func IsRenderableInput(path string) bool {
+	if IsHTMLInput(path) {
+		return true
+	}
+	// URL content sniffing already happened in IsHTMLInput; a non-HTML
+	// URL is not auto-rendered. Only local SVG files are added.
+	if strings.HasPrefix(strings.ToLower(path), "http://") ||
+		strings.HasPrefix(strings.ToLower(path), "https://") {
+		return false
+	}
+	return GetFileExtension(path) == ".svg"
 }

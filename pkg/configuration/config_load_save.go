@@ -8,25 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
-
-// logMigrationOnce dedupes config-migration log lines to one per unique
-// message per process: Load() runs once per subsystem at startup (~25
-// calls), so an unmigrated or newer-than-build config would otherwise
-// print its warning that many times.
-var migrationLogged sync.Map
-
-func logMigrationOnce(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	if _, dup := migrationLogged.LoadOrStore(msg, struct{}{}); dup {
-		return
-	}
-	log.Printf("[config] %s", msg)
-}
 
 // Load loads the configuration from file
 func Load() (*Config, error) {
@@ -73,13 +58,18 @@ func Load() (*Config, error) {
 	if err != nil {
 		// Load() runs many times per process (each subsystem re-reads the
 		// config); without dedupe the same warning would print once per
-		// call. Warn once per process, and keep the tone matched to
-		// severity: a config from a newer build is a note, not a failure.
+		// call. Warn once per process.
 		var newer *ConfigFromNewerBuildError
 		if errors.As(err, &newer) {
-			logMigrationOnce("note: %v", newer)
+			key := fmt.Sprintf("note: %v", newer)
+			if _, dup := migrationLogged.LoadOrStore(key, struct{}{}); !dup {
+				log.Printf("[config] %s", key)
+			}
 		} else {
-			logMigrationOnce("warning: config migration failed, using as-is: %v", err)
+			key := fmt.Sprintf("warning: config migration failed, using as-is: %v", err)
+			if _, dup := migrationLogged.LoadOrStore(key, struct{}{}); !dup {
+				log.Printf("[config] %s", key)
+			}
 		}
 		// Continue with original data — don't block startup
 	} else {

@@ -60,6 +60,13 @@ vi.mock('../contexts/PlatformNavContext', () => ({
   }),
 }));
 
+// SP-140-3: the Sidebar probes for a design/ directory to gate its nav item.
+// No design tree in these fixtures, so the probe reports absent.
+vi.mock('./design/useDesignPresence', () => ({
+  __esModule: true,
+  useDesignPresence: () => ({ present: false, loading: false }),
+}));
+
 // Mock config/mode so capability flags are explicit (not adapter-dependent).
 vi.mock('../config/mode', () => ({
   __esModule: true,

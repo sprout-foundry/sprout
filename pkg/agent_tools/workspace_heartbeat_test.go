@@ -48,6 +48,11 @@ func (m *mockPublisher) getEvents() []struct {
 }
 
 func TestHeartbeat_SessionAliveWithRegularBeats(t *testing.T) {
+	// Timing-scaled (10x the original 2ms/5ms/10ms) so a scheduler stall on
+	// a loaded CI runner can't stretch one beat-to-beat gap past the
+	// threshold and spuriously terminate a "healthy" session (seen on
+	// macos-latest: terminate fired + 1 event published). A stall would now
+	// need to exceed ~60ms, far above normal jitter.
 	publisher := &mockPublisher{}
 	monitor := NewHeartbeatMonitor(publisher)
 	defer monitor.Stop()
@@ -55,17 +60,17 @@ func TestHeartbeat_SessionAliveWithRegularBeats(t *testing.T) {
 	var terminated atomic.Bool
 	var terminatedID atomic.Value // string
 
-	monitor.StartMonitor(20*time.Millisecond, 50*time.Millisecond)
+	monitor.StartMonitor(200*time.Millisecond, 500*time.Millisecond)
 
 	monitor.RegisterJob("test-1", func(id string) {
 		terminated.Store(true)
 		terminatedID.Store(id)
 	})
 
-	// Send heartbeats every 10ms for 100ms — well within the 50ms threshold.
+	// Send heartbeats every 100ms for 1s — well within the 500ms threshold.
 	stopBeats := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(10 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
@@ -77,7 +82,7 @@ func TestHeartbeat_SessionAliveWithRegularBeats(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	close(stopBeats)
 	monitor.Stop()
 

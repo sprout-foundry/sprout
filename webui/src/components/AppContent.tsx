@@ -998,6 +998,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 diffState={diffState}
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
                 onViewChange={onViewChange}
+                onOpenDesignFile={handleFileClick}
               />
             </ErrorBoundary>
           </div>

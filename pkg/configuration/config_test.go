@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/skills"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,6 +101,46 @@ func TestGetSubagentType_AllowedToolsFromCatalog(t *testing.T) {
 	assert.NotNil(t, persona)
 	assert.NotEmpty(t, persona.AllowedTools)
 	assert.Contains(t, persona.AllowedTools, "read_file")
+}
+
+// TestGetSubagentType_DesignerResolvesByIDAndAliases verifies the designer
+// persona lands in the default config and that both of its aliases (ux,
+// design) resolve to the canonical designer entry, not to something else.
+func TestGetSubagentType_DesignerResolvesByIDAndAliases(t *testing.T) {
+	cfg := NewConfig()
+
+	canonical := cfg.GetSubagentType("designer")
+	if !assert.NotNil(t, canonical, "designer persona must be in the default catalog") {
+		return
+	}
+	assert.Equal(t, "designer", canonical.ID)
+	assert.True(t, canonical.Enabled, "designer must ship enabled")
+	assert.True(t, canonical.Delegatable, "designer must be delegatable so orchestrator can spawn it")
+	assert.Contains(t, canonical.AllowedTools, "design_validate")
+
+	for _, alias := range []string{"ux", "design"} {
+		resolved := cfg.GetSubagentType(alias)
+		if !assert.NotNil(t, resolved, "alias %q should resolve", alias) {
+			continue
+		}
+		assert.Equal(t, "designer", resolved.ID, "alias %q should resolve to designer", alias)
+	}
+}
+
+// TestGetSubagentType_DesignerCarriesGitWriteCapability is the security-
+// relevant assertion for SP-140-2 §2a: the capability must be on the
+// definition the agent reads at git-write time, not merely declared in JSON.
+func TestGetSubagentType_DesignerCarriesGitWriteCapability(t *testing.T) {
+	cfg := NewConfig()
+	persona := cfg.GetSubagentType("design")
+	if !assert.NotNil(t, persona) {
+		return
+	}
+	assert.True(t, persona.HasCapability(personas.CapabilityGitWrite),
+		"designer must carry the git_write capability via HasCapability")
+	// And it must be the only capability — the capability grant is explicit,
+	// not inferred from auto-approve rules.
+	assert.Equal(t, []string{personas.CapabilityGitWrite}, persona.Capabilities)
 }
 
 func TestGetSubagentType_DisabledReturnsNil(t *testing.T) {

@@ -1,0 +1,46 @@
+# golangci-lint v2 config — conservative baseline for an existing ~700K LOC
+# codebase. Standard set (errcheck, govet, ineffassign, staticcheck, unused)
+# plus gosec for the security-sensitive surface. Add linters here as the
+# backlog they uncover gets cleared; don't enable `all`.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gosec
+  settings:
+    gosec:
+      # G301 (0755 dirs), G304 (open user-supplied path), G306 (chdir) are
+      # structural for a CLI agent that opens user-specified files — they
+      # fire thousands of times and would never gate clean. Keep the rules
+      # that catch real mistakes (G101, G204, G302, G4xx, G5xx, G6xx...).
+      excludes:
+        - G301
+        - G304
+        - G306
+  exclusions:
+    generated: lax
+    rules:
+      # Test fixtures set up/tear down env and temp dirs; unchecked returns
+      # there are idiomatic and safe. Gate errcheck on production code only.
+      - path: _test\.go
+        linters:
+          - errcheck
+    paths:
+      - third_party$
+      - vendor$
+      - node_modules$
+      # internal/hnsw is a vendored fork (see go.mod replace) — don't lint
+      # upstream code we don't maintain line-by-line.
+      - internal/hnsw
+
+issues:
+  # Don't let a single linter drown the report during the ramp-up period.
+  max-issues-per-linter: 100
+  max-same-issues: 50
+
+run:
+  timeout: 15m
+  # golangci-lint analyzes the default build (same as `go vet ./...`).
+  # The js/wasm, windows, and mlx-tagged files get their own coverage in
+  # the WASM smoke test and the Windows CI lane.

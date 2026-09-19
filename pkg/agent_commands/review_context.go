@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/codereview"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -81,20 +82,7 @@ func extractKeyCommentsFromDiff(diff string) string {
 }
 
 func isImportantComment(comment string) bool {
-	commentUpper := strings.ToUpper(comment)
-	keywords := []string{
-		"CRITICAL", "IMPORTANT", "NOTE:", "WARNING", "TODO:", "FIXME",
-		"HACK", "BUG", "SECURITY", "FIX", "WORKAROUND",
-		"BECAUSE", "REASON:", "WHY:", "INTENT:", "PURPOSE:",
-	}
-
-	for _, keyword := range keywords {
-		if strings.Contains(commentUpper, keyword) {
-			return true
-		}
-	}
-
-	return strings.HasPrefix(comment, "//") && len(comment) > 50
+	return codereview.IsImportantComment(comment)
 }
 
 func categorizeChanges(diff string) string {

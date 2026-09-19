@@ -141,6 +141,12 @@ func SetTTL(d time.Duration) {
 	ttl = d
 }
 
+// BaseURLForTest returns the current registry base URL so tests can restore
+// it after SetBaseURL. Empty string means the registry is disabled.
+func BaseURLForTest() string {
+	return baseURLCopy()
+}
+
 // SetHTTPTimeout sets the HTTP client timeout (useful for testing).
 func SetHTTPTimeout(d time.Duration) {
 	mu.Lock()

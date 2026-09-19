@@ -217,19 +217,22 @@ func TestCalculateOutputBudget(t *testing.T) {
 			maxOutput:    0,
 		},
 		{
+			// Floor branch: remaining (1500) < floor (8192), so the budget is
+			// the remaining space — proportionate to the tiny window, not the
+			// fixed floor.
 			name:         "small context minimum output",
 			contextLimit: 2000,
 			inputTokens:  500,
 			wantOK:       true,
-			minOutput:    MinOutputTokens, // buffer = 20% of 2000 = 400, floored to 4000 >= remaining (1500), returns min
-			maxOutput:    MinOutputTokens,
+			minOutput:    1500,
+			maxOutput:    1500,
 		},
 		{
 			name:         "budget never exceeds remaining context",
 			contextLimit: 1200,
 			inputTokens:  900,
 			wantOK:       true,
-			minOutput:    300, // buffer = 20% of 1200 = 240, floored to 4000 >= remaining (300), returns remaining
+			minOutput:    300, // bias reserve + cushion exceed remaining, so the budget is the remaining space
 			maxOutput:    300,
 		},
 		{
@@ -242,20 +245,45 @@ func TestCalculateOutputBudget(t *testing.T) {
 			maxOutput: 28700,
 		},
 		{
+			// Regression: the gateway-reported truncation shape. Real prompt
+			// 133,589 tokens on a 200K window; the heuristic ran ~9% hot
+			// (est ~146K). The uncapped reserve (0.3*est + cushion = 53.8K)
+			// ate the remaining 54K down to the old 512 floor. With the
+			// 40%-of-remaining cap the budget is 22.4K — a full reasoning
+			// turn — while a truly cold estimate still gets the historical
+			// protection (see the estimation-gap case below).
+			name:         "taper zone - slightly hot estimate keeps real headroom",
+			contextLimit: 200000,
+			inputTokens:  146000,
+			wantOK:       true,
+			minOutput:    22000,
+			maxOutput:    23000,
+		},
+		{
+			// Same shape on the 128K profile (ai-128k): real ~80K prompt,
+			// estimate ~88K. Old code pinned 512 below est 93,145.
+			name:         "taper zone - 128k window",
+			contextLimit: 128000,
+			inputTokens:  88000,
+			wantOK:       true,
+			minOutput:    17000,
+			maxOutput:    18000,
+		},
+		{
 			// Regression test for the original "context window exceeded" error
 			// (see git history: estimated 116145 tokens, actual 156146 — a
 			// 34.4% underestimate — caused input+output to total 200001 with
-			// the old flat 20%-of-context buffer). The worst-case-input model
-			// must still absorb that real gap: 116000*1.3=150800 worst-case,
-			// +10000 cushion = 160800 threshold, comfortably above the actual
-			// 156146 that was observed.
+			// the old flat 20%-of-context buffer). The bias reserve must
+			// still fully absorb that real gap in the regime the 30%
+			// inflation was calibrated for (the 40% cap is inert here):
+			// reserve 34800 + cushion 10000 = worst-case input 160800,
+			// comfortably above the actual 156146 that was observed.
 			name:         "large context with heavy input - estimation gap absorbed",
 			contextLimit: 200000,
 			inputTokens:  116000,
 			wantOK:       true,
-			minOutput:    MinOutputTokens,
-			// worstCaseInput=116000+34800=150800, cushion=max(2000,10000)=10000, output=200000-150800-10000=39200
-			maxOutput: 39200,
+			minOutput:    40300,
+			maxOutput:    40500,
 		},
 	}
 
@@ -309,9 +337,17 @@ func TestCalculateOutputBudgetNoPrematureCollapse(t *testing.T) {
 				t.Errorf("CalculateOutputBudget(%d, %d) = %d, want at least %d (premature collapse to floor)",
 					contextLimit, tt.inputTokens, result, tt.minOutput)
 			}
-			if result <= MinOutputTokens {
-				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed to/below the emergency floor (%d) far from the real ceiling",
+			// Under the proportional taper the 70% case returns ¾ of the
+			// remaining space, well above the floor — but it must never dip
+			// below the floor, which would recreate the decapitation.
+			if result < MinOutputTokens {
+				t.Errorf("CalculateOutputBudget(%d, %d) = %d, collapsed below the emergency floor (%d) far from the real ceiling",
 					contextLimit, tt.inputTokens, result, MinOutputTokens)
+			}
+			// The floor itself must be a workable agentic budget — the old
+			// 512 value sawed responses off mid-tool-call.
+			if MinOutputTokens < 4096 {
+				t.Errorf("MinOutputTokens = %d, want a workable agentic budget (>= 4096)", MinOutputTokens)
 			}
 		})
 	}
@@ -460,4 +496,30 @@ func TestCalculateOutputBudgetAnchored(t *testing.T) {
 				anchoredResult, halfResult)
 		}
 	})
+}
+
+// TestCalculateOutputBudgetOverestimateNoFloorPin is a regression test for
+// the provider-reported truncation pattern: finish=output_limit with
+// generation cut at exactly MinOutputTokens (512) while the real prompt was
+// far below the context limit. The heuristic estimate claimed the input
+// filled the window, the function returned !ok, and every caller pinned
+// max_tokens to the 512-token floor — decapitating responses on
+// 80K–134K-token prompts. The !ok return must now report the remaining
+// window (0) so callers fall through to a sane budget instead of the floor.
+func TestCalculateOutputBudgetOverestimateNoFloorPin(t *testing.T) {
+	result, ok := CalculateOutputBudget(200000, 210000)
+	if ok {
+		t.Errorf("expected ok=false when estimate exceeds the window")
+	}
+	if result != 0 {
+		t.Errorf("CalculateOutputBudget(200000, 210000) = %d, want 0 (remaining window, not a floor sentinel)", result)
+	}
+
+	anchoredResult, anchoredOK := CalculateOutputBudgetAnchored(200000, 210000, 0)
+	if anchoredOK {
+		t.Errorf("expected ok=false from anchored variant when estimate exceeds the window")
+	}
+	if anchoredResult != 0 {
+		t.Errorf("CalculateOutputBudgetAnchored(200000, 210000, 0) = %d, want 0", anchoredResult)
+	}
 }

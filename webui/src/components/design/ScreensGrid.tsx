@@ -56,8 +56,8 @@ import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
 import ConflictBanner from './ConflictBanner';
-import type { DesignTabProps } from './DesignTabProps';
 import ScreenStatusMenu from './ScreenStatusMenu';
+import type { DesignTabProps } from './DesignTabProps';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -232,6 +232,12 @@ export default function ScreensGrid({
       setConflict(null);
       setConflictResolved(false);
     }
+  }, [selectedPath]);
+
+  // External selection (sidebar assets pane) drives the same downstream
+  // behavior as a card click — highlight, detail pane, preview mount.
+  useEffect(() => {
+    if (selectedPath !== undefined) setSelected(selectedPath);
   }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);

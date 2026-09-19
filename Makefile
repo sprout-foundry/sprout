@@ -3,7 +3,7 @@
 
 .PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
-       verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
+       verify-ui-embedded test-webui lint lint-fix lint-go lint-go-new dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local automate-run studio-providers
 
 # Default target
@@ -34,6 +34,8 @@ help:
 	@echo "  make test-webui       - Test React web UI server"
 	@echo "  make lint             - Lint frontend code"
 	@echo "  make lint-fix         - Auto-fix frontend linting issues"
+	@echo "  make lint-go          - Lint Go code (golangci-lint, full repo)"
+	@echo "  make lint-go-new      - Lint Go code for new code only (CI gate)"
 	@echo "Distribution Bundles:"
 	@echo "  make build-webui-dist       - Build cloud-mode distributable WebUI bundle"
 	@echo "  make build-webui-dist-local - Build local-mode distributable WebUI bundle"
@@ -387,6 +389,22 @@ lint:
 lint-fix:
 	@echo "Auto-fixing frontend linting issues..."
 	@cd webui && npm run lint:fix && npm run format && echo "Lint fix completed"
+
+# Go lint via golangci-lint (config: .golangci.yml). Full-repo run surfaces
+# the historical backlog; CI gates on lint-go-new so it doesn't block PRs.
+# GOMAXPROCS=2 keeps the run inside ~2GB on small machines.
+GOLANGCI_LINT_VERSION ?= v2.13.2
+.PHONY: lint-go lint-go-new
+lint-go: prepare-grammars
+	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@GOMAXPROCS=2 golangci-lint run ./...
+
+# New-code gate: only issues introduced after NEW_FROM_REV (default HEAD~1).
+# CI passes the PR base ref via NEW_FROM_REV so merge commits work.
+lint-go-new: prepare-grammars
+	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@rev="$(NEW_FROM_REV)"; [ -z "$$rev" ] && rev="HEAD~1"; \
+	GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
 
 # Quality gates
 .PHONY: vet fmt-check

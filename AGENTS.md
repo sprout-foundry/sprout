@@ -16,7 +16,7 @@ Guidance for AI agents working in this repository.
 - **Browser-dependent Go tests** (`pkg/agent/design_e2e_test.go` render cases) skip when no headless browser is reachable. Set `SPROUT_REQUIRE_BROWSER=1` to turn that skip into a failure — CI does this on Linux, where Chromium is installed, so "the render path ran" is asserted rather than hidden behind a green suite that skipped it.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Pin shared-mode UX in e2e; cover multi-chat logic in vitest.
 - Local-LLM selection skips model dirs with a corrupt `config.json` (`validModelConfig` in pkg/localmodel) — if a local model panics at load, check the local model store's `config.json` files for truncated downloads before debugging code.
-- Pre-push gates: `make vet && make fmt-check && make lint && make build-all`. Details: `docs/internal/ci-pipeline.md`.
+- Pre-push gates: `make vet && make fmt-check && make lint && make lint-go-new && make build-all`. Details: `docs/internal/ci-pipeline.md`.
 
 ## Critical Git Rules
 

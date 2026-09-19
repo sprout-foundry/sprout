@@ -1,0 +1,141 @@
+/* Mode switcher (top-left). Tokens only — no raw hex/rgba.
+   Visual language follows the shell's other anchored menus (.shell-picker-menu):
+   elevated surface, 8px radius, 4px padding, small-caps header. */
+
+.mode-switcher {
+  position: relative;
+  display: inline-flex;
+}
+
+.mode-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.mode-switcher-trigger:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+}
+
+.mode-switcher-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* A single-mode workspace renders the trigger as a plain mark, not a control. */
+.mode-switcher-trigger--static {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.mode-switcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 232px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 8px);
+  padding: 4px;
+  z-index: 200;
+  box-shadow: var(--shadow-elevated);
+  animation: modeSwitcherFadeIn 0.1s ease-out;
+}
+
+@keyframes modeSwitcherFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mode-switcher-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.mode-switcher-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.mode-switcher-option:hover {
+  background: var(--bg-hover);
+}
+
+.mode-switcher-option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.mode-switcher-option.is-active {
+  background: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.mode-switcher-option-icon {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.mode-switcher-option.is-active .mode-switcher-option-icon {
+  color: var(--accent-primary);
+}
+
+.mode-switcher-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mode-switcher-option-label {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mode-switcher-option-hint {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mode-switcher-option-check {
+  flex: 0 0 auto;
+  color: var(--accent-primary);
+}

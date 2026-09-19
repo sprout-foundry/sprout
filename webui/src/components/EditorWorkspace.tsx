@@ -17,10 +17,6 @@ import { useIsMobileViewport } from '../hooks/useMobileSheets';
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
 // open. Each render site below wraps the component in <Suspense>.
-// SP-140-3 §3a: DesignView is lazy so a workspace without design/ (the
-// common case — the nav item is hidden and the view unreachable) pays
-// zero bundle cost for the canvas/preview/mermaid stack.
-const DesignView = lazy(() => import('./design/DesignView').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
   <div className="editor-workspace-route-fallback">
@@ -55,8 +51,6 @@ export interface EditorWorkspaceProps {
   handleOutlineNavigateToSymbol: (line: number) => void;
   /** Called when the user clicks Back from a non-chat view. */
   onViewChange?: (view: ViewType) => void;
-  /** SP-140-3: open a design asset path in the editor (Sidebar's file handler). */
-  onOpenDesignFile?: (path: string) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -146,7 +140,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   diffState,
   handleOutlineNavigateToSymbol,
   onViewChange,
-  onOpenDesignFile,
 }) => {
   // P4.2: phone form factor — peer-buffer keep-alive topology (see
   // the mobile branch below). Desktop keeps the panes topology
@@ -711,29 +704,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     );
   }
 
-  // SP-140-3 §3a: the design surface. Rendered only when a design/ tree is
-  // present — the same rule the Sidebar nav item applies, re-checked here so
-  // the view is unreachable (and its chunk unloaded) without a design tree.
-  // While the presence probe is in flight we hold the fallback rather than
-  // flashing the view; a confirmed-absent tree falls through to chat.
-  if (currentView === 'design') {
-    if (designLoading) {
-      return <RouteFallback />;
-    }
-    if (designPresent) {
-      return (
-        <ErrorBoundary>
-          <Suspense fallback={<RouteFallback />}>
-            <DesignView onBack={onViewChange ? () => onViewChange('chat') : undefined} onOpenFile={onOpenDesignFile} />
-          </Suspense>
-        </ErrorBoundary>
-      );
-    }
-    // No design/ directory: the redirect effect above moves us to chat; hold
-    // the fallback meanwhile rather than rendering a dead view or flashing
-    // the pane layout.
-    return <RouteFallback />;
-  }
+  // Design is not a route in this component any more: it is a workspace mode
+  // with its own surface (design/DesignSurface.tsx), mounted by AppContent as a
+  // peer of this one. Keeping it out of the editor's view switch is what stops
+  // the editor's chrome from wrapping a surface that has no buffer in it.
 
   // ── P4.2 mobile branch: peer-buffer keep-alive topology ─────────
   // Phone IDE placement (user doctrine 2026-09-10): the editor is not

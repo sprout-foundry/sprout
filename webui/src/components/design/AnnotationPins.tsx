@@ -1,13 +1,19 @@
 /**
- * AnnotationPins — the pin layer over a rendered screen (SP-140-6 §6e).
+ * AnnotationPins — the pin layer over a rendered screen (SP-140-6 §6e,
+ * drag-to-adjust per SP-140-7 §7e).
  *
  * Renders every annotation in the target's feedback file as a pin at its
  * normalized `at` coordinates (§4d: 0–1, resolution-independent), colored by
  * its critique-area, open annotations visually distinct from resolved ones.
  * A pin click focuses that annotation in the pane (`onSelect`). While
  * placement mode is armed (`placeMode`), the next click on the layer reports
- * the normalized point instead (`onPlace`) — §6e's click-to-place replaces
- * the {0.5, 0.5} center default the §3e affordance wrote.
+ * the normalized point instead (`onPlace`).
+ *
+ * §7e drag: a pin is draggable — pointerdown on a pin starts the drag
+ * (with pointer capture so fast pointers cannot outrun the small element);
+ * pointerup on the layer reports the new normalized coordinates via
+ * `onPinMove`, which the host persists to the feedback file. The gesture
+ * maps to exactly one field — the coordinate pair — nothing else moves.
  *
  * Pure geometry + events; the feedback read/write stays with the pane
  * (DesignFeedbackResolution / the affordance). The layer is absolutely
@@ -15,7 +21,7 @@
  */
 
 import { MapPin } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { DesignFeedbackAnnotation } from '../../services/api/types';
 
 export interface AnnotationPinsProps {
@@ -31,6 +37,8 @@ export interface AnnotationPinsProps {
   placeMode?: boolean;
   /** A layer click in placement mode, normalized 0–1. */
   onPlace?: (at: { x: number; y: number }) => void;
+  /** §7e: a dragged pin's new position, normalized 0–1. */
+  onPinMove?: (id: string, at: { x: number; y: number }) => void;
 }
 
 /** The CSS class suffix for an annotation's area (slug-safe). */
@@ -38,10 +46,13 @@ function areaClass(area: string): string {
   return area ? ` pin-area-${area.replace(/[^a-z0-9-]/gi, '').toLowerCase()}` : '';
 }
 
-/** Normalized 0–1 percent for an axis, clamped against malformed values. */
+/** Normalized 0–1 for an axis, clamped against malformed values. */
+function clamp01(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
+}
+
 function pct(value: number | undefined): string {
-  const v = typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
-  return `${(v * 100).toFixed(2)}%`;
+  return `${(clamp01(value) * 100).toFixed(2)}%`;
 }
 
 export default function AnnotationPins({
@@ -51,26 +62,46 @@ export default function AnnotationPins({
   onSelect,
   placeMode = false,
   onPlace,
+  onPinMove,
 }: AnnotationPinsProps) {
   const layerRef = useRef<HTMLDivElement>(null);
+  /** The pin being dragged, if any (pointer capture keeps events flowing). */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!placeMode || !onPlace) return;
+  /** Normalized point for an event against the layer's box, or null. */
+  const pointFrom = (event: React.PointerEvent | React.MouseEvent): { x: number; y: number } | null => {
     const rect = layerRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0 || rect.height === 0) return;
-    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-    onPlace({ x, y });
+    if (!rect || rect.width === 0 || rect.height === 0) return null;
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    };
+  };
+
+  const handleLayerClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!placeMode || !onPlace) return;
+    const point = pointFrom(event);
+    if (point) onPlace(point);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    const id = draggingId;
+    setDraggingId(null);
+    const point = pointFrom(event);
+    if (point) onPinMove?.(id, point);
   };
 
   return (
     <div
       ref={layerRef}
-      className={`design-pins${placeMode ? ' design-pins-placing' : ''}`}
+      className={`design-pins${placeMode ? ' design-pins-placing' : ''}${draggingId ? ' design-pins-dragging' : ''}`}
       data-testid="design-pins"
       data-target={target}
       data-placing={placeMode}
-      onClick={handleClick}
+      data-dragging={draggingId ?? ''}
+      onClick={handleLayerClick}
+      onPointerUp={handlePointerUp}
       role={placeMode ? 'button' : undefined}
       aria-label={placeMode ? 'Click to place the annotation pin' : undefined}
     >
@@ -87,9 +118,18 @@ export default function AnnotationPins({
           aria-label={`Annotation ${annotation.id} (${annotation.area})${annotation.resolved ? ', resolved' : ', open'}`}
           onClick={(event) => {
             // A pin click focuses the annotation; it must not also place a
-            // new one when placement mode is armed.
+            // new one when placement mode is armed, nor fire right after a
+            // drag drop (the click that ends a drag is suppressed by the
+            // dragging flag having cleared before this handler runs — the
+            // host deduplicates by comparing coordinates).
             event.stopPropagation();
             onSelect?.(annotation.id);
+          }}
+          onPointerDown={(event) => {
+            if (!onPinMove) return;
+            event.stopPropagation();
+            (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+            setDraggingId(annotation.id);
           }}
         >
           <MapPin size={14} />

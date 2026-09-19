@@ -13,6 +13,16 @@ import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import type { DesignInventory } from '../../services/api/types';
 import ScreensGrid from './ScreensGrid';
 
+// The conflict tests exercise the banner/decision flow, not preview
+// rendering. LivePreview embeds a CodeMirror editor whose measure loop
+// throws an unhandled getClientRects error under jsdom (which fails the
+// whole vitest run with exit 1), so it is stubbed here.
+vi.mock('../LivePreview', () => ({
+  default: function MockLivePreview({ fileName }: { fileName?: string }) {
+    return <div data-testid="mock-live-preview">{fileName}</div>;
+  },
+}));
+
 // Hoisted so the vi.mock factory can close over it (factories hoist above
 // module scope); one transport per test via mockReset in beforeEach.
 const { transportMock } = vi.hoisted(() => ({ transportMock: vi.fn<typeof fetch>() }));

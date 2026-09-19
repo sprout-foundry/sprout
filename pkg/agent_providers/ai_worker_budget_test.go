@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
 
-// aiWorkerConfig mirrors the user's ai-worker custom provider: a gateway
-// with a 200K configured window, reasoning_content replay, and no
-// per-model catalog entry (so the configured context_size is the only
-// limit source buildChatRequest sees).
+// aiWorkerConfig mirrors a custom gateway provider: a configured 200K
+// window, reasoning_content replay, and no per-model catalog entry (so the
+// configured context_size is the only limit source buildChatRequest sees).
 func aiWorkerConfig() *ProviderConfig {
 	return &ProviderConfig{
 		Name:     "ai-worker",
@@ -67,11 +67,21 @@ func thirteenTools() []api.Tool {
 	return tools
 }
 
-// ai-worker-reported shape: stream, tools=13, 100+ messages, 80K-134K
+// guardRegistryOff disables the remote model registry for the test process.
+// t.Setenv cannot do this: the registry reads SPROUT_MODEL_REGISTRY_URL once
+// in package init, so SetBaseURL is the only test-side hook.
+func guardRegistryOff(t *testing.T) {
+	t.Helper()
+	original := modelregistry.BaseURLForTest()
+	modelregistry.SetBaseURL("")
+	t.Cleanup(func() { modelregistry.SetBaseURL(original) })
+}
+
+// gateway-reported shape: stream, tools=13, 100+ messages, 80K-134K
 // real prompt tokens against a 200K window, max_tokens must NOT be 512.
 func TestAIWorkerBigPromptBudgetNot512(t *testing.T) {
 	t.Setenv("SPROUT_MAX_REQUEST_COMPLETION_TOKENS", "")
-	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
+	guardRegistryOff(t)
 
 	cases := []struct {
 		name      string
@@ -109,7 +119,7 @@ func TestAIWorkerBigPromptBudgetNot512(t *testing.T) {
 				t.Fatalf("non-integer max_tokens: %v", maxTokens)
 			}
 			if int(maxTokens) < tc.minBudget {
-				t.Fatalf("max_tokens = %d, want >= %d for a big-context ai-worker request", int(maxTokens), tc.minBudget)
+				t.Fatalf("max_tokens = %d, want >= %d for a big-context gateway request", int(maxTokens), tc.minBudget)
 			}
 			if int(maxTokens) == 512 {
 				t.Fatalf("max_tokens pinned to the old decapitation floor")
@@ -132,7 +142,7 @@ func TestAIWorkerBigPromptBudgetNot512(t *testing.T) {
 // CalculateOutputBudgetAnchored with the same inputs.
 func TestAIWorkerAnchoredBudgetHealthy(t *testing.T) {
 	t.Setenv("SPROUT_MAX_REQUEST_COMPLETION_TOKENS", "")
-	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
+	guardRegistryOff(t)
 
 	messages := bigConversation(120, 500000)
 	tools := thirteenTools()
@@ -142,7 +152,7 @@ func TestAIWorkerAnchoredBudgetHealthy(t *testing.T) {
 
 	limit := aiWorkerConfig().GetContextLimit("qwen3.6-27b")
 	if limit != 200000 {
-		t.Fatalf("expected ai-worker context limit 200000, got %d", limit)
+		t.Fatalf("expected gateway profile context limit 200000, got %d", limit)
 	}
 
 	// Heuristic portion is what the estimator adds on top of the anchored
@@ -173,7 +183,7 @@ func TestAIWorkerAnchoredBudgetHealthy(t *testing.T) {
 // including the pathological all-tiny-messages case that used to collapse.
 func TestAIWorkerRequestNeverCarriesDegenerateBudget(t *testing.T) {
 	t.Setenv("SPROUT_MAX_REQUEST_COMPLETION_TOKENS", "")
-	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
+	guardRegistryOff(t)
 
 	p, err := NewGenericProvider(aiWorkerConfig())
 	if err != nil {

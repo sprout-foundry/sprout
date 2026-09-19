@@ -232,7 +232,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			contextLimit: 1200,
 			inputTokens:  900,
 			wantOK:       true,
-			minOutput:    300, // buffer = 20% of 1200 = 240, floored to 4000 >= remaining (300), returns remaining
+			minOutput:    300, // bias reserve + cushion exceed remaining, so the budget is the remaining space
 			maxOutput:    300,
 		},
 		{
@@ -245,44 +245,45 @@ func TestCalculateOutputBudget(t *testing.T) {
 			maxOutput: 28700,
 		},
 		{
-			// Regression: the provider-reported req-482 shape. Real prompt
-			// 133,589 tokens on a 200K window; the heuristic ran ~10% hot
-			// (est ~146K). worst-case math: 146000*1.3 + 10000 cushion ≈
-			// 199.8K → maxOutput ≈ 200, which is below the floor. The old
-			// code returned exactly 512 here; the taper must hand back a
-			// proportionate share of the real remaining space (54K → ~40K).
+			// Regression: the gateway-reported truncation shape. Real prompt
+			// 133,589 tokens on a 200K window; the heuristic ran ~9% hot
+			// (est ~146K). The uncapped reserve (0.3*est + cushion = 53.8K)
+			// ate the remaining 54K down to the old 512 floor. With the
+			// 40%-of-remaining cap the budget is 22.4K — a full reasoning
+			// turn — while a truly cold estimate still gets the historical
+			// protection (see the estimation-gap case below).
 			name:         "taper zone - slightly hot estimate keeps real headroom",
 			contextLimit: 200000,
 			inputTokens:  146000,
 			wantOK:       true,
-			minOutput:    40000,
-			maxOutput:    41000,
+			minOutput:    22000,
+			maxOutput:    23000,
 		},
 		{
 			// Same shape on the 128K profile (ai-128k): real ~80K prompt,
-			// estimate ~88K. Old code pinned 512; proportional budget now.
+			// estimate ~88K. Old code pinned 512 below est 93,145.
 			name:         "taper zone - 128k window",
 			contextLimit: 128000,
 			inputTokens:  88000,
 			wantOK:       true,
-			minOutput:    29000,
-			maxOutput:    31000,
+			minOutput:    17000,
+			maxOutput:    18000,
 		},
 		{
 			// Regression test for the original "context window exceeded" error
 			// (see git history: estimated 116145 tokens, actual 156146 — a
 			// 34.4% underestimate — caused input+output to total 200001 with
-			// the old flat 20%-of-context buffer). The worst-case-input model
-			// must still absorb that real gap: 116000*1.3=150800 worst-case,
-			// +10000 cushion = 160800 threshold, comfortably above the actual
-			// 156146 that was observed.
+			// the old flat 20%-of-context buffer). The bias reserve must
+			// still fully absorb that real gap in the regime the 30%
+			// inflation was calibrated for (the 40% cap is inert here):
+			// reserve 34800 + cushion 10000 = worst-case input 160800,
+			// comfortably above the actual 156146 that was observed.
 			name:         "large context with heavy input - estimation gap absorbed",
 			contextLimit: 200000,
 			inputTokens:  116000,
 			wantOK:       true,
-			minOutput:    MinOutputTokens,
-			// worstCaseInput=116000+34800=150800, cushion=max(2000,10000)=10000, output=200000-150800-10000=39200
-			maxOutput: 39200,
+			minOutput:    40300,
+			maxOutput:    40500,
 		},
 	}
 

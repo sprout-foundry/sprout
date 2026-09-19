@@ -20,6 +20,12 @@ linters:
         - G306
   exclusions:
     generated: lax
+    rules:
+      # Test fixtures set up/tear down env and temp dirs; unchecked returns
+      # there are idiomatic and safe. Gate errcheck on production code only.
+      - path: _test\.go
+        linters:
+          - errcheck
     paths:
       - third_party$
       - vendor$
@@ -32,12 +38,6 @@ issues:
   # Don't let a single linter drown the report during the ramp-up period.
   max-issues-per-linter: 100
   max-same-issues: 50
-  exclude-rules:
-    # Test fixtures set up/tear down env and temp dirs; unchecked returns
-    # there are idiomatic and safe. Gate errcheck on production code only.
-    - path: _test\.go
-      linters:
-        - errcheck
 
 run:
   timeout: 15m

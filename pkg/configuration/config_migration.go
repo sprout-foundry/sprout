@@ -37,19 +37,6 @@ func registerMigration(from, to string, fn MigrationFunc) error {
 	return nil
 }
 
-// RegisterMigration adds a migration step to the global registry.
-// It panics if a migration from the same source version is already registered
-// (at-most-one-step-per-source prevents ambiguous chains).
-//
-// Deprecated: Use registerMigration (returns an error) for new code. This
-// wrapper is retained for backward compatibility with external callers and
-// tests that expect the panic behavior.
-func RegisterMigration(from, to string, fn MigrationFunc) {
-	if err := registerMigration(from, to, fn); err != nil {
-		panic(err.Error())
-	}
-}
-
 // registrationOnce guards one-time population of migrationRegistry from the
 // built-in migration table. init() cannot return errors, so we defer the
 // registration into a sync.Once and surface any failure via MigrateConfig.

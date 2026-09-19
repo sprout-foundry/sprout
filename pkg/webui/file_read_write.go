@@ -3,6 +3,8 @@
 package webui
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -173,10 +175,71 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Parse JSON to extract content field
 	var requestData struct {
 		Content string `json:"content"`
+		// SP-140-7 §7a safe-write seam (opt-in): when either guard is
+		// supplied, the write is conditional on the file still being at the
+		// revision the caller last read — baseMTime against the on-disk mtime
+		// (unix seconds) and/or baseHash against the sha256 of the on-disk
+		// bytes. A mismatch returns 409 with the current revision and writes
+		// nothing. Omitted guards preserve the historical unconditional
+		// behavior, so existing callers (editor saves, the design surfaces
+		// predating the seam) are untouched.
+		BaseMTime *int64  `json:"baseMtime,omitempty"`
+		BaseHash  *string `json:"baseHash,omitempty"`
 	}
 	if err := json.Unmarshal(body, &requestData); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "failed_to_parse_json", fmt.Sprintf("Failed to parse JSON: %v", err))
 		return
+	}
+
+	// §7a: evaluate the guards BEFORE any write. The stat/read race window
+	// after this point is the same one the unconditional path always had; the
+	// guard shrinks lost-update exposure from "since first read" to
+	// "since this check".
+	if requestData.BaseMTime != nil || requestData.BaseHash != nil {
+		info, statErr := os.Stat(canonicalPath)
+		if statErr != nil {
+			// The file the caller read is gone: that is a conflict — an
+			// unconditional write would silently re-create it.
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":   "base_file_missing",
+				"message": "The file was deleted after it was read; nothing was written.",
+				"path":    canonicalPath,
+			})
+			return
+		}
+		if requestData.BaseMTime != nil && info.ModTime().Unix() != *requestData.BaseMTime {
+			currentHash := ""
+			if data, readErr := os.ReadFile(canonicalPath); readErr == nil {
+				sum := sha256.Sum256(data)
+				currentHash = hex.EncodeToString(sum[:])
+			}
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":        "revision_conflict",
+				"message":      "The file changed after it was read; nothing was written.",
+				"path":         canonicalPath,
+				"currentMtime": info.ModTime().Unix(),
+				"currentHash":  currentHash,
+			})
+			return
+		}
+		if requestData.BaseHash != nil && *requestData.BaseHash != "" {
+			data, readErr := os.ReadFile(canonicalPath)
+			currentHash := ""
+			if readErr == nil {
+				sum := sha256.Sum256(data)
+				currentHash = hex.EncodeToString(sum[:])
+			}
+			if currentHash != *requestData.BaseHash {
+				writeJSON(w, http.StatusConflict, map[string]interface{}{
+					"error":        "revision_conflict",
+					"message":      "The file content differs from the caller's base revision; nothing was written.",
+					"path":         canonicalPath,
+					"currentMtime": info.ModTime().Unix(),
+					"currentHash":  currentHash,
+				})
+				return
+			}
+		}
 	}
 
 	content := []byte(requestData.Content)

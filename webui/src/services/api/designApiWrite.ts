@@ -50,6 +50,82 @@ export function writeAsset(
   return writeDesignFile(fetchFn, path, content, writeFn, `Failed to write design asset: ${designRootPath(path)}`);
 }
 
+/** The 409 payload the §7a safe-write seam returns on a revision conflict. */
+export interface WriteConflict {
+  path: string;
+  currentMtime?: number;
+  currentHash?: string;
+}
+
+/** Thrown when a §7a conditional write is refused (409) — nothing was written. */
+export class DesignWriteConflictError extends Error {
+  readonly conflict: WriteConflict;
+  constructor(conflict: WriteConflict) {
+    super(`The file changed after it was read (${conflict.path}); nothing was written.`);
+    this.name = 'DesignWriteConflictError';
+    this.conflict = conflict;
+  }
+}
+
+export interface SafeWriteOptions {
+  /** The write transport override (tests/hosts). */
+  writeFn?: typeof fetch;
+  /**
+   * The revision the caller last read: the inventory's `modified` (unix
+   * seconds) and/or the sha256 of the loaded text. Omitted guards are simply
+   * not sent.
+   */
+  baseMtime?: number;
+  baseHash?: string;
+  /**
+   * Force the write through despite a conflict (the §7b "Keep mine" path —
+   * a deliberate, user-visible overwrite, not a silent one).
+   */
+  force?: boolean;
+}
+
+/**
+ * §7a conditional variant of `writeAsset`: sends `baseMtime`/`baseHash` and
+ * throws `DesignWriteConflictError` when the server answers 409 (nothing was
+ * written). Everything else behaves exactly like `writeAsset`.
+ */
+export async function writeAssetIfUnchanged(
+  fetchFn: typeof fetch,
+  path: string,
+  content: string,
+  options: SafeWriteOptions = {},
+): Promise<DesignWriteResult> {
+  const target = designRootPath(path);
+  const body: Record<string, unknown> = { content };
+  if (typeof options.baseMtime === 'number') body.baseMtime = options.baseMtime;
+  if (options.baseHash) body.baseHash = options.baseHash;
+  const response = await (options.writeFn ?? fetchFn)(fileUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (response.status === 409 && !options.force) {
+    let conflict: WriteConflict = { path: target };
+    try {
+      const data = (await response.json()) as Partial<WriteConflict>;
+      conflict = {
+        path: typeof data.path === 'string' ? data.path : target,
+        currentMtime: typeof data.currentMtime === 'number' ? data.currentMtime : undefined,
+        currentHash: typeof data.currentHash === 'string' ? data.currentHash : undefined,
+      };
+    } catch {
+      // A body we cannot parse still means one thing: conflict.
+    }
+    throw new DesignWriteConflictError(conflict);
+  }
+  // force: a 409 is the expected "the file moved, overwriting anyway" answer
+  // — the user decided (§7b Keep mine). Any other non-ok status is a failure.
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Failed to write design asset: ${target}`);
+  }
+  return { path: target, content, response };
+}
+
 /**
  * Write `design/flows/<name>.layout.json` — SP-140 invariant 2 sidecar.
  * Pass the consent-aware write function (writeFileWithFetch /

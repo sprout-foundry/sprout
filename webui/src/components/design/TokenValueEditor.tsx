@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { applyTokenEdit, coerceTokenValue, referenceCount } from '../../design/tokenEdit';
-import { designRootPath, readAsset, writeAssetIfUnchanged } from '../../services/api/designApi';
+import { designRootPath, baseMtimeFromResponse, writeAssetIfUnchanged } from '../../services/api/designApi';
 export interface TokenValueEditorProps {
   /** Dotted path of the selected token, e.g. "color.brand.primary". */
   tokenPath: string;
@@ -71,7 +71,11 @@ export default function TokenValueEditor({
       if (!readResponse.ok) throw new Error('could not read the token file');
       const fileText = await readResponse.text();
       const nextText = applyTokenEdit(fileText, tokenPath, coerced.value);
-      await writeAssetIfUnchanged(transport, filePath, nextText);
+      // §7a: guard the write with the revision just read, so an agent write
+      // between read and save surfaces as the conflict message, not a loss.
+      await writeAssetIfUnchanged(transport, filePath, nextText, {
+        baseMtime: baseMtimeFromResponse(readResponse),
+      });
       setStatus('saved');
       onSaved?.();
     } catch (err) {

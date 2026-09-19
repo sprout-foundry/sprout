@@ -18,6 +18,18 @@ export interface DesignStatusFinding {
   rule: string;
 }
 
+/**
+ * The severity vocabulary the Go validator emits (pkg/design/finding.go:
+ * error/warn/info/fix). Both the chips' classes and their click-through
+ * filters must use these spellings — a 'warning' spelling would render but
+ * never click through.
+ */
+export const FINDING_SEVERITIES = {
+  error: 'error',
+  warnings: ['warn', 'fix'],
+  info: 'info',
+} as const;
+
 /** Validation tallies (authoritative) plus the capped finding list. */
 export interface DesignStatusValidation {
   errors: number;

@@ -17,7 +17,7 @@ import {
   SCREEN_STATUSES,
   type ScreenStatus,
 } from '../../design/statusEdit';
-import { designRootPath, readAsset, writeAssetIfUnchanged } from '../../services/api/designApi';
+import { designRootPath, baseMtimeFromResponse, writeAssetIfUnchanged } from '../../services/api/designApi';
 
 export interface ScreenStatusMenuProps {
   /** The screen's file stem, e.g. "login". */
@@ -70,7 +70,10 @@ export default function ScreenStatusMenu({
         return;
       }
 
-      await writeAssetIfUnchanged(transport, manifestPath, rewritten);
+      // §7a: guard with the manifest revision just read.
+      await writeAssetIfUnchanged(transport, manifestPath, rewritten, {
+        baseMtime: baseMtimeFromResponse(response),
+      });
       setStatus(next);
       onSaved?.();
     } catch (err) {

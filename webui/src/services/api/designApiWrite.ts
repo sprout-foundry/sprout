@@ -57,6 +57,19 @@ export interface WriteConflict {
   currentHash?: string;
 }
 
+/**
+ * Extract the base revision (unix-seconds mtime) from a read response, for
+ * callers that load-then-edit: pass it as SafeWriteOptions.baseMtime so the
+ * write is revision-checked against what was just read (§7a). Returns
+ * undefined when the response carries no Last-Modified header.
+ */
+export function baseMtimeFromResponse(response: Response): number | undefined {
+  const header = response.headers.get('Last-Modified');
+  if (!header) return undefined;
+  const ms = Date.parse(header);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : undefined;
+}
+
 /** Thrown when a §7a conditional write is refused (409) — nothing was written. */
 export class DesignWriteConflictError extends Error {
   readonly conflict: WriteConflict;

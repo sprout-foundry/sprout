@@ -519,6 +519,17 @@ func analyzeCSSLiterals(f SyncFileInput, tree syncTree) []SyncDelta {
 
 		tokenPath, ok := tree.byCSSVar[name]
 		if !ok {
+			// The declaration may spell the same token differently: the export's
+			// identifier rule collapses every non-alphanumeric run in the DTCG
+			// path to '-', so `--color_brand_primary` and `--color-brand-primary`
+			// are the same token. Resolve through the normal form before giving
+			// up — otherwise a renamed var falls through to the inferred pass,
+			// which reports "no token counterpart" for a token that exists.
+			if normal := looksLikeToken(tree, name); normal != "" {
+				tokenPath, ok = normal, true
+			}
+		}
+		if !ok {
 			continue // declared var with no DTCG counterpart: inferred territory
 		}
 		designFiles, tokFile, tokEntry := tokenDesignFiles(tree, tokenPath)
@@ -551,6 +562,11 @@ func analyzeCSSLiterals(f SyncFileInput, tree syncTree) []SyncDelta {
 	for _, m := range cssVarRefRe.FindAllStringSubmatchIndex(content, -1) {
 		name := content[m[2]:m[3]]
 		if _, known := tree.byCSSVar[name]; known {
+			continue
+		}
+		// Same separator-spelling tolerance as the declaration pass: a var that
+		// resolves to an existing token is not "unknown".
+		if looksLikeToken(tree, name) != "" {
 			continue
 		}
 		if strings.Contains(content, "--"+name+":") {
@@ -608,6 +624,33 @@ func tokenPathFromCSSVar(name string) string {
 		return name
 	}
 	return strings.Join(segs, ".")
+}
+
+// looksLikeToken resolves a CSS var name that was spelled differently from the
+// export's canonical form back to an existing DTCG entry, or "" when the name
+// matches no token.
+//
+// The export identifier rule (cssVarStem) collapses every non-alphanumeric run
+// in a token path to '-', so the canonical spelling of `color.brand.primary` is
+// `color-brand-primary`. A declaration written `--color_brand_primary` or
+// `--color.brand.primary` denotes the same token; without this the exact map
+// lookup misses and the delta is misreported as having no counterpart.
+//
+// Only spellings that differ *solely* in separator characters are accepted, so
+// a genuinely new name (e.g. `color-brand-primary-alt`) stays a proposal.
+func looksLikeToken(tree syncTree, name string) string {
+	normalised := tokenPathFromCSSVar(name)
+	if tree.tokens != nil {
+		for _, candidate := range tree.tokens.Leaves {
+			if tokenPathFromCSSVar(cssVarStem(candidate.Name)) == normalised {
+				return candidate.Name
+			}
+		}
+	}
+	if tree.tokensPath != "" && tokenExists(tree, normalised) {
+		return normalised
+	}
+	return ""
 }
 
 // tokenDesignFiles returns the design files a token delta would touch: the
@@ -992,7 +1035,7 @@ func analyzeInferred(f SyncFileInput, tree syncTree) []SyncDelta {
 	literalSpans := map[int]bool{}
 	for _, m := range cssVarDeclRe.FindAllStringSubmatchIndex(content, -1) {
 		name := content[m[2]:m[3]]
-		if _, ok := tree.byCSSVar[name]; ok {
+		if _, ok := tree.byCSSVar[name]; ok || looksLikeToken(tree, name) != "" {
 			for i := m[4]; i < m[5]; i++ {
 				literalSpans[i] = true
 			}

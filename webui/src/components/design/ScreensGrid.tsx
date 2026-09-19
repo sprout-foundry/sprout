@@ -27,11 +27,18 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
-import { designRootPath, readAsset, writeAsset } from '../../services/api/designApi';
-import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
+import {
+  onPinPlacePoint,
+  onPinPlacementArm,
+  pendingCountForStem,
+  publishPinPlacePoint,
+} from '../../design/pinPlacement';
+import { designRootPath, readAsset, writeAsset , readFeedback } from '../../services/api/designApi';
+import type { DesignAssetEntry, DesignFrame, DesignInventory , DesignFeedbackAnnotation } from '../../services/api/types';
 import LivePreview from '../LivePreview';
-import type { DesignTabProps } from './DesignTabProps';
+import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
+import type { DesignTabProps } from './DesignTabProps';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -188,6 +195,10 @@ export default function ScreensGrid({
   const [selected, setSelected] = useState<string | null>(null);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // §6e pin layer state: the selected screen's annotations and the armed
+  // placement mode (the detail pane's affordance asks; the preview answers).
+  const [annotations, setAnnotations] = useState<DesignFeedbackAnnotation[]>([]);
+  const [placeMode, setPlaceMode] = useState(false);
 
   // External selection (sidebar assets pane) drives the same downstream
   // behavior as a card click — highlight, detail pane, preview mount.
@@ -236,6 +247,38 @@ export default function ScreensGrid({
   }, [requestedPaths, contentByPath, transport]);
 
   const contentFor = useCallback((path: string) => contentByPath?.[path] ?? texts[path] ?? '', [contentByPath, texts]);
+
+  // §6e: the selected screen's annotations. A failed read renders zero pins
+  // (the pin layer is advisory; the feedback validator owns read errors).
+  useEffect(() => {
+    if (!selected) {
+      setAnnotations([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const file = await readFeedback(transport, designRelativePath(selected));
+        if (!cancelled) setAnnotations(file?.annotations ?? []);
+      } catch {
+        if (!cancelled) setAnnotations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, transport]);
+
+  // §6e placement: the affordance arms; the preview's next click publishes
+  // the point and disarms. A cancelled arm (form closed) disarms too.
+  useEffect(() => {
+    const offArm = onPinPlacementArm((cancel) => setPlaceMode(!cancel));
+    const offPoint = onPinPlacePoint(() => setPlaceMode(false));
+    return () => {
+      offArm();
+      offPoint();
+    };
+  }, []);
 
   const handleContentChange = useCallback(
     (path: string, content: string) => {
@@ -342,6 +385,18 @@ export default function ScreensGrid({
                         {status}
                       </span>
                     ) : null}
+                    {(() => {
+                      const pending = pendingCountForStem(inventory.feedback, card.name.replace(/\.[^.]+$/, ''));
+                      return pending > 0 ? (
+                        <span
+                          className="design-screen-pending"
+                          data-testid={`design-screen-pending-${card.name}`}
+                          title={`${pending} open annotation${pending === 1 ? '' : 's'}`}
+                        >
+                          {pending}
+                        </span>
+                      ) : null;
+                    })()}
                   </span>
                 </button>
               </li>
@@ -358,14 +413,25 @@ export default function ScreensGrid({
               {error}
             </p>
           ) : null}
-          <LivePreview
-            content={contentFor(selectedCard.path)}
-            language={languageForScreen(selectedCard.path)}
-            fileName={selectedCard.path}
-            onContentChange={
-              onEditAsset ? (content: string) => handleContentChange(selectedCard.path, content) : undefined
-            }
-          />
+          <div className="design-screen-preview">
+            <LivePreview
+              content={contentFor(selectedCard.path)}
+              language={languageForScreen(selectedCard.path)}
+              fileName={selectedCard.path}
+              onContentChange={
+                onEditAsset ? (content: string) => handleContentChange(selectedCard.path, content) : undefined
+              }
+            />
+            <AnnotationPins
+              target={selectedCard.path}
+              annotations={annotations}
+              placeMode={placeMode}
+              onPlace={(at) => {
+                publishPinPlacePoint(at);
+                setPlaceMode(false);
+              }}
+            />
+          </div>
         </div>
       ) : (
         <p className="design-tab-placeholder" data-testid="design-screen-placeholder">

@@ -270,7 +270,20 @@ export async function readFeedback(
   target: string,
   readFn?: typeof fetch,
 ): Promise<DesignFeedbackFile> {
-  const text = await readAsset(fetchFn, feedbackFilePath(target), readFn);
+  let text: string;
+  try {
+    text = await readAsset(fetchFn, feedbackFilePath(target), readFn);
+  } catch (err) {
+    // Backends older than the 404-for-missing-files fix answered a missing
+    // sidecar with 400 invalid_file_path. A missing §4d file is "no
+    // annotations yet" — the empty document — never a transport error.
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes(feedbackFilePath(target)) && message.includes('Failed to read')) {
+      text = '';
+    } else {
+      throw err;
+    }
+  }
   return parseFeedbackJson(text, target);
 }
 

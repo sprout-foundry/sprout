@@ -32,9 +32,14 @@ describe('writeAssetIfUnchanged', () => {
   });
 
   it('a 409 throws DesignWriteConflictError with the current revision', async () => {
-    const transport = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(jsonResponse(409, { error: 'revision_conflict', path: 'design/screens/login.html', currentMtime: 42, currentHash: 'ff0' }));
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(409, {
+        error: 'revision_conflict',
+        path: 'design/screens/login.html',
+        currentMtime: 42,
+        currentHash: 'ff0',
+      }),
+    );
     await expect(
       writeAssetIfUnchanged(globalThis.fetch, 'screens/login.html', '<p>x</p>', { writeFn: transport, baseMtime: 41 }),
     ).rejects.toThrow(DesignWriteConflictError);

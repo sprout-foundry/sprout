@@ -17,9 +17,10 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 | `tester` | Unit-test authoring and coverage | Yes | |
 | `reviewer` | Diff-focused code review: correctness, security, quality | Yes | Alias: `code_reviewer` |
 | `researcher` | Codebase analysis combined with external research and web extraction | Yes | Aliases: `web_scraper`, `web-scraper`, `scraper` (retired persona, consolidated 2026-09) |
+| `designer` | Open-format UX design: DTCG tokens, SVG wireframes, mermaid flows, screens, brand | Yes | Carries `git_write` capability. Aliases: `ux`, `design` |
 | `computer_user` | Desktop automation with screenshots, mouse, and keyboard | No | Carries `computer_use` capability |
 
-Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`.
+Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`, `pkg/personas/configs/designer.json`.
 
 > Strategic project planning lives in the `project-planning` **skill** (`pkg/skills/library/project-planning/SKILL.md`), not a persona. Activate it via `activate_skill project-planning` when starting or aligning a project.
 
@@ -123,12 +124,13 @@ type SubagentType struct {
 
 ## 4. Capabilities
 
-The only capability constant today is `personas.CapabilityGitWrite = "git_write"` (`pkg/personas/ids.go`).
+The only capability constants today are `personas.CapabilityGitWrite = "git_write"` and `personas.CapabilityComputerUse = "computer_use"` (`pkg/personas/ids.go`).
 
 | Persona | Has `git_write`? | Effective? |
 |---------|------------------|------------|
 | `orchestrator` | Yes | Always (has capability) |
 | `coordinator` | Yes | Always (has capability) |
+| `designer` | Yes | Always (has capability) — deliberate: the design↔code loop commits design and code together (SP-140) |
 | All others | No | Never; `commit` tool is rejected, write subcommands are blocked |
 
 `Agent.isGitWriteAllowed()` (`pkg/agent/persona.go`):

@@ -546,6 +546,62 @@
   color: var(--text-muted);
 }
 
+/* ── Approval dialog (requires_approval gate) ─────────────── */
+
+.automations-approval-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.automations-approval-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automations-approval-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.automations-approval-subtitle {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.automations-approval-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+  font-family: var(--font-mono);
+}
+
+.automations-approval-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.automations-approval-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent-warning);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--accent-warning);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .automations-input {
   height: 32px;
   padding: 0 8px;

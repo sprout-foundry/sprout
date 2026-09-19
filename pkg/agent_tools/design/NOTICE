@@ -1,0 +1,31 @@
+Vendored third-party assets for the design_render tool (SP-140-2 §2c).
+
+================================================================================
+mermaid.min.js
+================================================================================
+Upstream:  mermaid
+Version:   11.4.1
+License:   MIT (see LICENSE in this directory)
+Source:    https://registry.npmjs.org/mermaid/-/mermaid-11.4.1.tgz
+File:      package/dist/mermaid.min.js (UMD/IIFE bundle)
+SHA-256:   a43bc1afd446f9c4cc66ac5dd45d02e8d65e26fc5344ec0ef787f88d6ddb6f9e
+
+Pinned-by: SP-140-2 §2c ("pinned vendored copy in pkg/agent_tools/design/",
+offline-safe; no CDN references). The same pinned build is mirrored by
+SP-140-3's webui copy for client-side flow rendering.
+
+Why vendored: design_render renders mermaid .mmd flow sources by generating
+a standalone HTML page that embeds this script, so flow rendering needs no
+network access and no CLI renderer. Keeping the bytes in-repo makes the
+render reproducible and offline-safe.
+
+Upgrade procedure:
+  1. npm pack mermaid@<new-version>
+  2. tar -xzf mermaid-<new-version>.tgz
+  3. cp package/dist/mermaid.min.js  pkg/agent_tools/design/mermaid.min.js
+  4. cp package/LICENSE               pkg/agent_tools/design/LICENSE
+  5. update Version and the SHA-256 pin below; run the design_render tests.
+
+The bundle is ~2.5 MB of minified JavaScript. It is exempt from the
+repository's 500-line-per-file rule (AGENTS.md) as a vendored third-party
+artifact — do not reformat, split, or hand-edit it.

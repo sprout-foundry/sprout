@@ -385,6 +385,11 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		BudgetUSD  *float64 `json:"budget_usd,omitempty"`
 		BudgetWarn *string  `json:"budget_warn,omitempty"`
 		Heartbeat  *int     `json:"heartbeat,omitempty"`
+		// Approved is set by the WebUI on the retry that follows a
+		// requires_approval response. The first (unconfirmed) request
+		// omits it and receives the prompt back; the confirmed retry
+		// carries approved=true and launches.
+		Approved bool `json:"approved,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
@@ -414,7 +419,12 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	// entry — we fall back to the bare response so the existing
 	// contract is preserved; the loader-side Validate will reject the
 	// workflow on the next attempt anyway.
-	if agent.WorkflowRequiresApprovalIn(dir, req.Workflow) {
+	//
+	// req.Approved bypasses the prompt: the WebUI sends it on the retry
+	// after the user confirms. Without this the gate was a dead end in the
+	// UI — the panel never rendered a dialog, so it treated the prompt
+	// response as a successful launch and no workflow ever started.
+	if agent.WorkflowRequiresApprovalIn(dir, req.Workflow) && !req.Approved {
 		response := map[string]interface{}{
 			"requires_approval": true,
 			"workflow":          req.Workflow,

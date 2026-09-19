@@ -1717,3 +1717,102 @@ func TestHandleAPIAutomateRun_OptionalParamsParsed(t *testing.T) {
 		t.Errorf("expected requires_approval true, got %v", resp["requires_approval"])
 	}
 }
+
+// ---------------------------------------------------------------------------
+// approved=true bypasses the requires_approval gate.
+//
+// The WebUI sends `approved: true` on the retry that follows a
+// {requires_approval: true} response. Without the bypass the gate was a dead
+// end in the UI: the panel never rendered a dialog, so it read the prompt as a
+// successful launch and no workflow ever started.
+//
+// These tests assert the GATE decision only — whether the
+// {requires_approval: true} prompt came back. What happens after the gate
+// (launch, agent resolution, BPM fork) depends on the ambient environment and
+// is covered elsewhere; pinning it here made the tests flaky.
+// ---------------------------------------------------------------------------
+
+// gatePrompted reports whether the handler answered with the approval prompt.
+func automateRunGatePrompted(t *testing.T, body []byte) bool {
+	t.Helper()
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		// A non-JSON body means we got past the gate (the launch path
+		// streams/returns other shapes).
+		return false
+	}
+	return resp["requires_approval"] == true
+}
+
+func TestHandleAPIAutomateRun_ApprovedBypassesGate(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(daemonRoot)
+
+	// No requires_approval field → defaults to required.
+	createWorkflowFile(daemonRoot, "gated", "Needs a nod", nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/run",
+		strings.NewReader(`{"workflow":"gated","approved":true}`))
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateRun(rec, req)
+
+	if automateRunGatePrompted(t, rec.Body.Bytes()) {
+		t.Fatalf("approved=true still returned the approval prompt: %s", rec.Body.String())
+	}
+}
+
+// An unconfirmed request (no `approved`) still gets the prompt — the bypass
+// must be opt-in, not a default.
+func TestHandleAPIAutomateRun_UnapprovedStillGated(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(daemonRoot)
+
+	createWorkflowFile(daemonRoot, "gated-2", "Needs a nod", nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/run",
+		strings.NewReader(`{"workflow":"gated-2"}`))
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateRun(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["requires_approval"] != true {
+		t.Errorf("unconfirmed request should be gated, got %+v", resp)
+	}
+}
+
+// A workflow declaring requires_approval:false skips the gate with no
+// `approved` field present.
+func TestHandleAPIAutomateRun_AutoApprovedWorkflowSkipsGate(t *testing.T) {
+	ws, daemonRoot := newAutomateTestServer(t)
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(daemonRoot)
+
+	no := false
+	createWorkflowFile(daemonRoot, "auto-ok", "Runs freely", &no)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/automate/run",
+		strings.NewReader(`{"workflow":"auto-ok"}`))
+	req.Header.Set(webClientIDHeader, "test-client")
+	rec := httptest.NewRecorder()
+	ws.handleAPIAutomateRun(rec, req)
+
+	if automateRunGatePrompted(t, rec.Body.Bytes()) {
+		t.Fatalf("requires_approval:false workflow should skip the gate, got %s", rec.Body.String())
+	}
+}

@@ -9,8 +9,18 @@ import (
 const (
 	// DefaultBufferTokens is the safety buffer for estimation errors
 	DefaultBufferTokens = 1000
-	// MinOutputTokens is the minimum output tokens to reserve
-	MinOutputTokens = 512
+	// MinOutputTokens is the emergency output floor when the window is
+	// nearly full by estimate. Sized for a reasoning-model turn: thinking
+	// tokens are billed against max_tokens on OpenAI-compatible stacks, so
+	// the floor must cover reasoning + one tool-call batch + prose, not
+	// just prose. If the estimate was right and input+floor overflows the
+	// window, the provider rejects and seed's context-overflow recovery
+	// compaction fires, which is strictly better than silently sawing
+	// every response off at a tiny floor when the heuristic merely
+	// overestimated the prompt size (observed as finish=output_limit at
+	// exactly the old 512 value on 80K–134K-token prompts with plenty of
+	// real headroom).
+	MinOutputTokens = 16384
 	// ToolTokenEstimate is the approximate token count per tool definition
 	ToolTokenEstimate = 200
 	// SystemInstructionBuffer accounts for system prompt overhead
@@ -28,6 +38,20 @@ const (
 	// CalculateOutputBudget inflates the input estimate by this percent to
 	// get a worst-case figure to budget output against.
 	EstimationErrorPercent = 30
+	// BiasReservePercent caps the estimation-bias reserve at a share of the
+	// REMAINING space once the 30% input inflation would eat more than that.
+	// Set above EstimationErrorPercent so the cap is inert in the regime the
+	// inflation was calibrated for: it binds only when input exceeds ~57% of
+	// the window (0.4·remaining < 0.3·estimate). Below that line budgets are
+	// bit-identical to the uncapped math — including the historical cold-
+	// estimate case (est 116K vs real 156K on a 200K window, fully absorbed).
+	// Above it, the uncapped reserve grew to 50K+ tokens and starved
+	// ordinary big-prompt turns into finish=output_limit-at-the-floor (the
+	// failures this file's history documents); the cap yields instead, and a
+	// genuinely wrong cold estimate then fails loudly via the provider's
+	// rejection + seed's overflow-recovery compaction rather than silently
+	// truncating the response.
+	BiasReservePercent = 40
 	// BaseCushionPercent is a small fixed cushion (percent of context limit)
 	// for output-side rounding/formatting slop, on top of the estimation
 	// error margin above.
@@ -214,6 +238,15 @@ func EstimateInputTokensWireView(messages []Message, tools []Tool) int {
 // CalculateOutputBudget calculates the safe output token budget given context constraints.
 // It returns the maximum tokens that can be requested for completion.
 // If the input exceeds the context limit, returns 0 and an error message.
+//
+// The !ok return is NOT "no budget": it means the estimate says input already
+// fills the window, but the heuristic has been observed to overestimate by
+// 80K+ tokens against the provider's true prompt count on real conversations
+// (finish=output_limit at exactly the floor value, prompt far below the
+// limit). The 512-token emergency floor then silently decapitated every
+// response. ok=false now reports the full remaining window as the budget —
+// the provider still owns the hard ceiling, and seed's context-overflow
+// recovery can actually fire when the estimate was right.
 func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	if contextLimit <= 0 {
 		contextLimit = 32000 // Default fallback
@@ -221,43 +254,55 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 
 	// Check if input already exceeds context
 	if inputTokens >= contextLimit {
-		return 0, false
+		// The estimate says the prompt fills the window, but this estimate
+		// can overestimate badly (heuristic vs real tokenizer). Pinning the
+		// output to the emergency floor here caused every serious truncation
+		// (finish=output_limit at exactly MinOutputTokens with prompts far
+		// below the provider's true limit). Report the full remaining window
+		// as the budget: the provider clamps the real overflow, and callers
+		// with overflow recovery can still fire when the estimate was right.
+		return max(contextLimit-inputTokens, 0), false
 	}
 
 	// Calculate remaining space
 	remaining := contextLimit - inputTokens
 
-	// EstimateTokens is a heuristic (not a real BPE tokenizer): on tool-heavy
-	// prompts it has been observed to underestimate the true token count by
-	// 25-34%. Rather than reserving a buffer *on top of* the already-remaining
-	// space (which double-counts the same risk and, being additive, collapses
-	// to nothing once input crosses ~64% of a 200K window — see the
-	// "no premature collapse" regression test), inflate the input estimate
-	// itself to a worst-case figure and budget output against that.
-	worstCaseInput := inputTokens + (inputTokens*EstimationErrorPercent)/100
+	// Reserve for estimation bias, capped at a share of the remaining
+	// space. EstimateTokens is a heuristic (not a real BPE tokenizer): it
+	// has been observed to underestimate the true token count by 25-34% on
+	// tool-heavy prompts and to run HOT on prose/reasoning-heavy history.
+	// Inflating the estimate by EstimationErrorPercent captures the
+	// underestimate regime, but uncapped the reserve grows to 50K+ tokens
+	// on a 200K window and starved ordinary big-prompt turns (the
+	// finish=output_limit-at-the-floor failures this file's history
+	// documents). The cap bounds the posture: while remaining is large the
+	// full 30% inflation applies; as it shrinks the reserve yields rather
+	// than eating the response.
+	biasReserve := min(
+		(inputTokens*EstimationErrorPercent)/100,
+		(remaining*BiasReservePercent)/100,
+	)
 
 	// Small fixed cushion for output-side rounding/formatting slop, separate
 	// from the estimation-error margin above. Scales gently with window size
-	// but stays modest — the worst-case input inflation already carries most
-	// of the safety margin.
+	// but stays modest — the bias reserve already carries most of the safety
+	// margin.
 	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
 
-	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput := remaining - biasReserve - cushion
 
 	// Hard cap: max_tokens must never cause input + output to exceed
 	// the context limit. This is the last line of defense against
 	// estimation errors that slip past the margins above.
 	maxOutput = min(maxOutput, remaining)
 
-	// Below the minimum viable output, fall back to a small fixed floor —
-	// but only once the real (non-worst-case) remaining space also can't
-	// comfortably cover it. This should only bite in the final stretch
-	// before the actual ceiling, not at moderate context usage.
+	// Below the minimum viable output, fall back to the floor — but only
+	// when the real remaining space cannot cover it either. A reasoning
+	// turn needs thinking + one tool batch + prose; if the estimate was
+	// right and even the floor overflows, the provider rejects and seed's
+	// overflow-recovery compaction fires.
 	if maxOutput < MinOutputTokens {
-		if remaining < MinOutputTokens {
-			return remaining, true
-		}
-		return MinOutputTokens, true // Minimum viable output
+		return min(MinOutputTokens, remaining), true
 	}
 
 	return maxOutput, true
@@ -279,26 +324,29 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 
 	totalInput := anchoredInput + heuristicInput
 	if totalInput >= contextLimit {
-		return 0, false
+		// Same overestimate defense as CalculateOutputBudget: report the
+		// remaining window (0) instead of a sentinel floor.
+		return max(contextLimit-totalInput, 0), false
 	}
 
 	remaining := contextLimit - totalInput
 
-	// Only inflate the heuristic portion — the anchored portion is already
-	// a real measurement with no estimation error.
-	worstCaseHeuristic := heuristicInput + (heuristicInput*EstimationErrorPercent)/100
-	worstCaseInput := anchoredInput + worstCaseHeuristic
+	// Bias reserve on the heuristic portion only — the anchored portion is
+	// a real measurement with no estimation error. Same cap as
+	// CalculateOutputBudget so the two variants agree in the taper zone.
+	biasReserve := min(
+		(heuristicInput*EstimationErrorPercent)/100,
+		(remaining*BiasReservePercent)/100,
+	)
 
 	cushion := max((contextLimit*BaseCushionPercent)/100, BaseCushionFloor)
 
-	maxOutput := contextLimit - worstCaseInput - cushion
+	maxOutput := remaining - biasReserve - cushion
 	maxOutput = min(maxOutput, remaining)
 
+	// Same floor semantics as CalculateOutputBudget.
 	if maxOutput < MinOutputTokens {
-		if remaining < MinOutputTokens {
-			return remaining, true
-		}
-		return MinOutputTokens, true
+		return min(MinOutputTokens, remaining), true
 	}
 
 	return maxOutput, true

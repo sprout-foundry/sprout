@@ -177,10 +177,17 @@ func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, message
 	inputTokens := api.EstimateInputTokens(messages, tools)
 
 	// Use centralized output budget calculation
-	maxOutput, ok := api.CalculateOutputBudget(contextLimit, inputTokens)
-	if !ok {
-		// Input exceeds context - return minimum
-		maxOutput = api.MinOutputTokens
+	maxOutput, _ := api.CalculateOutputBudget(contextLimit, inputTokens)
+	// maxOutput <= 0 means the estimate claims input already fills the
+	// window (ok=false from CalculateOutputBudget). That estimate can
+	// overestimate against the provider's real prompt count, and the old
+	// MinOutputTokens pin here decapitated responses (finish=output_limit
+	// at exactly the floor). Fall back to the request cap — the same shape
+	// healthy sibling calls send. If the estimate was right, the provider
+	// rejects with a context-overflow error and seed's recovery compaction
+	// fires; the provider enforces the real ceiling either way.
+	if maxOutput <= 0 {
+		maxOutput = getMaxRequestCompletionTokensCap()
 	}
 
 	// Apply completion limit if specified

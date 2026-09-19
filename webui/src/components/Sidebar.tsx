@@ -240,19 +240,21 @@ function Sidebar({
   const ModeRailComponent = modeRail;
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
-  // While a mode rail is active the content pane belongs to the mode: the
-  // mode's own section (flows/screens/tokens for Design) drives the pane, and
-  // the Code section tabs the rail replaces must not render theirs — a stale
-  // 'git' selection would show the git pane beside the mode's rail. Global
-  // sections (settings/logs/plugins) are addressed by the shared rail below
-  // the mode rail and keep rendering; with nothing selected the pane stays
-  // empty (renderContentPane's default case).
+  // While a mode rail is active the content pane belongs to the mode: Code
+  // sections (git/files/search) yield to the mode's section, but the global
+  // sections (logs/settings/plugin panels — addressed by the shared rail
+  // below the mode rail) keep rendering in every mode. Picking a mode
+  // section releases a global pane back to the mode (handleModeSectionChange
+  // clears the selection); picking a global entry claims it back.
   const isCodeSection = (section: SectionTab | undefined | null) =>
     section != null && ALL_SECTION_TABS.some((tab) => tab.id === section);
+  const isGlobalSection = (section: SectionTab | undefined | null) =>
+    !!section && (section === 'logs' || section === 'settings' || pluginPanels.some((panel) => panel.id === section));
   const effectiveSelectedSection = ModeRailComponent
-    ? (modeSection ?? (isCodeSection(selectedSection) ? null : (selectedSection ?? null)))
-    : selectedSection || (supportsGit ? 'git' : 'files');
-  // Use props for width or fall back to default
+    ? isGlobalSection(selectedSection)
+      ? selectedSection
+      : (modeSection ?? null)
+    : selectedSection || (supportsGit ? 'git' : 'files'); // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
   // Plain object fallback avoids calling useRef when the prop is not provided
   const effectiveSidebarWidthRef = sidebarWidthRef ?? { current: effectiveSidebarWidth };
@@ -360,9 +362,13 @@ function Sidebar({
    */
   const handleModeSectionChange = useCallback(
     (id: string) => {
+      // A mode-section pick releases a global pane (logs/settings/plugin
+      // panel) back to the mode's own content; without this the global pane
+      // would stick until manually re-picked.
+      if (isGlobalSection(selectedSection)) onSectionChange?.('' as SectionTab);
       onModeSectionChange?.(id);
     },
-    [onModeSectionChange],
+    [onModeSectionChange, onSectionChange, selectedSection],
   );
 
   const handleLogoToggle = useCallback(() => {

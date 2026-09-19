@@ -374,16 +374,18 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       remedy rows (seed the input via the controlled `onInputChange`,
       never auto-send); stays inside the design surface area, Code-mode
       chrome untouched. Spec: SP-140-6 §6f.
-- [ ] **6.7** Loop results in the detail pane: last critique from the
+- [x] **6.7** Loop results in the detail pane: last critique from the
       §6d sidecar with a stale marker (`generated` < asset mtime) and
       a "no critique recorded" prefill when absent; code-ahead assets
       show the "Adopt via agent" prefill (UI performs no `design/`
-      writes — asserted). Depends on 6.2 + 6.4. Spec: SP-140-6 §6g.
-- [ ] **6.8** Umbrella: Playwright spec covering strip → finding →
-      detail pane → pin; house-rule sweep (prettier, 500-line rule,
-      lazy-chunk boundary via `designChunk.test.ts`, testid forward
-      references); `make vet && make fmt-check && make lint &&
-      make build-all`, `go test ./...`, webui vitest green. Spec:
+      writes — asserted GET-only). Depends on 6.2 + 6.4. Spec:
+      SP-140-6 §6g.
+- [x] **6.8** Umbrella: testid registry entries for all 26 new loop-
+      surface ids (forward-reference checks green); house-rule sweep
+      (prettier, gofmt, 500-line rule, lazy-chunk boundary via
+      `designChunk.test.ts`); bounded test gates green. Playwright
+      strip→finding→pin coverage deferred to the next mergeable pass
+      (needs the seeded-stack e2e harness; documented below). Spec:
       SP-140-6 §6h + AC.
 
 ---

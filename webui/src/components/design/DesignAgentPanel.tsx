@@ -13,7 +13,7 @@
  */
 
 import { MessageSquare, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ComponentProps } from 'react';
 import Chat from '../ChatView';
 
@@ -39,14 +39,23 @@ export default function DesignAgentPanel({
   onPrefillConsumed,
   showHeader = true,
 }: DesignAgentPanelProps) {
-  // Seed the input when a prefill arrives. The chat input is app-owned
-  // state; writing it through the same controlled callback the Code shell
-  // uses means one input, one draft, no duplicated state.
+  // Seed the input when a prefill arrives — exactly once per distinct
+  // prefill string. The ref guard is load-bearing: chatProps and
+  // onPrefillConsumed change identity every shell render, so effect deps
+  // alone would re-stamp the input (clobbering the user's draft) between
+  // the stamp and the parent's prefill-clear commit.
+  const consumedRef = useRef<string | null>(null);
+  const chatPropsRef = useRef(chatProps);
+  chatPropsRef.current = chatProps;
+  const consumedCallbackRef = useRef(onPrefillConsumed);
+  consumedCallbackRef.current = onPrefillConsumed;
+
   useEffect(() => {
-    if (!open || !prefill) return;
-    chatProps.onInputChange?.(prefill);
-    onPrefillConsumed?.();
-  }, [open, prefill, chatProps, onPrefillConsumed]);
+    if (!open || !prefill || consumedRef.current === prefill) return;
+    consumedRef.current = prefill;
+    chatPropsRef.current.onInputChange?.(prefill);
+    consumedCallbackRef.current?.();
+  }, [open, prefill]);
 
   if (!open) {
     return (

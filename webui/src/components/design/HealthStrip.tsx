@@ -22,7 +22,8 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
-import { fetchDesignStatus, type DesignStatus } from '../../services/api/designStatusApi';
+import { fetchDesignStatus, FINDING_SEVERITIES, type DesignStatus } from '../../services/api/designStatusApi';
+import { DESIGN_REFRESH_INTERVAL_MS } from './DesignWorkspaceContext';
 
 export interface HealthStripProps {
   /** Bump to force a refetch (wired to the live tree's refresh). */
@@ -33,6 +34,12 @@ export interface HealthStripProps {
   onOpenSection?: (tab: 'flows' | 'screens' | 'tokens') => void;
   /** Code-ahead click: prefill the agent panel with the remedy. */
   onAskAgent?: (prompt: string) => void;
+  /**
+   * The refresh control's handler. When supplied it owns the refetch (the
+   * shell also refreshes the inventory — one control, both views); when
+   * omitted the strip refetches its own status only.
+   */
+  onRefresh?: () => void;
 }
 
 /** Severity chip classes for the tally. Kept token-only (§6h). */
@@ -40,7 +47,13 @@ function severityChipClass(kind: 'errors' | 'warnings' | 'infos'): string {
   return `design-health-chip design-health-chip-${kind}`;
 }
 
-export default function HealthStrip({ refreshKey = 0, onOpenFinding, onOpenSection, onAskAgent }: HealthStripProps) {
+export default function HealthStrip({
+  refreshKey = 0,
+  onOpenFinding,
+  onOpenSection,
+  onAskAgent,
+  onRefresh,
+}: HealthStripProps) {
   const fetchFn = useSproutFetch();
   const [status, setStatus] = useState<DesignStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +73,8 @@ export default function HealthStrip({ refreshKey = 0, onOpenFinding, onOpenSecti
     };
   }, [fetchFn, refreshKey]);
 
-  // Window-focus refetch, matching the live tree's rhythm (§6a).
+  // Focus + slow interval, matching the live tree's rhythm (§6a): a user
+  // who stays focused still sees tallies move after an agent turn.
   useEffect(() => {
     const refetch = () => {
       setBusy(true);
@@ -70,7 +84,11 @@ export default function HealthStrip({ refreshKey = 0, onOpenFinding, onOpenSecti
       });
     };
     window.addEventListener('focus', refetch);
-    return () => window.removeEventListener('focus', refetch);
+    const timer = window.setInterval(refetch, DESIGN_REFRESH_INTERVAL_MS);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      window.clearInterval(timer);
+    };
   }, [fetchFn]);
 
   if (!status || !status.exists) {
@@ -110,7 +128,9 @@ export default function HealthStrip({ refreshKey = 0, onOpenFinding, onOpenSecti
                 className={severityChipClass('warnings')}
                 data-testid="design-health-warnings"
                 onClick={() => {
-                  const first = validation.findings.find((f) => f.severity === 'warn' || f.severity === 'fix');
+                  const first = validation.findings.find((f) =>
+                    (FINDING_SEVERITIES.warnings as readonly string[]).includes(f.severity),
+                  );
                   if (first) onOpenFinding?.(first.file);
                 }}
               >
@@ -179,6 +199,13 @@ export default function HealthStrip({ refreshKey = 0, onOpenFinding, onOpenSecti
         data-testid="design-health-refresh"
         aria-label="Refresh design status"
         onClick={() => {
+          if (onRefresh) {
+            setBusy(true);
+            // The shell's handler refetches the inventory; the refreshKey
+            // bump it triggers re-runs this strip's own fetch effect.
+            onRefresh();
+            return;
+          }
           setBusy(true);
           void fetchDesignStatus(fetchFn).then((next) => {
             setStatus(next);

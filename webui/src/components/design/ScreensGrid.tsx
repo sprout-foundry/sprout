@@ -25,7 +25,7 @@
  * inventory, reads the selected screen's text, and owns the write-back.
  */
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import type { ConflictState } from '../../design/conflictModel';
 import { decideConflict, restoreAgentVersion, shouldSurfaceConflict } from '../../design/conflictModel';
@@ -43,6 +43,8 @@ import {
   readFeedback,
   writeFeedback,
   writeAssetIfUnchanged,
+  baseMtimeFromResponse,
+  DesignWriteConflictError,
 } from '../../services/api/designApi';
 import type {
   DesignAssetEntry,
@@ -233,10 +235,25 @@ export default function ScreensGrid({
   }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);
-  const cards = useMemo(
+  const builtCards = useMemo(
     () => screenCards(inventory?.screens ?? [], inventory?.wireframes ?? [], frames),
     [inventory, frames],
   );
+  // §7e: the visible order follows the manifest. After a successful reorder
+  // write, apply the new order locally (keyed by path) so the grid reflects
+  // the persisted order immediately; the next inventory refetch (which walks
+  // the manifest) converges on the same order and the override resets.
+  const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
+  useEffect(() => {
+    setOrderOverride(null);
+  }, [inventory]);
+  const cards = useMemo(() => {
+    if (!orderOverride) return builtCards;
+    const rank = new Map(orderOverride.map((stem, index) => [stem.toLowerCase(), index]));
+    const present = builtCards.filter((card) => rank.has(screenStem(card)));
+    const rest = builtCards.filter((card) => !rank.has(screenStem(card)));
+    return [...present.sort((a, b) => (rank.get(screenStem(a)) ?? 0) - (rank.get(screenStem(b)) ?? 0)), ...rest];
+  }, [builtCards, orderOverride]);
   // Key the read effect on the card set; the array itself is rebuilt per render.
   const cardPaths = cards.map((card) => card.path);
   const requestedPaths = cardPaths.join('|');
@@ -276,6 +293,8 @@ export default function ScreensGrid({
 
   // §6e: the selected screen's annotations. A failed read renders zero pins
   // (the pin layer is advisory; the feedback validator owns read errors).
+  // A refetch is also triggered when the agent writes the feedback file under
+  // us (the §7b bridge carries feedback paths too).
   useEffect(() => {
     if (!selected) {
       setAnnotations([]);
@@ -309,17 +328,17 @@ export default function ScreensGrid({
   // §7b incoming-change awareness: the shell's agent-file-changed bridge
   // names the path an agent just wrote. When it is the asset this pane holds
   // an edited buffer for, fetch the disk text and hold the conflict; identical
-  // text means nothing to decide.
+  // text means nothing to decide. A failed read retries once on a short timer
+  // — the write that triggered the event may not be readable yet, and there
+  // is no "next event" for that write.
   const selectedCardForConflict = cards.find((card) => card.path === selected) ?? null;
   const heldPath = selectedCardForConflict?.path ?? null;
   const heldText = heldPath ? contentFor(heldPath) : '';
   useEffect(() => {
     let ignore = false;
-    const handler = (event: Event) => {
-      const changedPath = (event as CustomEvent).detail?.path as string | undefined;
-      if (!changedPath || !heldPath) return;
-      const normalized = changedPath.startsWith('design/') ? changedPath : `design/${changedPath}`;
-      if (normalized !== designRootPath(heldPath)) return;
+    let retryTimer: number | undefined;
+    const check = (attempt: number) => {
+      if (!heldPath) return;
       void (async () => {
         try {
           const diskText = await readAsset(transport, designRelativePath(heldPath));
@@ -328,13 +347,23 @@ export default function ScreensGrid({
             setConflictResolved(false);
           }
         } catch {
-          // The incoming write may not be readable yet; the next event wins.
+          if (!ignore && attempt === 0) {
+            retryTimer = window.setTimeout(() => check(1), 750);
+          }
         }
       })();
+    };
+    const handler = (event: Event) => {
+      const changedPath = (event as CustomEvent).detail?.path as string | undefined;
+      if (!changedPath || !heldPath) return;
+      const normalized = changedPath.startsWith('design/') ? changedPath : `design/${changedPath}`;
+      if (normalized !== designRootPath(heldPath)) return;
+      check(0);
     };
     window.addEventListener('agent-file-changed', handler);
     return () => {
       ignore = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       window.removeEventListener('agent-file-changed', handler);
     };
   }, [heldPath, heldText, transport]);
@@ -368,33 +397,42 @@ export default function ScreensGrid({
   }, [conflict, heldPath]);
 
   // §7e pin drag: persist one annotation's new coordinates. Coordinate-only,
-  // human-authored — the one field the gesture maps to. The write goes
-  // through the plain feedback write (the pane owns this file's edits); a
-  // failure reverts to the previous coordinates by simply not committing.
+  // human-authored — the one field the gesture maps to. Read-modify-write
+  // cycles are SERIALIZED through a ref chain (two quick drags must not
+  // interleave their read/write and silently lose the first move). Failure
+  // persists nothing — the pin stays where it was.
+  const pinPersistChain = useRef<Promise<void>>(Promise.resolve());
   const persistPinMove = useCallback(
-    async (assetPath: string, id: string, at: { x: number; y: number }) => {
-      try {
-        const file = await readFeedback(transport, designRelativePath(assetPath));
-        if (!file) return;
-        const annotationsNext = (file.annotations ?? []).map((annotation) =>
-          annotation.id === id ? { ...annotation, at } : annotation,
-        );
-        await writeFeedback(transport, file.target || designRootPath(assetPath), {
-          ...file,
-          annotations: annotationsNext,
-        });
-        setAnnotations(annotationsNext);
-      } catch {
-        // Advisory surface: a failed drag persists nothing; the pin stays.
-      }
+    (assetPath: string, id: string, at: { x: number; y: number }) => {
+      pinPersistChain.current = pinPersistChain.current.then(async () => {
+        try {
+          const file = await readFeedback(transport, designRelativePath(assetPath));
+          if (!file) return;
+          const annotationsNext = (file.annotations ?? []).map((annotation) =>
+            annotation.id === id ? { ...annotation, at } : annotation,
+          );
+          await writeFeedback(transport, file.target || designRootPath(assetPath), {
+            ...file,
+            annotations: annotationsNext,
+          });
+          setAnnotations(annotationsNext);
+        } catch {
+          // Advisory surface: a failed drag persists nothing; the pin stays.
+        }
+      });
+      return pinPersistChain.current;
     },
     [transport],
   );
 
   // §7e grid reorder: dragging a card to a new slot persists the manifest's
-  // Screens listing order through the §7a seam. The grid's visible order is
-  // the manifest's; a failed write just leaves the order untouched.
+  // Screens listing order through the §7a seam, guarded with the read
+  // revision and SERIALIZED (two quick drags must not race their
+  // read/rewrite pairs — the second gets a 409 against the first's write,
+  // which is the honest outcome). A refused rewrite (no parsable Screens
+  // section) surfaces in the grid's error line rather than vanishing.
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const reorderChain = useRef<Promise<void>>(Promise.resolve());
   const handleCardDragOver = useCallback((event: React.DragEvent<HTMLUListElement>) => {
     event.preventDefault();
   }, []);
@@ -411,19 +449,29 @@ export default function ScreensGrid({
 
       const orderedCards = moveItem(cards, from, to);
       const orderedStems = orderedCards.map((card) => screenStem(card));
-      void (async () => {
+      reorderChain.current = reorderChain.current.then(async () => {
         try {
           const manifestPath = 'README.md';
           const response = await transport(`/api/file?path=${encodeURIComponent(designRootPath(manifestPath))}`);
           if (!response.ok) return;
           const manifest = await response.text();
           const { text: rewritten, changed } = reorderManifestScreens(manifest, orderedStems);
-          if (!changed) return;
-          await writeAssetIfUnchanged(transport, manifestPath, rewritten);
-        } catch {
-          // The visible order follows the manifest; a failed write is a no-op.
+          if (!changed) {
+            setError('The manifest has no parsable Screens listing to reorder — edit README.md directly.');
+            return;
+          }
+          await writeAssetIfUnchanged(transport, manifestPath, rewritten, {
+            baseMtime: baseMtimeFromResponse(response),
+          });
+          setOrderOverride(orderedStems);
+          setError(null);
+        } catch (err) {
+          if (err instanceof Error && err.name === 'DesignWriteConflictError') {
+            setError('The manifest changed while reordering — the reorder was not applied.');
+          }
+          // Other failures leave the order untouched.
         }
-      })();
+      });
     },
     [dragFrom, inventory, cards, transport],
   );

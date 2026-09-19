@@ -70,6 +70,7 @@ export {
   writeFeedback,
   writeLayout,
   DesignWriteConflictError,
+  baseMtimeFromResponse,
 } from './designApiWrite';
 export type { SafeWriteOptions, WriteConflict } from './designApiWrite';
 export {

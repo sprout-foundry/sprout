@@ -95,6 +95,11 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Last-Modified lets safe-write clients (SP-140-7 §7a) echo this value
+	// back as baseMtime on the POST, turning blind overwrites into
+	// revision-checked writes with no extra round-trip.
+	w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
+
 	// Determine content type
 	// First, try to detect content type from the file content (magic bytes)
 	contentType := http.DetectContentType(content)

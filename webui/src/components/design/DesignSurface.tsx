@@ -21,12 +21,12 @@
  * for that case; this component only decides whether it can render at all.
  */
 
-import React, { Suspense, lazy } from 'react';
 import { SkeletonText } from '@sprout/ui';
+import React, { Suspense, lazy } from 'react';
 import ErrorBoundary from '../ErrorBoundary';
+import type { DesignTab } from './DesignView';
 import { useDesignWorkspace } from './DesignWorkspaceContext';
 import HealthStrip from './HealthStrip';
-import type { DesignTab } from './DesignView';
 
 const DesignView = lazy(() => import('./DesignView').then((m) => ({ default: m.default })));
 
@@ -58,6 +58,14 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
   onAskAgent,
 }) => {
   const workspace = useDesignWorkspace();
+  // §6c/§6a: the strip's refresh control refetches the inventory too — one
+  // control, both views of the tree. Bumping refreshKey re-runs the strip's
+  // fetch effect; workspace.refresh() re-runs the inventory fetch.
+  const [stripRefreshKey, setStripRefreshKey] = React.useState(0);
+  const handleStripRefresh = React.useCallback(() => {
+    setStripRefreshKey((key) => key + 1);
+    workspace?.refresh();
+  }, [workspace]);
 
   if (loading) return <SurfaceFallback />;
 
@@ -70,6 +78,8 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
       {/* §6c health strip: the loop's status line (validate/drift/feedback). */}
       <ErrorBoundary panelName="Design health strip">
         <HealthStrip
+          refreshKey={stripRefreshKey}
+          onRefresh={handleStripRefresh}
           onOpenFinding={(path) => {
             // The inventory's paths are design-root-relative (§3f vocabulary);
             // the shared selection expects the same shape.

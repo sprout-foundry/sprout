@@ -84,12 +84,29 @@ export default function AnnotationPins({
     if (point) onPlace(point);
   };
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+  const handleLayerPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingId) return;
     const id = draggingId;
     setDraggingId(null);
     const point = pointFrom(event);
     if (point) onPinMove?.(id, point);
+  };
+
+  // Drag completion lives on the PIN: pointer capture delivers pointerup /
+  // pointercancel to the captured element, so an interrupted gesture clears
+  // here rather than arming the layer for a stray commit later.
+  const handlePinPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!draggingId) return;
+    const id = draggingId;
+    setDraggingId(null);
+    event.preventDefault(); // suppress the synthesized click after a drag
+    const point = pointFrom(event);
+    if (point) onPinMove?.(id, point);
+  };
+
+  const handlePinPointerCancel = () => {
+    // An interrupted gesture (scroll, OS gesture) persists nothing.
+    setDraggingId(null);
   };
 
   return (
@@ -101,7 +118,6 @@ export default function AnnotationPins({
       data-placing={placeMode}
       data-dragging={draggingId ?? ''}
       onClick={handleLayerClick}
-      onPointerUp={handlePointerUp}
       role={placeMode ? 'button' : undefined}
       aria-label={placeMode ? 'Click to place the annotation pin' : undefined}
     >
@@ -118,10 +134,8 @@ export default function AnnotationPins({
           aria-label={`Annotation ${annotation.id} (${annotation.area})${annotation.resolved ? ', resolved' : ', open'}`}
           onClick={(event) => {
             // A pin click focuses the annotation; it must not also place a
-            // new one when placement mode is armed, nor fire right after a
-            // drag drop (the click that ends a drag is suppressed by the
-            // dragging flag having cleared before this handler runs — the
-            // host deduplicates by comparing coordinates).
+            // new one when placement mode is armed. The click that ends a
+            // drag is suppressed by preventDefault in handlePinPointerUp.
             event.stopPropagation();
             onSelect?.(annotation.id);
           }}
@@ -131,6 +145,8 @@ export default function AnnotationPins({
             (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
             setDraggingId(annotation.id);
           }}
+          onPointerUp={handlePinPointerUp}
+          onPointerCancel={handlePinPointerCancel}
         >
           <MapPin size={14} />
           <span className="design-pin-badge">{annotation.id}</span>

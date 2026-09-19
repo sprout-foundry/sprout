@@ -454,6 +454,16 @@ const TESTIDS = {
   "design-loop-finding-0": "design-loop-finding-0", // pattern design-loop-finding-${index}
   "design-loop-drift": "design-loop-drift",
   "design-loop-adopt": "design-loop-adopt",
+  // SP-140-7 co-editing conflict banner (§7b, ConflictBanner.tsx)
+  "design-conflict": "design-conflict",
+  "design-conflict-text": "design-conflict-text",
+  "design-conflict-review": "design-conflict-review",
+  "design-conflict-review-pane": "design-conflict-review-pane",
+  "design-conflict-keep": "design-conflict-keep",
+  "design-conflict-take": "design-conflict-take",
+  "design-conflict-restore": "design-conflict-restore",
+  "design-conflict-side-text": "design-conflict-side-text", // repeated node
+  "design-conflict-base-toggle": "design-conflict-base-toggle",
 } as const;
 
 // Derived set for O(1) coverage lookups

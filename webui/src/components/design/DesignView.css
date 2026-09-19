@@ -1385,3 +1385,70 @@
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
+
+/* ---------------------------------------------------------------------------
+ * Conflict banner (SP-140-7 §7b) — incoming agent change under an edit.
+ * --------------------------------------------------------------------------- */
+
+.design-conflict {
+  border: 1px solid var(--accent-warning, var(--border-strong));
+  border-radius: var(--radius-md, 6px);
+  background: var(--bg-secondary);
+  padding: var(--space-sm, 8px);
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.design-conflict-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm, 8px);
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-primary, inherit);
+}
+
+.design-conflict-btn {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-conflict-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-conflict-review {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-sm, 8px);
+}
+
+.design-conflict-side h4 {
+  margin: 0 0 var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+}
+
+.design-conflict-side pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--space-sm, 8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm, 11px);
+  white-space: pre-wrap;
+}
+
+.design-conflict-base {
+  grid-column: 1 / -1;
+}

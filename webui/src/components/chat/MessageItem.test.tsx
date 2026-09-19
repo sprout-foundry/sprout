@@ -66,7 +66,9 @@ function makeNarration(content: string, toolRefs?: Message['toolRefs']): Message
 
 describe('MessageItem verbosity filter (SP-076)', () => {
   it('hides short inter-tool narration in compact mode', () => {
-    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
+    const message = makeNarration('Let me check the file', [
+      { toolId: 't1', toolName: 'read_file', label: 'read_file' },
+    ]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -82,7 +84,7 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   });
 
   it('keeps the terminal answer visible in compact mode', () => {
-    const message = makeNarration('Done.', [{ id: 't1', name: 'read_file' }]);
+    const message = makeNarration('Done.', [{ toolId: 't1', toolName: 'read_file', label: 'read_file' }]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -116,7 +118,7 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   it('does not hide long narration in compact mode', () => {
     const longContent =
       'I need to read the file, parse its contents, and then check the syntax tree to make sure everything is consistent before I make any changes to the codebase.';
-    const message = makeNarration(longContent, [{ id: 't1', name: 'read_file' }]);
+    const message = makeNarration(longContent, [{ toolId: 't1', toolName: 'read_file', label: 'read_file' }]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -132,7 +134,9 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   });
 
   it('shows inter-tool narration in default mode', () => {
-    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
+    const message = makeNarration('Let me check the file', [
+      { toolId: 't1', toolName: 'read_file', label: 'read_file' },
+    ]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -148,7 +152,9 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   });
 
   it('shows inter-tool narration in verbose mode', () => {
-    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
+    const message = makeNarration('Let me check the file', [
+      { toolId: 't1', toolName: 'read_file', label: 'read_file' },
+    ]);
     act(() => {
       root.render(
         createElement(MessageItem, {

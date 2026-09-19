@@ -63,6 +63,11 @@ func ensureRegistered() {
 	})
 }
 
+// migrationLogged dedupes successful migration log lines to one per unique migration.
+// MigrateConfig may be called multiple times during startup (one per subsystem
+// re-read), so we dedupe to avoid spamming the same migration message.
+var migrationLogged sync.Map
+
 // ConfigFromNewerBuildError reports that the on-disk config version is newer
 // than this binary's ConfigVersion. This happens when a newer sprout (e.g. a
 // dev build or a post-update install) has already migrated the config and an
@@ -143,7 +148,10 @@ func MigrateConfig(raw map[string]interface{}, targetVersion string) (map[string
 			return raw, fmt.Errorf("config migration %q → %q failed: %w", step.from, step.to, err)
 		}
 		raw["version"] = step.to
-		log.Printf("[config] migrated config from %q to %q", step.from, step.to)
+		key := fmt.Sprintf("migrated config from %q to %q", step.from, step.to)
+		if _, dup := migrationLogged.LoadOrStore(key, struct{}{}); !dup {
+			log.Printf("[config] %s", key)
+		}
 	}
 
 	return raw, nil

@@ -1,16 +1,16 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
-import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
-import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
+import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
+import { getPluginViewIds } from '../services/pluginRegistry';
 import { useFileHandler } from '../hooks/useFileHandler';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
@@ -27,19 +27,22 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
+import type { WorkspaceModeId } from '../workspaces/registry';
+import type { WorkspaceShellProps } from '../workspaces/shell';
+import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
-import ContextSidebar from './ContextSidebar';
-import EditorWorkspace from './EditorWorkspace';
+import DesignRail from './design/DesignRail';
+import { DesignWorkspaceProvider } from './design/DesignWorkspaceContext';
+import type { DesignTab } from './design/DesignView';
+import { useDesignPresence } from './design/useDesignPresence';
 import ErrorBoundary from './ErrorBoundary';
-import HeaderBar from './HeaderBar';
 import Sidebar from './Sidebar';
-import StatusBar from './StatusBar';
-import { WorktreeChatDialog } from './WorktreeChatDialog';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
+import { WorktreeChatDialog } from './WorktreeChatDialog';
 
 interface AppContentProps {
   state: AppState;
@@ -391,6 +394,79 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
 
+  // SP-140 / workspace modes: which mode the shell is showing. Availability
+  // depends on the workspace's own content (a design tree), probed once here so
+  // the switcher and the surface agree on what exists.
+  const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
+  const {
+    mode: workspaceMode,
+    modes: workspaceModes,
+    select: selectWorkspaceMode,
+  } = useWorkspaceMode({ hasDesignTree });
+
+  // SP-140-5: the Design mode's active section (its rail entries). Owned here
+  // because the rail (Sidebar) and the surface are siblings and must agree on
+  // it: the rail drives it, the surface renders it.
+  const [designSection, setDesignSection] = useState<DesignTab>('flows');
+
+  /**
+   * Selecting a mode moves the view. The workspace-mode state is the source of
+   * truth for "which surface am I in"; `currentView` remains the intra-mode
+   * route (chat/editor/git inside Code, the design surface inside Design), so
+   * the two are kept in step here rather than each mode re-deriving it.
+   */
+  const handleSelectMode = useCallback(
+    (id: WorkspaceModeId) => {
+      selectWorkspaceMode(id);
+      if (id === 'design') onViewChange('design');
+      else if (
+        // The target mode is Code. Reset the view only when the current view
+        // belongs to some other mode's surface (design today, future modes
+        // later); chat/editor/git and plugin views are Code's own routes and
+        // switching back to Code must not yank the user out of them.
+        !['chat', 'editor', 'git', ...getPluginViewIds()].includes(state.currentView)
+      ) {
+        onViewChange('chat');
+      }
+    },
+    [selectWorkspaceMode, onViewChange, state.currentView],
+  );
+
+  /**
+   * A file picked from the Design surface (a flow-edge hand-off) opens in the
+   * real editor: the mode moves to Code first so CodeShell mounts the pane the
+   * buffer lands in; handleFileClick then sets the view to the editor and
+   * opens the file. Plain handleFileClick would leave the Design surface
+   * mounted over the opened buffer.
+   */
+  const handleDesignFileOpen = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      selectWorkspaceMode('code');
+      handleFileClick(filePath, lineNumber);
+    },
+    [selectWorkspaceMode, handleFileClick],
+  );
+
+  /**
+   * Reconcile the view with the persisted mode once the design-presence probe
+   * settles. `currentView` alone can't decide this: it is restored before the
+   * probe answers, so a Design-mode workspace whose `design/` check is still in
+   * flight would briefly (or permanently) sit on chat. Runs only until it has
+   * acted once, so it never fights the user's own navigation.
+   */
+  const modeViewSyncedRef = useRef(false);
+  useEffect(() => {
+    if (modeViewSyncedRef.current) return;
+    if (designPresenceLoading) return; // probe still in flight
+    modeViewSyncedRef.current = true;
+    // Both branches key on the literal 'design' view id, so only the Design
+    // surface's route is ever touched here: Code-owned routes (chat/editor/
+    // git, plugin views included) match neither branch and are never reset.
+    // Resetting foreign views on mode switch is handleSelectMode's job.
+    if (workspaceMode.id === 'design' && state.currentView !== 'design') onViewChange('design');
+    else if (workspaceMode.id !== 'design' && state.currentView === 'design') onViewChange('chat');
+  }, [designPresenceLoading, workspaceMode.id, state.currentView, onViewChange]);
+
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
     document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
   }, []);
@@ -403,6 +479,13 @@ const AppContent: React.FC<AppContentProps> = ({
     if (initialViewSyncRef.current) {
       return;
     }
+    // A persisted Design mode owns the view: the design surface renders outside
+    // the chat buffer, so forcing `chat` here would undo the mode the user left
+    // the workspace in. Mode reconciliation is handled by the effect above.
+    if (workspaceMode.id === 'design') {
+      initialViewSyncRef.current = true;
+      return;
+    }
     if (currentBuffer?.kind === 'chat' && state.currentView !== 'chat') {
       initialViewSyncRef.current = true;
       onViewChange('chat');
@@ -411,7 +494,7 @@ const AppContent: React.FC<AppContentProps> = ({
     if (currentBuffer) {
       initialViewSyncRef.current = true;
     }
-  }, [currentBuffer, onViewChange, state.currentView]);
+  }, [currentBuffer, onViewChange, state.currentView, workspaceMode.id]);
 
   const handleToggleContextPanel = () => {
     // Direct ref call (the old custom-event hop depended on a listener that
@@ -837,6 +920,62 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
   );
 
+  // The active mode's shell (workspaceMode.Shell) owns the <main> column and
+  // the chrome that belongs to that mode — see workspaces/shell.ts. Each
+  // shell reads only the slice of this object its mode renders.
+  const shellProps: WorkspaceShellProps = {
+    isMobile,
+    isTablet,
+    isSidebarOpen,
+    isConnected: state.isConnected,
+    currentView: state.currentView,
+    onViewChange,
+    onToggleSidebar,
+    onToggleContextPanel: handleToggleContextPanel,
+    supportsLocalTerminal,
+    isTerminalExpanded,
+    onTerminalExpandedChange,
+    showContextSidebar,
+    contextPanelRef,
+    toolExecutions: state.toolExecutions,
+    logs: state.logs,
+    subagentActivities: state.subagentActivities,
+    messages: state.messages,
+    isProcessing: state.isProcessing,
+    lastError: state.lastError,
+    queryProgress: state.queryProgress,
+    currentBuffer: currentBuffer ?? null,
+    handleOutlineNavigateToSymbol,
+    chat: {
+      perChatCache,
+      activeChatId,
+      chatSessions,
+      onActiveChatChange,
+      onCreateChat,
+      onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
+      onDeleteChat,
+      onDeleteAllChats,
+      onRenameChat,
+      chatProps,
+      reviewProps,
+      diffState,
+    },
+    design: {
+      loading: designPresenceLoading,
+      present: hasDesignTree,
+      tab: designSection,
+      onTabChange: setDesignSection,
+      onOpenFile: handleDesignFileOpen,
+    },
+    git: {
+      gitBranches,
+      gitStatus,
+      workspaceRoot,
+    },
+  };
+  // Capital alias so the registry-supplied component renders as a component.
+  const ModeShell = workspaceMode.Shell;
+
   return (
     <div className="app">
       {/* SP-130: blocking home-workspace gate. Renders as a full-screen
@@ -851,194 +990,90 @@ const AppContent: React.FC<AppContentProps> = ({
         />
       )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
-      <ErrorBoundary panelName="Sidebar">
-        <Sidebar
-          isConnected={state.isConnected}
-          instances={instances}
-          selectedInstancePID={selectedInstancePID}
-          isSwitchingInstance={isSwitchingInstance}
-          onInstanceChange={handleInstanceChange}
-          provider={state.provider}
-          model={state.model}
-          selectedModel={state.model}
-          onModelChange={onModelChange}
-          currentView={state.currentView}
-          onViewChange={onViewChange}
-          onFileClick={handleFileClick}
-          stats={stats}
-          recentFiles={recentFiles}
-          recentLogs={recentLogs}
-          isMobileMenuOpen={isSidebarOpen}
-          onMobileMenuToggle={onToggleSidebar}
-          isMobile={isMobile}
-          sidebarCollapsed={sidebarCollapsed}
-          onSidebarToggle={onSidebarToggle}
-          selectedSection={selectedSection}
-          onSectionChange={onSectionChange}
-          sidebarWidth={sidebarWidth}
-          sidebarWidthRef={sidebarWidthRef}
-          onSidebarWidthChange={onSidebarWidthChange}
-          onSidebarWidthPersist={onSidebarWidthPersist}
-          onSidebarWidthReset={onSidebarWidthReset}
-          onProviderChange={onProviderChange}
-          gitPanel={{
-            gitStatus,
-            gitBranches,
-            workspaceRoot,
-            selectedFiles,
-            activeDiffSelectionKey,
-            commitMessage,
-            isLoading: isGitLoading,
-            isActing: isGitActing,
-            isGeneratingCommitMessage,
-            isReviewLoading,
-            actionError: gitActionError,
-            actionWarning: gitActionWarning,
-            onCommitMessageChange: setCommitMessage,
-            onGenerateCommitMessage: handleGenerateCommitMessage,
-            onCommit: handleGitCommitClick,
-            onRunReview: handleRunReview,
-            onCheckoutBranch: handleCheckoutBranch,
-            onCreateBranch: handleCreateBranch,
-            onPull: handlePull,
-            onPush: handlePush,
-            onPullRequest: handleCreatePullRequest,
-            onRefresh: refreshGitStatus,
-            onToggleFileSelection: handleToggleFileSelection,
-            onToggleSectionSelection: handleToggleSectionSelection,
-            onClearSelection: clearSelectedFiles,
-            onSelectFiles: handleSelectFiles,
-            onPreviewFile: handlePreviewGitFile,
-            onStageSelected: handleStageSelected,
-            onUnstageSelected: handleUnstageSelected,
-            onDiscardSelected: handleDiscardSelected,
-            onStageFile: handleStageFile,
-            onUnstageFile: handleUnstageFile,
-            onDiscardFile: handleDiscardFile,
-            onSectionAction: handleSectionAction,
-            onOpenFile: handleFileClick,
-            onLoadCommits: handleLoadCommits,
-            onLoadCommitDetail: handleLoadCommitDetail,
-            onLoadCommitFileDiff: handleLoadCommitFileDiff,
-            onCheckoutCommit: handleCheckoutCommit,
-            onRevertCommit: handleRevertCommit,
-            openWorkspaceBuffer,
-          }}
-        />
-      </ErrorBoundary>
-      <main
-        className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
-      >
-        <HeaderBar
-          isMobile={isMobile}
-          isTablet={isTablet}
-          isSidebarOpen={isSidebarOpen}
-          isConnected={state.isConnected}
-          onToggleSidebar={onToggleSidebar}
-          onToggleContextPanel={handleToggleContextPanel}
-        />
-        <div className="main-view-content">
-          <div className="editor-view">
-            {isMobile && (
-              <div className="pane-controls pane-controls-mobile">
-                <button
-                  className="top-mobile-menu-btn"
-                  onClick={onToggleSidebar}
-                  aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                >
-                  <Menu size={16} />
-                </button>
-                {state.currentView !== 'chat' && (
-                  <button
-                    className="top-mobile-chat-btn"
-                    onClick={() => onViewChange('chat')}
-                    aria-label="Back to chat"
-                    title="Back to chat"
-                  >
-                    <MessageSquare size={16} />
-                  </button>
-                )}
-                {supportsLocalTerminal && (
-                  <button
-                    className="top-mobile-terminal-btn"
-                    onClick={() => onTerminalExpandedChange(!isTerminalExpanded)}
-                    aria-label={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
-                    title={isTerminalExpanded ? 'Hide terminal' : 'Show terminal'}
-                  >
-                    <SquareTerminal size={16} />
-                  </button>
-                )}
-                {showContextSidebar && (
-                  <button
-                    className="top-mobile-context-btn"
-                    onClick={handleToggleContextPanel}
-                    aria-label="Toggle context panel"
-                    title="Toggle context panel"
-                  >
-                    <PanelRightClose size={16} />
-                  </button>
-                )}
-              </div>
-            )}
-            <ErrorBoundary panelName="Editor">
-              <EditorWorkspace
-                currentView={state.currentView}
-                perChatCache={perChatCache}
-                activeChatId={activeChatId}
-                chatSessions={chatSessions}
-                onActiveChatChange={onActiveChatChange}
-                onCreateChat={onCreateChat}
-                onCreateChatInWorktree={onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined}
-                onDeleteChat={onDeleteChat}
-                onDeleteAllChats={onDeleteAllChats}
-                onRenameChat={onRenameChat}
-                chatProps={chatProps}
-                reviewProps={reviewProps}
-                diffState={diffState}
-                handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-                onViewChange={onViewChange}
-              />
-            </ErrorBoundary>
-          </div>
-          <div className="context-panel-container">
-            <ContextSidebar
-              isMobile={isMobile}
-              isTablet={isTablet}
-              showContextSidebar={showContextSidebar}
-              contextPanelRef={contextPanelRef}
-              toolExecutions={state.toolExecutions}
-              logs={state.logs}
-              subagentActivities={state.subagentActivities}
-              messages={state.messages}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              queryProgress={state.queryProgress}
-            />
-          </div>
-        </div>
-        <StatusBar
-          branch={gitBranches.current || gitStatus?.branch}
-          workspacePath={workspaceRoot}
-          onWorkspaceClick={() => onToggleSidebar()}
-          buffer={
-            currentBuffer
-              ? {
-                  kind: currentBuffer.kind,
-                  file: currentBuffer.file,
-                  content: currentBuffer.content,
-                  cursorPosition: currentBuffer.cursorPosition,
-                  languageOverride: currentBuffer.languageOverride,
-                }
-              : null
-          }
-        />
-        {!supportsLocalTerminal && (
-          <ErrorBoundary panelName="Terminal">
-            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
-          </ErrorBoundary>
-        )}
-      </main>
+      <DesignWorkspaceProvider tab={designSection} active={workspaceMode.id === 'design'}>
+        <ErrorBoundary panelName="Sidebar">
+          <Sidebar
+            isConnected={state.isConnected}
+            instances={instances}
+            selectedInstancePID={selectedInstancePID}
+            isSwitchingInstance={isSwitchingInstance}
+            onInstanceChange={handleInstanceChange}
+            provider={state.provider}
+            model={state.model}
+            selectedModel={state.model}
+            onModelChange={onModelChange}
+            currentView={state.currentView}
+            onViewChange={onViewChange}
+            onFileClick={handleFileClick}
+            stats={stats}
+            recentFiles={recentFiles}
+            recentLogs={recentLogs}
+            isMobileMenuOpen={isSidebarOpen}
+            onMobileMenuToggle={onToggleSidebar}
+            isMobile={isMobile}
+            sidebarCollapsed={sidebarCollapsed}
+            onSidebarToggle={onSidebarToggle}
+            modes={workspaceModes}
+            activeModeId={workspaceMode.id}
+            onSelectMode={handleSelectMode}
+            modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
+            modeSection={designSection}
+            onModeSectionChange={(id) => setDesignSection(id as DesignTab)}
+            selectedSection={selectedSection}
+            onSectionChange={onSectionChange}
+            sidebarWidth={sidebarWidth}
+            sidebarWidthRef={sidebarWidthRef}
+            onSidebarWidthChange={onSidebarWidthChange}
+            onSidebarWidthPersist={onSidebarWidthPersist}
+            onSidebarWidthReset={onSidebarWidthReset}
+            onProviderChange={onProviderChange}
+            gitPanel={{
+              gitStatus,
+              gitBranches,
+              workspaceRoot,
+              selectedFiles,
+              activeDiffSelectionKey,
+              commitMessage,
+              isLoading: isGitLoading,
+              isActing: isGitActing,
+              isGeneratingCommitMessage,
+              isReviewLoading,
+              actionError: gitActionError,
+              actionWarning: gitActionWarning,
+              onCommitMessageChange: setCommitMessage,
+              onGenerateCommitMessage: handleGenerateCommitMessage,
+              onCommit: handleGitCommitClick,
+              onRunReview: handleRunReview,
+              onCheckoutBranch: handleCheckoutBranch,
+              onCreateBranch: handleCreateBranch,
+              onPull: handlePull,
+              onPush: handlePush,
+              onPullRequest: handleCreatePullRequest,
+              onRefresh: refreshGitStatus,
+              onToggleFileSelection: handleToggleFileSelection,
+              onToggleSectionSelection: handleToggleSectionSelection,
+              onClearSelection: clearSelectedFiles,
+              onSelectFiles: handleSelectFiles,
+              onPreviewFile: handlePreviewGitFile,
+              onStageSelected: handleStageSelected,
+              onUnstageSelected: handleUnstageSelected,
+              onDiscardSelected: handleDiscardSelected,
+              onStageFile: handleStageFile,
+              onUnstageFile: handleUnstageFile,
+              onDiscardFile: handleDiscardFile,
+              onSectionAction: handleSectionAction,
+              onOpenFile: handleFileClick,
+              onLoadCommits: handleLoadCommits,
+              onLoadCommitDetail: handleLoadCommitDetail,
+              onLoadCommitFileDiff: handleLoadCommitFileDiff,
+              onCheckoutCommit: handleCheckoutCommit,
+              onRevertCommit: handleRevertCommit,
+              openWorkspaceBuffer,
+            }}
+          />
+        </ErrorBoundary>
+        <ModeShell {...shellProps} />
+      </DesignWorkspaceProvider>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

@@ -11,33 +11,35 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 ## Workflow for Each `[ ]` Item
 
 1. **Read `TODO.md`** from your current working directory and identify the first incomplete `[ ]` item. Do not read any other `TODO.md` file.
-2. **Delegate implementation** to orchestrator using run_subagent. Your prompt to the orchestrator MUST include the following instructions verbatim (this is critical — the orchestrator often skips delegation without explicit direction):
+2. **Delegate implementation** to orchestrator using run_subagent. Your prompt to the orchestrator MUST include the following instructions verbatim (this is critical — the orchestrator often skips the required reviewer handoff without explicit direction):
 
-   "You are the orchestrator for this task. You MUST delegate all implementation, testing, and review work to specialized subagents. Do NOT write code, tests, or perform reviews yourself. Follow this exact sequence using run_subagent (serialized, NOT parallel):
+   "You are the orchestrator for this task. You write the code and the tests yourself. You MUST delegate ONLY the review to the `reviewer` subagent — do NOT perform the review yourself. Follow this exact sequence:
 
-   a) **Activate relevant skills first:** Use activate_skill for any relevant skill (e.g., `project-planning`, `browse-debugging`) before delegating.
+   a) **Activate relevant skills first:** Use activate_skill for any relevant skill (e.g., `project-planning`, `browse-debugging`) before starting.
 
-   b) **Write code:** Delegate to `coder` persona with the feature/task description, relevant file paths, and acceptance criteria. Wait for completion.
+   b) **Read the item context:** Read the TODO item, its cited spec section, and the relevant existing code (paths, conventions, test patterns).
 
-   c) **Verify build:** Run the project build command (e.g., `go build ./...` or `make build-all`). If it fails, delegate a fix to `coder` with the specific error. Repeat until build passes.
+   c) **Write code:** Implement the feature/task yourself, per the acceptance criteria and the cited spec.
 
-   d) **Write tests:** Delegate to `tester` persona to write comprehensive tests for the new or modified code. Wait for completion.
+   d) **Verify build:** Run the project build command (e.g., `go build ./...` or `make build-all`). If it fails, fix it yourself and re-run. Repeat until build passes.
 
-   e) **Run tests:** Execute the test suite. If tests fail, delegate fixes to `coder` or `debugger` as appropriate. Iterate until all tests pass.
+   e) **Write tests:** Write comprehensive tests yourself for the new or modified code, following the repo's test conventions.
 
-   f) **Code review:** Delegate to `reviewer` persona to review all changed files. Wait for the review results.
+   f) **Run tests:** Execute the test suite. If tests fail, fix the code (or the tests, if they are clearly wrong) yourself and re-run. Iterate until all tests pass.
 
-   g) **Fix review findings:** For every MUST_FIX and SHOULD_FIX finding, delegate to `coder` to fix them. Re-run tests after fixes.
+   g) **Code review:** Delegate to the `reviewer` persona via run_subagent to review all changed files. Wait for the review results.
 
-   h) **Final verification:** Run build and tests one more time. Confirm everything passes.
+   h) **Fix review findings:** For every MUST_FIX and SHOULD_FIX finding, fix it yourself. Re-run build and tests after fixes.
 
-   i) **Report back:** List all files changed, test results, and any open concerns.
+   i) **Final verification:** Run build and tests one more time. Confirm everything passes.
 
-   Rules: Use ONLY run_subagent (serialized). Never use run_parallel_subagents. Never write code yourself. Always activate the relevant skill before delegating to coder.
+   j) **Report back:** List all files changed, test evidence (exact commands run + outcomes), and any open concerns.
+
+   Rules: Your only subagent is `reviewer` (plus `debugger` only if a fix loop is stuck after 2 attempts). Never use run_parallel_subagents. Never write code or tests through a subagent.
 
    Task: [insert the TODO item description here, with any specific file paths or requirements]"
 
-3. **After the orchestrator completes**, verify that it actually delegated to subagents (check its output for run_subagent calls to coder, tester, reviewer). If it did the work directly instead, treat it as a failure and retry with a stronger reminder.
+3. **After the orchestrator completes**, verify that it delegated the review to the `reviewer` subagent (check its output for a run_subagent call to reviewer) and that its report contains build/test evidence (commands + outcomes). If it skipped the review or lacks test evidence, treat it as a failure and retry with a stronger reminder.
 4. **Verify the build passes** (run the project's build command like `make build-all` or `go build ./...`)
 5. **If build fails**, delegate a fix to orchestrator and re-verify
 6. **Review staged changes** with `git diff --cached`, then commit using the commit tool with the `notes` parameter (NOT the `message` parameter). Pass the TODO item description and a brief summary of what changed in `notes` so the LLM can generate a proper conventional commit message.
@@ -46,7 +48,7 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 
 ## Rules
 
-- Process at most 200 TODO items per session
+- Process at most 1000 TODO items per session
 - **Do NOT stop early.** Keep working through `[ ]` items until they are all `[x]` or you hit an unrecoverable error. A failed subagent, a broken build, or budget pressure are NOT stop conditions — fix, retry, or skip-and-move-on (see failure rule below) and continue to the next item.
 - If a subagent fails or the build cannot be fixed after 2 attempts, log the failure in your next iteration summary and continue to the next item. Do not stop — move on.
 - Do NOT use `git add .` or `git add -A` — only stage specific files you created or modified

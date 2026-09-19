@@ -36,7 +36,7 @@ import (
 )
 
 // critiqueFindingsSidecarSuffix closes every sidecar filename.
-const critiqueFindingsSidecarSuffix = ".findings.json"// CritiqueFindingsSidecarPath is the exported sidecar path for one critique
+const critiqueFindingsSidecarSuffix = ".findings.json" // CritiqueFindingsSidecarPath is the exported sidecar path for one critique
 // target: design/.cache/renders/findings/<label-slug>.findings.json. The
 // webui's detail pane (SP-140-6 §6g) computes the same path for an asset, so
 // the naming rule lives in exactly one place.

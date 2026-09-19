@@ -33,8 +33,13 @@ import {
   pendingCountForStem,
   publishPinPlacePoint,
 } from '../../design/pinPlacement';
-import { designRootPath, readAsset, writeAsset , readFeedback } from '../../services/api/designApi';
-import type { DesignAssetEntry, DesignFrame, DesignInventory , DesignFeedbackAnnotation } from '../../services/api/types';
+import { designRootPath, readAsset, writeAsset, readFeedback } from '../../services/api/designApi';
+import type {
+  DesignAssetEntry,
+  DesignFrame,
+  DesignInventory,
+  DesignFeedbackAnnotation,
+} from '../../services/api/types';
 import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';

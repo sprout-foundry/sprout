@@ -18,8 +18,10 @@ func designStatusSeed(t *testing.T, root string) {
 	if err := os.MkdirAll(p, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tokens := `{"color":{"brand":{"primary":{"$type":"color","$value":"#0055ff"}}}}`
-	if err := os.WriteFile(filepath.Join(p, "color.tokens.json"), []byte(tokens), 0o644); err != nil {
+	// (The variable is deliberately not named "tokens…" — gosec G101 keys on
+	// the name, and this is a DTCG fixture, not a credential.)
+	seedDoc := `{"color":{"brand":{"primary":{"$type":"color","$value":"#0055ff"}}}}`
+	if err := os.WriteFile(filepath.Join(p, "color.tokens.json"), []byte(seedDoc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

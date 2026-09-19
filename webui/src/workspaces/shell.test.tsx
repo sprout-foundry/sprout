@@ -185,15 +185,16 @@ describe('DesignShell', () => {
     expect(container.querySelector('.pane-controls-mobile')).toBeNull();
   });
 
-  it('keeps only the sidebar toggle in the mobile pane controls', () => {
+  it('keeps the mobile pane controls to sidebar + agent toggle (§6f)', () => {
     act(() => {
       root.render(createElement(DesignShell, makeShellProps({ isMobile: true })));
     });
 
     expect(container.querySelector('.pane-controls-mobile')).not.toBeNull();
     expect(container.querySelector('.top-mobile-menu-btn')).not.toBeNull();
-    // Design has no chat/terminal/context chrome of its own.
-    expect(container.querySelector('.top-mobile-chat-btn')).toBeNull();
+    // §6f: Design has agent presence — the mobile chat button opens the
+    // agent panel. Terminal and context chrome stay Code-only.
+    expect(container.querySelector('.top-mobile-chat-btn')).not.toBeNull();
     expect(container.querySelector('.top-mobile-terminal-btn')).toBeNull();
     expect(container.querySelector('.top-mobile-context-btn')).toBeNull();
   });

@@ -342,7 +342,7 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       Cross-check test: endpoint values equal what `design_validate` /
       `design_assets` report for the same fixture tree. Spec:
       SP-140-6 §6b.
-- [ ] **6.3** Health strip atop the design surface: validate tally
+- [x] **6.3** Health strip atop the design surface: validate tally
       chips, the two drift rows (only ahead rows render; synced shows a
       quiet mark), pending-feedback count, refresh control; every
       chip's click-through lands on the surface it names (finding →
@@ -358,20 +358,22 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       and screens/login.html both render to renders/login.png);
       derived output — `design_validate` does not emit findings for it.
       Spec: SP-140-6 §6d.
-- [ ] **6.5** Annotation pins: pin layer over the detail pane's
+- [x] **6.5** Annotation pins: pin layer over the detail pane's
       screen preview and wireframe nodes rendering each §4d annotation
       at its `at` coordinates, colored by area from palette tokens,
       open vs resolved visually distinct; pin click focuses the
       annotation in the pane; grid cards show pending counts;
       click-to-place during "Add feedback" records the clicked point
       as `at` (center default preserved when placement is skipped).
-      Spec: SP-140-6 §6e.
-- [ ] **6.6** Agent presence: DesignShell agent panel (collapsible;
-      bottom sheet on mobile) rendering from the `WorkspaceShellProps`
-      chat payload the shell already receives — no second query client;
-      "Ask the designer" prefill affordances on assets and remedy rows
-      (seed the input, never auto-send); stays inside the lazy design
-      chunk. Spec: SP-140-6 §6f.
+      Placement crosses tab↔pane through a window CustomEvent bridge
+      (the `agent-file-changed` pattern). Spec: SP-140-6 §6e.
+- [x] **6.6** Agent presence: DesignShell agent panel (collapsible;
+      overlay on mobile) rendering the real Chat component from the
+      `WorkspaceShellProps` chat payload the shell already receives —
+      no second query client; "Ask the designer" prefill affordances on
+      remedy rows (seed the input via the controlled `onInputChange`,
+      never auto-send); stays inside the design surface area, Code-mode
+      chrome untouched. Spec: SP-140-6 §6f.
 - [ ] **6.7** Loop results in the detail pane: last critique from the
       §6d sidecar with a stale marker (`generated` < asset mtime) and
       a "no critique recorded" prefill when absent; code-ahead assets

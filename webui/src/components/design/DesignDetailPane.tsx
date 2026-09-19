@@ -15,9 +15,11 @@
  */
 
 import type { ReactNode } from 'react';
+import type { DesignStatusDriftRow } from '../../services/api/designStatusApi';
+import { assetDisplayName } from './assetNames';
 import DesignFeedbackAffordance from './DesignFeedbackAffordance';
 import DesignFeedbackResolution from './DesignFeedbackResolution';
-import { assetDisplayName } from './assetNames';
+import LoopResults from './LoopResults';
 
 /** The pane heading shows the artifact name; the path stays as a caption. */
 function detailName(path: string): string {
@@ -39,6 +41,12 @@ export interface DesignDetailPaneProps {
   readFn?: typeof fetch;
   /** Consent-aware write override for the resolution flow (§3f). */
   writeFn?: typeof fetch;
+  /** The selected asset's inventory `modified` (unix seconds), for §6g. */
+  assetModified?: number;
+  /** The code-ahead drift row from the status endpoint, when ahead (§6g). */
+  codeAhead?: DesignStatusDriftRow | null;
+  /** Prefill the agent panel (§6f/§6g). */
+  onAskAgent?: (prompt: string) => void;
 }
 
 export default function DesignDetailPane({
@@ -48,6 +56,9 @@ export default function DesignDetailPane({
   fetchFn,
   readFn,
   writeFn,
+  assetModified,
+  codeAhead,
+  onAskAgent,
 }: DesignDetailPaneProps) {
   return (
     <div className="design-detail" data-testid="design-detail-content" data-selected={path ?? ''}>
@@ -67,6 +78,8 @@ export default function DesignDetailPane({
           <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
           <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
           {children}
+          {/* §6g: last critique + drift context. Advisory; last in the pane. */}
+          <LoopResults path={path} assetModified={assetModified} codeAhead={codeAhead} onAskAgent={onAskAgent} />
         </>
       ) : (
         <div className="design-detail-empty">

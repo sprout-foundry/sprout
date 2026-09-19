@@ -227,6 +227,27 @@ func TestCalculateMaxTokensWithCompletionLimit(t *testing.T) {
 	}
 }
 
+// TestCalculateMaxTokensEstimateOverWindowNo512Floor is a regression test for
+// the provider-reported truncation pattern: when the heuristic estimate claims
+// the prompt fills the window, the function must not pin max_tokens to the
+// 512-token emergency floor. The budget falls back to the request cap — the
+// same shape healthy sibling calls send — and the provider still enforces the
+// real context ceiling if the estimate was right.
+func TestCalculateMaxTokensEstimateOverWindowNo512Floor(t *testing.T) {
+	t.Setenv("SPROUT_MAX_REQUEST_COMPLETION_TOKENS", "")
+
+	// ~4K estimated tokens against a 4K window: estimate >= limit, so
+	// CalculateOutputBudget reports ok=false. The function must not pin
+	// max_tokens to a tiny floor.
+	messages := []api.Message{{Content: string(make([]byte, 16000))}}
+
+	maxTokens := CalculateMaxTokens(4000, messages, nil)
+	if maxTokens != getMaxRequestCompletionTokensCap() {
+		t.Fatalf("expected request-cap floor (%d) when the estimate exceeds the window, got %d",
+			getMaxRequestCompletionTokensCap(), maxTokens)
+	}
+}
+
 func TestEstimateInputTokens(t *testing.T) {
 	messages := []api.Message{{Content: "12345678"}}
 	tools := []api.Tool{{}}

@@ -196,13 +196,15 @@ const localMaxOutputCap = 16384
 // This mirrors the budgeting every network provider gets in
 // CalculateMaxTokensWithLimits: budget output against the model's real
 // context window using the exact prompt-token count (available here —
-// the tokenizer is local, no heuristic needed), floored at
-// api.MinOutputTokens so a near-full context still yields a viable turn,
-// and capped by localMaxOutputCap against runaway generation.
+// the tokenizer is local, no heuristic needed), and capped by
+// localMaxOutputCap against runaway generation. The budget is kept
+// proportionate to the remaining window: num_predict beyond the remaining
+// num_ctx is fictitious (the server clamps it), and MinOutputTokens is
+// only the fallback when the budget math yields nothing usable.
 func localMaxOutputTokens(model localBudgetModel, prompt string) int {
 	input := len(model.TokenizerEncode(prompt))
 	budget, ok := api.CalculateOutputBudget(model.ContextLength(), input)
-	if !ok || budget < api.MinOutputTokens {
+	if !ok || budget <= 0 {
 		return api.MinOutputTokens
 	}
 	if budget > localMaxOutputCap {

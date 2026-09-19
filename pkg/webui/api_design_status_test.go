@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // designStatusSeed writes the minimal tree the status tests use.
@@ -28,10 +26,7 @@ func designStatusSeed(t *testing.T, root string) {
 
 func TestHandleAPIDesignStatus(t *testing.T) {
 	t.Run("non-GET returns 405", func(t *testing.T) {
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
+		server := newDesignTestServer(t, t.TempDir())
 		req := httptest.NewRequest(http.MethodPost, "/api/design/status", nil)
 		rec := httptest.NewRecorder()
 		server.handleAPIDesignStatus(rec, req)
@@ -42,12 +37,7 @@ func TestHandleAPIDesignStatus(t *testing.T) {
 
 	t.Run("no design tree returns exists false with 200", func(t *testing.T) {
 		dir := t.TempDir()
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		server.workspaceRoot = dir
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server := newDesignTestServer(t, dir)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/design/status", nil)
 		rec := httptest.NewRecorder()
@@ -70,12 +60,7 @@ func TestHandleAPIDesignStatus(t *testing.T) {
 	t.Run("seeded tree returns validation drift feedback and tokenRefs", func(t *testing.T) {
 		dir := t.TempDir()
 		designStatusSeed(t, dir)
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		server.workspaceRoot = dir
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server := newDesignTestServer(t, dir)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/design/status", nil)
 		rec := httptest.NewRecorder()

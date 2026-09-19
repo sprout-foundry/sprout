@@ -28,16 +28,12 @@ func TestFileWritePublishesFileChangedEvent(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "design", "screens"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, rel), []byte("<p>v1</p>"), 0o644))
 
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	require.NoError(t, err)
-	server.workspaceRoot = root
-	server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = root
+	server := newDesignTestServer(t, root)
 
 	// Subscribe to the bus before the write; Unsubscribe by name at cleanup.
 	const subscriber = "file-write-parity-test"
 	eventCh := server.eventBus.Subscribe(subscriber)
 	t.Cleanup(func() { server.eventBus.Unsubscribe(subscriber) })
-
 	payload, jsonErr := json.Marshal(map[string]string{"content": "<p>user edit</p>"})
 	require.NoError(t, jsonErr)
 	req := httptest.NewRequest(http.MethodPost, "/api/file?path="+rel, bytes.NewReader(payload))

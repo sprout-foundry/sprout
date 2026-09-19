@@ -14,8 +14,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // ---------------------------------------------------------------------------
@@ -25,10 +23,7 @@ import (
 // seamWritePOSTs a write body to the handler for rel under root.
 func seamWrite(t *testing.T, root, rel string, body map[string]interface{}) *httptest.ResponseRecorder {
 	t.Helper()
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	require.NoError(t, err)
-	server.workspaceRoot = root
-	server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = root
+	server := newDesignTestServer(t, root)
 
 	payload, jsonErr := json.Marshal(body)
 	require.NoError(t, jsonErr)

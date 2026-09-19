@@ -17,6 +17,27 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// fileRevision is a file's on-disk revision (§7a): modification time in unix
+// seconds plus the sha256 of its content. A missing/unreadable file yields an
+// error; the caller decides how to report it.
+type fileRevision struct {
+	mtime int64
+	hash  string
+}
+
+func fileRevisionFor(path string) (fileRevision, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileRevision{}, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fileRevision{}, err
+	}
+	sum := sha256.Sum256(data)
+	return fileRevision{mtime: info.ModTime().Unix(), hash: hex.EncodeToString(sum[:])}, nil
+}
+
 // handleAPIFile handles API requests for file operations (read/write)
 func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -201,13 +222,17 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// guard shrinks lost-update exposure from "since first read" to
 	// "since this check".
 	if requestData.BaseMTime != nil || requestData.BaseHash != nil {
-		info, statErr := os.Stat(canonicalPath)
-		if statErr != nil {
+		// Compute the file's current revision once: mtime + content hash.
+		// canonicalPath is the canonicalizePath-verified resolution (the same
+		// sanitizer the read/write paths below use); hashing here keeps the
+		// guard logic in one place.
+		currentRev, revErr := fileRevisionFor(canonicalPath)
+		if revErr != nil {
 			// The file the caller read is gone (or unreadable): that is a
 			// conflict — an unconditional write would silently re-create it.
 			// The message distinguishes deletion from other stat failures.
 			reason := "The file was deleted after it was read; nothing was written."
-			if !os.IsNotExist(statErr) {
+			if !os.IsNotExist(revErr) {
 				reason = "The file could not be read to verify the base revision; nothing was written."
 			}
 			writeJSON(w, http.StatusConflict, map[string]interface{}{
@@ -217,38 +242,22 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
-		if requestData.BaseMTime != nil && info.ModTime().Unix() != *requestData.BaseMTime {
-			currentHash := ""
-			if data, readErr := os.ReadFile(canonicalPath); readErr == nil {
-				sum := sha256.Sum256(data)
-				currentHash = hex.EncodeToString(sum[:])
-			}
+		conflict := func() {
 			writeJSON(w, http.StatusConflict, map[string]interface{}{
 				"error":        "revision_conflict",
 				"message":      "The file changed after it was read; nothing was written.",
 				"path":         canonicalPath,
-				"currentMtime": info.ModTime().Unix(),
-				"currentHash":  currentHash,
+				"currentMtime": currentRev.mtime,
+				"currentHash":  currentRev.hash,
 			})
+		}
+		if requestData.BaseMTime != nil && currentRev.mtime != *requestData.BaseMTime {
+			conflict()
 			return
 		}
-		if requestData.BaseHash != nil && *requestData.BaseHash != "" {
-			data, readErr := os.ReadFile(canonicalPath)
-			currentHash := ""
-			if readErr == nil {
-				sum := sha256.Sum256(data)
-				currentHash = hex.EncodeToString(sum[:])
-			}
-			if currentHash != *requestData.BaseHash {
-				writeJSON(w, http.StatusConflict, map[string]interface{}{
-					"error":        "revision_conflict",
-					"message":      "The file content differs from the caller's base revision; nothing was written.",
-					"path":         canonicalPath,
-					"currentMtime": info.ModTime().Unix(),
-					"currentHash":  currentHash,
-				})
-				return
-			}
+		if requestData.BaseHash != nil && *requestData.BaseHash != "" && currentRev.hash != *requestData.BaseHash {
+			conflict()
+			return
 		}
 	}
 

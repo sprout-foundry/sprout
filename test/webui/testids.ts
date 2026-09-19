@@ -422,6 +422,38 @@ const TESTIDS = {
   "token-font-line": "token-font-line",
   "token-font-meta": "token-font-meta",
   "token-space-bar": "token-space-bar",
+  // SP-140-6 loop surface: health strip (§6c, HealthStrip.tsx)
+  "design-health-strip": "design-health-strip",
+  "design-health-errors": "design-health-errors",
+  "design-health-warnings": "design-health-warnings",
+  "design-health-infos": "design-health-infos",
+  "design-health-clean": "design-health-clean",
+  "design-health-design-ahead": "design-health-design-ahead",
+  "design-health-code-ahead": "design-health-code-ahead",
+  "design-health-in-sync": "design-health-in-sync",
+  "design-health-feedback": "design-health-feedback",
+  "design-health-refresh": "design-health-refresh",
+  // SP-140-6 annotation pins (§6e, AnnotationPins.tsx + pinPlacement.ts)
+  "design-pins": "design-pins",
+  "design-pin-a1": "design-pin-a1", // pattern design-pin-${annotation.id}
+  "design-feedback-place": "design-feedback-place",
+  "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
+  // SP-140-6 agent panel (§6f, DesignAgentPanel.tsx)
+  "design-agent-panel": "design-agent-panel",
+  "design-agent-open": "design-agent-open",
+  "design-agent-close": "design-agent-close",
+  "design-agent-chat": "design-agent-chat",
+  // SP-140-6 loop results (§6g, LoopResults.tsx)
+  "design-loop-results": "design-loop-results",
+  "design-loop-critique": "design-loop-critique",
+  "design-loop-critique-meta": "design-loop-critique-meta",
+  "design-loop-stale": "design-loop-stale",
+  "design-loop-no-critique": "design-loop-no-critique",
+  "design-loop-run-critique": "design-loop-run-critique",
+  "design-loop-clean": "design-loop-clean",
+  "design-loop-finding-0": "design-loop-finding-0", // pattern design-loop-finding-${index}
+  "design-loop-drift": "design-loop-drift",
+  "design-loop-adopt": "design-loop-adopt",
 } as const;
 
 // Derived set for O(1) coverage lookups

@@ -49,7 +49,14 @@ export interface DesignSurfaceProps {
   onAskAgent?: (prompt: string) => void;
 }
 
-const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, onTabChange, onOpenFile, onAskAgent }) => {
+const DesignSurface: React.FC<DesignSurfaceProps> = ({
+  loading,
+  present,
+  tab,
+  onTabChange,
+  onOpenFile,
+  onAskAgent,
+}) => {
   const workspace = useDesignWorkspace();
 
   if (loading) return <SurfaceFallback />;

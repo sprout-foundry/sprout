@@ -299,12 +299,28 @@ export default function ScreensGrid({
                     data-testid={`design-screen-thumb-box-${card.name}`}
                   >
                     {content ? (
-                      <img
-                        className="design-screen-thumb-image"
-                        src={thumbnailUrl(card.path)}
-                        alt=""
-                        data-testid={`design-screen-thumb-${card.name}`}
-                      />
+                      card.kind === 'screen' ? (
+                        // An HTML screen cannot be an <img>: the browser refuses
+                        // to decode it, which left every screen card on the
+                        // empty placeholder forever (wireframes — SVG — were
+                        // the only thumbs that ever rendered). Render the read
+                        // HTML in a scriptless sandboxed iframe, scaled down.
+                        <iframe
+                          className="design-screen-thumb-frame"
+                          title={card.name}
+                          sandbox=""
+                          srcDoc={content}
+                          loading="lazy"
+                          data-testid={`design-screen-thumb-${card.name}`}
+                        />
+                      ) : (
+                        <img
+                          className="design-screen-thumb-image"
+                          src={thumbnailUrl(card.path)}
+                          alt=""
+                          data-testid={`design-screen-thumb-${card.name}`}
+                        />
+                      )
                     ) : (
                       <span className="design-screen-thumb-empty" aria-hidden="true" />
                     )}

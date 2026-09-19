@@ -155,15 +155,18 @@ describe('ScreensGrid cards', () => {
     expect(screen.getByTestId('design-screen-card-login').getAttribute('data-kind')).toBe('screen');
   });
 
-  it('shows the screen name and a thumbnail image per card', () => {
+  it('shows the screen name and a thumbnail per card', () => {
     renderGrid();
 
     expect(screen.getByText('login')).toBeTruthy();
     expect(screen.getByText('inbox')).toBeTruthy();
-    expect(screen.getByTestId('design-screen-thumb-login')).toBeTruthy();
-    expect(screen.getByTestId('design-screen-thumb-login').getAttribute('src')).toContain(
-      encodeURIComponent('design/screens/login.html'),
-    );
+    // An HTML screen cannot be an <img> (the browser refuses to decode it, so
+    // the thumb was always the empty placeholder): screens render in a
+    // sandboxed iframe of the read HTML; wireframes (SVG) stay <img>s.
+    const loginThumb = screen.getByTestId('design-screen-thumb-login');
+    expect(loginThumb.tagName).toBe('IFRAME');
+    expect(loginThumb.getAttribute('sandbox')).toBe('');
+    expect(loginThumb.getAttribute('srcdoc')).toContain('<!doctype html>');
   });
 
   it('does not duplicate a wireframe that already has a screen', () => {

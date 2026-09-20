@@ -37,10 +37,6 @@ var (
 // silent terminal doesn't stall footer startup noticeably.
 const probeDeadline = 250 * time.Millisecond
 
-// probeReplyTerminator is the final byte of a CSI reply ("… c" for
-// DA2). The read loop returns as soon as it is observed.
-const probeReplyTerminator = 'c'
-
 // bottomAnchoredResize reports whether the controlling terminal reflows
 // bottom-anchored on resize (Termux and kin). Probed at most once; every
 // later call returns the cached answer. While a test override is installed

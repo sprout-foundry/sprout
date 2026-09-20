@@ -57,6 +57,18 @@ var lowContextProfile = ContextProfile{
 		"recover_file",
 		"run_subagent",
 		"ask_user",
+		// Design loop tools (SP-140): pure Go over workspace files, valid in
+		// every context tier. Without them an auto-LCM model (<132K window,
+		// e.g. most locally hosted models) loses the design workflow while
+		// the lite prompt still instructs it to run design_validate after
+		// each artifact. design_render/design_critique stay out: they need
+		// the browser and vision tiers and register conditionally (nil on
+		// WASM).
+		"design_assets",
+		"design_validate",
+		"design_brief",
+		"design_export_tokens",
+		"design_sync",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
 	SkipProactiveContext:      true,

@@ -2069,8 +2069,19 @@ func normalizeFindings(in []critiqueFinding) []critiqueFinding {
 	return out
 }
 
-func (h *designCritiqueHandler) Aliases() []string      { return nil }
-func (h *designCritiqueHandler) Timeout() time.Duration { return 0 }
+func (h *designCritiqueHandler) Aliases() []string { return nil }
+
+// designCritiqueTimeout bounds one Execute run. The §4e whole-tree cap allows
+// up to 20 screens per run, each costing a browser render plus a vision pass
+// (cache hits skip the render but not the vision call), so the registry's
+// 5-minute default kills a mid-sized tree critique before it finishes. Thirty
+// minutes covers 20 screens at roughly a minute apiece with headroom for the
+// browser's first launch (possible Chrome download) and slower local vision
+// models. Single-target runs finish far earlier; the timeout is a worst-case
+// bound, not a target.
+const designCritiqueTimeout = 30 * time.Minute
+
+func (h *designCritiqueHandler) Timeout() time.Duration { return designCritiqueTimeout }
 func (h *designCritiqueHandler) MaxResultSize() int     { return 0 }
 func (h *designCritiqueHandler) SafeForParallel() bool  { return false }
 func (h *designCritiqueHandler) Interactive() bool      { return false }

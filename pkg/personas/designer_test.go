@@ -10,12 +10,19 @@ import (
 // designerDesignTools is the design-tier tool roster the designer persona must
 // list per SP-140-2 §2a. Listing tools that register later is harmless (the
 // allowlist filters the registered roster), so this test asserts the declared
-// intent, not runtime registration.
+// intent, not runtime registration. All eight design tools must be declared:
+// the loop skill (brief → validate → export → sync, plus the visual pass) is
+// written against the full set, and a persona missing half its loop silently
+// degrades to whatever the enforcing path leaves it.
 var designerDesignTools = []string{
 	"design_validate",
 	"design_assets",
 	"design_render",
 	"design_import_sketch",
+	"design_export_tokens",
+	"design_sync",
+	"design_brief",
+	"design_critique",
 }
 
 // TestDesigner_DefinitionShape pins every field of the shipped designer

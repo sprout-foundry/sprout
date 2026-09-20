@@ -687,8 +687,10 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	// configuration additions alter the loaded prompt's exact text).
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "lite")
 
-	// Regression sanity: the LCM allowlist (now 13 tools — ask_user was
-	// added in a83ced640 for the cloud IDE ask_user/edit-approval flows)
+	// Regression sanity: the LCM allowlist (now 18 tools — ask_user was
+	// added in a83ced640 for the cloud IDE ask_user/edit-approval flows;
+	// the five pure-Go design loop tools in SP-140 so auto-LCM local
+	// models keep the design workflow the lite prompt instructs)
 	// should also be active on the CLI path (proves the profile flowed
 	// all the way through, not just the prompt).
 	tools := ag.getOptimizedToolDefinitions(nil)
@@ -698,13 +700,15 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true, "ask_user": true,
+		"design_assets": true, "design_validate": true, "design_brief": true,
+		"design_export_tokens": true, "design_sync": true,
 	}
 	if len(tools) != len(lcmTools) {
 		var names []string
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 13-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce LCM 18-tool allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 

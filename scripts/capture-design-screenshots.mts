@@ -12,12 +12,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { seedDesignWorkspace, removeDesignWorkspace } from '../test/webui/design_view_fixture.ts';
 import { startSprout } from '../test/webui/fixtures/sprout.ts';
 import { startViteDevServer } from '../test/webui/fixtures/vite.ts';
 
-const OUT = path.join('docs', 'pr-assets');
+// Repo-root relative regardless of the caller's CWD (the script is typically
+// invoked as `npx tsx scripts/…` from webui/, whose CWD is webui/).
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const OUT = path.join(REPO_ROOT, 'docs', 'pr-assets');
 fs.mkdirSync(OUT, { recursive: true });
 
 const workspaceDir = seedDesignWorkspace();

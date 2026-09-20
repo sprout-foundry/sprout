@@ -61,6 +61,8 @@
 
 .design-view-detail {
   flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: auto;
   padding: var(--space-3);
@@ -69,6 +71,17 @@
   transition:
     flex-basis 0.18s ease,
     opacity 0.18s ease;
+}
+
+/* Detail pane body: a column that always fills the pane. Without this the
+   wrapper is auto-height, so the screen tab's split view (whose .live-preview
+   is height:100%) collapses to content height and strands the rest of the
+   pane as dead space. Content taller than the pane still scrolls via the
+   aside's overflow. */
+.design-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 
 /* Nothing selected: the pane yields its width to the canvas instead of
@@ -422,6 +435,11 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
+  /* Fill the tab canvas (which has a definite height and scrolls) so the
+     screen-detail split view stretches down to the pane bottom instead of
+     leaving dead space under the preview. Floor keeps short viewports
+     usable. */
+  min-height: 100%;
 }
 
 .design-screens-grid {
@@ -555,7 +573,14 @@
 }
 
 .design-screen-detail {
-  min-height: 0;
+  /* Grow to absorb the pane's leftover height so the split view below
+     reaches the bottom of the pane (the pinned LoopResults block rides
+     down with it). The floor keeps the split usable on short viewports;
+     the aside scrolls when the floor exceeds available height. */
+  flex: 1 0 auto;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1082,6 +1107,18 @@
 
 .design-screen-preview {
   position: relative;
+  /* Fill the screen-detail column so the pin layer (inset:0) covers the
+     whole preview and LivePreview spans down to the pane bottom. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* LivePreview is shared with EditorPane (which gives it a sized box), so
+   scope the fill to the design detail's preview slot only. Absolutely
+   positioned so height:100% never has to resolve against an auto ancestor. */
+.design-screen-preview > .live-preview {
+  position: absolute;
+  inset: 0;
 }
 
 .design-pins {

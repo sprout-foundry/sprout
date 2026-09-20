@@ -329,7 +329,11 @@ export const FIXTURE_DESIGN_TREE: Record<string, string> = {
  * (see `removeDesignWorkspace`).
  */
 export function seedDesignWorkspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sprout-design-view-"));
+  // Short prefix on purpose: the location switcher shows the workspace dir's
+  // last path segment, and a long `mkdtemp` suffix overruns its chip — the PR
+  // capture then reads as clipped ("T/sprout-desi…"). "dsgn" + 6 random chars
+  // stays within the chip at the default 1600×1000 capture viewport.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dsgn-"));
   for (const [rel, content] of Object.entries(FIXTURE_DESIGN_TREE)) {
     const target = path.join(dir, rel);
     fs.mkdirSync(path.dirname(target), { recursive: true });

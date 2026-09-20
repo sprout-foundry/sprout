@@ -25,7 +25,22 @@ type MockLLMProvider struct {
 	debug             bool
 	// contextLimit overrides the default 128K context window when non-zero. Used by tests for LCM or the context floor.
 	contextLimit int
+	// responseQueue, when non-empty, is consumed FIFO ahead of the
+	// prompt-match/default paths. Each entry is a full assistant message
+	// (text, or text + an inline fenced JSON tool call the seed loop's
+	// fallback parser recovers). This lets a caller script a multi-step
+	// tool-using exchange — the queue advances once per model call, so
+	// turn N's response can trigger tool execution and turn N+1's
+	// response synthesizes the result. Seeded via the
+	// SPROUT_MOCK_LLM_QUEUE env var (newline-separated, \n---\n entry
+	// separator) by the screenshot/e2e harnesses.
+	responseQueue []string
 }
+
+// mockLLMQueueEntrySeparator separates queued assistant responses in the
+// SPROUT_MOCK_LLM_QUEUE env var. Chosen so entries themselves can carry
+// newlines (fenced JSON tool calls are multi-line).
+const mockLLMQueueEntrySeparator = "\n---MOCK-LIGHTWEIGHT-TURN---\n"
 
 // NewMockLLMProvider creates a new mock LLM provider with sensible defaults.
 func NewMockLLMProvider() *MockLLMProvider {
@@ -58,6 +73,13 @@ func getLastUserMessage(messages []api.Message) string {
 // was found or a built-in stub matched.
 func (m *MockLLMProvider) resolveResponse(userMsg string) (string, bool) {
 	lower := strings.ToLower(userMsg)
+
+	// 0. Scripted FIFO queue wins — the harness seeds exact turn order.
+	if len(m.responseQueue) > 0 {
+		resp := m.responseQueue[0]
+		m.responseQueue = m.responseQueue[1:]
+		return resp, true
+	}
 
 	// 1. Check registered custom responses (substring match)
 	m.mu.Lock()

@@ -137,6 +137,15 @@ export async function startSprout(opts: StartSproutOptions = {}): Promise<Sprout
   };
   delete env.CI;
   delete env.GITHUB_ACTIONS;
+  // Sanitize daemon/service env leaks: when the e2e harness itself runs
+  // inside a sprout agent session, SPROUT_SERVICE/SPROUT_DAEMON leak into
+  // the spawned backend and flip it into service/daemon mode, which
+  // changes WebSocket event routing (live chat events never reach the
+  // browser). The fixture backend must run in plain local mode.
+  delete env.SPROUT_SERVICE;
+  delete env.SPROUT_DAEMON;
+  delete env.SPROUT_DAEMON_ROOT;
+  delete env.SPROUT_WEB_TERMINAL;
 
   const bin = path.join(REPO_ROOT, 'sprout');
   const child = spawn(bin, args, {

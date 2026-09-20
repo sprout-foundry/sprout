@@ -29,9 +29,12 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
   chat,
   design,
 }) => {
-  // §6f agent presence: open/closed plus the pending prefill (consumed once
-  // it has landed in the chat input).
-  const [agentOpen, setAgentOpen] = useState(false);
+  // §6f agent presence: the chat is a docked column of the Design surface
+  // and is OPEN BY DEFAULT — directing the design loop from chat is the
+  // point of the mode, so the panel is part of the layout, not an overlay
+  // the user has to summon. Collapse is still available (remembers its
+  // state per mount), and on mobile the panel keeps its overlay behavior.
+  const [agentOpen, setAgentOpen] = useState(true);
   const [prefill, setPrefill] = useState<string | null>(null);
 
   const askAgent = useCallback((prompt: string) => {

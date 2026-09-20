@@ -11,6 +11,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// probeReplyTerminator is the final byte of a CSI reply ("… c" for
+// DA2). The read loop returns as soon as it is observed.
+const probeReplyTerminator = 'c'
+
 // readTTYReply reads from fd until the terminator byte appears, the
 // deadline expires, or the fd errors. Returns the accumulated bytes.
 // Used for reply-style terminal queries (DA2 fingerprinting) where the

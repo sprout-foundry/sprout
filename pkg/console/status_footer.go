@@ -223,6 +223,23 @@ func (f *StatusFooter) Start() {
 	f.applyScrollRegion()
 	f.draw()
 
+	// Fingerprint the terminal flavor NOW, before any input reader
+	// parks on stdin. The DA2 probe reads a reply from fd 0; when it
+	// ran lazily on the first Resize() (the first soft-keyboard toggle
+	// on Termux) an InputReader/SteerInputReader was already blocked in
+	// a raw-mode Read on the same fd — the kernel woke one of the two
+	// readers, the input reader won, consumed the reply, and the probe
+	// timed out and cached false FOREVER. With the cache poisoned the
+	// footer took the xterm union-clear path on Termux, whose
+	// bottom-anchored reflow means that window holds freshly
+	// pulled-down conversation lines: visible history was erased on
+	// every keyboard dismiss. Probing here is safe: the terminal is
+	// cooked, no reader is active, and on Termux the reply lands in
+	// <10ms (early return at the terminator).
+	LockOutput()
+	bottomAnchoredResize()
+	UnlockOutput()
+
 	if !wasActive {
 		go f.watchResize(stopCh, doneCh)
 		// On platforms without SIGWINCH (Windows), watchResize is a no-op.

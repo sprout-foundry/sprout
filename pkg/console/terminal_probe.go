@@ -1,6 +1,7 @@
 package console
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -64,7 +65,13 @@ func probeBottomAnchored(fd uintptr, w *os.File) bool {
 	if err != nil {
 		return false
 	}
-	defer term.Restore(int(fd), old)
+	// The probe result is best-effort; a failed restore would leave the
+	// user's terminal in raw mode, so surface it rather than swallow it.
+	defer func() {
+		if restoreErr := term.Restore(int(fd), old); restoreErr != nil {
+			fmt.Fprintf(os.Stderr, "console: failed to restore terminal state after DA2 probe: %v\n", restoreErr)
+		}
+	}()
 
 	if _, err := w.WriteString("\033[>c"); err != nil {
 		return false

@@ -2,6 +2,16 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.8] - 2026-09-20
+
+- fix(console): move probeReplyTerminator into unix-only file (8dc41e53f)
+- fix(console): stop DA2 probe closing borrowed stdin fd; probe at footer start (844cac539)
+- fix(console): check term.Restore error in DA2 probe defer (11f30a14c)
+- docs: dedupe v0.18.7 changelog section after merge (ac773df3a)
+- Merge remote-tracking branch 'origin/main' (658b90d76)
+- fix(console): bottom-anchored resize detection for Termux footer clears (853320b89)
+- docs: Update changelog for v0.18.7 (3915c89d4)
+
 ## [v0.18.7] - 2026-09-19
 
 - docs: Update changelog for v0.18.7 (220b05e94)

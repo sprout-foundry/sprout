@@ -98,6 +98,11 @@ type CallEdge struct {
 // multiple times.  After Release, the Root, Source, Tree, and Bound
 // fields are nilled to prevent use-after-release.
 func (r *ASTResult) Release() {
+	// Tree.Release returns the tree to gotreesitter's package-level
+	// pool, where a concurrent Parse's newTreeWithArenas may
+	// whole-struct overwrite it — serialize against parse (poolMu).
+	poolMu.Lock()
+	defer poolMu.Unlock()
 	if r.Bound != nil {
 		r.Bound.Release()
 		r.Bound = nil
@@ -149,6 +154,19 @@ type langEntry struct {
 var (
 	langCacheMu sync.RWMutex
 	langCache   = make(map[string]*langEntry)
+
+	// poolMu serializes every gotreesitter call that touches the
+	// package-level tree pool: Parser.Parse (newTreeWithArenas writes
+	// the whole recycled *Tree), Bind, and Tree.Release. The pool hands
+	// the same *Tree to concurrent parses, and v0.16.0 has no internal
+	// locking between pool Get/Put paths, so two goroutines parsing
+	// while a third releases reported a data race between
+	// newTreeWithArenas and Tree.Release on the shared tree. Holding
+	// one mutex across Parse..extract bounds the critical sections;
+	// extracted symbol/call data is plain Go values safe to use after.
+	// The extracted-data window is still under the lock because Bind
+	// and node walks read arena state the pool recycles.
+	poolMu sync.Mutex
 )
 
 // getLanguage resolves a language name to its gotreesitter.Language,
@@ -232,6 +250,10 @@ func parse(langName, filePath string, content []byte) (*ASTResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Serialize the pool-touching window — see poolMu for why.
+	poolMu.Lock()
+	defer poolMu.Unlock()
 
 	parser := gotreesitter.NewParser(entry.lang)
 	if parser == nil {

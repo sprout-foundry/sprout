@@ -60,26 +60,25 @@
 }
 
 .design-view-detail {
-  flex: 0 0 280px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: var(--space-3);
-  border-left: 1px solid var(--border-default);
   background: var(--bg-secondary);
-  transition:
-    flex-basis 0.18s ease,
-    opacity 0.18s ease;
 }
 
-/* Nothing selected: the pane yields its width to the canvas instead of
-   showing a static "select something" stub. Content stays mounted (the
-   pane contract and its data-selected wiring are test-observable). */
-.design-view-detail[data-idle='true'] {
-  flex-basis: 0px;
-  padding: 0;
-  border-left-width: 0;
-  opacity: 0;
-  overflow: hidden;
+/* Detail pane body: a column that always fills the pane. Without this the
+   wrapper is auto-height, so the screen tab's split view (whose .live-preview
+   is height:100%) collapses to content height and strands the rest of the
+   pane as dead space. Content taller than the pane still scrolls via the
+   aside's overflow. */
+.design-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 
 .design-rail-heading,
@@ -422,6 +421,11 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
+  /* Fill the tab canvas (which has a definite height and scrolls) so the
+     screen-detail split view stretches down to the pane bottom instead of
+     leaving dead space under the preview. Floor keeps short viewports
+     usable. */
+  min-height: 100%;
 }
 
 .design-screens-grid {
@@ -555,7 +559,14 @@
 }
 
 .design-screen-detail {
-  min-height: 0;
+  /* Grow to absorb the pane's leftover height so the split view below
+     reaches the bottom of the pane (the pinned LoopResults block rides
+     down with it). The floor keeps the split usable on short viewports;
+     the aside scrolls when the floor exceeds available height. */
+  flex: 1 0 auto;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -966,4 +977,702 @@
 
 .design-tokens-alias.is-dangling {
   color: var(--accent-warning, var(--text-secondary));
+}
+
+/* ---------------------------------------------------------------------------
+ * Health strip (SP-140-6 §6c) — the design surface's loop-status bar.
+ * --------------------------------------------------------------------------- */
+
+.design-surface {
+  display: flex;
+  flex-direction: column;
+}
+
+.design-health {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-xs, 4px) var(--space-md, 12px);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  min-height: 28px;
+  flex: 0 0 auto;
+}
+
+.design-health-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.design-health-chip,
+.design-health-ok,
+.design-health-synced,
+.design-health-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.6;
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 var(--space-sm, 8px);
+  white-space: nowrap;
+}
+
+.design-health-chip {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+}
+
+.design-health-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-health-chip-errors {
+  border-color: var(--accent-danger, var(--border-strong));
+  color: var(--accent-danger, inherit);
+}
+
+.design-health-chip-warnings {
+  border-color: var(--accent-warning, var(--border-default));
+  color: var(--accent-warning, inherit);
+}
+
+.design-health-chip-infos,
+.design-health-chip-drift,
+.design-health-chip-feedback {
+  border-color: var(--accent-info, var(--border-default));
+  color: var(--accent-info, var(--text-primary, inherit));
+}
+
+.design-health-ok,
+.design-health-synced {
+  color: var(--accent-success, var(--text-secondary));
+}
+
+.design-health-muted {
+  color: var(--text-secondary);
+}
+
+.design-health-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px;
+}
+
+.design-health-refresh:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+.design-health-refresh.busy {
+  animation: design-health-spin 1s linear infinite;
+}
+
+@keyframes design-health-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Annotation pins (SP-140-6 §6e) — the pin layer over a rendered screen.
+ * --------------------------------------------------------------------------- */
+
+.design-screen-preview {
+  position: relative;
+  /* Fill the screen-detail column so the pin layer (inset:0) covers the
+     whole preview and LivePreview spans down to the pane bottom. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* LivePreview is shared with EditorPane (which gives it a sized box), so
+   scope the fill to the design detail's preview slot only. Absolutely
+   positioned so height:100% never has to resolve against an auto ancestor. */
+.design-screen-preview > .live-preview {
+  position: absolute;
+  inset: 0;
+}
+
+.design-pins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.design-pins-placing {
+  pointer-events: auto;
+  cursor: crosshair;
+  outline: 1px dashed var(--accent-info, var(--border-strong));
+}
+
+.design-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--accent-info, var(--bg-primary));
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+  padding: 1px 3px;
+  pointer-events: auto;
+  font-size: var(--text-sm, 11px);
+  line-height: 1.4;
+}
+
+/* Open annotations read as urgent; resolved ones quiet down. */
+.design-pin-resolved {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+  opacity: 0.75;
+}
+
+.design-pin-selected {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+/* Area hues from the house palette tokens only (§6h: no raw hex). */
+.design-pin-area-hierarchy {
+  background: var(--accent-warning);
+  color: var(--text-primary, inherit);
+}
+
+.design-pin-area-contrast,
+.design-pin-area-touch-targets {
+  background: var(--accent-danger, var(--accent-warning));
+  color: var(--text-primary, inherit);
+}
+
+.design-pin-area-consistency {
+  background: var(--accent-primary);
+  color: var(--text-primary, inherit);
+}
+
+.design-pin-badge {
+  font-family: var(--font-mono, monospace);
+}
+
+.design-screen-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--accent-warning);
+  color: var(--text-primary, inherit);
+  font-size: var(--text-sm, 11px);
+  padding: 0 4px;
+}
+
+/* Keyboard reorder controls (§7e a11y parity with the drag gesture). */
+.design-screen-reorder {
+  position: absolute;
+  top: var(--space-1, 4px);
+  right: var(--space-1, 4px);
+  display: none;
+  gap: 2px;
+  z-index: 1;
+}
+
+.design-screens-grid li {
+  position: relative;
+}
+
+.design-screens-grid li:focus-within .design-screen-reorder,
+.design-screen-reorder:focus-within {
+  display: inline-flex;
+}
+
+.design-screen-reorder-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 2px;
+  font-size: var(--text-sm, 11px);
+  line-height: 1;
+}
+
+.design-screen-reorder-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.design-screen-reorder-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.design-token-reload {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  font-size: var(--text-sm, 11px);
+}
+
+.design-feedback-place {
+  margin: var(--space-xs, 4px) 0;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-feedback-place:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary, inherit);
+}
+
+/* ---------------------------------------------------------------------------
+ * Agent panel (SP-140-6 §6f) — agent presence inside the Design shell.
+ * --------------------------------------------------------------------------- */
+
+/* The shell's body becomes a row: the surface grows, the side column is a
+ * fixed side column. Only active while Design mode's shell is mounted. */
+.main-content.design-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.design-shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.design-shell-body > .design-surface {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * The side column (§6f rework): ONE right column, Details | Agent tabs.
+ * Replaces the old docked detail pane + always-open agent panel (four
+ * columns with the sidebar; the canvas squeezed in the middle).
+ * ------------------------------------------------------------------------- */
+
+.design-side-column {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 min(420px, 36vw);
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+}
+
+.design-side-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.design-side-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+}
+
+.design-side-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.design-side-tab.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.design-side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.design-side-body[hidden] {
+  display: none;
+}
+
+/* The old agent-panel styles (docked column + FAB + mobile overlay) are
+ * gone with the always-open panel; the chat fills the Agent tab body. */
+.design-agent-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.design-agent-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.design-agent-chat > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.design-agent-absent {
+  padding: var(--space-3);
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+}
+
+/* Mobile: the column overlays the surface instead of squeezing it. */
+@media (max-width: 768px) {
+  .design-side-column {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(92vw, 420px);
+    z-index: 30;
+    box-shadow: var(--shadow-float);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Loop results (SP-140-6 §6g) — last critique + drift context in the pane.
+ * --------------------------------------------------------------------------- */
+
+.design-loop-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-sm, 8px);
+  padding-top: var(--space-sm, 8px);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.design-loop-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-xs, 4px);
+}
+
+.design-loop-meta {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 4px);
+  align-items: center;
+}
+
+.design-loop-empty {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.design-loop-stale {
+  color: var(--accent-warning);
+}
+
+.design-loop-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs, 4px);
+}
+
+.design-loop-finding {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 4px);
+  align-items: baseline;
+  font-size: var(--text-sm, 12px);
+  padding: 2px var(--space-xs, 4px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.design-loop-severity {
+  font-weight: 600;
+}
+
+.design-loop-finding.severity-blocker .design-loop-severity,
+.design-loop-finding.severity-major .design-loop-severity {
+  color: var(--accent-danger, var(--accent-warning));
+}
+
+.design-loop-finding.severity-minor .design-loop-severity {
+  color: var(--accent-warning);
+}
+
+.design-loop-finding.severity-info .design-loop-severity {
+  color: var(--accent-info);
+}
+
+.design-loop-area {
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+
+.design-loop-suggestion {
+  color: var(--text-secondary);
+}
+
+.design-loop-ask {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-loop-ask:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+/* ---------------------------------------------------------------------------
+ * Conflict banner (SP-140-7 §7b) — incoming agent change under an edit.
+ * --------------------------------------------------------------------------- */
+
+.design-conflict {
+  border: 1px solid var(--accent-warning, var(--border-strong));
+  border-radius: var(--radius-md, 6px);
+  background: var(--bg-secondary);
+  padding: var(--space-sm, 8px);
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.design-conflict-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm, 8px);
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-primary, inherit);
+}
+
+.design-conflict-btn {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-sm, 8px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-conflict-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-conflict-review {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-sm, 8px);
+}
+
+.design-conflict-side h4 {
+  margin: 0 0 var(--space-xs, 4px);
+  font-size: var(--text-sm, 12px);
+  color: var(--text-secondary);
+}
+
+.design-conflict-side pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--space-sm, 8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm, 11px);
+  white-space: pre-wrap;
+}
+
+.design-conflict-base {
+  grid-column: 1 / -1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Token value editor (SP-140-7 §7c) — structured editing on the DTCG file.
+ * --------------------------------------------------------------------------- */
+
+.design-token-editor {
+  margin-top: var(--space-sm, 8px);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-sm, 8px);
+}
+
+.design-token-editor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+}
+
+.design-token-color-well {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  cursor: pointer;
+}
+
+.design-token-input {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  padding: 4px var(--space-sm, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm, 12px);
+  min-width: 160px;
+}
+
+.design-token-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.design-token-warn {
+  color: var(--accent-warning);
+  font-size: var(--text-sm, 12px);
+  margin: var(--space-xs, 4px) 0 0;
+}
+
+.design-token-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-xs, 4px);
+  flex-wrap: wrap;
+}
+
+.design-token-save {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm, 4px);
+  padding: 3px var(--space-md, 12px);
+  cursor: pointer;
+  font-size: var(--text-sm, 12px);
+}
+
+.design-token-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.design-token-save:not(:disabled):hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-token-saved {
+  color: var(--accent-success);
+  font-size: var(--text-sm, 12px);
+}
+
+.design-token-conflict,
+.design-token-error {
+  color: var(--accent-danger, var(--accent-warning));
+  font-size: var(--text-sm, 12px);
+}
+
+/* ---------------------------------------------------------------------------
+ * Screen status menu (SP-140-7 §7d)
+ * --------------------------------------------------------------------------- */
+
+.design-status-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  margin-left: var(--space-sm, 8px);
+  vertical-align: middle;
+}
+
+.design-status-option {
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 1px var(--space-xs, 4px);
+  cursor: pointer;
+  font-size: var(--text-sm, 11px);
+  text-transform: capitalize;
+}
+
+.design-status-option:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary, inherit);
+}
+
+.design-status-option.active {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.design-status-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Grid reorder drag (SP-140-7 §7e)
+ * --------------------------------------------------------------------------- */
+
+.design-screens-grid > li.dragging {
+  opacity: 0.5;
 }

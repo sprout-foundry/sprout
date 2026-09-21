@@ -431,3 +431,73 @@ func TestAgentCreation_WithUseMockLLM(t *testing.T) {
 		t.Errorf("GetProvider = %q, want %q", got, "mock")
 	}
 }
+
+// --- TestMockLLMProvider_ResponseQueue ---
+// The FIFO queue wins over prompt matching and the default, consuming one
+// entry per model call, so a harness can script a multi-step design-loop
+// exchange (tool call turn → synthesis turn). When the queue drains the
+// provider falls back to the normal paths.
+func TestMockLLMProvider_ResponseQueue(t *testing.T) {
+	m := NewMockLLMProvider()
+	m.mu.Lock()
+	m.responseQueue = []string{
+		"First turn: running the check.\n```json\n{\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"design_validate\",\"arguments\":\"{}\"}}]}\n```",
+		"Second turn: the tree is clean.",
+	}
+	m.mu.Unlock()
+	ctx := context.Background()
+
+	// Turn 1 — consumes the queue head (a fenced tool call).
+	resp1, err := m.SendChatRequest(ctx, []api.Message{{Role: "user", Content: "check the design tree"}}, nil, "", false)
+	if err != nil {
+		t.Fatalf("turn 1: %v", err)
+	}
+	if !strings.Contains(resp1.Choices[0].Message.Content, "design_validate") {
+		t.Errorf("turn 1: expected queued tool-call response, got: %s", resp1.Choices[0].Message.Content)
+	}
+
+	// Turn 2 — consumes the second entry.
+	resp2, err := m.SendChatRequest(ctx, []api.Message{{Role: "user", Content: "anything else"}}, nil, "", false)
+	if err != nil {
+		t.Fatalf("turn 2: %v", err)
+	}
+	if !strings.Contains(resp2.Choices[0].Message.Content, "tree is clean") {
+		t.Errorf("turn 2: expected queued synthesis response, got: %s", resp2.Choices[0].Message.Content)
+	}
+
+	// Turn 3 — queue drained, falls back to the default path.
+	resp3, err := m.SendChatRequest(ctx, []api.Message{{Role: "user", Content: "and now"}}, nil, "", false)
+	if err != nil {
+		t.Fatalf("turn 3: %v", err)
+	}
+	if !strings.Contains(resp3.Choices[0].Message.Content, "I received:") {
+		t.Errorf("turn 3: expected default fallback after queue drained, got: %s", resp3.Choices[0].Message.Content)
+	}
+}
+
+// --- TestSeedMockLLMResponseQueueFromEnv ---
+func TestSeedMockLLMResponseQueueFromEnv(t *testing.T) {
+	m := NewMockLLMProvider()
+
+	// Unset → no queue.
+	t.Setenv("SPROUT_MOCK_LLM_QUEUE", "")
+	seedMockLLMResponseQueueFromEnv(m)
+	m.mu.Lock()
+	got := len(m.responseQueue)
+	m.mu.Unlock()
+	if got != 0 {
+		t.Fatalf("empty env: expected no queue entries, got %d", got)
+	}
+
+	// Set → entries split on the separator, blanks dropped.
+	sep := mockLLMQueueEntrySeparator
+	t.Setenv("SPROUT_MOCK_LLM_QUEUE",
+		"first "+sep+" second\nmulti-line "+sep+" "+sep+" third")
+	seedMockLLMResponseQueueFromEnv(m)
+	m.mu.Lock()
+	got = len(m.responseQueue)
+	m.mu.Unlock()
+	if got != 3 {
+		t.Fatalf("expected 3 queued entries (blank dropped), got %d", got)
+	}
+}

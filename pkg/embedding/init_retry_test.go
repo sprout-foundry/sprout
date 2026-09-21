@@ -39,6 +39,15 @@ func TestInitRetriesAfterTransientFailure(t *testing.T) {
 	store := newCountingStore()
 	provider := &flakyProvider{mockProvider: mockProvider{dims: 8}}
 
+	// Init() → initLocked() rebuilds the provider via createProvider(), which
+	// would otherwise reach for the real ONNX runtime (downloading it from
+	// GitHub releases when not cached — a 504 there fails the test). Stub the
+	// factory so the test exercises only the retry semantics.
+	SetProviderFactory(func(ctx context.Context) (EmbeddingProvider, error) {
+		return provider, nil
+	})
+	defer SetProviderFactory(nil)
+
 	mgr := NewEmbeddingManager(&configuration.EmbeddingIndexConfig{
 		IndexDir: t.TempDir(),
 	}, workspace)

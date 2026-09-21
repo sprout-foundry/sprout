@@ -15,7 +15,7 @@ import (
 
 func TestCloseSession_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.CloseSession("nonexistent")
 	if err == nil {
@@ -32,7 +32,7 @@ func TestCloseSession_ActiveSession(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.CreateSession("close-test")
 	if err != nil {
@@ -53,7 +53,7 @@ func TestCloseSession_ActiveSession(t *testing.T) {
 
 func TestCloseSession_WithSubscribers(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "sub-test",
@@ -92,7 +92,7 @@ func TestCloseSession_WithSubscribers(t *testing.T) {
 
 func TestCloseSession_MultipleSubscribers(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "multi-sub",
@@ -128,7 +128,7 @@ func TestCloseSession_MultipleSubscribers(t *testing.T) {
 
 func TestCloseSession_ClosedTwice(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "double-close",
@@ -157,7 +157,7 @@ func TestCloseSession_ClosedTwice(t *testing.T) {
 
 func TestDetachFromSession_AlwaysNil(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Even for nonexistent sessions, should return nil
 	err := tm.DetachFromSession("nonexistent")
@@ -168,7 +168,7 @@ func TestDetachFromSession_AlwaysNil(t *testing.T) {
 
 func TestDetachFromSession_ExistingSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "detach-test",
@@ -199,7 +199,7 @@ func TestDetachFromSession_ExistingSession(t *testing.T) {
 
 func TestCloseAllSessions_Empty(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.CloseAllSessions()
 	if err != nil {
@@ -213,7 +213,7 @@ func TestCloseAllSessions_MultipleSessions(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.CreateSession("all-1")
 	if err != nil {
@@ -240,7 +240,7 @@ func TestCloseAllSessions_MultipleSessions(t *testing.T) {
 
 func TestReattachSession_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.ReattachSession("nonexistent")
 	if err == nil {
@@ -253,7 +253,7 @@ func TestReattachSession_SessionNotFound(t *testing.T) {
 
 func TestReattachSession_InactiveSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "inactive-reattach",
@@ -275,7 +275,7 @@ func TestReattachSession_InactiveSession(t *testing.T) {
 
 func TestReattachSession_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "hidden-reattach",
@@ -300,7 +300,7 @@ func TestReattachSession_HiddenSession(t *testing.T) {
 
 func TestReattachSession_ActiveReturnsScrollback(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "reattach-ok",
@@ -323,7 +323,7 @@ func TestReattachSession_ActiveReturnsScrollback(t *testing.T) {
 
 func TestReattachSession_UpdatesLastUsed(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:       "reattach-time",
@@ -353,7 +353,7 @@ func TestReattachSession_UpdatesLastUsed(t *testing.T) {
 
 func TestReattachSession_EmptyScrollback(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "reattach-empty",
@@ -379,7 +379,7 @@ func TestReattachSession_EmptyScrollback(t *testing.T) {
 
 func TestCleanupInactiveSessions_CleansUpOld(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:       "old-session",
@@ -401,7 +401,7 @@ func TestCleanupInactiveSessions_CleansUpOld(t *testing.T) {
 
 func TestCleanupInactiveSessions_PreservesActive(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:       "recent-session",
@@ -425,7 +425,7 @@ func TestCleanupInactiveSessions_PreservesActive(t *testing.T) {
 
 func TestCleanupInactiveSessions_BackgroundTimeoutSeparate(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Regular session (not background) - set to 5 min ago
 	regular := &TerminalSession{
@@ -471,7 +471,7 @@ func TestCleanupInactiveSessions_BackgroundTimeoutSeparate(t *testing.T) {
 
 func TestCleanupInactiveSessions_NoSessions(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Should not panic with empty manager
 	tm.CleanupInactiveSessions(30 * time.Minute)
@@ -483,7 +483,7 @@ func TestCleanupInactiveSessions_NoSessions(t *testing.T) {
 
 func TestStartCleanupWorker_StopsOnContextCancel(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	tm.StartCleanupWorker(ctx, 10*time.Millisecond, 1*time.Minute)

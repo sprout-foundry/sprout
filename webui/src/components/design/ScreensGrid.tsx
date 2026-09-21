@@ -25,13 +25,41 @@
  * inventory, reads the selected screen's text, and owns the write-back.
  */
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
-import { designRootPath, readAsset, writeAsset } from '../../services/api/designApi';
-import type { DesignAssetEntry, DesignFrame, DesignInventory } from '../../services/api/types';
+import type { ConflictState } from '../../design/conflictModel';
+import { decideConflict, restoreAgentVersion, shouldSurfaceConflict } from '../../design/conflictModel';
+import { reorderManifestScreens, moveItem } from '../../design/gridReorder';
+import {
+  onPinPlacePoint,
+  onPinPlacementArm,
+  pendingCountForStem,
+  publishPinPlacePoint,
+} from '../../design/pinPlacement';
+import {
+  designRootPath,
+  readAsset,
+  writeAsset,
+  readFeedback,
+  fileUrl,
+  parseFeedbackJson,
+  writeAssetIfUnchanged,
+  writeFeedbackIfUnchanged,
+  baseMtimeFromResponse,
+  DesignWriteConflictError,
+} from '../../services/api/designApi';
+import type {
+  DesignAssetEntry,
+  DesignFrame,
+  DesignInventory,
+  DesignFeedbackAnnotation,
+} from '../../services/api/types';
 import LivePreview from '../LivePreview';
-import type { DesignTabProps } from './DesignTabProps';
+import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
+import ConflictBanner from './ConflictBanner';
+import ScreenStatusMenu from './ScreenStatusMenu';
+import type { DesignTabProps } from './DesignTabProps';
 import './DesignView.css';
 
 /** Declared frames for the inventory's README; a missing README has none. */
@@ -172,7 +200,7 @@ export interface ScreensGridProps extends DesignTabProps {
    * Fired with the edited screen text when `LivePreview` reports a change. When
    * omitted, the grid renders the preview read-only and never writes.
    */
-  onEditAsset?: (path: string, content: string) => void;
+  onEditAsset?: (path: string, content: string) => void | Promise<unknown>;
 }
 
 export default function ScreensGrid({
@@ -188,18 +216,46 @@ export default function ScreensGrid({
   const [selected, setSelected] = useState<string | null>(null);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // §6e pin layer state: the selected screen's annotations and the armed
+  // placement mode (the detail pane's affordance asks; the preview answers).
+  const [annotations, setAnnotations] = useState<DesignFeedbackAnnotation[]>([]);
+  const [placeMode, setPlaceMode] = useState(false);
+  // §7b conflict state: held while an agent write lands under the buffer.
+  const [conflict, setConflict] = useState<ConflictState | null>(null);
+  const [conflictResolved, setConflictResolved] = useState(false);
 
   // External selection (sidebar assets pane) drives the same downstream
-  // behavior as a card click — highlight, detail pane, preview mount.
+  // behavior as a card click — highlight, detail pane, preview mount. A
+  // different asset also invalidates the held conflict (§7b: the banner is
+  // per-asset for the life of the selection).
   useEffect(() => {
-    if (selectedPath !== undefined) setSelected(selectedPath);
+    if (selectedPath !== undefined) {
+      setSelected(selectedPath);
+      setConflict(null);
+      setConflictResolved(false);
+    }
   }, [selectedPath]);
 
   const frames = useMemo(() => framesOf(inventory), [inventory]);
-  const cards = useMemo(
+  const builtCards = useMemo(
     () => screenCards(inventory?.screens ?? [], inventory?.wireframes ?? [], frames),
     [inventory, frames],
   );
+  // §7e: the visible order follows the manifest. After a successful reorder
+  // write, apply the new order locally (keyed by path) so the grid reflects
+  // the persisted order immediately; the next inventory refetch (which walks
+  // the manifest) converges on the same order and the override resets.
+  const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
+  useEffect(() => {
+    setOrderOverride(null);
+  }, [inventory]);
+  const cards = useMemo(() => {
+    if (!orderOverride) return builtCards;
+    const rank = new Map(orderOverride.map((stem, index) => [stem.toLowerCase(), index]));
+    const present = builtCards.filter((card) => rank.has(screenStem(card)));
+    const rest = builtCards.filter((card) => !rank.has(screenStem(card)));
+    return [...present.sort((a, b) => (rank.get(screenStem(a)) ?? 0) - (rank.get(screenStem(b)) ?? 0)), ...rest];
+  }, [builtCards, orderOverride]);
   // Key the read effect on the card set; the array itself is rebuilt per render.
   const cardPaths = cards.map((card) => card.path);
   const requestedPaths = cardPaths.join('|');
@@ -237,12 +293,227 @@ export default function ScreensGrid({
 
   const contentFor = useCallback((path: string) => contentByPath?.[path] ?? texts[path] ?? '', [contentByPath, texts]);
 
+  // §6e: the selected screen's annotations. A failed read renders zero pins
+  // (the pin layer is advisory; the feedback validator owns read errors).
+  // A refetch is also triggered when the agent writes the feedback file under
+  // us (the §7b bridge carries feedback paths too).
+  useEffect(() => {
+    if (!selected) {
+      setAnnotations([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const file = await readFeedback(transport, designRelativePath(selected));
+        if (!cancelled) setAnnotations(file?.annotations ?? []);
+      } catch {
+        if (!cancelled) setAnnotations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, transport]);
+
+  // §6e placement: the affordance arms; the preview's next click publishes
+  // the point and disarms. A cancelled arm (form closed) disarms too.
+  useEffect(() => {
+    const offArm = onPinPlacementArm((cancel) => setPlaceMode(!cancel));
+    const offPoint = onPinPlacePoint(() => setPlaceMode(false));
+    return () => {
+      offArm();
+      offPoint();
+    };
+  }, []);
+
+  // §7b incoming-change awareness: the shell's agent-file-changed bridge
+  // names the path an agent just wrote. When it is the asset this pane holds
+  // an edited buffer for, fetch the disk text and hold the conflict; identical
+  // text means nothing to decide. A failed read retries once on a short timer
+  // — the write that triggered the event may not be readable yet, and there
+  // is no "next event" for that write.
+  const selectedCardForConflict = cards.find((card) => card.path === selected) ?? null;
+  const heldPath = selectedCardForConflict?.path ?? null;
+  const heldText = heldPath ? contentFor(heldPath) : '';
+  useEffect(() => {
+    let ignore = false;
+    let retryTimer: number | undefined;
+    const check = (attempt: number) => {
+      if (!heldPath) return;
+      void (async () => {
+        try {
+          const diskText = await readAsset(transport, designRelativePath(heldPath));
+          if (!ignore && shouldSurfaceConflict(heldText, diskText)) {
+            setConflict({ theirs: diskText, mine: heldText });
+            setConflictResolved(false);
+          }
+        } catch {
+          if (!ignore && attempt === 0) {
+            retryTimer = window.setTimeout(() => check(1), 750);
+          }
+        }
+      })();
+    };
+    const handler = (event: Event) => {
+      const changedPath = (event as CustomEvent).detail?.path as string | undefined;
+      if (!changedPath || !heldPath) return;
+      const normalized = changedPath.startsWith('design/') ? changedPath : `design/${changedPath}`;
+      if (normalized !== designRootPath(heldPath)) return;
+      check(0);
+    };
+    window.addEventListener('agent-file-changed', handler);
+    return () => {
+      ignore = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      window.removeEventListener('agent-file-changed', handler);
+    };
+  }, [heldPath, heldText, transport]);
+
+  // §7b decisions.
+  const handleKeepMine = useCallback(async () => {
+    if (!conflict || !heldPath) return;
+    try {
+      await writeAssetIfUnchanged(transport, heldPath, conflict.mine, { force: true });
+    } catch {
+      // The force write failing leaves the conflict held; the banner stays.
+      return;
+    }
+    setConflictResolved(true);
+  }, [conflict, heldPath, transport]);
+
+  const handleTakeTheirs = useCallback(() => {
+    if (!conflict || !heldPath) return;
+    const { text } = decideConflict(conflict, 'take-theirs');
+    setTexts((current) => ({ ...current, [heldPath]: text }));
+    setConflict(null);
+    setConflictResolved(false);
+  }, [conflict, heldPath]);
+
+  const handleRestoreAgent = useCallback(() => {
+    if (!conflict || !heldPath) return;
+    const text = restoreAgentVersion(conflict);
+    setTexts((current) => ({ ...current, [heldPath]: text }));
+    setConflict(null);
+    setConflictResolved(false);
+  }, [conflict, heldPath]);
+
+  // §7e pin drag: persist one annotation's new coordinates. Coordinate-only,
+  // human-authored — the one field the gesture maps to. Read-modify-write
+  // cycles are SERIALIZED through a ref chain (two quick drags must not
+  // interleave their read/write and silently lose the first move), and the
+  // write goes through the §7a revision-checked seam: an agent write landing
+  // mid-gesture 409s, persists nothing, and surfaces in the error line
+  // instead of being silently overwritten. Failure persists nothing — the
+  // pin stays where it was.
+  const pinPersistChain = useRef<Promise<void>>(Promise.resolve());
+  const persistPinMove = useCallback(
+    (assetPath: string, id: string, at: { x: number; y: number }) => {
+      pinPersistChain.current = pinPersistChain.current.then(async () => {
+        try {
+          // One GET supplies both the §4d document and the revision guard.
+          const response = await transport(fileUrl(`feedback/${designRelativePath(assetPath)}.json`));
+          if (!response.ok) return;
+          const text = await response.text();
+          const file = parseFeedbackJson(text, designRelativePath(assetPath));
+          const base = file.target || designRootPath(assetPath);
+          const annotationsNext = (file.annotations ?? []).map((annotation) =>
+            annotation.id === id ? { ...annotation, at } : annotation,
+          );
+          await writeFeedbackIfUnchanged(
+            transport,
+            base,
+            { ...file, annotations: annotationsNext },
+            { baseMtime: baseMtimeFromResponse(response) },
+          );
+          setAnnotations(annotationsNext);
+          setError(null);
+        } catch (err) {
+          if (err instanceof Error && err.name === 'DesignWriteConflictError') {
+            setError('The feedback file changed while dragging the pin — the move was not saved.');
+          }
+          // Other failures persist nothing; the pin stays where it was.
+        }
+      });
+      return pinPersistChain.current;
+    },
+    [transport],
+  );
+
+  // §7e grid reorder: dragging a card to a new slot persists the manifest's
+  // Screens listing order through the §7a seam, guarded with the read
+  // revision and SERIALIZED (two quick drags must not race their
+  // read/rewrite pairs — the second gets a 409 against the first's write,
+  // which is the honest outcome). A refused rewrite (no parsable Screens
+  // section) surfaces in the grid's error line rather than vanishing.
+  // The same persistence path backs the keyboard move buttons (a11y parity
+  // for the pointer-only drag gesture).
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const reorderChain = useRef<Promise<void>>(Promise.resolve());
+  const handleCardDragOver = useCallback((event: React.DragEvent<HTMLUListElement>) => {
+    event.preventDefault();
+  }, []);
+  const requestReorder = useCallback(
+    (from: number, to: number) => {
+      if (!inventory || from === to) return;
+      if (from < 0 || to < 0 || from >= cards.length || to >= cards.length) return;
+      const orderedCards = moveItem(cards, from, to);
+      const orderedStems = orderedCards.map((card) => screenStem(card));
+      reorderChain.current = reorderChain.current.then(async () => {
+        try {
+          const manifestPath = 'README.md';
+          const response = await transport(`/api/file?path=${encodeURIComponent(designRootPath(manifestPath))}`);
+          if (!response.ok) return;
+          const manifest = await response.text();
+          const { text: rewritten, changed } = reorderManifestScreens(manifest, orderedStems);
+          if (!changed) {
+            setError('The manifest has no parsable Screens listing to reorder — edit README.md directly.');
+            return;
+          }
+          await writeAssetIfUnchanged(transport, manifestPath, rewritten, {
+            baseMtime: baseMtimeFromResponse(response),
+          });
+          setOrderOverride(orderedStems);
+          setError(null);
+        } catch (err) {
+          if (err instanceof Error && err.name === 'DesignWriteConflictError') {
+            setError('The manifest changed while reordering — the reorder was not applied.');
+          }
+          // Other failures leave the order untouched.
+        }
+      });
+    },
+    [inventory, cards, transport],
+  );
+  const handleCardDrop = useCallback(
+    (event: React.DragEvent<HTMLUListElement>) => {
+      event.preventDefault();
+      const from = dragFrom;
+      setDragFrom(null);
+      if (from === null || !inventory) return;
+      const targetLi = (event.target as HTMLElement).closest('li');
+      const items = Array.from(event.currentTarget.children);
+      const to = items.indexOf(targetLi as HTMLLIElement);
+      if (to < 0 || to === from) return;
+      requestReorder(from, to);
+    },
+    [dragFrom, inventory, requestReorder],
+  );
+
   const handleContentChange = useCallback(
     (path: string, content: string) => {
       if (!onEditAsset) return;
       setTexts((current) => (current[path] === content ? current : { ...current, [path]: content }));
       try {
-        onEditAsset(path, content);
+        // onEditAsset may return a promise (the composed container's write);
+        // a rejection means the edit did NOT persist — surface it instead of
+        // leaving a divergent buffer on screen silently.
+        const result = onEditAsset(path, content);
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          (result as Promise<void>).catch(() => {
+            setError(`Could not write ${path} — the edit is on screen only; try again.`);
+          });
+        }
         setError(null);
       } catch {
         setError(`Could not write ${path}.`);
@@ -276,12 +547,23 @@ export default function ScreensGrid({
       {cards.length === 0 ? (
         <p className="design-tab-placeholder">No screens in this workspace.</p>
       ) : (
-        <ul className="design-screens-grid" data-testid="design-screens-cards">
-          {cards.map((card) => {
+        <ul
+          className="design-screens-grid"
+          data-testid="design-screens-cards"
+          onDragOver={handleCardDragOver}
+          onDrop={handleCardDrop}
+        >
+          {cards.map((card, cardIndex) => {
             const content = contentFor(card.path);
             const status = card.status;
             return (
-              <li key={card.path}>
+              <li
+                key={card.path}
+                draggable
+                onDragStart={(event) => setDragFrom(cardIndex)}
+                onDragEnd={() => setDragFrom(null)}
+                className={dragFrom === cardIndex ? 'dragging' : ''}
+              >
                 <button
                   type="button"
                   className={`design-screen-card${card.path === selected ? ' selected' : ''}`}
@@ -342,8 +624,45 @@ export default function ScreensGrid({
                         {status}
                       </span>
                     ) : null}
+                    {(() => {
+                      const pending = pendingCountForStem(inventory.feedback, card.name.replace(/\.[^.]+$/, ''));
+                      return pending > 0 ? (
+                        <span
+                          className="design-screen-pending"
+                          data-testid={`design-screen-pending-${card.name}`}
+                          title={`${pending} open annotation${pending === 1 ? '' : 's'}`}
+                        >
+                          {pending}
+                        </span>
+                      ) : null;
+                    })()}
                   </span>
                 </button>
+                {/* Keyboard parity for the drag gesture (§7e a11y): move
+                    buttons issue the same manifest reorder request the drop
+                    does, through the same §7a seam. */}
+                <span className="design-screen-reorder">
+                  <button
+                    type="button"
+                    className="design-screen-reorder-btn"
+                    data-testid={`design-screen-move-up-${card.name}`}
+                    aria-label={`Move ${assetDisplayName(card.name)} earlier in the grid`}
+                    disabled={cardIndex === 0}
+                    onClick={() => requestReorder(cardIndex, cardIndex - 1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="design-screen-reorder-btn"
+                    data-testid={`design-screen-move-down-${card.name}`}
+                    aria-label={`Move ${assetDisplayName(card.name)} later in the grid`}
+                    disabled={cardIndex === cards.length - 1}
+                    onClick={() => requestReorder(cardIndex, cardIndex + 1)}
+                  >
+                    ↓
+                  </button>
+                </span>
               </li>
             );
           })}
@@ -352,20 +671,47 @@ export default function ScreensGrid({
 
       {selectedCard ? (
         <div className="design-screen-detail" data-testid="design-screen-detail">
-          <h3 className="design-detail-heading">{selectedCard.name}</h3>
+          <h3 className="design-detail-heading">
+            {selectedCard.name}
+            {/* §7d: status curation — structured manifest rewrite. */}
+            <ScreenStatusMenu stem={selectedCard.name.replace(/\.[^.]+$/, '')} />
+          </h3>
           {error ? (
             <p className="design-tab-placeholder" data-testid="design-screen-error">
               {error}
             </p>
           ) : null}
-          <LivePreview
-            content={contentFor(selectedCard.path)}
-            language={languageForScreen(selectedCard.path)}
-            fileName={selectedCard.path}
-            onContentChange={
-              onEditAsset ? (content: string) => handleContentChange(selectedCard.path, content) : undefined
-            }
-          />
+          {conflict && (
+            <ConflictBanner
+              conflict={conflict}
+              path={selectedCard.path}
+              base={texts[selectedCard.path] ?? ''}
+              onKeepMine={handleKeepMine}
+              onTakeTheirs={handleTakeTheirs}
+              onRestoreAgent={conflictResolved ? handleRestoreAgent : null}
+              resolved={conflictResolved}
+            />
+          )}
+          <div className="design-screen-preview">
+            <LivePreview
+              content={contentFor(selectedCard.path)}
+              language={languageForScreen(selectedCard.path)}
+              fileName={selectedCard.path}
+              onContentChange={
+                onEditAsset ? (content: string) => handleContentChange(selectedCard.path, content) : undefined
+              }
+            />
+            <AnnotationPins
+              target={selectedCard.path}
+              annotations={annotations}
+              placeMode={placeMode}
+              onPlace={(at) => {
+                publishPinPlacePoint(at);
+                setPlaceMode(false);
+              }}
+              onPinMove={(id, at) => void persistPinMove(selectedCard.path, id, at)}
+            />
+          </div>
         </div>
       ) : (
         <p className="design-tab-placeholder" data-testid="design-screen-placeholder">
@@ -386,9 +732,9 @@ export default function ScreensGrid({
  * under `design/` — the screens live there, and the write goes through the
  * existing file-write pathway (zero new HTTP endpoints, §3f).
  *
- * A failed write is swallowed here (the grid surfaces it through its error
- * line): a preview that keeps the user's text on screen is more useful than a
- * thrown render, and the next edit retries.
+ * A failed write keeps the user's text on screen (a preview that keeps the
+ * edit is more useful than a thrown render) and surfaces a persistent-failure
+ * line in the grid; the next edit retries.
  */
 export function ScreensTabContainer({
   inventory,
@@ -409,9 +755,10 @@ export function ScreensTabContainer({
   const handleEditAsset = useCallback(
     (path: string, content: string) => {
       // The write goes through designApi's shared file-write pathway (§3f).
-      void writeAsset(transport, path, content, writeFn ?? transport).catch(() => {
-        // The grid keeps the edited text; the next edit retries the write.
-      });
+      // The promise is returned un-swallowed so ScreensGrid can surface a
+      // failure in its error line — the grid keeps the edited text on screen
+      // and the next edit retries.
+      return writeAsset(transport, path, content, writeFn ?? transport);
     },
     [transport, writeFn],
   );

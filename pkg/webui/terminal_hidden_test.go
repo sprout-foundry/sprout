@@ -11,7 +11,7 @@ import (
 
 func TestCreateHiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-123")
 	if err != nil {
@@ -43,7 +43,7 @@ func TestCreateHiddenSession(t *testing.T) {
 
 func TestCreateHiddenSessionWithOptions(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("hidden-2", "agent", "chat-456",
 		WithName("npm run dev"),
@@ -70,7 +70,7 @@ func TestCreateHiddenSessionWithOptions(t *testing.T) {
 
 func TestListSessionsExcludesHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Create a regular session.
 	if _, err := tm.CreateSession("regular-1"); err != nil {
@@ -109,7 +109,7 @@ func TestListSessionsExcludesHidden(t *testing.T) {
 
 func TestCloseSessionWorksForHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Create a hidden session.
 	if _, err := tm.CreateHiddenSession("hidden-close", "agent", "chat-1"); err != nil {
@@ -134,7 +134,7 @@ func TestCloseSessionWorksForHidden(t *testing.T) {
 
 func TestCleanupInactivePicksUpHiddenSessions(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("hidden-inactive", "agent", "chat-1")
 	if err != nil {
@@ -158,7 +158,7 @@ func TestCleanupInactivePicksUpHiddenSessions(t *testing.T) {
 
 func TestCloseAllSessionsIncludesHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateSession("regular-1"); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -179,7 +179,7 @@ func TestCloseAllSessionsIncludesHidden(t *testing.T) {
 
 func TestCreateHiddenSessionDuplicateID(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateSession("dup-id"); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -194,7 +194,7 @@ func TestCreateHiddenSessionDuplicateID(t *testing.T) {
 
 func TestReattachSessionRejectsHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("hidden-reattach", "agent", "chat-1")
 	if err != nil {
@@ -219,7 +219,7 @@ func TestReattachSessionRejectsHidden(t *testing.T) {
 
 func TestGetSessionReturnsHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("hidden-get", "agent", "chat-1")
 	if err != nil {
@@ -240,7 +240,7 @@ func TestGetSessionReturnsHidden(t *testing.T) {
 
 func TestHasSessionReturnsTrueForHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateHiddenSession("hidden-has", "agent", "chat-1"); err != nil {
 		t.Fatalf("CreateHiddenSession failed: %v", err)
@@ -255,7 +255,7 @@ func TestHasSessionReturnsTrueForHidden(t *testing.T) {
 
 func TestCreateHiddenSessionValidation(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	cases := []struct {
 		name   string
@@ -282,7 +282,7 @@ func TestCreateHiddenSessionValidation(t *testing.T) {
 
 func TestCreateSessionRejectsExistingHiddenID(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateHiddenSession("shared-id", "agent", "chat-1"); err != nil {
 		t.Fatalf("CreateHiddenSession failed: %v", err)
@@ -297,7 +297,7 @@ func TestCreateSessionRejectsExistingHiddenID(t *testing.T) {
 
 func TestHasVisibleSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateSession("visible-1"); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -322,7 +322,7 @@ func TestHasVisibleSession(t *testing.T) {
 
 func TestListHiddenSessionsIsolation(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// No hidden sessions initially.
 	hidden := tm.ListHiddenSessions()
@@ -359,7 +359,7 @@ func TestListHiddenSessionsIsolation(t *testing.T) {
 
 func TestValidateSessionID(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	cases := []struct {
 		id    string
@@ -401,7 +401,7 @@ func TestValidateSessionID(t *testing.T) {
 
 func TestCreateHiddenSessionTrimsWhitespace(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("trim-1", "  agent  ", "  chat-1  ")
 	if err != nil {
@@ -425,7 +425,7 @@ func TestCreateHiddenSessionTrimsWhitespace(t *testing.T) {
 
 func TestCreateHiddenSessionPanicRecovery(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	panicOpt := func(s *TerminalSession) {
 		panic("intentional test panic")
@@ -454,7 +454,7 @@ func TestCreateHiddenSessionPanicRecovery(t *testing.T) {
 
 func TestReattachSessionErrorDoesNotLeakHiddenStatus(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateHiddenSession("agent-bg-1", "agent", "chat-1"); err != nil {
 		t.Fatalf("CreateHiddenSession failed: %v", err)
@@ -475,7 +475,7 @@ func TestReattachSessionErrorDoesNotLeakHiddenStatus(t *testing.T) {
 
 func TestGetVisibleSessionCountExcludesHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	if _, err := tm.CreateSession("regular-1"); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)

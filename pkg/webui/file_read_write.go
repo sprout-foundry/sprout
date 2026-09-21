@@ -3,6 +3,8 @@
 package webui
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,31 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
+
+// fileRevision is a file's on-disk revision (§7a): modification time in unix
+// seconds plus the sha256 of its content. A missing/unreadable file yields an
+// error; the caller decides how to report it.
+type fileRevision struct {
+	mtime int64
+	hash  string
+}
+
+func fileRevisionFor(path string) (fileRevision, error) {
+	// path is the canonicalizePath-verified resolution of the request path —
+	// the same value handleFileRead/handleFileWrite use directly and
+	// unsuppressed. gosec's interprocedural taint analysis cannot see the
+	// sanitizer across this helper's boundary, hence the two annotations.
+	info, err := os.Stat(path) //nolint:gosec // G703: canonical, sanitizer-verified path
+	if err != nil {
+		return fileRevision{}, err
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // G703: canonical, sanitizer-verified path
+	if err != nil {
+		return fileRevision{}, err
+	}
+	sum := sha256.Sum256(data)
+	return fileRevision{mtime: info.ModTime().Unix(), hash: hex.EncodeToString(sum[:])}, nil
+}
 
 // handleAPIFile handles API requests for file operations (read/write)
 func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +67,10 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 
 	canonicalPath, err := canonicalizePath(path, workspaceRoot, false)
 	if err != nil {
+		if _, notExist := err.(*pathNotExistError); notExist {
+			writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
+			return
+		}
 		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
@@ -47,6 +78,10 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	// Check if file exists and is not a directory
 	info, err := os.Stat(canonicalPath)
 	if err != nil {
+		// 404, not 400: clients (readAsset in webui) treat 404 as "absent
+		// file" — the §4d feedback flow depends on a missing file yielding
+		// the empty document, not a transport error. A missing file is a
+		// normal state for optional sidecars (design/feedback/*).
 		writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
 		return
 	}
@@ -92,6 +127,11 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_read_file", fmt.Sprintf("Failed to read file: %v", err))
 		return
 	}
+
+	// Last-Modified lets safe-write clients (SP-140-7 §7a) echo this value
+	// back as baseMtime on the POST, turning blind overwrites into
+	// revision-checked writes with no extra round-trip.
+	w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
 
 	// Determine content type
 	// First, try to detect content type from the file content (magic bytes)
@@ -173,10 +213,64 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	// Parse JSON to extract content field
 	var requestData struct {
 		Content string `json:"content"`
+		// SP-140-7 §7a safe-write seam (opt-in): when either guard is
+		// supplied, the write is conditional on the file still being at the
+		// revision the caller last read — baseMTime against the on-disk mtime
+		// (unix seconds) and/or baseHash against the sha256 of the on-disk
+		// bytes. A mismatch returns 409 with the current revision and writes
+		// nothing. Omitted guards preserve the historical unconditional
+		// behavior, so existing callers (editor saves, the design surfaces
+		// predating the seam) are untouched.
+		BaseMTime *int64  `json:"baseMtime,omitempty"`
+		BaseHash  *string `json:"baseHash,omitempty"`
 	}
 	if err := json.Unmarshal(body, &requestData); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "failed_to_parse_json", fmt.Sprintf("Failed to parse JSON: %v", err))
 		return
+	}
+
+	// §7a: evaluate the guards BEFORE any write. The stat/read race window
+	// after this point is the same one the unconditional path always had; the
+	// guard shrinks lost-update exposure from "since first read" to
+	// "since this check".
+	if requestData.BaseMTime != nil || requestData.BaseHash != nil {
+		// Compute the file's current revision once: mtime + content hash.
+		// canonicalPath is the canonicalizePath-verified resolution (the same
+		// sanitizer the read/write paths below use); hashing here keeps the
+		// guard logic in one place.
+		currentRev, revErr := fileRevisionFor(canonicalPath)
+		if revErr != nil {
+			// The file the caller read is gone (or unreadable): that is a
+			// conflict — an unconditional write would silently re-create it.
+			// The message distinguishes deletion from other stat failures.
+			reason := "The file was deleted after it was read; nothing was written."
+			if !os.IsNotExist(revErr) {
+				reason = "The file could not be read to verify the base revision; nothing was written."
+			}
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":   "base_file_missing",
+				"message": reason,
+				"path":    canonicalPath,
+			})
+			return
+		}
+		conflict := func() {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":        "revision_conflict",
+				"message":      "The file changed after it was read; nothing was written.",
+				"path":         canonicalPath,
+				"currentMtime": currentRev.mtime,
+				"currentHash":  currentRev.hash,
+			})
+		}
+		if requestData.BaseMTime != nil && currentRev.mtime != *requestData.BaseMTime {
+			conflict()
+			return
+		}
+		if requestData.BaseHash != nil && *requestData.BaseHash != "" && currentRev.hash != *requestData.BaseHash {
+			conflict()
+			return
+		}
 	}
 
 	content := []byte(requestData.Content)

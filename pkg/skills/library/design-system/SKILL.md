@@ -381,6 +381,11 @@ The loop ends in **one commit**, not two:
   design: refresh the check-deposit flow tokens
   feat: add CheckDeposit screen (+ design/ adoption)
   ```
+- **Human edits from Design mode** (SP-140-7: token values, screen status,
+  feedback pins) follow the same rule — fold them into the same commit as the
+  agent turn they belong with, or commit them as their own `design:` iteration.
+  Their edits are ordinary workspace-file writes: git history, blame, and
+  revert treat them exactly like agent edits.
 
 ### Drift has a direction — two meanings of "stale"
 

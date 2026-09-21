@@ -72,6 +72,23 @@ func GetLocalProvider() *LocalProvider {
 	return globalProvider
 }
 
+// DisableForTesting pins the local-model provider to its inert "none"
+// backend for the remainder of the process. pkg/webui (and any other
+// package whose tests exercise onboarding/agent paths) calls this from
+// TestMain: without it, a test that selects the sprout-local provider
+// triggers CheckConnection → ensureLoaded and pulls the user's real
+// multi-GB model weights into the test binary's memory — observed at
+// 16-24GB RSS per webui.test process and repeated machine-freezing OOMs
+// (2026-09-21). Model-loading code paths themselves are covered by
+// pkg/localmodel's own tests; other packages' tests only need the
+// provider to exist, not to actually load gigabytes.
+func DisableForTesting() {
+	GetLocalProvider().mu.Lock()
+	defer GetLocalProvider().mu.Unlock()
+	GetLocalProvider().backend = "none"
+	GetLocalProvider().loadErr = nil
+}
+
 func detectBackend() string {
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && mlx.Available() {
 		return localBackendMLX

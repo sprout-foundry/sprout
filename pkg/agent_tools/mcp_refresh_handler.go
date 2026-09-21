@@ -35,19 +35,32 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "mcp_refresh",
 		Description: "Reload MCP server config and reconcile servers after config changes. " +
-			"Operations: list, refresh, add, remove.",
+			"Operations: list, refresh, add, remove, set-credential, remove-credential. " +
+			"set-credential stores a secret (API token etc.) in the credential backend and wires it to " +
+			"the server's environment via a placeholder — prefer pairing it with a sensitive ask_user so " +
+			"the value never passes through the conversation. remove-credential deletes one.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{
 				Name:        "operation",
 				Type:        "string",
 				Required:    true,
-				Description: "Operation: list, refresh, add, or remove",
+				Description: "Operation: list, refresh, add, remove, set-credential, or remove-credential",
 			},
 			{
 				Name:        "name",
 				Type:        "string",
-				Description: "Server name (required for add/remove)",
+				Description: "Server name (required for add/remove/set-credential/remove-credential)",
+			},
+			{
+				Name:        "env_var",
+				Type:        "string",
+				Description: "Environment variable name the credential maps to (required for set-credential/remove-credential, e.g. FIGMA_TOKEN)",
+			},
+			{
+				Name:        "value",
+				Type:        "string",
+				Description: "Secret value to store (required for set-credential). Stored only in the credential backend; the server config receives a placeholder.",
 			},
 			{
 				Name:        "type",

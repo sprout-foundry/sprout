@@ -136,7 +136,12 @@
   border: none;
   resize: none;
   outline: none;
-  white-space: pre;
+  /* Soft-wrap: the pane is narrow (half a detail pane), and clipped lines
+     read as lost content — a PR capture showed `<meta … initial-sca|` cut
+     mid-attribute with the horizontal scrollbar hidden by macOS overlay
+     scrollbars. Break long tokens so nothing leaves the pane. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow: auto;
 }
 

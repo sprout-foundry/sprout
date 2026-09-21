@@ -212,7 +212,7 @@ func TestExecuteCommandAndWait_Success(t *testing.T) {
 		t.Skip("PTY echo behavior differs on macOS (zsh default shell)")
 	}
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-success")
 	defer tm.CloseSession("exec-success")
@@ -256,7 +256,7 @@ func TestExecuteCommandAndWait_Success(t *testing.T) {
 
 func TestExecuteCommandAndWait_ExitCode1(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-err")
 	defer tm.CloseSession("exec-err")
@@ -277,7 +277,7 @@ func TestExecuteCommandAndWait_ExitCode1(t *testing.T) {
 
 func TestExecuteCommandAndWait_CommandNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-notfound")
 	defer tm.CloseSession("exec-notfound")
@@ -303,7 +303,7 @@ func TestExecuteCommandAndWait_CommandNotFound(t *testing.T) {
 
 func TestExecuteCommandAndWait_ContextCancellation(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-cancel")
 	defer tm.CloseSession("exec-cancel")
@@ -329,7 +329,7 @@ func TestExecuteCommandAndWait_ContextCancellation(t *testing.T) {
 
 func TestExecuteCommandAndWait_ContextTimeout(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-timeout")
 	defer tm.CloseSession("exec-timeout")
@@ -351,7 +351,7 @@ func TestExecuteCommandAndWait_ContextTimeout(t *testing.T) {
 
 func TestExecuteCommandAndWait_NonHiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateSession("exec-visible")
 	if err != nil {
@@ -380,7 +380,7 @@ func TestExecuteCommandAndWait_NonHiddenSession(t *testing.T) {
 
 func TestExecuteCommandAndWait_InactiveSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateHiddenSession("exec-inactive", "agent", "chat-1")
 	if err != nil {
@@ -405,7 +405,7 @@ func TestExecuteCommandAndWait_InactiveSession(t *testing.T) {
 
 func TestExecuteCommandAndWait_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -426,7 +426,7 @@ func TestExecuteCommandAndWait_SessionNotFound(t *testing.T) {
 
 func TestExecuteCommandInHidden(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_ = createAndReadySession(t, tm, "exec-convenience")
 	defer tm.CloseSession("exec-convenience")
@@ -474,7 +474,7 @@ func TestExecuteCommandInHidden(t *testing.T) {
 
 func TestExecuteCommandAndWait_MultipleCommands(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-multi")
 	defer tm.CloseSession("exec-multi")
@@ -518,7 +518,7 @@ func TestExecuteCommandAndWait_MultipleCommands(t *testing.T) {
 
 func TestExecuteCommandAndWait_MarkerUniqueness(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-marker")
 	defer tm.CloseSession("exec-marker")
@@ -546,7 +546,7 @@ func TestExecuteCommandAndWait_MarkerUniqueness(t *testing.T) {
 
 func TestExecuteCommandAndWait_EmptyCommand(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-empty")
 	defer tm.CloseSession("exec-empty")
@@ -577,7 +577,7 @@ func TestExecuteCommandAndWait_EmptyCommand(t *testing.T) {
 
 func TestExecuteCommandAndWait_SingleQuotes(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-quotes")
 	defer tm.CloseSession("exec-quotes")
@@ -599,7 +599,7 @@ func TestExecuteCommandAndWait_SingleQuotes(t *testing.T) {
 
 func TestExecuteCommandAndWait_CommandSubstitution(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-subst")
 	defer tm.CloseSession("exec-subst")
@@ -621,7 +621,7 @@ func TestExecuteCommandAndWait_CommandSubstitution(t *testing.T) {
 
 func TestExecuteCommandAndWait_OutputContainsDollar(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-dollar")
 	defer tm.CloseSession("exec-dollar")
@@ -648,7 +648,7 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-reuse")
 
@@ -710,7 +710,7 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 
 func TestExecuteCommandAndWait_Backslashes(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-backslash")
 	defer tm.CloseSession("exec-backslash")
@@ -732,7 +732,7 @@ func TestExecuteCommandAndWait_Backslashes(t *testing.T) {
 
 func TestExecuteCommandAndWait_Pipe(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-pipe")
 	defer tm.CloseSession("exec-pipe")
@@ -754,7 +754,7 @@ func TestExecuteCommandAndWait_Pipe(t *testing.T) {
 
 func TestExecuteCommandAndWait_Semicolons(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-semi")
 	defer tm.CloseSession("exec-semi")
@@ -779,7 +779,7 @@ func TestExecuteCommandAndWait_Semicolons(t *testing.T) {
 
 func TestExecuteCommandAndWait_Backticks(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-backtick")
 	defer tm.CloseSession("exec-backtick")
@@ -801,7 +801,7 @@ func TestExecuteCommandAndWait_Backticks(t *testing.T) {
 
 func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-echoprefix")
 	defer tm.CloseSession("exec-echoprefix")
@@ -823,7 +823,7 @@ func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 
 func TestGetOrCreateHiddenSessionForChat_ShellReady(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -864,7 +864,7 @@ func TestGetOrCreateHiddenSessionForChat_ShellReady(t *testing.T) {
 
 func TestGetOrCreateHiddenSessionForChat_SessionReuse(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -899,7 +899,7 @@ func TestGetOrCreateHiddenSessionForChat_SessionReuse(t *testing.T) {
 
 func TestGetOrCreateHiddenSessionForChat_DeterministicID(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -924,7 +924,7 @@ func TestGetOrCreateHiddenSessionForChat_DeterministicID(t *testing.T) {
 
 func TestExecuteCommandAndWait_EmbeddedNewlines(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-newlines")
 	defer tm.CloseSession("exec-newlines")
@@ -956,7 +956,7 @@ func TestExecuteCommandAndWait_NoGoroutineLeak(t *testing.T) {
 	preCount := runtime.NumGoroutine()
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := createAndReadySession(t, tm, "exec-leak")
 	defer tm.CloseSession("exec-leak")

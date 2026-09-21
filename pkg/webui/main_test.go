@@ -11,6 +11,7 @@ import (
 	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -35,6 +36,20 @@ func TestMain(m *testing.M) {
 	// The git_api/… suites exec git subprocesses against real temp repos;
 	// redirect git config so the developer's ~/.gitconfig is never touched.
 	testgit.Configure()
+	// Terminal-PTY tests resolve the user's real login shell (zsh --login
+	// here) and leaked sessions historically piled up hundreds of multi-GB
+	// login shells — three OOM freezes. Force the featherweight POSIX shell:
+	// a leak now costs ~2MB, and no test ever sources the user's rc files.
+	// Tests that exercise shell resolution explicitly t.Setenv their own
+	// override (resolveShell reads the env at call time).
+	_ = os.Setenv("SPROUT_TEST_SHELL", "/bin/sh")
+	defer func() { _ = os.Unsetenv("SPROUT_TEST_SHELL") }()
+	// Onboarding/agent tests that select the sprout-local provider would
+	// otherwise pull the user's REAL multi-GB model weights into this test
+	// binary's memory via localmodel.EnsureServerForProviderWithCheck
+	// (observed: 16-24GB RSS per webui.test process, machine-freezing).
+	// Pin the provider to its inert backend for this whole process.
+	localmodel.DisableForTesting()
 	tmpDir, err := os.MkdirTemp("", "sprout-webui-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)

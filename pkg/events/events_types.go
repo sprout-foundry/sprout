@@ -264,6 +264,14 @@ type AskUserRequest struct {
 	Options     []AskUserRequestOption `json:"options,omitempty"`
 	MultiSelect bool                   `json:"multi_select,omitempty"`
 	Default     string                 `json:"default,omitempty"`
+	// Sensitive marks a credential request: the WebUI renders a masked
+	// input and the backend diverts the response to the credential store
+	// (the dialog's value must never be echoed into the conversation).
+	Sensitive bool `json:"sensitive,omitempty"`
+	// CredentialKey is where the response will be stored (e.g.
+	// "mcp/figma/FIGMA_TOKEN"). Not a secret; shown so the user knows
+	// where the value lands.
+	CredentialKey string `json:"credential_key,omitempty"`
 }
 
 // AskUserRequestOption is a single selectable choice in an ask_user prompt.

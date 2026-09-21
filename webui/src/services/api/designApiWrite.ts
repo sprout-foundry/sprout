@@ -50,6 +50,95 @@ export function writeAsset(
   return writeDesignFile(fetchFn, path, content, writeFn, `Failed to write design asset: ${designRootPath(path)}`);
 }
 
+/** The 409 payload the §7a safe-write seam returns on a revision conflict. */
+export interface WriteConflict {
+  path: string;
+  currentMtime?: number;
+  currentHash?: string;
+}
+
+/**
+ * Extract the base revision (unix-seconds mtime) from a read response, for
+ * callers that load-then-edit: pass it as SafeWriteOptions.baseMtime so the
+ * write is revision-checked against what was just read (§7a). Returns
+ * undefined when the response carries no Last-Modified header.
+ */
+export function baseMtimeFromResponse(response: Response): number | undefined {
+  const header = response.headers.get('Last-Modified');
+  if (!header) return undefined;
+  const ms = Date.parse(header);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : undefined;
+}
+
+/** Thrown when a §7a conditional write is refused (409) — nothing was written. */
+export class DesignWriteConflictError extends Error {
+  readonly conflict: WriteConflict;
+  constructor(conflict: WriteConflict) {
+    super(`The file changed after it was read (${conflict.path}); nothing was written.`);
+    this.name = 'DesignWriteConflictError';
+    this.conflict = conflict;
+  }
+}
+
+export interface SafeWriteOptions {
+  /** The write transport override (tests/hosts). */
+  writeFn?: typeof fetch;
+  /**
+   * The revision the caller last read: the inventory's `modified` (unix
+   * seconds) and/or the sha256 of the loaded text. Omitted guards are simply
+   * not sent.
+   */
+  baseMtime?: number;
+  baseHash?: string;
+  /**
+   * Force the write through despite a conflict (the §7b "Keep mine" path —
+   * a deliberate, user-visible overwrite, not a silent one).
+   */
+  force?: boolean;
+}
+
+/**
+ * §7a conditional variant of `writeAsset`: sends `baseMtime`/`baseHash` and
+ * throws `DesignWriteConflictError` when the server answers 409 (nothing was
+ * written). Everything else behaves exactly like `writeAsset`.
+ */
+export async function writeAssetIfUnchanged(
+  fetchFn: typeof fetch,
+  path: string,
+  content: string,
+  options: SafeWriteOptions = {},
+): Promise<DesignWriteResult> {
+  const target = designRootPath(path);
+  const body: Record<string, unknown> = { content };
+  if (typeof options.baseMtime === 'number') body.baseMtime = options.baseMtime;
+  if (options.baseHash) body.baseHash = options.baseHash;
+  const response = await (options.writeFn ?? fetchFn)(fileUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (response.status === 409 && !options.force) {
+    let conflict: WriteConflict = { path: target };
+    try {
+      const data = (await response.json()) as Partial<WriteConflict>;
+      conflict = {
+        path: typeof data.path === 'string' ? data.path : target,
+        currentMtime: typeof data.currentMtime === 'number' ? data.currentMtime : undefined,
+        currentHash: typeof data.currentHash === 'string' ? data.currentHash : undefined,
+      };
+    } catch {
+      // A body we cannot parse still means one thing: conflict.
+    }
+    throw new DesignWriteConflictError(conflict);
+  }
+  // force: a 409 is the expected "the file moved, overwriting anyway" answer
+  // — the user decided (§7b Keep mine). Any other non-ok status is a failure.
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Failed to write design asset: ${target}`);
+  }
+  return { path: target, content, response };
+}
+
 /**
  * Write `design/flows/<name>.layout.json` — SP-140 invariant 2 sidecar.
  * Pass the consent-aware write function (writeFileWithFetch /
@@ -77,19 +166,9 @@ export function writeLayout(
   );
 }
 
-/**
- * Write `design/feedback/<target>.json` in the SP-140-4d schema (including
- * the `resolution` field and per-annotation `resolved` flags).
- */
-export function writeFeedback(
-  fetchFn: typeof fetch,
-  target: string,
-  json: DesignFeedbackFile,
-  writeFn?: typeof fetch,
-): Promise<DesignWriteResult> {
-  const stem = target.replace(/\.json$/, '');
-  const path = `feedback/${stem}.json`;
-  const payload: DesignFeedbackFile = {
+/** The canonical §4d payload every feedback write sends (defaults filled). */
+function feedbackPayload(target: string, json: DesignFeedbackFile): DesignFeedbackFile {
+  return {
     target: json.target ?? target,
     status: json.status ?? '',
     resolution: json.resolution ?? '',
@@ -102,11 +181,50 @@ export function writeFeedback(
       created: a.created ?? '',
     })),
   };
+}
+
+/**
+ * Write `design/feedback/<target>.json` in the SP-140-4d schema (including
+ * the `resolution` field and per-annotation `resolved` flags).
+ */
+export function writeFeedback(
+  fetchFn: typeof fetch,
+  target: string,
+  json: DesignFeedbackFile,
+  writeFn?: typeof fetch,
+): Promise<DesignWriteResult> {
+  const stem = target.replace(/\.json$/, '');
+  const path = `feedback/${stem}.json`;
   return writeDesignFile(
     fetchFn,
     path,
-    JSON.stringify(payload, null, 2),
+    JSON.stringify(feedbackPayload(target, json), null, 2),
     writeFn,
     `Failed to write feedback: ${designRootPath(path)}`,
+  );
+}
+
+/**
+ * §7a conditional variant of `writeFeedback` for the pin-drag gesture
+ * (SP-140-7 §7e): sends the revision guards read from the feedback file just
+ * before the edit and throws `DesignWriteConflictError` on 409 — an agent
+ * write landing mid-gesture surfaces instead of being silently overwritten.
+ * Serialization across quick successive drags stays the caller's job (the
+ * grid's persist chain). Takes the same writeFn override as `writeFeedback`
+ * via `guards.writeFn`.
+ */
+export async function writeFeedbackIfUnchanged(
+  fetchFn: typeof fetch,
+  target: string,
+  json: DesignFeedbackFile,
+  guards: { baseMtime?: number; baseHash?: string; writeFn?: typeof fetch; force?: boolean },
+): Promise<DesignWriteResult> {
+  const stem = target.replace(/\.json$/, '');
+  const { writeFn, ...safe } = guards;
+  return writeAssetIfUnchanged(
+    fetchFn,
+    `feedback/${stem}.json`,
+    JSON.stringify(feedbackPayload(target, json), null, 2),
+    { ...safe, writeFn },
   );
 }

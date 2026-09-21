@@ -154,6 +154,17 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		return "", agenterrors.NewTool("automate", "failed to resolve sprout binary", err)
 	}
 
+	// A go-test binary re-execed with these args does NOT run an agent —
+	// it ignores the positional args, re-parses -test.* flags, and runs
+	// the whole suite again, which re-runs the automate tests, which
+	// re-exec again: a fork bomb (observed 2026-09-21: 37 nested
+	// webui.test processes, machine-freezing OOM). Fail loud instead.
+	if isGoTestBinary(execPath) {
+		return "", agenterrors.NewTool("automate",
+			"refusing to re-exec the go-test binary as a workflow agent "+
+				"(tests must stub the BPM launch; see isGoTestBinary)", nil)
+	}
+
 	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
 		return "", agenterrors.NewTool("automate", "memory floor check failed", floorErr)
 	}
@@ -265,6 +276,16 @@ func WorkflowRequiresApprovalIn(dir, workflowName string) bool {
 // the CWD-based automate.Dir() so the CLI tool path works correctly.
 func WorkflowRequiresApproval(workflowName string) bool {
 	return WorkflowRequiresApprovalIn(automate.Dir(), workflowName)
+}
+
+// isGoTestBinary reports whether path is a Go test binary (go test compiles
+// the package to `<pkg>.test`). Callers about to re-exec os.Executable() as
+// a sprout agent must refuse when this is true: a .test binary ignores
+// positional args and re-runs the whole test suite — re-exec from within a
+// test fork-bombs the machine.
+func isGoTestBinary(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasSuffix(base, ".test") || strings.HasSuffix(base, ".test.exe")
 }
 
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.

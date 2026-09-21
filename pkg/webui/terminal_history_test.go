@@ -14,7 +14,7 @@ import (
 
 func TestAddToHistory_ValidCommand(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestAddToHistory_ValidCommand(t *testing.T) {
 
 func TestAddToHistory_DuplicateCommand(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestAddToHistory_DuplicateCommand(t *testing.T) {
 
 func TestAddToHistory_EmptyCommand(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestAddToHistory_EmptyCommand(t *testing.T) {
 
 func TestAddToHistory_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.AddToHistory("nonexistent", "echo hello")
 	if err == nil {
@@ -103,7 +103,7 @@ func TestAddToHistory_SessionNotFound(t *testing.T) {
 
 func TestAddToHistory_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
 		t.Skipf("CreateHiddenSession failed: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestAddToHistory_HiddenSession(t *testing.T) {
 
 func TestAddToHistory_CapAt1000(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestAddToHistory_CapAt1000(t *testing.T) {
 
 func TestGetHistory_ReturnsCopy(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestGetHistory_ReturnsCopy(t *testing.T) {
 
 func TestGetHistory_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.GetHistory("nonexistent")
 	if err == nil {
@@ -199,7 +199,7 @@ func TestGetHistory_SessionNotFound(t *testing.T) {
 
 func TestGetHistory_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
 		t.Skipf("CreateHiddenSession failed: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestGetHistory_HiddenSession(t *testing.T) {
 
 func TestGetHistory_EmptyHistory(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestGetHistory_EmptyHistory(t *testing.T) {
 
 func TestNavigateHistory_UpAndDown(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestNavigateHistory_UpAndDown(t *testing.T) {
 
 func TestNavigateHistory_EmptyHistory(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestNavigateHistory_EmptyHistory(t *testing.T) {
 
 func TestNavigateHistory_InvalidDirection(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestNavigateHistory_InvalidDirection(t *testing.T) {
 
 func TestNavigateHistory_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.NavigateHistory("nonexistent", "up")
 	if err == nil {
@@ -360,7 +360,7 @@ func TestNavigateHistory_SessionNotFound(t *testing.T) {
 
 func TestNavigateHistory_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
 		t.Skipf("CreateHiddenSession failed: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestNavigateHistory_HiddenSession(t *testing.T) {
 
 func TestResetHistoryIndex_ResetsToEnd(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateSession("s1"); err != nil {
 		t.Skipf("CreateSession failed: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestResetHistoryIndex_ResetsToEnd(t *testing.T) {
 
 func TestResetHistoryIndex_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResetHistoryIndex("nonexistent")
 	if err == nil {
@@ -430,7 +430,7 @@ func TestResetHistoryIndex_SessionNotFound(t *testing.T) {
 
 func TestResetHistoryIndex_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
 		t.Skipf("CreateHiddenSession failed: %v", err)
 	}

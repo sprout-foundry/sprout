@@ -39,6 +39,12 @@ func newTestWebServer(t *testing.T) (*ReactWebServer, *TerminalManager) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(webClientIDHeader, "test-client")
 	tm := ws.getTerminalManagerForRequest(req)
+	// Every CreateHiddenSession these tests make spawns a real shell; close
+	// whatever the test leaves open (20 of them historically leaked one PTY
+	// login shell each — the machine-freezing webui test OOM).
+	t.Cleanup(func() {
+		_ = tm.CloseAllSessions()
+	})
 	return ws, tm
 }
 

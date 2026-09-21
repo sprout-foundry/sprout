@@ -17,7 +17,7 @@ import (
 
 func TestResizeTerminal_ZeroRows(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 0, 80)
 	if err == nil {
@@ -30,7 +30,7 @@ func TestResizeTerminal_ZeroRows(t *testing.T) {
 
 func TestResizeTerminal_ZeroCols(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 24, 0)
 	if err == nil {
@@ -43,7 +43,7 @@ func TestResizeTerminal_ZeroCols(t *testing.T) {
 
 func TestResizeTerminal_BothZero(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 0, 0)
 	if err == nil {
@@ -56,7 +56,7 @@ func TestResizeTerminal_BothZero(t *testing.T) {
 
 func TestResizeTerminal_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("nonexistent", 24, 80)
 	if err == nil {
@@ -69,7 +69,7 @@ func TestResizeTerminal_SessionNotFound(t *testing.T) {
 
 func TestResizeTerminal_InactiveSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "inactive-1",
@@ -92,7 +92,7 @@ func TestResizeTerminal_InactiveSession(t *testing.T) {
 
 func TestResizeTerminal_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "hidden-1",
@@ -116,7 +116,7 @@ func TestResizeTerminal_HiddenSession(t *testing.T) {
 
 func TestResizeTerminal_NilPTY(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "no-pty-1",
@@ -144,7 +144,7 @@ func TestResizeTerminal_ActiveWithPTY(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session, err := tm.CreateSession("resize-session")
 	if err != nil {
@@ -194,7 +194,7 @@ func TestResizeTerminal_ActiveWithPTY(t *testing.T) {
 
 func TestGetTerminalSize_SessionNotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.GetTerminalSize("nonexistent")
 	if err == nil {
@@ -207,7 +207,7 @@ func TestGetTerminalSize_SessionNotFound(t *testing.T) {
 
 func TestGetTerminalSize_HiddenSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "hidden-1",
@@ -231,7 +231,7 @@ func TestGetTerminalSize_HiddenSession(t *testing.T) {
 
 func TestGetTerminalSize_NilSize(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "no-size-1",
@@ -254,7 +254,7 @@ func TestGetTerminalSize_NilSize(t *testing.T) {
 
 func TestGetTerminalSize_ValidReturnsCopy(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "s1",
@@ -297,7 +297,7 @@ func TestGetTerminalSize_ValidReturnsCopy(t *testing.T) {
 
 func TestGetTerminalSize_ReturnsNilError(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	size, err := tm.GetTerminalSize("nonexistent")
 	if err == nil {
@@ -312,7 +312,7 @@ func TestGetTerminalSize_ReturnsNilError(t *testing.T) {
 // error message format for zero dimensions matches what frontend expects.
 func TestResizeTerminal_ZeroDimensionErrorFormat(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 0, 0)
 	if err == nil {
@@ -329,7 +329,7 @@ func TestResizeTerminal_ZeroDimensionErrorFormat(t *testing.T) {
 
 func TestResizeTerminal_ZeroRowsNotCols(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 0, 100)
 	if err == nil {
@@ -343,7 +343,7 @@ func TestResizeTerminal_ZeroRowsNotCols(t *testing.T) {
 
 func TestResizeTerminal_ZeroColsNotRows(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.ResizeTerminal("s1", 24, 0)
 	if err == nil {
@@ -358,7 +358,7 @@ func TestResizeTerminal_ZeroColsNotRows(t *testing.T) {
 // Additional: Test ResizeTerminal with a file descriptor check
 func TestResizeTerminal_NilPTYErrorFormat(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	session := &TerminalSession{
 		ID:     "no-pty-2",

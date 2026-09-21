@@ -46,6 +46,8 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
         <DesignSurface
           loading={design.loading}
           present={design.present}
+          treeState={design.treeState}
+          frontendLike={design.frontendLike}
           onRecheck={design.recheck}
           tab={design.tab}
           onTabChange={design.onTabChange}

@@ -203,8 +203,33 @@ func TestDesignAssetsHandler_NoDesignDir(t *testing.T) {
 	assert.Contains(t, raw, "manifest")
 }
 
-func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {
+// TestDesignAssetsHandler_ForeignFolder pins the someone-else's-design-folder
+// guidance: a design/ directory holding nothing in Sprout's vocabulary gets
+// an inventory-and-ask instruction (never a silent empty roster, never
+// scaffold text that implies the folder should be overwritten).
+func TestDesignAssetsHandler_ForeignFolder(t *testing.T) {
 	t.Parallel()
+	root := t.TempDir()
+	for _, rel := range []string{"design/mockups/homepage.psd", "design/notes.docx", "design/export/v2.png"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(root, rel)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, rel), []byte("x"), 0o644))
+	}
+	h := &designAssetsHandler{}
+
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	out, ok := res.StructuredOut.(designAssetsOutput)
+	require.True(t, ok)
+	assert.True(t, out.Exists, "the folder exists — exists stays honest")
+	assert.Empty(t, out.Assets)
+	assert.NotEmpty(t, out.Guidance, "a foreign folder must carry inventory-and-ask guidance")
+	assert.Contains(t, out.Guidance, "ask the user")
+	assert.Contains(t, out.Guidance, "Never move")
+}
+
+func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {	t.Parallel()
 	root := t.TempDir()
 	daWriteValidTree(t, root)
 	h := &designAssetsHandler{}

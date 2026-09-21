@@ -69,6 +69,13 @@ var lowContextProfile = ContextProfile{
 		"design_brief",
 		"design_export_tokens",
 		"design_sync",
+		// MCP setup and discovery: the empty state's import cards are
+		// agent-mediated (e.g. connecting a Figma MCP server), so an auto-LCM
+		// model needs the meta-tool (status/list/call) and the config tool
+		// (add/remove). Dynamic mcp_<server>_<tool> calls bypass this filter,
+		// but without these two the model can neither configure nor discover.
+		"mcp_tools",
+		"mcp_refresh",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
 	SkipProactiveContext:      true,

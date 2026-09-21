@@ -446,12 +446,15 @@ const TESTIDS = {
   "design-side-panel-agent": "design-side-panel-agent",
   "design-agent-panel": "design-agent-panel",
   "design-agent-chat": "design-agent-chat",
-  // Design empty state (no design/ tree onboarding, DesignEmptyState.tsx)
+  // Design empty state (no recognized design/ tree onboarding, DesignEmptyState.tsx)
   "design-surface-empty": "design-surface-empty",
   "design-empty-state": "design-empty-state",
+  "design-empty-card-discover-code": "design-empty-card-discover-code",
+  "design-empty-card-running-app": "design-empty-card-running-app",
+  "design-empty-card-images": "design-empty-card-images",
   "design-empty-card-figma": "design-empty-card-figma",
-  "design-empty-card-tools": "design-empty-card-tools",
   "design-empty-card-draft": "design-empty-card-draft",
+  "design-empty-foreign": "design-empty-foreign",
   "design-empty-recheck": "design-empty-recheck",
   "design-empty-agent": "design-empty-agent",
   // SP-140-6 loop results (§6g, LoopResults.tsx)

@@ -400,6 +400,8 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     present: hasDesignTree,
     loading: designPresenceLoading,
+    treeState: designTreeState,
+    frontendLike: frontendCodePresent,
     recheck: recheckDesignPresence,
   } = useDesignPresence();
   const {
@@ -972,6 +974,8 @@ const AppContent: React.FC<AppContentProps> = ({
     design: {
       loading: designPresenceLoading,
       present: hasDesignTree,
+      treeState: designTreeState,
+      frontendLike: frontendCodePresent,
       recheck: recheckDesignPresence,
       tab: designSection,
       onTabChange: setDesignSection,

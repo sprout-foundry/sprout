@@ -1,11 +1,12 @@
 /**
  * DesignSurface empty-state tests — Design mode on a workspace without a
- * `design/` tree.
+ * recognized `design/` tree.
  *
  * Pins the amended SP-140-3 §3a contract: an absent tree renders the
  * onboarding surface (starter cards + agent column) instead of bouncing the
- * user back to Code. The prefill handoff from card click to chat input is
- * asserted end to end through the mocked Chat.
+ * user back to Code; a foreign folder flips the surface's tree-state props
+ * through; the prefill handoff from card click to chat input is asserted
+ * end to end through the mocked Chat.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -46,7 +47,7 @@ function renderEmpty(props: Partial<Parameters<typeof DesignSurface>[0]> = {}) {
   };
 }
 
-describe('DesignSurface empty state (no design/ tree)', () => {
+describe('DesignSurface empty state (no recognized design/ tree)', () => {
   it('renders the onboarding surface instead of the dead fallback', () => {
     renderEmpty();
     expect(screen.getByTestId('design-surface-empty')).toBeInTheDocument();
@@ -60,23 +61,29 @@ describe('DesignSurface empty state (no design/ tree)', () => {
     expect(screen.getByTestId('design-empty-agent')).toContainElement(screen.getByTestId('mock-empty-chat'));
   });
 
-  it('clicking a card prefills the chat input (fill, never send)', async () => {
+  it('frontendLike reorders the cards — code discovery first', () => {
+    renderEmpty({ frontendLike: true });
+    const cards = screen.getAllByRole('listitem');
+    expect(cards[0]).toHaveAttribute('data-testid', 'design-empty-card-discover-code');
+  });
+
+  it('a foreign tree shows the inventory-and-ask banner and its prefill guards the files', async () => {
     const onInputChange = vi.fn();
-    const { rerender } = render(
+    render(
       <DesignSurface
         loading={false}
         present={false}
+        treeState="foreign"
         tab="flows"
         onTabChange={vi.fn()}
         chatProps={{ inputValue: '', onSendMessage: vi.fn(), onInputChange }}
         onRecheck={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByTestId('design-empty-card-draft'));
+    fireEvent.click(screen.getByTestId('design-empty-foreign'));
     await waitFor(() => {
-      expect(onInputChange).toHaveBeenCalledWith(expect.stringMatching(/design system/i));
+      expect(onInputChange).toHaveBeenCalledWith(expect.stringMatching(/never move|do not move/i));
     });
-    void rerender;
   });
 
   it("the empty surface's recheck control re-runs the presence probe", () => {

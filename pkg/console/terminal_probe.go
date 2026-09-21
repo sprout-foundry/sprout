@@ -32,6 +32,11 @@ var (
 	probeOverride func() bool
 )
 
+// probeDeadline bounds one DA2 request/reply round trip. Generous vs
+// the emulator's typical <10ms answer; still short enough that a
+// silent terminal doesn't stall footer startup noticeably.
+const probeDeadline = 250 * time.Millisecond
+
 // bottomAnchoredResize reports whether the controlling terminal reflows
 // bottom-anchored on resize (Termux and kin). Probed at most once; every
 // later call returns the cached answer. While a test override is installed
@@ -59,8 +64,15 @@ func resetFlavorCache() {
 // put in raw mode for the round trip and always restored. Anything the user
 // typed during the 250ms window is consumed; at footer start that window is
 // acceptable in exchange for correct resize painting for the whole session.
+//
+// The reply is read with raw poll+read syscalls, NOT os.NewFile(fd). Wrap-
+// ping a borrowed descriptor in an *os.File is fatal here: os.NewFile
+// registers a runtime finalizer that closes the wrapped fd when the object
+// becomes unreachable, so the next GC cycle after the probe returned would
+// close(0) — the caller's stdin — and the interactive REPL would die with
+// "stdin read error: read /dev/stdin: bad file descriptor" (EBADF) on the
+// next turn. Raw syscalls never close the borrowed fd.
 func probeBottomAnchored(fd uintptr, w *os.File) bool {
-	tty := os.NewFile(fd, "/dev/tty")
 	old, err := term.MakeRaw(int(fd))
 	if err != nil {
 		return false
@@ -76,29 +88,13 @@ func probeBottomAnchored(fd uintptr, w *os.File) bool {
 	if _, err := w.WriteString("\033[>c"); err != nil {
 		return false
 	}
-
-	deadline := time.Now().Add(250 * time.Millisecond)
-	buf := make([]byte, 0, 64)
-	reply := make([]byte, 32)
-	for time.Now().Before(deadline) {
-		if err := tty.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-			return false
-		}
-		n, err := tty.Read(reply)
-		if n > 0 {
-			buf = append(buf, reply[:n]...)
-			if idx := strings.Index(string(buf), "\033[>"); idx >= 0 && strings.Contains(string(buf[idx:]), "c") {
-				return isTermuxDA2(string(buf[idx:]))
-			}
-		}
-		if err != nil {
-			if os.IsTimeout(err) {
-				continue
-			}
-			break
-		}
+	reply := string(readTTYReply(int(fd), probeDeadline))
+	// Match the reply from its escape-sequence start; leading consumed
+	// keystrokes in the buffer must not shift the DA2 parse.
+	if idx := strings.Index(reply, "\033[>"); idx >= 0 {
+		reply = reply[idx:]
 	}
-	return false
+	return isTermuxDA2(reply)
 }
 
 // isTermuxDA2 reports whether a DA2 reply names Termux. Termux answers

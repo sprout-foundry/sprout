@@ -162,7 +162,10 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	endRSS := processRSSKB(t)
 	if endRSS > 0 && startRSS > 0 {
 		growthKB := endRSS - startRSS
-		const maxGrowthKB = 256 * 1024 // 256 MB — very generous; real growth is a few MB
+		// 256 MB — very generous on a normal binary; real growth is a
+		// few MB. Scaled under -race, whose shadow memory inflates peak
+		// RSS several-fold (288MB observed vs the unscaled bound).
+		const maxGrowthKB = 256 * 1024 * raceOverheadFactor
 		require.Less(t, growthKB, maxGrowthKB,
 			"daemon RSS grew by %d KB across 5 concurrent sessions (bounded check)", growthKB)
 		t.Logf("daemon RSS bounded: %d KB before, %d KB after (%d KB growth)",

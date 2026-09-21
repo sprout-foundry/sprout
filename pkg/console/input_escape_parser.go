@@ -164,6 +164,21 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 	case 2: // Got '[', reading sequence
 		ep.buffer = append(ep.buffer, b)
 
+		// Device status reports: when the first byte after '[' is '>',
+		// '?' or '=', the sequence is a terminal REPORT (DA2 reply
+		// "CSI > 41 ; 320 ; 0 c", DA1 "CSI ? 1 ; 2 c", DA3 "CSI = … c",
+		// DECRPM "CSI ? 2004 ; 1 $ y", kitty keyboard flags "CSI ? u").
+		// The InputReader sends no such queries mid-session, so any of
+		// these that show up are stray probe replies (e.g. the footer's
+		// DA2 fingerprint racing a concurrent reader). The old unknown-
+		// sequence fallback shredded them into typed text — the
+		// ">41;320;0c" ghosting seen in Termux input lines. Swallow the
+		// whole sequence silently instead.
+		if len(ep.buffer) == 2 && (b == '>' || b == '?' || b == '=') {
+			ep.state = 7
+			return nil
+		}
+
 		// Check for completed sequences - only look at the last character for simple cases
 		switch b {
 		case 'A': // Up arrow
@@ -341,6 +356,38 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			return &InputEvent{Type: EventMouse, Data: mouseData}
 		}
 		return nil
+
+	case 7: // Swallowing a device report: CSI > / ? / = … terminator
+		// Consume bytes until a plausible final byte. Responses seen in
+		// the wild end with 'c' (DA1/DA2/DA3), 'y' (DECRPM), 'u' (kitty
+		// flags), 'R' (CPR-style replies some terminals reuse the '>'
+		// prefix for) or 'n'/'~' (DSR-style variants). Numeric params,
+		// semicolons and the odd interim bytes ('$' in DECRPM) are all
+		// consumed. Anything else terminates the swallow AND is dropped:
+		// these sequences are machine reports, never user keystrokes.
+		ep.buffer = append(ep.buffer, b)
+		switch b {
+		case 'c', 'y', 'u', 'R', 'n', '~':
+			ep.Reset()
+			return nil
+		case 27:
+			// A truncated report (reply cut off mid-stream) followed by
+			// a real keystroke: the ESC starts the next sequence. Reset
+			// and re-enter state 1 so e.g. "\033[A" after a truncated
+			// DA2 reply still delivers EventUp — without this, '[' and
+			// 'A' would leak into the buffer as typed text.
+			ep.Reset()
+			ep.state = 1
+			return nil
+		default:
+			if b < 0x20 || b > 0x7E {
+				// Other malformed bytes (control char where a param
+				// belongs). Reset rather than letting the buffer grow
+				// unbounded.
+				ep.Reset()
+			}
+			return nil
+		}
 	}
 
 	return nil

@@ -13,6 +13,21 @@ export interface PlatformNavItem {
   readonly href: string;
   readonly icon?: string;
   readonly order?: number;
+  /**
+   * Optional ambient signal rendered on the rail icon (SP-016): a positive
+   * number or non-empty string shows a small dot/count (e.g. the pending
+   * task count on the Tasks item, an overage state on Billing). Absent (or
+   * zero/empty) means no indicator.
+   */
+  readonly badge?: number | string;
+  /**
+   * Whether clicking this item exits the editor to the platform surface at
+   * `href` (SP-016). When true the host navigates the top-level frame; when
+   * absent/false the host keeps the item in-editor (e.g. a registered plugin
+   * view for the same id). The platform serves this explicitly so the host
+   * no longer has to guess from the plugin-view registry.
+   */
+  readonly external?: boolean;
 }
 
 /** Adapter interface for backend communication */

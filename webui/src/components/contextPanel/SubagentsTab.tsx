@@ -83,7 +83,7 @@ export function SubagentsTab({
       )}
       {subagentRuns.length === 0 ? (
         <div className="context-panel-empty">
-          Delegated work will appear here when the orchestrator runs <code>run_subagent</code> or{' '}
+          Delegated work will appear here when a chat runs <code>run_subagent</code> or{' '}
           <code>run_parallel_subagents</code>.
         </div>
       ) : (

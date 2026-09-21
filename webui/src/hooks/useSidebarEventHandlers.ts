@@ -5,7 +5,7 @@ import { supportsSettings } from '../config/mode';
 import type { SectionTab } from './useSidebarState';
 
 interface OpenSettingsFocusEventDetail {
-  focus?: 'persona' | 'provider';
+  focus?: 'provider';
 }
 
 interface UseSidebarEventHandlersParams {
@@ -15,8 +15,8 @@ interface UseSidebarEventHandlersParams {
   onSectionChange?: (section: SectionTab) => void;
   finalOnMobileMenuToggle?: () => void;
   fileTreeRef: RefObject<FileTreeHandle | null>;
-  settingsFocusTarget: 'persona' | 'provider' | null;
-  setSettingsFocusTarget: (target: 'persona' | 'provider' | null) => void;
+  settingsFocusTarget: 'provider' | null;
+  setSettingsFocusTarget: (target: 'provider' | null) => void;
 }
 
 export function useSidebarEventHandlers({
@@ -92,7 +92,7 @@ export function useSidebarEventHandlers({
       if (!supportsSettings) return;
       const detail = (e as CustomEvent<OpenSettingsFocusEventDetail>).detail;
       const focusTarget = detail?.focus;
-      if (focusTarget !== 'persona' && focusTarget !== 'provider') return;
+      if (focusTarget !== 'provider') return;
 
       // On mobile, open the sidebar first
       if (isMobile) {
@@ -126,9 +126,7 @@ export function useSidebarEventHandlers({
 
     // Brief delay to allow the settings section to mount
     const timerId = setTimeout(() => {
-      if (settingsFocusTarget === 'persona') {
-        document.getElementById('persona-select')?.focus();
-      } else if (settingsFocusTarget === 'provider') {
+      if (settingsFocusTarget === 'provider') {
         document.getElementById('provider-select')?.focus();
       }
       setSettingsFocusTarget(null);

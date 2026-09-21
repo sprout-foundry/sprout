@@ -219,16 +219,12 @@ interface SidebarSettingsSectionProps {
   onRequestProviderSetup?: () => void;
   selectedProvider: string;
   selectedModel: string;
-  selectedPersona: string;
   providers: { id: string; name: string }[];
   availableModels: string[];
-  personas: { id: string; name: string }[];
   isLoadingProviders: boolean;
-  isLoadingPersonas: boolean;
   isConnected: boolean;
   onProviderChange: (provider: string) => void;
   onModelChange: (model: string) => void;
-  onPersonaChange: (persona: string) => void;
 }
 
 export default function SidebarSettingsSection({
@@ -251,16 +247,12 @@ export default function SidebarSettingsSection({
   onRequestProviderSetup,
   selectedProvider,
   selectedModel,
-  selectedPersona,
   providers,
   availableModels,
-  personas,
   isLoadingProviders,
-  isLoadingPersonas,
   isConnected,
   onProviderChange,
   onModelChange,
-  onPersonaChange,
 }: SidebarSettingsSectionProps): JSX.Element {
   const log = useLog();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -316,16 +308,12 @@ export default function SidebarSettingsSection({
   const agentConfigObj: AgentConfigProps = {
     selectedProvider,
     selectedModel,
-    selectedPersona,
     providers,
     availableModels,
-    personas,
     isLoadingProviders,
-    isLoadingPersonas,
     isConnected,
     onProviderChange,
     onModelChange,
-    onPersonaChange,
   };
 
   return (

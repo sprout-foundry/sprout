@@ -2,33 +2,28 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { supportsSettings } from '../config/mode';
 import { useProviderCatalog } from '../contexts/ProviderCatalogContext';
 import { ApiService, type ProviderOption, type SproutSettings } from '../services/api';
-import { useLog, debugLog } from '../utils/log';
+import { debugLog } from '../utils/log';
 
 interface UseSidebarModelParams {
   isConnected: boolean;
   provider?: string;
   model?: string;
   selectedModel?: string;
-  selectedPersona?: string;
   stats?: {
     persona?: string;
   };
   onProviderChange?: (provider: string) => void;
   onModelChange?: (model: string) => void;
-  onPersonaChange?: (persona: string) => void;
 }
 
 export interface UseSidebarModelReturn {
   // State
   selectedProvider: string;
   selectedModelState: string;
-  selectedPersonaState: string;
-  personas: { id: string; name: string; enabled: boolean }[];
-  isLoadingPersonas: boolean;
   providers: ProviderOption[];
   isLoadingProviders: boolean;
   settings: SproutSettings | null;
-  settingsFocusTarget: 'persona' | 'provider' | null;
+  settingsFocusTarget: 'provider' | null;
   // Computed values
   finalSelectedModel: string;
   availableModelsState: string[];
@@ -36,9 +31,8 @@ export interface UseSidebarModelReturn {
   // Setters
   setSelectedProvider: (provider: string) => void;
   setSelectedModelState: (model: string) => void;
-  setSelectedPersonaState: (persona: string) => void;
   setSettings: (settings: SproutSettings | null) => void;
-  setSettingsFocusTarget: (target: 'persona' | 'provider' | null) => void;
+  setSettingsFocusTarget: (target: 'provider' | null) => void;
 }
 
 export function useSidebarModel({
@@ -46,36 +40,20 @@ export function useSidebarModel({
   provider,
   model,
   selectedModel,
-  selectedPersona,
-  stats,
-  onProviderChange,
+  onProviderChange: _onProviderChange,
   onModelChange,
-  onPersonaChange,
 }: UseSidebarModelParams): UseSidebarModelReturn {
-  const log = useLog();
   const apiService = ApiService.getInstance();
 
   const catalog = useProviderCatalog();
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
-  const [selectedPersonaState, setSelectedPersonaState] = useState<string>(
-    selectedPersona || stats?.persona || 'orchestrator',
-  );
-  const [personas, setPersonas] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
-  const [isLoadingPersonas, setIsLoadingPersonas] = useState(false);
   // Providers now live in ProviderCatalogContext (single source of truth).
   const providers = catalog.providers;
   const isLoadingProviders = catalog.isLoading;
   const hasHydratedProviderStateRef = useRef(false);
   const [settings, setSettings] = useState<SproutSettings | null>(null);
-  const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
-
-  // Sync persona state when stats change (e.g., from another client's persona change)
-  useEffect(() => {
-    if (stats?.persona && stats.persona !== selectedPersonaState) {
-      setSelectedPersonaState(stats.persona);
-    }
-  }, [stats?.persona, selectedPersonaState]);
+  const [settingsFocusTarget, setSettingsFocusTarget] = useState<'provider' | null>(null);
 
   // Load settings on mount / connection
   useEffect(() => {
@@ -177,49 +155,9 @@ export function useSidebarModel({
     }
   }, [providers, selectedProvider, finalSelectedModel]);
 
-  // Load personas from the backend
-  useEffect(() => {
-    if (!isConnected || !supportsSettings) return;
-
-    const fetchPersonas = async () => {
-      setIsLoadingPersonas(true);
-      try {
-        const data = await apiService.getSubagentTypes();
-        const enabledPersonas = Object.values(data.subagent_types)
-          .filter((p) => p.enabled && p.id && p.name) // Skip empty/corrupted entries
-          .map((p) => ({
-            id: p.id,
-            name: p.name || p.id,
-            enabled: p.enabled,
-          }));
-
-        // Always add orchestrator as an option (it's the default)
-        const allPersonas = [
-          { id: 'orchestrator', name: 'Orchestrator', enabled: true },
-          ...enabledPersonas.filter((p) => p.id !== 'orchestrator'),
-        ];
-
-        setPersonas(allPersonas);
-      } catch (error) {
-        log.error(`Failed to fetch personas: ${error instanceof Error ? error.message : String(error)}`, {
-          title: 'Persona Load Error',
-        });
-        // Fallback to just orchestrator
-        setPersonas([{ id: 'orchestrator', name: 'Orchestrator', enabled: true }]);
-      } finally {
-        setIsLoadingPersonas(false);
-      }
-    };
-
-    fetchPersonas();
-  }, [apiService, isConnected, log]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return {
     selectedProvider,
     selectedModelState,
-    selectedPersonaState,
-    personas,
-    isLoadingPersonas,
     providers,
     isLoadingProviders,
     settings,
@@ -229,7 +167,6 @@ export function useSidebarModel({
     finalAvailableModels,
     setSelectedProvider,
     setSelectedModelState,
-    setSelectedPersonaState,
     setSettings,
     setSettingsFocusTarget,
   };

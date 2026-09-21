@@ -66,8 +66,6 @@ interface SidebarProps {
   onInstanceChange?: (pid: number) => void;
   selectedModel?: string;
   onModelChange?: (model: string) => void;
-  selectedPersona?: string;
-  onPersonaChange?: (persona: string) => void;
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
@@ -180,8 +178,6 @@ function Sidebar({
   onInstanceChange,
   selectedModel,
   onModelChange,
-  selectedPersona,
-  onPersonaChange,
   availableModels,
   currentView,
   stats,
@@ -265,17 +261,15 @@ function Sidebar({
   // Plain object fallback avoids calling useRef when the prop is not provided
   const effectiveSidebarWidthRef = sidebarWidthRef ?? { current: effectiveSidebarWidth };
 
-  // Use the extracted hook for provider/model/persona state management
+  // Use the extracted hook for provider/model state management
   const modelState = useSidebarModel({
     isConnected,
     provider,
     model,
     selectedModel,
-    selectedPersona,
     stats,
     onProviderChange,
     onModelChange,
-    onPersonaChange,
   });
 
   // Reset active section if settings tab is selected but settings are not supported
@@ -462,14 +456,11 @@ function Sidebar({
             onRequestProviderSetup={onRequestProviderSetup}
             selectedProvider={modelState.selectedProvider}
             selectedModel={modelState.finalSelectedModel}
-            selectedPersona={modelState.selectedPersonaState}
             providers={modelState.providers.map((p) => ({ id: p.id, name: p.name }))}
             availableModels={
               availableModels && availableModels.length > 1 ? availableModels : modelState.finalAvailableModels
             }
-            personas={modelState.personas.map((p) => ({ id: p.id, name: p.name }))}
             isLoadingProviders={modelState.isLoadingProviders}
-            isLoadingPersonas={modelState.isLoadingPersonas}
             isConnected={isConnected}
             onProviderChange={(val: string) => {
               modelState.setSelectedProvider(val);
@@ -480,10 +471,6 @@ function Sidebar({
                 modelState.setSelectedModelState(val);
                 onModelChange?.(val);
               }
-            }}
-            onPersonaChange={(val: string) => {
-              modelState.setSelectedPersonaState(val);
-              onPersonaChange?.(val);
             }}
           />
         ) : null;

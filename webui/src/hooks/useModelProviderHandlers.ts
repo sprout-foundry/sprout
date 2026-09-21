@@ -26,7 +26,6 @@ export interface UseModelProviderHandlersReturn {
   handleModelChange: (model: string) => void;
   handleProviderChange: (provider: string) => void;
   handleViewChange: (view: ViewType) => void;
-  handlePersonaChange: (persona: string) => void;
   /** Refs exposed for sharing with other hooks (e.g., WS event handler). */
   pendingProviderRef: MutableRefObject<string>;
 }
@@ -100,17 +99,5 @@ export function useModelProviderHandlers({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePersonaChange = useCallback(
-    (persona: string) => {
-      debugLog('Persona changed to:', persona);
-      events.sendEvent({
-        type: 'persona_change',
-        data: { persona },
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events],
-  );
-
-  return { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange, pendingProviderRef };
+  return { handleModelChange, handleProviderChange, handleViewChange, pendingProviderRef };
 }

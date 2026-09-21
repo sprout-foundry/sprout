@@ -39,20 +39,16 @@ export interface EditorPreferences {
   formatOnSaveEnabled?: boolean;
 }
 
-/** Props for rendering provider/model/persona selectors inside a section body */
+/** Props for rendering provider/model selectors inside a section body */
 export interface AgentConfigProps {
   selectedProvider: string;
   selectedModel: string;
-  selectedPersona: string;
   providers: Array<{ id: string; name: string }>;
   availableModels: string[];
-  personas: Array<{ id: string; name: string }>;
   isLoadingProviders: boolean;
-  isLoadingPersonas: boolean;
   isConnected: boolean;
   onProviderChange: (val: string) => void;
   onModelChange: (val: string) => void;
-  onPersonaChange: (val: string) => void;
 }
 
 export interface SettingsPanelProps {
@@ -62,7 +58,7 @@ export interface SettingsPanelProps {
   onRequestProviderSetup?: () => void;
   editorPreferences?: EditorPreferences | null;
   onEditorPreferenceChanged?: (key: string, value: unknown) => void;
-  /** Provider/model/persona data for the Agent section */
+  /** Provider/model data for the Agent section */
   agentConfig?: AgentConfigProps | null;
 }
 

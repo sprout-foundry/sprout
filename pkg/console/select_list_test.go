@@ -574,7 +574,10 @@ func TestSelectListRunFallbackHonorsContext(t *testing.T) {
 	}
 	// Inject a pipe that never delivers a line: without ctx support
 	// the fallback would block in ReadString until this test times out.
-	pipe, _ := io.Pipe()
+	// Closing the writer on cleanup lets the fallback's parked reader
+	// goroutine unblock (EOF) instead of leaking for the binary's life.
+	pipe, pipeWriter := io.Pipe()
+	t.Cleanup(func() { _ = pipeWriter.Close() })
 	s.fallbackReader = pipe
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -1856,77 +1856,87 @@ func TestSP079_ActivateSkill_NewReportsErrorForMissingSkill(t *testing.T) {
 }
 
 // ============================================================================
-// 2. web_search — Adapter pass-through
+// 2. web_search — Handler conformance via a stub SearchEngine
 //
-// The legacy handler calls tools.WebSearch(query, cfg).
-// The new handler calls env.SearchEngine.Search(ctx, query), which the
-// searchEngineAdapter implements as tools.WebSearch(query, cfg).
+// The new handler routes through env.SearchEngine. Conformance is pinned
+// hermetically with a stub engine: the handler must surface the engine's
+// result or error verbatim and must never touch the network.
 //
-// Because neither test environment has a real Google Custom Search API key,
-// both paths will fail with the same underlying error. The test verifies
-// that the adapter delegates to the same call the legacy path uses.
+// This test used to call the live adapter and the legacy handler
+// (tools.WebSearch -> DuckDuckGo, with a shared search_cache directory).
+// Its pass/fail then depended on the network's whim — a transient search
+// failure on one call followed by a success on the next (which populates
+// the shared cache) flipped the IsError assertion. Removed.
 // ============================================================================
 
+// stubWebSearchEngine is a recording double for tools.SearchEngine.
+type stubWebSearchEngine struct {
+	out   string
+	err   error
+	query string
+}
+
+func (s *stubWebSearchEngine) Search(_ context.Context, query string) (string, error) {
+	s.query = query
+	if s.err != nil {
+		return "", s.err
+	}
+	return s.out, nil
+}
+
 func TestSP079_WebSearch_AdapterPassThrough(t *testing.T) {
-	// NOTE: cannot use t.Parallel() — newIsolatedTestAgent uses t.Setenv()
 	ctx := context.Background()
+	handler := fetchNewHandler(t, "web_search")
+	args := map[string]any{"query": "test query for conformance"}
 
-	a := newIsolatedTestAgent(t)
-	defer a.Shutdown()
+	t.Run("SurfacesEngineError", func(t *testing.T) {
+		wantErr := errors.New("boom: upstream search failed")
+		env := tools.ToolEnv{SearchEngine: &stubWebSearchEngine{err: wantErr}}
 
-	// The searchEngineAdapter.Search() should call tools.WebSearch()
-	// which will fail due to no API key — but the error path is what
-	// matters for conformance.
-	adapter := newSearchEngineAdapter(a)
-
-	adapterOut, adapterErr := adapter.Search(ctx, "test query for conformance")
-
-	// Also call the legacy handler directly — it also calls tools.WebSearch().
-	args := map[string]interface{}{"query": "test query for conformance"}
-	legacyOut, legacyErr := handleWebSearch(ctx, a, args)
-
-	// Both should produce the same error (no API key configured).
-	haveAdapterError := adapterErr != nil || adapterOut == ""
-	haveLegacyError := legacyErr != nil || legacyOut == ""
-
-	if !haveAdapterError {
-		t.Log("adapter produced non-empty output (unexpected without API key), accepting as pass-through")
-	}
-	if !haveLegacyError {
-		t.Log("legacy produced non-empty output (unexpected without API key), accepting as pass-through")
-	}
-
-	// If both errored, they should be wrapping the same underlying issue.
-	if haveAdapterError && haveLegacyError {
-		// Both failed — that's the expected conformance result in a test env
-		// without a Google Custom Search API key. Both paths hit the same wall.
-		t.Log("Both paths failed without API key (expected) — adapter pass-through confirmed")
-	}
-
-	// Now verify the new handler routes through the adapter correctly.
-	env := tools.ToolEnv{SearchEngine: adapter}
-	newHandler := fetchNewHandler(t, "web_search")
-	newArgs := map[string]any{"query": "test query for conformance"}
-	newResult, newExecErr := newHandler.Execute(ctx, env, newArgs)
-
-	// The new handler should surface the same error as the adapter.
-	if newExecErr != nil {
-		t.Logf("new handler returned exec error (expected): %v", newExecErr)
-	}
-
-	// Key assertion: the new handler should return whatever the adapter returns.
-	// If the adapter returned an error, the handler's Output should contain it.
-	if adapterErr != nil {
-		if !newResult.IsError {
-			t.Errorf("new handler should be IsError when adapter returns error")
+		res, execErr := handler.Execute(ctx, env, args)
+		if execErr != nil {
+			t.Fatalf("Execute returned exec error: %v", execErr)
 		}
-		if !strings.Contains(newResult.Output, adapterErr.Error()) {
-			// The handler wraps the error slightly differently — check for the core message.
-			if !strings.Contains(newResult.Output, "web search") && !strings.Contains(newResult.Output, "search") {
-				t.Logf("output format differs slightly, but both paths hit the same adapter: adapter err=%v, new output=%s", adapterErr, newResult.Output)
-			}
+		if !res.IsError {
+			t.Fatalf("IsError = false, want true when the engine errors; output=%q", res.Output)
 		}
-	}
+		if !strings.Contains(res.Output, wantErr.Error()) {
+			t.Fatalf("Output = %q, want it to contain %q", res.Output, wantErr.Error())
+		}
+	})
+
+	t.Run("PassesEngineOutputThrough", func(t *testing.T) {
+		want := "Web search results for \"test query for conformance\":\n\n1. **Stub result**\n   URL: https://example.com\n"
+		stub := &stubWebSearchEngine{out: want}
+		env := tools.ToolEnv{SearchEngine: stub}
+
+		res, execErr := handler.Execute(ctx, env, args)
+		if execErr != nil {
+			t.Fatalf("Execute returned exec error: %v", execErr)
+		}
+		if res.IsError {
+			t.Fatalf("IsError = true, want false; output=%q", res.Output)
+		}
+		if res.Output != want {
+			t.Fatalf("Output = %q, want verbatim pass-through of the engine result", res.Output)
+		}
+		if stub.query != "test query for conformance" {
+			t.Fatalf("engine received query %q, want the handler's query", stub.query)
+		}
+	})
+
+	t.Run("NilEngineIsACleanError", func(t *testing.T) {
+		res, execErr := handler.Execute(ctx, tools.ToolEnv{}, args)
+		if execErr != nil {
+			t.Fatalf("Execute returned exec error: %v", execErr)
+		}
+		if !res.IsError {
+			t.Fatalf("IsError = false, want true when SearchEngine is not configured")
+		}
+		if !strings.Contains(res.Output, "search engine not available") {
+			t.Fatalf("Output = %q, want the not-available message", res.Output)
+		}
+	})
 }
 
 // ============================================================================

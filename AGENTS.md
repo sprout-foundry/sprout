@@ -17,6 +17,7 @@ Guidance for AI agents working in this repository.
 - The e2e stack runs `sprout agent --daemon`, which is **shared-agent mode**: chat-session create/modify APIs 403 with `shared_mode`. Pin shared-mode UX in e2e; cover multi-chat logic in vitest.
 - Local-LLM selection skips model dirs with a corrupt `config.json` (`validModelConfig` in pkg/localmodel) — if a local model panics at load, check the local model store's `config.json` files for truncated downloads before debugging code.
 - Pre-push gates: `make vet && make fmt-check && make lint && make lint-go-new && make build-all`. Details: `docs/internal/ci-pipeline.md`.
+- **Flaky-test policy**: no unbounded waits or live network in unit tests; close every pipe/pty in `t.Cleanup`; timing contract tests must loop. Pattern catalog: `docs/internal/test-flakiness.md`.
 
 ## Critical Git Rules
 

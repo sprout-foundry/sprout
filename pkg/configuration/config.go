@@ -135,7 +135,6 @@ type Config struct {
 	// allow (auto-approve), ask (force prompt), deny (hard block).
 	CommandPolicies *CommandPolicies `json:"command_policies,omitempty"`
 
-
 	// API Timeout Configuration (in seconds)
 	APITimeouts *APITimeoutConfig `json:"api_timeouts,omitempty"`
 

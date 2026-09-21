@@ -166,19 +166,9 @@ export function writeLayout(
   );
 }
 
-/**
- * Write `design/feedback/<target>.json` in the SP-140-4d schema (including
- * the `resolution` field and per-annotation `resolved` flags).
- */
-export function writeFeedback(
-  fetchFn: typeof fetch,
-  target: string,
-  json: DesignFeedbackFile,
-  writeFn?: typeof fetch,
-): Promise<DesignWriteResult> {
-  const stem = target.replace(/\.json$/, '');
-  const path = `feedback/${stem}.json`;
-  const payload: DesignFeedbackFile = {
+/** The canonical §4d payload every feedback write sends (defaults filled). */
+function feedbackPayload(target: string, json: DesignFeedbackFile): DesignFeedbackFile {
+  return {
     target: json.target ?? target,
     status: json.status ?? '',
     resolution: json.resolution ?? '',
@@ -191,11 +181,50 @@ export function writeFeedback(
       created: a.created ?? '',
     })),
   };
+}
+
+/**
+ * Write `design/feedback/<target>.json` in the SP-140-4d schema (including
+ * the `resolution` field and per-annotation `resolved` flags).
+ */
+export function writeFeedback(
+  fetchFn: typeof fetch,
+  target: string,
+  json: DesignFeedbackFile,
+  writeFn?: typeof fetch,
+): Promise<DesignWriteResult> {
+  const stem = target.replace(/\.json$/, '');
+  const path = `feedback/${stem}.json`;
   return writeDesignFile(
     fetchFn,
     path,
-    JSON.stringify(payload, null, 2),
+    JSON.stringify(feedbackPayload(target, json), null, 2),
     writeFn,
     `Failed to write feedback: ${designRootPath(path)}`,
+  );
+}
+
+/**
+ * §7a conditional variant of `writeFeedback` for the pin-drag gesture
+ * (SP-140-7 §7e): sends the revision guards read from the feedback file just
+ * before the edit and throws `DesignWriteConflictError` on 409 — an agent
+ * write landing mid-gesture surfaces instead of being silently overwritten.
+ * Serialization across quick successive drags stays the caller's job (the
+ * grid's persist chain). Takes the same writeFn override as `writeFeedback`
+ * via `guards.writeFn`.
+ */
+export async function writeFeedbackIfUnchanged(
+  fetchFn: typeof fetch,
+  target: string,
+  json: DesignFeedbackFile,
+  guards: { baseMtime?: number; baseHash?: string; writeFn?: typeof fetch; force?: boolean },
+): Promise<DesignWriteResult> {
+  const stem = target.replace(/\.json$/, '');
+  const { writeFn, ...safe } = guards;
+  return writeAssetIfUnchanged(
+    fetchFn,
+    `feedback/${stem}.json`,
+    JSON.stringify(feedbackPayload(target, json), null, 2),
+    { ...safe, writeFn },
   );
 }

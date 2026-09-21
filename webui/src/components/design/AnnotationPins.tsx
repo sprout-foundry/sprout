@@ -109,6 +109,29 @@ export default function AnnotationPins({
     setDraggingId(null);
   };
 
+  /** Normalized 0-1 step for one arrow key press (Shift = coarse). */
+  const nudgeStep = (event: React.KeyboardEvent) => (event.shiftKey ? 0.05 : 0.01);
+
+  // §7e keyboard parity for the drag gesture: arrow keys move the focused
+  // pin in normalized 0.01 steps (Shift: 0.05), persisting through the same
+  // onPinMove path the drag uses. Without this the gesture is pointer-only.
+  const handlePinKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, annotation: DesignFeedbackAnnotation) => {
+    if (!onPinMove) return;
+    const step = nudgeStep(event);
+    let dx = 0;
+    let dy = 0;
+    if (event.key === 'ArrowLeft') dx = -step;
+    else if (event.key === 'ArrowRight') dx = step;
+    else if (event.key === 'ArrowUp') dy = -step;
+    else if (event.key === 'ArrowDown') dy = step;
+    else return;
+    event.preventDefault(); // keep the page from scrolling
+    event.stopPropagation();
+    const x = Math.min(1, Math.max(0, clamp01(annotation.at?.x) + dx));
+    const y = Math.min(1, Math.max(0, clamp01(annotation.at?.y) + dy));
+    onPinMove(annotation.id, { x, y });
+  };
+
   return (
     <div
       ref={layerRef}
@@ -118,8 +141,10 @@ export default function AnnotationPins({
       data-placing={placeMode}
       data-dragging={draggingId ?? ''}
       onClick={handleLayerClick}
-      role={placeMode ? 'button' : undefined}
-      aria-label={placeMode ? 'Click to place the annotation pin' : undefined}
+      // Deliberately no role="button": the layer is a positioning surface,
+      // not a control, and role=button with button children is an ARIA
+      // violation. Place mode is conveyed through data-placing + CSS and the
+      // pins remain the layer's interactive elements.
     >
       {annotations.map((annotation) => (
         <button
@@ -147,6 +172,7 @@ export default function AnnotationPins({
           }}
           onPointerUp={handlePinPointerUp}
           onPointerCancel={handlePinPointerCancel}
+          onKeyDown={(event) => handlePinKeyDown(event, annotation)}
         >
           <MapPin size={14} />
           <span className="design-pin-badge">{annotation.id}</span>

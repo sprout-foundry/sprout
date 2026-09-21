@@ -1129,7 +1129,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm, 4px);
   background: var(--accent-info, var(--bg-primary));
-  color: var(--text-primary, #fff);
+  color: var(--text-primary, inherit);
   cursor: pointer;
   padding: 1px 3px;
   pointer-events: auto;
@@ -1164,7 +1164,7 @@
 
 .design-pin-area-consistency {
   background: var(--accent-primary);
-  color: var(--text-primary, invert);
+  color: var(--text-primary, inherit);
 }
 
 .design-pin-badge {
@@ -1182,6 +1182,58 @@
   color: var(--text-primary, inherit);
   font-size: var(--text-sm, 11px);
   padding: 0 4px;
+}
+
+/* Keyboard reorder controls (§7e a11y parity with the drag gesture). */
+.design-screen-reorder {
+  position: absolute;
+  top: var(--space-1, 4px);
+  right: var(--space-1, 4px);
+  display: none;
+  gap: 2px;
+  z-index: 1;
+}
+
+.design-screens-grid li {
+  position: relative;
+}
+
+.design-screens-grid li:focus-within .design-screen-reorder,
+.design-screen-reorder:focus-within {
+  display: inline-flex;
+}
+
+.design-screen-reorder-btn {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 2px;
+  font-size: var(--text-sm, 11px);
+  line-height: 1;
+}
+
+.design-screen-reorder-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.design-screen-reorder-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.design-token-reload {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+  margin-left: var(--space-2, 8px);
+  padding: 1px 8px;
+  font-size: var(--text-sm, 11px);
 }
 
 .design-feedback-place {

@@ -12,6 +12,7 @@ import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
+import { firePlatformViewBeacon } from '../bootstrapAdapter';
 
 // Route-level lazy-loaded panels — split out of the main bundle so the
 // initial chat-mode load doesn't pay for code paths the user may never
@@ -687,6 +688,17 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   );
 
   const activePluginView = pluginViews.find((v) => v.id === currentView);
+  const activePluginViewId = activePluginView?.id;
+
+  // SP-016 P0.7: fire the one-shot embedded-view beacon whenever the editor
+  // surfaces an in-editor plugin page (the platform logs one
+  // s016_embedded_view line per mount — the Phase 1 deletion gate's
+  // usage data). Fire-and-forget; a missing/older platform endpoint
+  // must never break the app.
+  useEffect(() => {
+    if (activePluginViewId) firePlatformViewBeacon(activePluginViewId);
+  }, [activePluginViewId]);
+
   if (activePluginView) {
     const Component = activePluginView.component;
     return (

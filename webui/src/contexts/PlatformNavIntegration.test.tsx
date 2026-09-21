@@ -21,7 +21,15 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 // (task count, overage state) ride the same contract.
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1, external: true, badge: 2 },
-  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2, external: true, badge: 'overage' },
+  {
+    id: 'billing',
+    label: 'Billing',
+    href: '/account/billing',
+    icon: 'credit-card',
+    order: 2,
+    external: true,
+    badge: 'overage',
+  },
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3, external: true },
 ];
 

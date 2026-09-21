@@ -53,6 +53,9 @@ const TESTIDS = {
   "chat-query-progress": "chat-query-progress",
   "chat-new-button": "chat-new-button",
 
+  // Header
+  "header-usage-chip": "header-usage-chip", // SP-016 P0.6 ambient usage chip (cloud mode)
+
   // Sidebar
   "sidebar-container": "sidebar-container",
   "sidebar-brand": "sidebar-brand",
@@ -65,6 +68,7 @@ const TESTIDS = {
   "sidebar-automations-tab": "sidebar-automations-tab",
   "sidebar-logs-tab": "sidebar-logs-tab",
   "sidebar-collapse-toggle": "sidebar-collapse-toggle",
+  "rail-badge-tasks": "rail-badge-tasks", // pattern rail-badge-${item.id} (platform-nav badge, SP-016 P0.4)
   // Workspace mode switcher (top-left). Derived ids: <testId>-trigger,
   // <testId>-menu, <testId>-option-<mode>.
   "sidebar-brand-trigger": "sidebar-brand-trigger",
@@ -360,6 +364,8 @@ const TESTIDS = {
   "design-screen-status-login": "design-screen-status-login", // pattern design-screen-status-${card.name}
   "design-screen-thumb-login": "design-screen-thumb-login", // pattern design-screen-thumb-${card.name}
   "design-screen-thumb-box-login": "design-screen-thumb-box-login", // pattern design-screen-thumb-box-${card.name}
+  "design-screen-move-up-login": "design-screen-move-up-login", // pattern design-screen-move-up-${card.name}
+  "design-screen-move-down-login": "design-screen-move-down-login", // pattern design-screen-move-down-${card.name}
   // Feedback write path (SP-140-4d)
   // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
   "design-feedback-annotations": "design-feedback-annotations",
@@ -395,6 +401,7 @@ const TESTIDS = {
   "design-tokens-tree": "design-tokens-tree",
   "design-tokens-count": "design-tokens-count",
   "design-tokens-empty": "design-tokens-empty",
+  "design-token-reload": "design-token-reload",
   "design-tokens-search": "design-tokens-search",
   "design-tokens-hint": "design-tokens-hint",
   "design-tokens-schema": "design-tokens-schema",

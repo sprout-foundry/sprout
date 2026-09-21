@@ -300,7 +300,6 @@ func applyMapInitializations(raw map[string]interface{}) {
 	mapFields := []string{
 		"provider_models",
 		"preferences",
-		"dismissed_prompts",
 		"custom_providers",
 		"subagent_types",
 		"skills",

@@ -119,7 +119,6 @@ vi.mock('./EditorPaneFooter', () => {
   return { default: MockEditorPaneFooter };
 });
 vi.mock('./ImageViewer', () => ({ default: () => null }));
-vi.mock('./SvgPreview', () => ({ default: () => null }));
 // Mock useEditorExtensions to avoid deep CodeMirror dependency cascade
 vi.mock('../hooks/useEditorExtensions', () => ({
   useEditorExtensions: () => ({

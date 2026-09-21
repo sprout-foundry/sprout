@@ -48,6 +48,16 @@ func newTestWebServer(t *testing.T) (*ReactWebServer, *TerminalManager) {
 	return ws, tm
 }
 
+// quietShell pins the session process to /bin/cat (zero startup output).
+// The default test shell (/bin/sh, set in TestMain) emits its first prompt
+// a few ms after session creation; under -race+coverage that prompt can land
+// in the ring after the test's own broadcast and corrupt ring-content
+// assertions (flaked as "expected length 500, got length 500").
+func quietShell(t *testing.T) {
+	t.Helper()
+	t.Setenv("SPROUT_TEST_SHELL", "/bin/cat")
+}
+
 // ---------------------------------------------------------------------------
 // handleAPIAgentSessions — GET /api/terminal/agent-sessions
 // ---------------------------------------------------------------------------
@@ -223,6 +233,7 @@ func TestHandleAPIAgentSessions_InactiveStatus(t *testing.T) {
 
 func TestHandleAPIAgentSessions_OutputPreviewMax500Bytes(t *testing.T) {
 	ws, tm := newTestWebServer(t)
+	quietShell(t)
 
 	session, err := tm.CreateHiddenSession("bg-preview", "agent", "chat-1")
 	if err != nil {
@@ -266,6 +277,7 @@ func TestHandleAPIAgentSessions_OutputPreviewMax500Bytes(t *testing.T) {
 
 func TestHandleAPIAgentSessions_OutputPreviewShortContent(t *testing.T) {
 	ws, tm := newTestWebServer(t)
+	quietShell(t)
 
 	session, err := tm.CreateHiddenSession("bg-short-preview", "agent", "chat-1")
 	if err != nil {
@@ -303,6 +315,7 @@ func TestHandleAPIAgentSessions_OutputPreviewShortContent(t *testing.T) {
 
 func TestHandleAPIAgentSessions_EmptyOutputPreview(t *testing.T) {
 	ws, tm := newTestWebServer(t)
+	quietShell(t)
 
 	session, err := tm.CreateHiddenSession("bg-no-output", "agent", "chat-1")
 	if err != nil {

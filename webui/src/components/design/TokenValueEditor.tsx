@@ -49,12 +49,15 @@ export default function TokenValueEditor({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorText, setErrorText] = useState('');
   const [conflictText, setConflictText] = useState('');
+  /** True when the conflict path should nudge the user to reload the tab. */
+  const [reloadHint, setReloadHint] = useState(false);
 
   useEffect(() => {
     setDraft(currentText);
     setStatus('idle');
     setErrorText('');
     setConflictText('');
+    setReloadHint(false);
   }, [currentText, tokenPath, filePath]);
 
   const refs = referenceCount(tokenRefs, tokenPath);
@@ -79,11 +82,22 @@ export default function TokenValueEditor({
       setStatus('saved');
       onSaved?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('changed after it was read')) {
-        setConflictText('The token file changed while you were editing. Reload the Tokens tab and try again.');
+      // Keep the draft alive on conflict/error: the user can reload the tab,
+      // re-apply the value from the still-held input, and save again — no
+      // retyping. (§7b parity: the conflict is surfaced, never silently
+      // resolved.)
+      if (err instanceof Error && err.name === 'DesignWriteConflictError') {
+        setConflictText(
+          'The token file changed after it was read — nothing was written. Reload the Tokens tab, then save again to reapply your edit.',
+        );
+        setReloadHint(true);
       } else {
-        setErrorText(message);
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes('changed after it was read')) {
+          setConflictText('The token file changed while you were editing. Reload the Tokens tab and try again.');
+        } else {
+          setErrorText(message);
+        }
       }
       setStatus('error');
     }
@@ -145,6 +159,11 @@ export default function TokenValueEditor({
         {conflictText && (
           <span className="design-token-conflict" data-testid="design-token-conflict" role="alert">
             {conflictText}
+            {reloadHint && (
+              <button type="button" className="design-token-reload" data-testid="design-token-reload" onClick={onSaved}>
+                Reload now
+              </button>
+            )}
           </span>
         )}
         {errorText && (

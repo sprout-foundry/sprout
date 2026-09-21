@@ -20,7 +20,7 @@
  */
 
 import { RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { fetchDesignStatus, FINDING_SEVERITIES, type DesignStatus } from '../../services/api/designStatusApi';
 import { DESIGN_REFRESH_INTERVAL_MS } from './DesignWorkspaceContext';
@@ -57,6 +57,20 @@ export default function HealthStrip({
   const fetchFn = useSproutFetch();
   const [status, setStatus] = useState<DesignStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  // Monotonic sequence guard (same pattern as DesignWorkspaceContext /
+  // useDesignPresence): focus, interval, and the refresh button can race;
+  // only the newest request may commit.
+  const fetchSeq = useRef(0);
+
+  const requestStatus = useCallback(() => {
+    const seq = ++fetchSeq.current;
+    setBusy(true);
+    void fetchDesignStatus(fetchFn).then((next) => {
+      if (seq !== fetchSeq.current) return;
+      setStatus(next);
+      setBusy(false);
+    });
+  }, [fetchFn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,20 +90,13 @@ export default function HealthStrip({
   // Focus + slow interval, matching the live tree's rhythm (§6a): a user
   // who stays focused still sees tallies move after an agent turn.
   useEffect(() => {
-    const refetch = () => {
-      setBusy(true);
-      void fetchDesignStatus(fetchFn).then((next) => {
-        setStatus(next);
-        setBusy(false);
-      });
-    };
-    window.addEventListener('focus', refetch);
-    const timer = window.setInterval(refetch, DESIGN_REFRESH_INTERVAL_MS);
+    window.addEventListener('focus', requestStatus);
+    const timer = window.setInterval(requestStatus, DESIGN_REFRESH_INTERVAL_MS);
     return () => {
-      window.removeEventListener('focus', refetch);
+      window.removeEventListener('focus', requestStatus);
       window.clearInterval(timer);
     };
-  }, [fetchFn]);
+  }, [requestStatus]);
 
   if (!status || !status.exists) {
     // No tree (or transport failure before the first response): render the
@@ -199,18 +206,14 @@ export default function HealthStrip({
         data-testid="design-health-refresh"
         aria-label="Refresh design status"
         onClick={() => {
+          setBusy(true);
           if (onRefresh) {
-            setBusy(true);
             // The shell's handler refetches the inventory; the refreshKey
             // bump it triggers re-runs this strip's own fetch effect.
             onRefresh();
             return;
           }
-          setBusy(true);
-          void fetchDesignStatus(fetchFn).then((next) => {
-            setStatus(next);
-            setBusy(false);
-          });
+          requestStatus();
         }}
       >
         <RefreshCw size={12} />

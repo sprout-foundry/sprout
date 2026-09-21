@@ -86,7 +86,28 @@ describe('AnnotationPins', () => {
   it('placement mode exposes the a11y affordances', () => {
     const { container } = render(<AnnotationPins target="t" annotations={[]} placeMode onPlace={() => {}} />);
     const layer = container.querySelector('[data-testid="design-pins"]') as HTMLElement;
-    expect(layer).toHaveAttribute('role', 'button');
-    expect(layer).toHaveAttribute('aria-label', 'Click to place the annotation pin');
+    // The layer is a positioning surface, not a control: no role="button"
+    // (it would nest interactive children — an ARIA violation). Place mode
+    // is conveyed via data-placing; the pins stay the interactive elements.
+    expect(layer).not.toHaveAttribute('role');
+    expect(layer).toHaveAttribute('data-placing', 'true');
+  });
+
+  it('a focused pin moves with arrow keys and persists through onPinMove', () => {
+    const onPinMove = vi.fn();
+    const first = render(<AnnotationPins target="t" annotations={[annotation()]} onPinMove={onPinMove} />);
+    const pin = first.getByTestId('design-pin-a1');
+    // 0.01 step, clamped to 0..1 (Shift = 0.05 coarse).
+    fireEvent.keyDown(pin, { key: 'ArrowRight' });
+    expect(onPinMove).toHaveBeenCalledWith('a1', { x: 0.26, y: 0.75 });
+    fireEvent.keyDown(pin, { key: 'ArrowUp', shiftKey: true });
+    expect(onPinMove).toHaveBeenCalledWith('a1', { x: 0.25, y: 0.7 });
+    first.unmount();
+    // Out-of-range values clamp at the boundary.
+    const second = render(
+      <AnnotationPins target="t" annotations={[annotation({ at: { x: 1, y: 1 } })]} onPinMove={onPinMove} />,
+    );
+    fireEvent.keyDown(second.getByTestId('design-pin-a1'), { key: 'ArrowDown' });
+    expect(onPinMove).toHaveBeenLastCalledWith('a1', { x: 1, y: 1 });
   });
 });

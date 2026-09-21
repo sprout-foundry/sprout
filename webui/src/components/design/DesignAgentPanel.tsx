@@ -41,7 +41,13 @@ export default function DesignAgentPanel({ chatProps, prefill, onPrefillConsumed
   consumedCallbackRef.current = onPrefillConsumed;
 
   useEffect(() => {
-    if (!prefill || consumedRef.current === prefill) return;
+    // A prefill returning to null means the shell consumed it — re-arm the
+    // guard so clicking the same remedy chip again re-seeds the input.
+    if (!prefill) {
+      consumedRef.current = null;
+      return;
+    }
+    if (consumedRef.current === prefill) return;
     consumedRef.current = prefill;
     chatPropsRef.current.onInputChange?.(prefill);
     consumedCallbackRef.current?.();

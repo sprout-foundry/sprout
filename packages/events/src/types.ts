@@ -384,6 +384,13 @@ export interface AskUserRequestData {
   multi_select?: boolean;
   /** Default value (option `value` / `label`, or freeform string) pre-selected when the dialog opens. */
   default?: string;
+  /**
+   * Credential request: the response is diverted to the credential store
+   * (never returned to the model). The dialog renders a masked input.
+   */
+  sensitive?: boolean;
+  /** Where the response will be stored (e.g. "mcp/figma/FIGMA_TOKEN"). Not a secret. */
+  credential_key?: string;
   client_id?: string;
   status?: string;
 }

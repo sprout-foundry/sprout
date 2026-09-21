@@ -63,14 +63,15 @@ describe('DesignEmptyState', () => {
     }
   });
 
-  it('the Figma card names MCP and the token handoff honestly', () => {
+  it('the Figma card names MCP and the masked token handoff', () => {
     const onAskAgent = vi.fn();
     render(<DesignEmptyState onAskAgent={onAskAgent} onRecheck={vi.fn()} />);
     fireEvent.click(screen.getByTestId('design-empty-card-figma'));
     const prompt = String(onAskAgent.mock.calls[0][0]);
-    expect(prompt).toMatch(/MCP/i);
-    expect(prompt).toMatch(/mcp-setup/i);
-    expect(prompt).toMatch(/token/i);
+    expect(prompt).toMatch(/mcp_refresh/);
+    expect(prompt).toMatch(/sensitive: true/);
+    expect(prompt).toMatch(/credential_key: mcp\/figma\/FIGMA_TOKEN/);
+    expect(prompt).toMatch(/mcp_tools/);
   });
 
   it('the running-app card asks for the URL before capturing', () => {

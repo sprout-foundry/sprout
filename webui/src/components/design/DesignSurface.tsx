@@ -12,8 +12,8 @@
  * §6c: the health strip sits across the top — validate tallies, the two drift
  * rows, pending feedback — with click-throughs into the surfaces it names.
  * Finding/feedback clicks select the asset (the shared workspace context);
- * design-ahead opens Tokens; code-ahead asks the agent (the shell owns the
- * panel, so the intent crosses as a callback).
+ * design-ahead opens Tokens; code-ahead prefills the agent (the prefill
+ * handoff lives in DesignView's side column).
  *
  * The presence gate is kept here rather than in the router: a workspace with no
  * `design/` tree has no Design mode to offer, so the chunk must never load and
@@ -24,7 +24,7 @@
 import { SkeletonText } from '@sprout/ui';
 import React, { Suspense, lazy } from 'react';
 import ErrorBoundary from '../ErrorBoundary';
-import type { DesignTab } from './DesignView';
+import type { DesignChatProps, DesignTab } from './DesignView';
 import { useDesignWorkspace } from './DesignWorkspaceContext';
 import HealthStrip from './HealthStrip';
 
@@ -45,18 +45,11 @@ export interface DesignSurfaceProps {
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
-  /** Code-ahead click: open the agent panel with this prefill (§6c/§6f). */
-  onAskAgent?: (prompt: string) => void;
+  /** The shell's chat payload (§6f) for the side column's Agent tab. */
+  chatProps?: DesignChatProps;
 }
 
-const DesignSurface: React.FC<DesignSurfaceProps> = ({
-  loading,
-  present,
-  tab,
-  onTabChange,
-  onOpenFile,
-  onAskAgent,
-}) => {
+const DesignSurface: React.FC<DesignSurfaceProps> = ({ loading, present, tab, onTabChange, onOpenFile, chatProps }) => {
   const workspace = useDesignWorkspace();
   // §6c/§6a: the strip's refresh control refetches the inventory too — one
   // control, both views of the tree. Bumping refreshKey re-runs the strip's
@@ -86,12 +79,11 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
             workspace?.select(path);
           }}
           onOpenSection={onTabChange}
-          onAskAgent={onAskAgent}
         />
       </ErrorBoundary>
       <ErrorBoundary panelName="Design">
         <Suspense fallback={<SurfaceFallback />}>
-          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} onAskAgent={onAskAgent} />
+          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} chatProps={chatProps} />
         </Suspense>
       </ErrorBoundary>
     </div>

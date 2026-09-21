@@ -33,7 +33,7 @@ export interface LoopResultsProps {
   assetModified?: number;
   /** The code-ahead drift row from the status endpoint, when ahead. */
   codeAhead?: DesignStatusDriftRow | null;
-  /** Prefill the agent panel (the §6f ask-the-designer flow). */
+  /** Prefill the agent panel (the §6f prefill flow). */
   onAskAgent?: (prompt: string) => void;
   /** Read seam override (tests/hosts). */
   readFn?: typeof fetch;
@@ -97,7 +97,7 @@ export default function LoopResults({ path, assetModified, codeAhead, onAskAgent
                   onAskAgent(`Run design_critique on ${path} (rubric: all) and fix any blocker or major findings.`)
                 }
               >
-                Ask the designer to run one
+                Ask the agent to run one
               </button>
             )}
           </p>

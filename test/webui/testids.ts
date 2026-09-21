@@ -438,10 +438,13 @@ const TESTIDS = {
   "design-pin-a1": "design-pin-a1", // pattern design-pin-${annotation.id}
   "design-feedback-place": "design-feedback-place",
   "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
-  // SP-140-6 agent panel (§6f, DesignAgentPanel.tsx)
+  // SP-140-6 agent side column (§6f, DesignSideColumn.tsx + DesignAgentPanel.tsx)
+  "design-side-column": "design-side-column",
+  "design-side-tab-details": "design-side-tab-details",
+  "design-side-tab-agent": "design-side-tab-agent",
+  "design-side-panel-details": "design-side-panel-details",
+  "design-side-panel-agent": "design-side-panel-agent",
   "design-agent-panel": "design-agent-panel",
-  "design-agent-open": "design-agent-open",
-  "design-agent-close": "design-agent-close",
   "design-agent-chat": "design-agent-chat",
   // SP-140-6 loop results (§6g, LoopResults.tsx)
   "design-loop-results": "design-loop-results",

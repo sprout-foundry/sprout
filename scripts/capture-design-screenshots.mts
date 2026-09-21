@@ -189,17 +189,16 @@ await page.getByTestId('design-token-editor').waitFor({ timeout: 30_000 });
 await page.waitForTimeout(500);
 await shot('token-editor');
 
-// 8. Agent panel — the chat is docked beside the canvas and open by
-//    default (SP-140-6 §6f). The exchange is real: the backend runs
-//    --mock-llm with SPROUT_MOCK_LLM_QUEUE seeded above startSprout(); the
-//    queue's first entry is an inline fenced-JSON design_validate tool
-//    call that seed's loop fallback-parses and executes against the real
-//    seeded design/ tree, so the shot shows a genuine tool run —
-//    narration, tool badge, streamed synthesis — not a staged transcript.
+// 8. Agent tab — the side column's Agent tab is active (SP-140-6 §6f
+//    rework: one Details | Agent column instead of a docked panel). The
+//    exchange is real: the backend runs --mock-llm with SPROUT_MOCK_LLM_QUEUE
+//    seeded above startSprout(); the queue's first entry is an inline
+//    fenced-JSON design_validate tool call that seed's loop fallback-parses
+//    and executes against the real seeded design/ tree, so the shot shows a
+//    genuine tool run — narration, tool badge, streamed synthesis — not a
+//    staged transcript.
 const panel = page.getByTestId('design-agent-panel');
-if (!(await panel.isVisible().catch(() => false))) {
-  await page.getByTestId('design-agent-open').click();
-}
+await page.getByTestId('design-side-tab-agent').click();
 await panel.waitFor({ timeout: 30_000 });
 
 // Type the design prompt into the panel's chat and send it, driving a real

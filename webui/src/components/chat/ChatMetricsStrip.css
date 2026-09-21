@@ -1,5 +1,5 @@
 /* ChatMetricsStrip — per-chat LLM metrics, rendered inside the chat
-   shell above the input. Design tokens only. */
+   shell under the input. Design tokens only. */
 
 .chat-metrics-strip {
   display: flex;
@@ -8,6 +8,7 @@
   flex-wrap: wrap;
   gap: var(--space-1);
   padding: 2px var(--space-3);
+  margin-top: 4px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
   color: var(--text-secondary);

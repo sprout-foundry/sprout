@@ -532,7 +532,6 @@ function Chat(props: ChatProps): JSX.Element {
           ) : null}
 
           <div className="input-container" ref={inputContainerRef}>
-            <ChatMetricsStrip stats={stats} isConnected={isConnected} onModelClick={onModelClick} />
             <ToolTimelineBar toolExecutions={filteredToolExecutions} />
             {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
               <div className="thinking-indicator" role="status" aria-live="polite">
@@ -576,6 +575,7 @@ function Chat(props: ChatProps): JSX.Element {
               onToggleIndex={handleToggleIndex}
               onUploadImage={handleUploadImage}
             />
+            <ChatMetricsStrip stats={stats} isConnected={isConnected} onModelClick={onModelClick} />
             {indexingError && (
               <div
                 className="indexing-error-banner"

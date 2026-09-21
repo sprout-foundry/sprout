@@ -52,7 +52,7 @@ describe('ChatMetricsStrip', () => {
     expect(strip.textContent).toContain('Link: disconnected');
   });
 
-  it('shows persona, context, tokens, and cost segments', () => {
+  it('shows persona, provider/model, context pair, tokens, and cost segments', () => {
     render({
       stats: {
         persona: 'web_scraper',
@@ -68,10 +68,28 @@ describe('ChatMetricsStrip', () => {
     });
     const text = container.querySelector('.chat-metrics-strip')!.textContent!;
     expect(text).toContain('Web Scraper');
-    expect(text).toContain('25.0%');
+    expect(text).toContain('OpenRouter : test-model');
+    // Context pair wins over the percent fallback.
+    expect(text).toContain('2.0k/8.0k ctx');
+    expect(text).not.toContain('25.0%');
     expect(text).toContain('1.5k tok');
     expect(text).toContain('$0.500');
     expect(text).toContain('Link: connected');
+  });
+
+  it('shows the context pair from the WS payload spelling (context_tokens)', () => {
+    render({
+      stats: { provider: 'anthropic', model: 'm', context_tokens: 1200, max_context_tokens: 200_000 },
+      isConnected: true,
+    });
+    const text = container.querySelector('.chat-metrics-strip')!.textContent!;
+    expect(text).toContain('1.2k/200.0k ctx');
+  });
+
+  it('falls back to context percent when the token pair is missing', () => {
+    render({ stats: { context_usage_percent: 25 }, isConnected: true });
+    const text = container.querySelector('.chat-metrics-strip')!.textContent!;
+    expect(text).toContain('25.0%');
   });
 
   it('colors cost by threshold', () => {
@@ -94,7 +112,7 @@ describe('ChatMetricsStrip', () => {
     });
     const btn = container.querySelector('.chat-metrics-model-button') as HTMLButtonElement;
     expect(btn).not.toBeNull();
-    expect(btn.textContent).toBe('m1');
+    expect(btn.textContent).toBe('OpenRouter : m1');
     act(() => {
       btn.click();
     });

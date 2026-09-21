@@ -5,6 +5,7 @@ package webui
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/buildinfo"
@@ -55,6 +56,17 @@ type RuntimeConfig struct {
 	// as "sync": null) when git state could not be determined; it never
 	// fails the bootstrap response.
 	Sync *gitops.SyncReport `json:"sync"`
+
+	// PlatformURL (SP-016 P0.3) is the absolute base URL of the platform
+	// web UI, so the editor's account-surface exits (the "← Dashboard"
+	// back-link, escalation "View task on platform" links, avatar-menu
+	// exits) can build absolute URLs instead of self-looping into this
+	// daemon's own SPA on a Fly workspace (Mode B). Sourced from the
+	// SPROUT_PLATFORM_URL env var (injected by the operator or the
+	// workspace launch config); empty string means the field is omitted
+	// (same pattern as other optional fields), and the editor keeps its
+	// current relative-exit behavior.
+	PlatformURL string `json:"platformURL,omitempty"`
 }
 
 // UpdateInfo tells the frontend a newer release is available. It is a
@@ -98,6 +110,10 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		Update:       updatePayload(),
 		SharedMode:   ws.IsSharedMode(),
 		Sync:         computeBootstrapSync(r.Context(), ws.getWorkspaceRootForRequest(r)),
+		// SP-016 P0.3: absolute platform base for the editor's account-surface
+		// exits. Empty (env unset) → the omitempty tag drops the field and
+		// the editor keeps its current relative-exit behavior.
+		PlatformURL: os.Getenv("SPROUT_PLATFORM_URL"),
 	}
 	writeJSON(w, http.StatusOK, config)
 }

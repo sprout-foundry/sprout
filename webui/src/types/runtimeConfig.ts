@@ -93,4 +93,10 @@ export interface RuntimeConfig {
    * null when the daemon could not determine git state; the frontend can
    * always re-fetch the live state from GET /api/sync. */
   sync?: GitSyncReport | null;
+
+  /** Absolute base URL of the platform web UI (SP-016 P0.3), served by the
+   * daemon when SPROUT_PLATFORM_URL is set in the daemon's env, or by the
+   * platform in cloud mode. Undefined when the host cannot know it — the
+   * editor's account-surface exits then keep their relative URLs. */
+  platformURL?: string;
 }

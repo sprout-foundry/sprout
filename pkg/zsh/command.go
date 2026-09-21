@@ -71,7 +71,13 @@ var allowedCommands = map[string]bool{
 	"hostname": true,
 
 	// Network info (read-only)
+	// curl/wget are here deliberately: this path only fires on text the
+	// user typed at the sprout prompt, so the user is the approval. It
+	// stays out of band of SecurityPolicy/risk-profile gates, which exist
+	// to constrain agent-initiated commands, not human-initiated ones.
 	"ping":     true,
+	"curl":     true,
+	"wget":     true,
 	"nslookup": true,
 	"dig":      true,
 

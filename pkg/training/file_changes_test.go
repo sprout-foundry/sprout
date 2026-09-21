@@ -442,9 +442,15 @@ func TestExportFileChanges_CustomMaxSize(t *testing.T) {
 		bigOriginal, bigUpdated)
 
 	outPath := filepath.Join(t.TempDir(), "out.jsonl")
+	// discoverChangeDirs also scans the user's home dir and the cwd. Exclude
+	// both so real .sprout/changes data on dev machines cannot pollute the
+	// exported count (CI runners are clean, dev machines are not).
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
 	result, err := ExportFileChanges(FileChangeExportOptions{
-		Output:  outPath,
-		MaxSize: 100, // content is 200 chars, should be filtered
+		Output:       outPath,
+		MaxSize:      100, // content is 200 chars, should be filtered
+		ExcludePaths: []string{home, cwd},
 	})
 	if err != nil {
 		t.Fatalf("ExportFileChanges failed: %v", err)

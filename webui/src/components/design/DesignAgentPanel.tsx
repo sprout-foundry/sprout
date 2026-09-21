@@ -1,44 +1,34 @@
 /**
- * DesignAgentPanel — agent presence in Design mode (SP-140-6 §6f).
+ * DesignAgentPanel — the agent chat inside Design mode's side column
+ * (SP-140-6 §6f).
  *
- * A collapsible panel on the design surface that renders the same Chat
- * component the Code shell mounts, fed by the same `chat.chatProps` payload
- * `WorkspaceShellProps` already passes to every shell — no second query
- * client, no new send path. This is what makes Design mode a place where the
- * loop can be *directed*: critique rounds, "build this screen from the
- * brief", and sync adoption become dispatchable without leaving the mode.
+ * Renders the same Chat component the Code shell mounts, fed by the same
+ * `chat.chatProps` payload `WorkspaceShellProps` already passes to every
+ * shell — no second query client, no new send path. This is what makes
+ * Design mode a place where the loop can be *directed*: critique rounds,
+ * "build this screen from the brief", and sync adoption become dispatchable
+ * without leaving the mode.
  *
- * Prefill ("Ask the designer", §6c remedy rows, §6g adopt) fills the chat
- * input through the controlled `onInputChange` — it never auto-sends.
+ * Visibility belongs to the host (DesignSideColumn's tab strip); this
+ * component is just the chat plus the prefill handoff. Prefill (remedy
+ * rows, §6g adopt) fills the chat input through the controlled
+ * `onInputChange` — it never auto-sends.
  */
 
-import { MessageSquare, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 import type { ComponentProps } from 'react';
+import { useEffect, useRef } from 'react';
 import Chat from '../ChatView';
 
 export interface DesignAgentPanelProps {
   /** The shell's chat payload — the Code shell's own chat props object. */
   chatProps: ComponentProps<typeof Chat>;
-  /** Whether the panel is expanded. */
-  open: boolean;
-  onToggle: () => void;
   /** A prompt to seed the input with. Consumed once, never sent. */
   prefill?: string | null;
   /** Fired after the prefill landed in the input. */
   onPrefillConsumed?: () => void;
-  /** Fires when a prompt is actually sent (hosts may close the prefill). */
-  showHeader?: boolean;
 }
 
-export default function DesignAgentPanel({
-  chatProps,
-  open,
-  onToggle,
-  prefill,
-  onPrefillConsumed,
-  showHeader = true,
-}: DesignAgentPanelProps) {
+export default function DesignAgentPanel({ chatProps, prefill, onPrefillConsumed }: DesignAgentPanelProps) {
   // Seed the input when a prefill arrives — exactly once per distinct
   // prefill string. The ref guard is load-bearing: chatProps and
   // onPrefillConsumed change identity every shell render, so effect deps
@@ -51,46 +41,17 @@ export default function DesignAgentPanel({
   consumedCallbackRef.current = onPrefillConsumed;
 
   useEffect(() => {
-    if (!open || !prefill || consumedRef.current === prefill) return;
+    if (!prefill || consumedRef.current === prefill) return;
     consumedRef.current = prefill;
     chatPropsRef.current.onInputChange?.(prefill);
     consumedCallbackRef.current?.();
-  }, [open, prefill]);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="design-agent-fab"
-        data-testid="design-agent-open"
-        onClick={onToggle}
-        aria-label="Ask the designer"
-        title="Ask the designer"
-      >
-        <MessageSquare size={16} />
-      </button>
-    );
-  }
+  }, [prefill]);
 
   return (
-    <aside className="design-agent-panel" data-testid="design-agent-panel" aria-label="Agent panel">
-      {showHeader && (
-        <div className="design-agent-header">
-          <span className="design-agent-title">Ask the designer</span>
-          <button
-            type="button"
-            className="design-agent-close"
-            data-testid="design-agent-close"
-            onClick={onToggle}
-            aria-label="Close agent panel"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+    <div className="design-agent-panel" data-testid="design-agent-panel" aria-label="Agent panel">
       <div className="design-agent-chat" data-testid="design-agent-chat">
-        <Chat {...chatProps} />
+        <Chat {...chatProps} inputPlaceholder="Describe a change, or ask about the design tree..." />
       </div>
-    </aside>
+    </div>
   );
 }

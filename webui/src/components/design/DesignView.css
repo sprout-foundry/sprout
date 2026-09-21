@@ -60,17 +60,14 @@
 }
 
 .design-view-detail {
-  flex: 0 0 280px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: var(--space-3);
-  border-left: 1px solid var(--border-default);
   background: var(--bg-secondary);
-  transition:
-    flex-basis 0.18s ease,
-    opacity 0.18s ease;
 }
 
 /* Detail pane body: a column that always fills the pane. Without this the
@@ -82,17 +79,6 @@
   display: flex;
   flex-direction: column;
   flex: 1 0 auto;
-}
-
-/* Nothing selected: the pane yields its width to the canvas instead of
-   showing a static "select something" stub. Content stays mounted (the
-   pane contract and its data-selected wiring are test-observable). */
-.design-view-detail[data-idle='true'] {
-  flex-basis: 0px;
-  padding: 0;
-  border-left-width: 0;
-  opacity: 0;
-  overflow: hidden;
 }
 
 .design-rail-heading,
@@ -1218,8 +1204,8 @@
  * Agent panel (SP-140-6 §6f) — agent presence inside the Design shell.
  * --------------------------------------------------------------------------- */
 
-/* The shell's body becomes a row: the surface grows, the panel is a fixed
- * side column. Only active while Design mode's shell is mounted. */
+/* The shell's body becomes a row: the surface grows, the side column is a
+ * fixed side column. Only active while Design mode's shell is mounted. */
 .main-content.design-shell {
   display: flex;
   flex-direction: column;
@@ -1236,41 +1222,74 @@
   min-width: 0;
 }
 
+/* ---------------------------------------------------------------------------
+ * The side column (§6f rework): ONE right column, Details | Agent tabs.
+ * Replaces the old docked detail pane + always-open agent panel (four
+ * columns with the sidebar; the canvas squeezed in the middle).
+ * ------------------------------------------------------------------------- */
+
+.design-side-column {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 min(420px, 36vw);
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+}
+
+.design-side-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.design-side-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+}
+
+.design-side-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.design-side-tab.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.design-side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.design-side-body[hidden] {
+  display: none;
+}
+
+/* The old agent-panel styles (docked column + FAB + mobile overlay) are
+ * gone with the always-open panel; the chat fills the Agent tab body. */
 .design-agent-panel {
   display: flex;
   flex-direction: column;
-  width: min(420px, 40vw);
-  border-left: 1px solid var(--border-default);
-  background: var(--bg-primary);
+  flex: 1;
   min-height: 0;
-}
-
-.design-agent-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-xs, 4px) var(--space-sm, 8px);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.design-agent-title {
-  font-size: var(--text-sm, 12px);
-  color: var(--text-secondary);
-}
-
-.design-agent-close {
-  display: inline-flex;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 2px;
-  border-radius: var(--radius-sm, 4px);
-}
-
-.design-agent-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary, inherit);
+  background: var(--bg-primary);
 }
 
 .design-agent-chat {
@@ -1285,33 +1304,15 @@
   min-height: 0;
 }
 
-/* Collapsed: the ask-the-designer affordance. */
-.design-agent-fab {
-  position: absolute;
-  right: var(--space-md, 12px);
-  bottom: var(--space-md, 12px);
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--border-default);
-  background: var(--bg-primary);
+.design-agent-absent {
+  padding: var(--space-3);
+  font-size: var(--text-sm, 12px);
   color: var(--text-secondary);
-  cursor: pointer;
-  box-shadow: var(--shadow-float);
 }
 
-.design-agent-fab:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary, inherit);
-}
-
-/* Mobile: the panel overlays the surface instead of squeezing it. */
+/* Mobile: the column overlays the surface instead of squeezing it. */
 @media (max-width: 768px) {
-  .design-agent-panel {
+  .design-side-column {
     position: fixed;
     inset: 0 0 0 auto;
     width: min(92vw, 420px);

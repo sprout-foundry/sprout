@@ -49,7 +49,6 @@ export interface WorkspaceShellDesign {
   onTabChange: (tab: DesignTab) => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
 }
-
 /** Git state the Code shell's status bar shows. */
 export interface WorkspaceShellGit {
   gitBranches: GitBranchesState;

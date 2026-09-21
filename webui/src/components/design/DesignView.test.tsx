@@ -53,6 +53,12 @@ vi.mock('../../services/api/designApi', async (importOriginal) => {
   return { ...actual, listAssets: vi.fn().mockResolvedValue(inventory) };
 });
 
+// The Agent tab mounts the real ChatView (heavy: Virtuoso, contexts);
+// these tests only assert the payload handoff, so mock it.
+vi.mock('../ChatView', () => ({
+  default: () => <div data-testid="mock-chat" />,
+}));
+
 /**
  * Renders DesignView inside the workspace provider (the app's composition).
  * Returns a `rerenderTab` helper to switch the provider's section (the
@@ -209,7 +215,7 @@ describe('DesignView shell', () => {
     // idle rather than showing a flows asset on the Screens tab.
     rerenderTab('screens');
     expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', '');
-    expect(screen.getByTestId('design-detail-pane')).toHaveAttribute('data-idle', 'true');
+    expect(screen.getByTestId('design-side-panel-details')).toHaveAttribute('data-idle', 'true');
   });
 });
 
@@ -230,5 +236,24 @@ describe('DesignView resolution flow wiring (SP-140-4 §4d)', () => {
     expect(section.getAttribute('data-target')).toBe('design/flows/sign-up.mmd');
     // The shell's readFn seam reaches the pane's reader.
     await waitFor(() => expect(readFn).toHaveBeenCalled());
+  });
+});
+
+describe('DesignView side column (§6f rework: Details | Agent tabs)', () => {
+  it('selecting an asset flips the side column to Details', async () => {
+    const { selectFromSidebar } = renderWorkspace();
+
+    // Start on the Agent tab (as after a prefill) — the selection should
+    // bring Details back.
+    fireEvent.click(screen.getByTestId('design-side-tab-agent'));
+    expect(screen.getByTestId('design-side-column')).toHaveAttribute('data-tab', 'agent');
+
+    selectFromSidebar('flows/sign-up.mmd');
+    expect(screen.getByTestId('design-side-column')).toHaveAttribute('data-tab', 'details');
+  });
+
+  it('passes the chat payload through to the Agent tab', () => {
+    renderWorkspace({ chatProps: { inputValue: '', onSendMessage: vi.fn(), onInputChange: vi.fn() } });
+    expect(screen.getByTestId('design-side-panel-agent')).toBeInTheDocument();
   });
 });

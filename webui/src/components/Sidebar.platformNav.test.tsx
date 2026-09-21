@@ -18,12 +18,18 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 // Mocks — MUST be set up BEFORE importing Sidebar or PlatformNavContext
 // ---------------------------------------------------------------------------
 
-// Cloud nav items matching bootstrapAdapter.ts
+// Cloud nav items matching bootstrapAdapter.ts. SP-016 P0.2: the platform
+// serves external: true on every nav item — the rail keys off that explicit
+// flag instead of the pluginViews id-match fork (SP016-P0.4).
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
-  { id: 'tasks', label: 'Tasks', href: '/', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
-  { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
+  { id: 'tasks', label: 'Tasks', href: '/', icon: 'list-checks', order: 1, external: true },
+  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2, external: true },
+  { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3, external: true },
 ];
+
+// Mutable so individual tests can exercise non-external items and badges
+// without re-mocking the module.
+let navItems: PlatformNavItem[] = CLOUD_NAV_ITEMS;
 
 // Mock apiAdapter — provides the cloud adapter with nav items
 vi.mock('../services/apiAdapter', () => ({
@@ -41,7 +47,7 @@ vi.mock('../contexts/PlatformNavContext', () => ({
   __esModule: true,
   PlatformNavProvider: ({ children }) => children,
   usePlatformNav: () => ({
-    platformNavItems: CLOUD_NAV_ITEMS,
+    platformNavItems: navItems,
   }),
 }));
 
@@ -229,6 +235,9 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   (window as any).location.href = '';
+  // Reset the mutable nav items so each test starts from the platform
+  // contract shape (external: true on every item).
+  navItems = CLOUD_NAV_ITEMS;
 });
 
 afterEach(() => {
@@ -451,6 +460,105 @@ describe('Sidebar PlatformNav Integration', () => {
       expect(mainTablistIdx >= 0);
       expect(platformNavIdx > mainTablistIdx);
       expect(bottomTablistIdx > platformNavIdx);
+    });
+
+    it('clicking a non-external item switches the view in-editor instead of navigating', () => {
+      const onViewChange = vi.fn();
+      // No `external` flag → in-editor view switch (a registered plugin view
+      // for the same id, if any); top-level navigation must NOT happen.
+      navItems = [
+        { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
+      ];
+
+      act(() => {
+        root.render(
+          createElement(Sidebar, {
+            ...minimalProps,
+            onViewChange,
+          }),
+        );
+      });
+
+      const nav = container.querySelector('nav[aria-label="Platform navigation"]');
+      const tasksBtn = nav!.querySelector('button[aria-label="Tasks"]');
+
+      act(() => {
+        tasksBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(onViewChange).toHaveBeenCalledWith('tasks');
+      expect(window.location.href).toBe('');
+    });
+
+    it('renders a count badge for a positive number item.badge', () => {
+      navItems = [
+        {
+          id: 'tasks',
+          label: 'Tasks',
+          href: '/tasks',
+          icon: 'list-checks',
+          order: 1,
+          external: true,
+          badge: 3,
+        },
+      ];
+
+      act(() => {
+        root.render(createElement(Sidebar, minimalProps));
+      });
+
+      const badge = container.querySelector('[data-testid="rail-badge-tasks"]');
+      expect(badge).not.toBeNull();
+      expect(badge!.textContent).toBe('3');
+      expect(badge!.className).not.toContain('rail-icon-badge-dot');
+    });
+
+    it('renders a dot (no glyph text) for a string item.badge', () => {
+      navItems = [
+        {
+          id: 'billing',
+          label: 'Billing',
+          href: '/account/billing',
+          icon: 'credit-card',
+          order: 2,
+          external: true,
+          badge: 'overage',
+        },
+      ];
+
+      act(() => {
+        root.render(createElement(Sidebar, minimalProps));
+      });
+
+      const badge = container.querySelector('[data-testid="rail-badge-billing"]');
+      expect(badge).not.toBeNull();
+      expect(badge!.textContent).toBe('');
+      expect(badge!.className).toContain('rail-icon-badge-dot');
+      // The string state is conveyed by the aria-label, not the glyph.
+      const billingBtn = container.querySelector('button[aria-label="Billing (overage)"]');
+      expect(billingBtn).not.toBeNull();
+    });
+
+    it('renders no badge when item.badge is absent or zero', () => {
+      navItems = [
+        { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1, external: true },
+        {
+          id: 'billing',
+          label: 'Billing',
+          href: '/account/billing',
+          icon: 'credit-card',
+          order: 2,
+          external: true,
+          badge: 0,
+        },
+      ];
+
+      act(() => {
+        root.render(createElement(Sidebar, minimalProps));
+      });
+
+      expect(container.querySelector('[data-testid="rail-badge-tasks"]')).toBeNull();
+      expect(container.querySelector('[data-testid="rail-badge-billing"]')).toBeNull();
     });
   });
 });

@@ -441,6 +441,43 @@
   background: color-mix(in srgb, var(--brand-active-cyan, #22d3ee) 80%, transparent);
 }
 
+/* ── SP-016 P0.4: nav badge on the rail icon ─────────────────────
+ * Ambient platform signal (pending-task count, billing overage state)
+ * riding PlatformNavItem.badge. The rail button is position:relative,
+ * so the badge pins to the top-right of the 36px hit area. Number
+ * badges render as a small count pill; string badges (e.g. "overage")
+ * render as a dot — the string is conveyed by the title/aria-label,
+ * not the glyph. Same brand token as the active indicator. */
+.sidebar .rail-icon .rail-icon-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--brand-active-cyan, #22d3ee);
+  color: #0b1016;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* String badge: ambient state dot instead of a count pill. */
+.sidebar .rail-icon .rail-icon-badge-dot {
+  min-width: 6px;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border-radius: 50%;
+  top: 5px;
+  right: 5px;
+  background: var(--brand-active-cyan, #22d3ee);
+}
+
 /* ── Platform Nav Divider ───────────────────────────────────── */
 .sidebar .sidebar-icon-rail-divider {
   width: 100%;

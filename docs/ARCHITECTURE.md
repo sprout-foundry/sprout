@@ -33,7 +33,6 @@ The `pkg/` directory contains the core modular components of sprout:
 | `pkg/codereview/` | Code review functionality |
 | `pkg/validation/` | Code validation (gofmt/goimports for Go) |
 | `pkg/security/` | Credential scanning and safety checks |
-| `pkg/spec/` | Specification extraction and scope validation |
 
 ### Configuration & State
 
@@ -84,14 +83,12 @@ The `pkg/` directory contains the core modular components of sprout:
 | Package | Description |
 |---------|-------------|
 | `pkg/prompts/` | Prompt templates |
-| `pkg/text/` | Text processing utilities |
 
 ### Utilities & Infrastructure
 
 | Package | Description |
 |---------|-------------|
 | `pkg/events/` | Event bus system |
-| `pkg/interfaces/` | Common interfaces and abstractions |
 | `pkg/logging/` | Structured logging with process step tracking |
 | `pkg/pythonruntime/` | Python runtime detection and validation |
 | `pkg/types/` | Common type definitions |

@@ -274,10 +274,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&trainFlag, "train", false, "Enable session recording for training data collection (OFF by default; also settable via SPROUT_TRAIN_ENABLED=true)")
 	rootCmd.PersistentFlags().StringVar(&trainEndpoint, "train-endpoint", "", "Training data collection endpoint URL (also settable via SPROUT_TRAIN_ENDPOINT)")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(exportTrainingCmd)
 	rootCmd.AddCommand(commitCmd)

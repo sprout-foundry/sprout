@@ -39,12 +39,6 @@ func RedactConfig(cfg *Config) Config {
 			redacted.Preferences[k] = v
 		}
 	}
-	if cfg.DismissedPrompts != nil {
-		redacted.DismissedPrompts = make(map[string]bool, len(cfg.DismissedPrompts))
-		for k, v := range cfg.DismissedPrompts {
-			redacted.DismissedPrompts[k] = v
-		}
-	}
 
 	// Deep-copy APITimeouts (pointer field)
 	if cfg.APITimeouts != nil {

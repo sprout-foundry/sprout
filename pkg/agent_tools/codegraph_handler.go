@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
@@ -82,6 +83,12 @@ const codegraphRefreshInterval = 30 * time.Second
 // last_indexed timestamp, in the background. Failures are logged but never
 // block the query the caller asked for.
 func triggerCodegraphRefresh() {
+	// Same test-mode gate as openCodegraphStoreHandler: the refresh
+	// goroutine parses through the same gotreesitter tree pool and must
+	// not outlive a test binary that's racing other tests' Release calls.
+	if testing.Testing() {
+		return
+	}
 	codegraphRefreshMu.Lock()
 	if codegraphRefreshRunning || time.Since(codegraphRefreshAt) < codegraphRefreshInterval {
 		codegraphRefreshMu.Unlock()
@@ -298,6 +305,17 @@ func (h *findDeadCodeHandler) Interactive() bool      { return false }
 // --- helpers ---
 
 func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
+	// Test binaries must never spawn the background indexer: under `go
+	// test` the git root resolves to the developer's (or CI's) real
+	// checkout, so a missing .sprout/codegraph.db makes the goroutine
+	// walk the real repo in-process for up to 10 minutes. Beyond wasting
+	// the run, its gotreesitter parses race Tree.Release() from other
+	// tests through the package-level tree pool — an unrelated test's
+	// deferred Release then reports "race detected" and fails the whole
+	// binary (seen on the release workflow's -race run).
+	if testing.Testing() {
+		return nil, nil
+	}
 	gitRoot, err := git.GetGitRootDir()
 	if err != nil {
 		return nil, nil

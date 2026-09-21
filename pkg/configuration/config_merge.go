@@ -140,16 +140,6 @@ func MergeConfig(base, override *Config) *Config {
 		result.ApprovedShellCommandPatterns = merged
 	}
 
-	// Merge DismissedPrompts
-	if len(override.DismissedPrompts) > 0 {
-		if result.DismissedPrompts == nil {
-			result.DismissedPrompts = make(map[string]bool)
-		}
-		for k, v := range override.DismissedPrompts {
-			result.DismissedPrompts[k] = v
-		}
-	}
-
 	// Merge APITimeouts
 	if override.APITimeouts != nil {
 		if result.APITimeouts == nil {

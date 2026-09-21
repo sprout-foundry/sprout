@@ -314,3 +314,122 @@ func TestFooterTooltip_ShowHideWrappedInSaveRestore(t *testing.T) {
 		t.Fatalf("tooltip Hide must wrap erase writes in DECSC/DECRC; output=%q", out)
 	}
 }
+
+// TestResize_BottomAnchoredTermuxSkipsOldTopClear pins the Termux-family
+// resize behavior: Termux's TerminalBuffer.resize anchors content to the
+// bottom and pulls rows down out of the transcript on a grow, so the rows
+// at the OLD footer top hold freshly pulled-down conversation lines, not a
+// stranded footer. The clear window must start at the NEW-geometry top
+// only — clearing the old top too eats visible history on every
+// soft-keyboard resize (the "paint lines wrong" symptom native and over
+// ssh). Termux is detected at runtime via its DA2 fingerprint; the probe
+// result is injected here with the test hook.
+func TestResize_BottomAnchoredTermuxSkipsOldTopClear(t *testing.T) {
+	probeOverride = func() bool { return true }
+	defer func() { probeOverride = nil; resetFlavorCache() }()
+
+	var buf bytes.Buffer
+	f := &StatusFooter{
+		w:            &buf,
+		isTTY:        true,
+		active:       true,
+		steerCursor:  -1,
+		fd:           -1,
+		sizeOverride: &terminalSizeOverride{cols: 80, rows: 24},
+	}
+
+	f.mu.Lock()
+	f.showKeymapHint = true
+	f.mu.Unlock()
+
+	LockOutput()
+	f.drawLocked()
+	UnlockOutput()
+
+	// Grow to 40 rows — same geometry change as the top-anchored pin above.
+	f.mu.Lock()
+	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 40}
+	f.mu.Unlock()
+
+	buf.Reset()
+	f.Resize()
+
+	out := buf.String()
+	re := regexp.MustCompile(`\x1b\[(\d+);1H\x1b\[J`)
+	m := re.FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("Resize did not emit a clear-to-end window; output=%q", out)
+	}
+	clearTop, _ := strconv.Atoi(m[1])
+	// New footer top at 40 rows, reserved=3, no width change → overflow=0:
+	// 40-3-0+1 = 38. The old-top (22) window must NOT be cleared — under
+	// Termux's reflow those rows hold pulled-down conversation content.
+	if clearTop != 38 {
+		t.Fatalf("bottom-anchored clear window starts at row %d; want exactly 38 (new footer top only); output=%q", clearTop, out)
+	}
+}
+
+// TestResize_TopAnchoredKeepsUnionClear pins the default: without a
+// bottom-anchored fingerprint the union (old-top vs new-top) clear window
+// from 974df516e is preserved for xterm-family terminals, where a grow
+// leaves the stranded old footer at its OLD absolute position mid-screen.
+func TestResize_TopAnchoredKeepsUnionClear(t *testing.T) {
+	probeOverride = func() bool { return false }
+	defer func() { probeOverride = nil; resetFlavorCache() }()
+
+	var buf bytes.Buffer
+	f := &StatusFooter{
+		w:            &buf,
+		isTTY:        true,
+		active:       true,
+		steerCursor:  -1,
+		fd:           -1,
+		sizeOverride: &terminalSizeOverride{cols: 80, rows: 24},
+	}
+
+	f.mu.Lock()
+	f.showKeymapHint = true
+	f.mu.Unlock()
+
+	LockOutput()
+	f.drawLocked()
+	UnlockOutput()
+
+	f.mu.Lock()
+	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 40}
+	f.mu.Unlock()
+
+	buf.Reset()
+	f.Resize()
+
+	out := buf.String()
+	re := regexp.MustCompile(`\x1b\[(\d+);1H\x1b\[J`)
+	m := re.FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("Resize did not emit a clear-to-end window; output=%q", out)
+	}
+	clearTop, _ := strconv.Atoi(m[1])
+	if clearTop != 22 {
+		t.Fatalf("top-anchored union clear window starts at row %d; want exactly 22 (old footer top); output=%q", clearTop, out)
+	}
+}
+
+// TestIsTermuxDA2 pins the DA2 fingerprint matching.
+func TestIsTermuxDA2(t *testing.T) {
+	cases := []struct {
+		reply string
+		want  bool
+	}{
+		{"\033[>41;320;0c", true},  // Termux (terminal-emulator source)
+		{"\033[>41;379;0c", false}, // xterm patch 379
+		{"\033[>0;95;0c", false},   // iTerm2
+		{"\033[>1;10;0c", false},   // screen
+		{"\033[?1;2c", false},      // DA1, not DA2
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := isTermuxDA2(tc.reply); got != tc.want {
+			t.Errorf("isTermuxDA2(%q) = %v, want %v", tc.reply, got, tc.want)
+		}
+	}
+}

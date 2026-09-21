@@ -2,6 +2,16 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.8] - 2026-09-20
+
+- fix(console): move probeReplyTerminator into unix-only file (8dc41e53f)
+- fix(console): stop DA2 probe closing borrowed stdin fd; probe at footer start (844cac539)
+- fix(console): check term.Restore error in DA2 probe defer (11f30a14c)
+- docs: dedupe v0.18.7 changelog section after merge (ac773df3a)
+- Merge remote-tracking branch 'origin/main' (658b90d76)
+- fix(console): bottom-anchored resize detection for Termux footer clears (853320b89)
+- docs: Update changelog for v0.18.7 (3915c89d4)
+
 ## [v0.18.7] - 2026-09-19
 
 - docs: Update changelog for v0.18.7 (220b05e94)
@@ -25,26 +35,9 @@ All notable changes to Sprout will be documented in this file.
 - test(providers): ai-worker big-prompt budget regression coverage (9a419c71c)
 - fix(providers): proportional output taper and 16K reasoning-aware floor (0b43b97d6)
 - fix(providers): stop 512-token decapitation of big-context agent turns (2394e499f)
-
-## [v0.18.7] - 2026-09-19
-
-- fix(ci): pin golangci-lint v2.13.2 for Go 1.26 toolchain (02d475507)
-- test(agent_api): force distinct mtime in vision TTL expiry fixture (126bccc5a)
-- Merge origin/main into main (213806d80)
-- SP-140-5: workspace modes — Code and Design as peers (switcher, rails, shells) (#81) (5c480d870)
-- fix(ci): move errcheck exclusion to linters.exclusions.rules (36fc48854)
-- SP-140: design workspace backend — formats, tools, visual loop, sync (#82) (20a89b2bd)
-- fix(providers): monotone budget curve via capped bias reserve (b0c783d0c)
-- docs(roadmap): add SP-141 pkg/agent package decomposition (plan-only) (d961aff98)
-- chore: archive CHANGELOG releases prior to v0.17.21 (446297acc)
-- fix(configuration): drop panic-prone deprecated RegisterMigration wrapper (6a55c3239)
-- refactor: unify review important-comment keyword list in pkg/codereview (33f372e06)
-- refactor(webui): split useWebSocketEventHandler into domain modules (0c78aeb63)
-- feat(ci): add golangci-lint with new-code-only gate (099d78f22)
-- chore: remove suspended desktop CI workflows, fix ELECTRON.md reference (5552d28c1)
-- test(providers): ai-worker big-prompt budget regression coverage (9a419c71c)
-- fix(providers): proportional output taper and 16K reasoning-aware floor (0b43b97d6)
-- fix(providers): stop 512-token decapitation of big-context agent turns (2394e499f)
+- docs: Update changelog for v0.18.7 (220b05e94)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (7364ab7a6)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (facb1311d)
 
 ## [v0.18.5] - 2026-09-18
 

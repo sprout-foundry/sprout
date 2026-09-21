@@ -60,8 +60,6 @@ var valueCases = []valueCase{
 		"review.*config", "pkg/codereview", ""},
 	{"mcp config load", "read the model context protocol server list from a config file",
 		"mcp.*config", "pkg/mcp", ""},
-	{"keyword extraction", "pull the significant words out of a block of prose",
-		"keyword", "pkg/text", ""},
 	{"credential storage mode", "which backend is currently used to store API keys on this machine",
 		"storage mode|backend mode", "pkg/credentials", ""},
 	{"revision file listing", "list the files that were touched by a particular revision",

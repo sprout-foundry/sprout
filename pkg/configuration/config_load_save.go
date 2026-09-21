@@ -96,9 +96,6 @@ func Load() (*Config, error) {
 	if config.MCP.Servers == nil {
 		config.MCP.Servers = make(map[string]mcp.MCPServerConfig)
 	}
-	if config.DismissedPrompts == nil {
-		config.DismissedPrompts = make(map[string]bool)
-	}
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)
 	}

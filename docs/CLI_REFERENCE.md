@@ -326,8 +326,8 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 | Command | Description |
 |---------|-------------|
-| `/models [select\|<id>]` | List/select models (e.g., `/models select` for interactive dropdown) |
-| `/providers [select\|<name>]` | Switch providers (e.g., `/providers ollama`) |
+| `/model [select\|<id>]` | List/select models (e.g., `/model select` for interactive dropdown) |
+| `/provider [select\|<name>]` | Switch providers (e.g., `/provider ollama`) |
 
 ### Agent Features
 
@@ -343,11 +343,9 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 | Command | Description |
 |---------|-------------|
-| `/skills` | List and load agent skills |
-| `/export` | Export training data |
-| `/plan [idea]` | Start planning mode |
+| `/skill` | Install, update, remove, list, enable, or disable skills |
+| `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection |
 | `/custom` | Manage custom providers |
-| `/diag` | Show diagnostic information |
 | `/risk-profile [name\|clear]` | Show or change the shell-command risk profile mid-session. With no args, lists profiles and marks the active one. See [SECURITY.md](SECURITY.md#risk-profiles). |
 
 ### Help
@@ -395,21 +393,14 @@ sprout agent --persona computer_user "open the browser and navigate to example.c
 
 The memory system persists learned information across all conversations. Memories are markdown files stored in `~/.config/sprout/memories/` and automatically loaded into the system prompt.
 
-### Memory Commands
+### Memory Tool
 
-| Command | Description |
-|---------|-------------|
-| `add_memory` | Save new memories with descriptive names |
-| `read_memory` | Read a specific memory |
-| `list_memories` | List all saved memories |
-| `delete_memory` | Delete a memory |
+The agent manages memories through the `manage_memory` tool (operations: `add`, `read`, `list`, `delete`, `search`). Ask the agent in natural language and it calls the tool for you:
 
-**Usage in Interactive Mode:**
 ```
-sprout> add_memory "git-safety" "Never force-push to shared branches"
-sprout> list_memories
-sprout> read_memory "git-safety"
-sprout> delete_memory "git-safety"
+sprout> remember that we never force-push to shared branches
+sprout> what memories do you have about git workflow?
+sprout> delete the git-safety memory
 ```
 
 **Use Cases:**
@@ -494,7 +485,8 @@ Thumbs.db
 
 | Tool | Description |
 |------|-------------|
-| `add_memory` / `read_memory` / `list_memories` / `delete_memory` | Persistent memory system |
+| `manage_memory` | Persistent memory system (add/read/list/delete/search operations) |
+| `search_memories` / `save_memory` | Memory search and save |
 | `list_skills` / `activate_skill` | Skill management for loading instruction bundles |
 
 ### Change History

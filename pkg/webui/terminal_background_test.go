@@ -17,7 +17,7 @@ func TestExecuteCommandInBackground_Success(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "echo hello")
 	if err != nil {
@@ -64,7 +64,7 @@ func TestExecuteCommandInBackground_Success(t *testing.T) {
 
 func TestExecuteCommandInBackground_EmptyCommand(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "")
 	if err == nil {
@@ -77,7 +77,7 @@ func TestExecuteCommandInBackground_EmptyCommand(t *testing.T) {
 
 func TestExecuteCommandInBackground_EmptyChatID(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.ExecuteCommandInBackground(context.Background(), "", "echo hello")
 	if err == nil {
@@ -90,7 +90,7 @@ func TestExecuteCommandInBackground_EmptyChatID(t *testing.T) {
 
 func TestExecuteCommandInBackground_CommandTooLong(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	longCommand := strings.Repeat("x", maxCommandLength+1)
 	_, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", longCommand)
@@ -106,7 +106,7 @@ func TestExecuteCommandInBackground_CommandTooLong(t *testing.T) {
 
 func TestGetBackgroundOutput_NotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	_, err := tm.GetBackgroundOutput("nonexistent-session")
 	if err == nil {
@@ -119,7 +119,7 @@ func TestGetBackgroundOutput_NotFound(t *testing.T) {
 
 func TestGetBackgroundOutput_NotBackgroundSession(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Create a regular hidden session (not a background session).
 	session, err := tm.CreateHiddenSession("hidden-regular", "agent", "chat-1")
@@ -143,7 +143,7 @@ func TestGetBackgroundOutput_StripANSI(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "echo hello")
 	if err != nil {
@@ -250,7 +250,7 @@ func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Create a regular hidden session.
 	regularSession, err := tm.CreateHiddenSession("regular-hidden", "agent", "chat-1")
@@ -326,7 +326,7 @@ func TestStopBackgroundSession_Success(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Start a background session with a long-running command.
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "sleep 300")
@@ -355,7 +355,7 @@ func TestStopBackgroundSession_Success(t *testing.T) {
 
 func TestStopBackgroundSession_NotFound(t *testing.T) {
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	err := tm.StopBackgroundSession("nonexistent-session")
 	if err == nil {
@@ -372,7 +372,7 @@ func TestStopBackgroundSession_NotBackgroundSession(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	// Create a regular (non-background) hidden session.
 	_, err := tm.CreateHiddenSession("regular-hidden", "agent", "chat-1")

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -23,6 +24,15 @@ var validSessionID = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
 // session with the requested ID already exists. Callers can use errors.Is to
 // detect this condition for idempotent get-or-create patterns.
 var ErrSessionExists = errors.New("session already exists")
+
+// testSessionCap bounds live PTY sessions when running under a Go test
+// binary. Historical webui tests leaked PTY login shells by the hundreds and
+// froze the machine (three OOM incidents, 2026-09); this cap turns any such
+// leak into a loud test failure at session #65 instead of a dead laptop.
+// Production daemons are unaffected: the check only trips when the process
+// is a `go test` binary (name ends in ".test" — also matched by the
+// ".test.exe" Windows convention used elsewhere in this repo).
+const testSessionCap = 64
 
 func validateSessionID(id string) error {
 	if id == "" {
@@ -110,6 +120,26 @@ func stripEnvVars(env, toStrip []string) []string {
 	return out
 }
 
+// runningUnderGoTest reports whether this process is a Go test binary (or a
+// test that opted in via SPROUT_TEST_SESSION_CAP). See testSessionCap.
+func runningUnderGoTest() bool {
+	if _, forced := os.LookupEnv("SPROUT_TEST_SESSION_CAP"); forced {
+		return true
+	}
+	name := filepath.Base(os.Args[0])
+	return strings.HasSuffix(name, ".test") || strings.HasSuffix(name, ".test.exe")
+}
+
+// checkTestSessionCap refuses new PTY sessions past the test-binary cap.
+// Caller must hold tm.mutex. See testSessionCap for why this exists.
+func (tm *TerminalManager) checkTestSessionCap() error {
+	if !runningUnderGoTest() || len(tm.sessions) < testSessionCap {
+		return nil
+	}
+	return fmt.Errorf("test session cap (%d) reached: a test is leaking PTY sessions — "+
+		"close sessions with t.Cleanup (newTestTerminalManager) before creating more", testSessionCap)
+}
+
 // CreateSession creates a new terminal session with PTY support.
 // The shell process runs for the lifetime of the session and persists across
 // WebSocket disconnections. On reconnect, the ring buffer replays recent output.
@@ -124,6 +154,9 @@ func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...stri
 
 	if _, exists := tm.sessions[sessionID]; exists {
 		return nil, fmt.Errorf("%w: %s", ErrSessionExists, sessionID)
+	}
+	if err := tm.checkTestSessionCap(); err != nil {
+		return nil, err
 	}
 
 	var override string
@@ -403,6 +436,14 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 	}
 
 	// Prefer the user's login shell, then fall back to common choices.
+	// SPROUT_TEST_SHELL overrides the whole resolution in test binaries: a
+	// leaked PTY session under `go test` then costs one ~2MB /bin/sh instead
+	// of a login zsh that sources the user's rc files (nvm etc., hundreds of
+	// MB each) — the difference between a nuisance and a machine freeze.
+	// (Wired by pkg/webui's TestMain; settable per-test via t.Setenv.)
+	if testShell := strings.TrimSpace(os.Getenv("SPROUT_TEST_SHELL")); testShell != "" {
+		return testShell, nil, nil
+	}
 	candidates := []string{os.Getenv("SHELL")}
 	for _, s := range []string{"bash", "zsh", "sh", "fish"} {
 		candidates = append(candidates, s)
@@ -579,6 +620,9 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 	// Check for duplicate session ID while holding the lock.
 	if _, exists := tm.sessions[id]; exists {
 		return nil, fmt.Errorf("%w: %s", ErrSessionExists, id)
+	}
+	if err := tm.checkTestSessionCap(); err != nil {
+		return nil, err
 	}
 
 	// Panic recovery: if option application panics, clean up the PTY goroutine

@@ -4,7 +4,7 @@ import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import './ChatMetricsStrip.css';
 
 /**
- * Per-chat LLM metrics strip, rendered inside the chat shell above the
+ * Per-chat LLM metrics strip, rendered inside the chat shell under the
  * input (SP-053-3a content, relocated from the app-wide footers).
  *
  * Why inside the chat: the metrics describe THIS chat's session —
@@ -78,9 +78,11 @@ export function ChatMetricsStrip({ stats, isConnected, onModelClick }: ChatMetri
   const providerDisplay = getProviderName(provider) || provider;
   const persona = typeof stats?.persona === 'string' ? stats.persona : '';
   const totalTokens = Number(stats?.total_tokens ?? NaN);
-  const contextPercent = Number(stats?.context_usage_percent ?? NaN);
-  const currentCtx = Number(stats?.current_context_tokens ?? NaN);
+  // Context pair: `context_tokens` comes from the WS metrics_update payload;
+  // `current_context_tokens` is the /api/stats spelling of the same value.
+  const currentCtx = Number(stats?.context_tokens ?? stats?.current_context_tokens ?? NaN);
   const maxCtx = Number(stats?.max_context_tokens ?? NaN);
+  const contextPercent = Number(stats?.context_usage_percent ?? NaN);
   const totalCost = Number(stats?.total_cost ?? NaN);
   const connectionPhase =
     (stats?.connection_phase as string | undefined) || (isConnected ? 'connected' : 'disconnected');
@@ -125,12 +127,13 @@ export function ChatMetricsStrip({ stats, isConnected, onModelClick }: ChatMetri
     );
   }
 
-  const showModel = (provider || model) && (isConnected === false || (persona && persona !== 'orchestrator'));
-  if (showModel) {
-    const modelLabel = model || providerDisplay;
-    const tooltip = onModelClick
-      ? `${providerDisplay} · ${model} — click to change model`
-      : `${providerDisplay} · ${model}`;
+  // Provider/model always render when known — this strip is the only
+  // surface showing them since the app-wide footers were retired, so the
+  // old "only when disconnected / subagent" gating would hide them in the
+  // common single-chat, orchestrator case.
+  if (provider || model) {
+    const label = provider && model ? `${providerDisplay} : ${model}` : model || providerDisplay;
+    const tooltip = onModelClick ? `${label} — click to change model` : label;
     segments.push(
       <span key="provider" className="chat-metrics-item chat-metrics-model" title={tooltip}>
         <ProviderIcon provider={provider} />
@@ -139,27 +142,29 @@ export function ChatMetricsStrip({ stats, isConnected, onModelClick }: ChatMetri
             type="button"
             className="chat-metrics-model-button"
             onClick={() => onModelClick(provider)}
-            aria-label={`Change model (currently ${modelLabel})`}
+            aria-label={`Change model (currently ${label})`}
           >
-            {modelLabel}
+            {label}
           </button>
         ) : (
-          <span>{modelLabel}</span>
+          <span>{label}</span>
         )}
       </span>,
     );
   }
 
-  if (Number.isFinite(contextPercent)) {
-    segments.push(
-      <span key="ctxpct" className="chat-metrics-item" title="Context usage">
-        {contextPercent.toFixed(1)}%
-      </span>,
-    );
-  } else if (Number.isFinite(currentCtx) && Number.isFinite(maxCtx) && maxCtx > 0) {
+  // Context pair first (e.g. 2.1k/128k ctx); percent is the fallback when
+  // the pair is incomplete.
+  if (Number.isFinite(currentCtx) && Number.isFinite(maxCtx) && maxCtx > 0) {
     segments.push(
       <span key="ctx" className="chat-metrics-item" title="Context usage">
         {formatTokens(currentCtx)}/{formatTokens(maxCtx)} ctx
+      </span>,
+    );
+  } else if (Number.isFinite(contextPercent)) {
+    segments.push(
+      <span key="ctxpct" className="chat-metrics-item" title="Context usage">
+        {contextPercent.toFixed(1)}%
       </span>,
     );
   }

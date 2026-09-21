@@ -11,7 +11,6 @@ import ErrorBoundary from './ErrorBoundary';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
-import { useDesignPresence } from './design/useDesignPresence';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 
 // Route-level lazy-loaded panels — split out of the main bundle so the
@@ -145,12 +144,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // the mobile branch below). Desktop keeps the panes topology
   // unchanged.
   const isMobileViewport = useIsMobileViewport();
-  // SP-140-3 §3a: defense-in-depth for the design route. The Sidebar nav item
-  // is gated on design/ presence, but this hook re-checks it here so a
-  // currentView mutated through any other path (devtools, a future URL route,
-  // a bug in onViewChange) can never reveal DesignView in a workspace without
-  // a design tree. `loading` keeps the branch from deciding on a stale false.
-  const { present: designPresent, loading: designLoading } = useDesignPresence();
+  // SP-140-3 §3a's design route guard is gone: Design mode is always offered
+  // and an empty tree renders the surface's onboarding empty state, so the
+  // editor neither probes design presence nor hosts a design view — the
+  // surface is a peer mode shell (see the note near the view switch).
   const {
     panes,
     paneLayout,
@@ -671,14 +668,11 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex]);
 
-  // SP-140-3 §3a: if a design view is requested but the workspace has no
-  // design/ tree, bounce back to chat. Runs as an effect (never during
-  // render) so StrictMode's double-invoke can't fire onViewChange twice
-  // concurrently, and so the presence probe's loading state can settle first.
-  React.useEffect(() => {
-    if (currentView !== 'design' || designLoading || designPresent) return;
-    onViewChange?.('chat');
-  }, [currentView, designLoading, designPresent, onViewChange]);
+  // SP-140-3 §3a is superseded by the Design empty state: a `design` view no
+  // longer bounces to chat when the tree is absent — the empty workspace gets
+  // the onboarding surface, which is how the tree comes to exist. DesignView
+  // itself never renders here anymore: it lives inside the Design surface
+  // (a peer mode shell), which handles the empty tree directly.
 
   const { pluginViews } = usePlugins();
 

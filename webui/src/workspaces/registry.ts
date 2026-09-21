@@ -32,10 +32,10 @@ export type WorkspaceModeId = 'code' | 'design' | (string & {}); // eslint-disab
 
 export interface WorkspaceModeContext {
   /**
-   * Whether the workspace root contains a `design/` directory. A mode whose
-   * surface requires specific workspace content declares that here rather than
-   * letting the shell guess (the design surface is meaningless without a
-   * design tree).
+   * Whether the workspace root contains a `design/` directory. No longer
+   * gates availability (Design is always offered; its surface owns the
+   * empty state), but kept so the switcher and surface can still observe
+   * tree presence.
    */
   hasDesignTree: boolean;
 }
@@ -72,8 +72,11 @@ export const DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
  * Mode registry.
  *
  * `code` is always available: it is the baseline experience over any root.
- * `design` requires a design tree, because its surface has nothing to show
- * without one.
+ * `design` is also always offered: an empty workspace gets the Design empty
+ * state (onboarding cards + the agent chat), which is how a `design/` tree
+ * comes to exist in the first place. The surface itself decides what an
+ * absent tree looks like; hiding the mode only meant the tree could never be
+ * started from the UI.
  */
 export const WORKSPACE_MODES: WorkspaceMode[] = [
   {
@@ -89,7 +92,7 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [
     label: 'Design',
     icon: Palette,
     hint: 'Flows, screens, tokens',
-    available: (ctx) => ctx.hasDesignTree,
+    available: () => true,
     Shell: DesignShell,
   },
 ];

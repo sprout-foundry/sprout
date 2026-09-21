@@ -132,18 +132,27 @@ func TestReadTTYReplyReturnsOnTerminator(t *testing.T) {
 
 // TestReadTTYReplyTimesOutSilent covers the deadline path: with no
 // reply ever written, the reader returns (not hangs) after the timeout
-// with whatever it has — empty.
+// with whatever it has — empty. Run back-to-back: poll can report the
+// fd with no event bits at the timeout boundary (a rare kernel-timing
+// race), and the read must stay bounded on every pass — a single pass
+// would not shake that race out.
 func TestReadTTYReplyTimesOutSilent(t *testing.T) {
 	_, slave := openRawPty(t)
 
-	start := time.Now()
-	reply := readTTYReply(int(slave.Fd()), 100*time.Millisecond)
-	elapsed := time.Since(start)
+	const timeout = 60 * time.Millisecond
+	for i := 0; i < 12; i++ {
+		start := time.Now()
+		reply := readTTYReply(int(slave.Fd()), timeout)
+		elapsed := time.Since(start)
 
-	if len(reply) != 0 {
-		t.Fatalf("readTTYReply = %q on silent fd, want empty", reply)
-	}
-	if elapsed < 90*time.Millisecond || elapsed > 2*time.Second {
-		t.Fatalf("readTTYReply returned after %v, want ~100ms timeout", elapsed)
+		if len(reply) != 0 {
+			t.Fatalf("readTTYReply = %q on silent fd, want empty", reply)
+		}
+		if elapsed <= timeout/2 {
+			t.Fatalf("readTTYReply returned after %v, want ~%v deadline wait (early return means the poll loop bailed)", elapsed, timeout)
+		}
+		if elapsed > 3*timeout {
+			t.Fatalf("readTTYReply blocked %v past the deadline; the read must be bounded", elapsed)
+		}
 	}
 }

@@ -467,25 +467,11 @@ func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
 // Validation
 // ---------------------------------------------------------------------------
 
-// isValidEnvVarName returns true if name looks like a valid environment variable
-// name (e.g. "MY_VAR_1"). This is used to validate credential key names in the
-// credential management API to prevent storing under nonsensical keys.
+// isValidEnvVarName delegates to the canonical mcp.IsValidEnvVarName.
+// It gates credential key names in the credential management API to prevent
+// storing under nonsensical keys.
 func isValidEnvVarName(name string) bool {
-	if name == "" || len(name) > 256 {
-		return false
-	}
-	for i, c := range name {
-		if i == 0 {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
-				return false
-			}
-		} else {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-				return false
-			}
-		}
-	}
-	return true
+	return mcp.IsValidEnvVarName(name)
 }
 
 func validateMCPServer(s mcp.MCPServerConfig) error {

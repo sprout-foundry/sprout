@@ -67,6 +67,7 @@ function Chat(props: ChatProps): JSX.Element {
     outputVerbosity = 'default',
     onForkAtBreakpoint,
     isForking = false,
+    inputPlaceholder,
   } = props;
 
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -556,7 +557,7 @@ function Chat(props: ChatProps): JSX.Element {
                   ? 'Configure a provider to start chatting...'
                   : needsHealthCheck && backendReachable === false
                     ? 'Waiting for server connection...'
-                    : 'Ask me anything about your code...'
+                    : (inputPlaceholder ?? 'Ask me anything about your code...')
               }
               multiline={true}
               autoFocus={providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}

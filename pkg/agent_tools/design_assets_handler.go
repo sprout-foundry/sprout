@@ -288,6 +288,20 @@ func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inv
 		})
 		out.BySeverity[f.Severity.String()]++
 	}
+
+	// A design/ directory that yields zero recognized assets is someone
+	// else's folder (exported PSDs, docs, scattered images), not a tree.
+	// Guide the model to inventory-and-ask: the folder's contents are the
+	// user's, and the loop's extend-don't-restructure rule applies double
+	// here. Whole-tree only — a narrowed subtree returning empty is a
+	// filter result, not a foreign-folder verdict.
+	if subtree == "" && formatFilter == "" && len(out.Assets) == 0 && !inv.Manifest.Exists {
+		out.Guidance = "design/ exists but holds nothing in Sprout's tree format (no README manifest, " +
+			"no tokens/, wireframes/, screens/, flows/, brand/, icons/, or feedback/ assets). " +
+			"List the directory's actual contents and ask the user what they are and whether to keep, " +
+			"move, or build around them before writing anything. Never move, rename, overwrite, or " +
+			"delete existing files without the user's explicit go-ahead."
+	}
 	return out
 }
 

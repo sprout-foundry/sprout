@@ -340,6 +340,22 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		tools := a.getMCPTools()
 		return fmt.Sprintf("Refreshed MCP tools. %d tools available.", len(tools)), nil
 
+	case "call":
+		// Invoke one MCP tool: server+tool+arguments, mirroring the schema the
+		// synthetic mcp_tools entry advertises. Routes through the manager so
+		// a not-running or unknown server surfaces as a typed error.
+		server, _ := args["server"].(string)
+		tool, _ := args["tool"].(string)
+		if server == "" || tool == "" {
+			return "", agenterrors.NewInvalidInputError("mcp_tools call requires 'server' and 'tool' parameters", nil)
+		}
+		callArgs, _ := args["arguments"].(map[string]interface{})
+		result, err := a.mcpSub.GetManager().CallTool(ctx, server, tool, callArgs)
+		if err != nil {
+			return "", agenterrors.Wrapf(err, "mcp_tools call %s/%s failed", server, tool)
+		}
+		return formatMCPResult(result), nil
+
 	case "status":
 		servers := a.mcpSub.GetManager().ListServers()
 		var output strings.Builder

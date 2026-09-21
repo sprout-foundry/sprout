@@ -98,6 +98,18 @@ func (m *fileConsentManager) clearAll() {
 	m.grants = make(map[string]fileConsentGrant)
 }
 
+// pathNotExistError reports a read path whose file does not exist. The
+// handler maps it to 404 (absent) rather than 400 (client error) — the webui
+// readAsset contract treats 404 as "no file" and builds empty documents for
+// optional sidecars (§4d feedback).
+type pathNotExistError struct {
+	path string
+}
+
+func (e *pathNotExistError) Error() string {
+	return fmt.Sprintf("path does not exist: %s", e.path)
+}
+
 func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -118,7 +130,10 @@ func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string,
 		resolved, err := filepath.EvalSymlinks(absPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return "", fmt.Errorf("path does not exist: %s", absPath)
+				// A missing file is a normal read outcome (optional §4d
+				// feedback sidecars), not a client error: report it as a
+				// typed error the handler can map to 404 instead of 400.
+				return "", &pathNotExistError{path: absPath}
 			}
 			return "", fmt.Errorf("failed to resolve path: %w", err)
 		}

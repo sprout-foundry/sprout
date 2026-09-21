@@ -36,7 +36,7 @@ func TestBackgroundSentinel_CompletionWithRealExitCode(t *testing.T) {
 		t.Skip("requires PTY")
 	}
 
-	tm := NewTerminalManager(t.TempDir())
+	tm := newTestTerminalManager(t, t.TempDir())
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-sentinel", "echo done-marker; true")
 	if err != nil {
@@ -76,7 +76,7 @@ func TestBackgroundSentinel_NonZeroExitCode(t *testing.T) {
 		t.Skip("requires PTY")
 	}
 
-	tm := NewTerminalManager(t.TempDir())
+	tm := newTestTerminalManager(t, t.TempDir())
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-fail", "echo boom >&2; sh -c 'exit 3'")
 	if err != nil {
@@ -100,7 +100,7 @@ func TestBackgroundStop_ReportsStopped(t *testing.T) {
 		t.Skip("requires PTY")
 	}
 
-	tm := NewTerminalManager(t.TempDir())
+	tm := newTestTerminalManager(t, t.TempDir())
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-stop", "sleep 30")
 	if err != nil {
@@ -125,7 +125,7 @@ func TestBackgroundSession_DeathClosesDone(t *testing.T) {
 		t.Skip("requires PTY")
 	}
 
-	tm := NewTerminalManager(t.TempDir())
+	tm := newTestTerminalManager(t, t.TempDir())
 
 	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-death", "sleep 30")
 	if err != nil {
@@ -157,7 +157,7 @@ func TestHasRunningBackgroundSessions(t *testing.T) {
 		t.Skip("requires PTY")
 	}
 
-	tm := NewTerminalManager(t.TempDir())
+	tm := newTestTerminalManager(t, t.TempDir())
 
 	if tm.HasRunningBackgroundSessions() {
 		t.Fatal("no sessions: should report false")

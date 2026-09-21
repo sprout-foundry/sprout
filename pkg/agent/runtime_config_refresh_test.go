@@ -76,11 +76,14 @@ func TestServerConfigChanged(t *testing.T) {
 		{"env removed", func(c *mcp.MCPServerConfig) { delete(c.Env, "GITHUB_API_KEY") }, true},
 		{"env value changed", func(c *mcp.MCPServerConfig) { c.Env["GITHUB_API_KEY"] = "${OTHER}" }, true},
 
-		// --- intentionally NOT compared: name (identity), credentials, max_restarts ---
+		// --- intentionally NOT compared: name (identity), max_restarts ---
 		{"name differs (ignored — identity)", func(c *mcp.MCPServerConfig) { c.Name = "github" }, false},
-		{"credentials differ (ignored)", func(c *mcp.MCPServerConfig) {
+		// Credential changes ARE restart-worthy (since 5546f6dff): the
+		// client resolves the credential store at process start, so a
+		// just-stored token is invisible until restart.
+		{"credentials differ (restart-worthy)", func(c *mcp.MCPServerConfig) {
 			c.Credentials = map[string]string{"TOKEN": "placeholder"}
-		}, false},
+		}, true},
 		{"max_restarts differs (ignored)", func(c *mcp.MCPServerConfig) { c.MaxRestarts = 5 }, false},
 	}
 

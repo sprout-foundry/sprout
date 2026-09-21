@@ -27,6 +27,12 @@ func GetLocalProvider() *LocalProvider {
 	return globalProvider
 }
 
+// DisableForTesting is a no-op on platforms without MLX: the stub provider
+// never loads model weights, so there is nothing to pin off. It exists to
+// mirror the Apple Silicon method (see local_provider.go) so callers can
+// compile on every platform.
+func DisableForTesting() {}
+
 // isModelLoaded reports whether the model is currently in memory.
 func (p *LocalProvider) isModelLoaded() bool    { return false }
 func (p *LocalProvider) loadedModelDir() string { return "" }

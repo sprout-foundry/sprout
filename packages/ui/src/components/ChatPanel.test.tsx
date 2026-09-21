@@ -68,9 +68,14 @@ vi.mock('./MessageSegments', () => ({
   default: ({ content }: { content: string }) => createElement('div', { 'data-testid': 'message-segments' }, content),
 }));
 
+const contentRenderCounts = vi.hoisted(() => ({ messageContent: 0 }));
+
 vi.mock('./MessageContent', () => ({
   __esModule: true,
-  default: ({ content }: { content: string }) => createElement('div', { 'data-testid': 'message-content' }, content),
+  default: ({ content }: { content: string }) => {
+    contentRenderCounts.messageContent++;
+    return createElement('div', { 'data-testid': 'message-content' }, content);
+  },
 }));
 
 vi.mock('./MessageBubble', () => {
@@ -106,6 +111,7 @@ describe('Chat', () => {
     container.id = 'chat-test-root';
     document.body.appendChild(container);
     root = createRoot(container);
+    contentRenderCounts.messageContent = 0;
   });
 
   afterEach(() => {
@@ -192,6 +198,38 @@ describe('Chat', () => {
     // The mock Virtuoso renders message bubbles for each message
     const bubbles = virtuosoMock?.querySelectorAll('.message-bubble-mock');
     expect(bubbles?.length).toBe(3);
+  });
+
+  // Regression: streaming updates re-rendered (and re-parsed markdown for)
+  // EVERY visible message because formatTime was a fresh closure per Chat
+  // render, defeating the MessageItem memo — the dominant CPU cost while
+  // watching an active agent session. Only the actively-streamed message may
+  // re-render when its content grows.
+  it('re-renders only the streaming message when the last message grows', () => {
+    const messages = makeMessages(3);
+    act(() => {
+      root.render(createElement(Chat, {
+        ...baseProps,
+        messages,
+        stats: { queryCount: 1 },
+      }));
+    });
+    const afterInitial = contentRenderCounts.messageContent;
+    expect(afterInitial).toBeGreaterThan(0);
+
+    const streamed = [
+      messages[0],
+      messages[1],
+      { ...messages[2], content: `${messages[2].content} more stream tokens` },
+    ];
+    act(() => {
+      root.render(createElement(Chat, {
+        ...baseProps,
+        messages: streamed,
+        stats: { queryCount: 1 },
+      }));
+    });
+    expect(contentRenderCounts.messageContent).toBe(afterInitial + 1);
   });
 
   it('renders processing indicator when isProcessing=true and no tool executions', () => {

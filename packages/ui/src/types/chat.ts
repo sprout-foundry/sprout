@@ -19,7 +19,7 @@ export interface ToolRef {
 
 export interface Message {
   id: string;
-  type: 'user' | 'assistant';
+  type: "user" | "assistant";
   content: string;
   timestamp: Date;
   reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
@@ -69,7 +69,7 @@ export interface Message {
 export interface ToolExecution {
   id: string;
   tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
+  status: "started" | "running" | "completed" | "error";
   message?: string;
   startTime: Date;
   endTime?: Date;
@@ -77,7 +77,7 @@ export interface ToolExecution {
   arguments?: string;
   result?: string;
   persona?: string;
-  subagentType?: 'single' | 'parallel';
+  subagentType?: "single" | "parallel";
   queryId?: number;
   /** Index of tool within its query's tool list */
   toolIndex?: number;
@@ -89,7 +89,7 @@ export interface SubagentActivity {
   id: string;
   toolCallId: string;
   toolName: string;
-  phase: 'spawn' | 'output' | 'complete' | 'step';
+  phase: "spawn" | "output" | "complete" | "step";
   message: string;
   timestamp: Date;
   taskId?: string;
@@ -101,7 +101,7 @@ export interface SubagentActivity {
   failures?: number;
   tool?: string;
   /** Lifecycle status: "queued", "started", "completed", "cancelled" */
-  status?: 'queued' | 'started' | 'completed' | 'cancelled';
+  status?: "queued" | "started" | "completed" | "cancelled";
   /** Reason for cancellation (e.g. "budget exceeded") */
   reason?: string;
   /** Tokens consumed by this subagent task */
@@ -119,12 +119,12 @@ export interface LogEntry {
   type: string;
   timestamp: Date;
   data: unknown;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+  level: "info" | "warning" | "error" | "success";
+  category: "query" | "tool" | "file" | "system" | "stream";
 }
 
-export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
-export type TodoPriority = 'high' | 'medium' | 'low';
+export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TodoPriority = "high" | "medium" | "low";
 
 export interface TodoItem {
   id: string;
@@ -171,7 +171,12 @@ export interface SubagentRun {
   activities: SubagentActivity[];
   spawnActivity: SubagentActivity | null;
   completeActivity: SubagentActivity | null;
-  outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
+  outputLines: Array<{
+    id: string;
+    text: string;
+    timestamp: Date;
+    taskId?: string;
+  }>;
   /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
   depth: number;
   /** Sum of tokens used across all activities in this run */
@@ -223,13 +228,19 @@ export interface ChatProps {
    * Opens a review surface for one changed file, given the agent-session
    * diff already fetched by the strip.
    */
-  onReviewChange?: (path: string, diff: { stats?: string; diff?: string }) => void;
+  onReviewChange?: (
+    path: string,
+    diff: { stats?: string; diff?: string },
+  ) => void;
   /**
    * Restores a saved conversation into this chat (SP-139 Phase 3 header
    * history switcher). Receives the chat's own id so restores stay scoped
    * to the pane that triggered them.
    */
-  onRestoreSession?: (sessionId: string, chatId?: string) => void | Promise<void>;
+  onRestoreSession?: (
+    sessionId: string,
+    chatId?: string,
+  ) => void | Promise<void>;
   /**
    * Client-side turn counter (AppState.queryCount) — the SAME counter
    * ToolExecution.queryId and FileEdit.queryId are stamped with. Consumers
@@ -258,11 +269,18 @@ export interface ChatProps {
   backendReachable?: boolean;
   onRetryConnection?: () => void;
   // SP-076: display verbosity for inter-tool narration filtering
-  outputVerbosity?: 'compact' | 'default' | 'verbose';
+  outputVerbosity?: "compact" | "default" | "verbose";
   // Fork support: callback when user clicks fork icon on a user message
   onForkAtBreakpoint?: (breakpointIndex: number) => void;
   // Fork support: true while a fork operation is in-flight (disables button)
   isForking?: boolean;
+  /**
+   * Overrides the input's default placeholder ("Ask me anything about your
+   * code..."). Hosts that embed the chat in a specific surface use this to
+   * prompt for the right kind of input — e.g. the Design workspace's agent
+   * panel asks about the design tree, not the codebase.
+   */
+  inputPlaceholder?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────

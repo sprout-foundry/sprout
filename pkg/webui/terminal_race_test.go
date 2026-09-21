@@ -34,7 +34,7 @@ func TestDetachWhilePTYActive_Race(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 
 	const iterations = 100
 	panicCount := int32(0)
@@ -102,7 +102,7 @@ func TestDetachDoesNotPanicWithBufferedOutput(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	id := uniqueSessionID("buffered-output")
 
 	sess, err := tm.CreateSession(id)
@@ -164,7 +164,7 @@ func TestCloseSessionDoesNotPanic(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 
-			tm := NewTerminalManager(dir)
+			tm := newTestTerminalManager(t, dir)
 			id := uniqueSessionID(fmt.Sprintf("close-race-%d", idx))
 			sess, err := tm.CreateSession(id)
 			if err != nil {

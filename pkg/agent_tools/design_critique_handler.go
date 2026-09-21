@@ -465,6 +465,9 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 	var attachment ToolResult
 	var visionAnalysis string
 	var visionErr error
+	// The §6d findings sidecars need the per-artifact target record (the
+	// artifacts slice alone cannot answer "which target is this PNG?").
+	artifactTargets := make([]critiqueTarget, 0, 4)
 	for _, t := range targets {
 		// Gate-1 precheck per discovered child. A deny fails the tool (the
 		// same contract as the requested-target precheck); a "prompt" verdict
@@ -494,6 +497,7 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 			out.RenderCount++
 		}
 		out.Artifacts = append(out.Artifacts, artifact)
+		artifactTargets = append(artifactTargets, t)
 		if out.Screen == "" && t.Screen != "" {
 			out.Screen = t.Screen
 		}
@@ -584,6 +588,11 @@ func (h *designCritiqueHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 	out.Count = len(out.Findings)
 	out.BySeverity = tallySeverities(out.Findings)
+	// §6d: persist the findings beside the artifacts so the last critique of
+	// each screen is reviewable in the DesignView detail pane (SP-140-6 §6g).
+	// Best-effort — the sidecars are derived output; their failure never
+	// fails a critique whose pixels and tool output already succeeded.
+	writeCritiqueFindingsSidecars(ctx, env, &out, artifactTargets)
 	attachment.Output = buildCritiqueSummary(out, len(attachment.Images) > 0, visionAnalysis, visionErr)
 	attachment.StructuredOut = out
 	return attachment, nil
@@ -2060,8 +2069,19 @@ func normalizeFindings(in []critiqueFinding) []critiqueFinding {
 	return out
 }
 
-func (h *designCritiqueHandler) Aliases() []string      { return nil }
-func (h *designCritiqueHandler) Timeout() time.Duration { return 0 }
+func (h *designCritiqueHandler) Aliases() []string { return nil }
+
+// designCritiqueTimeout bounds one Execute run. The §4e whole-tree cap allows
+// up to 20 screens per run, each costing a browser render plus a vision pass
+// (cache hits skip the render but not the vision call), so the registry's
+// 5-minute default kills a mid-sized tree critique before it finishes. Thirty
+// minutes covers 20 screens at roughly a minute apiece with headroom for the
+// browser's first launch (possible Chrome download) and slower local vision
+// models. Single-target runs finish far earlier; the timeout is a worst-case
+// bound, not a target.
+const designCritiqueTimeout = 30 * time.Minute
+
+func (h *designCritiqueHandler) Timeout() time.Duration { return designCritiqueTimeout }
 func (h *designCritiqueHandler) MaxResultSize() int     { return 0 }
 func (h *designCritiqueHandler) SafeForParallel() bool  { return false }
 func (h *designCritiqueHandler) Interactive() bool      { return false }

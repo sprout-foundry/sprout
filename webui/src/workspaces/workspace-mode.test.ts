@@ -28,8 +28,8 @@ describe('registry', () => {
     expect(availableModes(withDesign).map((m) => m.id)).toContain('code');
   });
 
-  it('offers design only where a design tree exists', () => {
-    expect(availableModes(withoutDesign).map((m) => m.id)).not.toContain('design');
+  it('offers design in every workspace — an empty tree gets the onboarding surface', () => {
+    expect(availableModes(withoutDesign).map((m) => m.id)).toContain('design');
     expect(availableModes(withDesign).map((m) => m.id)).toContain('design');
   });
 
@@ -57,11 +57,13 @@ describe('registry', () => {
 describe('resolveWorkspaceMode', () => {
   it('returns the requested mode when available', () => {
     expect(resolveWorkspaceMode('design', withDesign).id).toBe('design');
+    // An empty workspace does not disqualify the mode (empty state, not hidden).
+    expect(resolveWorkspaceMode('design', withoutDesign).id).toBe('design');
   });
 
   it('falls back to the default when the requested mode is not offered', () => {
-    // A persisted `design` in a workspace that has since lost its design tree.
-    expect(resolveWorkspaceMode('design', withoutDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
+    // An unknown mode id degrades to the default experience.
+    expect(resolveWorkspaceMode('ship', withoutDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
   });
 
   it('falls back to the default for an unknown id', () => {

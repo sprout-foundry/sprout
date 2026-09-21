@@ -19,7 +19,7 @@ func TestBackgroundCap_RejectsAtLimit(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	t.Cleanup(func() {
 		for _, sess := range tm.sessions {
 			tm.CloseSession(sess.ID)
@@ -73,7 +73,7 @@ func TestBackgroundCap_OtherChatNotAffected(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	t.Cleanup(func() {
 		for _, sess := range tm.sessions {
 			tm.CloseSession(sess.ID)
@@ -101,7 +101,7 @@ func TestBackgroundCap_FreedAfterClose(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	tm := NewTerminalManager(dir)
+	tm := newTestTerminalManager(t, dir)
 	t.Cleanup(func() {
 		for _, sess := range tm.sessions {
 			tm.CloseSession(sess.ID)

@@ -422,6 +422,77 @@ const TESTIDS = {
   "token-font-line": "token-font-line",
   "token-font-meta": "token-font-meta",
   "token-space-bar": "token-space-bar",
+  // SP-140-6 loop surface: health strip (§6c, HealthStrip.tsx)
+  "design-health-strip": "design-health-strip",
+  "design-health-errors": "design-health-errors",
+  "design-health-warnings": "design-health-warnings",
+  "design-health-infos": "design-health-infos",
+  "design-health-clean": "design-health-clean",
+  "design-health-design-ahead": "design-health-design-ahead",
+  "design-health-code-ahead": "design-health-code-ahead",
+  "design-health-in-sync": "design-health-in-sync",
+  "design-health-feedback": "design-health-feedback",
+  "design-health-refresh": "design-health-refresh",
+  // SP-140-6 annotation pins (§6e, AnnotationPins.tsx + pinPlacement.ts)
+  "design-pins": "design-pins",
+  "design-pin-a1": "design-pin-a1", // pattern design-pin-${annotation.id}
+  "design-feedback-place": "design-feedback-place",
+  "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
+  // SP-140-6 agent side column (§6f, DesignSideColumn.tsx + DesignAgentPanel.tsx)
+  "design-side-column": "design-side-column",
+  "design-side-tab-details": "design-side-tab-details",
+  "design-side-tab-agent": "design-side-tab-agent",
+  "design-side-panel-details": "design-side-panel-details",
+  "design-side-panel-agent": "design-side-panel-agent",
+  "design-agent-panel": "design-agent-panel",
+  "design-agent-chat": "design-agent-chat",
+  // Design empty state (no recognized design/ tree onboarding, DesignEmptyState.tsx)
+  "design-surface-empty": "design-surface-empty",
+  "design-empty-state": "design-empty-state",
+  "design-empty-card-discover-code": "design-empty-card-discover-code",
+  "design-empty-card-running-app": "design-empty-card-running-app",
+  "design-empty-card-images": "design-empty-card-images",
+  "design-empty-card-figma": "design-empty-card-figma",
+  "design-empty-card-draft": "design-empty-card-draft",
+  "design-empty-foreign": "design-empty-foreign",
+  "design-empty-recheck": "design-empty-recheck",
+  "design-empty-agent": "design-empty-agent",
+  // SP-140-6 loop results (§6g, LoopResults.tsx)
+  "design-loop-results": "design-loop-results",
+  "design-loop-critique": "design-loop-critique",
+  "design-loop-critique-meta": "design-loop-critique-meta",
+  "design-loop-stale": "design-loop-stale",
+  "design-loop-no-critique": "design-loop-no-critique",
+  "design-loop-run-critique": "design-loop-run-critique",
+  "design-loop-clean": "design-loop-clean",
+  "design-loop-finding-0": "design-loop-finding-0", // pattern design-loop-finding-${index}
+  "design-loop-drift": "design-loop-drift",
+  "design-loop-adopt": "design-loop-adopt",
+  // SP-140-7 co-editing conflict banner (§7b, ConflictBanner.tsx)
+  "design-conflict": "design-conflict",
+  "design-conflict-text": "design-conflict-text",
+  "design-conflict-review": "design-conflict-review",
+  "design-conflict-review-pane": "design-conflict-review-pane",
+  "design-conflict-keep": "design-conflict-keep",
+  "design-conflict-take": "design-conflict-take",
+  "design-conflict-restore": "design-conflict-restore",
+  "design-conflict-side-text": "design-conflict-side-text", // repeated node
+  "design-conflict-base-toggle": "design-conflict-base-toggle",
+  // SP-140-7 token value editor (§7c, TokenValueEditor.tsx)
+  "design-token-editor": "design-token-editor",
+  "design-token-color-well": "design-token-color-well",
+  "design-token-input": "design-token-input",
+  "design-token-warn": "design-token-warn",
+  "design-token-refs": "design-token-refs",
+  "design-token-save": "design-token-save",
+  "design-token-saved": "design-token-saved",
+  "design-token-conflict": "design-token-conflict",
+  "design-token-error": "design-token-error",
+  // SP-140-7 status menu (§7d, ScreenStatusMenu.tsx)
+  "design-status-menu-login": "design-status-menu-login", // pattern design-status-menu-${stem}
+  "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}
+  "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
+  "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
 } as const;
 
 // Derived set for O(1) coverage lookups

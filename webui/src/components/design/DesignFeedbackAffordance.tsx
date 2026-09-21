@@ -23,9 +23,10 @@
  * existing annotations this write path produces.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { FEEDBACK_AREAS, buildFeedbackFile, feedbackFilePath, feedbackTarget } from '../../design/feedbackWrite';
+import { armPinPlacement, onPinPlacePoint } from '../../design/pinPlacement';
 import { writeFeedback } from '../../services/api/designApi';
 import type { DesignFeedbackFile, DesignWriteResult } from '../../services/api/types';
 
@@ -57,6 +58,9 @@ export default function DesignFeedbackAffordance({
   const [area, setArea] = useState<string>(FEEDBACK_AREAS[0]);
   const [writtenPath, setWrittenPath] = useState('');
   const [error, setError] = useState('');
+  // §6e: the pinned point for the next annotation — null until placed by
+  // click; the builder defaults to the center when no point was placed.
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
 
   const target = feedbackTarget(path);
   if (!target) return null;
@@ -68,7 +72,7 @@ export default function DesignFeedbackAffordance({
     const trimmed = note.trim();
     if (!trimmed) return;
     setError('');
-    const json = buildFeedbackFile(target, trimmed, area, (now ?? defaultNow)());
+    const json = buildFeedbackFile(target, trimmed, area, (now ?? defaultNow)(), at ?? undefined);
     try {
       const result = onWriteFeedback
         ? await onWriteFeedback(target, json)
@@ -76,6 +80,7 @@ export default function DesignFeedbackAffordance({
       const written = (result as DesignWriteResult | undefined)?.path ?? filePath;
       setWrittenPath(written);
       setNote('');
+      setAt(null);
       setOpen(false);
     } catch {
       setError(`Could not write ${filePath}.`);
@@ -127,6 +132,10 @@ export default function DesignFeedbackAffordance({
               data-testid="design-feedback-note"
             />
           </label>
+          {/* §6e: place the pin by clicking the preview instead of the center
+              default. The Screens tab listens for the arm and answers with a
+              normalized point, which this form stores for the submit. */}
+          <PlaceByClickButton at={at} onArm={() => setAt(null)} onPoint={(point) => setAt(point)} />
           <button
             type="submit"
             className="design-feedback-open"
@@ -155,4 +164,41 @@ export default function DesignFeedbackAffordance({
 /** The annotation's `created` timestamp (ISO 8601, as in the §4d example). */
 function defaultNow(): string {
   return new Date().toISOString();
+}
+
+/**
+ * The §6e place-by-click control. Arms placement (the Screens tab's pin layer
+ * listens); the placed point comes back as an event and lands in the form's
+ * state. A successful submit clears the point, so the next annotation starts
+ * from the center default again unless placed.
+ */
+function PlaceByClickButton({
+  at,
+  onArm,
+  onPoint,
+}: {
+  at: { x: number; y: number } | null;
+  onArm: () => void;
+  onPoint: (point: { x: number; y: number }) => void;
+}) {
+  useEffect(() => {
+    if (at) return;
+    return onPinPlacePoint(onPoint);
+  }, [at, onPoint]);
+
+  return (
+    <button
+      type="button"
+      className="design-feedback-place"
+      data-testid="design-feedback-place"
+      onClick={() => {
+        onArm();
+        armPinPlacement();
+      }}
+    >
+      {at
+        ? `Pin at ${Math.round(at.x * 100)}%, ${Math.round(at.y * 100)}% — click to re-place`
+        : 'Place pin by clicking the preview'}
+    </button>
+  );
 }

@@ -63,8 +63,17 @@ export type {
   DesignWriteResult,
 } from './types';
 
-export { DESIGN_DIR, SUMMARY_MAX_CHARS, designRootPath } from './designApiPaths';
-export { writeAsset, writeFeedback, writeLayout } from './designApiWrite';
+export { DESIGN_DIR, SUMMARY_MAX_CHARS, designRootPath, fileUrl } from './designApiPaths';
+export {
+  writeAsset,
+  writeAssetIfUnchanged,
+  writeFeedback,
+  writeFeedbackIfUnchanged,
+  writeLayout,
+  DesignWriteConflictError,
+  baseMtimeFromResponse,
+} from './designApiWrite';
+export type { SafeWriteOptions, WriteConflict } from './designApiWrite';
 export {
   parseFeedback,
   parseFeedbackFile,
@@ -74,7 +83,6 @@ export {
   parseManifestStatuses,
   parseTokensFile,
 } from './designApiParse';
-
 const EMPTY_MANIFEST: DesignManifestSummary = { path: 'README.md', exists: false, frames: [], chars: 0 };
 
 /** Workspace roots containing a `design/` segment, from the file list. */
@@ -234,15 +242,30 @@ export async function flattenDesignTree(fetchFn: typeof fetch, rootListing: RawL
 }
 
 /**
+ * The read failure with the status attached: a 404 is the "missing file"
+ * shape callers may treat as empty data; anything else is a real failure.
+ */
+export class ReadAssetError extends Error {
+  readonly status: number;
+  constructor(path: string, status: number) {
+    super(`Failed to read design asset: ${path}`);
+    this.name = 'ReadAssetError';
+    this.status = status;
+  }
+}
+
+/**
  * Read a design asset's text. Default read path is GET /api/file (text body);
  * pass `readFileWithConsent` to reuse the consent-aware workspace read.
- * Throws on a non-OK response apart from 404 (which yields '').
+ * Throws on a non-OK response. A 404 yields '' — distinguishable from other
+ * failures so callers can treat "missing" as data ("no annotations yet")
+ * while server errors surface.
  */
 export async function readAsset(fetchFn: typeof fetch, path: string, readFn?: typeof fetch): Promise<string> {
   const response = await (readFn ?? fetchFn)(fileUrl(path));
   if (!response.ok) {
     if (response.status === 404) return '';
-    throw new Error(`Failed to read design asset: ${path}`);
+    throw new ReadAssetError(path, response.status);
   }
   return responseText(response);
 }
@@ -262,7 +285,20 @@ export async function readFeedback(
   target: string,
   readFn?: typeof fetch,
 ): Promise<DesignFeedbackFile> {
-  const text = await readAsset(fetchFn, feedbackFilePath(target), readFn);
+  let text: string;
+  try {
+    text = await readAsset(fetchFn, feedbackFilePath(target), readFn);
+  } catch (err) {
+    // A missing sidecar is "no annotations yet" — the empty document. Any
+    // other failure (transport, 5xx, off-workspace refusal) is a real error
+    // the pane surfaces; swallowing it would read a server fault as "the
+    // file has no annotations".
+    if (err instanceof ReadAssetError && err.status === 404) {
+      text = '';
+    } else {
+      throw err;
+    }
+  }
   return parseFeedbackJson(text, target);
 }
 

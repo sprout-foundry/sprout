@@ -39,7 +39,11 @@
         "design_validate",
         "design_assets",
         "design_render",
-        "design_import_sketch"
+        "design_import_sketch",
+        "design_export_tokens",
+        "design_sync",
+        "design_brief",
+        "design_critique"
       ],
       "capabilities": [
         "git_write"

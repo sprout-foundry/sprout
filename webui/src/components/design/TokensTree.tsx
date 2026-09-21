@@ -41,6 +41,7 @@ import {
   type TokenGrouping,
 } from './designTokens';
 import { SectionGroup, swatchStyle } from './TokenSpecimens';
+import TokenValueEditor from './TokenValueEditor';
 import './DesignView.css';
 
 /** Token files the tab knows about, from the inventory (workspace-relative). */
@@ -282,6 +283,15 @@ export default function TokensTree({
               <span className="design-tokens-detail-value">{selectedToken.description}</span>
             </div>
           ) : null}
+          {/* §7c: structured value editing — surgical DTCG edit via the §7a seam. */}
+          {selectedSourcePath && (
+            <TokenValueEditor
+              tokenPath={selectedToken.path}
+              filePath={selectedSourcePath}
+              type={selectedToken.type}
+              currentText={selectedToken.valueText || ''}
+            />
+          )}
           <div className="design-tokens-detail-row">
             <span className="design-tokens-detail-label">Schema</span>
             <span className="design-tokens-detail-value" data-testid="design-token-schema-hint">

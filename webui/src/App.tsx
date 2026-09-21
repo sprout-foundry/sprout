@@ -509,6 +509,8 @@ function AppInner() {
                           options={state.askUserRequest.options}
                           multiSelect={state.askUserRequest.multiSelect}
                           defaultValue={state.askUserRequest.default}
+                          sensitive={state.askUserRequest.sensitive}
+                          credentialKey={state.askUserRequest.credentialKey}
                           deliveryError={state.askUserRequest.deliveryError}
                           onRespond={handleAskUserResponse}
                         />

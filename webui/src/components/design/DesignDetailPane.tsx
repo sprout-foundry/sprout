@@ -15,13 +15,30 @@
  */
 
 import type { ReactNode } from 'react';
+import type { DesignStatusDriftRow } from '../../services/api/designStatusApi';
+import { assetDisplayName } from './assetNames';
 import DesignFeedbackAffordance from './DesignFeedbackAffordance';
 import DesignFeedbackResolution from './DesignFeedbackResolution';
-import { assetDisplayName } from './assetNames';
+import LoopResults from './LoopResults';
 
 /** The pane heading shows the artifact name; the path stays as a caption. */
 function detailName(path: string): string {
   return assetDisplayName(path.split('/').pop() ?? path);
+}
+
+/**
+ * §4d feedback and §6g critique flows are asset-scoped (screens, wireframes,
+ * flows — any artifact a reviewer can annotate per SP-140-4): only token
+ * selections skip them, because a DTCG file's detail pane is an editor, not
+ * a review target. Hosts spell screen paths two ways — design-root-relative
+ * (`screens/login.html`, the workspace context's selection) and
+ * `design/`-prefixed (status findings, some tests) — so accept both.
+ */
+function isAnnotatableAsset(path: string): boolean {
+  if (path.includes('/tokens/') || path.startsWith('tokens/') || path.endsWith('.tokens.json')) {
+    return false;
+  }
+  return true;
 }
 
 export interface DesignDetailPaneProps {
@@ -39,6 +56,12 @@ export interface DesignDetailPaneProps {
   readFn?: typeof fetch;
   /** Consent-aware write override for the resolution flow (§3f). */
   writeFn?: typeof fetch;
+  /** The selected asset's inventory `modified` (unix seconds), for §6g. */
+  assetModified?: number;
+  /** The code-ahead drift row from the status endpoint, when ahead (§6g). */
+  codeAhead?: DesignStatusDriftRow | null;
+  /** Prefill the agent panel (§6f/§6g). */
+  onAskAgent?: (prompt: string) => void;
 }
 
 export default function DesignDetailPane({
@@ -48,6 +71,9 @@ export default function DesignDetailPane({
   fetchFn,
   readFn,
   writeFn,
+  assetModified,
+  codeAhead,
+  onAskAgent,
 }: DesignDetailPaneProps) {
   return (
     <div className="design-detail" data-testid="design-detail-content" data-selected={path ?? ''}>
@@ -64,9 +90,19 @@ export default function DesignDetailPane({
               Open in editor
             </button>
           ) : null}
-          <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
-          <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
+          {/* §4d feedback flows are asset-scoped, tokens excluded
+              (see isAnnotatableAsset). */}
+          {isAnnotatableAsset(path) ? (
+            <>
+              <DesignFeedbackAffordance path={path} fetchFn={fetchFn} />
+              <DesignFeedbackResolution path={path} fetchFn={fetchFn} readFn={readFn} writeFn={writeFn} />
+            </>
+          ) : null}
           {children}
+          {/* §6g: last critique + drift context. Advisory; last in the pane. */}
+          {isAnnotatableAsset(path) ? (
+            <LoopResults path={path} assetModified={assetModified} codeAhead={codeAhead} onAskAgent={onAskAgent} />
+          ) : null}
         </>
       ) : (
         <div className="design-detail-empty">

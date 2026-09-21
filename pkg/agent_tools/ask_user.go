@@ -15,6 +15,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
 
 	"golang.org/x/term"
@@ -36,6 +37,16 @@ type AskUserRequest struct {
 	Options     []AskUserOption `json:"options,omitempty"`
 	MultiSelect bool            `json:"multi_select,omitempty"`
 	Default     string          `json:"default,omitempty"`
+	// Sensitive marks the response as a credential: the WebUI renders a
+	// masked (password-type) input, the CLI reads without echo, and the
+	// backend diverts the response into the credential store instead of
+	// returning it to the model. Sensitive requests MUST carry CredentialKey.
+	Sensitive bool `json:"sensitive,omitempty"`
+	// CredentialKey is the credential-store key the response is written to
+	// (e.g. "mcp/figma/FIGMA_TOKEN"). Required when Sensitive is true. It is
+	// not a secret — the dialog shows it so the user knows where the value
+	// lands.
+	CredentialKey string `json:"credential_key,omitempty"`
 }
 
 // ErrAskUserNoChannel is returned when no input channel is available
@@ -49,7 +60,12 @@ var ErrAskUserNoChannel = errors.New("ask_user: no interactive channel available
 type AskUserManager struct {
 	mu      sync.Mutex
 	pending map[string]chan string // requestID -> response channel
-	timeout time.Duration
+	// sensitive tracks which pending requests are credential requests and
+	// which credential key their response belongs to. On respond, the value
+	// is diverted to the credential store and the model receives only a
+	// confirmation — the secret itself never reaches the model context.
+	sensitive map[string]string // requestID -> credential store key
+	timeout   time.Duration
 }
 
 const DefaultAskUserTimeout = 30 * time.Minute
@@ -114,11 +130,18 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 
 	m.mu.Lock()
 	m.pending[requestID] = responseCh
+	if req.Sensitive {
+		if m.sensitive == nil {
+			m.sensitive = make(map[string]string)
+		}
+		m.sensitive[requestID] = req.CredentialKey
+	}
 	m.mu.Unlock()
 
 	defer func() {
 		m.mu.Lock()
 		delete(m.pending, requestID)
+		delete(m.sensitive, requestID)
 		m.mu.Unlock()
 	}()
 
@@ -156,19 +179,72 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 	}
 }
 
-// RespondToAskUser resolves a pending ask_user request with the user's text response.
-// Returns true if the request existed and was responded to, false otherwise.
+// RespondToAskUser resolves a pending ask_user request with the user's text
+// response. Returns true if the request existed and was responded to, false
+// otherwise.
+//
+// For sensitive (credential) requests the response never reaches the model:
+// it is written straight to the credential store under the request's key and
+// the pending channel receives a masked confirmation instead. The result
+// string the model sees is therefore safe to transcribe into the
+// conversation.
 func (m *AskUserManager) RespondToAskUser(requestID string, response string) bool {
 	m.mu.Lock()
 	ch, exists := m.pending[requestID]
+	credKey, sensitive := m.sensitive[requestID]
 	m.mu.Unlock()
 
 	if !exists {
 		return false
 	}
 
+	if sensitive {
+		return m.respondSensitive(requestID, ch, credKey, response)
+	}
+
 	select {
 	case ch <- response:
+		return true
+	default:
+		return false
+	}
+}
+
+// respondSensitive stores the user's value in the credential backend and
+// feeds the pending channel a confirmation placeholder. A store failure is
+// delivered to the model as an explicit error result (never the value) so
+// the flow fails loudly and safely.
+func (m *AskUserManager) respondSensitive(requestID string, ch chan string, credKey, response string) bool {
+	if strings.TrimSpace(credKey) == "" {
+		// Misconfigured request: fail closed with a message, not the value.
+		select {
+		case ch <- "ask_user: sensitive request had no credential key; nothing was stored. Ask the user to retry with the target key configured.":
+			return true
+		default:
+			return false
+		}
+	}
+	if strings.TrimSpace(response) == "" {
+		select {
+		case ch <- "ask_user: the user submitted an empty credential; nothing was stored. Ask again or choose another path.":
+			return true
+		default:
+			return false
+		}
+	}
+	if err := credentials.SetToActiveBackend(credKey, response); err != nil {
+		log.Printf("[ask_user] failed to store credential %s for request %s: %v", credKey, requestID, err)
+		select {
+		case ch <- fmt.Sprintf("ask_user: storing the credential failed (%v). The value was NOT saved; ask the user to retry or use Settings.", err):
+			return true
+		default:
+			return false
+		}
+	}
+	// Log only metadata, never the value.
+	log.Printf("[ask_user] credential stored for request %s (key %s, %d chars)", requestID, credKey, len(response))
+	select {
+	case ch <- fmt.Sprintf("Credential stored securely under %s. It is not visible in this conversation. Continue: restart or refresh the MCP server so it picks up the credential, then verify with mcp_refresh (operation: list).", credKey):
 		return true
 	default:
 		return false
@@ -250,6 +326,24 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	}
 
 	renderCLIPrompt(os.Stdout, req)
+
+	// Sensitive (credential) prompts read a single line without echo —
+	// the value must not land in the terminal scrollback or the
+	// conversation. The caller (the ask_user handler) stores what we
+	// return via RespondSensitiveCLI's contract: an empty answer means
+	// "nothing stored".
+	if req.Sensitive {
+		fmt.Println("(input hidden — paste the value and press Enter)")
+		secret, readErr := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			return "", fmt.Errorf("read credential: %w", readErr)
+		}
+		return string(secret), nil
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -526,10 +620,12 @@ func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, erro
 
 func toEventRequest(req AskUserRequest) events.AskUserRequest {
 	out := events.AskUserRequest{
-		Question:    req.Question,
-		Header:      req.Header,
-		MultiSelect: req.MultiSelect,
-		Default:     req.Default,
+		Question:      req.Question,
+		Header:        req.Header,
+		MultiSelect:   req.MultiSelect,
+		Default:       req.Default,
+		Sensitive:     req.Sensitive,
+		CredentialKey: req.CredentialKey,
 	}
 	if len(req.Options) > 0 {
 		out.Options = make([]events.AskUserRequestOption, len(req.Options))

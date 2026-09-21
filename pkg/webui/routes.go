@@ -24,6 +24,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerCommandRoutes(mux)
 	ws.registerDiagnosticsRoutes(mux)
 	ws.registerFileRoutes(mux)
+	ws.registerDesignRoutes(mux)
 	ws.registerSettingsRoutes(mux)
 	ws.registerWorkspaceRoutes(mux)
 	ws.registerSyncRoutes(mux)
@@ -141,6 +142,14 @@ func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
 	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
+}
+
+// registerDesignRoutes mounts SP-140-6 §6b's read-only design endpoint.
+// GET /api/design/status aggregates the tree's validation/drift/feedback
+// signals for the webui health strip (§6c) — the same pkg/design scanners
+// the agent tools read, so both surfaces share one truth.
+func (ws *ReactWebServer) registerDesignRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/design/status", ws.handleAPIDesignStatus)
 }
 
 func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {

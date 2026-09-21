@@ -92,6 +92,8 @@ export const handleAskUserRequest = (ctx: EventHandlerContext): void => {
         : undefined,
       multiSelect: Boolean(data.multi_select),
       default: data.default,
+      sensitive: Boolean(data.sensitive),
+      credentialKey: data.credential_key,
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));

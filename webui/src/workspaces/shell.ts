@@ -42,14 +42,19 @@ export interface WorkspaceShellChat {
 export interface WorkspaceShellDesign {
   /** True while the design-presence probe is in flight. */
   loading: boolean;
-  /** True when the workspace has a design/ tree. */
+  /** True when the workspace has a design/ tree Sprout recognizes. */
   present: boolean;
+  /** How design/ relates to Sprout's idiom: none, foreign, or recognized. */
+  treeState: 'none' | 'foreign' | 'recognized';
+  /** True when the workspace shows frontend code (empty-state position signal). */
+  frontendLike: boolean;
+  /** Re-run the design-presence probe (the empty state's "Check again"). */
+  recheck: () => void;
   /** The active section, driven by the mode's rail. */
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
 }
-
 /** Git state the Code shell's status bar shows. */
 export interface WorkspaceShellGit {
   gitBranches: GitBranchesState;

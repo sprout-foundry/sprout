@@ -18,6 +18,12 @@ export interface AskUserDialogProps {
   options?: AskUserDialogOption[];
   multiSelect?: boolean;
   defaultValue?: string;
+  // Credential request: render a masked single-line input; the backend
+  // diverts the response to the credential store, so the value never
+  // reaches the model or the conversation.
+  sensitive?: boolean;
+  // Where the response will be stored (shown to the user; not a secret).
+  credentialKey?: string;
   // Visible error when the user's response could not be delivered.
   // The dialog stays open for retry instead of silently hanging.
   deliveryError?: string;
@@ -34,6 +40,8 @@ function AskUserDialog({
   options,
   multiSelect,
   defaultValue,
+  sensitive,
+  credentialKey,
   deliveryError,
   onRespond,
 }: AskUserDialogProps): JSX.Element {
@@ -57,6 +65,7 @@ function AskUserDialog({
   const [response, setResponse] = useState(initialResponse);
   const [selected, setSelected] = useState<Set<string>>(initialSelection);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const firstOptionRef = useRef<HTMLButtonElement>(null);
 
   const buildSelectionResponse = useCallback((set: Set<string>): string => Array.from(set).join(','), []);
@@ -119,15 +128,16 @@ function AskUserDialog({
           return;
         }
         // For freeform textarea, plain Enter inserts newline. Submit on
-        // Cmd/Ctrl+Enter only when the textarea is focused.
-        if (!hasOptions && document.activeElement === textareaRef.current) {
+        // Cmd/Ctrl+Enter only when the textarea is focused. The sensitive
+        // input is single-line: plain Enter submits.
+        if (!hasOptions && !sensitive && document.activeElement === textareaRef.current) {
           return;
         }
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit, hasOptions],
+    [handleSubmit, hasOptions, sensitive],
   );
 
   useEffect(() => {
@@ -136,6 +146,8 @@ function AskUserDialog({
     const timer = setTimeout(() => {
       if (hasOptions) {
         firstOptionRef.current?.focus();
+      } else if (sensitive) {
+        inputRef.current?.focus();
       } else {
         textareaRef.current?.focus();
       }
@@ -146,7 +158,7 @@ function AskUserDialog({
       document.body.style.overflow = '';
       clearTimeout(timer);
     };
-  }, [handleKeyDown, hasOptions]);
+  }, [handleKeyDown, hasOptions, sensitive]);
 
   const submitDisabled = isMulti
     ? selected.size === 0
@@ -244,16 +256,35 @@ function AskUserDialog({
             </div>
           ) : (
             <div>
-              <label htmlFor="ask-user-response">Your Response</label>
-              <textarea
-                id="ask-user-response"
-                ref={textareaRef}
-                value={response}
-                onChange={(e) => setResponse(e.target.value)}
-                placeholder={defaultValue ? `Default: ${defaultValue}` : 'Type your response here...'}
-                rows={4}
-              />
-              <span className="ask-user-hint">Enter to submit · Shift+Enter for newline</span>
+              <label htmlFor="ask-user-response">{sensitive ? 'Paste the credential' : 'Your Response'}</label>
+              {sensitive ? (
+                <input
+                  id="ask-user-response"
+                  ref={inputRef}
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={response}
+                  onChange={(e) => setResponse(e.target.value)}
+                  placeholder="Paste the value — it is stored securely, never shown or sent to the model"
+                />
+              ) : (
+                <textarea
+                  id="ask-user-response"
+                  ref={textareaRef}
+                  value={response}
+                  onChange={(e) => setResponse(e.target.value)}
+                  placeholder={defaultValue ? `Default: ${defaultValue}` : 'Type your response here...'}
+                  rows={4}
+                />
+              )}
+              {sensitive ? (
+                <span className="ask-user-hint">
+                  Stored to <code>{credentialKey}</code> — the value is never visible in the conversation.
+                </span>
+              ) : (
+                <span className="ask-user-hint">Enter to submit · Shift+Enter for newline</span>
+              )}
             </div>
           )}
         </div>

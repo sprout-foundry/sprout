@@ -83,7 +83,10 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		t.Errorf("expected ContextModeLowContext, got %q", agent.contextProfile.Mode)
 	}
 
-	// (b) Exactly 13 tools registered (core edit + navigation + web + delegation + ask_user).
+	// (b) Exactly the LCM allowlist registered (core edit + navigation + web
+	// + delegation + ask_user; design loop tools and MCP meta-tools added
+	// in 2e6239417 / 5546f6dff — the single source of truth is
+	// configuration.lowContextProfile.ToolAllowlist).
 	tools := agent.getOptimizedToolDefinitions(nil)
 	expectedTools := map[string]bool{
 		"shell_command": true, "read_file": true, "write_file": true,
@@ -91,6 +94,11 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true, "ask_user": true,
+		// SP-140 design loop (pure Go, valid in every tier).
+		"design_assets": true, "design_validate": true,
+		"design_brief": true, "design_export_tokens": true, "design_sync": true,
+		// MCP setup/discovery meta-tools.
+		"mcp_tools": true, "mcp_refresh": true,
 	}
 	if len(tools) != len(expectedTools) {
 		var names []string

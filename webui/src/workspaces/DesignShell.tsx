@@ -2,10 +2,13 @@
  * The Design mode's shell.
  *
  * Owns the same `<main>` column the Code shell owns, but composes only what
- * Design needs: its surface (DesignSurface) and, on mobile, the sidebar
- * toggle. No menubar, no status bar, no context panel, no mobile
- * chat/terminal controls — those are the Code surface's chrome and belong to
- * CodeShell. Design has its own assets rail inside the surface.
+ * Design needs: its surface (DesignSurface). The surface itself carries the
+ * right column (§6f rework: one Details | Agent column instead of a docked
+ * detail pane plus a docked chat panel), fed by the same chat payload this
+ * shell already receives.
+ *
+ * No menubar, no status bar, no context panel — those are the Code surface's
+ * chrome and belong to CodeShell.
  */
 
 import { Menu } from 'lucide-react';
@@ -20,10 +23,11 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
   supportsLocalTerminal,
   isTerminalExpanded,
   onToggleSidebar,
+  chat,
   design,
 }) => (
   <main
-    className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
+    className={`main-content design-shell ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
   >
     {isMobile && (
       <div className="pane-controls pane-controls-mobile">
@@ -37,15 +41,21 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
         </button>
       </div>
     )}
-    <ErrorBoundary panelName="Design">
-      <DesignSurface
-        loading={design.loading}
-        present={design.present}
-        tab={design.tab}
-        onTabChange={design.onTabChange}
-        onOpenFile={design.onOpenFile}
-      />
-    </ErrorBoundary>
+    <div className="design-shell-body">
+      <ErrorBoundary panelName="Design">
+        <DesignSurface
+          loading={design.loading}
+          present={design.present}
+          treeState={design.treeState}
+          frontendLike={design.frontendLike}
+          onRecheck={design.recheck}
+          tab={design.tab}
+          onTabChange={design.onTabChange}
+          onOpenFile={design.onOpenFile}
+          chatProps={chat.chatProps}
+        />
+      </ErrorBoundary>
+    </div>
   </main>
 );
 

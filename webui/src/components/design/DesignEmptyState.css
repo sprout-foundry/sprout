@@ -1,0 +1,198 @@
+/*
+ * DesignEmptyState — the no-design-tree onboarding surface (DesignSurface's
+ * `!present` branch). Split from DesignView.css (which carries the live
+ * surface's styles) so each file stays reviewable; tokens only.
+ */
+
+.design-surface--empty {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.design-empty-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: var(--space-5, 20px);
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-5, 20px);
+  overflow-y: auto;
+}
+
+.design-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+  min-width: 0;
+}
+
+.design-empty-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  color: var(--text-primary, inherit);
+}
+
+.design-empty-header svg {
+  color: var(--accent-design, var(--text-secondary));
+}
+
+.design-empty-header h1 {
+  margin: 0;
+  font-size: var(--text-xl, 1.25rem);
+  font-weight: 600;
+}
+
+.design-empty-header p {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.design-empty-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4, 16px);
+}
+
+.design-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  padding: var(--space-4, 16px);
+  text-align: left;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  color: var(--text-primary, inherit);
+}
+
+.design-empty-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.design-empty-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--accent-design, var(--text-secondary));
+}
+
+.design-empty-card-title {
+  font-size: var(--text-base, 0.9375rem);
+  font-weight: 600;
+}
+
+.design-empty-card-body {
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.design-empty-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+.design-empty-foreign-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  text-align: left;
+  font-size: var(--text-sm, 0.8125rem);
+  line-height: 1.45;
+  color: var(--text-primary, inherit);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+}
+
+.design-empty-foreign-banner:hover {
+  background: var(--bg-hover);
+}
+
+.design-empty-foreign-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent-design, var(--text-secondary));
+}
+
+.design-empty-recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
+  padding: var(--space-2, 6px) var(--space-3, 12px);
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--text-primary, inherit);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+}
+
+.design-empty-recheck:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.design-empty-hint {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
+.design-empty-agent {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.design-empty-agent-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+}
+
+.design-empty-agent-title {
+  font-size: var(--text-base, 0.9375rem);
+  font-weight: 600;
+  color: var(--text-primary, inherit);
+}
+
+.design-empty-agent-sub {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
+.design-empty-agent .design-agent-panel {
+  flex: 1;
+  min-height: 420px;
+}
+
+@media (max-width: 900px) {
+  .design-empty-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .design-empty-agent {
+    min-height: 360px;
+  }
+}

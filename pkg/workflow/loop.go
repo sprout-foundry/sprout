@@ -415,8 +415,6 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}
 			continue
 		}
-		gateFailures = 0
-
 		console.GlyphInfo.Printf("Gate: title=%q skip=%v", gateRes.Title, gateRes.Skip)
 		gateFailures = 0 // successful parse — the run is healthy again
 

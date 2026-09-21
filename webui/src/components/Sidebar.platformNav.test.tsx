@@ -466,9 +466,7 @@ describe('Sidebar PlatformNav Integration', () => {
       const onViewChange = vi.fn();
       // No `external` flag → in-editor view switch (a registered plugin view
       // for the same id, if any); top-level navigation must NOT happen.
-      navItems = [
-        { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-      ];
+      navItems = [{ id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 }];
 
       act(() => {
         root.render(

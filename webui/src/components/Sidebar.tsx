@@ -630,9 +630,7 @@ function Sidebar({
                         <IconComponent size={18} strokeWidth={1.5} />
                         {badgeText ? (
                           <span
-                            className={`rail-icon-badge${
-                              typeof item.badge === 'string' ? ' rail-icon-badge-dot' : ''
-                            }`}
+                            className={`rail-icon-badge${typeof item.badge === 'string' ? ' rail-icon-badge-dot' : ''}`}
                             data-testid={`rail-badge-${item.id}`}
                             aria-hidden="true"
                           >

@@ -45,6 +45,10 @@ export interface DesignSurfaceProps {
   loading: boolean;
   /** True when the workspace has a `design/` tree. */
   present: boolean;
+  /** How design/ relates to Sprout's idiom (empty state's banner signal). */
+  treeState?: 'none' | 'foreign' | 'recognized';
+  /** True when the workspace shows frontend code (empty-state card order). */
+  frontendLike?: boolean;
   /** The active section, driven by the mode's rail. */
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
@@ -62,6 +66,8 @@ const noop = () => {};
 const DesignSurface: React.FC<DesignSurfaceProps> = ({
   loading,
   present,
+  treeState = 'none',
+  frontendLike = false,
   tab,
   onTabChange,
   onOpenFile,
@@ -94,7 +100,12 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
       <div className="design-surface design-surface--empty" data-testid="design-surface-empty">
         <ErrorBoundary panelName="Design empty state">
           <div className="design-empty-layout">
-            <DesignEmptyState onAskAgent={handleAskAgent} onRecheck={onRecheck ?? noop} />
+            <DesignEmptyState
+              onAskAgent={handleAskAgent}
+              onRecheck={onRecheck ?? noop}
+              frontendCode={frontendLike}
+              foreignTree={treeState === 'foreign'}
+            />
             <aside className="design-empty-agent" aria-label="Agent chat" data-testid="design-empty-agent">
               <div className="design-empty-agent-head">
                 <span className="design-empty-agent-title">Agent</span>

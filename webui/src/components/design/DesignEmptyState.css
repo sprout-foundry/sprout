@@ -105,6 +105,31 @@
   gap: var(--space-3, 12px);
 }
 
+.design-empty-foreign-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  text-align: left;
+  font-size: var(--text-sm, 0.8125rem);
+  line-height: 1.45;
+  color: var(--text-primary, inherit);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+}
+
+.design-empty-foreign-banner:hover {
+  background: var(--bg-hover);
+}
+
+.design-empty-foreign-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent-design, var(--text-secondary));
+}
+
 .design-empty-recheck {
   display: inline-flex;
   align-items: center;

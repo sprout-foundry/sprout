@@ -4,6 +4,8 @@ import { isCloud } from '../config/mode';
 import { notificationBus } from '../services/notificationBus';
 import { platformHref } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
+import { UserMenu } from './UserMenu';
+import { UsageChip } from './UsageChip';
 import WorkspaceBar from './WorkspaceBar';
 
 export interface HeaderBarProps {
@@ -128,16 +130,15 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div className="header-bar">
       {isCloud && (
-        <a
-          href={platformHref('/?from=editor')}
-          className="header-back-to-dashboard"
-          title="Back to Dashboard"
-        >
+        <a href={platformHref('/?from=editor')} className="header-back-to-dashboard" title="Back to Dashboard">
           ← Dashboard
         </a>
       )}
       {!isCloud && <MenuBar />}
       <div className="header-bar-actions">
+        {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
+         * local mode or without a bootstrap identity. */}
+        <UserMenu />
         {isCloud && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
@@ -158,6 +159,9 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             <PanelRightClose size={14} />
           </button>
         )}
+        {/* SP-016 P0.6: ambient usage signal — cloud mode only, renders
+         * nothing when the bootstrap carried no badge values. */}
+        <UsageChip />
         <WorkspaceBar isConnected={isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
       </div>
     </div>

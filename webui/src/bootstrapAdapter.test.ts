@@ -471,3 +471,56 @@ describe('bootstrapAdapter', () => {
     });
   });
 });
+
+describe('firePlatformViewBeacon (SP-016 P0.7)', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it('fires a GET beacon with the view id', async () => {
+    const { firePlatformViewBeacon } = await import('./bootstrapAdapter');
+    // A cold import re-runs the module top level, which auto-fires
+    // fetchRuntimeConfig() (one /api/bootstrap fetch) — clear the spy so
+    // the beacon's fetch is the only one counted.
+    fetchSpy.mockClear();
+    firePlatformViewBeacon('chat');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [
+      string,
+      { method?: string; keepalive?: boolean; credentials?: string },
+    ];
+    expect(url).toBe('/webui/plugin/view?view=chat');
+    expect(init.method).toBe('GET');
+    expect(init.keepalive).toBe(true);
+    expect(init.credentials).toBe('same-origin');
+  });
+
+  it('encodes the view id', async () => {
+    const { firePlatformViewBeacon } = await import('./bootstrapAdapter');
+    firePlatformViewBeacon('my view');
+    const [url] = fetchSpy.mock.calls[0] as unknown as [string];
+    expect(url).toBe('/webui/plugin/view?view=my%20view');
+  });
+
+  it('is a no-op for an empty view id', async () => {
+    const { firePlatformViewBeacon } = await import('./bootstrapAdapter');
+    firePlatformViewBeacon('');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('never throws or rejects when the endpoint is missing (older platform)', async () => {
+    fetchSpy.mockRejectedValue(new Error('404'));
+    const { firePlatformViewBeacon } = await import('./bootstrapAdapter');
+
+    expect(() => firePlatformViewBeacon('chat')).not.toThrow();
+    // Flush microtasks: the caught rejection must not surface unhandled.
+    await new Promise((r) => setTimeout(r, 0));
+  });
+});

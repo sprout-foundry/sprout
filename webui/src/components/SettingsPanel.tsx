@@ -623,26 +623,6 @@ function SettingsPanel({
                       ))}
                     </select>
                   </div>
-                  <div className="config-item">
-                    <label htmlFor="persona-select">Persona:</label>
-                    <select
-                      id="persona-select"
-                      value={agentConfig.selectedPersona}
-                      onChange={(e) => agentConfig.onPersonaChange(e.target.value)}
-                      disabled={!agentConfig.isConnected || agentConfig.isLoadingPersonas}
-                      className="styled-select"
-                    >
-                      {agentConfig.isLoadingPersonas ? (
-                        <option value="">Loading personas...</option>
-                      ) : (
-                        agentConfig.personas.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
                 </div>
               )}
 

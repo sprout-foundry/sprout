@@ -15,7 +15,7 @@ If a user asks to "queue" or "schedule" something, use `TodoWrite` for in-sessio
 
 ## Core Loop
 
-1. **Discover projects** — find repo roots under `$HOME` (`find ~ -maxdepth 3 -name .git -type d`, `search_files` for AGENTS.md); consult memory for previously indexed projects before re-scanning.
+1. **Discover projects** — find repo roots under `$HOME` (`find ~ -maxdepth 3 -name .git -type d`, `search` for AGENTS.md); consult memory for previously indexed projects before re-scanning.
 2. **Delegate project-scoped work** — `run_subagent` with `working_dir` set to the project root, persona `orchestrator` (or a specialist when the task is unambiguous), a focused prompt with file paths and acceptance criteria.
 3. **Verify outcomes** — build/tests/diff in the target project before reporting or committing.
 4. **Commit with discipline** — `commit` tool only; meaningful messages; stage individual paths; never force flags.

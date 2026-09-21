@@ -15,11 +15,13 @@ import { formatDuration } from '../../utils/format';
 export { getPersonaColor };
 
 // "Dn" is a compact subagent-depth badge. Surface a human-readable label
-// via tooltip / aria-label so users hovering a "D1" know it means an
-// orchestrator-level delegation rather than a cryptic abbreviation.
+// via tooltip / aria-label so users hovering a "D1" know what the
+// abbreviation means. The primary chat agent is always the orchestrator
+// persona, so depth-1 delegations are described by what they are (delegated
+// work), not by a persona name the user never chose.
 export const subagentDepthLabel = (depth: number): string => {
   if (depth <= 0) return 'Primary agent';
-  if (depth === 1) return 'Subagent depth 1 (orchestrator)';
+  if (depth === 1) return 'Subagent depth 1 (delegated)';
   if (depth === 2) return 'Subagent depth 2 (specialist)';
   return `Subagent depth ${depth} (nested specialist)`;
 };

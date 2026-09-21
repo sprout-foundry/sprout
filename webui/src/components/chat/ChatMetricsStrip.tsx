@@ -114,12 +114,12 @@ export function ChatMetricsStrip({ stats, isConnected, onModelClick }: ChatMetri
     );
   }
 
-  if (persona) {
+  if (persona && persona !== 'orchestrator') {
     segments.push(
       <span
         key="persona"
         className="chat-metrics-item chat-metrics-persona"
-        style={persona !== 'orchestrator' ? { color: getPersonaColor(persona) } : undefined}
+        style={{ color: getPersonaColor(persona) }}
         title={`Active persona: ${persona}`}
       >
         {formatPersonaLabel(persona)}

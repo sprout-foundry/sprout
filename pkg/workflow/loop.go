@@ -27,6 +27,21 @@ type gateResult struct {
 	SkipReason string `json:"skip_reason"`
 }
 
+// maxConsecutiveGateFailures is the circuit breaker for Step 2: after this
+// many consecutive gate call/parse failures with no intervening successful
+// item, the loop aborts instead of spinning. A healthy gate succeeds on the
+// first or second try; a run that cannot get a parseable gate response is
+// misconfigured (wrong model, stale prompt, provider outage) and burning
+// quota on every retry. Derived from MaxRetries (default 2) — generous
+// enough to ride out a transient 429, hard enough to stop a hot loop.
+func gateFailureLimit(maxRetries int) int {
+	limit := maxRetries + 1
+	if limit < 3 {
+		return 3
+	}
+	return limit
+}
+
 // gateTriageResult is the JSON response from the triage gate call.
 type gateTriageResult struct {
 	Action string `json:"action"` // "retry" or "skip"
@@ -221,6 +236,12 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 	itemsProcessed := 0
 	itemsSkipped := 0
 	itemsFailed := 0
+	// Consecutive gate call/parse failures without an intervening success.
+	// Reset on any successful gate; trips the circuit breaker at
+	// gateFailureLimit. Without this cap a run stuck on an unparseable gate
+	// response would spin forever — a subscription-billed provider never
+	// trips the USD budget check, so the budget guard cannot stop it.
+	gateFailures := 0
 
 	fmt.Println()
 	console.GlyphAction.Printf("TODO loop: provider=%s model=%s todo=%s",
@@ -232,18 +253,50 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 	todoWorkDir := filepath.Dir(todoFile)
 
 	// Determine the start-after line for checkpoint/resume.
+	// Both resume paths VALIDATE the line before trusting it: a checkpoint
+	// is only meaningful if the line it points at still holds an unchecked
+	// item. A stale checkpoint (TODO file edited/reorganized since the last
+	// run, or a line number persisted by an aborted run that never processed
+	// anything) silently redirects the entire run at the wrong item — worse
+	// than a full rescan, which can only redo work the checkboxes say is
+	// already done.
+	validateResumeLine := func(line int) bool {
+		if line <= 0 {
+			return false
+		}
+		data, err := os.ReadFile(filepath.Clean(todoFile))
+		if err != nil {
+			return false
+		}
+		lines := strings.Split(string(data), "\n")
+		if line > len(lines) {
+			return false
+		}
+		return regexp.MustCompile(`^\s*- \[ \]`).MatchString(lines[line-1])
+	}
+
 	startAfter := 0
 	if state.CurrentTodoLineNum > 0 {
-		console.GlyphInfo.Printf("Resuming from TODO line %d (checkpoint)", state.CurrentTodoLineNum)
-		startAfter = state.CurrentTodoLineNum - 1 // 1-based → subtract 1 for 0-based skip
+		if validateResumeLine(state.CurrentTodoLineNum) {
+			console.GlyphInfo.Printf("Resuming from TODO line %d (checkpoint)", state.CurrentTodoLineNum)
+			startAfter = state.CurrentTodoLineNum - 1 // 1-based → subtract 1 for 0-based skip
+		} else {
+			console.GlyphWarning.Printf("Checkpoint line %d no longer holds an unchecked item — ignoring stale checkpoint, rescanning %s", state.CurrentTodoLineNum, todoFile)
+			state.CurrentTodoLineNum = 0
+		}
 	}
 
 	// Fallback: try loading the lightweight loop checkpoint file when
-	// orchestration checkpoint didn't provide a resume line.
+	// orchestration checkpoint didn't provide a usable resume line.
 	if startAfter == 0 {
 		if fallbackLine, fbErr := LoadLoopCheckpoint(todoWorkDir); fbErr == nil && fallbackLine > 0 {
-			console.GlyphInfo.Printf("Resuming from fallback TODO checkpoint: line %d", fallbackLine)
-			startAfter = fallbackLine - 1
+			if validateResumeLine(fallbackLine) {
+				console.GlyphInfo.Printf("Resuming from fallback TODO checkpoint: line %d", fallbackLine)
+				startAfter = fallbackLine - 1
+			} else {
+				console.GlyphWarning.Printf("Fallback checkpoint line %d no longer holds an unchecked item — ignoring stale checkpoint, rescanning %s", fallbackLine, todoFile)
+				RemoveLoopCheckpoint(todoWorkDir)
+			}
 		}
 	}
 
@@ -312,10 +365,23 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		console.GlyphAction.Printf("TODO item at line %d", lineNum)
 
 		// Step 2: Gate call — parse section into delegation prompt.
+		// One repair round: if the gate answers in prose (models do this
+		// exactly when the excerpt confuses them — e.g. a stale checkpoint
+		// surfaced the wrong section), re-ask ONCE with the parse error and
+		// an explicit JSON-only instruction. This self-heals formatting
+		// failures without changing the gate's semantics.
 		gateText, gateErr := gateCall(ctx, chatAgent, gatePrompt, sectionText)
+		if gateErr == nil {
+			if _, parseErr := parseGateResponse(gateText); parseErr != nil {
+				console.GlyphWarning.Printf("Gate response not JSON — retrying once with repair instruction")
+				repairPrompt := "Your previous response was not valid JSON (" + parseErr.Error() + "). Respond with ONLY the JSON object: {\"title\": string, \"prompt\": string, \"skip\": bool, \"skip_reason\": string}. No prose, no markdown fences."
+				gateText, gateErr = gateCall(ctx, chatAgent, repairPrompt, sectionText)
+			}
+		}
 		if gateErr != nil {
 			console.GlyphWarning.Printf("Gate call failed: %v", gateErr)
 			itemsFailed++
+			gateFailures++
 			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  "unknown",
 				"line":   lineNum,
@@ -323,13 +389,20 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
+			if gateFailures >= gateFailureLimit(loop.MaxRetries) {
+				return false, fmt.Errorf("gate failed %d consecutive times (limit %d) — aborting TODO loop rather than spinning. Last error: %w", gateFailures, gateFailureLimit(loop.MaxRetries), gateErr)
+			}
 			continue
 		}
+		// NOTE: no reset here — a nil call error with an unparseable body
+		// (the repair-then-prose path) must keep the counter accumulating.
+		// The reset happens only on a successful parse below.
 
 		gateRes, parseErr := parseGateResponse(gateText)
 		if parseErr != nil {
 			console.GlyphWarning.Printf("Gate parse failed: %v", parseErr)
 			itemsFailed++
+			gateFailures++
 			if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
 				"title":  "unknown",
 				"line":   lineNum,
@@ -337,10 +410,15 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
+			if gateFailures >= gateFailureLimit(loop.MaxRetries) {
+				return false, fmt.Errorf("gate parse failed %d consecutive times (limit %d) — aborting TODO loop rather than spinning. Last error: %w", gateFailures, gateFailureLimit(loop.MaxRetries), parseErr)
+			}
 			continue
 		}
+		gateFailures = 0
 
 		console.GlyphInfo.Printf("Gate: title=%q skip=%v", gateRes.Title, gateRes.Skip)
+		gateFailures = 0 // successful parse — the run is healthy again
 
 		// Step 3: If skip, mark done and continue.
 		if gateRes.Skip {
@@ -536,6 +614,7 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}
 		case outcomeProcessed:
 			// Both agent completed AND build passes → mark done.
+			gateFailures = 0
 			if markErr := markTodoDone(todoFile, lineNum); markErr != nil {
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)
 			} else {

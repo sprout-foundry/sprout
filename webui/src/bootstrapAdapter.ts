@@ -31,6 +31,10 @@ interface BootstrapResponse {
   };
   /** URLs of external plugin script bundles (IIFE) to load after adapter installation. */
   pluginScripts?: string[];
+  /** Absolute base URL of the platform web UI (SP-016). Served by the
+   * platform (cloud mode) or by the daemon when SPROUT_PLATFORM_URL is set
+   * (Mode B Fly workspaces). Absent when the host cannot know it. */
+  platformURL?: string;
   /** Workspace git snapshot (ETH-1). Absent/null when the daemon could not determine it. */
   sync?: GitSyncReport | null;
   /** Newer release available, from the daemon's cached release check. */
@@ -89,6 +93,22 @@ let currentUserIdentity: { id: string; email: string; tier: string } | undefined
  */
 export function getBootstrapUser(): { id: string; email: string; tier: string } | undefined {
   return currentUserIdentity;
+}
+
+/**
+ * Most recently resolved platform web-UI base URL (SP-016 P0.3) from the
+ * bootstrap response. Undefined when the host did not provide one —
+ * account-surface exits (back-link, escalation task links, avatar menu)
+ * then keep their relative URLs (today's behavior).
+ */
+let currentPlatformURL: string | undefined;
+
+/**
+ * Return the platform base URL resolved at bootstrap, or undefined when
+ * absent. Safe to call before bootstrap resolves.
+ */
+export function getPlatformURL(): string | undefined {
+  return currentPlatformURL;
 }
 
 /**
@@ -202,10 +222,14 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         user: data.user,
         sync: data.sync,
         update: data.update,
+        // SP-016 P0.3: absolute platform base for account-surface exits.
+        // An empty string means "the host doesn't know" → treat as absent.
+        platformURL: data.platformURL || undefined,
       };
       lastConfig = config;
       currentUserIdentity = config.user;
       currentSyncSnapshot = data.sync;
+      currentPlatformURL = config.platformURL;
       // eslint-disable-next-line no-console
       await installAdapterForConfig(config);
 

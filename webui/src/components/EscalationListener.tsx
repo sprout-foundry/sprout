@@ -39,6 +39,7 @@ import {
   txnPullIO,
   type TxnProgress,
 } from '../services/cloudTxnEscalate';
+import { platformHref } from '../utils/platformUrl';
 import './EscalationToast.css';
 
 interface EscalationState {
@@ -264,11 +265,15 @@ export function EscalationListener() {
           // Network failure only — an HTTP error status resolves (not
           // rejects) and leaves the user here (pre-existing behavior).
           // `?from=editor` tells the platform SPA not to bounce us back.
-          window.location.href = '/?from=editor';
+          // SP-016 P0.3: build the absolute URL when the host knows the
+          // platform base (Mode B Fly workspaces must not self-loop into
+          // this daemon's SPA); falls back to the relative path otherwise.
+          window.location.href = platformHref('/?from=editor');
         });
     } else {
-      // No repo context — go to dashboard (not back into the editor loop)
-      window.location.href = '/?from=editor';
+      // No repo context — go to dashboard (not back into the editor loop).
+      // SP-016 P0.3: absolute platform URL when known, relative fallback.
+      window.location.href = platformHref('/?from=editor');
     }
   }, [escalation]);
 
@@ -360,7 +365,7 @@ export function EscalationListener() {
                 {cloudTask.taskId ? (
                   <a
                     className="escalation-toast-task-link"
-                    href={'/tasks/' + cloudTask.taskId}
+                    href={platformHref('/tasks/' + cloudTask.taskId)}
                     data-testid="escalation-toast-cloud-task-link"
                   >
                     View task on platform

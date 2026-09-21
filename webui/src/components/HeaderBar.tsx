@@ -2,6 +2,7 @@ import { PanelRightClose } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { isCloud } from '../config/mode';
 import { notificationBus } from '../services/notificationBus';
+import { platformHref } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
 import WorkspaceBar from './WorkspaceBar';
 
@@ -127,7 +128,11 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div className="header-bar">
       {isCloud && (
-        <a href="/?from=editor" className="header-back-to-dashboard" title="Back to Dashboard">
+        <a
+          href={platformHref('/?from=editor')}
+          className="header-back-to-dashboard"
+          title="Back to Dashboard"
+        >
           ← Dashboard
         </a>
       )}

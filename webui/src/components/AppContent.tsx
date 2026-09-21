@@ -397,7 +397,11 @@ const AppContent: React.FC<AppContentProps> = ({
   // SP-140 / workspace modes: which mode the shell is showing. Availability
   // depends on the workspace's own content (a design tree), probed once here so
   // the switcher and the surface agree on what exists.
-  const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
+  const {
+    present: hasDesignTree,
+    loading: designPresenceLoading,
+    recheck: recheckDesignPresence,
+  } = useDesignPresence();
   const {
     mode: workspaceMode,
     modes: workspaceModes,
@@ -453,6 +457,12 @@ const AppContent: React.FC<AppContentProps> = ({
    * probe answers, so a Design-mode workspace whose `design/` check is still in
    * flight would briefly (or permanently) sit on chat. Runs only until it has
    * acted once, so it never fights the user's own navigation.
+   *
+   * Design mode is offered on every workspace now: an empty tree renders the
+   * onboarding surface rather than disqualifying the mode, so the second
+   * branch below only fires for hosts whose surface is genuinely gone
+   * (none today) — an explicit `design` view with no tree is the empty
+   * state and is left alone.
    */
   const modeViewSyncedRef = useRef(false);
   useEffect(() => {
@@ -464,7 +474,6 @@ const AppContent: React.FC<AppContentProps> = ({
     // git, plugin views included) match neither branch and are never reset.
     // Resetting foreign views on mode switch is handleSelectMode's job.
     if (workspaceMode.id === 'design' && state.currentView !== 'design') onViewChange('design');
-    else if (workspaceMode.id !== 'design' && state.currentView === 'design') onViewChange('chat');
   }, [designPresenceLoading, workspaceMode.id, state.currentView, onViewChange]);
 
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
@@ -963,6 +972,7 @@ const AppContent: React.FC<AppContentProps> = ({
     design: {
       loading: designPresenceLoading,
       present: hasDesignTree,
+      recheck: recheckDesignPresence,
       tab: designSection,
       onTabChange: setDesignSection,
       onOpenFile: handleDesignFileOpen,

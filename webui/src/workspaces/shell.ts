@@ -44,6 +44,8 @@ export interface WorkspaceShellDesign {
   loading: boolean;
   /** True when the workspace has a design/ tree. */
   present: boolean;
+  /** Re-run the design-presence probe (the empty state's "Check again"). */
+  recheck: () => void;
   /** The active section, driven by the mode's rail. */
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;

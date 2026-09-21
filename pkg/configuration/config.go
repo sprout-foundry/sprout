@@ -135,8 +135,6 @@ type Config struct {
 	// allow (auto-approve), ask (force prompt), deny (hard block).
 	CommandPolicies *CommandPolicies `json:"command_policies,omitempty"`
 
-	// DismissedPrompts tracks which one-time prompts the user has dismissed.
-	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 
 	// API Timeout Configuration (in seconds)
 	APITimeouts *APITimeoutConfig `json:"api_timeouts,omitempty"`

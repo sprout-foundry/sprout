@@ -305,7 +305,6 @@ func TestApplyMapInitializations_MissingFields(t *testing.T) {
 	// Verify all map fields are created as empty maps
 	require.IsType(t, map[string]interface{}{}, raw["provider_models"])
 	require.IsType(t, map[string]interface{}{}, raw["preferences"])
-	require.IsType(t, map[string]interface{}{}, raw["dismissed_prompts"])
 	require.IsType(t, map[string]interface{}{}, raw["custom_providers"])
 	require.IsType(t, map[string]interface{}{}, raw["subagent_types"])
 	require.IsType(t, map[string]interface{}{}, raw["skills"])
@@ -589,7 +588,6 @@ func TestMigration_0_0_to_2_0_FullDefaults(t *testing.T) {
 	// Verify map initializations
 	require.IsType(t, map[string]interface{}{}, migrated["provider_models"])
 	require.IsType(t, map[string]interface{}{}, migrated["preferences"])
-	require.IsType(t, map[string]interface{}{}, migrated["dismissed_prompts"])
 	require.IsType(t, map[string]interface{}{}, migrated["custom_providers"])
 	require.IsType(t, map[string]interface{}{}, migrated["subagent_types"])
 	require.IsType(t, map[string]interface{}{}, migrated["skills"])
@@ -654,7 +652,6 @@ func TestMigration_Idempotent_FullDefaults(t *testing.T) {
 	for _, field := range []string{
 		"provider_models",
 		"preferences",
-		"dismissed_prompts",
 		"custom_providers",
 		"subagent_types",
 		"skills",

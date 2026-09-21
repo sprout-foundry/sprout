@@ -185,6 +185,15 @@ func StripHeredocBodies(cmd string) string {
 	var b strings.Builder
 	prevEnd := 0
 	for _, match := range indices {
+		// A marker inside a region already handled is data, not a new
+		// heredoc: an earlier heredoc's body can itself contain `<<WORD`
+		// text (e.g. a test file written via a heredoc that contains
+		// heredoc examples), and its closing delimiter extends past those
+		// markers. Skipping keeps prevEnd monotonic — without this the
+		// cmd[prevEnd:match[0]] write below slices out of range.
+		if match[0] < prevEnd {
+			continue
+		}
 		// match: [fullStart, fullEnd, group1Start, group1End]
 		delimStart := match[2]
 		delimEnd := match[3]

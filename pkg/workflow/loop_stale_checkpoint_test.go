@@ -68,7 +68,9 @@ func TestStaleFallbackCheckpoint_IgnoredWhenLineNotUnchecked(t *testing.T) {
 	client := agent.NewScriptedClient(
 		gateResponse("Real work item", "Do the real work", false),
 	)
-	client.SetModel("test:test")
+	if err := client.SetModel("test:test"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
 	chatAgent := newTestLoopAgent(t, client)
 	eventBus := events.NewEventBus()
 
@@ -127,7 +129,9 @@ func TestGateParseFailure_CircuitBreakerAborts(t *testing.T) {
 		responses = append(responses, &agent.ScriptedResponse{Content: p})
 	}
 	client := agent.NewScriptedClient(responses...)
-	client.SetModel("test:test")
+	if err := client.SetModel("test:test"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
 	chatAgent := newTestLoopAgent(t, client)
 	eventBus := events.NewEventBus()
 
@@ -162,7 +166,9 @@ func TestGateProseThenJSON_Repaired(t *testing.T) {
 		&agent.ScriptedResponse{Content: "I cannot select an item: BLOCKED by unknown circumstances."},
 		gateResponse("Item 1", "Process item 1", false),
 	)
-	client.SetModel("test:test")
+	if err := client.SetModel("test:test"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
 	chatAgent := newTestLoopAgent(t, client)
 	eventBus := events.NewEventBus()
 

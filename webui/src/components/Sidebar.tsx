@@ -225,7 +225,10 @@ function Sidebar({
     setFormatOnSaveEnabled,
   } = useEditorManager();
   const { platformNavItems } = usePlatformNav();
-  const { pluginViews, pluginPanels } = usePlugins();
+  // SP-016 P0.4: the rail no longer consults the plugin-view registry to
+  // decide item behavior (items carry an explicit `external` flag), so only
+  // the panel list is needed from the plugin context.
+  const { pluginPanels } = usePlugins();
   const sortedPlatformNavItems = useMemo(
     () => [...platformNavItems].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
     [platformNavItems],
@@ -592,8 +595,22 @@ function Sidebar({
                 <nav aria-label="Platform navigation">
                   {sortedPlatformNavItems.map((item) => {
                     const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
-                    const hasPluginView = pluginViews.some((v) => v.id === item.id);
+                    // SP-016 P0.4: the item's explicit `external` flag replaces
+                    // the pluginViews id-match fork — the platform now declares
+                    // its exits itself (SP016-P0.2), so the host no longer
+                    // guesses from the plugin-view registry.
+                    const isExternal = item.external === true;
                     const isActive = currentView === item.id;
+                    // SP-016 P0.4: ambient signal on the rail icon — a positive
+                    // number renders a count, a non-empty string renders a
+                    // state dot (e.g. billing "overage"). Zero/empty/absent
+                    // renders nothing.
+                    const badgeText =
+                      typeof item.badge === 'number' && item.badge > 0
+                        ? String(item.badge)
+                        : typeof item.badge === 'string' && item.badge !== ''
+                          ? item.badge
+                          : undefined;
                     return (
                       <button
                         key={item.id}
@@ -601,16 +618,27 @@ function Sidebar({
                         aria-selected={isActive}
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
-                          if (hasPluginView) {
-                            onViewChange?.(item.id);
-                          } else {
+                          if (isExternal) {
                             window.location.href = item.href;
+                          } else {
+                            onViewChange?.(item.id);
                           }
                         }}
                         title={item.label}
-                        aria-label={item.label}
+                        aria-label={badgeText ? `${item.label} (${badgeText})` : item.label}
                       >
                         <IconComponent size={18} strokeWidth={1.5} />
+                        {badgeText ? (
+                          <span
+                            className={`rail-icon-badge${
+                              typeof item.badge === 'string' ? ' rail-icon-badge-dot' : ''
+                            }`}
+                            data-testid={`rail-badge-${item.id}`}
+                            aria-hidden="true"
+                          >
+                            {typeof item.badge === 'number' ? badgeText : ''}
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}

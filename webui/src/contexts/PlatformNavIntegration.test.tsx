@@ -16,11 +16,13 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 // Mocks — install a mock adapter BEFORE the PlatformNavContext is loaded
 // ---------------------------------------------------------------------------
 
-// Create a mock adapter that has the 3 cloud nav items
+// Create a mock adapter that has the 3 cloud nav items. SP-016 P0.2: the
+// platform serves external: true on every item, and ambient badge values
+// (task count, overage state) ride the same contract.
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
-  { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
-  { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
+  { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1, external: true, badge: 2 },
+  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2, external: true, badge: 'overage' },
+  { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3, external: true },
 ];
 
 const mockAdapter = {
@@ -124,6 +126,9 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     expect(items[0].href).toBe('/tasks');
     expect(items[0].icon).toBe('list-checks');
     expect(items[0].order).toBe(1);
+    // SP-016 contract fields propagate through the context.
+    expect(items[0].external).toBe(true);
+    expect(items[0].badge).toBe(2);
   });
 
   it('nav item 1 is billing with correct properties', () => {
@@ -135,6 +140,9 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     expect(items[1].href).toBe('/account/billing');
     expect(items[1].icon).toBe('credit-card');
     expect(items[1].order).toBe(2);
+    // SP-016: string badge carries the overage state.
+    expect(items[1].external).toBe(true);
+    expect(items[1].badge).toBe('overage');
   });
 
   it('nav item 2 is team with correct properties', () => {
@@ -146,6 +154,9 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     expect(items[2].href).toBe('/team');
     expect(items[2].icon).toBe('users');
     expect(items[2].order).toBe(3);
+    // No badge served → the field is absent (undefined), not 0/''.
+    expect(items[2].external).toBe(true);
+    expect(items[2].badge).toBeUndefined();
   });
 
   it('items are ordered by their order field (ascending)', () => {

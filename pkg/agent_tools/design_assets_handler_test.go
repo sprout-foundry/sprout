@@ -229,7 +229,8 @@ func TestDesignAssetsHandler_ForeignFolder(t *testing.T) {
 	assert.Contains(t, out.Guidance, "Never move")
 }
 
-func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {	t.Parallel()
+func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	daWriteValidTree(t, root)
 	h := &designAssetsHandler{}

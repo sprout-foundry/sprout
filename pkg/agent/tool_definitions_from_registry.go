@@ -100,8 +100,8 @@ func mcpToolsSyntheticEntry() api.Tool {
 	return api.Tool{
 		Type: "function",
 		Function: api.ToolFunction{
-					Name:        "mcp_tools",
-		Description: "Access MCP server tools. Use action=\"list\" to discover available servers and their tools; use action=\"status\" to check server health; use action=\"call\" with server+tool+arguments to invoke one.",Parameters: api.ToolParameters{
+			Name:        "mcp_tools",
+			Description: "Access MCP server tools. Use action=\"list\" to discover available servers and their tools; use action=\"status\" to check server health; use action=\"call\" with server+tool+arguments to invoke one.", Parameters: api.ToolParameters{
 				Type: "object",
 				Properties: map[string]api.ToolParameter{
 					"action":    {Type: "string", Description: "Action to perform: 'list' to discover tools, 'call' to execute"},

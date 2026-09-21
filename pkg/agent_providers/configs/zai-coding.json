@@ -36,11 +36,13 @@
       "glm-4.5-air",
       "glm-4.6",
       "glm-4.7-flash",
+      "glm-4.7-flashx",
       "glm-5.2:batch",
       "glm-5.2:free",
       "glm-5.3-flash",
       "glm-5.3-flash:batch",
-      "glm-5.3:batch"
+      "glm-5.3:batch",
+      "glm-5.3-flashx"
     ],
     "default_context_limit": 200000,
     "default_model": "glm-5",
@@ -209,12 +211,25 @@
         ]
       },
       {
+        "cached_input_cost": 0,
+        "context_length": 200000,
+        "description": "GLM-4.7 Flash - free lightweight 30B-class model optimized for agentic coding with 200K context",
+        "id": "glm-4.7-flash",
+        "input_cost": 0,
+        "name": "GLM-4.7 Flash",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
         "cached_input_cost": 0.01,
         "context_length": 200000,
-        "description": "GLM-4.7 Flash - lightweight 30B-class model optimized for agentic coding with 200K context",
-        "id": "glm-4.7-flash",
+        "description": "Z.AI GLM-4.7-FlashX - Lightweight, high-speed and cost-efficient variant of GLM-4.7 with a 200K context window and 128K max output",
+        "id": "glm-4.7-flashx",
         "input_cost": 0.07,
-        "name": "GLM-4.7 Flash",
+        "name": "GLM-4.7 FlashX",
         "output_cost": 0.4,
         "tags": [
           "tools",
@@ -287,6 +302,21 @@
         "output_cost": 2.2,
         "tags": [
           "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Z.AI GLM-5.3-FlashX - High-speed native multimodal variant of GLM-5.3-Flash, delivering inference speeds up to 200 tokens/s with a 1M-token context window",
+        "id": "glm-5.3-flashx",
+        "input_cost": 0.37,
+        "name": "GLM-5.3 FlashX",
+        "output_cost": 1.25,
+        "tags": [
+          "tools",
+          "vision",
           "reasoning",
           "structured_output"
         ]

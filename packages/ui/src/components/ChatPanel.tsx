@@ -252,6 +252,11 @@ const isCompactionSummary = (message: Message): boolean => {
 
 // ── Main Chat Component ───────────────────────────────────────────
 
+// Stable empty default: an inline `= []` would give every render a fresh
+// reference, invalidating the filteredToolExecutions memo and the
+// MessageItem memo for consumers that omit toolExecutions.
+const EMPTY_TOOL_EXECUTIONS: ToolExecution[] = [];
+
 function Chat({
   messages,
   onSendMessage,
@@ -266,7 +271,7 @@ function Chat({
   onInputChange,
   isProcessing = false,
   lastError = null,
-  toolExecutions = [],
+  toolExecutions = EMPTY_TOOL_EXECUTIONS,
   queryProgress = null,
   currentTodos: _currentTodos = [],
   subagentActivities = [],
@@ -362,9 +367,16 @@ function Chat({
     [filteredToolExecutions],
   );
 
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  // Stable across renders: passed as a prop to the memoized MessageItem, so a
+  // fresh closure on every render would defeat the memo and force every
+  // visible message to re-render (and re-parse its markdown) on every state
+  // change.
+  const formatTime = useCallback(
+    (date: Date) => {
+      return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+    [],
+  );
 
   const handleReloadWithoutSSHPath = useCallback(() => {
     const { origin, pathname } = window.location;

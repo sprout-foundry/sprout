@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,7 +10,13 @@ interface MessageContentProps {
   content: string;
 }
 
-function MessageContent({ content }: MessageContentProps): JSX.Element {
+/**
+ * Memoized on `content`: the chat re-renders on every stream flush and tool
+ * event, and without this bail-out the full ReactMarkdown + remark-gfm parse
+ * re-ran on every render for every visible message — the dominant CPU cost
+ * while watching an active agent session.
+ */
+const MessageContent = memo(function MessageContent({ content }: MessageContentProps): JSX.Element {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -64,6 +71,6 @@ function MessageContent({ content }: MessageContentProps): JSX.Element {
       {stripAnsiCodes(content)}
     </ReactMarkdown>
   );
-}
+});
 
 export default MessageContent;

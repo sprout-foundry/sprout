@@ -328,6 +328,8 @@ function parseMarkdownMinimal(
   return results;
 }
 
+let markdownRenderCount = 0;
+
 function MockMarkdown({
   children,
   components,
@@ -335,6 +337,7 @@ function MockMarkdown({
   children: string;
   components?: Record<string, (props: any) => ReactNode>;
 }) {
+  markdownRenderCount++;
   const content = typeof children === 'string' ? children : '';
   const rendered = parseMarkdownMinimal(content, components);
   return createElement('div', { 'data-testid': 'mock-markdown' }, rendered);
@@ -359,6 +362,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+  markdownRenderCount = 0;
 });
 
 afterEach(() => {
@@ -680,5 +684,36 @@ describe('MessageContent', () => {
     });
     const paragraphs = container.querySelectorAll('p');
     expect(paragraphs).toHaveLength(2);
+  });
+
+  // ------------------------------------------------------------------
+  // Memoization (regression: chat re-renders on every stream flush and
+  // tool event; the markdown pipeline must not re-run for unchanged
+  // content or the visible window re-parses at ~20 updates/sec)
+  // ------------------------------------------------------------------
+
+  it('does not re-run the markdown pipeline when content is unchanged', () => {
+    act(() => {
+      root.render(createElement(MessageContent, { content: 'Hello **world**' }));
+    });
+    const afterFirst = markdownRenderCount;
+    expect(afterFirst).toBeGreaterThan(0);
+
+    act(() => {
+      root.render(createElement(MessageContent, { content: 'Hello **world**' }));
+    });
+    expect(markdownRenderCount).toBe(afterFirst);
+  });
+
+  it('re-runs the markdown pipeline when content changes', () => {
+    act(() => {
+      root.render(createElement(MessageContent, { content: 'Hello **world**' }));
+    });
+    const afterFirst = markdownRenderCount;
+
+    act(() => {
+      root.render(createElement(MessageContent, { content: 'Different **content**' }));
+    });
+    expect(markdownRenderCount).toBe(afterFirst + 1);
   });
 });

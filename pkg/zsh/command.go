@@ -72,8 +72,6 @@ var allowedCommands = map[string]bool{
 
 	// Network info (read-only)
 	"ping":     true,
-	"curl":     true,
-	"wget":     true,
 	"nslookup": true,
 	"dig":      true,
 

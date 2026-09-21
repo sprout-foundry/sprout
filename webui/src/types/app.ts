@@ -164,6 +164,11 @@ export interface AppState {
     options?: Array<{ label: string; value?: string; description?: string }>;
     multiSelect?: boolean;
     default?: string;
+    // Credential request: the response is diverted to the credential store;
+    // the dialog renders a masked input and the value never reaches the model.
+    sensitive?: boolean;
+    // Where the response will be stored (e.g. "mcp/figma/FIGMA_TOKEN").
+    credentialKey?: string;
     // Set when the user's response could not be delivered (network error,
     // non-2xx, or delivered:false from the WASM endpoint). The dialog stays
     // open so the user can retry; this message explains the failure.

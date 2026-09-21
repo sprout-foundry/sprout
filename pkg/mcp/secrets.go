@@ -91,6 +91,27 @@ func CredentialKey(serverName, envVarName string) string {
 	return "mcp/" + serverName + "/" + envVarName
 }
 
+// IsValidEnvVarName reports whether name is a usable environment variable
+// name: [A-Za-z_][A-Za-z0-9_]*, at most 256 chars. The settings API's
+// credential endpoints enforce the same rule; this is the canonical copy.
+func IsValidEnvVarName(name string) bool {
+	if name == "" || len(name) > 256 {
+		return false
+	}
+	for i, c := range name {
+		if i == 0 {
+			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+				return false
+			}
+			continue
+		}
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 // SecretRef returns the placeholder string for a credential reference.
 // Format: "{{credential:mcp/{server}/{envvar}}}"
 func SecretRef(serverName, envVarName string) string {

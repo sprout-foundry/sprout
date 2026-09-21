@@ -190,6 +190,13 @@ func serverConfigChanged(old, new mcp.MCPServerConfig) bool {
 	if !mapsEqual(old.Env, new.Env) {
 		return true
 	}
+	// Credential changes are restart-worthy too: the client resolves the
+	// credential store at start time (BuildFullEnvForServer), and list
+	// reports from the registered server's config — a stale registration
+	// would keep a just-stored token invisible until an unrelated restart.
+	if !mapsEqual(old.Credentials, new.Credentials) {
+		return true
+	}
 	return false
 }
 

@@ -79,9 +79,9 @@ const STARTER_CARDS: StarterCard[] = [
     id: 'figma',
     icon: Puzzle,
     title: 'Connect Figma (MCP)',
-    body: 'Figma joins through an MCP server. The agent walks you through connecting it, then imports frames, components, and styles. Note: connecting takes a few minutes and a Figma access token you paste into Settings.',
+    body: 'The agent adds the Figma MCP server, asks you to paste a token (stored securely, never visible to it), then imports frames, components, and styles.',
     prompt:
-      'I want to bring my Figma designs into this workspace. Start by walking me through connecting a Figma MCP server (use the mcp-setup skill): I will need to run or install a Figma MCP server and paste an access token into Settings. Once connected, use mcp_tools to list the Figma tools, then ask me for the file URL and which frames matter before importing them into the design/ tree.',
+      'I want to bring my Figma designs into this workspace. Set it up end to end: (1) use mcp_refresh (operation: add) to connect a Figma MCP server — pick the official HTTP endpoint or the npx stdio package; (2) when the server needs my Figma access token, ask me for it with ask_user (sensitive: true, credential_key: mcp/figma/FIGMA_TOKEN) so it goes straight to the credential store; (3) verify with mcp_refresh (operation: list) that the server is running and the credential is set; (4) then use mcp_tools to discover the Figma tools, ask me for the file URL and which frames matter, and import them into the design/ tree.',
     codeOrder: 3,
     freshOrder: 2,
   },

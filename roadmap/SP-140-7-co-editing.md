@@ -1,6 +1,9 @@
 # SP-140-7 — Human Co-Editing: Design Edits That Work With Agent Edits
 
-> **Status (2026-09-19):** Draft — not started.
+> **Status (2026-09-20):** Shipped — items 7.1–7.6 landed on
+> `feat-design-workspace` (`d2eea8146`…`d59ae36f2`, rolled up in
+> `1ebdc7673`); the §7g Playwright conflict-flow pass is the remaining
+> follow-up.
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-3/4/5
 > (shipped) and coordinates with SP-140-6 (loop surface; §6a's live tree
 > and §6f's agent panel are prerequisites for the awareness items here).

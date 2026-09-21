@@ -42,8 +42,8 @@ func TestMain(m *testing.M) {
 	// a leak now costs ~2MB, and no test ever sources the user's rc files.
 	// Tests that exercise shell resolution explicitly t.Setenv their own
 	// override (resolveShell reads the env at call time).
-	os.Setenv("SPROUT_TEST_SHELL", "/bin/sh")
-	defer os.Unsetenv("SPROUT_TEST_SHELL")
+	_ = os.Setenv("SPROUT_TEST_SHELL", "/bin/sh")
+	defer func() { _ = os.Unsetenv("SPROUT_TEST_SHELL") }()
 	// Onboarding/agent tests that select the sprout-local provider would
 	// otherwise pull the user's REAL multi-GB model weights into this test
 	// binary's memory via localmodel.EnsureServerForProviderWithCheck

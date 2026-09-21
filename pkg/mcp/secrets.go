@@ -99,13 +99,15 @@ func IsValidEnvVarName(name string) bool {
 		return false
 	}
 	for i, c := range name {
+		isAlpha := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+		isDigitOrUnderscore := (c >= '0' && c <= '9') || c == '_'
 		if i == 0 {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+			if !isAlpha && c != '_' {
 				return false
 			}
 			continue
 		}
-		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+		if !isAlpha && !isDigitOrUnderscore {
 			return false
 		}
 	}

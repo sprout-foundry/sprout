@@ -2,15 +2,17 @@
  * Tokens tab body — the grouped DTCG browser (SP-140-3 §3d).
  *
  * Renders every `design/tokens/*.tokens.json` as a grouped tree (file → token
- * group → token), with a swatch per `color` token, font specimens for the
- * typography types, spacing bars for `dimension` tokens, and a type-appropriate
- * fallback for the remaining charter types. A search box filters the tree by
- * token path (§3d "search/filter across token paths").
+ * group → token), with a tile grid of swatches for `color` tokens, font
+ * specimens for the typography types, proportional spacing bars for
+ * `dimension` tokens, and a type-appropriate fallback for the remaining
+ * charter types. A search box filters the tree by token path (§3d
+ * "search/filter across token paths").
  *
  * Read-only in v1: clicking a token selects it, and the detail pane's action
- * opens the `.tokens.json` in the editor (`onSelectAsset` puts the file in the
- * pane, `onOpenFile` hands it to the editor-tab mechanism) alongside a JSON
- * schema hint for validation — editing tokens is file editing (§3d).
+ * opens the `.tokens.json` in the editor (`onSelectAsset` puts the file in
+ * the pane, `onOpenFile` hands it to the editor-tab mechanism); values edit
+ * in place through the §7c structured editor — editing tokens is file
+ * editing (§3d).
  *
  * Split like the other tabs: the parsing/grouping rules live in the pure
  * `designTokens.ts` module and the type-specific specimen surfaces in
@@ -34,7 +36,6 @@ import {
   groupTokens,
   schemaHintForToken,
   tokenFileModel,
-  tokenSchemaText,
   resolveTokenValue,
   type DesignToken,
   type DesignTokenFile,
@@ -313,18 +314,9 @@ export default function TokensTree({
         </div>
       ) : (
         <p className="design-tab-placeholder" data-testid="design-tokens-hint">
-          Select a token to inspect it; the schema for its file is shown here.
+          Select a token to inspect it; values edit in place and the DTCG schema applies per file.
         </p>
       )}
-
-      {!selectedToken ? (
-        <details className="design-tokens-schema-wrap">
-          <summary className="design-tokens-schema-summary">DTCG token schema reference</summary>
-          <pre className="design-tokens-schema" data-testid="design-tokens-schema">
-            {tokenSchemaText()}
-          </pre>
-        </details>
-      ) : null}
     </div>
   );
 }

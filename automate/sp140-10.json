@@ -1,0 +1,36 @@
+{
+  "budget": {
+    "warn_at": [0.5, 0.8],
+    "on_exceed": "stop",
+    "usd": 25
+  },
+  "continue_on_error": false,
+  "description": "SP-140-10: design-mode chat UX (10a-10e) in the feat-design-workspace worktree — RTL-aware side column, full-height agent panel, per-mode conversation pinning, inline tool details (shared chat mechanism), verify+dogfood+status. Spec: feat-design-workspace/roadmap/SP-140-10-chat-ux.md.",
+  "initial": {
+    "prompt_file": "sprout/automate/sp140-10_prompt.md",
+    "provider": "ai-worker",
+    "model": "qwen3.8-27b",
+    "persona": "coordinator",
+    "risk_profile": "permissive",
+    "skip_prompt": true,
+    "max_iterations": 0,
+    "subagent_overrides": {
+      "coder": { "provider": "zai-coding", "model": "glm-5.3-flash" },
+      "refactor": { "provider": "zai-coding", "model": "glm-5.3-flash" },
+      "tester": { "provider": "ai-worker", "model": "qwen3.8-27b" },
+      "reviewer": { "provider": "ai-worker", "model": "qwen3.8-27b" },
+      "debugger": { "provider": "ai-worker", "model": "qwen3.8-27b" },
+      "orchestrator": { "provider": "ai-worker", "model": "qwen3.8-27b" }
+    }
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false,
+  "progress": { "heartbeat_seconds": 600 },
+  "loop": {
+    "max_retries": 2,
+    "todo_file": "feat-design-workspace/roadmap/SP-140-10-chat-ux.md",
+    "build_command": "cd feat-design-workspace && make build",
+    "gate_prompt_file": "sprout/automate/sp140-10_gate.md",
+    "max_iterations": 60
+  }
+}

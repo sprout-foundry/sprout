@@ -1,6 +1,7 @@
 # SP-140-10 — Design-Mode Chat UX: Placement, Pinning, Visibility, Inline Tool Details
 
-> **Status (2026-09-22):** Draft — in flight (automation run).
+> **Status (2026-09-22):** Shipped (10a–10d committed; manual-browser dogfood
+> items 1–4 awaiting verification — see the 10e record at the end).
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-6
 > (loop surface — §6f side-column agent panel), SP-140-7 (co-editing).
 > Fixes the four design-mode dogfood gripes of 2026-09-22. Item 10d
@@ -60,7 +61,7 @@
 - [x] SP140-10b — Full-height agent panel + live visibility while working
 - [x] SP140-10c — Per-mode conversation pinning
 - [x] SP140-10d — Inline tool details (retire the sidebar dependency)
-- [ ] SP140-10e — Verify, dogfood, and mark shipped
+- [x] SP140-10e — Verify, dogfood, and mark shipped
 
 ## Items
 
@@ -233,5 +234,39 @@ Acceptance:
      drives the sidebar.
 - Flip this spec's Status to Shipped; add the `roadmap/00-INDEX.md`
   row and the umbrella phase-map row (both added at spec-creation time
-  with status Draft — update them, don't re-add). Commit with this
-  item.
+  with status Draft — update them, don't re-add). Commit with this item.
+
+## Verification record (2026-09-22, 10e)
+
+Mechanical gates — all green as of `e36c2a843` (the 10d commit):
+
+- `make build` (full pipeline: React + WASM + Go) — exit 0.
+- Targeted vitest, bounded and serial: webui 62/62 across
+  `ToolDetailInline`, `nativeChatBoot`, `useChatModePinning`,
+  `DesignSideColumn`, `DesignView` (the 10a/10b/10c regression suites
+  are green — no LTR visual or behavior regression); `packages/ui`
+  68/68 across `ChatPanel` + `MessageSegments`, plus `npm run
+  type-check` (dist rebuilt so the new props are visible to consumers).
+- webui `tsc --noEmit` pass; `prettier --check` clean; `eslint`
+  0 errors (the tree's pre-existing warning baseline otherwise).
+- The packages/ui `dist/` staleness caught by webui's tsc (old
+  `MessageSegments.d.ts` missing `activeToolDetailId`) is the reason
+  the 10d commit rebuilt the package — a stale shared-package dist
+  must be rebuilt before a consumer's type-check can pass.
+
+Manual-browser dogfood — **awaiting manual verification** (per the
+item, these are not claimed):
+
+1. `dir=rtl`: side column, border, and mobile overlay land on the
+   left (the inline-end side under RTL).
+2. Agent tab full-height on first render; latest message visible
+   during an active run; jump-to-latest button when scrolled up.
+3. Mode switches restore per-mode chats; design-with-no-pin starts a
+   fresh chat.
+4. Tool pill expands inline in design mode; code mode no longer
+   drives the sidebar.
+
+Umbrella note: `roadmap/SP-140-design-workspace.md`'s phase-map
+table carries no status column (the SP-140-7 shipped flip,
+`c54e04ce2`, touched only the child spec header), so no umbrella
+update is needed — the row exists and its scope text is accurate.

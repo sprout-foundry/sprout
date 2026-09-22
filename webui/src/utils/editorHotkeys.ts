@@ -453,7 +453,10 @@ const EDITOR_COMMAND_IDS = new Set([
  * bound.
  */
 export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: EditorHotkeyActions): KeyBinding[] {
-  const entries = hotkeyEntries ?? [];
+  // Guard non-array truthy values: a cloud-compat backend that returns
+  // `{"hotkeys": {}}` (object, not array) previously crashed the whole
+  // editor pane with "entries is not iterable" on file open (2026-09-22).
+  const entries = Array.isArray(hotkeyEntries) ? hotkeyEntries : [];
 
   // Index entries by command_id for quick lookup.
   const byCommand = new Map<string, HotkeyEntry[]>();

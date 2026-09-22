@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 264">
+  <!-- button: action buttons. Source: webui/src/App.css (.btn / .icon-btn) + ChatView composer + ModeSwitcher.
+       Palette tokens: {color.dark.accent.primary} {color.dark.accent.fg} {color.dark.brand.active-cyan} {color.dark.bg.elevated} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.muted} {typography.size.sm} {typography.weight.medium} {radius.md} {sizing.control.icon-button} {space.3} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .acbg { fill: #61afef; }
+    .hoverbg { fill: #22d3ee; }
+    .onac { fill: #ffffff; font: 14px sans-serif; }
+    .el { fill: #303742; }
+  </style>
+
+  <text x="16" y="24" class="t1">Button</text>
+
+  <!-- primary: accent fill, white label. hover = brand.active-cyan; disabled = opacity 0.4 -->
+  <text x="16" y="58" class="tm">primary</text>
+  <rect x="96" y="44" width="96" height="30" rx="6" class="acbg"/>
+  <text x="118" y="63" class="onac">Run</text>
+  <rect x="208" y="44" width="96" height="30" rx="6" class="hoverbg"/>
+  <text x="228" y="63" class="onac">Run</text>
+  <rect x="320" y="44" width="96" height="30" rx="6" class="acbg" opacity="0.4"/>
+  <text x="338" y="63" class="onac" opacity="0.6">Run</text>
+  <text x="96" y="88" class="tm">default</text>
+  <text x="208" y="88" class="tm">hover</text>
+  <text x="320" y="88" class="tm">disabled</text>
+
+  <!-- secondary: elevated fill, primary text -->
+  <text x="16" y="126" class="tm">secondary</text>
+  <rect x="96" y="112" width="96" height="30" rx="6" class="el"/>
+  <text x="114" y="131" class="t1">Cancel</text>
+  <rect x="208" y="112" width="96" height="30" rx="6" class="el" opacity="0.55"/>
+  <text x="226" y="131" class="t1" opacity="0.55">Cancel</text>
+
+  <!-- ghost: no fill, subtle border; used for toolbar / compact actions -->
+  <text x="16" y="170" class="tm">ghost</text>
+  <rect x="96" y="156" width="96" height="30" rx="6" class="none"/>
+  <rect x="96" y="156" width="96" height="30" rx="6" class="b1"/>
+  <text x="116" y="175" class="t2">Close</text>
+
+  <!-- icon-button: 28x28 square, compact affordance ({sizing.control.icon-button}) -->
+  <text x="16" y="222" class="tm">icon-button</text>
+  <rect x="96" y="204" width="28" height="28" rx="6" class="el"/>
+  <text x="104" y="222" class="t2">&#9881;</text>
+  <rect x="132" y="204" width="28" height="28" rx="6" class="none"/>
+  <rect x="132" y="204" width="28" height="28" rx="6" class="b1"/>
+  <text x="140" y="222" class="t2">&#10005;</text>
+  <text x="180" y="222" class="tm">toolbar / destructive, at {sizing.control.icon-button}</text>
+</svg>

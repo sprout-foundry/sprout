@@ -18,6 +18,7 @@ const (
 	KindBrand     = "brand"
 	KindIcon      = "icon"
 	KindWireframe = "wireframe"
+	KindComponent = "component"
 	KindScreen    = "screen"
 	KindFlow      = "flow"
 	KindFeedback  = "feedback"
@@ -230,6 +231,10 @@ func assetKind(sub, name string) string {
 	case "wireframes":
 		if strings.HasSuffix(name, ".svg") {
 			return KindWireframe
+		}
+	case "components":
+		if strings.HasSuffix(name, ".svg") {
+			return KindComponent
 		}
 	case "screens":
 		if strings.HasSuffix(name, ".html") {

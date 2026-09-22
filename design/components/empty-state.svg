@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240">
+  <!-- empty-state: placeholder for absent content. Source: webui/src empty chat / no files selected /
+       no sessions.
+       Palette tokens: {color.dark.bg.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {space.6} {space.8} {typography.size.md} {typography.size.xs} -->
+  <style>
+    .none { fill: none; }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #9aa3b2; font: 15px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .acbg { fill: #61afef; }
+    .onac { fill: #ffffff; font: 13px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="tm" font-size="14" fill="#abb2bf">Empty state</text> <!-- {color.dark.text.primary} -->
+
+  <rect x="40" y="44" width="400" height="170" rx="10" class="none"/>
+  <rect x="40" y="44" width="400" height="170" rx="10" class="b2" stroke-dasharray="4 4"/>
+  <!-- icon area, title, hint, optional action; all centered, stacked at {space.6} -->
+  <circle cx="240" cy="92" r="18" class="none"/>
+  <circle cx="240" cy="92" r="18" class="b2"/>
+  <text x="232" y="98" class="tm">&#8984;K</text>
+  <text x="240" y="140" class="t1" text-anchor="middle">No session yet</text>
+  <text x="240" y="162" class="tm" text-anchor="middle">Start a conversation or open a file</text>
+  <rect x="196" y="178" width="88" height="26" rx="6" class="acbg"/>
+  <text x="212" y="195" class="onac">New chat</text>
+  <text x="16" y="232" class="tm">dashed {color.dark.border.default} frame; action = button/primary when there is a next step</text>
+</svg>

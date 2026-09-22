@@ -1,0 +1,12 @@
+{
+  "$description": "Sprout motion tokens, distilled from webui/src/App.css (:root) and the transition literals used across component CSS.",
+  "easing": {
+    "out": { "$value": "cubic-bezier(0, 0, 0.2, 1)", "$type": "cubicBezier", "$description": "Default exit/enter curve." },
+    "in-out": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" }
+  },
+  "duration": {
+    "quick": { "$value": "120ms", "$type": "duration", "$description": "Hover tints, small state flips." },
+    "fast": { "$value": "150ms", "$type": "duration", "$description": "Standard control transitions." },
+    "base": { "$value": "200ms", "$type": "duration", "$description": "Sidebar width, panel slides, app-shell padding." }
+  }
+}

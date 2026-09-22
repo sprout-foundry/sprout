@@ -27,6 +27,10 @@ frames:
 - ` + "`login`" + ` — draft — sign-in entry point
 - ` + "`home`" + ` — ready — post-sign-in landing
 
+## Components
+
+- ` + "`button`" + ` — draft — action buttons in key states
+
 ## Flows
 
 - ` + "`sign-up`" + ` — draft — account creation
@@ -90,6 +94,7 @@ func writeValidDesignTree(t *testing.T, root string) {
 	write("design/tokens/color.tokens.json", validTokenJSON)
 	write("design/wireframes/login.svg", validWireframeBody)
 	write("design/wireframes/home.svg", validHomeWireframeBody)
+	write("design/components/button.svg", validComponentBody)
 	write("design/flows/sign-up.mmd", validFlowBody)
 	write("design/screens/login.html", validScreenHTML)
 	write("design/icons/home.svg", validTreeIconSVG)
@@ -299,6 +304,31 @@ func TestValidateFileFlow(t *testing.T) {
 	assert.Equal(t, 1, findingRules(findings)[ruleFlowchartNodeStem])
 }
 
+func TestValidateFileComponent(t *testing.T) {
+	root := t.TempDir()
+	writeValidDesignTree(t, root)
+
+	// writeValidDesignTree already carries design/components/button.svg; a
+	// clean component spec validates with zero findings through the
+	// single-file dispatch (the path is recognized, not "not a recognized
+	// design asset").
+	findings, err := ValidateFile(root, "design/components/button.svg")
+	require.NoError(t, err)
+	requireNoWireframeFindings(t, findings)
+
+	// The short form (no design/ prefix) dispatches too.
+	findings, err = ValidateFile(root, "components/button.svg")
+	require.NoError(t, err)
+	requireNoWireframeFindings(t, findings)
+
+	// A malformed component spec is a finding, not an error.
+	require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "components", "bad.svg"),
+		[]byte(`<svg viewBox="0 0 10 10"><script>x()</script><text/></svg>`), 0o644))
+	findings, err = ValidateFile(root, "design/components/bad.svg")
+	require.NoError(t, err)
+	assert.Equal(t, 1, findingRules(findings)[ruleSVGSelfContainment])
+}
+
 func TestValidateFileScreen(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
@@ -419,6 +449,7 @@ func TestValidateFileErrors(t *testing.T) {
 			"design/notes.txt",
 			"design/tokens/colors.json",   // wrong extension for the tokens dir
 			"design/wireframes/thing.png", // not an SVG
+			"design/components/thing.png", // not an SVG
 			"design/brand/logo.png",       // logos must be SVG
 		} {
 			path := filepath.Join(root, filepath.FromSlash(rel))

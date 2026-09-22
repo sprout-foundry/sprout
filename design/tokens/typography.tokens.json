@@ -1,0 +1,34 @@
+{
+  "$description": "Sprout typography tokens, distilled from webui/src/App.css (:root). Font families, the 8-step text scale (compact/large UI scales override these in CSS but the base scale is canonical), line height, and the weights the UI actually uses.",
+  "font": {
+    "sans": {
+      "$value": "Sora, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "$type": "fontFamily",
+      "$description": "UI face (Sora with Inter/system fallbacks)."
+    },
+    "mono": {
+      "$value": "'JetBrains Mono', 'SF Mono', 'Fira Code', Consolas, monospace",
+      "$type": "fontFamily",
+      "$description": "Code, terminal, and path labels."
+    }
+  },
+  "size": {
+    "xs": { "$value": "12px", "$type": "dimension", "$description": "Captions, tier badges, dense labels." },
+    "sm": { "$value": "13px", "$type": "dimension", "$description": "Sidebar, header bar, secondary text." },
+    "base": { "$value": "14px", "$type": "dimension", "$description": "Body text (document default)." },
+    "md": { "$value": "15px", "$type": "dimension" },
+    "lg": { "$value": "16px", "$type": "dimension", "$description": "Chat input, panel headings." },
+    "xl": { "$value": "18px", "$type": "dimension" },
+    "2xl": { "$value": "20px", "$type": "dimension" },
+    "3xl": { "$value": "28px", "$type": "dimension", "$description": "Page titles." }
+  },
+  "line-height": {
+    "body": { "$value": "1.5", "$type": "number", "$description": "Document line height." }
+  },
+  "weight": {
+    "regular": { "$value": "400", "$type": "fontWeight" },
+    "medium": { "$value": "500", "$type": "fontWeight", "$description": "Nav items, button labels." },
+    "semibold": { "$value": "600", "$type": "fontWeight", "$description": "Headings, active labels, option labels." },
+    "bold": { "$value": "700", "$type": "fontWeight", "$description": "Brand wordmark, avatar initials." }
+  }
+}

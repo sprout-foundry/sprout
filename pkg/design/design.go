@@ -34,6 +34,7 @@ var Subdirs = []string{
 	"brand",
 	"icons",
 	"wireframes",
+	"components",
 	"screens",
 	"flows",
 	"feedback",

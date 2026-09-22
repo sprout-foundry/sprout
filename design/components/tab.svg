@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 216">
+  <!-- tab: tab bar. Source: webui/src editor TabBar + DesignView rail tabs + SettingsView sections.
+       Palette tokens: {color.dark.bg.secondary} {color.dark.bg.tertiary} {color.dark.bg.hover} {color.dark.border.subtle} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {typography.size.sm} {space.3} {space.4} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .bar { fill: #21252b; }
+    .tabon { fill: #2c313a; }
+    .u { stroke: #61afef; }
+    .x { fill: #7f8794; font: 11px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Tab</text>
+
+  <!-- bar: secondary background, subtle divider under the row -->
+  <text x="16" y="58" class="tm">bar</text>
+  <rect x="96" y="40" width="360" height="32" rx="0" class="none"/>
+  <rect x="96" y="40" width="360" height="32" class="bar"/>
+  <line x1="96" y1="72" x2="456" y2="72" class="b1" stroke-width="1"/>
+  <!-- active tab: tertiary wash + accent underline; inactive: plain -->
+  <rect x="96" y="40" width="92" height="32" class="tabon"/>
+  <line x1="96" y1="71" x2="188" y2="71" class="u" stroke-width="2"/>
+  <text x="112" y="60" class="t1">ModeSwitcher.tsx</text>
+  <text x="196" y="60" class="t2">sidebar.css</text>
+  <text x="284" y="60" class="t2">README.md</text>
+  <text x="96" y="92" class="tm">active = bg.tertiary + accent underline (2px)</text>
+
+  <!-- modified / close affordance on open tabs -->
+  <text x="16" y="140" class="tm">open tab</text>
+  <rect x="96" y="122" width="140" height="32" class="tabon"/>
+  <circle cx="110" cy="138" r="3" class="none"/>
+  <circle cx="110" cy="138" r="3" fill="#61afef"/> <!-- {color.dark.accent.primary} -->
+  <text x="120" y="142" class="t1">App.css</text>
+  <text x="216" y="143" class="x">&#10005;</text>
+  <text x="96" y="176" class="tm">dot = unsaved {color.dark.accent.primary}; close = {color.dark.text.muted}</text>
+
+  <!-- overflow: more-menu at the right edge -->
+  <text x="16" y="204" class="tm">overflow</text>
+  <text x="96" y="200" class="tm">&#8230;</text>
+  <text x="120" y="200" class="tm">collapsed tabs open as a select list</text>
+</svg>

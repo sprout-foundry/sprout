@@ -1,0 +1,20 @@
+%% agent-turn — one chat turn end to end.
+%% Non-screen flow: node ids are generic (deliberately not wireframe stems).
+flowchart TD
+  send["user sends message (⌘↵)"]
+  plan["agent plans — todos appear"]
+  tools["tool execution — parallel pills on the timeline"]
+  todos["todos update — checked off as done"]
+  changes["files change — diff pane + git status"]
+  review["human reviews — build / test / e2e"]
+  commit["commit + push (on explicit request only)"]
+  reply["final message — completion summary"]
+  send --> plan
+  plan --> tools
+  tools --> todos
+  todos --> changes
+  changes --> review
+  review --> commit
+  review --> reply
+  %% failing gate: loop back with the error as context
+  review --> tools

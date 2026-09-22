@@ -1,0 +1,14 @@
+{
+  "$description": "Sprout spacing scale, distilled from webui/src/App.css (:root). The --space-* ramp used across the UI; note the deliberate gap between 6 and 8 (the scale has no 7-step).",
+  "space": {
+    "1": { "$value": "2px", "$type": "dimension" },
+    "2": { "$value": "4px", "$type": "dimension" },
+    "3": { "$value": "6px", "$type": "dimension" },
+    "4": { "$value": "8px", "$type": "dimension", "$description": "Default gap between related elements." },
+    "5": { "$value": "10px", "$type": "dimension" },
+    "6": { "$value": "12px", "$type": "dimension", "$description": "Compact control padding." },
+    "8": { "$value": "16px", "$type": "dimension", "$description": "Section padding." },
+    "10": { "$value": "20px", "$type": "dimension" },
+    "12": { "$value": "24px", "$type": "dimension", "$description": "Largest standard step." }
+  }
+}

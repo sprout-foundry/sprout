@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <!-- command-palette: ⌘K overlay (files, symbols, actions). Source: webui/src CommandPalette structure.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.elevated} {color.dark.bg.hover} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {radius.lg} {sizing.control.icon-button} -->
+  <style>
+    .bg { fill: #282c34; }
+    .panel { fill: #21252b; }
+    .elev { fill: #303742; }
+    .hover { fill: rgba(48, 55, 66, 0.85); }
+    .none { fill: none; }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .ac { fill: #61afef; font: 13px sans-serif; }
+    .acline { fill: none; stroke: #61afef; }
+    .mono { fill: #9aa3b2; font: 12px monospace; }
+    .scrim { fill: rgba(16, 17, 23, 0.55); }
+  </style>
+
+  <!-- dimmed app behind the overlay -->
+  <rect x="0" y="0" width="1440" height="900" class="bg"/>
+  <rect x="0" y="0" width="288" height="900" class="panel" opacity="0.35"/>
+  <rect x="0" y="0" width="1440" height="35" class="panel" opacity="0.35"/>
+  <rect x="312" y="72" width="480" height="60" rx="10" class="elev" opacity="0.15"/>
+  <rect x="312" y="168" width="560" height="60" rx="10" class="elev" opacity="0.15"/>
+  <rect x="0" y="0" width="1440" height="900" class="scrim"/>
+
+  <!-- palette {color.dark.bg.elevated} {radius.lg} -->
+  <rect x="360" y="180" width="720" height="460" rx="8" class="elev"/>
+  <line x1="360" y1="180" x2="1080" y2="640" class="b2" stroke-width="1"/>
+
+  <!-- input row -->
+  <text x="388" y="216" class="t1">&#8984;K &#160; Search files, symbols, actions&#8230;</text>
+  <rect x="940" y="196" width="112" height="24" rx="4" class="none"/>
+  <rect x="940" y="196" width="112" height="24" rx="4" class="panel"/>
+  <text x="952" y="213" class="tm">type to filter</text>
+  <line x1="360" y1="236" x2="1080" y2="236" class="b2" stroke-width="1"/>
+
+  <!-- files group -->
+  <text x="388" y="264" class="tm">FILES</text>
+  <rect id="res-1" x="376" y="276" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="276" width="688" height="32" rx="6" class="hover"/>
+  <line x1="376" y1="276" x2="1064" y2="308" class="acline" stroke-width="1.5"/>
+  <text x="392" y="298" class="t1">ModeSwitcher.tsx</text>
+  <text x="940" y="298" class="mono">webui/src/workspaces/</text>
+  <rect id="res-2" x="376" y="312" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="312" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="334" class="t2">ModeSwitcher.test.tsx</text>
+  <text x="940" y="334" class="mono">webui/src/workspaces/</text>
+  <rect id="res-3" x="376" y="348" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="348" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="370" class="t2">App.css</text>
+  <text x="940" y="370" class="mono">webui/src/</text>
+  <rect id="res-4" x="376" y="384" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="384" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="406" class="t2">design_validate_handler.go</text>
+  <text x="940" y="406" class="mono">pkg/agent_tools/</text>
+
+  <!-- symbols group -->
+  <text x="388" y="444" class="tm">SYMBOLS</text>
+  <rect id="res-5" x="376" y="456" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="456" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="478" class="t2">&#9672; validateDesignWorkspace()</text>
+  <text x="940" y="478" class="mono">pkg/design/</text>
+  <rect id="res-6" x="376" y="492" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="492" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="514" class="t2">&#9672; ModeSwitcher() &#8230; component</text>
+  <text x="940" y="514" class="mono">webui/src/workspaces/</text>
+
+  <!-- actions group -->
+  <text x="388" y="552" class="tm">ACTIONS</text>
+  <rect id="res-7" x="376" y="564" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="564" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="586" class="t2">Switch to Design mode</text>
+  <text x="1000" y="586" class="mono">&#8984;D</text>
+  <rect id="res-8" x="376" y="600" width="688" height="32" rx="6" class="none"/>
+  <rect x="376" y="600" width="688" height="32" rx="6" class="panel"/>
+  <text x="392" y="622" class="t2">Open terminal</text>
+  <text x="1000" y="622" class="mono">&#8984;J</text>
+
+  <!-- footer hints -->
+  <line x1="360" y1="628" x2="1080" y2="628" class="b2" stroke-width="1"/>
+  <text x="388" y="646" class="tm">&#8593;&#8595; navigate &#183; &#8629; open &#183; esc close</text>
+</svg>

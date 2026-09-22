@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 220">
+  <!-- composer: message input. Source: webui/src/ChatView composer (placeholder, model selector,
+       send, queue row). Composes: select (model) + button (send).
+       Palette tokens: {color.dark.bg.secondary} {color.dark.text.muted} {color.dark.text.primary} {color.dark.accent.primary} {color.dark.accent.fg} {color.dark.border.default} {radius.xl} {space.4} {space.6} -->
+  <style>
+    .none { fill: none; }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .tm { fill: #5c6370; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .panel { fill: #21252b; }
+    .el { fill: #303742; }
+    .acbg { fill: #61afef; }
+    .onac { fill: #ffffff; font: 14px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Composer</text>
+
+  <text x="16" y="58" class="tm">idle</text>
+  <rect x="16" y="70" width="528" height="62" rx="10" class="none"/>
+  <rect x="16" y="70" width="528" height="62" rx="10" class="panel"/>
+  <rect x="16" y="70" width="528" height="62" rx="10" class="b2"/>
+  <text x="36" y="96" class="tm">Message sprout&#8230; (&#8984;&#8679; to send, shift+enter for newline)</text>
+  <line x1="36" y1="112" x2="524" y2="112" class="b1"/>
+  <rect x="414" y="88" width="104" height="26" rx="6" class="el"/>
+  <text x="424" y="105" class="t2">qwen3.8-27b &#9662;</text>
+  <rect x="530" y="86" width="44" height="30" rx="6" class="acbg"/>
+  <text x="542" y="106" class="onac">&#9654;</text>
+
+  <text x="16" y="164" class="tm">queued</text>
+  <rect x="16" y="176" width="528" height="24" rx="6" class="none"/>
+  <rect x="16" y="176" width="528" height="24" rx="6" class="el" opacity="0.35"/>
+  <text x="32" y="192" class="tm">queued: 1 message (sent when the current turn finishes)</text>
+  <text x="16" y="214" class="tm">send = button/primary; selector = select; queue row = badge-like status strip</text>
+</svg>

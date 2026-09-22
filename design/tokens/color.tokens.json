@@ -1,0 +1,113 @@
+{
+  "$description": "Sprout color tokens, distilled from webui/src/App.css (:root dark defaults and :root[data-theme=light] overrides). One group per theme; the app ships dark by default and switches via data-theme. Status tints are 12% accent mixes (the CSS color-mix recipe) expressed as self-contained rgba literals. Aliases reference same-theme tokens within this file only.",
+  "dark": {
+    "brand": {
+      "$description": "The sprout brand hues; teal is constant across themes per the design system.",
+      "teal": { "$value": "#14b8c8", "$type": "color", "$description": "Brand teal." },
+      "frost": { "$value": "#68e3ee", "$type": "color", "$description": "Frost leaf accent (flips to sprout green in light)." },
+      "active-cyan": { "$value": "#22d3ee", "$type": "color", "$description": "Canonical active rail / underline hue (sidebar nav, editor tab)." },
+      "navy": { "$value": "#10212d", "$type": "color", "$description": "Brand navy ink." }
+    },
+    "bg": {
+      "primary": { "$value": "#282c34", "$type": "color", "$description": "Page background (Atom One)." },
+      "secondary": { "$value": "#21252b", "$type": "color", "$description": "Sidebar and header surfaces." },
+      "tertiary": { "$value": "#2c313a", "$type": "color", "$description": "Tertiary surfaces (nav buttons)." },
+      "elevated": { "$value": "#303742", "$type": "color", "$description": "Raised surfaces: menus, popovers, code backgrounds, standard hover." },
+      "surface": { "$value": "#3a404b", "$type": "color", "$description": "Terminal strip and highest-elevation surfaces." },
+      "hover": { "$value": "{dark.bg.elevated}", "$type": "color", "$description": "Standard hover surface alias." },
+      "code": { "$value": "{dark.bg.elevated}", "$type": "color", "$description": "Code / inline-code background." },
+      "input": { "$value": "{dark.bg.primary}", "$type": "color", "$description": "Form field background — distinct from page bg." },
+      "error": { "$value": "rgba(224, 108, 117, 0.12)", "$type": "color", "$description": "12% error tint (status pills, alerts)." },
+      "success": { "$value": "rgba(152, 195, 121, 0.12)", "$type": "color", "$description": "12% success tint." },
+      "warning": { "$value": "rgba(229, 192, 123, 0.12)", "$type": "color", "$description": "12% warning tint." },
+      "info": { "$value": "rgba(97, 175, 239, 0.12)", "$type": "color", "$description": "12% info tint (primary accent)." }
+    },
+    "border": {
+      "subtle": { "$value": "rgba(171, 178, 191, 0.14)", "$type": "color", "$description": "Hairline separators." },
+      "default": { "$value": "rgba(171, 178, 191, 0.22)", "$type": "color", "$description": "Default control and card borders." },
+      "strong": { "$value": "rgba(171, 178, 191, 0.34)", "$type": "color", "$description": "Emphasized borders (hover, active controls)." },
+      "focus": { "$value": "rgba(97, 175, 239, 0.75)", "$type": "color", "$description": "Keyboard focus rings." }
+    },
+    "text": {
+      "primary": { "$value": "#abb2bf", "$type": "color", "$description": "Body text." },
+      "secondary": { "$value": "#9aa3b2", "$type": "color", "$description": "Secondary text, controls." },
+      "tertiary": { "$value": "#7f8794", "$type": "color", "$description": "Tertiary text." },
+      "muted": { "$value": "#5c6370", "$type": "color", "$description": "Placeholders, timestamps." },
+      "accent": { "$value": "#e5c07b", "$type": "color", "$description": "Amber text accent (Atom One yellow)." }
+    },
+    "accent": {
+      "primary": { "$value": "#61afef", "$type": "color", "$description": "Primary accent (Atom One blue): links, selection, active states." },
+      "secondary": { "$value": "#56b6c2", "$type": "color", "$description": "Secondary accent (cyan-teal)." },
+      "cyan": { "$value": "{dark.accent.secondary}", "$type": "color", "$description": "Cyan accent; same hue as secondary." },
+      "success": { "$value": "#98c379", "$type": "color", "$description": "Success green." },
+      "warning": { "$value": "#e5c07b", "$type": "color", "$description": "Warning amber." },
+      "error": { "$value": "#e06c75", "$type": "color", "$description": "Error red." },
+      "info": { "$value": "{dark.accent.primary}", "$type": "color", "$description": "Informational emphasis maps to primary." },
+      "fg": { "$value": "#ffffff", "$type": "color", "$description": "Foreground on accent surfaces." },
+      "on-primary": { "$value": "{dark.accent.fg}", "$type": "color", "$description": "Text on a primary-color surface." },
+      "foreground": { "$value": "{dark.accent.primary}", "$type": "color", "$description": "Semantic foreground-accent alias (badges, active-tab icons)." },
+      "warning-fg": { "$value": "#1a1a2e", "$type": "color", "$description": "Dark ink on amber warning surfaces (white fails contrast); constant across themes." }
+    },
+    "subagent": {
+      "$description": "Subagent nesting-depth accents (tree borders, persona text); driven by depth 0-3.",
+      "depth-0": { "$value": "#818cf8", "$type": "color" },
+      "depth-1": { "$value": "#a78bfa", "$type": "color" },
+      "depth-2": { "$value": "#c084fc", "$type": "color" },
+      "depth-3": { "$value": "#e879f9", "$type": "color" }
+    }
+  },
+  "light": {
+    "brand": {
+      "teal": { "$value": "#14b8c8", "$type": "color", "$description": "Brand teal (constant across themes)." },
+      "frost": { "$value": "#1ba03d", "$type": "color", "$description": "Frost leaf accent as sprout green in light mode." },
+      "active-cyan": { "$value": "#0891b2", "$type": "color", "$description": "Active rail / underline hue, pulled darker for legibility." },
+      "navy": { "$value": "#10212d", "$type": "color", "$description": "Brand navy ink (no light override in CSS; inherits dark)." }
+    },
+    "bg": {
+      "primary": { "$value": "#f4f7fb", "$type": "color", "$description": "Page background." },
+      "secondary": { "$value": "#eef3f9", "$type": "color", "$description": "Sidebar and header surfaces." },
+      "tertiary": { "$value": "#e5edf7", "$type": "color", "$description": "Tertiary surfaces." },
+      "elevated": { "$value": "#dbe7f5", "$type": "color", "$description": "Raised surfaces: menus, popovers, code backgrounds, standard hover." },
+      "surface": { "$value": "#cfdff1", "$type": "color", "$description": "Terminal strip and highest-elevation surfaces." },
+      "hover": { "$value": "{light.bg.elevated}", "$type": "color", "$description": "Standard hover surface alias." },
+      "code": { "$value": "{light.bg.elevated}", "$type": "color", "$description": "Code / inline-code background." },
+      "input": { "$value": "{light.bg.primary}", "$type": "color", "$description": "Form field background." },
+      "error": { "$value": "rgba(220, 38, 38, 0.12)", "$type": "color", "$description": "12% error tint." },
+      "success": { "$value": "rgba(5, 150, 105, 0.12)", "$type": "color", "$description": "12% success tint." },
+      "warning": { "$value": "rgba(217, 119, 6, 0.12)", "$type": "color", "$description": "12% warning tint." },
+      "info": { "$value": "rgba(29, 78, 216, 0.12)", "$type": "color", "$description": "12% info tint." }
+    },
+    "border": {
+      "subtle": { "$value": "rgba(71, 85, 105, 0.12)", "$type": "color" },
+      "default": { "$value": "rgba(71, 85, 105, 0.22)", "$type": "color" },
+      "strong": { "$value": "rgba(71, 85, 105, 0.34)", "$type": "color" },
+      "focus": { "$value": "rgba(2, 132, 199, 0.58)", "$type": "color", "$description": "Keyboard focus rings." }
+    },
+    "text": {
+      "primary": { "$value": "#0f172a", "$type": "color", "$description": "Body text." },
+      "secondary": { "$value": "#334155", "$type": "color", "$description": "Secondary text." },
+      "tertiary": { "$value": "#475569", "$type": "color", "$description": "Tertiary text." },
+      "muted": { "$value": "#64748b", "$type": "color", "$description": "Placeholders, timestamps." },
+      "accent": { "$value": "#b45309", "$type": "color", "$description": "Amber text accent, darkened for light backgrounds." }
+    },
+    "accent": {
+      "primary": { "$value": "#1d4ed8", "$type": "color", "$description": "Primary accent: links, selection, active states." },
+      "secondary": { "$value": "#0f766e", "$type": "color", "$description": "Secondary accent (teal)." },
+      "cyan": { "$value": "#0891b2", "$type": "color", "$description": "Cyan accent." },
+      "success": { "$value": "#059669", "$type": "color", "$description": "Success green." },
+      "warning": { "$value": "#d97706", "$type": "color", "$description": "Warning amber." },
+      "error": { "$value": "#dc2626", "$type": "color", "$description": "Error red." },
+      "info": { "$value": "{light.accent.primary}", "$type": "color", "$description": "Informational emphasis maps to primary." },
+      "fg": { "$value": "#ffffff", "$type": "color", "$description": "Foreground on accent surfaces." },
+      "on-primary": { "$value": "{light.accent.fg}", "$type": "color", "$description": "Text on a primary-color surface." },
+      "foreground": { "$value": "{light.accent.primary}", "$type": "color", "$description": "Semantic foreground-accent alias." },
+      "warning-fg": { "$value": "#1a1a2e", "$type": "color", "$description": "Dark ink on amber warning surfaces; constant across themes." }
+    },
+    "subagent": {
+      "depth-0": { "$value": "#4f46e5", "$type": "color" },
+      "depth-1": { "$value": "#7c3aed", "$type": "color" },
+      "depth-2": { "$value": "#9333ea", "$type": "color" },
+      "depth-3": { "$value": "#c026d3", "$type": "color" }
+    }
+  }
+}

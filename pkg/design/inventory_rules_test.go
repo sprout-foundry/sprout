@@ -278,6 +278,73 @@ func TestValidateConsistencyInventoryFindings(t *testing.T) {
 	assertSortedFindings(t, findings)
 }
 
+// TestValidateComponentInventoryOrphans covers the §4b "Component inventory"
+// bullet: a component stem that appears in no README Components listing is an
+// orphan (info); a listed one is not. Unlike screens, a flow reference does
+// not rescue a component — the README listing is its only reference channel.
+func TestValidateComponentInventoryOrphans(t *testing.T) {
+	t.Run("orphan-component-info", func(t *testing.T) {
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{
+			"button.svg":    validComponentBody,
+			"badge.svg":     validComponentBody,
+			"forgotten.svg": validComponentBody,
+		})
+		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"),
+			[]byte("# Design\n\n## Components\n\n- `button` — draft\n- `badge` — draft\n"), 0o644))
+
+		findings := ValidateComponentInventory(root)
+		rules := findingRules(findings)
+		assert.Equal(t, 1, rules[ruleConsistencyComponentOrphan], "got %#v", findings)
+		f := findings[0]
+		assert.Equal(t, SeverityInfo, f.Severity, "an unlisted component is advisory info")
+		assert.Equal(t, "design/components/forgotten.svg", f.File)
+		assert.Contains(t, f.Message, "forgotten")
+	})
+
+	t.Run("readme-reference-clears-orphan", func(t *testing.T) {
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{"button.svg": validComponentBody})
+		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"),
+			[]byte("# Design\n\n## Components\n\n- `button` — draft — actions\n"), 0o644))
+
+		findings := ValidateComponentInventory(root)
+		assert.Equal(t, 0, findingRules(findings)[ruleConsistencyComponentOrphan], "got %#v", findings)
+	})
+
+	t.Run("screens-section-does-not-clear", func(t *testing.T) {
+		// A component named only in the Screens section is still an orphan:
+		// the listing sections are distinct.
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{"button.svg": validComponentBody})
+		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"),
+			[]byte("# Design\n\n## Screens\n\n- `button` — draft\n"), 0o644))
+
+		findings := ValidateComponentInventory(root)
+		assert.Equal(t, 1, findingRules(findings)[ruleConsistencyComponentOrphan], "got %#v", findings)
+	})
+
+	t.Run("flow-reference-does-not-clear", func(t *testing.T) {
+		// Components are referenced by compositions, not flows: a flow node
+		// sharing the stem does not rescue the component.
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{"button.svg": validComponentBody})
+		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "flows", "main.mmd"),
+			[]byte("flowchart LR\n  button --> done\n"), 0o644))
+
+		findings := ValidateComponentInventory(root)
+		assert.Equal(t, 1, findingRules(findings)[ruleConsistencyComponentOrphan], "got %#v", findings)
+	})
+
+	t.Run("no-components-clean", func(t *testing.T) {
+		root := t.TempDir()
+		findings := ValidateComponentInventory(root)
+		require.NotNil(t, findings)
+		assert.Empty(t, findings)
+	})
+}
+
 // ---------------------------------------------------------------------------
 // SP-140-4 §4b — naming (slug rule + screens/ ↔ wireframes/ mismatch -> warn)
 // ---------------------------------------------------------------------------

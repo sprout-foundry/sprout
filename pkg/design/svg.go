@@ -301,6 +301,163 @@ func ValidateWireframesDir(root string) ([]Finding, error) {
 	return findings, nil
 }
 
+// ValidateComponent validates one design/components/*.svg component spec,
+// SP-140-1 §1b applied to the component tier: a self-contained, low-fidelity
+// SVG that shows one reusable UI component in its key variants and states.
+// relPath is the design-relative path (e.g. "design/components/button.svg").
+//
+// Components are the composable layer beneath screens: a screen wireframe
+// is a composition of components, so a component spec carries no navigation
+// semantics (no data-nav check) and its viewBox is the component's bounding
+// box, not a device frame (no frame-match check). Everything else the
+// wireframe contract requires applies unchanged: well-formed XML, a root
+// <svg> with an integer viewBox, self-containment, the slug name rule,
+// <text> labels (advisory), data-URI size (advisory), and token-usage
+// comments (advisory).
+//
+// Hard checks (SeverityError): well-formedness, root/viewBox, self-
+// containment, slug name. Advisory (info/warn): text usage, data-URI size,
+// token usage. The result is never nil.
+func ValidateComponent(relPath string, content []byte) []Finding {
+	findings := []Finding{}
+
+	// slug name rule (hard) — the file stem must match the shared slug rule.
+	stem := strings.TrimSuffix(path.Base(filepath.ToSlash(relPath)), ".svg")
+	if !frameNameRe.MatchString(stem) {
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGSlugName,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("component stem %q must match the slug rule %s", stem, SlugPattern),
+		})
+	}
+
+	walk := walkSVG(content)
+	if walk.error != nil {
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     walk.errorLine,
+			Rule:     ruleSVGWellformed,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("not well-formed XML: %v", walk.error),
+		})
+		return finalizeWireframeFindings(findings)
+	}
+	if !walk.sawRoot {
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGWellformed,
+			Severity: SeverityError,
+			Message:  "missing root element; a component spec must be a single <svg> document",
+		})
+		return finalizeWireframeFindings(findings)
+	}
+
+	// root <svg> + integer viewBox (hard).
+	switch {
+	case !walk.rootIsSVG:
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGViewBox,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("root element is <%s>, expected <svg>", walk.rootName),
+		})
+	case walk.viewBoxMissing:
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGViewBox,
+			Severity: SeverityError,
+			Message:  "root <svg> is missing the viewBox attribute",
+		})
+	case !walk.viewBoxAllInt:
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGViewBox,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("viewBox %q must hold four integer values (minX minY width height)", walk.viewBoxRaw),
+		})
+	}
+
+	// self-containment (hard): no <script>, no external/local resource refs.
+	scriptOff := 0
+	for range walk.scripts {
+		off := findTagOffset(content, "script", scriptOff)
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     lineOfOffset(content, off),
+			Rule:     ruleSVGSelfContainment,
+			Severity: SeverityError,
+			Message:  "component specs must be self-contained: remove <script>",
+		})
+		if off >= 0 {
+			scriptOff = off + 1
+		}
+	}
+	for _, r := range walk.resourceRefs {
+		verdict := classifyResourceRef(r.value)
+		if verdict == "" {
+			continue
+		}
+		off := findAttrValueOffset(content, r.attr, r.value, 0)
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     lineOfOffset(content, off),
+			Rule:     ruleSVGSelfContainment,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("self-containment: %s reference %q in <%s> breaks self-containment (embed a data: URI or reference from brand/)", verdict, r.value, r.tag),
+		})
+	}
+
+	// <text> usage (advisory): variant and state labels should stay greppable.
+	if !walk.hasText {
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleSVGTextUsage,
+			Severity: SeverityInfo,
+			Message:  "component spec contains no <text> elements; label variants and states with <text> so they stay greppable and accessible",
+		})
+	}
+
+	// embedded data URI size (advisory warn, SP-140-1 §1h binary hygiene).
+	findings = append(findings, ValidateDataURISizes(relPath, content)...)
+
+	// literal fill/stroke/font-family values not backed by a {token.path}
+	// comment (advisory info, SP-140-4 §4b "Token usage").
+	findings = append(findings, validateTokenUsage(relPath, content)...)
+
+	return finalizeWireframeFindings(findings)
+}
+
+// ValidateComponentsDir validates every design/components/*.svg under root.
+// A missing or empty components directory yields no findings, not an error —
+// a whole-tree validator run must not fail on workspaces without a component
+// tier. Findings are sorted by file, line, rule, message; errors are I/O
+// failures only.
+func ValidateComponentsDir(root string) ([]Finding, error) {
+	pattern := filepath.Join(root, DirName, "components", "*.svg")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("globbing %s: %w", pattern, err)
+	}
+	findings := []Finding{}
+	if len(matches) == 0 {
+		return findings, nil
+	}
+	for _, match := range matches {
+		data, err := os.ReadFile(match)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", match, err)
+		}
+		rel, err := filepath.Rel(root, match)
+		if err != nil {
+			return nil, fmt.Errorf("resolving %s relative to %s: %w", match, root, err)
+		}
+		findings = append(findings, ValidateComponent(filepath.ToSlash(rel), data)...)
+	}
+	sortFindings(findings)
+	return findings, nil
+}
+
 // svgWalk holds the structural facts the wireframe checks extract from one
 // SVG document via a single encoding/xml pass.
 type svgWalk struct {

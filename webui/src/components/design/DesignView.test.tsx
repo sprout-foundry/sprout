@@ -21,6 +21,8 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import type * as designApiModule from '../../services/api/designApi';
@@ -255,5 +257,88 @@ describe('DesignView side column (§6f rework: Details | Agent tabs)', () => {
   it('passes the chat payload through to the Agent tab', () => {
     renderWorkspace({ chatProps: { inputValue: '', onSendMessage: vi.fn(), onInputChange: vi.fn() } });
     expect(screen.getByTestId('design-side-panel-agent')).toBeInTheDocument();
+  });
+});
+
+/**
+ * SP-140-10b — full-height agent panel + live visibility while working.
+ *
+ * The height chain is pinned as a CSS contract (jsdom does not compute
+ * layout): every link from .design-shell-body down to the chat root is
+ * flex: 1 + min-height: 0 under a definite parent, so the chat fills the
+ * column with no auto-height ancestor to collapse it. The tab-flip tests
+ * pin the remount that guarantees the chat's virtuoso scroller measures
+ * with real height (it mounts inside the hidden Details-default tab).
+ */
+describe('DesignView agent panel height chain (SP-140-10b)', () => {
+  const chatProps = { inputValue: '', onSendMessage: vi.fn(), onInputChange: vi.fn() };
+
+  it('remounts the agent panel on each Details→Agent flip (fresh full-height metrics)', () => {
+    renderWorkspace({ chatProps });
+    const initial = screen.getByTestId('design-agent-panel');
+
+    // First flip: the hidden first mount is replaced by a visible one.
+    fireEvent.click(screen.getByTestId('design-side-tab-agent'));
+    const first = screen.getByTestId('design-agent-panel');
+    expect(first).not.toBe(initial);
+
+    // Subsequent flips remount too — the metric fix is per-flip.
+    fireEvent.click(screen.getByTestId('design-side-tab-details'));
+    fireEvent.click(screen.getByTestId('design-side-tab-agent'));
+    const second = screen.getByTestId('design-agent-panel');
+    expect(second).not.toBe(first);
+  });
+
+  it('keeps the agent panel mounted while the Details tab is active', () => {
+    renderWorkspace({ chatProps });
+    fireEvent.click(screen.getByTestId('design-side-tab-agent'));
+    const panel = screen.getByTestId('design-agent-panel');
+    fireEvent.click(screen.getByTestId('design-side-tab-details'));
+    expect(panel).toBeInTheDocument();
+  });
+
+  it('CSS contract: the height chain carries no auto-height ancestor', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, 'DesignView.css'), 'utf8');
+    /** All rule bodies for a selector (a class may appear in several rules). */
+    const ruleBodies = (source: string, selector: string): string[] => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'g');
+      const bodies: string[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(source)) !== null) bodies.push(m[1]);
+      return bodies;
+    };
+    const anyBody = (bodies: string[], pattern: RegExp) => bodies.some((b) => pattern.test(b));
+    const noBody = (bodies: string[], pattern: RegExp) => bodies.every((b) => !pattern.test(b));
+
+    for (const selector of [
+      '.design-shell-body',
+      '.design-view',
+      '.design-view-body',
+      '.design-side-body',
+      '.design-agent-panel',
+      '.design-agent-chat',
+    ]) {
+      const bodies = ruleBodies(css, selector);
+      expect(bodies.length, `no rule found for ${selector}`).toBeGreaterThan(0);
+      expect(anyBody(bodies, /flex:\s*1/), `${selector} must grow (flex: 1)`).toBe(true);
+      expect(anyBody(bodies, /min-height:\s*0/), `${selector} must allow shrink (min-height: 0)`).toBe(true);
+    }
+    // The chat root (.design-agent-chat > *) is granted the flex growth.
+    expect(anyBody(ruleBodies(css, '.design-agent-chat > *'), /flex:\s*1/)).toBe(true);
+    expect(anyBody(ruleBodies(css, '.design-agent-chat > *'), /min-height:\s*0/)).toBe(true);
+    // .design-view must not lean on a percentage height (a definite parent
+    // it does not have in every host); it grows as a flex child.
+    expect(noBody(ruleBodies(css, '.design-view'), /height:\s*100%/)).toBe(true);
+    // The side column stretches under a definite row height.
+    expect(anyBody(ruleBodies(css, '.design-side-column'), /min-height:\s*0/)).toBe(true);
+    // The shared chat root (packages/ui) is the last link of the chain.
+    const uiCss = fs.readFileSync(
+      path.resolve(__dirname, '../../../../packages/ui/src/components/ChatPanel.css'),
+      'utf8',
+    );
+    expect(anyBody(ruleBodies(uiCss, '.chat-shell'), /flex:\s*1/)).toBe(true);
+    expect(anyBody(ruleBodies(uiCss, '.chat-shell'), /min-height:\s*0/)).toBe(true);
+    expect(anyBody(ruleBodies(uiCss, '.chat-shell'), /display:\s*flex/)).toBe(true);
   });
 });

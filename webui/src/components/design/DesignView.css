@@ -11,7 +11,15 @@
 .design-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* SP-140-10b: the surface is a flex column (health strip + view), so the
+   * view takes the REMAINING height as a flex child instead of a 100% that
+   * only resolves when the parent's height is definite. Every link in the
+   * chain .main-content.design-shell → .design-shell-body → .design-surface
+   * → .design-view → .design-view-body → .design-side-column →
+   * .design-side-body → .design-agent-panel → .design-agent-chat is now
+   * flex: 1 + min-height: 0 under a definite parent — no auto-height
+   * ancestor left to collapse the chat. */
+  flex: 1;
   min-height: 0;
   background: var(--bg-primary);
   color: var(--text-primary);

@@ -6,8 +6,10 @@
  * marker reflects the selection; the tablist wiring (roles/aria) is present.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import DesignSideColumn from './DesignSideColumn';
 
 function renderColumn(overrides: Partial<React.ComponentProps<typeof DesignSideColumn>> = {}) {
@@ -60,5 +62,58 @@ describe('DesignSideColumn', () => {
       <DesignSideColumn sideTab="details" onSideTabChange={vi.fn()} details={<div />} agent={<div />} hasSelection />,
     );
     expect(screen.getByTestId('design-side-panel-details')).toHaveAttribute('data-idle', 'false');
+  });
+});
+
+/**
+ * SP-140-10a — RTL-aware side column placement.
+ *
+ * The component stays direction-agnostic (the DOM contract is identical under
+ * dir="rtl"); the direction logic lives in DesignView.css as logical
+ * properties, so in either direction the column sits at the END of the
+ * reading flow: the border faces the content (inline-start) and the mobile
+ * fixed overlay pins to the far edge (inline-end). jsdom
+ * cannot compute logical styles (or apply media queries), so the placement
+ * contract is asserted against the CSS source itself.
+ */
+describe('DesignSideColumn — RTL placement (SP-140-10a)', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, 'DesignView.css'), 'utf8');
+
+  /** The base (non-media-query) `.design-side-column` rule body. */
+  const baseRuleBody = (css.match(/\.design-side-column\s*\{([^}]*)\}/) ?? ['', ''])[1];
+
+  /** The `.design-side-column` rule body inside the mobile media query. */
+  const mobileRuleBody = (() => {
+    const block = css.match(/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{([\s\S]*?)\n\}/);
+    return (block?.[1] ?? '').match(/\.design-side-column\s*\{([^}]*)\}/)?.[1] ?? '';
+  })();
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('dir');
+    cleanup();
+  });
+
+  it('renders the same DOM contract under dir="rtl" (CSS carries the direction)', () => {
+    document.documentElement.setAttribute('dir', 'rtl');
+    renderColumn({ sideTab: 'agent' });
+    const column = screen.getByTestId('design-side-column');
+    expect(column.className).toBe('design-side-column');
+    expect(column).toHaveAttribute('data-tab', 'agent');
+    expect(screen.getByTestId('design-side-panel-agent')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('design-side-panel-details')).toHaveAttribute('hidden');
+  });
+
+  it('CSS contract: the column border is logical, not a physical border-left', () => {
+    expect(baseRuleBody).toContain('border-inline-start');
+    expect(baseRuleBody).not.toMatch(/\bborder-left\b/);
+  });
+
+  it('CSS contract: the mobile overlay pins to the inline-end edge, not a physical inset', () => {
+    expect(mobileRuleBody).toContain('inset-block');
+    expect(mobileRuleBody).toContain('inset-inline-end');
+    expect(mobileRuleBody).not.toMatch(/\binset:/); // no physical inset shorthand
+    expect(mobileRuleBody).not.toMatch(/\bleft\b|\bright\b/);
+    // width is unchanged by the 10a switch.
+    expect(mobileRuleBody).toContain('width: min(92vw, 420px)');
   });
 });

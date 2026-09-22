@@ -56,7 +56,7 @@
 
 ## Progress (gate scans this list)
 
-- [ ] SP140-10a — RTL-aware side column placement
+- [x] SP140-10a — RTL-aware side column placement
 - [ ] SP140-10b — Full-height agent panel + live visibility while working
 - [ ] SP140-10c — Per-mode conversation pinning
 - [ ] SP140-10d — Inline tool details (retire the sidebar dependency)

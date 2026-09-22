@@ -109,6 +109,18 @@ describe('getLineIndent', () => {
 describe('getEditorKeymap', () => {
   const emptyActions = { onSave: vi.fn(), onGoToLine: vi.fn() };
 
+  describe('non-array hotkeyEntries guard', () => {
+    // A cloud-compat backend returned `{"hotkeys": {}}` (object) and crashed
+    // the editor pane with "entries is not iterable" on file open.
+    it('treats a non-array truthy value as empty (no crash)', () => {
+      // @ts-expect-error deliberately passing the wrong runtime shape
+      const keymap = getEditorKeymap({}, emptyActions);
+      expect(Array.isArray(keymap)).toBe(true);
+      // Falls back to built-in defaults (save etc.) instead of crashing.
+      expect(keymap.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('hotkeyToCodeMirror (indirect via getEditorKeymap)', () => {
     it('translates Ctrl+Enter → Mod-Enter for editor_insert_line_below', () => {
       const entries: HotkeyEntry[] = [{ key: 'Ctrl+Enter', command_id: 'editor_insert_line_below' }];

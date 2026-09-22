@@ -25,8 +25,9 @@ import {
   tokenAliasPath,
   tokenFileModel,
   tokenSchemaText,
+  type DesignToken,
 } from './designTokens';
-import { fontFamilies, spaceBarStyle, specimenWeight, swatchStyle } from './TokenSpecimens';
+import { fontFamilies, maxDimensionValue, spaceBarStyle, specimenWeight, swatchStyle } from './TokenSpecimens';
 import { tokenFileName, tokenRelativePath } from './TokensTree';
 
 /** A representative `*.tokens.json` tier with every specimen-bearing type. */
@@ -236,6 +237,30 @@ describe('TokenSpecimens', () => {
     expect(spaceBarStyle('24px')).toEqual({ width: '24px' });
     expect(spaceBarStyle('4px')).toEqual({ width: '4px' });
     expect(spaceBarStyle('auto')).toEqual({});
+  });
+
+  it('scales a spacing bar against the section shared scale', () => {
+    // The percentage is computed, not a literal (floating point).
+    expect(parseFloat(spaceBarStyle('4px', 24).width as string)).toBeCloseTo((4 / 24) * 100, 2);
+    expect(spaceBarStyle('24px', 24)).toEqual({ width: '100%' });
+    expect(spaceBarStyle('auto', 24)).toEqual({});
+    expect(maxDimensionValue([])).toBeNull();
+    const dim = (path: string, valueText: string): DesignToken =>
+      ({
+        path,
+        name: path,
+        type: 'dimension',
+        section: 'spacing',
+        value: valueText,
+        valueText,
+        alias: null,
+        description: '',
+        extensions: undefined,
+        filePath: 'tokens/x.tokens.json',
+        fileName: 'x',
+      }) as DesignToken;
+    expect(maxDimensionValue([dim('spacing.sm', '4px'), dim('spacing.lg', '24px')])).toBe(24);
+    expect(maxDimensionValue([dim('spacing.a', 'auto')])).toBeNull();
   });
 
   it('splits font families and picks a numeric weight', () => {

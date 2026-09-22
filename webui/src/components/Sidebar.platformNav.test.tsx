@@ -372,7 +372,7 @@ describe('Sidebar PlatformNav Integration', () => {
         tasksBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(window.location.href).toBe('/');
+      expect(window.location.href).toBe('/?from=editor');
     });
 
     it('clicking Billing button navigates to the billing route via window.location.href', () => {
@@ -387,7 +387,7 @@ describe('Sidebar PlatformNav Integration', () => {
         billingBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(window.location.href).toBe('/account/billing');
+      expect(window.location.href).toBe('/account/billing?from=editor');
     });
 
     it('clicking Team button navigates to the team route via window.location.href', () => {
@@ -402,7 +402,7 @@ describe('Sidebar PlatformNav Integration', () => {
         teamBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(window.location.href).toBe('/team');
+      expect(window.location.href).toBe('/team?from=editor');
     });
 
     it('highlights the active platform nav item with "active" class', () => {

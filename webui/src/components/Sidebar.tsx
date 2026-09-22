@@ -619,7 +619,13 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (isExternal) {
-                            window.location.href = item.href;
+                            // SP-016 P0.7: every editor→platform exit carries
+                            // ?from=editor so the platform can count exits vs
+                            // embedded views (the Phase-1 deletion gate data).
+                            // Server hrefs may already carry a query (they
+                            // don't today, but keep this safe).
+                            const joiner = item.href.includes('?') ? '&' : '?';
+                            window.location.href = `${item.href}${joiner}from=editor`;
                           } else {
                             onViewChange?.(item.id);
                           }

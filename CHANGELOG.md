@@ -2,6 +2,16 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.18.10] - 2026-09-22
+
+- perf: stop re-parsing markdown and re-rendering unchanged chat messages (ed3a01f85)
+- fix: skip heredoc markers inside prior heredoc bodies (c9451ca6b)
+- fix: satisfy new-code lint in TODO-loop gate changes (1463c9e22)
+- Merge remote-tracking branch 'origin/main' (a8ada4167)
+- fix: cap TODO-loop gate failures and validate resume checkpoints (31ee2ce9f)
+- chore: refresh provider catalog (#83) (df9048661)
+- fix(pricing): pricing and model audit (#84) (6aae00667)
+
 ## [v0.18.8] - 2026-09-20
 
 - fix(console): move probeReplyTerminator into unix-only file (8dc41e53f)

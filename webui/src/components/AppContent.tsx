@@ -29,6 +29,7 @@ import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
+import { useChatModePinning } from '../workspaces/useChatModePinning';
 import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
@@ -94,7 +95,8 @@ interface AppContentProps {
   chatSessions?: ChatSession[];
   activeChatId: string | null;
   perChatCache?: Record<string, PerChatState>;
-  onActiveChatChange?: (id: string) => void;
+  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); SP-140-10c pinning uses the result. */
+  onActiveChatChange?: (id: string) => void | Promise<boolean>;
   onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onCreateChatInWorktree?: (
@@ -363,6 +365,56 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const initialViewSyncRef = useRef(false);
 
+  // SP-140 / workspace modes: which mode the shell is showing. Availability
+  // depends on the workspace's own content (a design tree), probed once here so
+  // the switcher and the surface agree on what exists. Declared before the
+  // chat-tab wiring below: the tab-driven switch handler must record the mode
+  // pin (SP-140-10c), which needs the pinning hook's callbacks in scope.
+  const {
+    present: hasDesignTree,
+    loading: designPresenceLoading,
+    treeState: designTreeState,
+    frontendLike: frontendCodePresent,
+    recheck: recheckDesignPresence,
+  } = useDesignPresence();
+  const {
+    mode: workspaceMode,
+    modes: workspaceModes,
+    select: selectWorkspaceMode,
+  } = useWorkspaceMode({ hasDesignTree });
+
+  // SP-140-10c: per-mode chat pinning. A mode switch restores that mode's own
+  // conversation (Design with no pin starts a fresh chat, never a Code
+  // session); pins are recorded as sessions become active in the mode.
+  // onFreshSession passes ONLY the create: creating a chat does not move the
+  // active chat, so the hook's restoreFreshSession performs the switch itself
+  // (create → switch → pin) — pinning without switching would let the first
+  // send re-pin the still-active Code session into the design pin.
+  const chatModePinning = useChatModePinning({
+    mode: workspaceMode.id,
+    activeChatId,
+    onSwitchSession: (sessionId) => onActiveChatChange?.(sessionId),
+    onFreshSession: () => onCreateChat?.(),
+  });
+  const { switchSession: pinSwitchSession, recordSend: pinRecordSend } = chatModePinning;
+
+  // Pin-recording wrappers: record the mode's pin at the moments a session
+  // becomes active (explicit switch / message send), then delegate to the
+  // existing chat handlers.
+  const sendWithModePin = useCallback(
+    (message: string) => {
+      pinRecordSend();
+      onSendMessage(message);
+    },
+    [pinRecordSend, onSendMessage],
+  );
+  const switchSessionWithModePin = useCallback(
+    (id: string) => {
+      pinSwitchSession(id);
+    },
+    [pinSwitchSession],
+  );
+
   useChatSessionsSync({
     chatSessions,
     activeChatId,
@@ -373,7 +425,10 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferClosable,
     openWorkspaceBuffer,
   });
-  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
+  // SP-140-10c: tab-driven switches (clicking a chat tab) must record the
+  // mode pin too — the raw handler would switch without recording, leaving
+  // the pin pointing at the previous session.
+  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange: switchSessionWithModePin });
 
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
@@ -393,22 +448,6 @@ const AppContent: React.FC<AppContentProps> = ({
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
-
-  // SP-140 / workspace modes: which mode the shell is showing. Availability
-  // depends on the workspace's own content (a design tree), probed once here so
-  // the switcher and the surface agree on what exists.
-  const {
-    present: hasDesignTree,
-    loading: designPresenceLoading,
-    treeState: designTreeState,
-    frontendLike: frontendCodePresent,
-    recheck: recheckDesignPresence,
-  } = useDesignPresence();
-  const {
-    mode: workspaceMode,
-    modes: workspaceModes,
-    select: selectWorkspaceMode,
-  } = useWorkspaceMode({ hasDesignTree });
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
   // because the rail (Sidebar) and the surface are siblings and must agree on
@@ -828,7 +867,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
-      onSendMessage,
+      onSendMessage: sendWithModePin,
       onQueueMessage,
       onQueueMessageRemove,
       onQueueMessageEdit,
@@ -863,7 +902,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }),
     [
       state.messages,
-      onSendMessage,
+      sendWithModePin,
       onQueueMessage,
       onQueueMessageRemove,
       onQueueMessageEdit,
@@ -961,7 +1000,7 @@ const AppContent: React.FC<AppContentProps> = ({
       perChatCache,
       activeChatId,
       chatSessions,
-      onActiveChatChange,
+      onActiveChatChange: switchSessionWithModePin,
       onCreateChat,
       onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
       onDeleteChat,

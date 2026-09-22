@@ -199,6 +199,9 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isForking, setIsForking] = useState(false);
+  // SP-140-10d: the tool id whose inline detail is currently open in the chat.
+  // Toggled by a tool pill; reset when the active chat session changes.
+  const [activeToolDetailId, setActiveToolDetailId] = useState<string | null>(null);
 
   // ── New Chat in Worktree dialog ────────────────────────────────
   const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
@@ -835,7 +838,27 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  const handleToolPillClick = useCallback((toolId: string) => contextPanelRef.current?.highlightTool(toolId), []);
+  // SP-140-10d: open/close the inline tool detail from a tool pill. The chat
+  // renders the detail inline (below the message) instead of routing it to
+  // the context sidebar, so no mode has to open the sidebar to inspect a
+  // tool call.
+  const handleToolDetailToggle = useCallback((toolId: string | null) => {
+    // null closes the open detail; a matching id toggles it off, a new id opens it.
+    // At most one open at a time — this inline detail replaces the old sidebar.
+    setActiveToolDetailId((prev) => (prev === toolId ? null : toolId));
+  }, []);
+
+  // A session switch replaces the tool list, so the open detail must close.
+  useEffect(() => {
+    setActiveToolDetailId(null);
+  }, [activeChatId]);
+
+  // The ToolExecution backing the open detail (null if the id no longer
+  // resolves against the current session's tool list).
+  const activeToolDetail = useMemo(
+    () => (activeToolDetailId ? (state.toolExecutions.find((t) => t.id === activeToolDetailId) ?? null) : null),
+    [activeToolDetailId, state.toolExecutions],
+  );
 
   const handleForkAtBreakpoint = useCallback(
     async (breakpointIndex: number) => {
@@ -889,7 +912,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onReviewChange: handleReviewChange,
       onRestoreSession: handleSessionSearchRestore,
       queryCount: state.queryCount,
-      onToolPillClick: handleToolPillClick,
+      activeToolDetail,
+      onToolDetailToggle: handleToolDetailToggle,
       stats: state.stats,
       isConnected: state.isConnected,
       onModelClick: handleChatModelClick,
@@ -924,7 +948,8 @@ const AppContent: React.FC<AppContentProps> = ({
       handleReviewChange,
       handleSessionSearchRestore,
       state.queryCount,
-      handleToolPillClick,
+      activeToolDetail,
+      handleToolDetailToggle,
       state.stats,
       state.isConnected,
       handleChatModelClick,

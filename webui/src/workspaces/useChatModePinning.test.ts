@@ -88,12 +88,15 @@ describe('useChatModePinning — mode-switch restore', () => {
     expect(options.onFreshSession).not.toHaveBeenCalled();
   });
 
-  it('switches to that mode\'s pin on a mode change', () => {
+  it("switches to that mode's pin on a mode change", () => {
     writeChatModePin('design', 'pin-d');
     const options = baseOptions({ mode: 'code', activeChatId: 'chat-code' });
-    const { rerender } = renderHook(({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }), {
-      initialProps: { mode: 'code' as const },
-    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      {
+        initialProps: { mode: 'code' as const },
+      },
+    );
     rerender({ mode: 'design' });
     expect(options.onSwitchSession).toHaveBeenCalledWith('pin-d');
     expect(options.onFreshSession).not.toHaveBeenCalled();
@@ -106,9 +109,12 @@ describe('useChatModePinning — mode-switch restore', () => {
       activeChatId: 'chat-code',
       onFreshSession: vi.fn().mockResolvedValue('fresh-design'),
     });
-    const { rerender } = renderHook(({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }), {
-      initialProps: { mode: 'code' as const },
-    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      {
+        initialProps: { mode: 'code' as const },
+      },
+    );
     rerender({ mode: 'design' });
     await waitFor(() => expect(options.onFreshSession).toHaveBeenCalledTimes(1));
     // The fresh session must become the ACTIVE chat: without the switch the
@@ -124,9 +130,12 @@ describe('useChatModePinning — mode-switch restore', () => {
       activeChatId: 'chat-code',
       onFreshSession: vi.fn().mockResolvedValue(null),
     });
-    const { rerender } = renderHook(({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }), {
-      initialProps: { mode: 'code' as const },
-    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      {
+        initialProps: { mode: 'code' as const },
+      },
+    );
     rerender({ mode: 'design' });
     await waitFor(() => expect(options.onFreshSession).toHaveBeenCalledTimes(1));
     await act(async () => {}); // let the async restore settle
@@ -137,15 +146,18 @@ describe('useChatModePinning — mode-switch restore', () => {
   it('does nothing for Code with no code pin (current behavior)', () => {
     writeChatModePin('design', 'pin-d'); // only a design pin exists
     const options = baseOptions({ mode: 'design', activeChatId: 'chat-d' });
-    const { rerender } = renderHook(({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }), {
-      initialProps: { mode: 'design' as const },
-    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      {
+        initialProps: { mode: 'design' as const },
+      },
+    );
     rerender({ mode: 'code' });
     expect(options.onSwitchSession).not.toHaveBeenCalled();
     expect(options.onFreshSession).not.toHaveBeenCalled();
   });
 
-  it('switches back to the Code pin, so code→design→code restores each mode\'s chat', () => {
+  it("switches back to the Code pin, so code→design→code restores each mode's chat", () => {
     writeChatModePin('code', 'pin-c');
     writeChatModePin('design', 'pin-d');
     const options = baseOptions({ mode: 'code', activeChatId: 'pin-c' });
@@ -167,9 +179,12 @@ describe('useChatModePinning — mode-switch restore', () => {
   it('skips the switch when the pin is already the active chat', () => {
     writeChatModePin('design', 'pin-d');
     const options = baseOptions({ mode: 'code', activeChatId: 'pin-d' });
-    const { rerender } = renderHook(({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }), {
-      initialProps: { mode: 'code' as const },
-    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      {
+        initialProps: { mode: 'code' as const },
+      },
+    );
     rerender({ mode: 'design' });
     expect(options.onSwitchSession).not.toHaveBeenCalled();
   });

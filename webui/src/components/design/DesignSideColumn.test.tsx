@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import DesignSideColumn from './DesignSideColumn';
 
@@ -90,7 +90,6 @@ describe('DesignSideColumn — RTL placement (SP-140-10a)', () => {
 
   afterEach(() => {
     document.documentElement.removeAttribute('dir');
-    cleanup();
   });
 
   it('renders the same DOM contract under dir="rtl" (CSS carries the direction)', () => {

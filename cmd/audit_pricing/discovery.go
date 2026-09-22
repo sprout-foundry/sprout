@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,14 @@ import (
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
+
+// roundPrice trims float noise introduced by per-token -> per-Mtok conversion
+// (e.g. 2.5e-8 * 1e6 == 0.024999999999999998). Rounding at 1e-9 keeps every
+// legitimate source precision while making auto-added entries byte-identical
+// to hand-verified ones.
+func roundPrice(v float64) float64 {
+	return math.Round(v*1e9) / 1e9
+}
 
 // DiscoverResult holds the comparison between live API models and the
 // provider's config file. It drives both the report and the auto-update logic.
@@ -164,10 +173,10 @@ func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface
 		entry["tags"] = tags
 	}
 	if m.Pricing != nil {
-		entry["input_cost"] = m.Pricing.InputPerMTok
-		entry["output_cost"] = m.Pricing.OutputPerMTok
+		entry["input_cost"] = roundPrice(m.Pricing.InputPerMTok)
+		entry["output_cost"] = roundPrice(m.Pricing.OutputPerMTok)
 		if m.Pricing.CachedPerMTok > 0 {
-			entry["cached_input_cost"] = m.Pricing.CachedPerMTok
+			entry["cached_input_cost"] = roundPrice(m.Pricing.CachedPerMTok)
 		}
 	}
 	return entry
@@ -291,9 +300,9 @@ func addModelsToManifest(manifestPath, providerID string, newModels []modelcontr
 			OutputPerMTok: 0,
 		}
 		if m.Pricing != nil {
-			entry.InputPerMTok = m.Pricing.InputPerMTok
-			entry.OutputPerMTok = m.Pricing.OutputPerMTok
-			entry.CachedPerMTok = m.Pricing.CachedPerMTok
+			entry.InputPerMTok = roundPrice(m.Pricing.InputPerMTok)
+			entry.OutputPerMTok = roundPrice(m.Pricing.OutputPerMTok)
+			entry.CachedPerMTok = roundPrice(m.Pricing.CachedPerMTok)
 		}
 		pm.Models = append(pm.Models, entry)
 		existing[m.ID] = true

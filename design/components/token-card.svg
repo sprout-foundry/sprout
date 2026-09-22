@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 240">
+  <!-- token-card: design token row (DesignView Tokens tab). Source: webui/src DesignView tokens
+       panel — DTCG groups rendered as swatch / mono value rows with copy affordance.
+       Palette tokens: {color.dark.bg.elevated} {color.dark.bg.secondary} {color.dark.border.subtle} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {typography.font.mono} {radius.md} {space.4} {space.6} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .mono { fill: #9aa3b2; font: 12px monospace; }
+    .panel { fill: #21252b; }
+    .el { fill: #303742; }
+    .grp { fill: #61afef; font: 11px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Token card</text>
+
+  <!-- group header: accent label + count -->
+  <text x="16" y="58" class="tm">group</text>
+  <text x="96" y="56" class="grp">color &#183; 28 tokens</text>
+
+  <!-- row: name (mono) + value (swatch or mono) + copy icon; hover wash -->
+  <text x="16" y="100" class="tm">row</text>
+  <rect x="96" y="84" width="408" height="28" rx="6" class="none"/>
+  <rect x="96" y="84" width="408" height="28" rx="6" class="panel"/>
+  <rect x="96" y="84" width="408" height="28" rx="6" class="b1"/>
+  <text x="108" y="102" class="mono">dark.bg.primary</text>
+  <rect x="280" y="90" width="14" height="14" rx="3" class="none"/>
+  <rect x="280" y="90" width="14" height="14" rx="3" fill="#282c34" stroke="rgba(171, 178, 191, 0.22)"/> <!-- {color.dark.bg.primary} {color.dark.border.default} -->
+  <text x="304" y="102" class="mono">#282c34</text>
+  <text x="476" y="102" class="tm">&#10697;</text>
+
+  <!-- non-color token: mono value, no swatch -->
+  <text x="16" y="140" class="tm">row (value)</text>
+  <rect x="96" y="124" width="408" height="28" rx="6" class="none"/>
+  <rect x="96" y="124" width="408" height="28" rx="6" class="panel"/>
+  <rect x="96" y="124" width="408" height="28" rx="6" class="b1"/>
+  <text x="108" y="142" class="mono">radius.md</text>
+  <text x="304" y="142" class="mono">6px</text>
+  <text x="476" y="142" class="tm">&#10697;</text>
+
+  <!-- copied state: transient success tint -->
+  <text x="16" y="180" class="tm">copied</text>
+  <rect x="96" y="164" width="408" height="28" rx="6" class="none"/>
+  <rect x="96" y="164" width="408" height="28" rx="6" class="el"/>
+  <text x="108" y="182" class="mono">dark.accent.primary</text>
+  <rect x="280" y="170" width="14" height="14" rx="3" class="none"/>
+  <rect x="280" y="170" width="14" height="14" rx="3" fill="#61afef"/> <!-- {color.dark.accent.primary} -->
+  <text x="304" y="182" class="mono">copied &#10003;</text>
+
+  <text x="96" y="222" class="tm">color tokens carry a swatch; others render the raw value; names in {typography.font.mono}</text>
+</svg>

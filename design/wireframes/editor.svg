@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <!-- editor: Code + diff surface. Source: webui/src EditorWorkspace / EditorPane / DiffSurface structure.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.secondary} {color.dark.bg.elevated} {color.dark.bg.code} {color.dark.bg.success} {color.dark.bg.error} {color.dark.border.subtle} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {color.dark.brand.active-cyan} {sizing.header.height} {typography.font.mono} {typography.size.sm} -->
+  <style>
+    .bg { fill: #282c34; }
+    .panel { fill: #21252b; }
+    .elev { fill: #303742; }
+    .codebg { fill: #303742; }
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .code { fill: #abb2bf; font: 12px monospace; }
+    .ac { fill: #61afef; font: 14px sans-serif; }
+    .cy { fill: #22d3ee; font: 14px sans-serif; }
+    .cyb { fill: #22d3ee; }
+    .add { fill: rgba(152, 195, 121, 0.12); }
+    .del { fill: rgba(224, 108, 117, 0.12); }
+    .addt { fill: #98c379; font: 12px monospace; }
+    .delt { fill: #e06c75; font: 12px monospace; }
+  </style>
+
+  <rect x="0" y="0" width="1440" height="900" class="bg"/>
+
+  <!-- sidebar (collapsed rail only, for context) -->
+  <rect x="0" y="0" width="48" height="900" class="panel"/>
+  <circle cx="24" cy="17" r="8" class="cyb"/>
+  <rect x="8" y="104" width="32" height="32" rx="6" class="elev"/>
+  <text x="18" y="125" class="cy">E</text>
+
+  <!-- header bar {sizing.header.height} -->
+  <rect x="48" y="0" width="1392" height="35" class="panel"/>
+  <line x1="48" y1="35" x2="1440" y2="35" class="b1" stroke-width="1"/>
+  <text id="back-to-app" x="64" y="22" class="t2" data-nav="app-shell">&#9664; Editor</text>
+  <text x="1330" y="22" class="tm">main &#10003;</text>
+
+  <!-- tab bar -->
+  <rect x="48" y="35" width="1392" height="34" class="panel"/>
+  <rect id="tab-active" x="48" y="35" width="220" height="34" class="none"/>
+  <rect x="48" y="67" width="220" height="2" class="cyb"/>
+  <text x="64" y="56" class="t1">ModeSwitcher.tsx</text>
+  <text x="240" y="56" class="tm">&#215;</text>
+  <rect id="tab-2" x="268" y="35" width="200" height="34" class="none"/>
+  <text x="284" y="56" class="t2">ModeSwitcher.css</text>
+  <text x="440" y="56" class="tm">&#215;</text>
+  <rect id="tab-3" x="468" y="35" width="190" height="34" class="none"/>
+  <text x="484" y="56" class="t2">ModeSwitcher.test.tsx</text>
+  <line x1="48" y1="69" x2="1440" y2="69" class="b1" stroke-width="1"/>
+
+  <!-- breadcrumb -->
+  <text x="64" y="88" class="tm">webui/src/workspaces / ModeSwitcher.tsx</text>
+
+  <!-- split: code pane | diff pane -->
+  <!-- code pane {color.dark.bg.code} -->
+  <rect x="48" y="98" width="740" height="762" class="codebg"/>
+  <line x1="788" y1="98" x2="788" y2="860" class="b2" stroke-width="1"/>
+  <text x="64" y="124" class="tm">  42</text>
+  <text x="96" y="124" class="code">const menuRef = useRef&lt;HTMLDivElement&gt;(null);</text>
+  <text x="64" y="144" class="tm">  43</text>
+  <text x="96" y="144" class="code">const [open, setOpen] = useState(false);</text>
+  <text x="64" y="164" class="tm">  44</text>
+  <text x="96" y="164" class="code">&#160;&#160;</text>
+  <text x="64" y="184" class="tm">  45</text>
+  <text x="96" y="184" class="code">const menu = createPortal(</text>
+  <text x="64" y="204" class="tm">  46</text>
+  <text x="96" y="204" class="code">&#160;&#160;&lt;div ref={menuRef} className="mode-menu"&gt;</text>
+  <text x="64" y="224" class="tm">  47</text>
+  <text x="96" y="224" class="code">&#160;&#160;&#160;&#160;{MODES.map((m) =&gt; (</text>
+  <text x="64" y="244" class="tm">  48</text>
+  <text x="96" y="244" class="code">&#160;&#160;&#160;&#160;&#160;&#160;&lt;button onClick={() =&gt; pick(m)}&gt;{m}&lt;/button&gt;</text>
+  <text x="64" y="264" class="tm">  49</text>
+  <text x="96" y="264" class="code">&#160;&#160;&#160;&#160;))}</text>
+  <text x="64" y="284" class="tm">  50</text>
+  <text x="96" y="284" class="code">&#160;&#160;&lt;/div&gt;,</text>
+  <text x="64" y="304" class="tm">  51</text>
+  <text x="96" y="304" class="code">&#160;&#160;document.body,</text>
+  <text x="64" y="324" class="tm">  52</text>
+  <text x="96" y="324" class="code">);</text>
+  <text x="96" y="348" class="tm">&#8230; 120 more lines</text>
+
+  <!-- diff pane -->
+  <rect x="788" y="98" width="652" height="762" class="none"/>
+  <rect x="788" y="98" width="652" height="26" class="panel"/>
+  <text x="804" y="116" class="t2">Diff &#183; 3 files changed &#183; +42 / &#8722;17</text>
+  <text x="1352" y="116" class="tm">&#8984;D split</text>
+  <rect x="788" y="124" width="652" height="22" class="elev"/>
+  <text x="804" y="140" class="t2">@@ -38,7 +38,29 @@ export function ModeSwitcher()</text>
+  <rect x="788" y="146" width="652" height="22" class="del"/>
+  <text x="804" y="162" class="delt">&#8722;  const menu = (</text>
+  <rect x="788" y="168" width="652" height="22" class="del"/>
+  <text x="804" y="184" class="delt">&#8722;    &lt;div className="mode-menu"&gt;{MODES.map&#8230;(&lt;/div&gt;);</text>
+  <rect x="788" y="190" width="652" height="22" class="add"/>
+  <text x="804" y="206" class="addt">+  const menu = createPortal(</text>
+  <rect x="788" y="212" width="652" height="22" class="add"/>
+  <text x="804" y="228" class="addt">+    &lt;div ref={menuRef} className="mode-menu"&gt;</text>
+  <rect x="788" y="234" width="652" height="22" class="add"/>
+  <text x="804" y="250" class="addt">+      {MODES.map((m) =&gt; &lt;button onClick={() =&gt; pick(m)}&gt;{m}&lt;/button&gt;)}</text>
+  <rect x="788" y="256" width="652" height="22" class="add"/>
+  <text x="804" y="272" class="addt">+    &lt;/div&gt;,</text>
+  <rect x="788" y="278" width="652" height="22" class="add"/>
+  <text x="804" y="294" class="addt">+    document.body,</text>
+  <rect x="788" y="300" width="652" height="22" class="add"/>
+  <text x="804" y="316" class="addt">+  );</text>
+  <rect x="788" y="322" width="652" height="22" class="elev"/>
+  <text x="804" y="338" class="t2">@@ -96,3 +118,23 @@ css scoping for portal root</text>
+  <rect x="788" y="344" width="652" height="22" class="add"/>
+  <text x="804" y="360" class="addt">+.mode-menu { position: fixed; z-index: 40; }</text>
+  <text x="804" y="400" class="tm">&#8230; remaining hunks (scroll)</text>
+
+  <!-- status footer -->
+  <rect x="48" y="860" width="1392" height="40" class="panel"/>
+  <line x1="48" y1="860" x2="1440" y2="860" class="b1" stroke-width="1"/>
+  <text x="64" y="884" class="tm">ModeSwitcher.tsx &#183; UTF-8 &#183; LF &#183; TypeScript React</text>
+  <text x="1240" y="884" class="ac">Ln 45, Col 24</text>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 196">
+  <!-- toggle: switch + checkbox (settings rows). Source: webui/src SettingsView theme/scale rows.
+       Palette tokens: {color.dark.accent.primary} {color.dark.accent.fg} {color.dark.bg.elevated} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.tertiary} {radius.pill} {space.4} {space.6} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .acbg { fill: #61afef; }
+    .el { fill: #303742; }
+    .knob { fill: #ffffff; }
+    .knobm { fill: #7f8794; }
+  </style>
+
+  <text x="16" y="24" class="t1">Toggle</text>
+
+  <!-- switch: pill track, knob slides; on = accent track -->
+  <text x="16" y="58" class="tm">switch</text>
+  <rect x="96" y="44" width="40" height="22" rx="11" class="none"/>
+  <rect x="96" y="44" width="40" height="22" rx="11" class="acbg"/>
+  <circle cx="126" cy="55" r="8" class="knob"/>
+  <text x="148" y="59" class="t1">Auto-commit</text>
+  <rect x="96" y="76" width="40" height="22" rx="11" class="none"/>
+  <rect x="96" y="76" width="40" height="22" rx="11" class="el"/>
+  <rect x="96" y="76" width="40" height="22" rx="11" class="b1"/>
+  <circle cx="106" cy="87" r="8" class="knobm"/>
+  <text x="148" y="91" class="t1">Notifications</text>
+  <text x="96" y="118" class="tm">on = {color.dark.accent.primary} track; off = {color.dark.bg.elevated} + {color.dark.border.default}</text>
+
+  <!-- checkbox: square, accent fill + white check when set -->
+  <text x="16" y="160" class="tm">checkbox</text>
+  <rect x="96" y="142" width="18" height="18" rx="4" class="none"/>
+  <rect x="96" y="142" width="18" height="18" rx="4" class="acbg"/>
+  <text x="100" y="156" fill="#ffffff" font-size="12">&#10003;</text> <!-- {color.dark.accent.fg} -->
+  <text x="124" y="156" class="t1">Watch design/</text>
+  <rect x="248" y="142" width="18" height="18" rx="4" class="none"/>
+  <rect x="248" y="142" width="18" height="18" rx="4" class="el"/>
+  <rect x="248" y="142" width="18" height="18" rx="4" class="b1"/>
+  <text x="276" y="156" class="t1">Strict tokens</text>
+</svg>

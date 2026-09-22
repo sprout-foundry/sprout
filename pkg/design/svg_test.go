@@ -262,3 +262,130 @@ func writeWireframeTree(t *testing.T, root string, files map[string]string, read
 		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"), []byte(readme), 0o644))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Component specs (design/components/*.svg)
+// ---------------------------------------------------------------------------
+
+// validComponentBody is a self-contained component spec that satisfies every
+// component rule: the viewBox is the component's bounding box (NOT a device
+// frame — component specs carry no frame-match check) and it has no data-nav
+// (components are not navigation surfaces). The literal font-family is
+// backed by a {token.path} comment, as in the wireframe fixture.
+const validComponentBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120">
+  <text x="16" y="32" font-size="14" font-family="Inter"><!-- {typography.label.font-family} -->primary</text>
+  <rect x="16" y="48" width="160" height="36" />
+</svg>`
+
+const validComponentRel = "design/components/button.svg"
+
+func TestValidateComponentValid(t *testing.T) {
+	findings := ValidateComponent(validComponentRel, []byte(validComponentBody))
+	requireNoWireframeFindings(t, findings)
+}
+
+func TestValidateComponentWellFormed(t *testing.T) {
+	findings := ValidateComponent(validComponentRel, []byte(`<svg viewBox="0 0 10 10"><rect`))
+	assert.Equal(t, 1, findingRules(findings)[ruleSVGWellformed])
+	for _, f := range findings {
+		if f.Rule == ruleSVGWellformed {
+			assert.Equal(t, SeverityError, f.Severity)
+		}
+	}
+}
+
+func TestValidateComponentViewBox(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		findings := ValidateComponent(validComponentRel, []byte(`<svg><text/></svg>`))
+		assert.Equal(t, 1, findingRules(findings)[ruleSVGViewBox])
+	})
+	t.Run("non-integer", func(t *testing.T) {
+		findings := ValidateComponent(validComponentRel, []byte(`<svg viewBox="0 0 10 9.5"><text/></svg>`))
+		assert.Equal(t, 1, findingRules(findings)[ruleSVGViewBox])
+	})
+}
+
+func TestValidateComponentSlugName(t *testing.T) {
+	findings := ValidateComponent("design/components/Button Spec.svg", []byte(validComponentBody))
+	rules := findingRules(findings)
+	assert.Equal(t, 1, rules[ruleSVGSlugName], "got %#v", findings)
+}
+
+func TestValidateComponentSelfContainment(t *testing.T) {
+	t.Run("script", func(t *testing.T) {
+		content := `<svg viewBox="0 0 10 10"><script>bad()</script><text/></svg>`
+		findings := ValidateComponent(validComponentRel, []byte(content))
+		assert.Equal(t, 1, findingRules(findings)[ruleSVGSelfContainment])
+	})
+	t.Run("external-href", func(t *testing.T) {
+		content := `<svg viewBox="0 0 10 10"><text/><image href="https://cdn.example.com/x.png"/></svg>`
+		findings := ValidateComponent(validComponentRel, []byte(content))
+		assert.Equal(t, 1, findingRules(findings)[ruleSVGSelfContainment])
+	})
+}
+
+// A component viewBox is a component box, not a device frame: no frame-match
+// advisory fires even though 480x120 matches no declared frame.
+func TestValidateComponentNoFrameMatch(t *testing.T) {
+	findings := ValidateComponent(validComponentRel, []byte(validComponentBody))
+	assert.Equal(t, 0, findingRules(findings)[ruleSVGFrameMatch],
+		"component specs are exempt from the device frame-match check, got %#v", findings)
+}
+
+// Components carry no navigation semantics: a data-nav attribute is not a
+// dangling-target violation (and gets no stable-id advisory) in the
+// component checks, unlike in a screen wireframe.
+func TestValidateComponentDataNavIgnored(t *testing.T) {
+	content := `<svg viewBox="0 0 10 10"><rect data-nav="not-a-screen"/><text/></svg>`
+	findings := ValidateComponent(validComponentRel, []byte(content))
+	assert.Equal(t, 0, findingRules(findings)[ruleSVGDataNavDangling], "got %#v", findings)
+	assert.Equal(t, 0, findingRules(findings)[ruleSVGStableIDs], "got %#v", findings)
+}
+
+func TestValidateComponentAdvisories(t *testing.T) {
+	findings := ValidateComponent(validComponentRel, []byte(`<svg viewBox="0 0 10 10"><rect/></svg>`))
+	rules := findingRules(findings)
+	assert.Equal(t, 1, rules[ruleSVGTextUsage], "got %#v", findings)
+}
+
+func TestValidateComponentsDir(t *testing.T) {
+	t.Run("valid-clean", func(t *testing.T) {
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{"button.svg": validComponentBody})
+		findings, err := ValidateComponentsDir(root)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+
+	t.Run("invalid-reported", func(t *testing.T) {
+		root := t.TempDir()
+		writeComponentTree(t, root, map[string]string{
+			"button.svg":   validComponentBody,
+			"broken.svg":   `<svg viewBox="0 0 10 10"><script>x()</script><text/></svg>`,
+			"Bad Slug.svg": validComponentBody,
+		})
+		findings, err := ValidateComponentsDir(root)
+		require.NoError(t, err)
+		rules := findingRules(findings)
+		assert.Equal(t, 1, rules[ruleSVGSelfContainment], "got %#v", findings)
+		assert.Equal(t, 1, rules[ruleSVGSlugName], "got %#v", findings)
+	})
+
+	t.Run("missing-dir-clean", func(t *testing.T) {
+		root := t.TempDir()
+		findings, err := ValidateComponentsDir(root)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+}
+
+// writeComponentTree writes the given files under root/design/components/ for
+// dir-level tests (mirror of writeWireframeTree).
+func writeComponentTree(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	dir := filepath.Join(root, "design", "components")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+	}
+}

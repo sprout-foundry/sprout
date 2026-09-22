@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420">
+  <!-- sidebar: navigation macro. Source: webui/src/Sidebar.tsx (pinned header, mode switcher,
+       icon rail, section pane, resize handle). The component screens compose; expanded width
+       {sizing.sidebar.width} (288px), collapsed rail {sizing.sidebar.collapsed-width} (48px).
+       Palette tokens: {color.dark.bg.secondary} {color.dark.bg.primary} {color.dark.bg.elevated} {color.dark.bg.hover} {color.dark.border.subtle} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {color.dark.brand.teal} {sizing.sidebar.width} {sizing.sidebar.collapsed-width} {space.4} {space.6} {space.8} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 12px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .bg2 { fill: #21252b; }
+    .bg1 { fill: #282c34; }
+    .el { fill: #303742; }
+    .hv { fill: #3a404b; }
+    .teal { fill: #14b8c8; }
+    .acbg { fill: #61afef; }
+  </style>
+
+  <text x="16" y="24" class="t1">Sidebar</text>
+
+  <!-- expanded (288px): pinned header, icon rail (48px), section pane -->
+  <text x="16" y="58" class="tm">expanded &#183; {sizing.sidebar.width}</text>
+  <rect x="96" y="70" width="288" height="330" rx="6" class="none"/>
+  <rect x="96" y="70" width="288" height="330" rx="6" class="bg2"/>
+  <rect x="96" y="70" width="288" height="330" rx="6" class="b2"/>
+  <!-- pinned header: brandmark + mode switcher + collapse -->
+  <rect x="96" y="70" width="288" height="35" class="none"/>
+  <rect x="96" y="70" width="288" height="35" class="bg1"/>
+  <line x1="96" y1="105" x2="384" y2="105" class="b1"/>
+  <rect x="104" y="79" width="16" height="16" rx="4" class="teal"/>
+  <rect x="130" y="77" width="92" height="21" rx="4" class="el"/>
+  <text x="140" y="91" class="t2">Code &#9662;</text>
+  <text x="366" y="91" class="tm">&#171;</text>
+  <!-- icon rail -->
+  <rect x="96" y="105" width="48" height="295" class="bg1"/>
+  <line x1="144" y1="105" x2="144" y2="400" class="b1"/>
+  <rect x="110" y="118" width="20" height="20" rx="4" class="hv"/>
+  <text x="114" y="132" class="t2">&#9776;</text>
+  <rect x="110" y="150" width="20" height="20" rx="4" class="none"/>
+  <text x="114" y="164" class="tm">&#128193;</text>
+  <rect x="110" y="182" width="20" height="20" rx="4" class="none"/>
+  <text x="114" y="196" class="tm">&#128260;</text>
+  <!-- section pane: grouped file / session list -->
+  <text x="156" y="126" class="tm">FILES</text>
+  <text x="156" y="150" class="t1">ModeSwitcher.tsx</text>
+  <circle cx="374" cy="146" r="3" class="none"/>
+  <circle cx="374" cy="146" r="3" class="acbg"/>
+  <text x="156" y="172" class="t2">Sidebar.tsx</text>
+  <text x="156" y="194" class="t2">App.css</text>
+  <text x="156" y="222" class="tm">SESSIONS</text>
+  <text x="156" y="246" class="t2">session-0922-01</text>
+  <text x="156" y="268" class="t2">session-0921-04</text>
+  <!-- resize handle at the right edge -->
+  <rect x="380" y="70" width="4" height="330" rx="2" class="none"/>
+  <rect x="380" y="70" width="4" height="330" rx="2" class="el" opacity="0.5"/>
+
+  <!-- collapsed (48px): rail only; brandmark triggers open, menu stays portaled -->
+  <text x="16" y="330" class="tm">collapsed &#183; {sizing.sidebar.collapsed-width}</text>
+  <rect x="408" y="70" width="48" height="330" rx="6" class="none"/>
+  <rect x="408" y="70" width="48" height="330" rx="6" class="bg2"/>
+  <rect x="408" y="70" width="48" height="330" rx="6" class="b2"/>
+  <rect x="412" y="70" width="40" height="35" class="none"/>
+  <rect x="412" y="70" width="40" height="35" class="bg1"/>
+  <line x1="408" y1="105" x2="456" y2="105" class="b1"/>
+  <rect x="419" y="79" width="16" height="16" rx="4" class="teal"/>
+  <rect x="419" y="118" width="20" height="20" rx="4" class="hv"/>
+  <text x="423" y="132" class="t2">&#9776;</text>
+  <rect x="419" y="150" width="20" height="20" rx="4" class="none"/>
+  <text x="423" y="164" class="tm">&#128193;</text>
+  <text x="408" y="416" class="tm">rail only; hover tooltips name the sections</text>
+</svg>

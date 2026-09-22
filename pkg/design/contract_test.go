@@ -9,9 +9,9 @@ import (
 )
 
 func TestSubdirsContract(t *testing.T) {
-	want := []string{"tokens", "brand", "icons", "wireframes", "screens", "flows", "feedback"}
+	want := []string{"tokens", "brand", "icons", "wireframes", "components", "screens", "flows", "feedback"}
 
-	assert.Len(t, Subdirs, 7, "Subdirs must declare exactly seven directories")
+	assert.Len(t, Subdirs, 8, "Subdirs must declare exactly eight directories")
 	assert.Equal(t, want, Subdirs, "Subdirs contents and contract order mismatch")
 }
 

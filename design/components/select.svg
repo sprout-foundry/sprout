@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300">
+  <!-- select: dropdown (model selector, mode switcher). Source: webui/src ModelSelector + ModeSwitcher (portaled menu).
+       Palette tokens: {color.dark.bg.elevated} {color.dark.bg.hover} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.accent.primary} {color.dark.accent.fg} {typography.size.sm} {radius.md} {shadow.elevation.elevated} {space.4} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .el { fill: #303742; }
+    .hv { fill: #3a404b; }
+    .acbg { fill: #61afef; }
+    .onac { fill: #ffffff; font: 13px sans-serif; }
+    .panel { fill: #21252b; }
+  </style>
+
+  <text x="16" y="24" class="t1">Select</text>
+
+  <!-- closed: elevated chip, label + chevron -->
+  <text x="16" y="58" class="tm">closed</text>
+  <rect x="96" y="44" width="160" height="30" rx="6" class="none"/>
+  <rect x="96" y="44" width="160" height="30" rx="6" class="el"/>
+  <rect x="96" y="44" width="160" height="30" rx="6" class="b1"/>
+  <text x="108" y="63" class="t2">qwen3.8-27b</text>
+  <text x="236" y="63" class="tm">&#9662;</text>
+
+  <!-- open: panel drops below the chip (portaled in the app), elevated shadow,
+       options list with one selected row -->
+  <text x="16" y="130" class="tm">open</text>
+  <rect x="96" y="112" width="160" height="30" rx="6" class="none"/>
+  <rect x="96" y="112" width="160" height="30" rx="6" class="el"/>
+  <rect x="96" y="112" width="160" height="30" rx="6" class="b1"/>
+  <text x="108" y="131" class="t2">qwen3.8-27b</text>
+  <text x="236" y="131" class="tm">&#9652;</text>
+  <rect x="94" y="146" width="164" height="124" rx="6" class="none"/>
+  <rect x="94" y="146" width="164" height="124" rx="6" class="panel"/>
+  <rect x="94" y="146" width="164" height="124" rx="6" class="b1"/>
+  <rect x="98" y="152" width="156" height="24" rx="4" class="hv"/>
+  <text x="108" y="168" class="t1">glm-5.3-flash</text>
+  <text x="240" y="168" class="onac">&#10003;</text>
+  <text x="108" y="200" class="t2">qwen3.8-27b</text>
+  <text x="108" y="226" class="t2">minicpm5-2b</text>
+  <text x="96" y="284" class="tm">selected option: bg.hover + accent check; menu shadow {shadow.elevation.elevated}</text>
+</svg>

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 232">
+  <!-- file-tree-row: explorer row. Source: webui/src file explorer (indent, chevron, file icon,
+       dirty dot, active row).
+       Palette tokens: {color.dark.bg.hover} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {color.dark.border.subtle} {space.3} {space.4} {typography.size.sm} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .hv { fill: #3a404b; }
+    .dot { fill: #61afef; }
+  </style>
+
+  <text x="16" y="24" class="t1">File tree row</text>
+
+  <!-- row anatomy: chevron + icon + name at {space.4} gaps; indent per depth {space.8} -->
+  <text x="16" y="58" class="tm">folder (open)</text>
+  <text x="96" y="56" class="tm">&#9660;</text>
+  <text x="116" y="56" class="tm">&#128193;</text>
+  <text x="140" y="56" class="t1">webui/src</text>
+
+  <text x="16" y="94" class="tm">file</text>
+  <text x="116" y="92" class="tm">&#128196;</text>
+  <text x="140" y="92" class="t2">ModeSwitcher.tsx</text>
+
+  <text x="16" y="130" class="tm">file (dirty)</text>
+  <text x="116" y="128" class="tm">&#128196;</text>
+  <text x="140" y="128" class="t2">Sidebar.tsx</text>
+  <circle cx="440" cy="124" r="3" class="dot"/>
+
+  <!-- active row: bg.hover wash across the full row width -->
+  <text x="16" y="172" class="tm">active</text>
+  <rect x="96" y="156" width="360" height="24" rx="4" class="none"/>
+  <rect x="96" y="156" width="360" height="24" rx="4" class="hv"/>
+  <line x1="96" y1="180" x2="456" y2="180" class="b1"/>
+  <text x="116" y="172" class="tm">&#128196;</text>
+  <text x="140" y="172" class="t1">App.css</text>
+  <circle cx="440" cy="168" r="3" class="dot"/>
+  <text x="96" y="204" class="tm">dirty dot = {color.dark.accent.primary}; active = {color.dark.bg.hover}</text>
+  <text x="96" y="220" class="tm">depth indent = {space.8} per level; row gap = {space.3}</text>
+</svg>

@@ -1,0 +1,10 @@
+{
+  "$description": "Sprout corner radius scale, distilled from webui/src/App.css (:root).",
+  "radius": {
+    "sm": { "$value": "4px", "$type": "dimension", "$description": "Small chips, inline code, ghost links." },
+    "md": { "$value": "6px", "$type": "dimension", "$description": "Buttons, menu items, inputs." },
+    "lg": { "$value": "8px", "$type": "dimension", "$description": "Menus, popovers, cards." },
+    "xl": { "$value": "12px", "$type": "dimension", "$description": "Dialogs, large panels." },
+    "pill": { "$value": "999px", "$type": "dimension", "$description": "Status pills, badges." }
+  }
+}

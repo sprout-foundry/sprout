@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <!-- git-panel: sidebar git section (status, staging, commit, history). Source: webui/src SidebarSidebarGitSection structure.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.secondary} {color.dark.bg.tertiary} {color.dark.bg.elevated} {color.dark.bg.success} {color.dark.bg.warning} {color.dark.bg.error} {color.dark.border.subtle} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.primary} {color.dark.brand.active-cyan} {radius.md} {sizing.sidebar.width} -->
+  <style>
+    .bg { fill: #282c34; }
+    .panel { fill: #21252b; }
+    .tertiary { fill: #2c313a; }
+    .elev { fill: #303742; }
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .ac { fill: #61afef; font: 13px sans-serif; }
+    .ok { fill: #98c379; font: 12px sans-serif; }
+    .warn { fill: #e5c07b; font: 12px sans-serif; }
+    .err { fill: #e06c75; font: 12px sans-serif; }
+    .cy { fill: #22d3ee; font: 14px sans-serif; }
+    .cyb { fill: #22d3ee; }
+    .acbg { fill: #61afef; }
+    .onac { fill: #ffffff; font: 13px sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="1440" height="900" class="bg"/>
+
+  <!-- dimmed context: rest of the app behind the opened git pane -->
+  <rect x="288" y="0" width="1152" height="900" class="none"/>
+  <rect x="312" y="72" width="480" height="60" rx="10" class="elev" opacity="0.25"/>
+  <rect x="312" y="168" width="560" height="60" rx="10" class="elev" opacity="0.25"/>
+  <rect x="312" y="264" width="420" height="60" rx="10" class="elev" opacity="0.25"/>
+
+  <!-- sidebar -->
+  <rect x="0" y="0" width="288" height="900" class="panel"/>
+  <line x1="288" y1="0" x2="288" y2="900" class="b1" stroke-width="1"/>
+  <circle cx="22" cy="17" r="8" class="cyb"/>
+  <text x="36" y="22" class="t2">sprout</text>
+  <rect id="mode-switcher" x="96" y="4" width="76" height="27" rx="6" class="elev" data-nav="design-flows"/>
+  <text x="108" y="22" class="t1">Code</text>
+
+  <!-- rail: git active {color.dark.brand.active-cyan} -->
+  <rect x="8" y="64" width="32" height="32" rx="6" class="elev"/>
+  <text id="nav-git" x="18" y="85" class="cy" data-nav="git-panel">G</text>
+  <circle cx="24" cy="120" r="10" class="none"/>
+  <text x="17" y="125" class="tm">F</text>
+  <circle cx="24" cy="164" r="10" class="none"/>
+  <text x="17" y="169" class="tm">&#8964;</text>
+
+  <!-- git content pane -->
+  <text x="56" y="62" class="t2">Git</text>
+  <!-- status -->
+  <rect x="48" y="76" width="232" height="40" rx="6" class="tertiary"/>
+  <text x="60" y="94" class="ok">&#10003; main</text>
+  <text x="128" y="94" class="t2">up to date</text>
+  <text x="60" y="110" class="tm">3 changed &#183; 2 staged</text>
+  <!-- staging -->
+  <text x="56" y="142" class="t2">Staged</text>
+  <text id="stage-1" x="60" y="166" class="ok" data-nav="editor">+ ModeSwitcher.tsx</text>
+  <text id="stage-2" x="60" y="188" class="ok" data-nav="editor">+ ModeSwitcher.css</text>
+  <text id="stage-3" x="60" y="210" class="ok" data-nav="editor">+ ModeSwitcher.test.tsx</text>
+  <!-- changes -->
+  <text x="56" y="242" class="t2">Changes</text>
+  <text id="chg-1" x="60" y="266" class="warn" data-nav="editor">M design/README.md</text>
+  <text id="chg-2" x="60" y="288" class="warn" data-nav="editor">M webui/src/ModeSwitcher.tsx</text>
+  <text id="chg-3" x="60" y="310" class="err" data-nav="editor">U webui/src/ModeSwitcher.css</text>
+  <!-- commit -->
+  <text x="56" y="346" class="t2">Commit</text>
+  <rect x="48" y="358" width="232" height="92" rx="6" class="none"/>
+  <rect x="48" y="358" width="232" height="92" rx="6" class="elev" opacity="0.4"/>
+  <line x1="48" y1="358" x2="280" y2="450" class="b2" stroke-width="1"/>
+  <text x="60" y="380" class="t2">fix(webui): portal mode switcher</text>
+  <text x="60" y="398" class="tm">menu out of the clipping sidebar</text>
+  <rect id="commit-btn" x="48" y="462" width="232" height="30" rx="6" class="acbg"/>
+  <text x="86" y="482" class="onac">Commit (3 staged) &#183; &#8984;&#8679;</text>
+  <!-- history -->
+  <text x="56" y="522" class="t2">History</text>
+  <text id="commit-1" x="60" y="546" class="ac">8f2a1c9 fix(webui): portal switcher</text>
+  <text x="60" y="564" class="tm">main &#183; 12m ago &#183; 3 files</text>
+  <text id="commit-2" x="60" y="590" class="t2">5c480d8 SP-140-5: workspace modes</text>
+  <text x="60" y="608" class="tm">main &#183; 2d ago &#183; 14 files</text>
+  <text id="commit-3" x="60" y="634" class="t2">91e0b77 feat(design): feedback chan</text>
+  <text x="60" y="652" class="tm">main &#183; 3d ago &#183; 6 files</text>
+  <text x="56" y="690" class="tm">pull &#183; push &#183; branch &#8943;</text>
+</svg>

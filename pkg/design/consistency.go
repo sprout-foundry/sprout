@@ -99,14 +99,17 @@ func ValidateConsistency(root string) []Finding {
 		wireframeStems: wireframeStems,
 		screenStems:    screenStems,
 		flowStems:      flowStems,
+		componentStems: assetStems(root, "components", ".svg"),
 	}
 	findings = append(findings, validateReadmeScreenRefs(root, readmeAssets)...)
 
-	// SP-140-4 §4b screen inventory + naming packs (inventory_rules.go): orphan
-	// screens (info) and screens/ ↔ wireframes/ name mismatches (warn). They
-	// share this dispatch point so design_validate and the static critique pick
-	// them up with the bidirectionality pack.
+	// SP-140-4 §4b screen + component inventory and naming packs
+	// (inventory_rules.go): orphan screens and orphan components (info) and
+	// screens/ ↔ wireframes/ name mismatches (warn). They share this dispatch
+	// point so design_validate and the static critique pick them up with the
+	// bidirectionality pack.
 	findings = append(findings, ValidateInventory(root)...)
+	findings = append(findings, ValidateComponentInventory(root)...)
 	findings = append(findings, screenSlugViolations(root)...)
 	findings = append(findings, screenNameMismatches(root)...)
 
@@ -196,23 +199,26 @@ func validateFlowWireframeBidirectionality(relPath string, content []byte, wiref
 
 // readmeScreenAssets is the set of design file stems a README listing can
 // resolve against: wireframe/screen stems for a Screens entry, flow stems for
-// a Flows entry.
+// a Flows entry, component stems for a Components entry.
 type readmeScreenAssets struct {
 	wireframeStems []string
 	screenStems    []string
 	flowStems      []string
+	componentStems []string
 }
 
 // validateReadmeScreenRefs flags every listing in the README manifest's
-// Screens/Flows sections that names an artifact with no real file, SP-140-4 §4b
-// ("screens referenced in README exist"). The two sections are checked against
-// the artifact they actually name:
+// Screens/Flows/Components sections that names an artifact with no real file,
+// SP-140-4 §4b ("screens referenced in README exist"). The sections are
+// checked against the artifact they actually name:
 //
 //   - a Screens entry names a screen, resolvable as a wireframe stem
 //     (design/wireframes/<name>.svg) or a delivered screen file
 //     (design/screens/<name>.html);
 //   - a Flows entry names a flow, resolvable as design/flows/<name>.mmd (or,
-//     because a screen flow and its wireframe share the stem, a wireframe).
+//     because a screen flow and its wireframe share the stem, a wireframe);
+//   - a Components entry names a component, resolvable as
+//     design/components/<name>.svg.
 //
 // A missing README yields no findings.
 func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding {
@@ -232,6 +238,7 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 	wireframes := stems(assets.wireframeStems)
 	screens := stems(assets.screenStems)
 	flows := stems(assets.flowStems)
+	components := stems(assets.componentStems)
 
 	var findings []Finding
 	for _, ref := range readmeScreenRefs(string(data)) {
@@ -245,6 +252,11 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 			// A screen flow and its wireframe share a stem; a listing that
 			// names a screen flow is satisfied by the wireframe too.
 			if _, ok := wireframes[ref.name]; ok {
+				continue
+			}
+		case "Components":
+			expected = fmt.Sprintf("design/components/%s.svg", ref.name)
+			if _, ok := components[ref.name]; ok {
 				continue
 			}
 		default: // Screens
@@ -324,8 +336,8 @@ func readmeScreenRefs(text string) []readmeScreenRef {
 	return refs
 }
 
-// manifestSectionKind classifies a heading text as the "Screens" or "Flows"
-// listing section; other headings return "".
+// manifestSectionKind classifies a heading text as the "Screens", "Flows",
+// or "Components" listing section; other headings return "".
 func manifestSectionKind(heading string) string {
 	trimmed := strings.TrimSpace(heading)
 	switch {
@@ -333,6 +345,8 @@ func manifestSectionKind(heading string) string {
 		return "Screens"
 	case strings.HasPrefix(strings.ToLower(trimmed), "flow"):
 		return "Flows"
+	case strings.HasPrefix(strings.ToLower(trimmed), "component"):
+		return "Components"
 	default:
 		return ""
 	}

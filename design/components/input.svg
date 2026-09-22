@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 232">
+  <!-- input: text field with label. Source: webui/src SettingsView fields + ChatView composer placeholder.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.error} {color.dark.border.default} {color.dark.border.focus} {color.dark.accent.error} {color.dark.text.primary} {color.dark.text.tertiary} {typography.size.base} {radius.md} {space.3} {space.6} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .bf { fill: none; stroke: rgba(97, 175, 239, 0.75); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .tm { fill: #7f8794; font: 14px sans-serif; }
+    .te { fill: #e06c75; font: 12px sans-serif; }
+    .inp { fill: #282c34; }
+    .errbg { fill: rgba(224, 108, 117, 0.12); }
+  </style>
+
+  <text x="16" y="24" class="t1">Input</text>
+
+  <!-- default: label above field, muted placeholder -->
+  <text x="16" y="56" class="tm">default</text>
+  <text x="96" y="52" class="t1" font-size="13">API key</text>
+  <rect x="96" y="60" width="360" height="30" rx="6" class="none"/>
+  <rect x="96" y="60" width="360" height="30" rx="6" class="inp"/>
+  <rect x="96" y="60" width="360" height="30" rx="6" class="b1"/>
+  <text x="108" y="79" class="tm">sk-&#8230;</text>
+
+  <!-- focus: border.focus ring -->
+  <text x="16" y="128" class="tm">focus</text>
+  <rect x="96" y="112" width="360" height="30" rx="6" class="none"/>
+  <rect x="96" y="112" width="360" height="30" rx="6" class="inp"/>
+  <rect x="96" y="112" width="360" height="30" rx="6" class="bf" stroke-width="1.5"/>
+  <text x="108" y="131" class="t1">sk-live-9f2c</text>
+
+  <!-- error: bg.error wash + error hint below -->
+  <text x="16" y="190" class="tm">error</text>
+  <rect x="96" y="174" width="360" height="30" rx="6" class="none"/>
+  <rect x="96" y="174" width="360" height="30" rx="6" class="errbg"/>
+  <rect x="96" y="174" width="360" height="30" rx="6" class="b1"/>
+  <text x="108" y="193" class="t1">sk-invalid</text>
+  <text x="96" y="220" class="te">Enter a valid key</text>
+</svg>

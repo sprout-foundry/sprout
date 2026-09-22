@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 430">
+  <!-- chat-message: message timeline blocks. Source: webui/src/ChatView (user bubble, agent block,
+       tool-event rows, subagent depth indent, todo list).
+       Palette tokens: {color.dark.bg.elevated} {color.dark.bg.secondary} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.success} {color.dark.accent.warning} {color.dark.subagent.depth-0} {color.dark.subagent.depth-1} {radius.lg} {radius.xl} {space.4} {space.6} {space.8} -->
+  <style>
+    .none { fill: none; }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .el { fill: #303742; }
+    .ok { fill: #98c379; font: 13px sans-serif; }
+    .warn { fill: #e5c07b; font: 13px sans-serif; }
+    .d0b { fill: #818cf8; }
+    .d1b { fill: #a78bfa; }
+    .d0 { fill: #818cf8; font: 12px sans-serif; }
+    .d1 { fill: #a78bfa; font: 12px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Chat message</text>
+
+  <!-- user: right-aligned bubble, elevated wash -->
+  <text x="16" y="58" class="tm">user</text>
+  <rect x="240" y="70" width="300" height="54" rx="10" class="none"/>
+  <rect x="240" y="70" width="300" height="54" rx="10" class="el"/>
+  <text x="256" y="94" class="t1">Portal the mode menu out of the sidebar.</text>
+  <text x="256" y="114" class="tm">08:41 &#183; user</text>
+
+  <!-- agent: full-width block, faint elevated wash, no border -->
+  <text x="16" y="158" class="tm">agent</text>
+  <rect x="16" y="170" width="528" height="76" rx="10" class="none"/>
+  <rect x="16" y="170" width="528" height="76" rx="10" class="el" opacity="0.35"/>
+  <text x="32" y="196" class="t1">The sidebar clips the menu. I&#8217;ll portal it to</text>
+  <text x="32" y="216" class="t1">document.body and re-anchor the styles.</text>
+  <text x="32" y="238" class="tm">agent &#183; 6s</text>
+
+  <!-- tool event: compact pill row inside the agent block -->
+  <text x="16" y="272" class="tm">tool event</text>
+  <rect x="16" y="284" width="300" height="26" rx="13" class="none"/>
+  <rect x="16" y="284" width="300" height="26" rx="13" class="el" opacity="0.6"/>
+  <text x="30" y="301" class="t2">&#9881; read_file &#183; ModeSwitcher.tsx &#183; 0.4s</text>
+
+  <!-- subagent: depth-0 bar + nested depth-1 row (subagent.depth-N accents) -->
+  <text x="16" y="334" class="tm">subagent</text>
+  <rect x="16" y="346" width="420" height="58" rx="8" class="none"/>
+  <rect x="16" y="346" width="4" height="58" rx="2" class="d0b"/>
+  <text x="34" y="368" class="d0">subagent: coder &#183; portal + css scoping</text>
+  <rect x="36" y="378" width="380" height="22" rx="4" class="none"/>
+  <rect x="36" y="378" width="4" height="22" rx="2" class="d1b"/>
+  <text x="48" y="393" class="d1">subagent: tester &#183; ModeSwitcher.test.tsx</text>
+
+  <!-- todo: checked / open rows, success + warning accents -->
+  <text x="16" y="424" class="tm">todo</text>
+  <rect x="420" y="346" width="124" height="58" rx="8" class="none"/>
+  <rect x="420" y="346" width="124" height="58" rx="8" class="el" opacity="0.35"/>
+  <text x="432" y="368" class="ok">&#10003; portal menu</text>
+  <text x="432" y="390" class="warn">&#9675; run e2e</text>
+</svg>

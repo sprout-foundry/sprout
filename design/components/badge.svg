@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 216">
+  <!-- badge: status pills. Source: webui/src status chips (agent state, turn counts, ctx gauge).
+       Palette tokens: {color.dark.bg.success} {color.dark.bg.warning} {color.dark.bg.error} {color.dark.bg.info} {color.dark.accent.success} {color.dark.accent.warning} {color.dark.accent.error} {color.dark.accent.primary} {color.dark.accent.fg} {color.dark.text.tertiary} {typography.size.xs} {radius.pill} {space.3} -->
+  <style>
+    .none { fill: none; }
+    .okbg { fill: rgba(152, 195, 121, 0.12); }
+    .warnbg { fill: rgba(229, 192, 123, 0.12); }
+    .errbg { fill: rgba(224, 108, 117, 0.12); }
+    .infobg { fill: rgba(97, 175, 239, 0.12); }
+    .okt { fill: #98c379; font: 12px sans-serif; }
+    .warnt { fill: #e5c07b; font: 12px sans-serif; }
+    .errt { fill: #e06c75; font: 12px sans-serif; }
+    .inft { fill: #61afef; font: 12px sans-serif; }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .tm { fill: #7f8794; font: 11px sans-serif; }
+    .acbg { fill: #61afef; }
+    .onac { fill: #ffffff; font: 12px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Badge</text>
+
+  <!-- semantic: success / warning / error / info washes with matching accent text -->
+  <text x="16" y="56" class="tm">semantic</text>
+  <rect x="96" y="42" width="80" height="22" rx="11" class="none"/>
+  <rect x="96" y="42" width="80" height="22" rx="11" class="okbg"/>
+  <text x="112" y="57" class="okt">passed</text>
+  <rect x="188" y="42" width="80" height="22" rx="11" class="none"/>
+  <rect x="188" y="42" width="80" height="22" rx="11" class="warnbg"/>
+  <text x="202" y="57" class="warnt">pending</text>
+  <rect x="280" y="42" width="80" height="22" rx="11" class="none"/>
+  <rect x="280" y="42" width="80" height="22" rx="11" class="errbg"/>
+  <text x="294" y="57" class="errt">failed</text>
+  <rect x="372" y="42" width="80" height="22" rx="11" class="none"/>
+  <rect x="372" y="42" width="80" height="22" rx="11" class="infobg"/>
+  <text x="386" y="57" class="inft">42&#37; ctx</text>
+
+  <!-- agent state: idle / running / blocked -->
+  <text x="16" y="110" class="tm">agent state</text>
+  <rect x="96" y="96" width="64" height="22" rx="11" class="none"/>
+  <rect x="96" y="96" width="64" height="22" rx="11" class="none" stroke="rgba(171, 178, 191, 0.22)"/> <!-- {color.dark.border.default} -->
+  <text x="110" y="111" class="tm">idle</text>
+  <rect x="172" y="96" width="84" height="22" rx="11" class="none"/>
+  <rect x="172" y="96" width="84" height="22" rx="11" class="infobg"/>
+  <text x="186" y="111" class="inft">&#9654; running</text>
+  <rect x="268" y="96" width="78" height="22" rx="11" class="none"/>
+  <rect x="268" y="96" width="78" height="22" rx="11" class="errbg"/>
+  <text x="282" y="111" class="errt">blocked</text>
+
+  <!-- count: accent fill, on-accent label; solid variant for counts that matter -->
+  <text x="16" y="166" class="tm">count</text>
+  <rect x="96" y="152" width="34" height="22" rx="11" class="none"/>
+  <rect x="96" y="152" width="34" height="22" rx="11" class="acbg"/>
+  <text x="106" y="167" class="onac">12</text>
+  <text x="146" y="167" class="tm">file / message counts, pill at {radius.pill}</text>
+</svg>

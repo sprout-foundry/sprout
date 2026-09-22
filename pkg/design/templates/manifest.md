@@ -12,6 +12,7 @@ screens and flows are added.
 | `brand/`     | `brand.md` (name, voice, palette as `{group.token}` references — never raw hex — usage rules) plus logo SVGs. |
 | `icons/`     | Icon SVGs, one file per icon, plus optional `sprite.svg` of `<symbol id="icon-name">` entries. |
 | `wireframes/` | One SVG per screen. File stem is the screen name. Interactive elements carry stable `id` attributes; navigation targets carry `data-nav="<screen-name>"`. |
+| `components/` | One SVG per reusable UI component: the component in its key variants and states, with `{token.path}` comments. File stem is the component name. The composable layer beneath screens — screen wireframes compose components. |
 | `screens/`   | One self-contained HTML + CSS file per screen. Inline `<style>` or workspace-relative CSS only; no external network resources. |
 | `flows/`     | One mermaid `flowchart` per `.mmd` file. For screen flows, node ids are wireframe file stems; edge labels carry trigger semantics (`-- "tap Submit" -->`). |
 | `feedback/`  | Human annotations, one JSON file per target. |
@@ -41,6 +42,17 @@ and its purpose.
 - `inbox` — ready — message list with unread badges
 ```
 
+## Components
+
+One line per component: the component name (matching a `components/` file
+stem) and its purpose. Components are the composable layer beneath screens;
+list every component so the manifest tracks the vocabulary screens compose.
+
+```
+- `button` — draft — primary/secondary/ghost actions in all states
+- `badge` — draft — status markers (agent state, counts)
+```
+
 ## Flows
 
 One line per flow: the flow name (matching a `flows/` file stem) and its
@@ -52,7 +64,7 @@ purpose.
 
 ## Status markers
 
-Screens and flows carry one of: `draft`, `review`, `ready`.
+Screens, components, and flows carry one of: `draft`, `review`, `ready`.
 - `draft` — in progress, open for agent iteration
 - `review` — awaiting human feedback
 - `ready` — approved as the source of truth for implementation

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 132">
+  <!-- status-bar: bottom strip. Source: webui/src terminal strip + status footer (segments of
+       label + value, fixed height {sizing.terminal.reserved-height}).
+       Palette tokens: {color.dark.bg.secondary} {color.dark.border.subtle} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.success} {color.dark.accent.warning} {sizing.terminal.reserved-height} {space.6} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .t2 { fill: #9aa3b2; font: 12px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .panel { fill: #21252b; }
+    .ok { fill: #98c379; font: 12px sans-serif; }
+    .warn { fill: #e5c07b; font: 12px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t2">Status bar</text>
+
+  <rect x="16" y="40" width="488" height="42" rx="6" class="none"/>
+  <rect x="16" y="40" width="488" height="42" rx="6" class="panel"/>
+  <rect x="16" y="40" width="488" height="42" rx="6" class="b1"/>
+  <circle cx="40" cy="61" r="4" class="none"/>
+  <circle cx="40" cy="61" r="4" class="ok"/>
+  <text x="54" y="65" class="t2">idle</text>
+  <text x="140" y="65" class="tm">main</text>
+  <text x="220" y="65" class="warn">2 dirty</text>
+  <text x="320" y="65" class="tm">qwen3.8-27b</text>
+  <text x="440" y="65" class="tm">42&#37; ctx</text>
+
+  <text x="16" y="112" class="tm">fixed height {sizing.terminal.reserved-height}; segments gap {space.6}; state dot left of the label</text>
+</svg>

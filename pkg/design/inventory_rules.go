@@ -32,6 +32,13 @@ const (
 	// nothing references the screen (SP-140-4 §4b "Screen inventory").
 	ruleConsistencyScreenOrphan = "consistency_screen_orphan"
 
+	// ruleConsistencyComponentOrphan is advisory (info): a component stem
+	// appears in no README Components listing, so nothing tracks the
+	// component in the manifest. Components are referenced by screen
+	// compositions rather than flows, so the README listing is the only
+	// reference channel (SP-140-4 §4b "Component inventory").
+	ruleConsistencyComponentOrphan = "consistency_component_orphan"
+
 	// ruleConsistencyScreenNameMismatch fires (warn) when a delivered
 	// design/screens/*.html file has no wireframe counterpart, so the two
 	// inventories disagree about which screens exist (SP-140-4 §4b "Naming").
@@ -507,6 +514,66 @@ func readmeScreenEntries(root string) map[string]bool {
 	}
 	for _, ref := range readmeScreenRefs(string(data)) {
 		if ref.section == "Screens" {
+			out[ref.name] = true
+		}
+	}
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// Component inventory — orphan components
+// ---------------------------------------------------------------------------
+
+// ValidateComponentInventory runs the component-inventory pack over the whole
+// design tree under root, SP-140-4 §4b "Component inventory": every component
+// stem must appear in the README's Components listing. A component that
+// appears there is orphaned — it exists on disk but the manifest does not
+// track it — and is surfaced as `info`. Components are referenced by screen
+// compositions (README Composition table, data-component attributes) rather
+// than by flows, so the README listing is their only reference channel;
+// unlike screens, a flow reference does not rescue a component.
+//
+// A workspace with no components yields no findings; the result is sorted and
+// never nil.
+func ValidateComponentInventory(root string) []Finding {
+	componentStems := assetStems(root, "components", ".svg")
+	if len(componentStems) == 0 {
+		return []Finding{}
+	}
+
+	readmeRefs := readmeComponentEntries(root)
+
+	var findings []Finding
+	for _, stem := range componentStems {
+		if readmeRefs[stem] {
+			continue
+		}
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, "components", stem+".svg"),
+			Rule:     ruleConsistencyComponentOrphan,
+			Severity: SeverityInfo,
+			Message: fmt.Sprintf(
+				"orphan component: %q appears in no README Components listing; list it in the manifest so the composition table can reference it",
+				stem),
+		})
+	}
+	sortFindings(findings)
+	return findings
+}
+
+// readmeComponentEntries returns the set of names named by the README
+// manifest's Components listing bullets, reusing the §4b parser so the
+// inventory and the bidirectionality pack agree on what "listed in the
+// README" means. A missing README yields an empty set (every component is
+// then an orphan).
+func readmeComponentEntries(root string) map[string]bool {
+	out := map[string]bool{}
+	data, err := os.ReadFile(filepath.Join(root, DirName, ManifestName))
+	if err != nil {
+		return out
+	}
+	for _, ref := range readmeScreenRefs(string(data)) {
+		if ref.section == "Components" {
 			out[ref.name] = true
 		}
 	}

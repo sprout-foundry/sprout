@@ -1,0 +1,31 @@
+%% navigation — Code-mode navigation map between the main surfaces.
+%% Node ids are wireframe stems. Triggers live in the %% comments:
+%% the design/flows contract for this pass keeps edges label-free.
+flowchart TD
+  app-shell["app-shell — Code mode default"]
+  chat["chat — chat surface"]
+  editor["editor — code + diff"]
+  git-panel["git-panel — sidebar git section"]
+  settings["settings — providers / models / theme / scale"]
+  command-palette["command-palette — ⌘K overlay"]
+  design-flows["design-flows — Design mode"]
+  %% open a file (sidebar tree, palette, or a link in chat)
+  app-shell --> editor
+  %% select the chat workspace / send a message
+  app-shell --> chat
+  %% open the git section from the icon rail
+  app-shell --> git-panel
+  %% open settings from the menu bar
+  app-shell --> settings
+  %% ⌘K
+  app-shell --> command-palette
+  %% switch workspace mode
+  app-shell --> design-flows
+  %% back affordances (back arrow / close / Esc)
+  editor --> app-shell
+  git-panel --> app-shell
+  settings --> app-shell
+  command-palette --> app-shell
+  design-flows --> app-shell
+  %% open the file a message is diffing
+  chat --> editor

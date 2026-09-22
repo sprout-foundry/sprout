@@ -39,6 +39,7 @@ func TestScanValidTree(t *testing.T) {
 		"design/tokens/color.tokens.json": KindToken,
 		"design/wireframes/login.svg":     KindWireframe,
 		"design/wireframes/home.svg":      KindWireframe,
+		"design/components/button.svg":    KindComponent,
 		"design/flows/sign-up.mmd":        KindFlow,
 		"design/screens/login.html":       KindScreen,
 		"design/icons/home.svg":           KindIcon,

@@ -40,6 +40,13 @@ func ValidateTree(root string) ([]Finding, error) {
 		findings = append(findings, wireframes...)
 	}
 
+	components, err := ValidateComponentsDir(root)
+	if err != nil {
+		errs = append(errs, err)
+	} else {
+		findings = append(findings, components...)
+	}
+
 	flows, err := ValidateFlowsDir(root)
 	if err != nil {
 		errs = append(errs, err)
@@ -99,9 +106,10 @@ func ValidateTree(root string) ([]Finding, error) {
 // design/ and the file must exist.
 //
 // Dispatch is by location + extension: tokens/*.tokens.json, wireframes/*.svg,
-// icons/*.svg, flows/*.mmd, screens/*.html, README.md, brand/brand.md, and the
-// repository-level git-contract files .gitattributes and .gitignore (§1h).
-// Anything else is an error, not a silent pass. The result is never nil.
+// components/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, README.md,
+// brand/brand.md, and the repository-level git-contract files .gitattributes
+// and .gitignore (§1h). Anything else is an error, not a silent pass. The
+// result is never nil.
 func ValidateFile(root, relPath string) ([]Finding, error) {
 	rel := path.Clean(filepath.ToSlash(strings.TrimSpace(relPath)))
 	if rel == "" || rel == "." {
@@ -168,6 +176,9 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 	case strings.HasPrefix(rel, DirName+"/wireframes/") && strings.HasSuffix(rel, ".svg"):
 		return ValidateWireframe(rel, data, assetStems(root, "wireframes", ".svg"), manifestFrames(root)), nil
 
+	case strings.HasPrefix(rel, DirName+"/components/") && strings.HasSuffix(rel, ".svg"):
+		return ValidateComponent(rel, data), nil
+
 	case strings.HasPrefix(rel, DirName+"/icons/") && strings.HasSuffix(rel, ".svg"):
 		isSprite := strings.TrimSuffix(path.Base(rel), ".svg") == iconSpriteName
 		return validateIconSVG(rel, data, isSprite), nil
@@ -184,7 +195,7 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		return validateScreen(rel, data, manifestFrames(root)), nil
 
 	default:
-		return nil, fmt.Errorf("%s is not a recognized design asset (expected a tokens/*.tokens.json, wireframes/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, %s, or brand/brand.md under %s/)",
+		return nil, fmt.Errorf("%s is not a recognized design asset (expected a tokens/*.tokens.json, wireframes/*.svg, components/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, %s, or brand/brand.md under %s/)",
 			rel, ManifestName, DirName)
 	}
 }

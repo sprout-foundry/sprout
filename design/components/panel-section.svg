@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300">
+  <!-- panel-section: collapsible section (git panel, settings groups). Source: webui/src git panel
+       sections + SettingsView groups.
+       Palette tokens: {color.dark.bg.secondary} {color.dark.bg.elevated} {color.dark.border.subtle} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.accent.success} {radius.md} {space.4} {space.6} {space.8} -->
+  <style>
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .t1 { fill: #abb2bf; font: 13px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 11px sans-serif; }
+    .panel { fill: #21252b; }
+    .el { fill: #303742; }
+    .ok { fill: #98c379; font: 12px sans-serif; }
+  </style>
+
+  <text x="16" y="24" class="t1">Panel section</text>
+
+  <!-- open: header row (label + chevron + summary) over indented body -->
+  <text x="16" y="58" class="tm">open</text>
+  <rect x="96" y="42" width="360" height="88" rx="6" class="none"/>
+  <rect x="96" y="42" width="360" height="88" rx="6" class="panel"/>
+  <rect x="108" y="54" width="160" height="20" rx="4" class="none"/>
+  <rect x="108" y="54" width="160" height="20" rx="4" class="el"/>
+  <text x="118" y="68" class="t1">Git</text>
+  <text x="276" y="68" class="tm">&#9662;</text>
+  <line x1="108" y1="84" x2="444" y2="84" class="b1"/>
+  <text x="120" y="104" class="ok">&#10003; committed: portal menu fix</text>
+  <text x="120" y="122" class="t2">M ModeSwitcher.tsx &#183; M ModeSwitcher.css</text>
+
+  <!-- closed: header row only, chevron right -->
+  <text x="16" y="164" class="tm">closed</text>
+  <rect x="96" y="148" width="360" height="32" rx="6" class="none"/>
+  <rect x="96" y="148" width="360" height="32" rx="6" class="panel"/>
+  <rect x="108" y="156" width="160" height="20" rx="4" class="none"/>
+  <rect x="108" y="156" width="160" height="20" rx="4" class="el"/>
+  <text x="118" y="170" class="t1">History</text>
+  <text x="276" y="170" class="tm">&#9656;</text>
+
+  <!-- body content rules -->
+  <text x="96" y="216" class="tm">body indents {space.8} from the header; rows gap {space.6}</text>
+  <text x="96" y="234" class="tm">dividers are {color.dark.border.subtle}; the header label sits on an elevated chip</text>
+  <text x="96" y="252" class="tm">status glyphs: success {color.dark.accent.success}, muted {color.dark.text.muted}</text>
+  <text x="96" y="270" class="tm">radius {radius.md} on the section card</text>
+</svg>

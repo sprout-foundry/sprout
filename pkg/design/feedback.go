@@ -239,7 +239,7 @@ func ValidateFeedbackDir(root string) ([]Finding, error) {
 }
 
 // feedbackTargetStems returns the known design asset stems (wireframes,
-// screens, flows) a §4d target may resolve against, lowercased and
+// components, screens, flows) a §4d target may resolve against, lowercased and
 // de-duplicated. Targets are workspace-relative asset paths
 // ("design/wireframes/login.svg"), so resolution is by file stem.
 func feedbackTargetStems(root string) []string {
@@ -247,6 +247,7 @@ func feedbackTargetStems(root string) []string {
 	var stems []string
 	for _, spec := range []struct{ subdir, ext string }{
 		{"wireframes", ".svg"},
+		{"components", ".svg"},
 		{"screens", ".html"},
 		{"flows", ".mmd"},
 	} {

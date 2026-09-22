@@ -1,0 +1,52 @@
+{
+  "$description": "Sprout elevation and inset-highlight tokens, distilled from webui/src/App.css (:root). Elevation shadows are theme-neutral (dark ink with high alpha); inset highlights are the dark-theme top-edge sheen (the light theme resolves them to transparent in CSS). The validator's closed DTCG type set (SP-140-1 \u00a71a) has no shadow type: box-shadow values are typed dimension (length-based, values pass through verbatim); inset-highlight values are colors consumed as box-shadow colors.",
+  "elevation": {
+    "subtle": {
+      "$value": "0 2px 6px rgba(2, 6, 23, 0.32)",
+      "$type": "dimension",
+      "$description": "Subtle drop shadow."
+    },
+    "elevated": {
+      "$value": "0 10px 22px rgba(2, 6, 23, 0.42)",
+      "$type": "dimension",
+      "$description": "Menus, popovers, anchored dropdowns."
+    },
+    "float": {
+      "$value": "0 20px 38px rgba(2, 6, 23, 0.52)",
+      "$type": "dimension",
+      "$description": "Mobile slide-in sidebar, floating layers."
+    }
+  },
+  "inset-highlight": {
+    "3": {
+      "$value": "rgba(255, 255, 255, 0.03)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 3% (light theme: transparent)."
+    },
+    "4": {
+      "$value": "rgba(255, 255, 255, 0.04)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 4% (light theme: transparent)."
+    },
+    "5": {
+      "$value": "rgba(255, 255, 255, 0.05)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 5% (light theme: transparent)."
+    },
+    "6": {
+      "$value": "rgba(255, 255, 255, 0.06)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 6% (light theme: transparent)."
+    },
+    "8": {
+      "$value": "rgba(255, 255, 255, 0.08)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 8% (light theme: transparent)."
+    },
+    "10": {
+      "$value": "rgba(255, 255, 255, 0.10)",
+      "$type": "color",
+      "$description": "Top-edge sheen, alpha 10% (light theme: transparent)."
+    }
+  }
+}

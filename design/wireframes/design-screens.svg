@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <!-- design-screens: Design mode — screens browser with detail pane. Source: webui/src DesignSurface / screens browser structure.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.secondary} {color.dark.bg.tertiary} {color.dark.bg.elevated} {color.dark.bg.info} {color.dark.bg.success} {color.dark.border.subtle} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.brand.active-cyan} {radius.md} {sizing.sidebar.width} -->
+  <style>
+    .bg { fill: #282c34; }
+    .panel { fill: #21252b; }
+    .tertiary { fill: #2c313a; }
+    .elev { fill: #303742; }
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .cy { fill: #22d3ee; font: 14px sans-serif; }
+    .cyb { fill: #22d3ee; }
+    .cyline { fill: none; stroke: #22d3ee; }
+    .ok { fill: #98c379; font: 12px sans-serif; }
+    .okb { fill: #98c379; }
+    .warn { fill: #e5c07b; font: 12px sans-serif; }
+    .ac { fill: #61afef; font: 13px sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="1440" height="900" class="bg"/>
+
+  <!-- sidebar with design mode active -->
+  <rect x="0" y="0" width="288" height="900" class="panel"/>
+  <line x1="288" y1="0" x2="288" y2="900" class="b1" stroke-width="1"/>
+  <circle cx="22" cy="17" r="8" class="cyb"/>
+  <text x="36" y="22" class="t2">sprout</text>
+  <rect id="mode-switcher" x="96" y="4" width="84" height="27" rx="6" class="elev" data-nav="design-flows"/>
+  <text x="108" y="22" class="cy">Design</text>
+  <text x="152" y="22" class="tm">&#9662;</text>
+
+  <!-- rail tabs: screens active -->
+  <text x="56" y="62" class="tm">DESIGN RAIL</text>
+  <rect id="rail-flows" x="48" y="78" width="232" height="30" rx="6" class="none" data-nav="design-flows"/>
+  <text x="64" y="98" class="t2">Flows</text>
+  <rect id="rail-screens" x="48" y="116" width="232" height="30" rx="6" class="none"/>
+  <rect x="48" y="116" width="232" height="30" rx="6" class="elev" opacity="0.6"/>
+  <line x1="48" y1="146" x2="280" y2="146" class="cyline" stroke-width="2"/>
+  <text x="64" y="136" class="t1">Screens</text>
+  <rect id="rail-tokens" x="48" y="154" width="232" height="30" rx="6" class="none"/>
+  <text x="64" y="174" class="t2">Tokens</text>
+  <!-- screens list -->
+  <text x="56" y="212" class="t2">SCREENS &#183; 8</text>
+  <rect id="scr-1" x="48" y="224" width="232" height="34" rx="6" class="none" data-nav="design-screens"/>
+  <rect x="48" y="224" width="232" height="34" rx="6" class="elev" opacity="0.5"/>
+  <line x1="48" y1="224" x2="280" y2="258" class="cyline" stroke-width="1.5"/>
+  <text x="60" y="246" class="t1">app-shell</text>
+  <text x="236" y="246" class="tm">draft</text>
+  <text x="60" y="282" class="t2" id="scr-2" data-nav="design-screens">chat</text>
+  <text x="60" y="310" class="t2" id="scr-3" data-nav="design-screens">editor</text>
+  <text x="60" y="338" class="t2" id="scr-4" data-nav="design-screens">git-panel</text>
+  <text x="60" y="366" class="t2" id="scr-5" data-nav="design-screens">settings</text>
+  <text x="60" y="394" class="t2" id="scr-6" data-nav="design-screens">command-palette</text>
+  <text x="60" y="422" class="t2" id="scr-7" data-nav="design-screens">design-flows</text>
+  <text x="60" y="450" class="t2" id="scr-8" data-nav="design-screens">design-screens</text>
+
+  <!-- header bar -->
+  <rect x="288" y="0" width="1152" height="35" class="panel"/>
+  <line x1="288" y1="35" x2="1440" y2="35" class="b1" stroke-width="1"/>
+  <text x="304" y="22" class="t2">design/ &#183; screens &#183; app-shell</text>
+  <text x="1240" y="22" class="tm">status: draft &#9656;</text>
+
+  <!-- center: wireframe preview -->
+  <rect x="312" y="60" width="780" height="500" rx="8" class="none"/>
+  <rect x="312" y="60" width="780" height="500" rx="8" class="elev" opacity="0.3"/>
+  <line x1="312" y1="60" x2="1092" y2="560" class="b2" stroke-width="1"/>
+  <text x="328" y="84" class="tm">preview &#183; 1440x900 (scaled)</text>
+  <!-- miniature app-shell inside -->
+  <rect x="360" y="110" width="180" height="420" rx="4" class="panel"/>
+  <rect x="360" y="110" width="180" height="18" rx="4" class="tertiary"/>
+  <line x1="360" y1="128" x2="540" y2="128" class="cyline" stroke-width="1"/>
+  <rect x="552" y="110" width="508" height="18" class="tertiary"/>
+  <line x1="552" y1="128" x2="1060" y2="128" class="b1" stroke-width="1"/>
+  <rect x="552" y="140" width="300" height="26" rx="6" class="elev" opacity="0.5"/>
+  <rect x="552" y="180" width="380" height="26" rx="6" class="elev" opacity="0.3"/>
+  <rect x="552" y="220" width="240" height="14" rx="7" class="elev" opacity="0.5"/>
+  <rect x="552" y="248" width="340" height="26" rx="6" class="elev" opacity="0.3"/>
+  <rect x="552" y="470" width="508" height="16" rx="4" class="tertiary"/>
+  <text x="572" y="482" class="tm">terminal strip</text>
+  <rect id="preview-shell" x="360" y="530" width="180" height="16" rx="3" class="none"/>
+  <text x="360" y="575" class="tm">wireframe: design/wireframes/app-shell.svg</text>
+
+  <!-- right: detail pane -->
+  <rect x="1112" y="60" width="312" height="700" rx="8" class="panel"/>
+  <line x1="1112" y1="60" x2="1424" y2="760" class="b2" stroke-width="1"/>
+  <text x="1132" y="92" class="t1">app-shell</text>
+  <rect x="1330" y="76" width="70" height="20" rx="10" class="tertiary"/>
+  <text x="1344" y="90" class="tm">draft</text>
+  <text x="1132" y="124" class="tm">PURPOSE</text>
+  <text x="1132" y="144" class="t2">Code-mode default: header bar,</text>
+  <text x="1132" y="160" class="t2">sidebar, chat workspace, terminal</text>
+  <text x="1132" y="176" class="t2">strip.</text>
+  <text x="1132" y="208" class="tm">FLOWS IN</text>
+  <text x="1132" y="228" class="t2">launch (no entry edge)</text>
+  <text x="1132" y="256" class="tm">FLOWS OUT</text>
+  <text x="1132" y="276" class="t2">&#9654; chat &#8230; start a turn</text>
+  <text x="1132" y="294" class="t2">&#9654; editor &#8230; open a file</text>
+  <text x="1132" y="312" class="t2">&#9654; git-panel &#8230; open git section</text>
+  <text x="1132" y="330" class="t2">&#9654; settings &#8230; open settings</text>
+  <text x="1132" y="348" class="t2">&#9654; command-palette &#8230; &#8984;K</text>
+  <text x="1132" y="366" class="t2">&#9654; design-flows &#8230; switch mode</text>
+  <text x="1132" y="398" class="tm">TOKENS</text>
+  <text x="1132" y="418" class="ac">color.dark.bg.primary</text>
+  <text x="1132" y="436" class="ac">color.dark.bg.secondary</text>
+  <text x="1132" y="454" class="ac">color.dark.bg.elevated</text>
+  <text x="1132" y="472" class="ac">color.dark.bg.surface</text>
+  <text x="1132" y="490" class="ac">color.dark.brand.active-cyan</text>
+  <text x="1132" y="508" class="ac">sizing.sidebar.width</text>
+  <text x="1132" y="526" class="ac">sizing.header.height</text>
+  <text x="1132" y="544" class="ac">&#8230; 9 more (see svg)</text>
+  <line x1="1132" y1="564" x2="1404" y2="564" class="b1" stroke-width="1"/>
+  <text x="1132" y="592" class="tm">FEEDBACK</text>
+  <text x="1132" y="612" class="tm">no annotations yet</text>
+  <rect id="open-designer" x="1132" y="640" width="272" height="32" rx="6" class="elev"/>
+  <text x="1152" y="661" class="t1">Open in editor &#183; &#8629;</text>
+  <rect id="mark-ready" x="1132" y="684" width="272" height="32" rx="6" class="none"/>
+  <rect x="1132" y="684" width="272" height="32" rx="6" class="elev" opacity="0.4"/>
+  <line x1="1132" y1="684" x2="1404" y2="716" class="b2" stroke-width="1"/>
+  <circle cx="1152" cy="700" r="4" class="okb"/>
+  <text x="1164" y="705" class="ok">mark review &#8230; mark ready</text>
+</svg>

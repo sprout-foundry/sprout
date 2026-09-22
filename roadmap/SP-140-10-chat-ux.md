@@ -57,7 +57,7 @@
 ## Progress (gate scans this list)
 
 - [x] SP140-10a — RTL-aware side column placement
-- [ ] SP140-10b — Full-height agent panel + live visibility while working
+- [x] SP140-10b — Full-height agent panel + live visibility while working
 - [ ] SP140-10c — Per-mode conversation pinning
 - [ ] SP140-10d — Inline tool details (retire the sidebar dependency)
 - [ ] SP140-10e — Verify, dogfood, and mark shipped

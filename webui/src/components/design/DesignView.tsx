@@ -17,7 +17,7 @@
  * stays usable without the workspace shell.
  */
 
-import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { listAssets } from '../../services/api/designApi';
 import { fetchDesignStatus, type DesignStatusDriftRow } from '../../services/api/designStatusApi';
@@ -103,6 +103,21 @@ export default function DesignView({
   // Details; a prefill flips to Agent (below). Both bodies stay mounted.
   const [sideTab, setSideTab] = useState<DesignSideTab>('details');
   const [prefill, setPrefill] = useState<string | null>(null);
+
+  // SP-140-10b: remount the agent panel's chat whenever the Agent tab is
+  // shown again. The Agent body starts hidden (Details is the default tab),
+  // so the chat's virtuoso scroller measures zero height on first mount and
+  // followOutput / jump-to-latest can't work off that stale metric. A
+  // fresh full-height mount on each Details→Agent flip shows the latest
+  // message on the flip; the transcript and draft are shell-controlled
+  // state, so the §6f "state survives flips" contract still holds.
+  const [agentFlipKey, setAgentFlipKey] = useState(0);
+  const agentTabVisibleRef = useRef(false);
+  useEffect(() => {
+    const visible = sideTab === 'agent';
+    if (visible && !agentTabVisibleRef.current) setAgentFlipKey((key) => key + 1);
+    agentTabVisibleRef.current = visible;
+  }, [sideTab]);
 
   const inventory = workspace ? workspace.inventory : fallbackInventory;
   const rawSelected = workspace ? workspace.selected : fallbackSelected;
@@ -252,7 +267,12 @@ export default function DesignView({
           }
           agent={
             chatProps ? (
-              <DesignAgentPanel chatProps={chatProps} prefill={prefill} onPrefillConsumed={() => setPrefill(null)} />
+              <DesignAgentPanel
+                key={agentFlipKey}
+                chatProps={chatProps}
+                prefill={prefill}
+                onPrefillConsumed={() => setPrefill(null)}
+              />
             ) : (
               <div className="design-agent-absent">Agent chat is not available in this host.</div>
             )

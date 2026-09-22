@@ -151,6 +151,7 @@ treating an entry as unstarted._
 | SP-140-3 | [WebUI DesignView — Flow Canvas and Screen Browser](./SP-140-3-designview.md) | 🟡 Draft — not started. Depends on SP-140-1. |
 | SP-140-4 | [Visual Loop — Render→Critique, Consistency Checks, Human Feedback](./SP-140-4-visual-loop.md) | 🟡 Draft — not started. Depends on SP-140-2, SP-140-3. |
 | SP-140-5 | [Design↔Code Sync — Continuous Bidirectional Loop](./SP-140-5-sync.md) | 🟡 Draft — not started. Export + `design_sync` (code→design import), directional drift reporting. Depends on SP-140-1 (core); SP-140-4 for full value. |
+| SP-140-10 | [Design-Mode Chat UX — Placement, Pinning, Visibility, Inline Tool Details](./SP-140-10-chat-ux.md) | 🟡 Draft — in flight (automation run, 2026-09-22). Four dogfood gripes: RTL-aware side column, per-mode conversation pinning, full-height + live visibility, inline tool details retiring the sidebar dependency (shared chat mechanism; Code-mode regression gates). |
 
 ## Future / On Hold
 

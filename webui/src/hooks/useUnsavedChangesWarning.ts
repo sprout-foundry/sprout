@@ -19,9 +19,9 @@ interface UseUnsavedChangesWarningParams {
  * so a reload with modified buffers loses those edits.
  *
  * Effect 2: Updates document.title to reflect the active buffer:
- *   - Modified file: "● filename — ledit"
- *   - Clean file:    "filename — ledit"
- *   - Other / none:  "ledit — AI Code Editor"
+ *   - Modified file: "● filename — sprout"
+ *   - Clean file:    "filename — sprout"
+ *   - Other / none:  "sprout"
  */
 export function useUnsavedChangesWarning({
   buffersRef,
@@ -51,11 +51,11 @@ export function useUnsavedChangesWarning({
     const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : undefined;
 
     if (!activeBuffer || activeBuffer.kind !== 'file') {
-      document.title = 'ledit — AI Code Editor';
+      document.title = 'sprout';
       return;
     }
 
     const indicator = activeBuffer.isModified ? '● ' : '';
-    document.title = `${indicator}${activeBuffer.file.name} — ledit`;
+    document.title = `${indicator}${activeBuffer.file.name} — sprout`;
   }, [activeBufferId, buffers]);
 }

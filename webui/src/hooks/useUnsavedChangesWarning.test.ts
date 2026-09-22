@@ -79,7 +79,7 @@ describe('useUnsavedChangesWarning — beforeunload guard', () => {
     const buffersRef = { current: buffers };
     const original = document.title;
     renderHook(() => useUnsavedChangesWarning({ buffersRef, buffers, activeBufferId: 'b1' }));
-    expect(document.title).toBe('● a.ts — ledit');
+    expect(document.title).toBe('● a.ts — sprout');
     document.title = original;
   });
 });

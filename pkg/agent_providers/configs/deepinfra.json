@@ -1169,13 +1169,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.035,
+        "cached_input_cost": 0.033,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts (MoE) model with 21B active parameters and 3.8B MTP layer parameters, developed by the Tencent Hy Team. Following the Hy3 Preview launch in late April, we gathered feedback from 50+ products and scaled up post-training with higher quality data. Today, we introduce Hy3, which outperforms similar-size models and rivals flagship open-source models with 2-5x parameters. It also shows significant gains in utility across various products and productivity tasks.",
         "id": "tencent/Hy3",
-        "input_cost": 0.14,
+        "input_cost": 0.13,
         "name": "Hy3",
-        "output_cost": 0.58,
+        "output_cost": 0.53,
         "tags": [
           "tools",
           "reasoning",
@@ -1560,6 +1560,36 @@
         "output_cost": 0.382,
         "tags": [
           "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0028,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Flash is an open-source Mixture-of-Experts foundation model from Xiaomi with 309B total parameters and 15B activated per token. A hybrid attention mechanism keeps inference efficient across a 1M-token context.",
+        "id": "XiaomiMiMo/MiMo-V2.6-Flash",
+        "input_cost": 0.14,
+        "name": "MiMo V2.6 Flash",
+        "output_cost": 0.28,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0036,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Pro is Xiaomi's flagship foundation model. Built at over 1T parameters, it targets the most demanding reasoning, coding, and agentic workloads with a 1M-token context window.",
+        "id": "XiaomiMiMo/MiMo-V2.6-Pro",
+        "input_cost": 0.435,
+        "name": "MiMo V2.6 Pro",
+        "output_cost": 0.87,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
           "structured_output"
         ]
       }

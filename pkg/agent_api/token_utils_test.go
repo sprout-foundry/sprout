@@ -285,6 +285,34 @@ func TestCalculateOutputBudget(t *testing.T) {
 			minOutput:    40300,
 			maxOutput:    40500,
 		},
+		{
+			// Regression: reasoning-budget collision near the ceiling. The
+			// old floor degradation (min(MinOutputTokens, remaining)) let the
+			// budget sink to 2–5K as the estimate crossed ~185K on a 200K
+			// window — below the ~2–4K tokens reasoning models need just to
+			// finish thinking, so turns dead-ended finish=length with zero
+			// tool calls (probe: 7 straight no-op turns at 40K/2000). The
+			// floor is now kept: the provider either clamps (same effective
+			// budget) or rejects, which triggers seed's overflow-recovery
+			// compaction. Both beat a guaranteed no-op turn.
+			name:         "near-ceiling keeps reasoning floor",
+			contextLimit: 200000,
+			inputTokens:  185000,
+			wantOK:       true,
+			minOutput:    MinOutputTokens,
+			maxOutput:    MinOutputTokens,
+		},
+		{
+			// Same guard deeper into the tail: remaining (4K) is below the
+			// floor, but the window is large enough to hold it — the floor
+			// must win over the degraded remaining.
+			name:         "deep-tail keeps floor over remaining",
+			contextLimit: 200000,
+			inputTokens:  196000,
+			wantOK:       true,
+			minOutput:    MinOutputTokens,
+			maxOutput:    MinOutputTokens,
+		},
 	}
 
 	for _, tt := range tests {

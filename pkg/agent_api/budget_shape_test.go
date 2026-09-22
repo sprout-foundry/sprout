@@ -52,8 +52,17 @@ func TestCalculateOutputBudgetAnchoredShape(t *testing.T) {
 
 		split, okS := CalculateOutputBudgetAnchored(c, h/2, h-h/2)
 		rem := c - h
-		if okS && split > rem {
-			t.Fatalf("anchored split %d exceeds remaining %d at total h=%d", split, rem, h)
+		// The split budget may exceed `rem` by at most the floor step: the
+		// floor is kept (not degraded to `remaining`) when the heuristic
+		// reserves consume the tail, so near the ceiling the budget
+		// legitimately sits at MinOutputTokens while remaining is below it.
+		// Degrading to `remaining` there was the finish=length no-op-turn
+		// bug: providers clamped or rejected, and a rejected request
+		// triggers overflow-recovery compaction — but a clamped 2–5K budget
+		// silently starved reasoning-only turns. Allowing the floor step
+		// keeps reasoning viable; the recovery path handles true overflow.
+		if okS && split > rem && split != MinOutputTokens {
+			t.Fatalf("anchored split %d exceeds remaining %d at total h=%d without the floor step", split, rem, h)
 		}
 	}
 }

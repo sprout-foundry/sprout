@@ -296,13 +296,24 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	// estimation errors that slip past the margins above.
 	maxOutput = min(maxOutput, remaining)
 
-	// Below the minimum viable output, fall back to the floor — but only
-	// when the real remaining space cannot cover it either. A reasoning
-	// turn needs thinking + one tool batch + prose; if the estimate was
-	// right and even the floor overflows, the provider rejects and seed's
-	// overflow-recovery compaction fires.
+	// Below the minimum viable output, keep the floor rather than degrading
+	// to `remaining`. A reasoning turn needs thinking + one tool batch +
+	// prose; the observed failure mode of the degraded floor was
+	// max_tokens pinned at 2–5K near the window ceiling, below the ~2–4K
+	// tokens reasoning models need just to finish thinking — turns then
+	// dead-end finish=length with zero tool calls. When the estimate was
+	// right and even the floor overflows the window, the provider either
+	// clamps (same effective budget as before) or rejects and seed's
+	// context-overflow recovery compaction fires — both strictly better
+	// than a guaranteed no-op turn.
+	//
+	// Exception: a window smaller than the floor can never fit it; degrade
+	// to the remaining space there (proportionate to the tiny window).
 	if maxOutput < MinOutputTokens {
-		return min(MinOutputTokens, remaining), true
+		if contextLimit <= MinOutputTokens {
+			return min(MinOutputTokens, remaining), true
+		}
+		return MinOutputTokens, true
 	}
 
 	return maxOutput, true
@@ -344,9 +355,15 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 	maxOutput := remaining - biasReserve - cushion
 	maxOutput = min(maxOutput, remaining)
 
-	// Same floor semantics as CalculateOutputBudget.
+	// Same floor semantics as CalculateOutputBudget: keep the floor rather
+	// than degrading to `remaining` (see that function's comment for the
+	// finish=length no-op-turn failure mode the degradation caused), with
+	// the same tiny-window exception.
 	if maxOutput < MinOutputTokens {
-		return min(MinOutputTokens, remaining), true
+		if contextLimit <= MinOutputTokens {
+			return min(MinOutputTokens, remaining), true
+		}
+		return MinOutputTokens, true
 	}
 
 	return maxOutput, true

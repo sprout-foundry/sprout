@@ -305,9 +305,6 @@ export function useAppInitialization({
         setTimeout(() => loadFiles(), 500);
       }
 
-      // Load initial chat sessions
-      loadChatSessions();
-
       // Restore workspace and session startup state
       const restoreStartupState = async () => {
         try {
@@ -335,6 +332,19 @@ export function useAppInitialization({
           }
         } catch (error) {
           debugLog('[startup] workspace check failed:', error);
+        }
+
+        // SP-140-10c: settle the chat list + backend active chat BEFORE the
+        // boot-time active-chat decision below. The design-mode restore /
+        // fresh-start switches the active chat; if the list load is still in
+        // flight it can race that switch (the fresh chat would be missing
+        // from the list the load adopts, and the switch's result is only
+        // meaningful once the list has settled). Best-effort: a failure here
+        // must not break the shell — later activity refreshes the list.
+        try {
+          await loadChatSessions();
+        } catch (error) {
+          debugLog('[startup] chat session load failed:', error);
         }
 
         // SP-140-10c: a persisted Design mode boots into its own session pin

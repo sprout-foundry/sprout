@@ -44,6 +44,58 @@ interface ToolCardProps {
   onToggleExpansion: (toolId: string) => void;
 }
 
+/**
+ * The expandable detail body for a tool execution (Task / Call / Response plus
+ * the truncation notice). Shared by ToolCard (ContextPanel) and ToolDetailInline
+ * (chat) so the two renderings never diverge (SP-140-10d).
+ */
+export function ToolDetailBody({ tool }: { tool: ToolExecution }) {
+  const isSub = isSubagentTool(tool);
+  const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
+  return (
+    <>
+      {isSub && subagentPrompt && (
+        <div className="tool-detail-section">
+          <div className="tool-detail-label">
+            <FileEdit size={12} className="inline-icon" /> Task
+          </div>
+          <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+        </div>
+      )}
+      {tool.arguments && !isSub && (
+        <div className="tool-detail-section">
+          <div className="tool-detail-label">
+            <ClipboardList size={12} className="inline-icon" /> Call
+          </div>
+          <FilePathPre text={formatToolDetail(tool.arguments)} />
+        </div>
+      )}
+      {tool.result && (
+        <div className="tool-detail-section">
+          <div className="tool-detail-label">
+            {isSub ? (
+              <>
+                <BarChart3Icon size={12} className="inline-icon" /> Summary
+              </>
+            ) : (
+              <>
+                <FileText size={12} className="inline-icon" /> Response
+              </>
+            )}
+          </div>
+          <FilePathPre text={formatToolDetail(tool.result)} />
+          {hasTruncation(tool.details) && tool.details.result_truncated && (
+            <div className="tool-truncation-notice">
+              <AlertTriangle size={11} className="inline-icon" />
+              Truncated — full result was {Number(tool.details.result_length ?? 0)} characters
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleExpansion }: ToolCardProps) {
   const isSub = isSubagentTool(tool);
   const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
@@ -106,44 +158,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
 
         {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
           <div className="tool-details">
-            {isSub && subagentPrompt && (
-              <div className="tool-detail-section">
-                <div className="tool-detail-label">
-                  <FileEdit size={12} className="inline-icon" /> Task
-                </div>
-                <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
-              </div>
-            )}
-            {tool.arguments && !isSub && (
-              <div className="tool-detail-section">
-                <div className="tool-detail-label">
-                  <ClipboardList size={12} className="inline-icon" /> Call
-                </div>
-                <FilePathPre text={formatToolDetail(tool.arguments)} />
-              </div>
-            )}
-            {tool.result && (
-              <div className="tool-detail-section">
-                <div className="tool-detail-label">
-                  {isSub ? (
-                    <>
-                      <BarChart3Icon size={12} className="inline-icon" /> Summary
-                    </>
-                  ) : (
-                    <>
-                      <FileText size={12} className="inline-icon" /> Response
-                    </>
-                  )}
-                </div>
-                <FilePathPre text={formatToolDetail(tool.result)} />
-                {hasTruncation(tool.details) && tool.details.result_truncated && (
-                  <div className="tool-truncation-notice">
-                    <AlertTriangle size={11} className="inline-icon" />
-                    Truncated — full result was {Number(tool.details.result_length ?? 0)} characters
-                  </div>
-                )}
-              </div>
-            )}
+            <ToolDetailBody tool={tool} />
           </div>
         )}
       </>

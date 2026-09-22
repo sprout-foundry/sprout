@@ -169,13 +169,10 @@ export function useChatModePinning({
 
   // The returned callbacks are stable (they only touch refs), so callers can
   // memoize around them.
-  const switchSession = useCallback(
-    (sessionId: string) => {
-      writeChatModePin(modeRef.current, sessionId);
-      switchRef.current(sessionId);
-    },
-    [],
-  );
+  const switchSession = useCallback((sessionId: string) => {
+    writeChatModePin(modeRef.current, sessionId);
+    switchRef.current(sessionId);
+  }, []);
 
   const recordSend = useCallback(() => {
     const active = activeChatIdRef.current;

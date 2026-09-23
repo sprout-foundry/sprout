@@ -143,7 +143,7 @@ describe('UserMenu (SP-016 P0.5)', () => {
     expect(links[0].getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor');
     expect(links[1].getAttribute('href')).toBe('https://platform.sprout.dev/tasks?from=editor');
     expect(links[2].getAttribute('href')).toBe('https://platform.sprout.dev/account/billing?from=editor');
-    expect(links[3].getAttribute('href')).toBe('https://platform.sprout.dev/team?from=editor');
+    expect(links[3].getAttribute('href')).toBe('https://platform.sprout.dev/#/team?from=editor');
   });
 
   it('falls back to relative exit URLs when the platform base is absent', () => {

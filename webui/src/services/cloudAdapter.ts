@@ -31,6 +31,7 @@ import {
 } from './cloudWasmHandlers';
 import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
 import { initWasmShell, type WasmShell } from './wasmShell';
+import { loadRepoImport, saveRepoImport, setLastRepo } from './repoImportCache';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -175,7 +176,51 @@ export class CloudAdapter implements APIAdapter {
         }
       }
 
-      return { success: true, repo: data.repo };
+      // Persist the manifest so a page reload can re-seed the in-memory VFS
+      // from the cache instead of re-cloning. Fire-and-forget: a
+      // persistence failure must never fail the import itself.
+      const repo = data.repo ?? repoURL;
+      void (async () => {
+        try {
+          await saveRepoImport(repoURL, { repo, files, importedAt: new Date().toISOString() });
+          await setLastRepo(repoURL);
+        } catch (err) {
+          console.warn('[CloudAdapter] repo import cache persist failed:', err);
+        }
+      })();
+
+      return { success: true, repo };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Re-seed the workspace for a repo, preferring the local import cache.
+   *
+   * Cache hit: writes the persisted manifest straight into the WASM VFS —
+   * no network, no server clone. Cache miss: falls back to the network
+   * import (which persists its result on success).
+   */
+  async restoreRepo(
+    repoURL: string,
+  ): Promise<{ success: boolean; repo?: string; error?: string; fromCache?: boolean }> {
+    const cached = await loadRepoImport(repoURL);
+    if (!cached || !cached.files || cached.files.length === 0) {
+      const result = await this.importRepo(repoURL);
+      return { ...result, fromCache: false };
+    }
+    try {
+      const shell = await this.ensureWasmShell();
+      for (const file of cached.files) {
+        try {
+          shell.writeFile(file.path, file.content);
+          trackFileWrite(file.path);
+        } catch (writeErr) {
+          console.warn(`[CloudAdapter] failed to restore file ${file.path}:`, writeErr);
+        }
+      }
+      return { success: true, repo: cached.repo, fromCache: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }

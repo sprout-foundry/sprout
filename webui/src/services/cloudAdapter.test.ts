@@ -76,6 +76,15 @@ vi.mock('./browserGitHandler', () => ({
   ),
 }));
 
+// Mock repoImportCache — the ?repo= import cache (IndexedDB-backed). jsdom
+// has no IndexedDB, so tests control cache hits/misses directly.
+const mockRepoImportCache = vi.hoisted(() => ({
+  loadRepoImport: vi.fn(async () => null),
+  saveRepoImport: vi.fn(async () => {}),
+  setLastRepo: vi.fn(async () => {}),
+}));
+vi.mock('./repoImportCache', () => mockRepoImportCache);
+
 // Polyfill Response for jsdom environment (jsdom lacks Response/fetch)
 if (typeof Response === 'undefined') {
   global.Response = class Response {
@@ -1746,6 +1755,43 @@ describe('CloudAdapter', () => {
       const response = await adapter.fetch('/api/stats', { method: 'GET' });
       expect(response.ok).toBe(false);
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('restoreRepo (?repo= reload persistence)', () => {
+    const repoUrl = 'https://github.com/octocat/Hello-World';
+
+    it('re-seeds the VFS from the cache on a hit (no network call)', async () => {
+      mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
+        repo: 'octocat/Hello-World',
+        files: [{ path: 'README', content: 'hi' }],
+        importedAt: '2026-09-23T00:00:00Z',
+      });
+
+      const res = await adapter.restoreRepo(repoUrl);
+
+      expect(res).toMatchObject({ success: true, repo: 'octocat/Hello-World', fromCache: true });
+      expect(mockWasmShell.writeFile).toHaveBeenCalledWith('README', 'hi');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the network import on a cache miss and persists the manifest', async () => {
+      mockRepoImportCache.loadRepoImport.mockResolvedValueOnce(null);
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ repo: 'octocat/Hello-World', files: [{ path: 'README', content: 'hi' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const res = await adapter.restoreRepo(repoUrl);
+
+      expect(res).toMatchObject({ success: true, repo: 'octocat/Hello-World', fromCache: false });
+      expect(mockWasmShell.writeFile).toHaveBeenCalledWith('README', 'hi');
+      expect(mockRepoImportCache.saveRepoImport).toHaveBeenCalledWith(
+        repoUrl,
+        expect.objectContaining({ repo: 'octocat/Hello-World' }),
+      );
     });
   });
 });

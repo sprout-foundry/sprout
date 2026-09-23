@@ -27,12 +27,15 @@ import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { notificationBus } from '../services/notificationBus';
 import { platformHref } from '../utils/platformUrl';
 
-/** Account-surface exit items. Paths carry ?from=editor (SP-016 P0.7). */
+/** Account-surface exit items. Paths carry ?from=editor (SP-016 P0.7).
+ *  Team/Runners are flat API routes on the platform (GET /team, GET /runners),
+ *  so their SPA views live at hash deep links — a plain /team would return
+ *  the API's JSON, not the page. */
 const MENU_ITEMS: readonly { label: string; path: string }[] = [
   { label: 'Dashboard', path: '/?from=editor' },
   { label: 'Tasks', path: '/tasks?from=editor' },
   { label: 'Billing', path: '/account/billing?from=editor' },
-  { label: 'Manage Team', path: '/team?from=editor' },
+  { label: 'Manage Team', path: '/#/team?from=editor' },
 ];
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;

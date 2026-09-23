@@ -101,10 +101,8 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
       result.current.refreshGitStatus();
     });
 
-    await waitFor(() => {
-      expect(result.current.gitStatus).not.toBeNull();
-      expect(result.current.gitActionError).toBeNull();
-    });
+    await waitFor(() => expect(result.current.gitStatus).not.toBeNull());
+    await waitFor(() => expect(result.current.gitActionError).toBeNull());
     expect(result.current.gitStatus?.branch).toBe('master');
     expect(result.current.gitStatus?.modified).toEqual(['README']);
   });
@@ -121,10 +119,8 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
       result.current.refreshGitStatus();
     });
 
-    await waitFor(() => {
-      expect(result.current.gitStatus).toBeNull();
-      expect(result.current.gitActionError).toBeNull();
-    });
+    await waitFor(() => expect(result.current.gitStatus).toBeNull());
+    await waitFor(() => expect(result.current.gitActionError).toBeNull());
   });
 
   it('keeps the error banner when the status load fails', async () => {

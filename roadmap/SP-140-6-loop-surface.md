@@ -1,6 +1,7 @@
 # SP-140-6 — The Loop Surface: Agent State in the Design Space
 
-> **Status (2026-09-19):** Draft — not started.
+> **Status (2026-09-22):** Shipped — `849f41282` (PR #85), merged to
+> `main` via `fe93ae98a` (released in v0.18.12).
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-3/4/5
 > (all shipped on `feat-design-workspace`). Co-editing of design assets
 > by humans — edits that interleave safely with agent edits — is scoped

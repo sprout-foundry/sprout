@@ -43,8 +43,13 @@ func registerPastedImagesWithProvider(a *Agent, prov core.Provider, images map[s
 // to the user message so the model sees the exact moment of each turn without
 // invalidating the prompt-prefix cache. The system prompt stays static across
 // requests (date/time injection there would defeat provider caching and cost
-// users real money on every turn); the timestamp is added only at the provider
-// boundary, where Anthropic and OpenAI do not cache the user-message suffix.
+// users real money on every turn). The stamp is applied once at injection —
+// prepareQueryRun stamps the query before it enters the conversation state,
+// and steer messages are stamped at delivery — so the stamped bytes are part
+// of the prefix every later request replays byte-identically. The
+// provider-boundary net (stampTurnTimestamp) only catches messages that
+// somehow arrive unstamped. Persisted state is stripped (ExportState), so
+// restored sessions re-stamp on their first turn.
 // ISO 8601 with timezone offset is machine-parseable; the Local parenthetical
 // matches what the user sees in their OS clock so the model can reason about
 // time-of-day naturally.
@@ -215,6 +220,25 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		return nil, agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
 
+	// Stamp the turn timestamp into the query ONCE, at injection. The
+	// stamped text becomes part of the in-memory conversation state, so
+	// every request this turn — and every later turn that replays this
+	// message as prefix — carries byte-identical user-message content.
+	// This is what keeps the provider prompt cache eligible across turns:
+	// stamping only at the provider boundary made a message go out
+	// stamped during its own turn and unstamped from the next turn on,
+	// flipping prefix bytes at every turn boundary. The stamp is stripped
+	// again at ExportState, so persisted sessions stay envelope-free
+	// (StripUserMessageTimestamp consumers keep working on disk state).
+	// Applied after image processing so placeholders see clean text; the
+	// query_started event above already published the raw display text.
+	a.turnTimestampMu.RLock()
+	turnStamp := a.turnTimestamp
+	a.turnTimestampMu.RUnlock()
+	if !turnStamp.IsZero() {
+		processedQuery = InjectUserMessageTimestampAt(processedQuery, turnStamp)
+	}
+
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
@@ -233,7 +257,9 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
 	if shouldInjectProactiveContext {
 		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := a.InjectProactiveContext(injectCtx, processedQuery); err != nil {
+		// Semantic consumers embed the query against stripped signatures;
+		// hand them clean text, not the stamped envelope.
+		if err := a.InjectProactiveContext(injectCtx, StripUserMessageTimestamp(processedQuery)); err != nil {
 			a.Logger().Debug("[proactive-context] injection failed: %v\n", err)
 		}
 		injectCancel()
@@ -529,8 +555,13 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 
 // finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
 func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
+	// The stored conversation carries the timestamp envelope from
+	// injection-time stamping; downstream consumers (turn checkpoint
+	// summaries, embedding signatures, transcript events) want clean text.
+	cleanQuery := StripUserMessageTimestamp(processedQuery)
+
 	// Maybe checkpoint completed turn
-	a.maybeCheckpointCompletedTurn(processedQuery, preSeedMsgCount, len(a.state.GetMessages()))
+	a.maybeCheckpointCompletedTurn(cleanQuery, preSeedMsgCount, len(a.state.GetMessages()))
 
 	// Publish query completed event
 	var finalContent string
@@ -548,7 +579,7 @@ func (a *Agent) finalizeConversationPostHooks(result string, processedQuery stri
 
 	duration := time.Since(a.conversationStartTime)
 	completedEvent := events.QueryCompletedEvent(
-		processedQuery,
+		cleanQuery,
 		finalContent,
 		a.GetTotalTokens(),
 		a.GetTotalCost(),

@@ -348,7 +348,8 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 
 // doChatNonStream performs a non-streaming chat request.
 func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images before adding the provider-only turn timestamp.
+	// Attach pasted images before the turn-timestamp safety net stamps any
+	// unstamped user message (legacy restored sessions).
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
 	// Special-token truncation guard: observe seed nudges, add corrective
@@ -377,7 +378,8 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 
 // doChatStream performs a streaming chat request.
 func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	// Attach pasted images before adding the provider-only turn timestamp.
+	// Attach pasted images before the turn-timestamp safety net (see
+	// doChatNonStream).
 	messages := sp.attachPastedImages(req.Messages)
 	messages = sp.stampTurnTimestamp(messages)
 	// Special-token truncation guard (see doChatNonStream).
@@ -430,7 +432,12 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	return sproutResponseToSeed(resp), nil
 }
 
-// stampTurnTimestamp adds the current turn's fixed timestamp to the latest user message.
+// stampTurnTimestamp is the provider-boundary safety net for user messages
+// that reached the wire without an injection-time stamp: legacy restored
+// sessions (persisted before injection-time stamping), wakeup-batch edge
+// cases, and any future injection path that misses the stamp. Normal turns
+// arrive already stamped (see prepareQueryRun), so this returns the input
+// unchanged for them — the HasPrefix check below is the fast path.
 func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Message {
 	if sp.agent == nil {
 		return messages

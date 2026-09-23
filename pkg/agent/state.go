@@ -17,12 +17,40 @@ import (
 
 // ExportState exports the current agent state for persistence
 func (a *Agent) ExportState() ([]byte, error) {
+	// Strip the provider-boundary timestamp envelopes from user messages.
+	// In-memory conversation state carries them (stamped once at injection
+	// so every request this turn and later turns replays byte-identical
+	// user-message content — the prompt-cache-eligibility invariant), but
+	// persisted state has always been envelope-free: restored sessions,
+	// session previews, transcripts, and the WebUI's message list all
+	// predate the envelopes and their tests pin clean text. Restored
+	// messages simply run unstamped (consistently) until the session ends;
+	// each new turn's message is stamped fresh at injection.
+	messages := a.state.GetMessages()
+	if len(messages) > 0 {
+		stripped := make([]api.Message, len(messages))
+		copy(stripped, messages)
+		changed := false
+		for i, msg := range stripped {
+			if msg.Role != "user" {
+				continue
+			}
+			if clean := StripUserMessageTimestamp(msg.Content); clean != msg.Content {
+				stripped[i].Content = clean
+				changed = true
+			}
+		}
+		if changed {
+			messages = stripped
+		}
+	}
+
 	// Generate compact summary for next session continuity
 	compactSummary := a.GenerateCompactSummary()
 	taskActions := a.GetTaskActions()
 
 	state := AgentState{
-		Messages:                       a.state.GetMessages(),
+		Messages:                       messages,
 		MessageTimestamps:              a.state.GetMessageTimestamps(),
 		TurnCheckpoints:                a.copyTurnCheckpoints(),
 		PreviousSummary:                a.state.GetPreviousSummary(),

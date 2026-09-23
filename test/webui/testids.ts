@@ -68,7 +68,6 @@ const TESTIDS = {
   "sidebar-automations-tab": "sidebar-automations-tab",
   "sidebar-logs-tab": "sidebar-logs-tab",
   "sidebar-collapse-toggle": "sidebar-collapse-toggle",
-  "rail-badge-tasks": "rail-badge-tasks", // pattern rail-badge-${item.id} (platform-nav badge, SP-016 P0.4)
   // Workspace mode switcher (top-left). Derived ids: <testId>-trigger,
   // <testId>-menu, <testId>-option-<mode>.
   "sidebar-brand-trigger": "sidebar-brand-trigger",
@@ -343,6 +342,8 @@ const TESTIDS = {
   "design-rail-flows": "design-rail-flows",
   "design-rail-screens": "design-rail-screens",
   "design-rail-tokens": "design-rail-tokens",
+  "design-rail-library": "design-rail-library",
+  "design-rail-screen-login": "design-rail-screen-login", // pattern design-rail-screen-${stem} (DesignRail.tsx)
   "design-detail-pane": "design-detail-pane",
   "design-detail-content": "design-detail-content",
   // Flows canvas

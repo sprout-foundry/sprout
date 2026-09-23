@@ -130,6 +130,11 @@ export const useGitWorkspace = ({
         throw new Error(data.message || 'Failed to load git status');
       }
 
+      // A successful status load supersedes any stale error banner from an
+      // earlier failed attempt (e.g. the boot call that ran before the
+      // WASM shell was ready).
+      setGitActionError(null);
+
       const status = data.status || {
         branch: '',
         ahead: 0,

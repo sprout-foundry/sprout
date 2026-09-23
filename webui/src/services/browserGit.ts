@@ -42,6 +42,12 @@ export function configureBrowserGit(cfg: BrowserGitConfig) {
   repoInitialized = false;
 }
 
+/** Test-only: restore the pre-bootstrap (never-configured) state. */
+export function __resetBrowserGitForTest(): void {
+  config = null;
+  repoInitialized = false;
+}
+
 /**
  * The VFS bridge configureBrowserGit was called with, or null when browser
  * git was never wired up (local mode / pre-bootstrap). The ETH-2 txn path
@@ -49,6 +55,31 @@ export function configureBrowserGit(cfg: BrowserGitConfig) {
  */
 export function getBrowserGitVfsBridge(): BrowserGitConfig | null {
   return config;
+}
+
+/**
+ * Honest empty-repo GitStatusResponse (the same shape the local daemon's
+ * /api/git/status returns, and the platform's cloud fallback). Used by the
+ * boot-time guard in executeGitOp so the git panel shows "No git repository
+ * found" (neutral) instead of erroring before browser git is wired.
+ */
+function emptyGitStatus() {
+  return {
+    message: 'success',
+    in_git_repo: false,
+    status: {
+      branch: '',
+      ahead: 0,
+      behind: 0,
+      staged: [] as Array<{ path: string; status: string; staged?: boolean }>,
+      modified: [] as Array<{ path: string; status: string; staged?: boolean }>,
+      untracked: [] as Array<{ path: string; status: string; staged?: boolean }>,
+      deleted: [] as Array<{ path: string; status: string; staged?: boolean }>,
+      renamed: [] as Array<{ path: string; status: string; staged?: boolean }>,
+      in_git_repo: false,
+    },
+    files: [] as Array<{ path: string; status: string; staged?: boolean }>,
+  };
 }
 
 async function ensureDir(path: string) {
@@ -451,6 +482,16 @@ export async function executeGitOp(
 ): Promise<unknown> {
   switch (op) {
     case 'status': {
+      // Boot-time guard: browser git is only wired up after the WASM shell is
+      // ready (configureBrowserGit in useAppInitialization). The git panel's
+      // initial status load runs before that, so without this the call would
+      // throw "browserGit not configured" → HTTP 500 → a "Failed to load git
+      // status" console error + transient error banner. Report an honest
+      // empty-repo state instead; the ?repo= import's refresh re-fetches the
+      // real status once browser git is wired and the repo is seeded.
+      if (!getBrowserGitVfsBridge()) {
+        return emptyGitStatus();
+      }
       // HTTP surface: the git panel expects the canonical GitStatusResponse
       // (message/in_git_repo/status/files), the same contract as the local
       // daemon's /api/git/status. The internal gitStatus() shape
@@ -489,6 +530,12 @@ export async function executeGitOp(
       return gitLog(Number(body?.count ?? 50));
     case 'branch':
     case 'branches': {
+      // Boot-time guard (matches the 'status' case above): before browser git
+      // is wired, gitBranch() would throw → HTTP 500. Return an honest empty
+      // branch list instead; the panel re-fetches after the ?repo= import.
+      if (!getBrowserGitVfsBridge()) {
+        return { message: 'success', current: '', branches: [] as string[] };
+      }
       // HTTP surface: GitBranchesResponse (message/current/branches:string[]).
       // The internal gitBranch() returns [{name, current}] — shell consumers
       // keep using that directly.

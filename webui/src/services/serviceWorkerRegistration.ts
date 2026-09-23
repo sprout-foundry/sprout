@@ -9,9 +9,16 @@ import { debugLog } from '../utils/log';
 import { isCloud } from '../config/mode';
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
-  // In cloud mode, register the SW for app-shell caching + installability.
-  // The SW caches navigations (network-first) and static assets (cache-first)
-  // so the app loads fast and works offline (IndexedDB backs the VFS).
+  // Cloud mode ships no service worker: the platform's vendored dist strips
+  // sw.js (see platform/scripts/update-sprout-webui.sh) and the SPA
+  // catch-all would serve index.html (text/html) for /webui/sw.js, turning
+  // the registration into a "script has an unsupported MIME type" console
+  // error. The CloudAdapter proxies the platform API directly; offline
+  // state is backed by IndexedDB, not a network cache.
+  if (isCloud) {
+    return null;
+  }
+
   if (!('serviceWorker' in navigator)) {
     return null;
   }

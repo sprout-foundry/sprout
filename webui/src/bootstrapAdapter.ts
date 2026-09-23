@@ -296,52 +296,40 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
     });
     installAdapter(adapter);
 
-    // Auto-import repo from ?repo= query param if present.
-    // Cached per-repo via IndexedDB so revisiting the same repo doesn't re-import.
+    // Auto-import repo from ?repo= query param if present. restoreRepo
+    // checks the IndexedDB import cache first (the file tree lives in the
+    // in-memory WASM VFS, so without the cache a reload loses the
+    // workspace) and only falls back to the server-side clone on a cache
+    // miss. The ?repo= param stays in the URL: it is a shareable deep
+    // link, and refreshes are served from the cache.
     const repoParam = CloudAdapter.getRepoFromQuery();
     if (repoParam) {
-      const cacheKey = `sprout:repo-import:${repoParam}`;
-
-      // Check if this repo was already imported (cached)
-      const cached =
-        typeof window !== 'undefined'
-          ? (window as unknown as Record<string, unknown>).__repoImported === repoParam
-          : false;
-
-      if (cached) {
-        console.warn(`bootstrap: repo ${repoParam} already imported — skipping`);
-      } else {
-        console.warn(`bootstrap: ?repo= detected — importing ${repoParam}`);
-        // Signal that an import is in progress (before WASM shell is ready).
-        (window as unknown as Record<string, unknown>).__repoImporting = repoParam;
-        // Fire-and-forget: import runs after adapter is installed and WASM is ready.
-        adapter.importRepo(repoParam).then((result) => {
-          if (result.success) {
-            console.warn(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
-            (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
-            delete (window as unknown as Record<string, unknown>).__repoImporting;
-            window.dispatchEvent(
-              new CustomEvent('sprout:repo-imported', {
-                detail: { repo: result.repo ?? repoParam },
-              }),
-            );
-          } else {
-            console.warn(`bootstrap: repo import failed: ${result.error}`);
-            delete (window as unknown as Record<string, unknown>).__repoImporting;
-            (window as unknown as Record<string, unknown>).__repoImportFailed = result.error;
-            window.dispatchEvent(
-              new CustomEvent('sprout:repo-import-failed', {
-                detail: { error: result.error ?? 'Unknown error' },
-              }),
-            );
-          }
-          // Clean the URL after import to prevent re-import on refresh.
-          if (typeof window !== 'undefined' && window.history.replaceState) {
-            const cleanURL = window.location.pathname + window.location.hash;
-            window.history.replaceState({}, '', cleanURL);
-          }
-        });
-      }
+      // Signal that an import is in progress (before WASM shell is ready).
+      (window as unknown as Record<string, unknown>).__repoImporting = repoParam;
+      // Fire-and-forget: import runs after adapter is installed and WASM is ready.
+      adapter.restoreRepo(repoParam).then((result) => {
+        if (result.success) {
+          console.warn(
+            `bootstrap: repo ${result.fromCache ? 'restored from cache' : 'imported'}: ${result.repo ?? repoParam}`,
+          );
+          (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
+          delete (window as unknown as Record<string, unknown>).__repoImporting;
+          window.dispatchEvent(
+            new CustomEvent('sprout:repo-imported', {
+              detail: { repo: result.repo ?? repoParam },
+            }),
+          );
+        } else {
+          console.warn(`bootstrap: repo import failed: ${result.error}`);
+          delete (window as unknown as Record<string, unknown>).__repoImporting;
+          (window as unknown as Record<string, unknown>).__repoImportFailed = result.error;
+          window.dispatchEvent(
+            new CustomEvent('sprout:repo-import-failed', {
+              detail: { error: result.error ?? 'Unknown error' },
+            }),
+          );
+        }
+      });
     }
   } else {
     // eslint-disable-next-line no-console

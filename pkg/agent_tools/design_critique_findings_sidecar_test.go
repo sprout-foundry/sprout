@@ -16,7 +16,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// design_critique findings sidecar (SP-140-6 §6d, TODO item 6.4)
+// design_critique findings sidecar (SP-140-6 §6d)
 // ---------------------------------------------------------------------------
 
 // dcFindingsSidecar reads and parses a target's findings sidecar (path per

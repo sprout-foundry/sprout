@@ -1,5 +1,5 @@
 /**
- * Status curation tests (SP-140-7 §7d, TODO item 7.4): the structured
+ * Status curation tests (SP-140-7 §7d): the structured
  * manifest rewrite model and the ScreenStatusMenu component.
  */
 

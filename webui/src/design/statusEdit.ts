@@ -1,5 +1,5 @@
 /**
- * Manifest status curation model (SP-140-7 §7d, TODO item 7.4).
+ * Manifest status curation model (SP-140-7 §7d).
  *
  * Pure functions for the screen status menu: a structured README rewrite that
  * touches ONLY the chosen listing's status segment, leaving every other byte

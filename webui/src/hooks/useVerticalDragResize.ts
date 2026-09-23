@@ -46,7 +46,7 @@ export function useVerticalDragResize(args: UseVerticalDragResizeArgs): (e: Reac
 
   const handleMove = useCallback(
     (ev: PointerEvent, startY: number, startHeight: number) => {
-      // P4.5: the terminal's drag handle receives SCREEN px, but the
+      // The terminal's drag handle receives SCREEN px, but the
       // persisted height is LOGICAL (painted = logical x ui-scale when
       // the terminal portal carries the paint scale). Divide the delta
       // by the live factor so drags track the pointer 1:1 and stored

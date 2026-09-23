@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// SP-fix: the seed-tool migration left write_file / edit_file /
+// The seed-tool migration left write_file / edit_file /
 // shell_command without any ChangeTracker hooks — the session change log
 // (Agent Changes panel, /api/changes/*, revert tooling) recorded nothing.
 // These tests pin the wiring: when the env carries Track* funcs, the

@@ -1,5 +1,5 @@
 /**
- * Safe-write seam client tests (SP-140-7 §7a, TODO item 7.1).
+ * Safe-write seam client tests (SP-140-7 §7a).
  */
 
 import { describe, expect, it, vi } from 'vitest';

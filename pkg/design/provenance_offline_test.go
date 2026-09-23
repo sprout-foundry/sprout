@@ -16,22 +16,17 @@ import (
 
 // -----------------------------------------------------------------------------
 // SP-140-5 §5f — provenance at any ref / AC "Provenance offline check"
-// (TODO item 5.10)
-//
 // §5f: generated artifacts carry content-hash headers (5a), so any checkout —
 // any commit, any branch, a PR diff — can verify design/code consistency
 // offline with no database, no tags, no CI. The commit hash is the version pin.
-//
 // The AC: "at an arbitrary checkout, the hash in a generated artifact's header
 // matches the token inputs at that commit (staleness is decidable from the tree
 // alone)."
-//
 // This test proves that property on a FIXTURE git repo, and it is deliberately
 // falsifiable on *state*: at every point it reads the token sources and the
 // generated artifacts OUT OF THE COMMITS THEMSELVES (`git show <rev>:<path>`),
 // never off the working tree, so "at an arbitrary checkout" is not simulated by
 // whatever the test happens to have left on disk. The assertions:
-//
 //	(a) at the export commit A, the token-input hash recomputed from A's tree
 //	    equals the `source-hash:` header recorded in A's generated artifact —
 //	    not stale, provable from the tree alone;
@@ -41,7 +36,6 @@ import (
 //	(c) the same recomputation the design_assets/design_validate drift report
 //	    (5.5, §5c) uses agrees: the committed tree at A reads design-ahead=false,
 //	    at B design-ahead=true.
-//
 // No network, no browser, no database, no tags: only `git init` + commits in a
 // t.TempDir(). The developer's real working tree is never touched — git's
 // config lookup is redirected by the package TestMain in cocommit_test.go, and
@@ -169,7 +163,6 @@ func provCheckout(t *testing.T, root, rev string) {
 // blobs, sorted by basename — the exact ordering TokenExportInputHash requires
 // (the exporter's exportTokenInputHash sorts the same way) — so it never reads
 // the working tree and needs no git checkout to be correct.
-//
 // It deliberately calls the *exported* TokenExportInputHash rather than the
 // unexported exportTokenInputHash: the exported function is the documented
 // offline recompute, and it makes the ordering precondition explicit at the

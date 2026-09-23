@@ -426,8 +426,8 @@ function AppInner() {
                         onSectionChange={setSelectedSection}
                         onSidebarWidthChange={setSidebarWidth}
                         onSidebarWidthPersist={persistSidebarWidth}
-                        // P4.5-B: double-tap/double-click on the grip cycles
-                        // snap presets (narrow → standard → wide, wraps) instead
+                        // Double-tap/double-click on the grip cycles snap
+                        // presets (narrow → standard → wide, wraps) instead
                         // of only resetting to default.
                         onSidebarWidthReset={cycleSidebarSnap}
                         stats={stats}

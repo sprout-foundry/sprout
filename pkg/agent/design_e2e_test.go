@@ -1,7 +1,7 @@
 //go:build !js
 
 // design_e2e_test.go — scripted-client end-to-end tests for the design tier
-// (SP-140-2 §2c, TODO item 2.11).
+// (SP-140-2 §2c).
 //
 // These tests drive a REAL agent turn through seed's conversation loop with a
 // scripted client standing in for the model. They exercise the three layers

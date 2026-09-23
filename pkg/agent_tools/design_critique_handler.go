@@ -47,7 +47,7 @@ import (
 // structured findings, the derived-artifact cache path with its provenance
 // header (4.1), the non-vision degradation (4.2), and the content-hash render
 // cache + whole-tree cost cap (4.3). The consistency rule packs (items
-// 4.4/4.5) and feedback consumption (item 4.7) are separate TODO items.
+// 4.4/4.5) and feedback consumption (item 4.7) are out of scope here.
 type designCritiqueHandler struct{}
 
 func (h *designCritiqueHandler) Name() string { return "design_critique" }
@@ -1331,7 +1331,7 @@ func renderKindName(k designRenderKind) string {
 }
 
 // ---------------------------------------------------------------------------
-// Render cache + cost cap (SP-140-4 §4e, TODO item 4.3)
+// Render cache + cost cap (SP-140-4 §4e)
 // ---------------------------------------------------------------------------
 
 // critiqueCacheFilename is the sidecar a cached render writes next to its PNG:
@@ -1709,7 +1709,7 @@ func degradedTail(out critiqueOutput) string {
 }
 
 // ---------------------------------------------------------------------------
-// Static degradation (SP-140-4 §4a, TODO item 4.2)
+// Static degradation (SP-140-4 §4a)
 // ---------------------------------------------------------------------------
 
 // staticCritiqueFindings is the non-vision degradation path: it runs the

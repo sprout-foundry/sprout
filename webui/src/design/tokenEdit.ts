@@ -1,5 +1,5 @@
 /**
- * Token editing model (SP-140-7 §7c, TODO item 7.3).
+ * Token editing model (SP-140-7 §7c).
  *
  * Pure functions for the structured token editor: surgical DTCG document
  * edits (parse → set ONE leaf's $value → canonical stringify), light client

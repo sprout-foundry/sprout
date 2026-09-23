@@ -1,7 +1,10 @@
 # SP-140-8 — Screen-Centric IA: The Design Shell Organizes Around Screens
 
-> **Status (2026-09-22):** Draft. Follow-up to SP-140-6/7 (shipped). The
-> token-display rework that motivated this (tile grid, proportional spacing
+> **Status (2026-09-23):** In progress. Follow-up to SP-140-6/7 (shipped).
+> Item 8.1 (rail rework — data-driven Screens group + Library group, status
+> dot + open-annotation badge, selection routing) has landed; the workbench
+> (8.2) and adaptive chrome (8.3) remain.
+> The token-display rework that motivated this (tile grid, proportional spacing
 > scale, schema-wall removal) landed in the same review pass on
 > `feat-design-workspace` and is *not* part of this spec.
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-3 (shell),
@@ -144,6 +147,13 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
 - **8.1** Rail rework: screen group (inventory + status dot + annotation
   badge) + Library group; selection state shared with the workbench.
   (webui; testids per the registry; vitest on the rail state machine.)
+  > **Progress (2026-09-23):** rail side landed — the rail is now data-driven
+  > from the inventory: a Screens group (one entry per wireframe stem with a
+  > status dot and an open-annotation count badge) + a Library group
+  > (Tokens / Flows); screen selection drives the shared selection and lands
+  > on the Screens section, degrading gracefully to Library-only when there
+  > is no workspace. The workbench-side selection handoff completes in 8.2.
+  > `DesignRail.test.tsx` pins the state machine.
 - **8.2** Screen workbench: facet pane over `design_brief(full)` + feedback
   JSON + status; facet links; agent-state slice. (webui + the existing
   brief/feedback services; no new endpoints.)

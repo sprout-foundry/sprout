@@ -236,16 +236,15 @@ describe('Sidebar mode rail (SP-140-5)', () => {
 
     const rail = container.querySelector('[data-testid="sidebar-mode-rail"]');
     expect(rail).not.toBeNull();
-    expect(rail.querySelectorAll('[role="tab"]')).toHaveLength(3);
+    // No workspace context here, so the data-driven Screens group is
+    // omitted and only the Library group (Tokens, Flows) renders.
+    expect(rail.querySelectorAll('[role="tab"]')).toHaveLength(2);
 
     const flows = container.querySelector('[data-testid="design-rail-flows"]');
-    const screens = container.querySelector('[data-testid="design-rail-screens"]');
     const tokens = container.querySelector('[data-testid="design-rail-tokens"]');
     expect(flows).not.toBeNull();
-    expect(screens).not.toBeNull();
     expect(tokens).not.toBeNull();
     expect(flows!.getAttribute('aria-selected')).toBe('true');
-    expect(screens!.getAttribute('aria-selected')).toBe('false');
     expect(tokens!.getAttribute('aria-selected')).toBe('false');
   });
 
@@ -261,12 +260,12 @@ describe('Sidebar mode rail (SP-140-5)', () => {
 
     act(() => {
       container
-        .querySelector('[data-testid="design-rail-screens"]')!
+        .querySelector('[data-testid="design-rail-flows"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onModeSectionChange).toHaveBeenCalledTimes(1);
-    expect(onModeSectionChange).toHaveBeenCalledWith('screens');
+    expect(onModeSectionChange).toHaveBeenCalledWith('flows');
   });
 
   it('a rail selection leaves the section state untouched', () => {
@@ -324,7 +323,7 @@ describe('Sidebar mode rail (SP-140-5)', () => {
     // returns to the mode's assets instead of sticking on Logs.
     act(() => {
       container
-        .querySelector('[data-testid="design-rail-screens"]')!
+        .querySelector('[data-testid="design-rail-flows"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSectionChange).toHaveBeenCalledWith('');

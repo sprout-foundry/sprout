@@ -1,0 +1,61 @@
+/*
+ * Design rail (SP-140-8 §8a) — screen-centric IA.
+ *
+ * The rail reuses the shell's `.rail-icon` button (see Sidebar.css) for each
+ * entry; this file only layers the screen-axis signal onto it: a status dot
+ * (README marker) and an open-annotation count badge. Tokens only.
+ */
+
+.design-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Screen entries anchor their overlays on the 36px icon hit area. */
+.design-rail-screen {
+  position: relative;
+}
+
+/* Status dot (draft / review / ready), pinned top-right of the icon. */
+.design-rail-status {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.design-rail-status--draft {
+  background: var(--text-tertiary);
+}
+
+.design-rail-status--review {
+  background: var(--accent-warning);
+}
+
+.design-rail-status--ready {
+  background: var(--accent-success);
+}
+
+/* Open-annotation count pill, pinned bottom-right (below the status dot). */
+.design-rail-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--brand-active-cyan, var(--accent-primary));
+  color: var(--brand-navy, #10212d);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}

@@ -1,10 +1,11 @@
 # SP-140 — Design Workspace: Agent-Native UX Design on Open Formats
 
-> **Status (2026-09-19):** Draft. Umbrella spec for SP-140-1 … SP-140-5
-> (all shipped on `feat-design-workspace`) and SP-140-6 — the loop
-> surface (drafted 2026-09-19, not started). This spec is the
-> coordination point: directory contract, phase map, cross-spec
-> invariants, and the open-format charter.
+> **Status (2026-09-22):** SP-140-1 … SP-140-7 and SP-140-10 shipped
+> (merged to `main` via `fe93ae98a`, released in v0.18.12);
+> SP-140-8 (screen-centric IA) and SP-140-9 (HTML-first format rework)
+> are drafted, not started. This spec is the coordination point:
+> directory contract, phase map, cross-spec invariants, and the
+> open-format charter.
 
 ## Problem
 

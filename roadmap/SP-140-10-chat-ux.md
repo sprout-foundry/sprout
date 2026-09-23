@@ -1,7 +1,9 @@
 # SP-140-10 — Design-Mode Chat UX: Placement, Pinning, Visibility, Inline Tool Details
 
-> **Status (2026-09-22):** Shipped (10a–10d committed; manual-browser dogfood
-> items 1–4 awaiting verification — see the 10e record at the end).
+> **Status (2026-09-22):** Shipped — items 10a–10d + the 10e dogfood
+> record; manual-browser dogfood items 1–4 verified in a 2026-09-22
+> browser pass on a local build from the feat-design-workspace branch.
+> Merged to `main` via `fe93ae98a`.
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-6
 > (loop surface — §6f side-column agent panel), SP-140-7 (co-editing).
 > Fixes the four design-mode dogfood gripes of 2026-09-22. Item 10d
@@ -254,8 +256,9 @@ Mechanical gates — all green as of `e36c2a843` (the 10d commit):
   the 10d commit rebuilt the package — a stale shared-package dist
   must be rebuilt before a consumer's type-check can pass.
 
-Manual-browser dogfood — **awaiting manual verification** (per the
-item, these are not claimed):
+Manual-browser dogfood — **verified** (2026-09-22 session, manual
+browser pass on a local build from the feat-design-workspace branch;
+all four items pass):
 
 1. `dir=rtl`: side column, border, and mobile overlay land on the
    left (the inline-end side under RTL).

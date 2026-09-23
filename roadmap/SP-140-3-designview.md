@@ -1,6 +1,7 @@
 # SP-140-3 — WebUI DesignView: Flow Canvas and Screen Browser
 
-> **Status (2026-09-15):** Draft — not started.
+> **Status (2026-09-22):** Shipped — merged to `main` via `fe93ae98a`
+> (released in v0.18.12).
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-1;
 > SP-140-2 makes it end-to-end but is not a blocker.
 

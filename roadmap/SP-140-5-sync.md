@@ -1,6 +1,7 @@
 # SP-140-5 — Design↔Code Sync: Continuous Bidirectional Loop
 
-> **Status (2026-09-15):** Draft — not started.
+> **Status (2026-09-22):** Shipped — merged to `main` via `fe93ae98a`
+> (released in v0.18.12).
 > Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-1 only
 > for the core (token export); the sync and reconciliation parts want
 > SP-140-4's consistency data.

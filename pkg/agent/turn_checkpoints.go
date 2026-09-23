@@ -87,6 +87,44 @@ func (a *Agent) RecordTurnCheckpoint(startIndex, endIndex int) {
 	a.ResetFileReadsForNewTurn()
 }
 
+// rebaseTurnCheckpoints shifts every checkpoint's StartIndex/EndIndex
+// through a compaction survivor map (old message index -> new message
+// index) and drops checkpoints whose range lost an endpoint. Called from
+// syncSeedStateToSprout after seed persisted a mid-turn compaction: the
+// message list shrank, so unrebased indices would point at the wrong
+// messages (the exact corruption class fixed for session-name shifts in
+// 95feea807 — substitution would replace the wrong ranges).
+func (a *Agent) rebaseTurnCheckpoints(survivorOf map[int]int) {
+	if a == nil || a.state == nil || len(survivorOf) == 0 {
+		return
+	}
+	mu := a.state.GetCheckpointMutex()
+	mu.Lock()
+	defer mu.Unlock()
+
+	checkpoints := a.state.GetTurnCheckpoints()
+	if len(checkpoints) == 0 {
+		return
+	}
+	out := make([]TurnCheckpoint, 0, len(checkpoints))
+	dropped := 0
+	for _, cp := range checkpoints {
+		newStart, okS := survivorOf[cp.StartIndex]
+		newEnd, okE := survivorOf[cp.EndIndex]
+		if !okS || !okE || newEnd < newStart {
+			dropped++
+			continue
+		}
+		cp.StartIndex = newStart
+		cp.EndIndex = newEnd
+		out = append(out, cp)
+	}
+	if dropped == 0 && len(out) == len(checkpoints) {
+		return // nothing moved — skip the state write
+	}
+	a.state.SetTurnCheckpoints(out)
+}
+
 func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
 	msgs := a.state.GetMessages()
 	if a == nil || startIndex < 0 || endIndex < startIndex || endIndex >= len(msgs) {

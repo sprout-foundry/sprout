@@ -38,6 +38,11 @@ type TurnJournalEvent struct {
 	Msgs        []api.Message      `json:"msgs,omitempty"`
 	Checkpoint  *TurnCheckpoint    `json:"checkpoint,omitempty"`
 	TokenTotals *TurnJournalTokens `json:"token_totals,omitempty"`
+	// CompactionShrink carries the full post-compaction message list on a
+	// "compaction" event: a mid-turn compaction persist REPLACED the state
+	// list (shrinking it below the journal's high-water mark), so replay
+	// must replace, not append. Nil on all other event types.
+	CompactionShrink []api.Message `json:"compaction_shrink,omitempty"`
 }
 
 func turnJournalPath(stateFile string) string {

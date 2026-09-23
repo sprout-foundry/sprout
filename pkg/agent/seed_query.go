@@ -473,7 +473,8 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 		// Check if the fleet budget was exceeded mid-run
 		if errors.Is(err, FleetBudgetExceededError) {
 			// Extract the last assistant response as the truncated result
-			a.syncSeedStateToSprout(qc.seedAgent)
+			rebase := a.syncSeedStateToSprout(qc.seedAgent)
+			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 
 			var truncatedResult string
 			messages := a.state.GetMessages()
@@ -504,7 +505,8 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
 
 		// Sync whatever state we can before returning
-		a.syncSeedStateToSprout(qc.seedAgent)
+		rebase := a.syncSeedStateToSprout(qc.seedAgent)
+		qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 		a.journalSeedState(qc.seedAgent.State())
 		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
 
@@ -514,7 +516,8 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	}
 
 	// Sync state back to sprout's agent manager
-	a.syncSeedStateToSprout(qc.seedAgent)
+	rebase := a.syncSeedStateToSprout(qc.seedAgent)
+	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 	a.journalSeedState(qc.seedAgent.State())
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
@@ -646,14 +649,18 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 // conversation history), seed's final state contains the complete message
 // sequence: [historical msgs, new user msg, assistant msg, tool msgs, ...].
 // We simply replace sprout's messages with seed's messages and sync counters.
-func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
+//
+// Returns the compaction survivor map when seed persisted a mid-turn
+// compaction (nil otherwise), so callers can rebase their own pre-run
+// indices (preSeedMsgCount) alongside the checkpoint rebase.
+func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) map[int]int {
 	if a.state == nil {
-		return
+		return nil
 	}
 
 	seedState := seedAgent.State()
 	if seedState == nil {
-		return
+		return nil
 	}
 
 	seedMsgs := seedState.Messages()
@@ -661,6 +668,17 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 	// Seed now has the full history (via InitialMessages) plus new messages
 	// from this query. Replace sprout's messages entirely.
 	a.state.SetMessages(seedMsgs)
+
+	// Rebase sprout's richer turn checkpoints through seed's compaction
+	// survivor map when a mid-turn compaction persisted: the map's old
+	// indices are pre-run state indices, which is exactly the layout
+	// sprout's checkpoints were recorded against. Seed rebased its own
+	// (plain) checkpoints in the loop; sprout's carry ID/FileChanges/
+	// RevisionID metadata that must survive the same index shift.
+	rebase := seedState.LastCompactionRebase()
+	if rebase != nil {
+		a.rebaseTurnCheckpoints(rebase)
+	}
 
 	// Accumulate token and cost counters across queries. The seed agent is
 	// created fresh per query (see opts.InitialMessages earlier in this file)
@@ -699,4 +717,35 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 		a.Logger().Debug("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
 			len(seedMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
 	}
+
+	return rebase
+}
+
+// rebaseQueryStart shifts a pre-run message index (e.g. preSeedMsgCount)
+// through a compaction survivor map, clamping into the new layout. Used
+// after syncSeedStateToSprout so finalize hooks that anchor against the
+// pre-run conversation boundary (turn checkpoints) span the right
+// messages after a mid-turn compaction shrank the list.
+func rebaseQueryStart(idx int, survivorOf map[int]int, newLen int) int {
+	if len(survivorOf) == 0 {
+		return idx
+	}
+	if nw, ok := survivorOf[idx]; ok {
+		return nw
+	}
+	// The boundary message itself was compacted away: the turn's own
+	// messages were appended after the compaction (they postdate the
+	// survivor set), so the turn starts right after the last surviving
+	// pre-boundary message. When nothing before the boundary survived,
+	// the turn sits at the head of the new layout.
+	best := 0
+	for old, nw := range survivorOf {
+		if old < idx && nw+1 > best {
+			best = nw + 1
+		}
+	}
+	if best > newLen {
+		best = newLen
+	}
+	return best
 }

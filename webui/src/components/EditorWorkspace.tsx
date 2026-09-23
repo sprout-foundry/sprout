@@ -1,28 +1,14 @@
-import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
-import { usePlugins } from '../contexts/PluginContext';
 import { isSharedMode } from '../utils/sharedMode';
 import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
-import ErrorBoundary from './ErrorBoundary';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
-import { firePlatformViewBeacon } from '../bootstrapAdapter';
-
-// Route-level lazy-loaded panels — split out of the main bundle so the
-// initial chat-mode load doesn't pay for code paths the user may never
-// open. Each render site below wraps the component in <Suspense>.
-
-const RouteFallback: React.FC = () => (
-  <div className="editor-workspace-route-fallback">
-    <SkeletonText lines={6} />
-  </div>
-);
 
 export interface EditorWorkspaceProps {
   currentView: ViewType;
@@ -675,8 +661,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // itself never renders here anymore: it lives inside the Design surface
   // (a peer mode shell), which handles the empty tree directly.
 
-  const { pluginViews } = usePlugins();
-
   // ── P4.2 mobile helpers ──────────────────────────────────────────
   // activePaneHasChat: is the active buffer the chat? (Peer topology:
   // chat surface is visible iff the chat buffer is active; the editor
@@ -686,29 +670,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     () => currentBuffer?.kind === 'chat' || currentBuffer === null,
     [currentBuffer],
   );
-
-  const activePluginView = pluginViews.find((v) => v.id === currentView);
-  const activePluginViewId = activePluginView?.id;
-
-  // SP-016 P0.7: fire the one-shot embedded-view beacon whenever the editor
-  // surfaces an in-editor plugin page (the platform logs one
-  // s016_embedded_view line per mount — the Phase 1 deletion gate's
-  // usage data). Fire-and-forget; a missing/older platform endpoint
-  // must never break the app.
-  useEffect(() => {
-    if (activePluginViewId) firePlatformViewBeacon(activePluginViewId);
-  }, [activePluginViewId]);
-
-  if (activePluginView) {
-    const Component = activePluginView.component;
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={<RouteFallback />}>
-          <Component onBack={() => onViewChange?.('chat')} onNavigate={(id) => onViewChange?.(id)} />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
 
   // Design is not a route in this component any more: it is a workspace mode
   // with its own surface (design/DesignSurface.tsx), mounted by AppContent as a

@@ -118,25 +118,6 @@ export function getPlatformURL(): string | undefined {
 }
 
 /**
- * Fire the SP-016 P0.7 embedded-view beacon:
- * GET /webui/plugin/view?view=<id>.
- *
- * The editor calls this once per in-editor plugin page mount
- * (EditorWorkspace) so the platform can log one s016_embedded_view line
- * per view — the Phase 1 plugin-page deletion gate's usage data.
- * Fire-and-forget by design: errors are swallowed (the platform returns
- * 204; older platforms 404 — neither may break the app). No-op without
- * a DOM (SSR edge) or an empty view id.
- */
-export function firePlatformViewBeacon(viewId: string): void {
-  if (typeof window === 'undefined' || !viewId) return;
-  const url = `/webui/plugin/view?view=${encodeURIComponent(viewId)}`;
-  void fetch(url, { method: 'GET', keepalive: true, credentials: 'same-origin' }).catch(() => {
-    /* observability-only: never break the app for a missing endpoint */
-  });
-}
-
-/**
  * Most recently resolved workspace git snapshot (ETH-1 sync-on-resume) from
  * the bootstrap response. null when the platform/daemon did not provide one
  * or bootstrap has not resolved yet — callers wanting fresher state should

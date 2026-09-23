@@ -142,6 +142,16 @@ type PatternOverride struct {
 	ContextLimit int    `json:"context_limit"`
 }
 
+// VisionLimitsSpec holds optional per-model vision limits on a model_info
+// entry (SP-140 Phase 1). Every field is optional: a zero value means
+// "unspecified" and falls through to the provider's capability table, then
+// to the package defaults. Most models need no entry at all.
+type VisionLimitsSpec struct {
+	MaxImageBytes     int `json:"max_image_bytes,omitempty"`
+	MaxImageCount     int `json:"max_image_count,omitempty"`
+	MaxImageDimension int `json:"max_dimension,omitempty"`
+}
+
 // ModelInfo represents information about a model (simplified version for config)
 type ModelInfo struct {
 	ID            string   `json:"id"`
@@ -149,6 +159,9 @@ type ModelInfo struct {
 	Description   string   `json:"description,omitempty"`
 	ContextLength int      `json:"context_length"`
 	Tags          []string `json:"tags,omitempty"`
+	// Per-model vision limits (SP-140 Phase 1): override the provider's
+	// capability table for this model only. Optional.
+	VisionLimits *VisionLimitsSpec `json:"vision_limits,omitempty"`
 	// Pricing (USD per million tokens) — optional, used by enrich_registry
 	// to estimate probe cost for models sourced from embedded configs.
 	InputCost  float64 `json:"input_cost,omitempty"`

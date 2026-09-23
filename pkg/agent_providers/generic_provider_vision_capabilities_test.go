@@ -305,3 +305,112 @@ func TestGenericProvider_VisionCapabilities_FallsBackToDefaults_WhenConfigNil(t 
 		t.Errorf("MaxImageDimension: nil-config fallback got %d, want 1536", caps.MaxImageDimension)
 	}
 }
+
+// =============================================================================
+// GenericProvider.VisionCapabilities — SP-140 Phase 1 per-model limits
+//
+// model_info.vision_limits overrides the provider capability table for the
+// current model only; unspecified fields keep the table value.
+// =============================================================================
+
+// TestGenericProvider_VisionCapabilities_PartialPerModelLimits verifies a
+// partial override: a model_info entry that sets only MaxImageCount
+// overrides the count while bytes/dimension stay at the provider table.
+func TestGenericProvider_VisionCapabilities_PartialPerModelLimits(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "openai",
+		Endpoint: "https://api.test-openai.example.com/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "gpt-5"},
+		Models: ModelConfig{
+			DefaultContextLimit: 128000,
+			ModelInfo: []ModelInfo{{
+				ID: "gpt-5",
+				VisionLimits: &VisionLimitsSpec{
+					MaxImageCount: 4, // partial: count only
+				},
+			}},
+		},
+	}
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create GenericProvider: %v", err)
+	}
+
+	caps := provider.VisionCapabilities()
+	if caps.MaxImageCount != 4 {
+		t.Errorf("MaxImageCount: got %d, want 4 (model override)", caps.MaxImageCount)
+	}
+	// OpenAI table values survive for the unspecified fields.
+	if caps.MaxImageBytes != 20_000_000 {
+		t.Errorf("MaxImageBytes: got %d, want 20000000 (provider table)", caps.MaxImageBytes)
+	}
+	if caps.MaxImageDimension != 2048 {
+		t.Errorf("MaxImageDimension: got %d, want 2048 (provider table)", caps.MaxImageDimension)
+	}
+}
+
+// TestGenericProvider_VisionCapabilities_FullPerModelLimits verifies a
+// full override: all three fields replace the provider table.
+func TestGenericProvider_VisionCapabilities_FullPerModelLimits(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "anthropic",
+		Endpoint: "https://api.test-anthropic.example.com/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "claude-vision-limited"},
+		Models: ModelConfig{
+			DefaultContextLimit: 128000,
+			ModelInfo: []ModelInfo{{
+				ID: "claude-vision-limited",
+				VisionLimits: &VisionLimitsSpec{
+					MaxImageBytes:     1_000_000,
+					MaxImageCount:     2,
+					MaxImageDimension: 512,
+				},
+			}},
+		},
+	}
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create GenericProvider: %v", err)
+	}
+
+	caps := provider.VisionCapabilities()
+	if caps.MaxImageBytes != 1_000_000 {
+		t.Errorf("MaxImageBytes: got %d, want 1000000 (model override)", caps.MaxImageBytes)
+	}
+	if caps.MaxImageCount != 2 {
+		t.Errorf("MaxImageCount: got %d, want 2 (model override)", caps.MaxImageCount)
+	}
+	if caps.MaxImageDimension != 512 {
+		t.Errorf("MaxImageDimension: got %d, want 512 (model override)", caps.MaxImageDimension)
+	}
+}
+
+// TestGenericProvider_VisionCapabilities_ModelInfoWithoutLimitsKeepsTable
+// verifies that a model_info entry without a vision_limits field does not
+// perturb the provider table.
+func TestGenericProvider_VisionCapabilities_ModelInfoWithoutLimitsKeepsTable(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "openai",
+		Endpoint: "https://api.test-openai.example.com/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "gpt-5"},
+		Models: ModelConfig{
+			DefaultContextLimit: 128000,
+			ModelInfo: []ModelInfo{{
+				ID:   "gpt-5",
+				Tags: []string{"vision"},
+			}},
+		},
+	}
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create GenericProvider: %v", err)
+	}
+
+	caps := provider.VisionCapabilities()
+	if caps.MaxImageBytes != 20_000_000 || caps.MaxImageCount != 10 || caps.MaxImageDimension != 2048 {
+		t.Errorf("provider table perturbed by bare model_info entry: %+v", caps)
+	}
+}

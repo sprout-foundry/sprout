@@ -1,8 +1,11 @@
 # SP-140 — Vision as a First-Class Input: Unified Capability Resolution, Optimistic Inline, and Structured-Description Delegation
 
-> **Status:** 🟡 Phases 1–4 core landed (2026-09-18). Remaining: per-model
-> `vision_limits` (Phase 1 leftover), catalog capabilities projection,
-> designer-flow batch refinements (deferred to designer spec). Supersedes
+> **Status:** ✅ Phases 1–4 core landed (2026-09-18); per-model
+> `vision_limits` landed 2026-09-22 (`model_info.vision_limits` in
+> `pkg/agent_providers`, layered in `GenericProvider.VisionCapabilities`;
+> catalog capabilities projection was already in place via
+> `cmd/refresh_provider_catalog`'s `CapabilitiesFromTags` merge).
+> Remaining: designer-flow batch refinements (deferred to designer spec). Supersedes
 > the *capability-gate* posture of SP-137 (whose delivery fixes — seed
 > tool-result images, `read_file` image branch, native OCR tier,
 > provider-neutral config — remain in force and are built upon here).

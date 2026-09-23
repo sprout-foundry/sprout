@@ -1825,3 +1825,41 @@ func TestValidateRemoteConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestModelsToNative_VisionLimitsConversion verifies that
+// model_info.vision_limits (SP-140 Phase 1) survives the remote→native
+// conversion: set entries map field-for-field, absent entries stay nil.
+func TestModelsToNative_VisionLimitsConversion(t *testing.T) {
+	rc := &RemoteProviderConfig{
+		Name: "test-provider",
+		Models: RemoteModelConfig{
+			ModelInfo: []RemoteModelInfo{
+				{
+					ID: "m-limited",
+					VisionLimits: &RemoteVisionLimits{
+						MaxImageBytes:     1,
+						MaxImageCount:     2,
+						MaxImageDimension: 3,
+					},
+				},
+				{ID: "m-plain"},
+			},
+		},
+	}
+
+	mc := rc.modelsToNative()
+	if len(mc.ModelInfo) != 2 {
+		t.Fatalf("expected 2 model_info entries, got %d", len(mc.ModelInfo))
+	}
+	if mc.ModelInfo[0].VisionLimits == nil {
+		t.Fatal("m-limited: VisionLimits not converted")
+	}
+	if mc.ModelInfo[0].VisionLimits.MaxImageBytes != 1 ||
+		mc.ModelInfo[0].VisionLimits.MaxImageCount != 2 ||
+		mc.ModelInfo[0].VisionLimits.MaxImageDimension != 3 {
+		t.Errorf("m-limited: got %+v, want {1 2 3}", mc.ModelInfo[0].VisionLimits)
+	}
+	if mc.ModelInfo[1].VisionLimits != nil {
+		t.Errorf("m-plain: expected nil VisionLimits, got %+v", mc.ModelInfo[1].VisionLimits)
+	}
+}

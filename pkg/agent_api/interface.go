@@ -28,10 +28,11 @@ type ClientInterface interface {
 	GetModelContextLimit() (int, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
-	// VisionCapabilities returns the per-provider vision limits (max bytes
-	// per image, max images per request, max dimension, supported detail
-	// tiers). Zero-valued fields mean "unknown — use default". Concrete
-	// implementations populate this with provider-specific data; callers
+	// VisionCapabilities returns the vision limits for the provider's
+	// current model (max bytes per image, max images per request, max
+	// dimension, supported detail tiers). GenericProvider layers the
+	// model's model_info.vision_limits over the provider table (SP-140
+	// Phase 1). Zero-valued fields mean "unknown — use default"; callers
 	// should pass the result through VisionCapabilitiesOrDefault() before
 	// reading individual fields. SP-103-D3 / AUDIT-GAP-2.
 	VisionCapabilities() VisionCapabilities

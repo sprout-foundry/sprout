@@ -333,9 +333,7 @@ export async function gitBranch() {
 /** Current branch name ('' when the repo has no commits yet). */
 async function currentBranchName(): Promise<string> {
   try {
-    const current = await git.currentBranch({ fs: getFs().promises, dir: REPO_DIR, fullname: false }).catch(
-      () => null,
-    );
+    const current = await git.currentBranch({ fs: getFs().promises, dir: REPO_DIR, fullname: false }).catch(() => null);
     return current ?? '';
   } catch {
     return '';

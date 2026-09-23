@@ -42,11 +42,30 @@ const fixtureWorkspace = () => ({
     // `checkout` has no screen entry, so its stem renders no status dot.
     screens: [
       { path: 'design/screens/login.html', name: 'login.html', kind: 'screen', size: 1, modified: 1, status: 'review' },
-      { path: 'design/screens/dashboard.html', name: 'dashboard.html', kind: 'screen', size: 1, modified: 1, status: 'ready' },
+      {
+        path: 'design/screens/dashboard.html',
+        name: 'dashboard.html',
+        kind: 'screen',
+        size: 1,
+        modified: 1,
+        status: 'ready',
+      },
     ],
     feedback: [
-      { name: 'login.json', path: 'design/feedback/login.json', status: 'changes-requested', annotationCount: 3, resolvedCount: 1 },
-      { name: 'dashboard.json', path: 'design/feedback/dashboard.json', status: 'resolved', annotationCount: 2, resolvedCount: 2 },
+      {
+        name: 'login.json',
+        path: 'design/feedback/login.json',
+        status: 'changes-requested',
+        annotationCount: 3,
+        resolvedCount: 1,
+      },
+      {
+        name: 'dashboard.json',
+        path: 'design/feedback/dashboard.json',
+        status: 'resolved',
+        annotationCount: 2,
+        resolvedCount: 2,
+      },
     ],
   },
   selected: 'design/wireframes/login.svg',

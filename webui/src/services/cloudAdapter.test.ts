@@ -1778,10 +1778,10 @@ describe('CloudAdapter', () => {
     it('falls back to the network import on a cache miss and persists the manifest', async () => {
       mockRepoImportCache.loadRepoImport.mockResolvedValueOnce(null);
       mockFetch.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ repo: 'octocat/Hello-World', files: [{ path: 'README', content: 'hi' }] }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
+        new Response(JSON.stringify({ repo: 'octocat/Hello-World', files: [{ path: 'README', content: 'hi' }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
       );
 
       const res = await adapter.restoreRepo(repoUrl);

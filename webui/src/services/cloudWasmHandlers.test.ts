@@ -325,16 +325,11 @@ describe('handleWasmFileList — /api/files returns single-level listings', () =
     expect(api?.relative).toBe('api');
   });
 
-  it('child fetch for an expanded directory returns that directory\'s files', async () => {
+  it("child fetch for an expanded directory returns that directory's files", async () => {
     const shell = dirShell('/work', {
       '/work/api': [{ name: 'access_token.go', type: 'file', size: 100, mode: 0 }],
     });
-    const res = handleWasmLocal(
-      shell,
-      '/api/files',
-      'GET',
-      '/api/files?path=%2Fwork%2Fapi',
-    );
+    const res = handleWasmLocal(shell, '/api/files', 'GET', '/api/files?path=%2Fwork%2Fapi');
     const body = JSON.parse(await res.text());
     const files = body.files as Array<{ name: string; is_dir: boolean; path: string }>;
     expect(files).toHaveLength(1);
@@ -358,9 +353,7 @@ describe('handleWasmFileList — /api/files returns single-level listings', () =
     expect(byName.get('LICENSE')?.is_dir).toBe(false);
     expect(byName.get('LICENSE')?.path).toBe('/mfl-a/LICENSE');
     // directories sort before files
-    expect(files.findIndex((f) => f.name === 'api')).toBeLessThan(
-      files.findIndex((f) => f.name === 'LICENSE'),
-    );
+    expect(files.findIndex((f) => f.name === 'api')).toBeLessThan(files.findIndex((f) => f.name === 'LICENSE'));
   });
 
   it('CWD mismatch: files written elsewhere are listed from the manifest root', async () => {
@@ -370,7 +363,7 @@ describe('handleWasmFileList — /api/files returns single-level listings', () =
     const body = JSON.parse(await res.text());
     const files = body.files as Array<{ name: string; is_dir: boolean; path: string }>;
     const mflb = files.find((f) => f.name === 'mfl-b');
-    expect(mflb).toBeDefined(), 'manifest fallback must surface files written to a different root';
+    (expect(mflb).toBeDefined(), 'manifest fallback must surface files written to a different root');
     expect(mflb?.is_dir).toBe(true);
     expect(mflb?.path).toBe('/mfl-b');
   });

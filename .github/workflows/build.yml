@@ -189,7 +189,11 @@ jobs:
           echo "### Packages with Lowest Coverage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          awk '!/^total:/ {print $NF, $0}' /tmp/sprout-coverage.txt | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
+          # SIGPIPE-tolerant: `sort | head` under bash pipefail reports the
+          # sort's SIGPIPE death as exit 2 when its output exceeds head's
+          # window (observed on ubuntu: "sort: write failed: Broken pipe").
+          # sort -n | sed -n '1,15p' consumes the full stream instead.
+          awk '!/^total:/ {print $NF, $0}' /tmp/sprout-coverage.txt | sort -n | sed -n '1,15p' | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
         else
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY

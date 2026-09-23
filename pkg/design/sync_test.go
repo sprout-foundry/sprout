@@ -13,7 +13,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// SP-140-5 §5b — design_sync analyze core (TODO item 5.3)
+// SP-140-5 §5b — design_sync analyze core
 //
 // The analyze half is pure analysis (plus a read of the design/ tree): it takes
 // the touched UI code files and returns the structured sync report. These tests
@@ -694,7 +694,7 @@ func TestValueSlug(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// §5b apply half — PlanSyncApply (TODO item 5.4)
+// §5b apply half — PlanSyncApply
 //
 // The apply planning core is pure: given a report (and a reader for current
 // design-file bytes) it returns the safe-subset writes plus the proposals. These

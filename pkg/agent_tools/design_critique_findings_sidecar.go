@@ -3,7 +3,7 @@
 package tools
 
 // ---------------------------------------------------------------------------
-// design_critique findings sidecar (SP-140-6 §6d, TODO item 6.4)
+// design_critique findings sidecar (SP-140-6 §6d)
 //
 // §4a's critique findings are tool output and evaporate with the turn; only
 // the PNG and the §4e cache-key sidecar persist under design/.cache/renders/.

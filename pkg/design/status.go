@@ -10,7 +10,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Design status — SP-140-6 §6b (TODO item 6.2)
+// Design status — SP-140-6 §6b
 // -----------------------------------------------------------------------------
 //
 // BuildDesignStatus is the read-side aggregate behind GET /api/design/status:

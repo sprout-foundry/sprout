@@ -18,7 +18,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// design_sync handler tests (SP-140-5 §5b, TODO item 5.3 — ANALYZE mode)
+// design_sync handler tests (SP-140-5 §5b — ANALYZE mode)
 //
 // The pure analysis is unit tested in pkg/design/sync_test.go. These tests
 // cover the ToolHandler seam: argument resolution, the touched-file default via

@@ -290,8 +290,8 @@
 }
 
 /* ── Popover Content ──────────────────────────────────────────── */
-/* Single scroll surface (P-fix 2026-09-10, "double scrollbar in
- * desktop webui"): the content is a flex column capped relative to
+/* Single scroll surface — no double scrollbar in the desktop webui:
+ * the content is a flex column capped relative to
  * the VIEWPORT (not a fixed 420px), so short windows never clip the
  * footer, and there is exactly one scroller — this one. Inner lists
  * (recent/suggestions) deliberately have NO max-height of their own:

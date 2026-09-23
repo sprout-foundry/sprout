@@ -1,5 +1,5 @@
 /**
- * HealthStrip tests (SP-140-6 §6c, TODO item 6.3).
+ * HealthStrip tests (SP-140-6 §6c).
  *
  * Pins the strip's contract: the payload renders as chips (validate tally,
  * drift rows, pending feedback), the synced state renders the quiet mark,

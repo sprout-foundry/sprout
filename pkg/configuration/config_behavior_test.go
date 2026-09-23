@@ -177,7 +177,7 @@ func TestSaveProducesValidJSON(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Load() merges defaults for omitempty bool fields (SP-fix)
+// Load() merges defaults for omitempty bool fields
 // ---------------------------------------------------------------------------
 
 // TestLoadDefaultsAppliedForOmittedZshFields verifies that when a config
@@ -281,7 +281,7 @@ func TestSaveLoadRoundTripExplicitFalseZshFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Load() applies default wakeup config when the key is omitted (SP-fix)
+// Load() applies default wakeup config when the key is omitted
 // ---------------------------------------------------------------------------
 
 // TestLoadDefaultsAppliedForOmittedWakeup verifies that when a config file

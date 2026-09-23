@@ -10,7 +10,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Drift direction — SP-140-5 §5c (TODO item 5.5)
+// Drift direction — SP-140-5 §5c
 // -----------------------------------------------------------------------------
 //
 // §5c reinterprets "stale" as *signal*, not defect. There are two directions

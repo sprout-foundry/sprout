@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// DTCG document editing for the apply half (SP-140-5 §5b, TODO item 5.4).
+// DTCG document editing for the apply half (SP-140-5 §5b).
 //
 // The apply half rewrites a DTCG token source file (design/tokens/*.tokens.json)
 // to revalue an existing entry or add a renamed/new one. The edit is *surgical*:

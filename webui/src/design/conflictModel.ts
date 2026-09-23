@@ -1,5 +1,5 @@
 /**
- * Conflict model (SP-140-7 §7b, TODO item 7.2).
+ * Conflict model (SP-140-7 §7b).
  *
  * Pure state machine for "the agent changed the file while you were editing".
  * The design surfaces hold the loaded base text; when an incoming

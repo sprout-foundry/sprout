@@ -212,7 +212,7 @@ function Sidebar({
   onViewChange,
 }: SidebarProps): JSX.Element {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
-  // UI Size (P4.5-C): hook mount applies data-ui-scale to <html> on boot
+  // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.
   const { uiScale, setUIScale } = useUIScale();
   const { applyPreset } = useHotkeys();

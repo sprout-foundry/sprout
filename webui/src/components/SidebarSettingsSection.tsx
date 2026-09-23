@@ -204,7 +204,7 @@ interface SidebarSettingsSectionProps {
   setThemePack: (id: string) => void;
   importTheme: (text: string) => { success: boolean; warnings?: string[] };
   removeTheme: (id: string) => void;
-  /** UI Size (P4.5-C): compact | default | large, applied to <html>. */
+  /** UI Size: compact | default | large, applied to <html>. */
   uiScale: UIScale;
   setUIScale: (scale: UIScale) => void;
   applyPreset: (preset: string) => Promise<void>;
@@ -366,7 +366,7 @@ export default function SidebarSettingsSection({
           />
           {importError && <div className="theme-picker-error">{importError}</div>}
         </div>
-        {/* UI Size (P4.5-C): density control — scales text+spacing tokens via
+        {/* UI Size: density control — scales text+spacing tokens via
             data-ui-scale on <html>. Tablet first run defaults to Large. */}
         <div className="config-item">
           <label htmlFor="ui-scale-select">UI Size:</label>

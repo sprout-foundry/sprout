@@ -1447,6 +1447,126 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna is the fast, cost-efficient model in OpenAI's GPT-6 series, positioned below GPT-6 Sol. It is suited for high-volume and latency-sensitive workloads such as chat, classification, and lightweight agentic tasks, and at higher reasoning effort it can take on complex software engineering and computer-use tasks that previously called for a Sol-tier model. It shares the GPT-6 family's gains in factual reliability and its clearer, more concise communication style.",
+        "id": "gpt-6-luna",
+        "input_cost": 0.1,
+        "name": "GPT-6 Luna",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna Pro is the same underlying model as [GPT-6 Luna](https://openrouter.ai/openai/gpt-6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-6-luna-pro",
+        "input_cost": 0.1,
+        "name": "GPT-6 Luna Pro",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.005,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna Pro via the Batch API at 50% of standard pricing. Cost-efficient model with pro reasoning mode.",
+        "id": "gpt-6-luna-pro:batch",
+        "input_cost": 0.05,
+        "name": "GPT-6 Luna Pro (batch)",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.005,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna via the Batch API at 50% of standard pricing. Fast, cost-efficient model for high-volume, latency-sensitive tasks.",
+        "id": "gpt-6-luna:batch",
+        "input_cost": 0.05,
+        "name": "GPT-6 Luna (batch)",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol is the cost-efficient high-end model in OpenAI's GPT-6 series, positioned below the flagship GPT-6 Astra and above the fast GPT-6 Luna tier. It is suited for demanding professional work, agentic coding, business workflow automation, and computer use, and is particularly strong at long-horizon software engineering tasks in real codebases. It approaches Astra-level factual reliability at a much lower cost and shares Astra's clearer, more concise communication style in technical and coding conversations.",
+        "id": "gpt-6-sol",
+        "input_cost": 2,
+        "name": "GPT-6 Sol",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol Pro is the same underlying model as [GPT-6 Sol](https://openrouter.ai/openai/gpt-6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "gpt-6-sol-pro",
+        "input_cost": 2,
+        "name": "GPT-6 Sol Pro",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol Pro via the Batch API at 50% of standard pricing. High-end model with pro reasoning mode for higher-quality responses on complex tasks.",
+        "id": "gpt-6-sol-pro:batch",
+        "input_cost": 1,
+        "name": "GPT-6 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol via the Batch API at 50% of standard pricing. High-end model for demanding professional work and agentic coding.",
+        "id": "gpt-6-sol:batch",
+        "input_cost": 1,
+        "name": "GPT-6 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

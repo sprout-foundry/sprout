@@ -132,6 +132,31 @@ function AppInner() {
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
+  // Cloud mode: refresh the git panel after a ?repo= import completes.
+  // The import writes files into the WASM VFS (via the platform's
+  // /api/repo/import) and the in-browser git syncs VFS files into its
+  // working tree on the next status call. The panel's initial status
+  // load happens before the import finishes (falling back to the
+  // platform's /api/git/status, which has no per-user git), so without
+  // this refresh the panel stays stuck on "No git repository found".
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const handleImported = () => {
+      // Let the WASM shell's VFS writes settle before the browser git's
+      // status call syncs them into the working tree (matches the
+      // pre-mount race handling in useAppInitialization).
+      timer = setTimeout(() => setGitRefreshToken((n) => n + 1), 500);
+    };
+    window.addEventListener('sprout:repo-imported', handleImported);
+    // The import may have completed before this mounted (a cached repo
+    // imports near-instantly on the second visit).
+    if ((window as unknown as Record<string, unknown>).__repoImported) handleImported();
+    return () => {
+      window.removeEventListener('sprout:repo-imported', handleImported);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
   // Keyboard shortcuts modal — listen for menu/welcome-tab event and `?` shortcut.
   // The menu dispatches `sprout:open-hotkeys-config`; the dedicated JSON-editing
   // path (SidebarSettingsSection's "Edit Keyboard Shortcuts (JSON)" button) uses

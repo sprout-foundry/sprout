@@ -171,26 +171,74 @@ function getAuth() {
 export async function gitStatus() {
   await ensureInitialized();
   await syncVfsToGitFs();
-  const matrix = await git.statusMatrix({ fs: getFs().promises, dir: REPO_DIR });
+
+  let matrix: Array<[string, number, number, number]>;
+  try {
+    matrix = await git.statusMatrix({ fs: getFs().promises, dir: REPO_DIR });
+  } catch {
+    // Unborn HEAD (fresh git.init with no commits yet): statusMatrix cannot
+    // resolve the HEAD tree and throws. Report the working files as
+    // untracked instead of surfacing a 500 to the git panel.
+    const files = (await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git'));
+    return {
+      staged: [] as Array<{ path: string; status: string; staged: boolean }>,
+      unstaged: [] as Array<{ path: string; status: string; staged: boolean }>,
+      untracked: files.map((path) => ({ path, status: 'new', staged: false })),
+    };
+  }
 
   const staged: Array<{ path: string; status: string; staged: boolean }> = [];
   const unstaged: Array<{ path: string; status: string; staged: boolean }> = [];
+  const untracked: Array<{ path: string; status: string; staged: boolean }> = [];
 
+  // isomorphic-git statusMatrix rows are [filepath, HEAD, WORKDIR, STAGE]:
+  //   HEAD:    0=absent, 1=present
+  //   WORKDIR: 0=absent, 1=identical-to-HEAD, 2=different-from-HEAD
+  //   STAGE:   0=absent, 1=identical-to-HEAD, 2=identical-to-WORKDIR,
+  //            3=different-from-WORKDIR
+  // (see isomorphic-git docs "statusMatrix" reference table)
   for (const [filepath, HEAD, WORKDIR, STAGE] of matrix) {
-    if (HEAD === 0 && WORKDIR === 1 && STAGE === 2) {
-      staged.push({ path: filepath, status: 'new', staged: true });
-    } else if (HEAD === 0 && WORKDIR === 1) {
-      unstaged.push({ path: filepath, status: 'new', staged: false });
-    } else if (HEAD === 1 && WORKDIR === 0) {
+    // Unmodified: present everywhere and all three copies identical.
+    if (HEAD === 1 && WORKDIR === 1 && STAGE === 1) continue;
+
+    if (HEAD === 0) {
+      // New file (never committed).
+      if (STAGE === 0) {
+        // Not in the index → untracked.
+        untracked.push({ path: filepath, status: 'new', staged: false });
+      } else {
+        // In the index → staged addition.
+        staged.push({ path: filepath, status: 'new', staged: true });
+      }
+      continue;
+    }
+
+    // File exists in HEAD.
+    if (STAGE === 0) {
+      // Absent from the index → staged deletion (or delete-and-recreate).
+      staged.push({ path: filepath, status: 'deleted', staged: true });
+      continue;
+    }
+
+    if (WORKDIR === 0) {
+      // Removed from the working tree but still in the index (index === HEAD).
       unstaged.push({ path: filepath, status: 'deleted', staged: false });
-    } else if (HEAD !== WORKDIR && STAGE === HEAD) {
-      unstaged.push({ path: filepath, status: 'modified', staged: false });
-    } else if (STAGE !== HEAD && STAGE !== WORKDIR) {
+      continue;
+    }
+
+    // File present in the workdir (WORKDIR 1|2) and in the index (STAGE 1|2|3).
+    if (STAGE === 1) {
+      // Index === HEAD, so any workdir change is unstaged.
+      if (WORKDIR === 2) {
+        unstaged.push({ path: filepath, status: 'modified', staged: false });
+      }
+    } else {
+      // STAGE 2 (index === workdir) or 3 (index !== workdir): staged change.
       staged.push({ path: filepath, status: 'modified', staged: true });
     }
   }
 
-  return { staged, unstaged, untracked: unstaged.filter((f) => f.status === 'new') };
+  return { staged, unstaged, untracked };
 }
 
 export async function gitAdd(filepaths: string[]) {
@@ -249,6 +297,18 @@ export async function gitBranch() {
     // no commits
   }
   return branches;
+}
+
+/** Current branch name ('' when the repo has no commits yet). */
+async function currentBranchName(): Promise<string> {
+  try {
+    const current = await git.currentBranch({ fs: getFs().promises, dir: REPO_DIR, fullname: false }).catch(
+      () => null,
+    );
+    return current ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export async function gitCheckout(branch: string) {
@@ -390,8 +450,32 @@ export async function executeGitOp(
   query?: Record<string, string>,
 ): Promise<unknown> {
   switch (op) {
-    case 'status':
-      return gitStatus();
+    case 'status': {
+      // HTTP surface: the git panel expects the canonical GitStatusResponse
+      // (message/in_git_repo/status/files), the same contract as the local
+      // daemon's /api/git/status. The internal gitStatus() shape
+      // ({staged, unstaged, untracked}) stays for the shell/txn consumers.
+      const s = await gitStatus();
+      const branch = await currentBranchName();
+      const modified = s.unstaged.filter((f) => f.status !== 'new' && f.status !== 'deleted');
+      const deleted = s.unstaged.filter((f) => f.status === 'deleted');
+      return {
+        message: 'success',
+        in_git_repo: true,
+        status: {
+          branch,
+          ahead: 0,
+          behind: 0,
+          staged: s.staged,
+          modified,
+          untracked: s.untracked,
+          deleted,
+          renamed: [] as Array<{ path: string; status: string; staged?: boolean }>,
+          in_git_repo: true,
+        },
+        files: [...s.staged, ...modified, ...s.untracked, ...deleted],
+      };
+    }
     case 'add':
     case 'stage': {
       const files = (body?.files as string[]) || (body?.path ? [body.path as string] : []);
@@ -404,8 +488,14 @@ export async function executeGitOp(
     case 'log':
       return gitLog(Number(body?.count ?? 50));
     case 'branch':
-    case 'branches':
-      return gitBranch();
+    case 'branches': {
+      // HTTP surface: GitBranchesResponse (message/current/branches:string[]).
+      // The internal gitBranch() returns [{name, current}] — shell consumers
+      // keep using that directly.
+      const list = await gitBranch();
+      const current = list.find((b) => b.current)?.name ?? '';
+      return { message: 'success', current, branches: list.map((b) => b.name) };
+    }
     case 'checkout':
       return gitCheckout((body?.branch as string) || (body?.name as string));
     case 'diff':

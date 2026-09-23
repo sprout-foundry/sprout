@@ -169,26 +169,32 @@ class GitClient {
     });
   }
 
-  /** Get working tree status. */
+  /** Get working tree status (changed files only). */
   async status(dir: string): Promise<GitStatusEntry[]> {
     const matrix = await git.statusMatrix({ fs: this.fs, dir });
-    return matrix.map(([filepath, workdir, stage, HEAD]) => {
-      // statusMatrix returns [filepath, workdir, stage, HEAD] where
-      // values: 0=absent, 1=present, 2=identical-to-target
-      // We collapse "identical" (2) into "present" (1) for simplicity.
-      const wd = workdir > 0;
-      const st = stage > 0;
-      const hd = HEAD > 0;
-
-      let type: FileStatusType;
-      if (!wd && st && hd) type = 'deleted';
-      else if (!wd && st && !hd) type = 'added';
-      else if (wd && !st && !hd) type = 'untracked';
-      else if (wd && st && !hd) type = 'added';
-      else type = 'modified';
-
-      return { filepath, type };
-    });
+    // statusMatrix rows are [filepath, HEAD, WORKDIR, STAGE]:
+    //   HEAD:    0=absent, 1=present
+    //   WORKDIR: 0=absent, 1=identical-to-HEAD, 2=different-from-HEAD
+    //   STAGE:   0=absent, 1=identical-to-HEAD, 2=identical-to-WORKDIR,
+    //            3=different-from-WORKDIR
+    const entries: GitStatusEntry[] = [];
+    for (const [filepath, HEAD, WORKDIR, STAGE] of matrix) {
+      if (HEAD === 0) {
+        // New file (never committed): untracked when not staged, else added.
+        entries.push({ filepath, type: STAGE === 0 ? 'untracked' : 'added' });
+        continue;
+      }
+      // File exists in HEAD.
+      if (STAGE === 0 || WORKDIR === 0) {
+        // Absent from index (staged deletion) or removed from the workdir.
+        entries.push({ filepath, type: 'deleted' });
+        continue;
+      }
+      // Present in workdir and index; unmodified when both equal HEAD.
+      if (WORKDIR === 1 && (STAGE === 1 || STAGE === 2)) continue;
+      entries.push({ filepath, type: 'modified' });
+    }
+    return entries;
   }
 
   /** Stage a file or all changes. */

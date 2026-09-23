@@ -769,11 +769,44 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 
 // SupportsVision is defined in generic_provider_vision.go
 
-// VisionCapabilities returns per-provider vision limits (nil config returns safe defaults).
+// VisionCapabilities returns the per-model vision limits (SP-140 Phase 1):
+// the provider's capability table, overlaid with the current model's
+// model_info.vision_limits entry. A nil config returns safe defaults.
+//
+// Resolution order per field: model override → provider table →
+// VisionCapabilitiesDefault() (applied by callers via
+// VisionCapabilitiesOrDefault). Unspecified override fields (zero) keep
+// the provider-table value.
 func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
 	if p.config == nil {
 		return api.VisionCapabilitiesDefault()
 	}
+	caps := p.providerVisionTable()
+
+	p.mu.RLock()
+	currentModel := strings.TrimSpace(p.model)
+	p.mu.RUnlock()
+	if currentModel == "" {
+		currentModel = strings.TrimSpace(p.config.Defaults.Model)
+	}
+	if mi := p.config.GetModelInfo(currentModel); mi != nil && mi.VisionLimits != nil {
+		v := mi.VisionLimits
+		if v.MaxImageBytes > 0 {
+			caps.MaxImageBytes = v.MaxImageBytes
+		}
+		if v.MaxImageCount > 0 {
+			caps.MaxImageCount = v.MaxImageCount
+		}
+		if v.MaxImageDimension > 0 {
+			caps.MaxImageDimension = v.MaxImageDimension
+		}
+	}
+	return caps
+}
+
+// providerVisionTable returns the per-provider vision limits. The caller
+// must ensure p.config is non-nil (VisionCapabilities guards it).
+func (p *GenericProvider) providerVisionTable() api.VisionCapabilities {
 	switch p.config.Name {
 	case "anthropic":
 		return api.VisionCapabilities{

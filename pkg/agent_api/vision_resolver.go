@@ -14,8 +14,10 @@ type VisionCapability struct {
 	// AcceptsImages reports whether the model can take image input at all
 	// (inline multimodal turns, OCR extraction).
 	AcceptsImages bool
-	// Limits are the per-client vision limits; zero-valued fields mean
-	// "unknown" and must pass through VisionCapabilitiesOrDefault().
+	// Limits are the per-model vision limits (GenericProvider layers the
+	// current model's model_info.vision_limits over the provider table;
+	// SP-140 Phase 1). Zero-valued fields mean "unknown" and must pass
+	// through VisionCapabilitiesOrDefault().
 	Limits VisionCapabilities
 	// Source records which layer decided: "probe" (published probe data)
 	// or "declared" (client's own SupportsVision).

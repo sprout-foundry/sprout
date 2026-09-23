@@ -47,6 +47,13 @@ type RemotePatternOverride struct {
 	ContextLimit int    `json:"context_limit"`
 }
 
+// RemoteVisionLimits duplicates providers.VisionLimitsSpec.
+type RemoteVisionLimits struct {
+	MaxImageBytes     int `json:"max_image_bytes,omitempty"`
+	MaxImageCount     int `json:"max_image_count,omitempty"`
+	MaxImageDimension int `json:"max_dimension,omitempty"`
+}
+
 // RemoteModelInfo duplicates ModelInfo.
 type RemoteModelInfo struct {
 	ID            string   `json:"id"`
@@ -54,6 +61,8 @@ type RemoteModelInfo struct {
 	Description   string   `json:"description,omitempty"`
 	ContextLength int      `json:"context_length"`
 	Tags          []string `json:"tags,omitempty"`
+	// Per-model vision limits (SP-140 Phase 1). Optional.
+	VisionLimits *RemoteVisionLimits `json:"vision_limits,omitempty"`
 }
 
 // RemoteModelConfig duplicates ModelConfig.
@@ -199,13 +208,21 @@ func (r *RemoteProviderConfig) modelsToNative() providers.ModelConfig {
 		})
 	}
 	for _, mi := range r.Models.ModelInfo {
-		mc.ModelInfo = append(mc.ModelInfo, providers.ModelInfo{
+		entry := providers.ModelInfo{
 			ID:            mi.ID,
 			Name:          mi.Name,
 			Description:   mi.Description,
 			ContextLength: mi.ContextLength,
 			Tags:          copyStringSlice(mi.Tags),
-		})
+		}
+		if mi.VisionLimits != nil {
+			entry.VisionLimits = &providers.VisionLimitsSpec{
+				MaxImageBytes:     mi.VisionLimits.MaxImageBytes,
+				MaxImageCount:     mi.VisionLimits.MaxImageCount,
+				MaxImageDimension: mi.VisionLimits.MaxImageDimension,
+			}
+		}
+		mc.ModelInfo = append(mc.ModelInfo, entry)
 	}
 	return mc
 }

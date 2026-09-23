@@ -108,9 +108,6 @@ func TestSeedCompactionPersistRebasesSproutCheckpoints(t *testing.T) {
 	survived := map[string]bool{}
 	for _, cp := range cps {
 		survived[cp.ID] = true
-		if cp.ID == "cp-recent" && (cp.Summary != "recent turn summary" || cp.FileChanges != nil || cp.RevisionID != "") {
-			// metadata assertion for the early one; recent carries none
-		}
 	}
 	if len(cps) == 0 {
 		t.Fatal("all checkpoints dropped — the recent-window one must survive")

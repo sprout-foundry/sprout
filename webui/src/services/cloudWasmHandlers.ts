@@ -5,7 +5,7 @@
  * by the WASM shell rather than being proxied to a backend.
  */
 
-import type { WasmShell } from './wasmShell';
+import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
@@ -274,36 +274,114 @@ function listAllFilesTracked(shell: WasmShell, dir: string): string[] {
 // ── Individual wasm-local route handlers ─────────────────────────
 
 /**
- * GET /api/files — Returns all files in the workspace.
- * Supports optional ?path= query parameter for browsing subdirectories.
- * The webui expects { message: string, files: Array<{path, modified}> }
+ * Join a directory and a child name into an absolute path.
+ */
+function joinVfsPath(dir: string, name: string): string {
+  return dir === '/' ? `/${name}` : `${dir}/${name}`;
+}
+
+/** Path relative to the shell's CWD (the browser workspace root). */
+function vfsRelative(absPath: string, rootDir: string): string {
+  if (rootDir === '/') return absPath.replace(/^\/+/, '');
+  const prefix = `${rootDir}/`;
+  if (absPath.startsWith(prefix)) return absPath.slice(prefix.length);
+  if (absPath === rootDir) return '.';
+  return absPath;
+}
+
+/**
+ * Single-level listing in the daemon /api/files shape: every immediate
+ * child is one entry, directories flagged is_dir (FileTree lazily
+ * fetches a directory's children when it is expanded). The daemon
+ * excludes .git from listings.
+ */
+function singleLevelFileEntries(
+  entries: WasmDirEntry[],
+  dir: string,
+  rootDir: string,
+): Array<Record<string, unknown>> {
+  return entries
+    .filter((e) => !(e.type === 'dir' && e.name === '.git'))
+    .map((e) => {
+      const absPath = joinVfsPath(dir, e.name);
+      return {
+        name: e.name,
+        path: absPath,
+        relative: vfsRelative(absPath, rootDir),
+        is_dir: e.type === 'dir',
+        size: e.size ?? 0,
+        mod_time: 0,
+      };
+    });
+}
+
+/**
+ * Group manifest paths into single-level children of dir: files directly
+ * under dir plus implicit directory entries for any nested file. When
+ * nothing lives under dir, the CWD may not match where importRepo wrote
+ * the files — in that case group the whole manifest under '/' instead.
+ */
+function groupManifestChildren(dir: string): Array<{ name: string; path: string; isDir: boolean }> {
+  const underDir = (p: string) =>
+    dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir;
+  let base = dir;
+  let paths = Array.from(vfsManifest).filter(underDir);
+  if (paths.length === 0 && vfsManifest.size > 0) {
+    base = '/';
+    paths = Array.from(vfsManifest);
+  }
+  if (paths.length === 0) return [];
+
+  const groups = new Map<string, { isDir: boolean; filePath: string }>();
+  for (const p of paths) {
+    const inner = base === '/' ? p.replace(/^\/+/, '') : p.slice(base.length + 1);
+    const [top, ...rest] = inner.split('/');
+    if (!top || top === '.git') continue;
+    const g = groups.get(top) ?? { isDir: false, filePath: p };
+    if (rest.length > 0) g.isDir = true;
+    groups.set(top, g);
+  }
+
+  const out: Array<{ name: string; path: string; isDir: boolean }> = [];
+  for (const [name, g] of groups) {
+    const path = g.isDir ? joinVfsPath(base, name) : g.filePath;
+    out.push({ name, path, isDir: g.isDir });
+  }
+  out.sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name)));
+  return out;
+}
+
+/**
+ * GET /api/files — Returns the immediate children of a directory, in the
+ * daemon's single-level shape ({name, path, relative, is_dir, size,
+ * mod_time}). The webui FileTree renders folders from this shape and
+ * fetches a directory's children lazily when expanded. A recursive flat
+ * file list (the previous behavior) made the tree render every file at
+ * the top level — folders vanished.
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
   const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
+  const dir = normalizePath(cwd);
+  const rootDir = normalizePath(shell.getCwd());
 
-  // Try listDir first; fall back to manifest.
-  const dirResult = shell.listDir(cwd);
+  // Try listDir first; fall back to the manifest.
+  const dirResult = shell.listDir(dir);
   if (!dirResult.error && dirResult.entries && dirResult.entries.length > 0) {
-    const files = flattenEntries(shell, cwd);
+    const files = singleLevelFileEntries(dirResult.entries, dir, rootDir);
     return jsonOk({ message: 'success', files });
   }
 
-  // listDir failed or empty — use the manifest.
-  const trackedFiles = listFilesTracked(shell, cwd);
-  const baseDir = normalizePath(cwd);
-  const files = trackedFiles.map((absPath) => {
-    const name = absPath.split('/').pop() || absPath;
-    // Return path relative to the requested directory so the FileTree
-    // can match it against its rootPath. For root "/" the relative path
-    // is the absolute path minus the leading /.
-    let relPath = absPath;
-    if (baseDir !== '/' && absPath.startsWith(baseDir + '/')) {
-      relPath = absPath.slice(baseDir.length + 1);
-    } else if (baseDir === '/') {
-      relPath = absPath; // keep absolute for root
-    }
-    return { path: relPath, modified: false, name };
-  });
+  // listDir failed or the directory is empty in the VFS — derive a
+  // single-level listing from the tracked-file manifest.
+  const children = groupManifestChildren(dir);
+  const files = children.map((c) => ({
+    name: c.name,
+    path: c.path,
+    relative: vfsRelative(c.path, rootDir),
+    is_dir: c.isDir,
+    size: 0,
+    mod_time: 0,
+  }));
   return jsonOk({ message: 'success', files });
 }
 
@@ -346,12 +424,16 @@ function handleWasmBrowse(shell: WasmShell, fullUrl: string): Response {
     return jsonOk({ files });
   }
 
-  // listDir failed — fall back to manifest.
-  const tracked = listFilesTracked(shell, safePath);
-  const files = tracked.map((filePath) => {
-    const name = filePath.split('/').pop() || filePath;
-    return { name, path: filePath, type: 'file', size: 0, modified: 0 };
-  });
+  // listDir failed — fall back to the manifest, deriving a single-level
+  // listing (files + implicit directories) so folders aren't lost.
+  const children = groupManifestChildren(safePath);
+  const files = children.map((c) => ({
+    name: c.name,
+    path: c.path,
+    type: c.isDir ? 'directory' : 'file',
+    size: 0,
+    modified: 0,
+  }));
   return jsonOk({ files });
 }
 

@@ -284,46 +284,67 @@ describe('status()', () => {
     expect(result).toEqual([]);
   });
 
-  it('identifies modified files', async () => {
-    // workdir=1 (present), stage=2 (identical to target), HEAD=2 (present)
-    // wd=true, st=true, hd=true -> modified
+  it('skips unmodified files', async () => {
+    // [filepath, HEAD, WORKDIR, STAGE]: present everywhere, all identical.
+    mockFns.gitStatusMatrix.mockResolvedValue([['clean.ts', 1, 1, 1]]);
+    const result = await gitClient.status('/repos/owner/repo');
+    expect(result).toEqual([]);
+  });
+
+  it('identifies modified files (unstaged)', async () => {
+    // present in HEAD+workdir+index; workdir differs from HEAD, index === HEAD.
+    mockFns.gitStatusMatrix.mockResolvedValue([['a.ts', 1, 2, 1]]);
+    const result = await gitClient.status('/repos/owner/repo');
+    expect(result).toEqual([{ filepath: 'a.ts', type: 'modified' }]);
+  });
+
+  it('identifies modified files (staged)', async () => {
+    // index differs from HEAD (and workdir) -> staged modification.
     mockFns.gitStatusMatrix.mockResolvedValue([['a.ts', 1, 2, 2]]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toEqual([{ filepath: 'a.ts', type: 'modified' }]);
   });
 
   it('identifies added files (staged new)', async () => {
-    // workdir=1, stage=1, HEAD=0 -> wd=true, st=true, hd=false -> added
-    mockFns.gitStatusMatrix.mockResolvedValue([['new.ts', 1, 1, 0]]);
+    // new file (HEAD absent) present in workdir and index.
+    mockFns.gitStatusMatrix.mockResolvedValue([['new.ts', 0, 2, 2]]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toEqual([{ filepath: 'new.ts', type: 'added' }]);
   });
 
-  it('identifies deleted files', async () => {
-    // workdir=0, stage=1, HEAD=1 -> wd=false, st=true, hd=true -> deleted
-    mockFns.gitStatusMatrix.mockResolvedValue([['old.ts', 0, 1, 1]]);
+  it('identifies deleted files (staged)', async () => {
+    // present in HEAD, absent from index -> staged deletion.
+    mockFns.gitStatusMatrix.mockResolvedValue([['old.ts', 1, 0, 0]]);
+    const result = await gitClient.status('/repos/owner/repo');
+    expect(result).toEqual([{ filepath: 'old.ts', type: 'deleted' }]);
+  });
+
+  it('identifies deleted files (unstaged)', async () => {
+    // present in HEAD+index, removed from the workdir.
+    mockFns.gitStatusMatrix.mockResolvedValue([['old.ts', 1, 0, 1]]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toEqual([{ filepath: 'old.ts', type: 'deleted' }]);
   });
 
   it('identifies untracked files', async () => {
-    // workdir=1, stage=0, HEAD=0 -> wd=true, st=false, hd=false -> untracked
-    mockFns.gitStatusMatrix.mockResolvedValue([['random.txt', 1, 0, 0]]);
+    // new file (HEAD absent) present only in the workdir (not the index).
+    mockFns.gitStatusMatrix.mockResolvedValue([['random.txt', 0, 2, 0]]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toEqual([{ filepath: 'random.txt', type: 'untracked' }]);
   });
 
-  it('maps multiple entries with mixed types', async () => {
+  it('maps multiple entries with mixed types (unmodified skipped)', async () => {
     mockFns.gitStatusMatrix.mockResolvedValue([
-      ['a.ts', 1, 2, 2], // modified
-      ['b.ts', 1, 0, 0], // untracked
-      ['c.ts', 0, 1, 1], // deleted
+      ['a.ts', 1, 2, 2], // modified (staged)
+      ['b.txt', 0, 2, 0], // untracked
+      ['c.ts', 1, 0, 0], // deleted (staged)
+      ['d.ts', 1, 1, 1], // unmodified -> skipped
     ]);
     const result = await gitClient.status('/repos/owner/repo');
     expect(result).toHaveLength(3);
-    expect(result[0].type).toBe('modified');
-    expect(result[1].type).toBe('untracked');
-    expect(result[2].type).toBe('deleted');
+    expect(result[0]).toEqual({ filepath: 'a.ts', type: 'modified' });
+    expect(result[1]).toEqual({ filepath: 'b.txt', type: 'untracked' });
+    expect(result[2]).toEqual({ filepath: 'c.ts', type: 'deleted' });
   });
 });
 
@@ -341,8 +362,8 @@ describe('add()', () => {
 
   it('stages all changes when no filepath given', async () => {
     mockFns.gitStatusMatrix.mockResolvedValue([
-      ['new.ts', 1, 0, 0], // untracked -> add
-      ['del.ts', 0, 1, 1], // deleted -> remove
+      ['new.ts', 0, 2, 0], // untracked (new, only in workdir) -> add
+      ['del.ts', 1, 0, 0], // staged deletion (in HEAD, not index) -> remove
     ]);
 
     await gitClient.add('/repos/owner/repo');
@@ -715,7 +736,7 @@ describe('diff()', () => {
   });
 
   it('includes added files with + prefix', async () => {
-    mockFns.gitStatusMatrix.mockResolvedValue([['new.txt', 1, 0, 0]]); // untracked
+    mockFns.gitStatusMatrix.mockResolvedValue([['new.txt', 0, 2, 0]]); // untracked (new, only in workdir)
     mockFns.pfsReadFile.mockResolvedValue('new content');
 
     const results = await gitClient.diff('/repos/owner/repo');
@@ -727,7 +748,7 @@ describe('diff()', () => {
   });
 
   it('includes deleted files with - prefix', async () => {
-    mockFns.gitStatusMatrix.mockResolvedValue([['old.txt', 0, 1, 1]]); // deleted
+    mockFns.gitStatusMatrix.mockResolvedValue([['old.txt', 1, 0, 0]]); // staged deletion (in HEAD, not index)
     mockFns.gitReadBlob.mockResolvedValue({ blob: new Uint8Array([111, 108, 100]) }); // "old"
 
     const results = await gitClient.diff('/repos/owner/repo');

@@ -83,11 +83,32 @@ describe('executeGitOp dispatch', () => {
   });
 
   describe('implemented operations run the real helpers', () => {
-    it('status resolves and returns a staged/unstaged shape', async () => {
-      const result = await executeGitOp('status');
-      expect(result).toHaveProperty('staged');
-      expect(result).toHaveProperty('unstaged');
-      expect(result).toHaveProperty('untracked');
+    it('status resolves and returns the canonical GitStatusResponse shape', async () => {
+      const result = (await executeGitOp('status')) as {
+        message: string;
+        in_git_repo: boolean;
+        status: { branch: string; ahead: number; behind: number; staged: unknown[]; untracked: unknown[] };
+        files: unknown[];
+      };
+      // The git panel consumes the daemon-compatible contract (message +
+      // in_git_repo + nested status), not the raw staged/unstaged shape.
+      expect(result.message).toBe('success');
+      expect(result.in_git_repo).toBe(true);
+      expect(result.status).toMatchObject({ branch: '', ahead: 0, behind: 0 });
+      expect(Array.isArray(result.status.staged)).toBe(true);
+      expect(Array.isArray(result.status.untracked)).toBe(true);
+      expect(Array.isArray(result.files)).toBe(true);
+    });
+
+    it('branches resolves and returns the canonical GitBranchesResponse shape', async () => {
+      const result = (await executeGitOp('branches')) as {
+        message: string;
+        current: string;
+        branches: string[];
+      };
+      expect(result.message).toBe('success');
+      expect(result.current).toBe('');
+      expect(result.branches).toEqual([]);
     });
 
     it('add/stage delegates to gitAdd', async () => {
@@ -153,5 +174,61 @@ describe('executeGitOp dispatch', () => {
         expect(caught).toBeInstanceOf(Error);
       }
     });
+  });
+});
+
+// ── Unborn-HEAD (no commits) tolerance ─────────────────────────────
+//
+// After a ?repo= import the browser repo is a fresh git.init with no
+// commits: statusMatrix cannot resolve the HEAD tree and rejects. gitStatus
+// must fall back to "all working files are untracked" instead of throwing
+// (a throw surfaces as a 500 → the git panel's "Failed to fetch git
+// status" banner).
+
+import LightningFS from '@isomorphic-git/lightning-fs';
+
+describe('git status with no commits (unborn HEAD)', () => {
+  const fs = new LightningFS();
+  const readdirMock = fs.promises.readdir as unknown as { mockResolvedValue(v: unknown[]): void };
+  const statMock = fs.promises.stat as unknown as {
+    mockResolvedValue(v: unknown): void;
+    mockRejectedValue(e: unknown): void;
+  };
+
+  afterEach(() => {
+    // Restore the factory defaults so other suites are unaffected.
+    readdirMock.mockResolvedValue([]);
+    statMock.mockRejectedValue(new Error('not found'));
+  });
+
+  it('reports working files as untracked when statusMatrix cannot resolve HEAD', async () => {
+    mockGitStatusMatrix.mockRejectedValue(new Error('Invalid ref: HEAD'));
+    readdirMock.mockResolvedValue(['README', 'src.ts']);
+    statMock.mockResolvedValue({ isDirectory: () => false });
+
+    const result = (await executeGitOp('status')) as {
+      message: string;
+      in_git_repo: boolean;
+      status: { untracked: Array<{ path: string; status: string }> };
+      files: unknown[];
+    };
+    expect(result.message).toBe('success');
+    expect(result.in_git_repo).toBe(true);
+    expect(result.status.untracked).toEqual([
+      { path: 'README', status: 'new', staged: false },
+      { path: 'src.ts', status: 'new', staged: false },
+    ]);
+    expect(result.files).toHaveLength(2);
+  });
+
+  it('resolves to an empty state when the repo is empty', async () => {
+    mockGitStatusMatrix.mockRejectedValue(new Error('Invalid ref: HEAD'));
+    // readdir → [] (default), stat rejects (default): no files listed.
+    const result = (await executeGitOp('status')) as {
+      status: { untracked: unknown[]; staged: unknown[]; modified: unknown[] };
+    };
+    expect(result.status.untracked).toEqual([]);
+    expect(result.status.staged).toEqual([]);
+    expect(result.status.modified).toEqual([]);
   });
 });

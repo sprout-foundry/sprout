@@ -1482,7 +1482,7 @@
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves on GLM-5.2 in coding and in the balance between performance and token efficiency.",
         "id": "zai-org/GLM-5.3",
-        "input_cost": 1.2,
+        "input_cost": 0.9,
         "name": "GLM-5.3",
         "output_cost": 4,
         "tags": [

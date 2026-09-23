@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { handleWasmLocal } from './cloudWasmHandlers';
-import type { WasmShell } from './wasmShell';
+import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
+import type { WasmDirEntry, WasmShell } from './wasmShell';
 
 function createMockShell(overrides: Partial<WasmShell> = {}): WasmShell {
   return {
@@ -274,5 +274,104 @@ describe('handleWasmShellApprovalDecision — /api/shell-approvals/{id}/decision
       request_id: 'shell_99',
       delivered: true,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleWasmFileList — /api/files single-level shape (folder preservation)
+// ---------------------------------------------------------------------------
+
+describe('handleWasmFileList — /api/files returns single-level listings', () => {
+  function dirShell(cwd: string, dirs: Record<string, WasmDirEntry[]>): WasmShell {
+    return {
+      ...({} as WasmShell),
+      executeCommand: () => ({ stdout: '', stderr: '', exitCode: 0 }),
+      autoComplete: () => ({ completions: [] }),
+      getCwd: () => cwd,
+      changeDir: () => ({ cwd }),
+      writeFile: () => '',
+      readFile: () => ({ content: '' }),
+      listDir: (p: string) => {
+        const entries = dirs[p];
+        if (!entries) return { entries: [], error: `no such directory: ${p}` };
+        return { entries };
+      },
+      deleteFile: () => '',
+      runAgent: async () => ({ response: '', provider: '', model: '' }),
+      clearConversation: () => {},
+      stopAgent: () => {},
+    } as unknown as WasmShell;
+  }
+
+  it('lists immediate children with is_dir flags and excludes .git (no recursion)', async () => {
+    const shell = dirShell('/work', {
+      '/work': [
+        { name: '.git', type: 'dir', size: 0, mode: 0 },
+        { name: 'api', type: 'dir', size: 0, mode: 0 },
+        { name: 'LICENSE', type: 'file', size: 10, mode: 0 },
+      ],
+      '/work/api': [{ name: 'access_token.go', type: 'file', size: 100, mode: 0 }],
+    });
+    const res = handleWasmLocal(shell, '/api/files', 'GET', '/api/files?path=%2Fwork');
+    const body = JSON.parse(await res.text());
+    const names = (body.files as Array<{ name: string }>).map((f) => f.name);
+    expect(names).toContain('api');
+    expect(names).toContain('LICENSE');
+    expect(names).not.toContain('.git', '.git directory must be hidden');
+    expect(names).not.toContain('access_token.go', 'must be single-level, not recursive');
+    const api = (body.files as Array<Record<string, unknown>>).find((f) => f.name === 'api');
+    expect(api?.is_dir).toBe(true);
+    expect(api?.path).toBe('/work/api');
+    expect(api?.relative).toBe('api');
+  });
+
+  it('child fetch for an expanded directory returns that directory\'s files', async () => {
+    const shell = dirShell('/work', {
+      '/work/api': [{ name: 'access_token.go', type: 'file', size: 100, mode: 0 }],
+    });
+    const res = handleWasmLocal(
+      shell,
+      '/api/files',
+      'GET',
+      '/api/files?path=%2Fwork%2Fapi',
+    );
+    const body = JSON.parse(await res.text());
+    const files = body.files as Array<{ name: string; is_dir: boolean; path: string }>;
+    expect(files).toHaveLength(1);
+    expect(files[0].name).toBe('access_token.go');
+    expect(files[0].is_dir).toBe(false);
+    expect(files[0].path).toBe('/work/api/access_token.go');
+  });
+
+  it('falls back to the manifest with implicit directory entries when listDir fails', async () => {
+    trackFileWrite('/mfl-a/api/access_token.go');
+    trackFileWrite('/mfl-a/device/poller.go');
+    trackFileWrite('/mfl-a/LICENSE');
+    const shell = dirShell('/mfl-a', {}); // listDir errors for everything
+    const res = handleWasmLocal(shell, '/api/files', 'GET', '/api/files?path=%2Fmfl-a');
+    const body = JSON.parse(await res.text());
+    const files = body.files as Array<{ name: string; is_dir: boolean; path: string }>;
+    const byName = new Map(files.map((f) => [f.name, f]));
+    expect(byName.get('api')?.is_dir).toBe(true, 'nested files imply a directory entry');
+    expect(byName.get('api')?.path).toBe('/mfl-a/api');
+    expect(byName.get('device')?.is_dir).toBe(true);
+    expect(byName.get('LICENSE')?.is_dir).toBe(false);
+    expect(byName.get('LICENSE')?.path).toBe('/mfl-a/LICENSE');
+    // directories sort before files
+    expect(files.findIndex((f) => f.name === 'api')).toBeLessThan(
+      files.findIndex((f) => f.name === 'LICENSE'),
+    );
+  });
+
+  it('CWD mismatch: files written elsewhere are listed from the manifest root', async () => {
+    trackFileWrite('/mfl-b/api/x.go');
+    const shell = dirShell('/other', {}); // listDir('/other') errors, nothing under /other
+    const res = handleWasmLocal(shell, '/api/files', 'GET', '/api/files?path=%2Fother');
+    const body = JSON.parse(await res.text());
+    const files = body.files as Array<{ name: string; is_dir: boolean; path: string }>;
+    const mflb = files.find((f) => f.name === 'mfl-b');
+    expect(mflb).toBeDefined(), 'manifest fallback must surface files written to a different root';
+    expect(mflb?.is_dir).toBe(true);
+    expect(mflb?.path).toBe('/mfl-b');
   });
 });

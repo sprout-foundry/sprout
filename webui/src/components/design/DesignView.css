@@ -11,7 +11,15 @@
 .design-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* The surface is a flex column (health strip + view), so the
+   * view takes the REMAINING height as a flex child instead of a 100% that
+   * only resolves when the parent's height is definite. Every link in the
+   * chain .main-content.design-shell → .design-shell-body → .design-surface
+   * → .design-view → .design-view-body → .design-side-column →
+   * .design-side-body → .design-agent-panel → .design-agent-chat is now
+   * flex: 1 + min-height: 0 under a definite parent — no auto-height
+   * ancestor left to collapse the chat. */
+  flex: 1;
   min-height: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -832,9 +840,11 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-.design-tokens-path {
+.design-tokens-name {
   flex: 1;
   min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 
@@ -867,8 +877,44 @@
   height: 48px;
 }
 
+/* Color section renders as a tile grid: swatch, name, value — the palette is
+   comparable at a glance instead of a row of tiny swatches. */
+.design-tokens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-2);
+}
+
+.design-tokens-tile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.design-tokens-tile-name {
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.design-tokens-tile-specimen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.design-tokens-tile-value {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
 /* Typography specimen: the family/size/weight are painted from the token
-   values by inline style, one line per face in the family. */
+   values by inline style, one line per face in the family. The line is set
+   large enough to read the face itself, not just its metadata. */
 .design-token-font-specimen {
   display: flex;
   flex-direction: column;
@@ -878,6 +924,8 @@
 
 .design-token-font-line {
   margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
@@ -887,15 +935,32 @@
   color: var(--text-tertiary);
 }
 
-/* Spacing specimen: a bar whose width is the token's own dimension value. */
-.design-token-space-bar {
-  flex: 0 0 auto;
+/* Spacing specimen: a proportional bar (a percentage of the section's shared
+   scale, set inline) on a full-width track, so the rhythm reads at a glance. */
+.design-token-space-specimen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.design-token-space-track {
+  flex: 1;
+  min-width: 60px;
   height: 8px;
-  min-width: 2px;
-  max-width: 160px;
-  background: var(--accent-primary-alpha);
-  border: 1px solid var(--accent-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.design-token-space-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--accent-primary-alpha);
+  border-right: 1px solid var(--accent-primary);
 }
 
 .design-tokens-detail {
@@ -924,51 +989,9 @@
   overflow-wrap: anywhere;
 }
 
-.design-tokens-schema {
-  margin: 0;
-  padding: var(--space-2);
-  font-family: var(--font-mono, monospace);
-  font-size: var(--text-xs, 12px);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  color: var(--text-secondary);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  overflow-wrap: anywhere;
-}
-
-/* Collapsible schema reference: closed by default so an unselected token
-   shows guidance, not a dense spec wall (PR-review critique). */
-.design-tokens-schema-wrap {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-}
-
-.design-tokens-schema-summary {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm, 0.875rem);
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-
-.design-tokens-schema-summary:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.design-tokens-schema-wrap[open] .design-tokens-schema-summary {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.design-tokens-schema-wrap .design-tokens-schema {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-}
+/* (The DTCG schema reference block was retired with its markup: the Tokens
+   tab now shows a one-line hint instead of a dense spec wall when nothing is
+   selected. The per-token schema hint lives in the detail pane.) */
 
 .design-tokens-alias {
   font-family: var(--font-mono, monospace);
@@ -1286,7 +1309,10 @@
   flex: 0 0 min(420px, 36vw);
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--border-default);
+  /* Logical property — the column sits at the end of the reading
+   * flow (far right under LTR, far left under dir="rtl"), so its border
+   * faces the content on the inline-start side in either direction. */
+  border-inline-start: 1px solid var(--border-default);
   background: var(--bg-secondary);
 }
 
@@ -1362,11 +1388,14 @@
   color: var(--text-secondary);
 }
 
-/* Mobile: the column overlays the surface instead of squeezing it. */
+/* Mobile: the column overlays the surface instead of squeezing it.
+ * Logical insets — the overlay pins to the inline-end edge
+ * (right under LTR, left under dir="rtl"). */
 @media (max-width: 768px) {
   .design-side-column {
     position: fixed;
-    inset: 0 0 0 auto;
+    inset-block: 0;
+    inset-inline-end: 0;
     width: min(92vw, 420px);
     z-index: 30;
     box-shadow: var(--shadow-float);

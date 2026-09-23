@@ -29,6 +29,7 @@ import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
+import { useChatModePinning } from '../workspaces/useChatModePinning';
 import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
@@ -94,7 +95,8 @@ interface AppContentProps {
   chatSessions?: ChatSession[];
   activeChatId: string | null;
   perChatCache?: Record<string, PerChatState>;
-  onActiveChatChange?: (id: string) => void;
+  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); per-mode pinning uses the result. */
+  onActiveChatChange?: (id: string) => void | Promise<boolean>;
   onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onCreateChatInWorktree?: (
@@ -197,6 +199,9 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isForking, setIsForking] = useState(false);
+  // The tool id whose inline detail is currently open in the chat.
+  // Toggled by a tool pill; reset when the active chat session changes.
+  const [activeToolDetailId, setActiveToolDetailId] = useState<string | null>(null);
 
   // ── New Chat in Worktree dialog ────────────────────────────────
   const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
@@ -363,6 +368,56 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const initialViewSyncRef = useRef(false);
 
+  // SP-140 / workspace modes: which mode the shell is showing. Availability
+  // depends on the workspace's own content (a design tree), probed once here so
+  // the switcher and the surface agree on what exists. Declared before the
+  // chat-tab wiring below: the tab-driven switch handler must record the mode
+  // pin, which needs the pinning hook's callbacks in scope.
+  const {
+    present: hasDesignTree,
+    loading: designPresenceLoading,
+    treeState: designTreeState,
+    frontendLike: frontendCodePresent,
+    recheck: recheckDesignPresence,
+  } = useDesignPresence();
+  const {
+    mode: workspaceMode,
+    modes: workspaceModes,
+    select: selectWorkspaceMode,
+  } = useWorkspaceMode({ hasDesignTree });
+
+  // Per-mode chat pinning. A mode switch restores that mode's own
+  // conversation (Design with no pin starts a fresh chat, never a Code
+  // session); pins are recorded as sessions become active in the mode.
+  // onFreshSession passes ONLY the create: creating a chat does not move the
+  // active chat, so the hook's restoreFreshSession performs the switch itself
+  // (create → switch → pin) — pinning without switching would let the first
+  // send re-pin the still-active Code session into the design pin.
+  const chatModePinning = useChatModePinning({
+    mode: workspaceMode.id,
+    activeChatId,
+    onSwitchSession: (sessionId) => onActiveChatChange?.(sessionId),
+    onFreshSession: () => onCreateChat?.(),
+  });
+  const { switchSession: pinSwitchSession, recordSend: pinRecordSend } = chatModePinning;
+
+  // Pin-recording wrappers: record the mode's pin at the moments a session
+  // becomes active (explicit switch / message send), then delegate to the
+  // existing chat handlers.
+  const sendWithModePin = useCallback(
+    (message: string) => {
+      pinRecordSend();
+      onSendMessage(message);
+    },
+    [pinRecordSend, onSendMessage],
+  );
+  const switchSessionWithModePin = useCallback(
+    (id: string) => {
+      pinSwitchSession(id);
+    },
+    [pinSwitchSession],
+  );
+
   useChatSessionsSync({
     chatSessions,
     activeChatId,
@@ -373,7 +428,10 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferClosable,
     openWorkspaceBuffer,
   });
-  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
+  // Tab-driven switches (clicking a chat tab) must record the
+  // mode pin too — the raw handler would switch without recording, leaving
+  // the pin pointing at the previous session.
+  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange: switchSessionWithModePin });
 
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
@@ -393,22 +451,6 @@ const AppContent: React.FC<AppContentProps> = ({
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
-
-  // SP-140 / workspace modes: which mode the shell is showing. Availability
-  // depends on the workspace's own content (a design tree), probed once here so
-  // the switcher and the surface agree on what exists.
-  const {
-    present: hasDesignTree,
-    loading: designPresenceLoading,
-    treeState: designTreeState,
-    frontendLike: frontendCodePresent,
-    recheck: recheckDesignPresence,
-  } = useDesignPresence();
-  const {
-    mode: workspaceMode,
-    modes: workspaceModes,
-    select: selectWorkspaceMode,
-  } = useWorkspaceMode({ hasDesignTree });
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
   // because the rail (Sidebar) and the surface are siblings and must agree on
@@ -796,7 +838,27 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  const handleToolPillClick = useCallback((toolId: string) => contextPanelRef.current?.highlightTool(toolId), []);
+  // Open/close the inline tool detail from a tool pill. The chat
+  // renders the detail inline (below the message) instead of routing it to
+  // the context sidebar, so no mode has to open the sidebar to inspect a
+  // tool call.
+  const handleToolDetailToggle = useCallback((toolId: string | null) => {
+    // null closes the open detail; a matching id toggles it off, a new id opens it.
+    // At most one open at a time — this inline detail replaces the old sidebar.
+    setActiveToolDetailId((prev) => (prev === toolId ? null : toolId));
+  }, []);
+
+  // A session switch replaces the tool list, so the open detail must close.
+  useEffect(() => {
+    setActiveToolDetailId(null);
+  }, [activeChatId]);
+
+  // The ToolExecution backing the open detail (null if the id no longer
+  // resolves against the current session's tool list).
+  const activeToolDetail = useMemo(
+    () => (activeToolDetailId ? (state.toolExecutions.find((t) => t.id === activeToolDetailId) ?? null) : null),
+    [activeToolDetailId, state.toolExecutions],
+  );
 
   const handleForkAtBreakpoint = useCallback(
     async (breakpointIndex: number) => {
@@ -828,7 +890,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
-      onSendMessage,
+      onSendMessage: sendWithModePin,
       onQueueMessage,
       onQueueMessageRemove,
       onQueueMessageEdit,
@@ -850,7 +912,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onReviewChange: handleReviewChange,
       onRestoreSession: handleSessionSearchRestore,
       queryCount: state.queryCount,
-      onToolPillClick: handleToolPillClick,
+      activeToolDetail,
+      onToolDetailToggle: handleToolDetailToggle,
       stats: state.stats,
       isConnected: state.isConnected,
       onModelClick: handleChatModelClick,
@@ -863,7 +926,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }),
     [
       state.messages,
-      onSendMessage,
+      sendWithModePin,
       onQueueMessage,
       onQueueMessageRemove,
       onQueueMessageEdit,
@@ -885,7 +948,8 @@ const AppContent: React.FC<AppContentProps> = ({
       handleReviewChange,
       handleSessionSearchRestore,
       state.queryCount,
-      handleToolPillClick,
+      activeToolDetail,
+      handleToolDetailToggle,
       state.stats,
       state.isConnected,
       handleChatModelClick,
@@ -961,7 +1025,7 @@ const AppContent: React.FC<AppContentProps> = ({
       perChatCache,
       activeChatId,
       chatSessions,
-      onActiveChatChange,
+      onActiveChatChange: switchSessionWithModePin,
       onCreateChat,
       onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
       onDeleteChat,

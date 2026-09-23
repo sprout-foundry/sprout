@@ -181,7 +181,7 @@ function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.El
 
 interface MessageItemProps {
   message: Message;
-  onToolPillClick?: (toolId: string) => void;
+  onToolDetailToggle?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
   filteredToolExecutions: ToolExecution[];
   formatTime: (date: Date) => string;
@@ -189,7 +189,7 @@ interface MessageItemProps {
 
 const MessageItem = memo(function MessageItem({
   message,
-  onToolPillClick,
+  onToolDetailToggle,
   findMatchingToolExecution,
   filteredToolExecutions,
   formatTime,
@@ -224,11 +224,11 @@ const MessageItem = memo(function MessageItem({
           <MessageSegments
             content={message.content}
             toolRefs={message.toolRefs}
-            onToolRefClick={onToolPillClick}
+            onToolRefClick={onToolDetailToggle}
             onToolClick={(toolName) => {
               const matchingTool = findMatchingToolExecution(toolName);
               if (matchingTool) {
-                onToolPillClick?.(matchingTool.id);
+                onToolDetailToggle?.(matchingTool.id);
               }
             }}
             getToolStatus={(toolId) => {
@@ -275,7 +275,7 @@ function Chat({
   queryProgress = null,
   currentTodos: _currentTodos = [],
   subagentActivities = [],
-  onToolPillClick,
+  onToolDetailToggle,
   onStopProcessing,
   onRetractSteer,
   // Worktree support — chatId, workspaceRoot, onWorktreeChange available for future worktree switching
@@ -563,7 +563,7 @@ function Chat({
               itemContent={(index, message) => (
                 <MessageItem
                   message={message}
-                  onToolPillClick={onToolPillClick}
+                  onToolDetailToggle={onToolDetailToggle}
                   findMatchingToolExecution={findMatchingToolExecution}
                   filteredToolExecutions={filteredToolExecutions}
                   formatTime={formatTime}

@@ -119,6 +119,9 @@ external tools equal citizens.
 | 5 | SP-140-5 | Design↔code sync (continuous, bidirectional): token export (CSS vars / TS / Tailwind `@theme`), screen scaffold briefs (`design_brief`), `design_sync` code→design import, directional drift reporting | 140-1 (140-4 for full value) |
 | 6 | SP-140-6 | Loop surface: agent state in the design space — live inventory, `/api/design/status` + health strip, annotation pins, agent panel in Design mode, critique findings sidecar | 140-3/4/5 |
 | 7 | SP-140-7 | Human co-editing: revision-checked writes (409 seam), incoming-change conflict UX, structured token/status editing, classified drag-and-drop gestures, review parity with agent edits | 140-6 (7.1 needs 6.a/6.f; 7.3 needs 6.b) |
+| 8 | SP-140-8 | Screen-centric IA: the shell's primary axis is the screen — screen workbench (render/status/feedback/flows/tokens/agent-state facets), kind tabs demoted to a Library group, adaptive chrome | 140-3/6/7 (coordinates with 140-9) |
+| 9 | SP-140-9 | Format rework: HTML-first screen tier (wireframe tier retired), structured flow sources, `.mmd` as a provenance-hashed derived export | 140-1 (amends §1b/§1c; ripples into 140-2/4/5) |
+| 10 | SP-140-10 | Design-mode chat UX: RTL-aware side-column placement, per-mode conversation pinning, full-height agent panel + live visibility, inline tool details (retire the tool-details sidebar dependency) | 140-6/7 (10d changes the shared chat mechanism; Code-mode regression gates) |
 
 Phases 2 and 3 are independent of each other and can proceed in parallel
 after Phase 1. Only Phase 5's token export (SP-140-5 §5a) needs Phase 1

@@ -404,7 +404,6 @@ const TESTIDS = {
   "design-token-reload": "design-token-reload",
   "design-tokens-search": "design-tokens-search",
   "design-tokens-hint": "design-tokens-hint",
-  "design-tokens-schema": "design-tokens-schema",
   "design-tokens-token-detail": "design-tokens-token-detail",
   "design-token-open": "design-token-open",
   "design-token-schema-hint": "design-token-schema-hint",

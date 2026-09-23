@@ -111,7 +111,7 @@ A todo item tracked during a session:
 Messages are rendered via a virtualized list using `react-virtuoso` for performance. The component handles several streaming scenarios:
 
 - **Progressive content** — As new content arrives, the message grows in real-time
-- **Tool executions** — Appear as clickable pill elements within messages. Clicking a pill can navigate to the full execution details via `onToolPillClick`
+- **Tool executions** — Appear as clickable pill elements within messages. Clicking a pill toggles an inline detail block rendered beneath it (`activeToolDetail` / `onToolDetailToggle`)
 - **Subagent activities** — Show as expandable cards with real-time output streaming. The phase indicator shows whether the subagent is spawning, outputting, completing, or stepping through work
 - **Auto-scroll** — The viewport automatically follows new messages. When the user scrolls up, auto-scroll pauses until they scroll back to the bottom
 
@@ -205,7 +205,8 @@ function ChatWithTools() {
       inputValue=""
       onInputChange={() => {}}
       toolExecutions={toolExecutions}
-      onToolPillClick={(toolId) => console.log('Pill clicked:', toolId)}
+      activeToolDetail={null}
+      onToolDetailToggle={(toolId) => console.log('Toggle tool detail:', toolId)}
     />
   );
 }

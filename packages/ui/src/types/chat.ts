@@ -208,7 +208,19 @@ export interface ChatProps {
   queryProgress?: unknown;
   currentTodos?: TodoItem[];
   subagentActivities?: SubagentActivity[];
-  onToolPillClick?: (toolId: string) => void;
+  /**
+   * The tool execution currently shown inline beneath its
+   * message (rendered by the chat surface via ToolDetailInline).
+   * null/absent = no expanded pill. Replaces the retired onToolPillClick
+   * ContextPanel deep-link.
+   */
+  activeToolDetail?: ToolExecution | null;
+  /**
+   * Toggle a tool pill's inline detail — pass the clicked
+   * pill's toolId (null to collapse). The owner resolves it to a
+   * ToolExecution and stores it in `activeToolDetail`.
+   */
+  onToolDetailToggle?: (toolId: string | null) => void;
   onStopProcessing?: () => void;
   onRetractSteer?: () => boolean | Promise<boolean>;
   /**

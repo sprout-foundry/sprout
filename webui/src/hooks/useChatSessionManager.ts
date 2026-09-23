@@ -51,7 +51,13 @@ export interface UseChatSessionManagerParams {
 
 export interface UseChatSessionManagerReturn {
   loadChatSessions: () => Promise<void>;
-  handleActiveChatChange: (id: string) => Promise<void>;
+  /**
+   * Switch the active chat session. Resolves `true` when the switch
+   * took effect (or the chat was already active), `false` when it failed
+   * or was superseded by a newer switch. Boot restore uses the
+   * result to fall back to a fresh chat when a persisted pin is stale.
+   */
+  handleActiveChatChange: (id: string) => Promise<boolean>;
   handleCreateChat: () => Promise<string | null>;
   handleCreateChatInWorktree: (
     branch: string,
@@ -127,12 +133,22 @@ export function useChatSessionManager({
           debugLog('[chat] Failed to load initial messages:', e);
         }
       }
-      setState((prev) => ({
-        chatSessions: response.chat_sessions ?? [],
-        activeChatId: prev.activeChatId || activeChatId,
-        messages:
-          prev.messages.length === 0 && initialMessages.length > 0 ? trimMessages(initialMessages) : prev.messages,
-      }));
+      setState((prev) => {
+        // Don't adopt this chat's transcript when the active chat
+        // moved on while we were fetching (a design-mode boot switch runs
+        // concurrently with this hook — its list refresh resolves later).
+        // Showing messages for a chat the user isn't in desyncs the transcript
+        // from activeChatId; the switch response already loaded the right one.
+        const initialChatStillActive = !prev.activeChatId || prev.activeChatId === activeChatId;
+        return {
+          chatSessions: response.chat_sessions ?? [],
+          activeChatId: prev.activeChatId || activeChatId,
+          messages:
+            initialChatStillActive && prev.messages.length === 0 && initialMessages.length > 0
+              ? trimMessages(initialMessages)
+              : prev.messages,
+        };
+      });
     } catch (error) {
       // best-effort: background list refresh on connect; an empty tab bar is
       // the visible symptom and self-heals via the session_changed WS event.
@@ -141,9 +157,9 @@ export function useChatSessionManager({
   }, [setState, activeChatIdRef]);
 
   const handleActiveChatChange = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       const currentId = activeChatIdRef.current;
-      if (currentId === id) return;
+      if (currentId === id) return true;
 
       // Track the expected chat ID to detect stale async responses
       const switchId = id;
@@ -198,8 +214,10 @@ export function useChatSessionManager({
 
       try {
         const response = await switchChatSession(id);
-        // Bail if user switched to yet another chat while we were loading
-        if (activeChatIdRef.current !== switchId) return;
+        // Bail if user switched to yet another chat while we were loading.
+        // Report `false` so callers waiting on the switch (boot restore)
+        // know it never landed and can fall back.
+        if (activeChatIdRef.current !== switchId) return false;
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m, i) => ({
@@ -249,8 +267,9 @@ export function useChatSessionManager({
           .catch((err) => {
             debugLog('[chat] Failed to refresh session list after switch:', err);
           });
+        return true;
       } catch (error) {
-        if (activeChatIdRef.current !== switchId) return;
+        if (activeChatIdRef.current !== switchId) return false;
         activeChatIdRef.current = currentId;
         debugLog('[chat] Failed to switch chat session:', error);
         // User tapped a chat tab and nothing happened — say why.
@@ -260,6 +279,7 @@ export function useChatSessionManager({
           toUserErrorMessage(error, 'Could not switch to that chat session.'),
           5000,
         );
+        return false;
       }
     },
     [setState, activeRequestsRef],

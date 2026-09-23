@@ -295,11 +295,7 @@ function vfsRelative(absPath: string, rootDir: string): string {
  * fetches a directory's children when it is expanded). The daemon
  * excludes .git from listings.
  */
-function singleLevelFileEntries(
-  entries: WasmDirEntry[],
-  dir: string,
-  rootDir: string,
-): Array<Record<string, unknown>> {
+function singleLevelFileEntries(entries: WasmDirEntry[], dir: string, rootDir: string): Array<Record<string, unknown>> {
   return entries
     .filter((e) => !(e.type === 'dir' && e.name === '.git'))
     .map((e) => {
@@ -322,8 +318,7 @@ function singleLevelFileEntries(
  * the files — in that case group the whole manifest under '/' instead.
  */
 function groupManifestChildren(dir: string): Array<{ name: string; path: string; isDir: boolean }> {
-  const underDir = (p: string) =>
-    dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir;
+  const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
   let base = dir;
   let paths = Array.from(vfsManifest).filter(underDir);
   if (paths.length === 0 && vfsManifest.size > 0) {

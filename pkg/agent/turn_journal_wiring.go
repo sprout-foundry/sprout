@@ -61,7 +61,31 @@ func (a *Agent) journalSeedState(st *core.State) {
 	j := a.turnJournal
 	base := a.journalBase
 	a.journalMu.Unlock()
-	if j == nil || len(seedMsgs) <= base {
+	if j == nil {
+		return
+	}
+
+	// A mid-turn compaction persist shrank state below the journal's
+	// high-water mark. An append event would replay wrong (its Base
+	// exceeds the live list); skipping it would leave the journal
+	// permanently ahead of state. Record a replace event carrying the
+	// full post-compaction list so replay truncates to nothing and
+	// appends the compacted truth.
+	if len(seedMsgs) < base {
+		if err := j.AppendTurnEvent(TurnJournalEvent{
+			Type:             "compaction",
+			Base:             0,
+			CompactionShrink: append([]api.Message(nil), seedMsgs...),
+		}); err != nil {
+			a.Logger().Debug("[WARN] failed to append compaction journal event: %v\n", err)
+		}
+		a.journalMu.Lock()
+		a.journalBase = len(seedMsgs)
+		a.journalMu.Unlock()
+		return
+	}
+
+	if len(seedMsgs) <= base {
 		return
 	}
 	newMsgs := append([]api.Message(nil), seedMsgs[base:]...)

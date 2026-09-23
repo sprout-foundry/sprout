@@ -123,6 +123,13 @@ func LoadStateRecoverable(sessionID, workingDir string) (*ConversationState, Rec
 			lastTs = ev.Ts
 		}
 		switch ev.Type {
+		case "compaction":
+			// A mid-turn compaction persist replaced the state list —
+			// everything journaled before this point is superseded.
+			if ev.CompactionShrink != nil {
+				msgs = append([]api.Message(nil), ev.CompactionShrink...)
+				applied++
+			}
 		case "messages":
 			if ev.Base >= 0 && ev.Base <= len(msgs) {
 				msgs = msgs[:ev.Base]

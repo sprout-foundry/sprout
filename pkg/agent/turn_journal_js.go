@@ -23,6 +23,10 @@ type TurnJournalEvent struct {
 	Msgs        []api.Message      `json:"msgs,omitempty"`
 	Checkpoint  *TurnCheckpoint    `json:"checkpoint,omitempty"`
 	TokenTotals *TurnJournalTokens `json:"token_totals,omitempty"`
+	// CompactionShrink carries the full post-compaction message list on a
+	// "compaction" event (see turn_journal.go; the js stub never emits it
+	// but the field keeps the struct shape identical across build tags).
+	CompactionShrink []api.Message `json:"compaction_shrink,omitempty"`
 }
 
 type TurnJournalTokens struct {

@@ -24,7 +24,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.5.1
+require github.com/sprout-foundry/seed v1.5.2
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
@@ -139,10 +139,5 @@ require (
 // is gated by `// +build !windows` and thus undefined on Windows). The
 // only diff from upstream is the renameio.TempFile call site → a small
 // in-package atomic-write helper. Source lives in ./internal/hnsw/.
-// TEMPORARY for the compaction-persistence work: seed's LastCompactionRebase
-// API is not yet in a published tag. Drop this replace and bump the require
-// to the next seed tag once published.
-replace github.com/sprout-foundry/seed => ../seed
-
 // Drop this replace when upstream merges a Windows fix.
 replace github.com/coder/hnsw => ./internal/hnsw

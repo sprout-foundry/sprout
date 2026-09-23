@@ -1,5 +1,12 @@
 # SP-121-7: Repo Click → GitHub Content Flow
 
+> **Status (2026-09-22):** Shipped — browser-side GitHub clone
+> (isomorphic-git + lightning-fs), multi-repo gitClient service, VFS
+> bridge to the WASM shell, Phase-7 agent integration
+> (`agentGitTools.ts` + `agentGitToolBridge.ts`, 15 git tools).
+> Remaining: Playwright E2E pass (shared open item with
+> SP-GIT-CLIENT Phase 7).
+
 ## Architecture
 
 ### Data Flow

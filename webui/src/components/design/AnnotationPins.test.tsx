@@ -1,5 +1,5 @@
 /**
- * AnnotationPins tests (SP-140-6 §6e, TODO item 6.5).
+ * AnnotationPins tests (SP-140-6 §6e).
  *
  * Pins the pin-layer contract: annotations render at their normalized `at`
  * coordinates, open vs resolved are visually distinct, pin click focuses,

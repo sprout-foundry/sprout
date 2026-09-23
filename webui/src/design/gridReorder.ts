@@ -1,5 +1,5 @@
 /**
- * Grid reorder model (SP-140-7 §7e, TODO item 7.5).
+ * Grid reorder model (SP-140-7 §7e).
  *
  * Dragging a screen card to a new position persists the README manifest's
  * `Screens:` listing order (manifest-level, human-authored curation). Pure

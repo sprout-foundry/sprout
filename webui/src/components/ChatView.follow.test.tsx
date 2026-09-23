@@ -1,9 +1,8 @@
 // @ts-nocheck
 /**
- * SP-140-10b — live visibility while the agent is working.
+ * Live visibility while the agent is working.
  *
- * Pins the Chat's streaming-visibility contract (the gripe "content was
- * never visible even though it was doing things"):
+ * Pins the Chat's streaming-visibility contract:
  *
  * - while the user is at the bottom, `followOutput` resolves to 'smooth',
  *   so appended (streaming) messages keep the latest message in view;
@@ -218,7 +217,7 @@ function rerenderMessages(messages: Message[]) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('ChatView streaming visibility (SP-140-10b)', () => {
+describe('ChatView streaming visibility', () => {
   it('at the bottom, followOutput is smooth so appended messages stay in view', () => {
     renderChat([message('m1', 'first'), message('m2', 'second')]);
     expect(virtuoso.followOutput?.(true)).toBe('smooth');

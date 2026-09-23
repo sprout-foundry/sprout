@@ -10,7 +10,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// SP-140-5 §5c — drift direction core (TODO item 5.5)
+// SP-140-5 §5c — drift direction core
 //
 // Drift is signal, not defect: design-ahead (design/ changed, generated/code
 // behind) and code-ahead (implementation changed, semantic layer behind) are

@@ -17,7 +17,7 @@ export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 288;
 
 /**
- * Sidebar width snap presets (P4.5-B). Double-tap/double-click on the
+ * Sidebar width snap presets. Double-tap/double-click on the
  * resize grip cycles through these instead of precision-dragging —
  * coarse-pointer users get real targets, pointer users get a quick
  * toggle. Ordered narrow → standard → wide; cycling wraps. Any manually
@@ -67,7 +67,7 @@ export interface UseSidebarStateReturn {
   setSidebarWidth: (width: number) => void;
   persistSidebarWidth: () => void;
   resetSidebarWidth: () => void;
-  /** Cycle the sidebar width through snap presets (P4.5-B). */
+  /** Cycle the sidebar width through snap presets. */
   cycleSidebarSnap: () => void;
 }
 
@@ -176,7 +176,7 @@ export function useSidebarState(): UseSidebarStateReturn {
   }, []);
 
   /**
-   * Cycle to the next snap preset (P4.5-B). Enters the cycle at the
+   * Cycle to the next snap preset. Enters the cycle at the
    * nearest preset to the current width, then advances; wraps wide→narrow.
    */
   const cycleSidebarSnap = useCallback(() => {

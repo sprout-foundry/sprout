@@ -1,5 +1,5 @@
 /**
- * Sidecar coverage-gap tests (SP-140-3 §3b, TODO item 3.10).
+ * Sidecar coverage-gap tests (SP-140-3 §3b).
  *
  * `sidecar.test.ts` pins the happy paths: a fresh sidecar is reused, a drifted
  * hash regenerates, a malformed sidecar degrades. This file fills the branches

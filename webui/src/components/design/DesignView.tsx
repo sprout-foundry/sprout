@@ -104,7 +104,7 @@ export default function DesignView({
   const [sideTab, setSideTab] = useState<DesignSideTab>('details');
   const [prefill, setPrefill] = useState<string | null>(null);
 
-  // SP-140-10b: remount the agent panel's chat whenever the Agent tab is
+  // Remount the agent panel's chat whenever the Agent tab is
   // shown again. The Agent body starts hidden (Details is the default tab),
   // so the chat's virtuoso scroller measures zero height on first mount and
   // followOutput / jump-to-latest can't work off that stale metric. A

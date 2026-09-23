@@ -95,7 +95,7 @@ interface AppContentProps {
   chatSessions?: ChatSession[];
   activeChatId: string | null;
   perChatCache?: Record<string, PerChatState>;
-  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); SP-140-10c pinning uses the result. */
+  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); per-mode pinning uses the result. */
   onActiveChatChange?: (id: string) => void | Promise<boolean>;
   onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
@@ -199,7 +199,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isForking, setIsForking] = useState(false);
-  // SP-140-10d: the tool id whose inline detail is currently open in the chat.
+  // The tool id whose inline detail is currently open in the chat.
   // Toggled by a tool pill; reset when the active chat session changes.
   const [activeToolDetailId, setActiveToolDetailId] = useState<string | null>(null);
 
@@ -372,7 +372,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // depends on the workspace's own content (a design tree), probed once here so
   // the switcher and the surface agree on what exists. Declared before the
   // chat-tab wiring below: the tab-driven switch handler must record the mode
-  // pin (SP-140-10c), which needs the pinning hook's callbacks in scope.
+  // pin, which needs the pinning hook's callbacks in scope.
   const {
     present: hasDesignTree,
     loading: designPresenceLoading,
@@ -386,7 +386,7 @@ const AppContent: React.FC<AppContentProps> = ({
     select: selectWorkspaceMode,
   } = useWorkspaceMode({ hasDesignTree });
 
-  // SP-140-10c: per-mode chat pinning. A mode switch restores that mode's own
+  // Per-mode chat pinning. A mode switch restores that mode's own
   // conversation (Design with no pin starts a fresh chat, never a Code
   // session); pins are recorded as sessions become active in the mode.
   // onFreshSession passes ONLY the create: creating a chat does not move the
@@ -428,7 +428,7 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferClosable,
     openWorkspaceBuffer,
   });
-  // SP-140-10c: tab-driven switches (clicking a chat tab) must record the
+  // Tab-driven switches (clicking a chat tab) must record the
   // mode pin too — the raw handler would switch without recording, leaving
   // the pin pointing at the previous session.
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange: switchSessionWithModePin });
@@ -838,7 +838,7 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  // SP-140-10d: open/close the inline tool detail from a tool pill. The chat
+  // Open/close the inline tool detail from a tool pill. The chat
   // renders the detail inline (below the message) instead of routing it to
   // the context sidebar, so no mode has to open the sidebar to inspect a
   // tool call.

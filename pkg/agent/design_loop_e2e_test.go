@@ -1,7 +1,6 @@
 //go:build !js
 
-// design_loop_e2e_test.go — the SP-140-5 §5 "End-to-end loop" acceptance test
-// (TODO item 5.9).
+// design_loop_e2e_test.go — the SP-140-5 §5 "End-to-end loop" acceptance test.
 //
 // The AC is the design↔code loop, driven end to end through REAL agent turns:
 //

@@ -1,5 +1,5 @@
 /**
- * Loop-results model (SP-140-6 §6g, TODO item 6.7).
+ * Loop-results model (SP-140-6 §6g).
  *
  * Pure helpers behind the detail pane's "loop results" section: the critique
  * sidecar path for an asset (the webui twin of pkg/agent_tools'

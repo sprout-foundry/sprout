@@ -1,5 +1,5 @@
 /**
- * LoopResults tests (SP-140-6 §6g, TODO item 6.7) plus the pure-model tests
+ * LoopResults tests (SP-140-6 §6g) plus the pure-model tests
  * for loopResults.ts.
  */
 

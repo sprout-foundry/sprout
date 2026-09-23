@@ -1,5 +1,5 @@
 /**
- * designApi coverage-gap tests (SP-140-3 §3f, TODO item 3.10).
+ * designApi coverage-gap tests (SP-140-3 §3f).
  *
  * `designApi.test.ts` covers the happy paths of the inventory/read/write half
  * and the pure parsers. This file fills the branches it leaves open — the

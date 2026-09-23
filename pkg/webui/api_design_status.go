@@ -1,6 +1,6 @@
 //go:build !js
 
-// Design status endpoint — SP-140-6 §6b (TODO item 6.2).
+// Design status endpoint — SP-140-6 §6b.
 //
 // GET /api/design/status is the one read-only design endpoint (the spec's
 // deliberate amendment to SP-140-3 §3f's zero-endpoint preference: findings/

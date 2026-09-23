@@ -1,5 +1,5 @@
 /**
- * pinPlacement bridge tests (SP-140-6 §6e, TODO item 6.5).
+ * pinPlacement bridge tests (SP-140-6 §6e).
  *
  * The arm/point CustomEvent bridge and the card-badge count helper: pure
  * window-event behavior, testable without components.

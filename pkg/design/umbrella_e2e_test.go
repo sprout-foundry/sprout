@@ -1,7 +1,7 @@
 //go:build !js
 
-// umbrella_e2e_test.go — the SP-140 umbrella end-to-end validation (TODO item
-// 5.11), the FINAL item of the Design Workspace feature.
+// umbrella_e2e_test.go — the SP-140 umbrella end-to-end validation: one
+// continuous, hermetic run of the umbrella acceptance criteria.
 //
 // The parent acceptance criteria (roadmap/SP-140-design-workspace.md,
 // "Acceptance criteria (umbrella)") are validated here as ONE continuous,

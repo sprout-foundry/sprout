@@ -1,5 +1,5 @@
 /**
- * Conflict model + banner tests (SP-140-7 §7b, TODO item 7.2).
+ * Conflict model + banner tests (SP-140-7 §7b).
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';

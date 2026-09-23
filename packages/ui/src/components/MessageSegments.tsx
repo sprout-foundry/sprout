@@ -13,7 +13,7 @@ export interface MessageSegmentsProps {
   /** Returns the status of a tool execution by ID, used to show footnote vs pill. */
   getToolStatus?: (toolId: string) => string | undefined;
   /**
-   * Tool id whose inline detail block is currently open (SP-140-10d). When
+   * Tool id whose inline detail block is currently open. When
    * set, the matching tool pill is marked aria-expanded with aria-controls
    * pointing at the block (`tool-detail-${toolId}`). Undefined = none open.
    */
@@ -69,7 +69,7 @@ const getShortToolName = (toolName: string): string => {
 };
 
 /**
- * ARIA toggle attributes for a tool pill (SP-140-10d). Returns the
+ * ARIA toggle attributes for a tool pill. Returns the
  * aria-expanded / aria-controls pair for a pill that controls the inline
  * detail block, or undefined for pills that are not tool toggles.
  *

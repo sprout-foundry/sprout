@@ -261,7 +261,7 @@ describe('DesignView side column (§6f rework: Details | Agent tabs)', () => {
 });
 
 /**
- * SP-140-10b — full-height agent panel + live visibility while working.
+ * Full-height agent panel + live visibility while working.
  *
  * The height chain is pinned as a CSS contract (jsdom does not compute
  * layout): every link from .design-shell-body down to the chat root is
@@ -270,7 +270,7 @@ describe('DesignView side column (§6f rework: Details | Agent tabs)', () => {
  * pin the remount that guarantees the chat's virtuoso scroller measures
  * with real height (it mounts inside the hidden Details-default tab).
  */
-describe('DesignView agent panel height chain (SP-140-10b)', () => {
+describe('DesignView agent panel height chain', () => {
   const chatProps = { inputValue: '', onSendMessage: vi.fn(), onInputChange: vi.fn() };
 
   it('remounts the agent panel on each Details→Agent flip (fresh full-height metrics)', () => {

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Design↔code sync, analyze half (SP-140-5 §5b, TODO item 5.3).
+// Design↔code sync, analyze half (SP-140-5 §5b).
 //
 // This file is the pure analysis core of the `design_sync` tool: it takes the
 // touched UI code files (their paths and current bytes) plus the design/ tree
@@ -1291,7 +1291,7 @@ func safeDeltaCount(r *SyncReport) int {
 }
 
 // -----------------------------------------------------------------------------
-// Apply half — SP-140-5 §5b apply mode (TODO item 5.4)
+// Apply half — SP-140-5 §5b apply mode
 // -----------------------------------------------------------------------------
 //
 // The apply half is the pure planning core for `design_sync` mode=apply. It

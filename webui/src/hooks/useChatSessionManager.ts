@@ -54,7 +54,7 @@ export interface UseChatSessionManagerReturn {
   /**
    * Switch the active chat session. Resolves `true` when the switch
    * took effect (or the chat was already active), `false` when it failed
-   * or was superseded by a newer switch. SP-140-10c boot restore uses the
+   * or was superseded by a newer switch. Boot restore uses the
    * result to fall back to a fresh chat when a persisted pin is stale.
    */
   handleActiveChatChange: (id: string) => Promise<boolean>;
@@ -134,7 +134,7 @@ export function useChatSessionManager({
         }
       }
       setState((prev) => {
-        // SP-140-10c: don't adopt this chat's transcript when the active chat
+        // Don't adopt this chat's transcript when the active chat
         // moved on while we were fetching (a design-mode boot switch runs
         // concurrently with this hook — its list refresh resolves later).
         // Showing messages for a chat the user isn't in desyncs the transcript
@@ -215,8 +215,8 @@ export function useChatSessionManager({
       try {
         const response = await switchChatSession(id);
         // Bail if user switched to yet another chat while we were loading.
-        // Report `false` so callers waiting on the switch (boot restore,
-        // SP-140-10c) know it never landed and can fall back.
+        // Report `false` so callers waiting on the switch (boot restore)
+        // know it never landed and can fall back.
         if (activeChatIdRef.current !== switchId) return false;
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
           .filter((m) => m.role === 'user' || m.role === 'assistant')

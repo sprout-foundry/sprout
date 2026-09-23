@@ -15,7 +15,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// SP-140-5 §5c — drift direction at the tool boundary (TODO item 5.5)
+// SP-140-5 §5c — drift direction at the tool boundary
 //
 // The AC: "design-ahead and code-ahead states report distinct rows with
 // distinct remedies in design_assets output." These tests assert that at the

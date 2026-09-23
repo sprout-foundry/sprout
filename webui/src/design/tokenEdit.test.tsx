@@ -1,5 +1,5 @@
 /**
- * Token editing tests (SP-140-7 §7c, TODO item 7.3): the surgical DTCG model
+ * Token editing tests (SP-140-7 §7c): the surgical DTCG model
  * and the TokenValueEditor component.
  */
 

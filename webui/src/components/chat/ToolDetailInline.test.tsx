@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SP-140-10d: tests for the inline tool details that replace the ContextPanel
+ * Tests for the inline tool details that replace the ContextPanel
  * dependency when a tool pill is clicked in the chat. Pins the contract:
  *   - Renders an accessible region labelled for the tool.
  *   - Escape collapses and returns focus to the controlling pill (a11y).

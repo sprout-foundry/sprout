@@ -11,7 +11,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // SP-140-4 §4b acceptance — seeded fixtures trip each consistency rule with the
-// RIGHT SEVERITY (TODO item 4.9).
+// RIGHT SEVERITY.
 //
 // The per-rule tests live beside their rule packs (consistency_test.go for the
 // flow/wireframe + README rules, inventory_rules_test.go for token usage /

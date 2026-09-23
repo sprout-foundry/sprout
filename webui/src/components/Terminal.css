@@ -13,7 +13,7 @@
   transition: height 200ms var(--ease-out);
 }
 
-/* P4.5: the terminal portals to document.body (outside #root's UI-Size
+/* The terminal portals to document.body (outside #root's UI-Size
  * transform — see Terminal.tsx) but must still PAINT at the UI size.
  * The wrapper here carries the same paint scale as #root via --ui-scale
  * (kept in sync by hooks/useUIScale.ts). #root's transform-origin is
@@ -50,7 +50,7 @@
   /* NO safe-area padding on the portal: any inset band paints in
    * --bg-secondary (lighter gray) under the console's near-black
    * (#05070d) — that color seam is the persistent "slight margin
-   * around the terminal" (2026-09-10, physical iPad; the simulator's
+   * around the terminal" (physical iPad; the simulator's
    * rendering hid it twice). The home-indicator clearance lives INSIDE
    * the console host's own black surface instead — see
    * NativeTerminalConsole's padding, which includes the inset. */
@@ -69,8 +69,8 @@
 
 /* ── Native console host (studio dist) ─────────────────────────────
  * REAL CSS, not utility classes: the shipped dist contains NO Tailwind
- * utilities (verified 2026-09-10: zero .flex-1/.min-h-0/.h-full rules
- * in the built css) — the previous `flex min-h-0 flex-1 flex-col` and
+ * utilities (zero .flex-1/.min-h-0/.h-full rules in the built css) —
+ * the previous `flex min-h-0 flex-1 flex-col` and
  * `h-full w-full bg-[#05070d]` class strings compiled in DEV but were
  * INERT in the app, leaving the console host transparent: its 6/8px
  * padding showed the container's gray through as a ~5px frame around
@@ -122,7 +122,7 @@
   top: 0;
   left: 0;
   right: 0;
-  /* Touch-large hit area (P4.5): 6px is a mouse target; fingers need a
+  /* Touch-large hit area: 6px is a mouse target; fingers need a
    * real grab zone. 28px on coarse pointers, centered on the seam
    * (bleeds into both neighbors; terminal content scrolls under it).
    * touch-action:none is REQUIRED for pointer-drag on touch — without

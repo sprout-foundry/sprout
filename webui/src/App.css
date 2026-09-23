@@ -344,7 +344,7 @@ body {
   transition: padding-bottom 200ms var(--ease-out);
 }
 
-/* P4.5 (user request 2026-09-10): on the touch-large band (tablets —
+/* Touch-large band (tablets —
  * coarse pointer wider than the phone breakpoint), give the app shell
  * breathing room at the top so the first row of chrome doesn't sit
  * jammed against the screen edge / status bar area. Scoped to the
@@ -2503,7 +2503,7 @@ button.primary.success {
   line-height: 1.4;
 }
 
-/* ── UI Size (P4.5 option C) — density control ────────────────────
+/* ── UI Size — density control ────────────────────────────────────
  *
  * data-ui-scale is set on <html> by hooks/useUIScale.ts (persisted in
  * localStorage; first-run heuristic defaults tablets to large).
@@ -2512,17 +2512,16 @@ button.primary.success {
  * imported by App.tsx AFTER index.tsx imports index.css, and the
  * attribute selector [data-ui-scale] ties with :root on specificity
  * (0,1,0), so file order decides. In index.css the :root token
- * definitions below always won and the scale never applied (verified
- * on-device: no visible difference on the iPad). Equal-specificity
- * order is load-bearing here; do not move without re-verifying.
+ * definitions below always won and the scale never applied.
+ * Equal-specificity order is load-bearing here; do not move without
+ * re-verifying.
  *
  * The scale multiplies the --text-* and --space-* tokens defined on
  * :root above. Pixel-quantized (+/- 1px) so text stays crisp and
  * layout shifts stay predictable.
  *
- * Spread widened 2026-09-10 after on-device feedback: the original
- * ~8% Large step "didn't feel very large". Compact ~0.86x, Large
- * ~1.21x — each step is now clearly visible at arm's length.
+ * Spread: Compact ~0.86x, Large ~1.21x — each step clearly visible at
+ * arm's length.
  */
 [data-ui-scale='compact'] {
   --text-xs: 11px;
@@ -2598,10 +2597,10 @@ button.primary.success {
   height: calc(100% / var(--ui-scale, 1));
 }
 
-/* ── Scale application (P4.5) ─────────────────────────────────────
+/* ── Scale application ────────────────────────────────────────────
  *
  * transform: scale() on #root — NOT zoom. Two zoom attempts failed
- * empirically (verified by headless-browser screenshot 2026-09-10):
+ * empirically:
  *  - zoom on <html> scales the initial containing block → media
  *    queries + innerWidth shrink → the app flips into tablet/mobile
  *    layout bands ("much bigger but layout broken").

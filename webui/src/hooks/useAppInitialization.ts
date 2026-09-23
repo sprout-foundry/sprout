@@ -46,10 +46,10 @@ export interface UseAppInitializationOptions {
   setState: AppStoreSetState;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
-  /** SP-140-10c: create a fresh (empty) chat session; returns the new session id, or null. */
+  /** Create a fresh (empty) chat session; returns the new session id, or null. */
   createFreshChat?: () => Promise<string | null>;
   /**
-   * SP-140-10c: switch the active chat to a session id (loads its messages).
+   * Switch the active chat to a session id (loads its messages).
    * Resolves `true` when the switch took effect (or the chat was already
    * active), `false` when it failed or was superseded — boot uses the result
    * to fall back to a fresh chat when a persisted design pin is stale.
@@ -334,7 +334,7 @@ export function useAppInitialization({
           debugLog('[startup] workspace check failed:', error);
         }
 
-        // SP-140-10c: settle the chat list + backend active chat BEFORE the
+        // Settle the chat list + backend active chat BEFORE the
         // boot-time active-chat decision below. The design-mode restore /
         // fresh-start switches the active chat; if the list load is still in
         // flight it can race that switch (the fresh chat would be missing
@@ -347,10 +347,9 @@ export function useAppInitialization({
           debugLog('[startup] chat session load failed:', error);
         }
 
-        // SP-140-10c: a persisted Design mode boots into its own session pin
-        // — or a fresh session — and never falls back to the cross-mode (Code)
-        // "most recent non-empty" restore (the dogfood gripe: switching to
-        // Design mode still showed the Code conversation). The switch goes
+        // A persisted Design mode boots into its own session pin — or a fresh
+        // session — and never falls back to the cross-mode (Code) "most
+        // recent non-empty" restore. The switch goes
         // through the chat-session path AppContent consumes (switchToChat),
         // not the agent-session restore flow — the two id spaces must not be
         // mixed.

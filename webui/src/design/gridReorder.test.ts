@@ -1,5 +1,5 @@
 /**
- * Drag gesture tests (SP-140-7 §7e, TODO item 7.5): pin drag persisting `at`
+ * Drag gesture tests (SP-140-7 §7e): pin drag persisting `at`
  * coordinates, and grid reorder persisting manifest order.
  */
 

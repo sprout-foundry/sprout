@@ -303,7 +303,7 @@
   color: var(--text-tertiary);
 }
 
-/* ── SP-140-10d: inline tool detail ───────────────────────────────
+/* ── Inline tool detail ──────────────────────────────────────────
    The block ToolDetailInline renders directly under a tool pill row in
    the chat transcript. It replaces the retired ContextPanel deep-link,
    so it must read in every mode — design included. The body sections

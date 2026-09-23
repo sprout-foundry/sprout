@@ -6,9 +6,9 @@ import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {
   message: Message;
-  /** SP-140-10d: the tool whose inline detail is open (at most one per transcript). */
+  /** The tool whose inline detail is open (at most one per transcript). */
   activeToolDetail?: ToolExecution | null;
-  /** SP-140-10d: toggle the inline detail (re-press collapses; another pill swaps). */
+  /** Toggle the inline detail (re-press collapses; another pill swaps). */
   onToolDetailToggle?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
   /**

@@ -10,7 +10,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// design_brief core tests (SP-140-5 §5g, TODO item 5.8)
+// design_brief core tests (SP-140-5 §5g)
 //
 // These tests cover the pure, read-only core in pkg/design/brief.go:
 // BuildScreenBrief, the summary/full depths, every brief field populated from a

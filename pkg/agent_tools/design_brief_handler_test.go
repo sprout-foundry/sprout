@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// design_brief handler tests (SP-140-5 §5g, TODO item 5.8)
+// design_brief handler tests (SP-140-5 §5g)
 //
 // The pure brief core is unit tested in pkg/design/brief_test.go. These tests
 // cover the ToolHandler seam: definition/validate, argument resolution (the

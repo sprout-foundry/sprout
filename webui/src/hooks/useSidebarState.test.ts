@@ -315,7 +315,7 @@ describe('useSidebarState', () => {
       expect(localStorage.getItem('sprout-sidebar-width')).toBe(String(SIDEBAR_DEFAULT_WIDTH));
     });
 
-    // ── P4.5-B: snap presets ───────────────────────────────────────────
+    // ── Snap presets ────────────────────────────────────────────────
 
     it('cycleSidebarSnap advances through presets in order and wraps', () => {
       localStorage.setItem('sprout-sidebar-width', '232'); // narrow

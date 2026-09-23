@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * UI Size (P4.5 option C) — a persisted, user-facing density control.
+ * UI Size — a persisted, user-facing density control.
  *
  * Scales the entire webui two ways at once:
  *  1. CSS `zoom` on <html> — multiplies EVERYTHING (all px values,
@@ -48,7 +48,7 @@ export function isUIScale(v: unknown): v is UIScale {
 }
 
 /**
- * First-run heuristic (P4.5 option A): coarse pointer (finger as the
+ * First-run heuristic: coarse pointer (finger as the
  * primary input) on a viewport wider than the 768px phone breakpoint —
  * the iPad band. Phone widths keep default (their layout is chat-first
  * sheets; large would waste the small canvas) and pointer-fine devices

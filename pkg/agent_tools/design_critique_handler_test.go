@@ -18,13 +18,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// design_critique handler (SP-140-4 §4a, TODO item 4.1 — tool core)
+// design_critique handler (SP-140-4 §4a — tool core)
 //
 // Scope: rendering the target, attaching the image via the SP-137 path, the
 // structured findings shape {target, area, severity, note, suggestion}, and the
 // derived-artifact PNG under design/.cache/renders/ with its provenance header.
 //
-// Out of scope here (separate TODO items): cache-hit/render counting (4.3),
+// Out of scope here: cache-hit/render counting (4.3),
 // consistency rule packs (4.4/4.5), feedback consumption (4.7).
 //
 // Item 4.2 (non-vision degradation → static findings, visual:false) is covered
@@ -733,7 +733,7 @@ func TestDesignCritiqueHandler_EmptyFindingsShape(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Non-vision degradation — static findings (SP-140-4 §4a, TODO item 4.2)
+// Non-vision degradation — static findings (SP-140-4 §4a)
 //
 // AC: "Non-vision scripted client: design_critique returns visual:false static
 // findings, no error." These tests pin that a run with no reachable vision tier

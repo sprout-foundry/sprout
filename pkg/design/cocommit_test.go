@@ -15,7 +15,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// SP-140-5 §5f — Git: one commit carries both sides (TODO item 5.7)
+// SP-140-5 §5f — Git: one commit carries both sides
 //
 // The co-commit rule is *baked-in process*, so it gets a git-fixture test, not
 // just prose: on a throwaway repo this test drives the skill-driven loop end to

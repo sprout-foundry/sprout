@@ -1,6 +1,6 @@
 // Regression: the diff viewer must not constantly rebuild itself.
 //
-// Bug (fixed 2026-09-01): `.workspace-tab` sized to its content inside the
+// Root cause: `.workspace-tab` sized to its content inside the
 // row-flex `.editor-pane-host`, and `.workspace-diff-merge-wrapper` had no
 // height bound. The merge wrapper's measured width therefore depended on
 // the rendered diff mode (unified content ≈ 604px, side-by-side ≈ 519px),

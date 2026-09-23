@@ -1,5 +1,5 @@
 /**
- * SP-140-10c — per-mode conversation pinning.
+ * Per-mode conversation pinning.
  *
  * Covers the pin store (write/read, corrupt-storage tolerance), the hook
  * (mode-switch restore rules + pin recording), and the boot-path decision

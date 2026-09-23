@@ -13,7 +13,7 @@ export interface ToolDetailInlineProps {
 }
 
 /**
- * Inline tool-detail block (SP-140-10d). Rendered directly below the pill row
+ * Inline tool-detail block. Rendered directly below the pill row
  * in a chat message — it replaces the old "pill click -> ContextPanel
  * highlight" deep-link. Shows the tool's args / status / output / duration /
  * subagent prompt, reusing the shared ToolDetailBody so it never diverges from

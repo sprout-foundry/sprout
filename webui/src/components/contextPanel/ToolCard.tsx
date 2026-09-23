@@ -47,7 +47,7 @@ interface ToolCardProps {
 /**
  * The expandable detail body for a tool execution (Task / Call / Response plus
  * the truncation notice). Shared by ToolCard (ContextPanel) and ToolDetailInline
- * (chat) so the two renderings never diverge (SP-140-10d).
+ * (chat) so the two renderings never diverge.
  */
 export function ToolDetailBody({ tool }: { tool: ToolExecution }) {
   const isSub = isSubagentTool(tool);

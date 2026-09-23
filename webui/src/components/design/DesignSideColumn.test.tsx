@@ -66,7 +66,7 @@ describe('DesignSideColumn', () => {
 });
 
 /**
- * SP-140-10a — RTL-aware side column placement.
+ * RTL-aware side column placement.
  *
  * The component stays direction-agnostic (the DOM contract is identical under
  * dir="rtl"); the direction logic lives in DesignView.css as logical
@@ -76,7 +76,7 @@ describe('DesignSideColumn', () => {
  * cannot compute logical styles (or apply media queries), so the placement
  * contract is asserted against the CSS source itself.
  */
-describe('DesignSideColumn — RTL placement (SP-140-10a)', () => {
+describe('DesignSideColumn — RTL placement', () => {
   const css = fs.readFileSync(path.resolve(__dirname, 'DesignView.css'), 'utf8');
 
   /** The base (non-media-query) `.design-side-column` rule body. */

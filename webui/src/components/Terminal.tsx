@@ -284,7 +284,7 @@ function Terminal({
   /* ---- Render ---- */
   // Portaled to document.body: the terminal is VIEWPORT chrome (fixed to
   // the real viewport bottom), and must live OUTSIDE #root's UI-Size
-  // transform (P4.5). Inside it, three classes of breakage: fixed
+  // transform. Inside it, three classes of breakage: fixed
   // positioning resolves against the scaled box (ghost offset from the
   // real viewport bottom), JS-set px heights mix logical/real numbers,
   // and xterm.js mis-measures char cells under ancestor transforms

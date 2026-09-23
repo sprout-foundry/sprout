@@ -1,5 +1,5 @@
 /**
- * ScreensGrid co-editing integration (SP-140-7 §7b, TODO item 7.2).
+ * ScreensGrid co-editing integration (SP-140-7 §7b).
  *
  * Drives the real event bridge: an agent-file-changed event under the held
  * buffer fires the banner; Keep mine forces the §7a write (asserted on the

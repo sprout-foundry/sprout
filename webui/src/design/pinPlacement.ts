@@ -1,5 +1,5 @@
 /**
- * Pin-placement bridge (SP-140-6 §6e, TODO item 6.5).
+ * Pin-placement bridge (SP-140-6 §6e).
  *
  * The "Add feedback" affordance lives in the detail pane; the rendered
  * preview (and its pin layer) lives in the Screens tab body. Placement is

@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Design↔code sync, screen-brief half (SP-140-5 §5g, TODO item 5.8).
+// Design↔code sync, screen-brief half (SP-140-5 §5g).
 //
 // This file is the pure, read-only core of the `design_brief` tool: given a
 // screen name (a wireframe stem) and the workspace root, it reads the design/

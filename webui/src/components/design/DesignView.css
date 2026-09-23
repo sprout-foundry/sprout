@@ -11,7 +11,7 @@
 .design-view {
   display: flex;
   flex-direction: column;
-  /* SP-140-10b: the surface is a flex column (health strip + view), so the
+  /* The surface is a flex column (health strip + view), so the
    * view takes the REMAINING height as a flex child instead of a 100% that
    * only resolves when the parent's height is definite. Every link in the
    * chain .main-content.design-shell → .design-shell-body → .design-surface
@@ -1309,7 +1309,7 @@
   flex: 0 0 min(420px, 36vw);
   min-width: 0;
   min-height: 0;
-  /* SP-140-10a: logical property — the column sits at the end of the reading
+  /* Logical property — the column sits at the end of the reading
    * flow (far right under LTR, far left under dir="rtl"), so its border
    * faces the content on the inline-start side in either direction. */
   border-inline-start: 1px solid var(--border-default);
@@ -1389,7 +1389,7 @@
 }
 
 /* Mobile: the column overlays the surface instead of squeezing it.
- * SP-140-10a: logical insets — the overlay pins to the inline-end edge
+ * Logical insets — the overlay pins to the inline-end edge
  * (right under LTR, left under dir="rtl"). */
 @media (max-width: 768px) {
   .design-side-column {

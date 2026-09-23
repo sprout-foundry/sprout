@@ -143,7 +143,7 @@ describe('DesignWorkspaceProvider', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §6a live tree (SP-140-6, TODO item 6.1)
+// §6a live tree (SP-140-6)
 // ---------------------------------------------------------------------------
 
 describe('DesignWorkspaceProvider live tree', () => {

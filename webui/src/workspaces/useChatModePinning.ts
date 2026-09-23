@@ -1,11 +1,10 @@
 /**
- * Per-mode chat session pinning (SP-140-10c).
+ * Per-mode chat session pinning.
  *
  * Each workspace mode (Code, Design) pins its own chat session so a mode
  * switch restores that mode's conversation instead of sharing one chat
- * across modes (the dogfood gripe: "switching to Design mode still showed
- * my Code conversation"). Design mode with no pin starts a fresh
- * conversation — it never resurrects a Code session.
+ * across modes. Design mode with no pin starts a fresh conversation —
+ * it never resurrects a Code session.
  *
  * The pin map is stored per instance + UI context, exactly like the
  * persisted workspace mode (`workspaceModeStorageKey`), as
@@ -15,7 +14,7 @@
  * failed read/write degrades to the un-pinned defaults and never throws
  * into the shell.
  *
- * Wiring contract (what AppContent passes — SP-140-10c):
+ * Wiring contract (what AppContent passes):
  * - `onSwitchSession` → the chat-session switch path (`onActiveChatChange`).
  * - `onFreshSession` → ONLY the create call (`onCreateChat`): creating a chat
  *   does not move the active chat, so `restoreFreshSession` performs the
@@ -91,7 +90,7 @@ export interface BootRestoreDecision {
 }
 
 /**
- * The boot-path decision (SP-140-10c): a persisted Design mode restores the
+ * The boot-path decision: a persisted Design mode restores the
  * design pin — or stays fresh when unpinned — instead of the cross-mode
  * "most recent non-empty" fallback. A persisted Code mode (or an unset
  * mode) keeps the existing behavior. Pure, so the init hook and the unit

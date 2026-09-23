@@ -83,7 +83,7 @@ function EditorBreadcrumb({
     if (!filePath || !filePath.includes('/')) return null;
 
     // Display relative to the workspace when possible — the full machine
-    // path is noise (and post-LSP-fix buffer paths are absolute).
+    // path is noise (and LSP buffer paths are absolute).
     const displayPath = relativizePath(filePath, cwd);
     const parts = displayPath.split('/').filter(Boolean);
     if (parts.length < 2) return null;

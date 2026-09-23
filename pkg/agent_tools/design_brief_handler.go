@@ -12,7 +12,7 @@ import (
 )
 
 // designBriefHandler implements ToolHandler for the design_brief tool
-// (SP-140-5 §5g, TODO item 5.8). It is the "brief whenever building a screen"
+// (SP-140-5 §5g). It is the "brief whenever building a screen"
 // step of the loop (§5d): the read-only contract an implementing agent reads
 // before it builds a screen.
 //

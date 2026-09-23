@@ -324,8 +324,8 @@ function AppInner() {
     setIsTablet,
     setState,
     handleReconnect,
-    // SP-140-10c: when the persisted workspace mode is Design and that mode
-    // has no pinned chat, boot into a fresh Design chat instead of the most
+    // When the persisted workspace mode is Design and that mode has no
+    // pinned chat, boot into a fresh Design chat instead of the most
     // recent Code session. Switch/pin via the existing chat manager path —
     // the chat-session id space, never the agent-session restore flow.
     // The switch result (did it take effect?) drives the stale-pin fallback
@@ -436,8 +436,8 @@ function AppInner() {
                         onSectionChange={setSelectedSection}
                         onSidebarWidthChange={setSidebarWidth}
                         onSidebarWidthPersist={persistSidebarWidth}
-                        // P4.5-B: double-tap/double-click on the grip cycles
-                        // snap presets (narrow → standard → wide, wraps) instead
+                        // Double-tap/double-click on the grip cycles snap
+                        // presets (narrow → standard → wide, wraps) instead
                         // of only resetting to default.
                         onSidebarWidthReset={cycleSidebarSnap}
                         stats={stats}

@@ -58,18 +58,9 @@ const KNOWN_STATUSES = new Set(['draft', 'review', 'ready']);
 
 export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
   const workspace = useDesignWorkspace();
-  const wireframes = useMemo(
-    () => workspace?.inventory?.wireframes ?? [],
-    [workspace?.inventory?.wireframes],
-  );
-  const screens = useMemo(
-    () => workspace?.inventory?.screens ?? [],
-    [workspace?.inventory?.screens],
-  );
-  const feedback = useMemo(
-    () => workspace?.inventory?.feedback ?? [],
-    [workspace?.inventory?.feedback],
-  );
+  const wireframes = useMemo(() => workspace?.inventory?.wireframes ?? [], [workspace?.inventory?.wireframes]);
+  const screens = useMemo(() => workspace?.inventory?.screens ?? [], [workspace?.inventory?.screens]);
+  const feedback = useMemo(() => workspace?.inventory?.feedback ?? [], [workspace?.inventory?.feedback]);
   const selected = workspace?.selected ?? null;
 
   // Open-annotation count per wireframe stem. A feedback file is keyed
@@ -154,9 +145,7 @@ export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
         </div>
       )}
 
-      {showScreens ? (
-        <div className="sidebar-icon-rail-divider" role="separator" aria-label="Library" />
-      ) : null}
+      {showScreens ? <div className="sidebar-icon-rail-divider" role="separator" aria-label="Library" /> : null}
 
       <div
         className="design-rail-group"

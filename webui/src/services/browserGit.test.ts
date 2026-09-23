@@ -62,7 +62,7 @@ vi.mock('isomorphic-git/http/web', () => ({ default: {} }));
 
 // ── Imports ──────────────────────────────────────────────────────────
 
-import { configureBrowserGit, executeGitOp } from './browserGit';
+import { configureBrowserGit, executeGitOp, __resetBrowserGitForTest } from './browserGit';
 
 describe('executeGitOp dispatch', () => {
   beforeEach(() => {
@@ -230,5 +230,44 @@ describe('git status with no commits (unborn HEAD)', () => {
     expect(result.status.untracked).toEqual([]);
     expect(result.status.staged).toEqual([]);
     expect(result.status.modified).toEqual([]);
+  });
+});
+
+// ── Boot-time (not yet wired) state ─────────────────────────────────
+//
+// The git panel's initial status/branches load runs before the WASM shell
+// calls configureBrowserGit (config is still null). The read-only ops must
+// return an honest empty-repo response (HTTP 200, in_git_repo:false) rather
+// than throw "browserGit not configured" (which the handler surfaces as a
+// 500 → the panel's "Failed to load git status" console error). The ?repo=
+// import's refresh re-fetches the real status once browser git is wired.
+
+describe('executeGitOp before configureBrowserGit (boot state)', () => {
+  it('status returns an honest empty-repo response instead of throwing', async () => {
+    __resetBrowserGitForTest();
+    const result = (await executeGitOp('status')) as {
+      message: string;
+      in_git_repo: boolean;
+      status: { branch: string; in_git_repo: boolean };
+      files: unknown[];
+    };
+    expect(result.message).toBe('success');
+    expect(result.in_git_repo).toBe(false);
+    expect(result.status.in_git_repo).toBe(false);
+    expect(result.files).toEqual([]);
+    // Must not have touched the git helpers.
+    expect(mockGitStatusMatrix).not.toHaveBeenCalled();
+  });
+
+  it('branches returns an honest empty list instead of throwing', async () => {
+    __resetBrowserGitForTest();
+    const result = (await executeGitOp('branches')) as {
+      message: string;
+      current: string;
+      branches: string[];
+    };
+    expect(result.message).toBe('success');
+    expect(result.current).toBe('');
+    expect(result.branches).toEqual([]);
   });
 });

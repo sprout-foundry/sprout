@@ -26,6 +26,7 @@ import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
 import { debugLog, useLog } from '../utils/log';
+import { decideBootRestore, writeChatModePin } from '../workspaces/useChatModePinning';
 
 interface RecentFile {
   path: string;
@@ -36,13 +37,24 @@ export interface UseAppInitializationOptions {
   eventsProvider: EventsProvider;
   handleEvent: (event: SproutEvent) => void;
   connectionTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
-  loadChatSessions: () => void;
+  /** Loads the chat list and the backend's active chat. Awaited before the boot-time
+   * active-chat decision so a design-mode restore/fresh start is not clobbered. */
+  loadChatSessions: () => Promise<void>;
   setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setIsTablet: Dispatch<SetStateAction<boolean>>;
   setState: AppStoreSetState;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
+  /** Create a fresh (empty) chat session; returns the new session id, or null. */
+  createFreshChat?: () => Promise<string | null>;
+  /**
+   * Switch the active chat to a session id (loads its messages).
+   * Resolves `true` when the switch took effect (or the chat was already
+   * active), `false` when it failed or was superseded — boot uses the result
+   * to fall back to a fresh chat when a persisted design pin is stale.
+   */
+  switchToChat?: (id: string) => Promise<boolean>;
 }
 
 export function useAppInitialization({
@@ -55,6 +67,8 @@ export function useAppInitialization({
   setIsTablet,
   setState,
   handleReconnect,
+  createFreshChat,
+  switchToChat,
 }: UseAppInitializationOptions): void {
   const log = useLog();
   const apiService = ApiService.getInstance();
@@ -291,9 +305,6 @@ export function useAppInitialization({
         setTimeout(() => loadFiles(), 500);
       }
 
-      // Load initial chat sessions
-      loadChatSessions();
-
       // Restore workspace and session startup state
       const restoreStartupState = async () => {
         try {
@@ -323,59 +334,109 @@ export function useAppInitialization({
           debugLog('[startup] workspace check failed:', error);
         }
 
+        // Settle the chat list + backend active chat BEFORE the
+        // boot-time active-chat decision below. The design-mode restore /
+        // fresh-start switches the active chat; if the list load is still in
+        // flight it can race that switch (the fresh chat would be missing
+        // from the list the load adopts, and the switch's result is only
+        // meaningful once the list has settled). Best-effort: a failure here
+        // must not break the shell — later activity refreshes the list.
         try {
-          const sessionsResponse = await apiService.getSessions('current');
-          const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
-          const currentSessionId = String(sessionsResponse?.current_session_id || '');
-          const currentSession = sessions.find(
-            (item: SessionEntry) => String(item?.session_id || '') === currentSessionId,
-          );
-          const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
+          await loadChatSessions();
+        } catch (error) {
+          debugLog('[startup] chat session load failed:', error);
+        }
 
-          // Cloud mode: the "current" session id points at the most recently
-          // active localStorage-backed conversation, but its transcript is
-          // not loaded into React state on a fresh page load. When that
-          // session has messages, restore it directly so the conversation
-          // reappears after a refresh. (In local mode the backend pre-loads
-          // the current session, so this branch is a no-op.)
-          if (isCloud && currentHasMessages && currentSessionId) {
-            const restored = await apiService.restoreSession(currentSessionId);
-            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
-              window.dispatchEvent(
-                new CustomEvent('sprout:session-restored', {
-                  detail: { messages: restored.messages },
-                }),
-              );
+        // A persisted Design mode boots into its own session pin — or a fresh
+        // session — and never falls back to the cross-mode (Code) "most
+        // recent non-empty" restore. The switch goes
+        // through the chat-session path AppContent consumes (switchToChat),
+        // not the agent-session restore flow — the two id spaces must not be
+        // mixed.
+        const bootRestore = decideBootRestore();
+        if (bootRestore.isDesignMode) {
+          // Fresh design chat: create, SWITCH the active chat to it, then
+          // record it as the design pin. The switch must land before the pin
+          // (and before the user can send) — otherwise the first send pins
+          // the still-active Code session into the design slot.
+          const startFreshDesignChat = async () => {
+            const freshId = createFreshChat ? await createFreshChat() : null;
+            if (freshId && switchToChat && (await switchToChat(freshId))) {
+              writeChatModePin('design', freshId);
+              debugLog('[startup] design mode — fresh session:', freshId);
+            } else {
+              debugLog('[startup] design mode, no pin — starting fresh');
             }
-          } else if (!currentHasMessages) {
-            // Auto-restore the most recent non-empty session, but only when
-            // there is no explicit current session pointer. In cloud mode a
-            // `/clear` persists a fresh empty session id as current (see
-            // startNewCloudSession) — that is an intentional "start fresh"
-            // signal, so we must NOT fall back to history and resurrect the
-            // just-cleared conversation. In local mode the backend supplies
-            // the current id, so this only fires when there genuinely is none.
-            const hasExplicitCurrent = !!currentSessionId && !!currentSession;
-            const allowFallback = !isCloud || !hasExplicitCurrent;
-            if (allowFallback) {
-              const restorable = sessions.find(
-                (item: SessionEntry) =>
-                  String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
-              );
-              if (restorable?.session_id) {
-                const restored = await apiService.restoreSession(String(restorable.session_id));
-                if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
-                  window.dispatchEvent(
-                    new CustomEvent('sprout:session-restored', {
-                      detail: { messages: restored.messages },
-                    }),
-                  );
+          };
+          if (bootRestore.designPin && switchToChat) {
+            const switched = await switchToChat(bootRestore.designPin);
+            if (switched) {
+              debugLog('[startup] restored design-mode chat pin:', bootRestore.designPin);
+            } else {
+              // Stale pin (the session was deleted server-side) — boot into a
+              // fresh session rather than a broken active chat.
+              debugLog('[startup] design chat pin is stale — starting fresh:', bootRestore.designPin);
+              await startFreshDesignChat();
+            }
+          } else {
+            await startFreshDesignChat();
+          }
+        } else {
+          // Code mode: existing boot behavior (no cross-mode regression).
+          try {
+            const sessionsResponse = await apiService.getSessions('current');
+            const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
+            const currentSessionId = String(sessionsResponse?.current_session_id || '');
+            const currentSession = sessions.find(
+              (item: SessionEntry) => String(item?.session_id || '') === currentSessionId,
+            );
+            const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
+
+            if (isCloud && currentHasMessages && currentSessionId) {
+              // Cloud mode: the "current" session id points at the most recently
+              // active localStorage-backed conversation, but its transcript is
+              // not loaded into React state on a fresh page load. When that
+              // session has messages, restore it directly so the conversation
+              // reappears after a refresh. (In local mode the backend pre-loads
+              // the current session, so this branch is a no-op.)
+              const restored = await apiService.restoreSession(currentSessionId);
+              if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+                window.dispatchEvent(
+                  new CustomEvent('sprout:session-restored', {
+                    detail: { messages: restored.messages },
+                  }),
+                );
+              }
+            } else if (!currentHasMessages) {
+              // Auto-restore the most recent non-empty session, but only when
+              // there is no explicit current session pointer. In cloud mode a
+              // `/clear` persists a fresh empty session id as current (see
+              // startNewCloudSession) — that is an intentional "start fresh"
+              // signal, so we must NOT fall back to history and resurrect the
+              // just-cleared conversation. In local mode the backend supplies
+              // the current id, so this only fires when there genuinely is none.
+              const hasExplicitCurrent = !!currentSessionId && !!currentSession;
+              const allowFallback = !isCloud || !hasExplicitCurrent;
+              if (allowFallback) {
+                const restorable = sessions.find(
+                  (item: SessionEntry) =>
+                    String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+                );
+                if (restorable?.session_id) {
+                  const restored = await apiService.restoreSession(String(restorable.session_id));
+                  if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+                    window.dispatchEvent(
+                      new CustomEvent('sprout:session-restored', {
+                        detail: { messages: restored.messages },
+                      }),
+                    );
+                  }
                 }
               }
             }
+          } catch (error) {
+            debugLog('[startup] session restore check failed:', error);
           }
-        } catch (error) {
-          debugLog('[startup] session restore check failed:', error);
         }
 
         // Deep-link: ?chat=<session_id> restores a specific conversation.

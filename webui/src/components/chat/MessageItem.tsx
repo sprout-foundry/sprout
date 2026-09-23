@@ -1,11 +1,15 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
 import { BrainCircuit, Bot, GitFork } from 'lucide-react';
 import { memo } from 'react';
+import { ToolDetailInline } from './ToolDetailInline';
 import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {
   message: Message;
-  onToolPillClick?: (toolId: string) => void;
+  /** The tool whose inline detail is open (at most one per transcript). */
+  activeToolDetail?: ToolExecution | null;
+  /** Toggle the inline detail (re-press collapses; another pill swaps). */
+  onToolDetailToggle?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
   /**
    * Status lookup that spans ALL tool executions, not just the current
@@ -50,7 +54,8 @@ interface MessageItemProps {
 
 export const MessageItem = memo(function MessageItem({
   message,
-  onToolPillClick,
+  activeToolDetail,
+  onToolDetailToggle,
   findMatchingToolExecution,
   getToolStatus,
   formatTime,
@@ -188,15 +193,19 @@ export const MessageItem = memo(function MessageItem({
           <MessageSegments
             content={message.content}
             toolRefs={message.toolRefs}
-            onToolRefClick={onToolPillClick}
+            onToolRefClick={onToolDetailToggle}
+            activeToolDetailId={activeToolDetail?.id}
             onToolClick={(toolName) => {
               const matchingTool = findMatchingToolExecution(toolName);
               if (matchingTool) {
-                onToolPillClick?.(matchingTool.id);
+                onToolDetailToggle?.(matchingTool.id);
               }
             }}
             getToolStatus={getToolStatus}
           />
+          {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
+            <ToolDetailInline tool={activeToolDetail} onToggle={onToolDetailToggle ?? (() => undefined)} />
+          )}
         </>
       ) : (
         <MessageContent content={message.content} />

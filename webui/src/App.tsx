@@ -324,6 +324,16 @@ function AppInner() {
     setIsTablet,
     setState,
     handleReconnect,
+    // When the persisted workspace mode is Design and that mode has no
+    // pinned chat, boot into a fresh Design chat instead of the most
+    // recent Code session. Switch/pin via the existing chat manager path —
+    // the chat-session id space, never the agent-session restore flow.
+    // The switch result (did it take effect?) drives the stale-pin fallback
+    // to a fresh chat, and a landed fresh switch is recorded as the pin.
+    createFreshChat: chatManager.handleCreateChat,
+    switchToChat: async (id: string) => {
+      return chatManager.handleActiveChatChange(id);
+    },
   });
 
   // ── Escalation Triggers (cloud mode) ────────────────────────────

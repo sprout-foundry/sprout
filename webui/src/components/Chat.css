@@ -302,3 +302,48 @@
   display: inline-flex;
   color: var(--text-tertiary);
 }
+
+/* ── Inline tool detail ──────────────────────────────────────────
+   The block ToolDetailInline renders directly under a tool pill row in
+   the chat transcript. It replaces the retired ContextPanel deep-link,
+   so it must read in every mode — design included. The body sections
+   (.tool-detail-section, .tool-detail-label, …) are styled by the shared
+   ChatPanel.css; this adds only the block chrome and the header row.
+   Visual language matches .tool-execution / .tool-details. */
+
+.tool-detail-inline {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.tool-detail-inline-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tool-detail-inline .tool-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-detail-inline .tool-duration {
+  margin-left: auto;
+}
+
+/* Self-contained icon rule — the unscoped .tool-icon lives in
+   ContextPanel.css (Code-mode chrome); the inline block must not depend
+   on that stylesheet being loaded. Scoped so it cannot leak onto the
+   panel's own tool cards. */
+.tool-detail-inline .tool-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}

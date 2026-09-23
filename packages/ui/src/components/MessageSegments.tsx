@@ -12,6 +12,12 @@ export interface MessageSegmentsProps {
   onToolRefClick?: (toolId: string) => void;
   /** Returns the status of a tool execution by ID, used to show footnote vs pill. */
   getToolStatus?: (toolId: string) => string | undefined;
+  /**
+   * Tool id whose inline detail block is currently open. When
+   * set, the matching tool pill is marked aria-expanded with aria-controls
+   * pointing at the block (`tool-detail-${toolId}`). Undefined = none open.
+   */
+  activeToolDetailId?: string;
 }
 
 const getToolIcon = (toolName: string): ReactNode => {
@@ -62,7 +68,28 @@ const getShortToolName = (toolName: string): string => {
   return words.slice(0, 2).join(' ');
 };
 
-const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus }) => {
+/**
+ * ARIA toggle attributes for a tool pill. Returns the
+ * aria-expanded / aria-controls pair for a pill that controls the inline
+ * detail block, or undefined for pills that are not tool toggles.
+ *
+ * aria-controls is only emitted while the block is open (it is unmounted when
+ * collapsed, so we never reference a node that isn't in the DOM);
+ * aria-expanded is always present on a tool pill so the disclosure state is
+ * announced either way.
+ */
+const toolPillAria = (
+  toolId: string | undefined,
+  activeToolDetailId: string | undefined,
+): Record<string, string | boolean> | undefined => {
+  if (!toolId) return undefined;
+  const isActive = activeToolDetailId === toolId;
+  return isActive
+    ? { 'aria-expanded': true, 'aria-controls': `tool-detail-${toolId}` }
+    : { 'aria-expanded': false };
+};
+
+const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus, activeToolDetailId }) => {
   let segments: MessageSegment[];
   try {
     segments = parseMessageSegments(stripAnsiCodes(content));
@@ -130,6 +157,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                   }}
                   title={matchingRef.label}
                   aria-label={`View tool: ${matchingRef.label}`}
+                  {...toolPillAria(matchingRef.toolId, activeToolDetailId)}
                 >
                   <Icon size={12} className="tool-footnote-icon" />
                   <span className="tool-footnote-name">{getShortToolName(baseName)}</span>
@@ -161,6 +189,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                   }
                 }}
                 title={matchingRef ? matchingRef.label : segment.summary || segment.toolName}
+                {...toolPillAria(matchingRef?.toolId, activeToolDetailId)}
               >
                 <span className="tool-pill-icon">{getToolIcon(baseName)}</span >
                 <span className="tool-pill-name">{getShortToolName(baseName)}</span >
@@ -225,6 +254,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             }}
             title={ref.label}
             aria-label={`View tool: ${ref.label}`}
+            {...toolPillAria(ref.toolId, activeToolDetailId)}
           >
             {!isDone && <span className="tool-pill-icon">{getToolIcon(baseName)}</span>}
             <Icon size={12} className={isDone ? 'tool-footnote-icon' : 'tool-pill-icon'} />

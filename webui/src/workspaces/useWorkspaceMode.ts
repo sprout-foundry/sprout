@@ -23,7 +23,7 @@ import {
 } from './registry';
 
 /** The UI-context scope, mirroring services/appStatePersistence's rule. */
-function uiContextScope(): string {
+export function uiContextScope(): string {
   if (typeof window === 'undefined') return 'local';
   const path = window.location.pathname || '/';
   return path.startsWith('/ssh/') ? 'ssh' : 'local';

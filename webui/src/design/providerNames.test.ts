@@ -124,8 +124,8 @@ describe('SP-140-1 design tier — no proprietary product names', () => {
   });
 
   it('does not pass vacuously once the design components exist', () => {
-    // SP-140-3 has not landed yet, so the design directories are absent and the
-    // scan is a no-op. Record that explicitly: when the directories appear, the
+    // Workspaces without a design/ tree make the scan a no-op. Record that
+    // explicitly: when the directories appear, the
     // scan must actually read files (guards against a green-but-empty sweep).
     const { rootsPresent, scannedFiles } = scanDesignTier();
     if (rootsPresent) {

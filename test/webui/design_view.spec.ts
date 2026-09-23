@@ -13,14 +13,13 @@
 // not needed: the two stacks use distinct OS-assigned ports, so the shared
 // `webServer` may run alongside this one without interference.
 //
-// Two SP-140-3 AC steps were previously recorded as `test.fixme` because of
-// defects in item 3.5's canvas: node-side handles were all registered as
-// `type="source"` (so React Flow drew no edges and no edge labels), and a node
-// click fired the editor hand-off, which unmounted the canvas and opened a
-// `<path>#L<n>` file that does not exist. Both are fixed and asserted below;
-// the edge-click hand-off carries its line as a number rather than a path
-// fragment. Also covered here: drag persistence (AC 2) and the lazy chunk
-// (AC 5).
+// The canvas defects these AC steps pin: node-side handles were all
+// registered as `type="source"` (so React Flow drew no edges and no edge
+// labels), and a node click fired the editor hand-off, which unmounted the
+// canvas and opened a `<path>#L<n>` file that does not exist. Both are
+// asserted below; the edge-click hand-off carries its line as a number
+// rather than a path fragment. Also covered here: drag persistence (AC 2)
+// and the lazy chunk (AC 5).
 
 import {
   test,

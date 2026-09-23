@@ -45,7 +45,8 @@ function Chat(props: ChatProps): JSX.Element {
     queryProgress = null,
     currentTodos = [],
     subagentActivities: _subagentActivities = [],
-    onToolPillClick,
+    activeToolDetail,
+    onToolDetailToggle,
     onStopProcessing,
     onRetractSteer,
     onChatCleared,
@@ -209,7 +210,8 @@ function Chat(props: ChatProps): JSX.Element {
       return (
         <MessageItem
           message={message}
-          onToolPillClick={onToolPillClick}
+          activeToolDetail={activeToolDetail}
+          onToolDetailToggle={onToolDetailToggle}
           findMatchingToolExecution={findMatchingToolExecution}
           getToolStatus={getToolStatusForMessage}
           formatTime={formatTime}
@@ -222,7 +224,14 @@ function Chat(props: ChatProps): JSX.Element {
         />
       );
     },
-    [onToolPillClick, findMatchingToolExecution, getToolStatusForMessage, formatTime, outputVerbosity],
+    [
+      activeToolDetail,
+      onToolDetailToggle,
+      findMatchingToolExecution,
+      getToolStatusForMessage,
+      formatTime,
+      outputVerbosity,
+    ],
   );
 
   const handleReloadWithoutSSHPath = useCallback(() => {

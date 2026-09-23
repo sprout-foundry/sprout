@@ -115,10 +115,14 @@ describe('TokensTree grouped tree', () => {
     expect(screen.getByTestId('design-token-group-spacing')).toBeTruthy();
   });
 
-  it('renders a row per token with its path and type chip', () => {
+  it('renders color tokens as tiles and other rows with a type chip', () => {
     renderTree();
-    expect(screen.getByTestId('design-token-row-color-color.brand.primary')).toBeTruthy();
-    expect(screen.getByTestId('design-token-type-color-color.brand.primary').textContent).toBe('color');
+    const tile = screen.getByTestId('design-token-row-color-color.brand.primary');
+    expect(tile.className).toContain('design-tokens-tile');
+    // The tile shows the token's short name and value, not the full dotted path.
+    expect(tile.textContent).toContain('primary');
+    // Color tiles carry no type chip — the section title already says Color.
+    expect(tile.querySelector('[data-testid="design-token-type-color-color.brand.primary"]')).toBeNull();
     expect(screen.getByTestId('design-token-type-motion-border.card').textContent).toBe('border');
   });
 
@@ -157,6 +161,12 @@ describe('TokensTree color swatches', () => {
     renderTree();
     expect(screen.getAllByTestId('token-swatch')).toHaveLength(3);
   });
+
+  it('renders the color section as a tile grid', () => {
+    renderTree();
+    const section = screen.getByTestId('design-token-section-color');
+    expect(section.querySelector('.design-tokens-grid')).toBeTruthy();
+  });
 });
 
 describe('TokensTree typography and spacing specimens', () => {
@@ -177,12 +187,19 @@ describe('TokensTree typography and spacing specimens', () => {
     expect(meta.textContent).toContain('w700');
   });
 
-  it('renders a spacing bar sized from the dimension value', () => {
+  it('renders spacing bars on the section shared scale (proportional)', () => {
     renderTree();
-    const row = screen.getByTestId('design-token-row-color-spacing.lg');
-    const bar = row.querySelector('[data-testid="token-space-bar"]') as HTMLElement;
-    expect(bar.style.width).toBe('24px');
-    expect(row.querySelector('[data-testid="token-specimen-spacing"]')!.textContent).toContain('24px');
+    // The color file's spacing section is { sm: 4px, lg: 24px }, so the scale
+    // max is 24 and each bar is a percentage of that.
+    const lg = screen.getByTestId('design-token-row-color-spacing.lg');
+    const lgBar = lg.querySelector('[data-testid="token-space-bar"]') as HTMLElement;
+    expect(lgBar.style.width).toBe('100%');
+
+    const sm = screen.getByTestId('design-token-row-color-spacing.sm');
+    const smBar = sm.querySelector('[data-testid="token-space-bar"]') as HTMLElement;
+    expect(parseFloat(smBar.style.width)).toBeCloseTo((4 / 24) * 100, 1);
+
+    expect(lg.querySelector('[data-testid="token-specimen-spacing"]')!.textContent).toContain('24px');
   });
 
   it('falls back to a plain value line for the remaining charter types', () => {
@@ -288,9 +305,10 @@ describe('TokensTree detail pane and open-file hand-off', () => {
     expect(screen.queryByTestId('design-token-open')).toBeNull();
   });
 
-  it('shows the schema hint before any token is selected', () => {
+  it('shows a one-line hint (no schema wall) before any token is selected', () => {
     renderTree();
-    expect(screen.getByTestId('design-tokens-schema').textContent).toContain('DTCG token schema');
+    expect(screen.getByTestId('design-tokens-hint').textContent).toContain('Select a token');
+    expect(screen.queryByTestId('design-tokens-schema')).toBeNull();
     expect(screen.queryByTestId('design-tokens-token-detail')).toBeNull();
   });
 

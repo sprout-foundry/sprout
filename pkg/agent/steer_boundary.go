@@ -53,6 +53,17 @@ func (d *steerBoundaryDeliverer) deliverOne() bool {
 	if !ok {
 		return false
 	}
+	// Stamp the steer message with the active turn's timestamp as it
+	// enters seed's state — same injection-time rule as the turn's query.
+	// The staged copy stays clean so retraction returns the user's text,
+	// and the stamped bytes become part of the conversation prefix that
+	// later requests replay byte-identically.
+	agent.turnTimestampMu.RLock()
+	turnStamp := agent.turnTimestamp
+	agent.turnTimestampMu.RUnlock()
+	if !turnStamp.IsZero() {
+		content = InjectUserMessageTimestampAt(content, turnStamp)
+	}
 	if !sa.InjectInput(content) {
 		agent.releaseStagedSteer(id)
 		return false

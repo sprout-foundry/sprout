@@ -495,6 +495,33 @@ const TESTIDS = {
   "design-token-saved": "design-token-saved",
   "design-token-conflict": "design-token-conflict",
   "design-token-error": "design-token-error",
+  // SP-140-8 §8b screen workbench (ScreenWorkbench.tsx / ScreenWorkbenchContainer.tsx)
+  "design-workbench": "design-workbench",
+  "design-workbench-header": "design-workbench-header",
+  "design-workbench-not-found": "design-workbench-not-found",
+  "design-workbench-loading": "design-workbench-loading",
+  "design-workbench-error": "design-workbench-error",
+  "design-workbench-render": "design-workbench-render",
+  "design-workbench-status": "design-workbench-status",
+  "design-workbench-status-chip": "design-workbench-status-chip",
+  "design-workbench-feedback": "design-workbench-feedback",
+  "design-workbench-feedback-empty": "design-workbench-feedback-empty",
+  "design-workbench-feedback-resolve": "design-workbench-feedback-resolve",
+  "design-workbench-resolution": "design-workbench-resolution",
+  "design-workbench-open-count": "design-workbench-open-count",
+  "design-workbench-flows": "design-workbench-flows",
+  "design-workbench-flows-empty": "design-workbench-flows-empty",
+  "design-workbench-tokens": "design-workbench-tokens",
+  "design-workbench-tokens-empty": "design-workbench-tokens-empty",
+  "design-workbench-token-link": "design-workbench-token-link",
+  "design-workbench-agent": "design-workbench-agent",
+  "design-workbench-agent-file": "design-workbench-agent-file", // pattern design-workbench-agent-file-${index}
+  "design-workbench-agent-ask": "design-workbench-agent-ask",
+  "design-workbench-annotation-a1": "design-workbench-annotation-a1", // pattern design-workbench-annotation-${annotation.id}
+  "design-workbench-annotation-ask-a1": "design-workbench-annotation-ask-a1", // pattern design-workbench-annotation-ask-${annotation.id}
+  "design-workbench-flow-in-sign-up-open": "design-workbench-flow-in-sign-up-open", // patterns design-workbench-flow-in-${flowName} + ${testid}-open
+  "design-workbench-flow-out-sign-up-open": "design-workbench-flow-out-sign-up-open", // pattern design-workbench-flow-out-${flowName}
+  "design-workbench-token-ref-color.primary": "design-workbench-token-ref-color.primary", // pattern design-workbench-token-ref-${ref.path}
   // SP-140-7 status menu (§7d, ScreenStatusMenu.tsx)
   "design-status-menu-login": "design-status-menu-login", // pattern design-status-menu-${stem}
   "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}

@@ -31,10 +31,28 @@ import type { DesignTab } from './DesignView';
 /** How often the live tree polls while Design mode is active (§6a). */
 export const DESIGN_REFRESH_INTERVAL_MS = 30_000;
 
-/** Every asset path an inventory carries — the selection-liveness set. */
+/**
+ * Every asset path an inventory carries — the selection-liveness set.
+ *
+ * The set spans every per-class array, not just `assets`: a partial
+ * inventory (tests, hosts) may omit `assets`, and wiping a live selection
+ * on every refetch (focus, the 30s tick) would collapse an open screen
+ * workbench back to its empty state (SP-140-8 item 8.2).
+ */
 function inventoryPaths(inventory: DesignInventory | null): Set<string> {
   const paths = new Set<string>();
-  for (const asset of inventory?.assets ?? []) paths.add(asset.path);
+  const groups = [
+    inventory?.assets,
+    inventory?.wireframes,
+    inventory?.screens,
+    inventory?.flows,
+    inventory?.layouts,
+    inventory?.tokenFiles,
+    inventory?.feedback,
+  ];
+  for (const group of groups) {
+    for (const entry of group ?? []) paths.add(entry.path);
+  }
   return paths;
 }
 

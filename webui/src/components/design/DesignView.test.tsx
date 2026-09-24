@@ -20,23 +20,23 @@
  * seams to is the one the annotation resolution lives on.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fs from 'node:fs';
 import path from 'node:path';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SproutAdapterProvider } from '../../contexts/SproutAdapterContext';
 import type * as designApiModule from '../../services/api/designApi';
 import type { DesignInventory } from '../../services/api/types/design';
-import DesignView, { DESIGN_TABS, type DesignTab } from './DesignView';
+import DesignView, { DESIGN_TABS, type DesignChatProps, type DesignTab } from './DesignView';
 import { DesignWorkspaceProvider, useDesignWorkspace } from './DesignWorkspaceContext';
 
 // The shell fetches the inventory itself; a fixture with one asset per class
 // gives the tests real rows to select (the shell-stage stub row is gone).
 vi.mock('../../services/api/designApi', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof designApiModule;
-  const entry = (path: string, kind: string) => ({
-    path,
-    name: path.split('/').pop(),
+  const entry = (assetPath: string, kind: string) => ({
+    path: assetPath,
+    name: assetPath.split('/').pop(),
     kind,
     size: 128,
     modified: 0,
@@ -44,7 +44,7 @@ vi.mock('../../services/api/designApi', async (importOriginal) => {
   });
   const inventory: DesignInventory = {
     exists: true,
-    wireframes: [],
+    wireframes: [entry('wireframes/inbox.svg', 'wireframe')],
     layouts: [],
     screens: [entry('screens/inbox.html', 'screen')],
     flows: [entry('flows/sign-up.mmd', 'flow')],
@@ -59,6 +59,16 @@ vi.mock('../../services/api/designApi', async (importOriginal) => {
 // these tests only assert the payload handoff, so mock it.
 vi.mock('../ChatView', () => ({
   default: () => <div data-testid="mock-chat" />,
+}));
+
+// The workbench's render facet mounts LivePreview; stub it (no iframe preview
+// in jsdom) — its own tests cover the real component.
+vi.mock('../LivePreview', () => ({
+  default: ({ content, fileName }: { content: string; fileName: string }) => (
+    <div data-testid="mock-live-preview" data-file={fileName}>
+      {content}
+    </div>
+  ),
 }));
 
 /**
@@ -90,9 +100,9 @@ function renderWorkspace(props: Partial<React.ComponentProps<typeof DesignView>>
 
   const rendered = render(tree(currentTab));
   return {
-    selectFromSidebar: (path: string | null) => {
+    selectFromSidebar: (target: string | null) => {
       act(() => {
-        select?.(path);
+        select?.(target);
       });
     },
     rerenderTab: (tab: DesignTab) => {
@@ -218,6 +228,85 @@ describe('DesignView shell', () => {
     rerenderTab('screens');
     expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', '');
     expect(screen.getByTestId('design-side-panel-details')).toHaveAttribute('data-idle', 'true');
+  });
+});
+
+/**
+ * SP-140-8 §8b screen workbench — the shell hands the selected screen to the
+ * facet pane (the §8a rail's selection handoff), and the facets keep the
+ * design surfaces in context: the flows facet opens its flow in the canvas,
+ * the tokens facet links the library, and the agent ask prefills the §6f
+ * panel. The tab stays shell-controlled (the surface requests through
+ * `onTabChange`), so the tests rerender with the requested section.
+ */
+describe('DesignView SP-140-8 §8b screen workbench', () => {
+  const FLOW = 'graph LR\n  home -->|landing click| inbox\n  inbox -->|open| sign-up\n';
+  const SCREEN = '<html><body><p class="t-{color.primary}">inbox</p></body></html>';
+  // The mock inventory carries design-root-relative paths, so the selection
+  // handoff uses the same convention (the provider's liveness set matches on
+  // the exact inventory paths).
+  const SCREEN_PATH = 'screens/inbox.html';
+
+  function renderWorkbench(onInputChange?: (value: string) => void) {
+    const readFn = vi.fn(async (url: string) => {
+      const target = String(url);
+      const body = target.includes('sign-up') ? FLOW : target.includes('screens/inbox') ? SCREEN : '';
+      return { ok: true, status: 200, text: async () => body } as unknown as Response;
+    });
+    return {
+      readFn,
+      ...renderWorkspace({
+        readFn,
+        chatProps: onInputChange ? ({ onInputChange } as DesignChatProps) : undefined,
+      }),
+    };
+  }
+
+  it('shows the facet pane (not the grid) for the selected screen', async () => {
+    const { selectFromSidebar, rerenderTab } = renderWorkbench();
+    selectFromSidebar(SCREEN_PATH);
+    rerenderTab('screens');
+    await screen.findByTestId('design-workbench-header');
+    expect(screen.getByTestId('design-workbench')).toHaveAttribute('data-screen', 'inbox');
+    expect(screen.getByTestId('design-workbench')).toHaveAttribute('data-found', 'true');
+    expect(screen.queryByTestId('design-screens-grid')).not.toBeInTheDocument();
+  });
+
+  it('opens the touched flow in the canvas (the flow stays in context)', async () => {
+    const { selectFromSidebar, rerenderTab } = renderWorkbench();
+    selectFromSidebar(SCREEN_PATH);
+    rerenderTab('screens');
+    fireEvent.click(await screen.findByTestId('design-workbench-flow-in-sign-up'));
+    rerenderTab('flows');
+    expect(screen.getByTestId('design-flows-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('design-detail-content')).toHaveAttribute('data-selected', 'flows/sign-up.mmd');
+  });
+
+  it('links the token library from the tokens facet', async () => {
+    const { selectFromSidebar, rerenderTab } = renderWorkbench();
+    selectFromSidebar(SCREEN_PATH);
+    rerenderTab('screens');
+    fireEvent.click(await screen.findByTestId('design-workbench-token-link'));
+    rerenderTab('tokens');
+    expect(screen.getByTestId('design-tokens-tree')).toBeInTheDocument();
+  });
+
+  it('asks the agent about the screen through the §6f panel', async () => {
+    const onInputChange = vi.fn();
+    const { selectFromSidebar, rerenderTab } = renderWorkbench(onInputChange);
+    selectFromSidebar(SCREEN_PATH);
+    rerenderTab('screens');
+    fireEvent.click(await screen.findByTestId('design-workbench-agent-ask'));
+    expect(onInputChange).toHaveBeenCalledWith(expect.stringContaining('inbox'));
+  });
+
+  it('lands on the workbench from a wireframe selection (the rail handoff)', async () => {
+    const { selectFromSidebar, rerenderTab } = renderWorkbench();
+    selectFromSidebar('wireframes/inbox.svg');
+    rerenderTab('screens');
+    await screen.findByTestId('design-workbench-header');
+    expect(screen.getByTestId('design-workbench')).toHaveAttribute('data-screen', 'inbox');
+    expect(screen.getByTestId('design-workbench')).toHaveAttribute('data-found', 'true');
   });
 });
 

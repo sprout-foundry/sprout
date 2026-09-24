@@ -107,7 +107,7 @@ func TestFindChecksumLine(t *testing.T) {
 func TestRollbackBinary_NoBackup(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "sprout")
-	if err := os.WriteFile(target, []byte("stub"), 0755); err != nil {
+	if err := os.WriteFile(target, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	backup := target + upgradeBackupSuffix
@@ -160,10 +160,10 @@ func TestProbeWritableInstallDir(t *testing.T) {
 			t.Skip("root bypasses mode bits; run as a normal user to exercise this")
 		}
 		dir := t.TempDir()
-		if err := os.Chmod(dir, 0500); err != nil {
+		if err := os.Chmod(dir, 0o500); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { os.Chmod(dir, 0755) })
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 		if err := probeWritableInstallDir(dir); err == nil {
 			t.Fatal("expected write failure in read-only dir, got nil")
 		}
@@ -177,10 +177,10 @@ func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
 		t.Skip("root bypasses mode bits; run as a normal user to exercise this")
 	}
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0500); err != nil {
+	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	execPath := filepath.Join(dir, "sprout")
 
 	err := requireWritableInstallDir(execPath)
@@ -208,18 +208,18 @@ func TestReplaceBinary_StagePermissionDenied(t *testing.T) {
 	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "sprout")
-	if err := os.WriteFile(target, []byte("old"), 0755); err != nil {
+	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	fresh := filepath.Join(t.TempDir(), "sprout-fresh")
-	if err := os.WriteFile(fresh, []byte("new"), 0755); err != nil {
+	if err := os.WriteFile(fresh, []byte("new"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.Chmod(dir, 0500); err != nil {
+	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	err := replaceBinary(target, fresh)
 	if err == nil {

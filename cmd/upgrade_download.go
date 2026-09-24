@@ -19,7 +19,11 @@ func downloadTo(url, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close response body: %v\n", cerr)
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
@@ -42,7 +46,7 @@ func downloadTo(url, dst string) error {
 	}
 
 	if _, err := io.Copy(f, src); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	// Close explicitly so flush/write errors surfaced at close time (e.g.

@@ -63,6 +63,17 @@ The full charter is SP-140-1; the rules you must not get wrong:
   `spacing`, `sizing`, `motion`) plus project tiers. **No `index.json`
   aggregation — consumers glob the directory.** `$extensions` passes through
   untouched.
+- **Tier self-nesting (the rule most often missed).** Each tier file's top
+  level contains a group **named for the tier**: `color.tokens.json` holds
+  `{"color": {...}}`, `typography.tokens.json` holds `{"typography": {...}}`.
+  References walk from that group — `{color.dark.bg.primary}` resolves because
+  `color.tokens.json` has a top-level `color` group containing `dark.bg.primary`.
+  A file with bare sub-groups (`{"dark": {...}}` with no `color` wrapper) parses
+  and exports cleanly, but **every `{color.*}` reference against it dangles** —
+  the brief reports the refs unknown and export names vars without the tier
+  prefix. The validator's `consistency_token_ref_dangling` finding names this
+  exact failure; if you see it, self-nest the tier file, do not rewrite the
+  references.
 - **Wireframes** (`design/wireframes/<screen-name>.svg`) — root
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">` with integer
   `W H` matching a device frame declared in `design/README.md`. Self-contained:
@@ -122,15 +133,20 @@ For **brownfield** trees, the brief starts with an inventory (next section).
 
 ### Step 1 — Tokens
 
-Write `design/tokens/*.tokens.json` — one file per tier. Every value that
-later artifacts reference (palette, type scale, spacing steps, radii, motion)
-belongs here first, because tokens are what screens and wireframes consume.
+Write `design/tokens/*.tokens.json` — one file per tier, **self-nested under
+the tier's own group** (`color.tokens.json` → top-level `"color"`; see the
+format charter above). Every value that later artifacts reference (palette,
+type scale, spacing steps, radii, motion) belongs here first, because tokens
+are what screens and wireframes consume.
 
 Then **validate**: `design_validate` (or the token path).
 
 - Fix `error` findings: bad JSON, unknown `$type`, dangling/cyclic aliases.
 - Resolve every alias you introduce — a reference to a token you have not
   written yet is an error today.
+- Fix any `consistency_token_ref_dangling` finding by self-nesting the tier
+  file (add the missing top-level group), never by rewriting the references
+  in wireframes/components.
 - If the validator emits the `.gitattributes` `diff=html` fix finding, apply
   it (append, never clobber an existing `.gitattributes`).
 

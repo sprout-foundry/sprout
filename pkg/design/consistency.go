@@ -22,6 +22,17 @@ const (
 	// outgoing edge — is exempt, per §4b ("every edge has a wireframe
 	// counterpart unless the node is a terminal state").
 	ruleConsistencyFlowEdgeWireframe = "consistency_flow_edge_wireframe"
+
+	// ruleConsistencyTokenRefDangling fires when a wireframe or component
+	// references a {group.token} path that does not resolve against the
+	// tree's DTCG leaves (SP-140-1 §1a/§1e). The common cause is a token
+	// file missing its self-nesting tier group (color.tokens.json holding
+	// bare "dark"/"light" instead of a top-level "color" group), which
+	// silently breaks every downstream consumer — the brief reports the ref
+	// unknown and export never names it — while the file itself still
+	// parses cleanly. Cross-artifact by construction: the ref and the
+	// leaves live in different files, so only this pack can see it.
+	ruleConsistencyTokenRefDangling = "consistency_token_ref_dangling"
 )
 
 // README artifact references reuse the existing ruleManifestLinkDangling id
@@ -112,6 +123,12 @@ func ValidateConsistency(root string) []Finding {
 	findings = append(findings, ValidateComponentInventory(root)...)
 	findings = append(findings, screenSlugViolations(root)...)
 	findings = append(findings, screenNameMismatches(root)...)
+
+	// SP-140-1 §1a/§1e: every {group.token} reference in a wireframe or
+	// component must resolve against the tree's DTCG leaves. Kept in this
+	// pack (not the SVG validator) because the ref and the leaves live in
+	// different files — only a cross-artifact pass can see the mismatch.
+	findings = append(findings, validateArtifactTokenRefs(root)...)
 
 	sortFindings(findings)
 	return findings
@@ -378,4 +395,59 @@ func nodeFirstLine(content []byte, id string) int {
 		}
 	}
 	return 0
+}
+
+// validateArtifactTokenRefs checks that every `{group.token}` reference in
+// design/wireframes/*.svg and design/components/*.svg resolves against the
+// tree's DTCG leaves, using the same export projection the brief and
+// design_export_tokens consume (one known-set for all consumers). A
+// workspace without tokens yields no findings — the SVG validator's
+// info-level literal tracking covers the no-token case; this rule is about
+// refs that promise a token and cannot find it. Severity is warn (not
+// error): the artifact still parses and renders, but every downstream
+// consumer silently loses the ref, which is exactly the §4b "parses but is
+// inconsistent" class.
+func validateArtifactTokenRefs(root string) []Finding {
+	tokens, err := ResolveExportTokens(root)
+	if err != nil || tokens == nil || len(tokens.Leaves) == 0 {
+		return nil
+	}
+	known := make(map[string]bool, len(tokens.Leaves))
+	for _, leaf := range tokens.Leaves {
+		known[leaf.Name] = true
+	}
+
+	findings := []Finding{}
+	for _, subdir := range []string{"wireframes", "components"} {
+		matches, err := filepath.Glob(filepath.Join(root, DirName, subdir, "*.svg"))
+		if err != nil {
+			continue
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			data, err := os.ReadFile(match)
+			if err != nil {
+				continue
+			}
+			rel := relAsset(root, match)
+			seen := map[string]bool{}
+			for _, m := range tokenRefRe.FindAllSubmatch(data, -1) {
+				p := string(m[1])
+				if p == "" || seen[p] || known[p] {
+					continue
+				}
+				seen[p] = true
+				findings = append(findings, Finding{
+					File:     rel,
+					Line:     lineOfOffset(data, int(m[0][1])),
+					Rule:     ruleConsistencyTokenRefDangling,
+					Severity: consistencySeverity,
+					Message: fmt.Sprintf(
+						"token reference {%s} does not resolve against design/tokens/ leaves; if the tier file exists, it may be missing its self-nesting group (color.tokens.json needs a top-level \"color\" group so {color.*} refs resolve)",
+						p),
+				})
+			}
+		}
+	}
+	return findings
 }

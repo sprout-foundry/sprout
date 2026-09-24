@@ -17,13 +17,17 @@ func moveFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		if cerr := in.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close %s: %v\n", src, cerr)
+		}
+	}()
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := out.Close(); err != nil {

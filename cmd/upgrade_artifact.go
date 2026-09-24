@@ -41,7 +41,11 @@ func findChecksumLine(sumsPath, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close %s: %v\n", sumsPath, cerr)
+		}
+	}()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -66,7 +70,11 @@ func sha256OfFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close %s: %v\n", path, cerr)
+		}
+	}()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -83,12 +91,20 @@ func extractBinaryFromTarGz(tgz, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close %s: %v\n", tgz, cerr)
+		}
+	}()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() {
+		if cerr := gz.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close gzip reader for %s: %v\n", tgz, cerr)
+		}
+	}()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
@@ -98,14 +114,16 @@ func extractBinaryFromTarGz(tgz, dst string) error {
 		if err != nil {
 			return err
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 		out, err := os.Create(dst)
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(out, tr)
+		// Cap extraction at the tar header's declared size so a malformed
+		// or hostile archive can't decompress-bomb the disk (gosec G110).
+		_, copyErr := io.Copy(out, io.LimitReader(tr, hdr.Size))
 		closeErr := out.Close()
 		if copyErr != nil {
 			return copyErr
@@ -120,7 +138,11 @@ func extractBinaryFromZip(zipPath, binaryName, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer zr.Close()
+	defer func() {
+		if cerr := zr.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: close %s: %v\n", zipPath, cerr)
+		}
+	}()
 	for _, entry := range zr.File {
 		if !strings.EqualFold(filepath.Base(entry.Name), binaryName) &&
 			!strings.HasSuffix(strings.ToLower(entry.Name), ".exe") {
@@ -132,10 +154,11 @@ func extractBinaryFromZip(zipPath, binaryName, dst string) error {
 		}
 		out, err := os.Create(dst)
 		if err != nil {
-			in.Close()
+			_ = in.Close()
 			return err
 		}
-		_, copyErr := io.Copy(out, in)
+		// Cap extraction at the zip entry's declared size (gosec G110).
+		_, copyErr := io.Copy(out, io.LimitReader(in, int64(entry.FileInfo().Size())))
 		_ = in.Close()
 		closeErr := out.Close()
 		if copyErr != nil {

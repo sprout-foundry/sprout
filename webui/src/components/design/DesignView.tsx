@@ -23,12 +23,13 @@ import { listAssets } from '../../services/api/designApi';
 import { fetchDesignStatus, type DesignStatusDriftRow } from '../../services/api/designStatusApi';
 import type { DesignInventory } from '../../services/api/types';
 import { assetMatchesSection } from './assetNames';
-import DesignDetailPane from './DesignDetailPane';
-import { useDesignWorkspace } from './DesignWorkspaceContext';
-import DesignSideColumn, { type DesignSideTab } from './DesignSideColumn';
 import DesignAgentPanel from './DesignAgentPanel';
+import DesignDetailPane from './DesignDetailPane';
+import DesignSideColumn, { type DesignSideTab } from './DesignSideColumn';
+import { useDesignWorkspace } from './DesignWorkspaceContext';
 import { FlowsCanvasContainer } from './FlowsCanvasContainer';
 import { ScreensTabContainer } from './ScreensGrid';
+import { ScreenWorkbenchContainer } from './ScreenWorkbenchContainer';
 import TokensTree from './TokensTree';
 import './DesignView.css';
 
@@ -231,14 +232,35 @@ export default function DesignView({
               onOpenFile={onOpenFile}
             />
           )}
-          {activeTab === 'screens' && (
-            <ScreensTabContainer
-              inventory={inventory}
-              selectedPath={selectedAsset}
-              onSelectAsset={handleSelectAsset}
-              onSelectTab={changeTab}
-            />
-          )}
+          {activeTab === 'screens' &&
+            (selectedAsset ? (
+              // SP-140-8 item 8.2: a selected screen renders its §8b workbench
+              // (the facet pane over the §5g brief); the grid stays the
+              // section's no-selection view. The facet links navigate the
+              // other surfaces (flows canvas, token library, agent panel,
+              // the §3f resolution flow in the Details tab) — the workbench
+              // itself never writes a file.
+              <ScreenWorkbenchContainer
+                inventory={inventory}
+                selectedPath={selectedAsset}
+                onOpenFlow={(flowPath) => {
+                  handleSelectAsset(flowPath);
+                  changeTab('flows');
+                }}
+                onOpenTokens={() => changeTab('tokens')}
+                onAskAgent={askAgent}
+                onOpenFeedbackPane={() => setSideTab('details')}
+                onStatusSaved={workspace ? () => workspace.refresh() : undefined}
+                readFn={readFn}
+              />
+            ) : (
+              <ScreensTabContainer
+                inventory={inventory}
+                selectedPath={selectedAsset}
+                onSelectAsset={handleSelectAsset}
+                onSelectTab={changeTab}
+              />
+            ))}
           {activeTab === 'tokens' && (
             <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} onSelectTab={changeTab} />
           )}

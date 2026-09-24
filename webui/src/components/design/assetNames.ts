@@ -20,9 +20,12 @@ export function assetDisplayName(name: string): string {
  * Whether an asset path belongs to a section. Inventory paths are relative to
  * the workspace root in the live app (`design/flows/…`) and to `design/` in
  * some hosts (`flows/…`), so the check is on the path's segment, not a prefix.
+ * The Screens section owns the whole screen axis — the delivered screens and
+ * their wireframes (SP-140-8 §8a: selecting either enters the screen
+ * workbench) — so a wireframe selection is in-section for "screens".
  */
 export function assetMatchesSection(path: string, tab: string): boolean {
-  return String(path ?? '')
-    .split(/[/\\]/)
-    .includes(tab);
+  const segments = String(path ?? '').split(/[/\\]/);
+  if (tab === 'screens') return segments.includes('screens') || segments.includes('wireframes');
+  return segments.includes(tab);
 }

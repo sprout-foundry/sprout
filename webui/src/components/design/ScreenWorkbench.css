@@ -1,0 +1,284 @@
+/* ScreenWorkbench — the §8b facet pane (SP-140-8 item 8.2).
+ * Colors/borders/radii are design tokens; spacing follows the design shell's
+ * px rhythm (DesignView.css). */
+
+.design-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+/* Header: the screen-relevant health subset (status + open count, §8c). */
+.design-workbench-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.design-workbench-screen-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.design-workbench-status {
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.design-workbench-status--draft {
+  color: var(--accent-warning);
+  border-color: var(--accent-warning);
+}
+
+.design-workbench-status--review {
+  color: var(--accent-info);
+  border-color: var(--accent-info);
+}
+
+.design-workbench-status--ready {
+  color: var(--accent-success);
+  border-color: var(--accent-success);
+}
+
+.design-workbench-open-count {
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-warning);
+  color: var(--bg-primary);
+}
+
+.design-workbench-purpose {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* §8b 1 — Render (first and largest: the screen is what you came to see). */
+.design-workbench-render {
+  flex: 1 1 auto;
+  min-height: 240px;
+  display: flex;
+}
+
+.design-workbench-render-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+/* Facets. */
+.design-workbench-facet {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.design-workbench-facet-heading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.design-workbench-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* §8b 3 — open feedback notes. */
+.design-workbench-note-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.design-workbench-note-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.design-workbench-note-row.focused {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-subtle);
+}
+
+.design-workbench-note-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-workbench-note-ask,
+.design-workbench-note-resolve,
+.design-workbench-flow-open,
+.design-workbench-token-open,
+.design-workbench-agent-ask {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.design-workbench-note-ask:hover,
+.design-workbench-note-resolve:hover,
+.design-workbench-flow-open:hover,
+.design-workbench-token-open:hover,
+.design-workbench-agent-ask:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.design-workbench-note-resolve {
+  margin-top: 6px;
+}
+
+.design-workbench-resolution {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* §8b 4 — flows in/out. */
+.design-workbench-flow-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.design-workbench-flow-sub {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.design-workbench-flow-columns ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.design-workbench-flow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  padding: 6px 8px;
+}
+
+.design-workbench-flow-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The row is the click target (the open link lives inside it). */
+.design-workbench-flow-row:has(> .design-workbench-flow-open) {
+  cursor: pointer;
+}
+
+.design-workbench-flow-label {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.design-workbench-flow-trigger {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* §8b 5 — token refs. */
+.design-workbench-token-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.design-workbench-token-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.design-workbench-token-chip--unknown {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+}
+
+/* §8b 6 — agent-state slice. */
+.design-workbench-agent-files {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.design-workbench-agent-file {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+
+/* Not-found (a stem with neither wireframe nor feedback). */
+.design-workbench-notfound {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .design-workbench-flow-columns {
+    grid-template-columns: 1fr;
+  }
+}

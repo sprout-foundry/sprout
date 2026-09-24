@@ -25,7 +25,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
-		ID string `json:"id"`
+		ID   string `json:"id"`
+		Mode string `json:"mode"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -55,6 +56,23 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 			"id":    chatID,
 		})
 		return
+	}
+
+	// Lane backstop (SP-142 §1): a client that names its lane must land on a
+	// chat in that lane. "" and "code" are the same lane (legacy chats carry
+	// "" and read as code). The mode-aware client never issues a cross-mode
+	// switch; this rejects stale tabs and third-party clients doing it.
+	if mode := strings.TrimSpace(req.Mode); mode != "" {
+		cs.mu.RLock()
+		targetMode := cs.Mode
+		cs.mu.RUnlock()
+		if normalizeChatMode(mode) != normalizeChatMode(targetMode) {
+			chatLane := normalizeChatMode(targetMode)
+			ws.mutex.Unlock()
+			writeJSONErr(w, http.StatusConflict, "mode_mismatch", fmt.Sprintf(
+				"Chat %q belongs to the %s lane; switch within the %s lane", chatID, chatLane, normalizeChatMode(mode)))
+			return
+		}
 	}
 
 	// Update the active chat ID.

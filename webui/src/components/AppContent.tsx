@@ -95,10 +95,10 @@ interface AppContentProps {
   chatSessions?: ChatSession[];
   activeChatId: string | null;
   perChatCache?: Record<string, PerChatState>;
-  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); per-mode pinning uses the result. */
-  onActiveChatChange?: (id: string) => void | Promise<boolean>;
+  /** Switch the active chat session. May resolve `true` (landed) / `false` (failed); per-mode pinning uses the result. The lane param (SP-142) lets the server reject cross-mode switches. */
+  onActiveChatChange?: (id: string, mode?: 'code' | 'design') => void | Promise<boolean>;
   onTerminalOutput?: (output: string) => void;
-  onCreateChat?: () => Promise<string | null>;
+  onCreateChat?: (mode?: 'code' | 'design') => Promise<string | null>;
   onCreateChatInWorktree?: (
     branch: string,
     baseRef?: string,
@@ -393,11 +393,15 @@ const AppContent: React.FC<AppContentProps> = ({
   // active chat, so the hook's restoreFreshSession performs the switch itself
   // (create → switch → pin) — pinning without switching would let the first
   // send re-pin the still-active Code session into the design pin.
+  // SP-142: creates and switches carry the lane so the server stamps it and
+  // rejects cross-mode switches (mode_mismatch). Only code/design are lane
+  // modes today; a future mode id maps to the code lane until it earns one.
+  const chatLane: 'code' | 'design' = workspaceMode.id === 'design' ? 'design' : 'code';
   const chatModePinning = useChatModePinning({
     mode: workspaceMode.id,
     activeChatId,
-    onSwitchSession: (sessionId) => onActiveChatChange?.(sessionId),
-    onFreshSession: () => onCreateChat?.(),
+    onSwitchSession: (sessionId) => onActiveChatChange?.(sessionId, chatLane),
+    onFreshSession: () => onCreateChat?.(chatLane),
   });
   const { switchSession: pinSwitchSession, recordSend: pinRecordSend } = chatModePinning;
 
@@ -421,11 +425,13 @@ const AppContent: React.FC<AppContentProps> = ({
   useChatSessionsSync({
     chatSessions,
     activeChatId,
+    mode: workspaceMode.id,
     buffersRef,
     updateBufferTitle,
     updateBufferMetadata,
     setBufferPinned,
     setBufferClosable,
+    closeBuffer,
     openWorkspaceBuffer,
   });
   // Tab-driven switches (clicking a chat tab) must record the
@@ -1026,7 +1032,9 @@ const AppContent: React.FC<AppContentProps> = ({
       activeChatId,
       chatSessions,
       onActiveChatChange: switchSessionWithModePin,
-      onCreateChat,
+      // New Chat stamps the lane it was created in (SP-142): EditorTabs
+      // invokes this with no args, so the current mode is bound here.
+      onCreateChat: onCreateChat ? () => onCreateChat(chatLane) : undefined,
       onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
       onDeleteChat,
       onDeleteAllChats,

@@ -355,9 +355,10 @@ function AppInner() {
     // the chat-session id space, never the agent-session restore flow.
     // The switch result (did it take effect?) drives the stale-pin fallback
     // to a fresh chat, and a landed fresh switch is recorded as the pin.
-    createFreshChat: chatManager.handleCreateChat,
+    // SP-142: the fresh chat is stamped with the design lane.
+    createFreshChat: (mode) => chatManager.handleCreateChat(mode ?? 'design'),
     switchToChat: async (id: string) => {
-      return chatManager.handleActiveChatChange(id);
+      return chatManager.handleActiveChatChange(id, 'design');
     },
   });
 

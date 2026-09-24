@@ -90,6 +90,11 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 		if info.WorktreePath != "" {
 			entry["worktree_path"] = info.WorktreePath
 		}
+		// The lane this chat belongs to (SP-142): "" (or "code") is omitted
+		// so legacy clients see today's shape; "design" marks the lane.
+		if info.Mode == "design" {
+			entry["mode"] = info.Mode
+		}
 		if info.ActiveQuery && info.CurrentQuery != "" {
 			entry["current_query"] = info.CurrentQuery
 		}

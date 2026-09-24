@@ -126,7 +126,9 @@ describe('chat deletion', () => {
     });
 
     expect(chatSessionsDouble.deleteAllChatSessions).toHaveBeenCalled();
-    expect(chatSessionsDouble.switchChatSession).toHaveBeenCalledWith('chat-default');
+    // Mode-less switch (the post-delete fallback keeps the legacy shape —
+    // the server's default chat is lane-less).
+    expect(chatSessionsDouble.switchChatSession).toHaveBeenCalledWith('chat-default', undefined);
     // Final activeChatId mirrors the switchChatSession response (mock returns
     // active_chat_id 'chat-1'), confirming the post-delete switch ran.
     expect(getState().activeChatId).toBe('chat-1');

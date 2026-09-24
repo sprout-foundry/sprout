@@ -24,7 +24,13 @@ function makeBuffer(overrides: Partial<EditorBuffer> & { id: string }): EditorBu
   };
 }
 
-function setup(opts: { sessions: Sessions; activeChatId: string | null; buffers: Map<string, EditorBuffer> }) {
+function setup(opts: {
+  sessions: Sessions;
+  activeChatId: string | null;
+  buffers: Map<string, EditorBuffer>;
+  mode?: string;
+  closedIds?: string[];
+}) {
   const buffersRef: React.RefObject<Map<string, EditorBuffer>> = { current: opts.buffers };
   const calls: {
     open: Array<{ id: string; isPinned?: boolean; isClosable?: boolean; activate?: boolean }>;
@@ -62,6 +68,7 @@ function setup(opts: { sessions: Sessions; activeChatId: string | null; buffers:
     useChatSessionsSync({
       chatSessions: opts.sessions as never,
       activeChatId: opts.activeChatId,
+      mode: opts.mode,
       buffersRef,
       updateBufferTitle: vi.fn(),
       updateBufferMetadata: (id, updates) => {
@@ -153,5 +160,74 @@ describe('useChatSessionsSync', () => {
     // Active chat's own tab must NOT be unpinned or made closable.
     expect(calls.closable.some(([id, v]) => id === 'buffer-chat' && v === true)).toBe(false);
     expect(calls.pinned.some(([id, v]) => id === 'buffer-chat' && v === false)).toBe(false);
+  });
+
+  it('mode lanes: the design lane mirrors only design chats, the code lane the rest', () => {
+    const sessions = [
+      { id: 'code-1', name: 'Code one' },
+      { id: 'design-1', name: 'Design one', mode: 'design' },
+      { id: 'legacy-1', name: 'Legacy' },
+    ];
+    // Code lane: design-1 gets no tab.
+    const codeBuffers = new Map<string, EditorBuffer>();
+    const code = setup({ sessions, activeChatId: 'code-1', buffers: codeBuffers });
+    expect(code.calls.open.map((c) => c.id)).toEqual(
+      expect.arrayContaining(['__workspace/chat/code-1', '__workspace/chat/legacy-1']),
+    );
+    expect(code.calls.open.some((c) => c.id === '__workspace/chat/design-1')).toBe(false);
+  });
+
+  it('mode lanes: design mode mirrors only the design chats', () => {
+    const sessions = [
+      { id: 'code-1', name: 'Code one' },
+      { id: 'design-1', name: 'Design one', mode: 'design' },
+    ];
+    const designBuffers = new Map<string, EditorBuffer>();
+    const design = setup({ sessions, activeChatId: 'design-1', buffers: designBuffers, mode: 'design' });
+    expect(design.calls.open.map((c) => c.id)).toEqual(['__workspace/chat/design-1']);
+  });
+
+  it('mode lanes: a lane switch closes the previous lane chat tabs', () => {
+    const sessions = [
+      { id: 'code-1', name: 'Code one' },
+      { id: 'design-1', name: 'Design one', mode: 'design' },
+    ];
+    const closedIds: string[] = [];
+    const buffers = new Map<string, EditorBuffer>();
+    const closeBuffer = (id: string) => {
+      closedIds.push(id);
+      buffers.delete(id);
+    };
+    const openWorkspaceBuffer = (o: { path: string; metadata?: Record<string, unknown> }) => {
+      buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
+      return o.path;
+    };
+
+    const props = { mode: 'code' as string };
+    const utils = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: sessions as never,
+        activeChatId: 'code-1',
+        mode: props.mode,
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        updateBufferMetadata: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        closeBuffer,
+        openWorkspaceBuffer: openWorkspaceBuffer as never,
+      }),
+    );
+    // Code lane mounted: code-1 has a tab, design-1 does not.
+    expect(buffers.has('__workspace/chat/code-1')).toBe(true);
+    expect(buffers.has('__workspace/chat/design-1')).toBe(false);
+
+    // Switch to the design lane: the code tab closes, the design tab opens.
+    props.mode = 'design';
+    utils.rerender();
+    expect(closedIds).toContain('__workspace/chat/code-1');
+    expect(buffers.has('__workspace/chat/design-1')).toBe(true);
+    expect(buffers.has('__workspace/chat/code-1')).toBe(false);
+    utils.unmount();
   });
 });

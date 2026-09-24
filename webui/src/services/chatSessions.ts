@@ -44,6 +44,8 @@ export interface ChatSessionSwitchResponseChatSession {
   last_active_at: string;
   message_count: number;
   current_session_id: string;
+  /** Workspace-mode lane ("design"); absent = code/legacy (SP-142). */
+  mode?: string;
 }
 
 export interface ChatSessionSwitchResponse {
@@ -64,11 +66,14 @@ export async function listChatSessions(): Promise<ChatSessionsResponse> {
   return res.json();
 }
 
-export async function createChatSession(name?: string): Promise<{ message: string; chat_session: ChatSession }> {
+export async function createChatSession(
+  name?: string,
+  mode?: 'code' | 'design',
+): Promise<{ message: string; chat_session: ChatSession }> {
   const res = await clientFetch('/api/chat-sessions/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(name ? { name } : {}),
+    body: JSON.stringify({ ...(name ? { name } : {}), ...(mode ? { mode } : {}) }),
   });
   if (!res.ok) throw new Error('Failed to create chat session');
   return res.json();
@@ -110,11 +115,11 @@ export async function renameChatSession(
   return res.json();
 }
 
-export async function switchChatSession(id: string): Promise<ChatSessionSwitchResponse> {
+export async function switchChatSession(id: string, mode?: 'code' | 'design'): Promise<ChatSessionSwitchResponse> {
   const res = await clientFetch('/api/chat-sessions/switch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify(mode ? { id, mode } : { id }),
   });
   if (!res.ok) throw new Error('Failed to switch chat session');
   return res.json();

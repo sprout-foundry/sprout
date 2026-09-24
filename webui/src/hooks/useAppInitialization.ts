@@ -46,15 +46,16 @@ export interface UseAppInitializationOptions {
   setState: AppStoreSetState;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
-  /** Create a fresh (empty) chat session; returns the new session id, or null. */
-  createFreshChat?: () => Promise<string | null>;
+  /** Create a fresh (empty) chat session; returns the new session id, or null. The lane (SP-142) stamps the new chat. */
+  createFreshChat?: (mode?: 'code' | 'design') => Promise<string | null>;
   /**
    * Switch the active chat to a session id (loads its messages).
    * Resolves `true` when the switch took effect (or the chat was already
    * active), `false` when it failed or was superseded — boot uses the result
    * to fall back to a fresh chat when a persisted design pin is stale.
+   * The lane (SP-142) names the caller's mode for the server backstop.
    */
-  switchToChat?: (id: string) => Promise<boolean>;
+  switchToChat?: (id: string, mode?: 'code' | 'design') => Promise<boolean>;
 }
 
 export function useAppInitialization({

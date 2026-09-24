@@ -26,6 +26,17 @@ const (
 	defaultChatID = "default"
 )
 
+// normalizeChatMode maps a chat's mode to its lane: "" (legacy/unassigned)
+// reads as "code" (SP-142 §1) so pre-existing sessions keep today's
+// behavior; unknown values also read as code — the wire never rejects a
+// mode it doesn't know.
+func normalizeChatMode(mode string) string {
+	if strings.TrimSpace(strings.ToLower(mode)) == "design" {
+		return "design"
+	}
+	return "code"
+}
+
 // chatSession stores per-chat state within a single browser tab context.
 //
 // @ts-generated  webui/src/types/generated.ts::ChatSession
@@ -46,6 +57,11 @@ type chatSession struct {
 	Provider         string    `json:"provider"`
 	Model            string    `json:"model"`
 	WorktreePath     string    `json:"worktree_path"`
+
+	// Mode is the workspace mode lane this chat belongs to: "code" or
+	// "design" (SP-142). "" is a legacy/unassigned chat — the read side
+	// treats it as code so pre-existing sessions keep today's behavior.
+	Mode string `json:"mode"`
 
 	// ConfigOverrides stores session-scoped configuration overrides that differ
 	// from the global/workspace config. Populated when settings change during a session.
@@ -336,7 +352,20 @@ func newChatSession(id, name string) *chatSession {
 		LastActiveAt: now,
 		AgentState:   emptyAgentStateSnapshot(),
 		IsPinned:     false,
+		Mode:         "",
 	}
+}
+
+// newChatSessionInMode creates a chat pinned to a workspace-mode lane
+// (SP-142 §1): "code" or "design". Any other value normalizes to "" (the
+// legacy read-as-code lane) — the wire never rejects a mode it doesn't
+// know so forward-compatible clients keep working.
+func newChatSessionInMode(id, name, mode string) *chatSession {
+	cs := newChatSession(id, name)
+	if mode == "code" || mode == "design" {
+		cs.Mode = mode
+	}
+	return cs
 }
 
 // newDefaultChatSession creates the "default" chat session.
@@ -403,6 +432,7 @@ type chatSessionInfo struct {
 	Model            string    `json:"model"`
 	WorktreePath     string    `json:"worktree_path"`
 	IsPinned         bool      `json:"is_pinned"`
+	Mode             string    `json:"mode"`
 }
 
 // toInfo copies the public fields from cs under cs.mu.
@@ -422,6 +452,7 @@ func (cs *chatSession) toInfo() chatSessionInfo {
 		Model:            cs.Model,
 		WorktreePath:     cs.WorktreePath,
 		IsPinned:         cs.IsPinned,
+		Mode:             cs.Mode,
 	}
 }
 
@@ -764,6 +795,11 @@ func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery
 	}
+	// The lane this chat belongs to (SP-142): "" reads as code client-side,
+	// so legacy sessions surface in the Code tab list unchanged.
+	if cs.Mode == "design" {
+		summary["mode"] = cs.Mode
+	}
 	return summary
 }
 
@@ -795,6 +831,10 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 	}
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery
+	}
+	// The lane this chat belongs to (SP-142); see chatSessionSummary.
+	if cs.Mode == "design" {
+		summary["mode"] = cs.Mode
 	}
 
 	// Decode agent state to extract messages for the frontend

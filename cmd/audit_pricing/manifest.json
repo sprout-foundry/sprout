@@ -77,7 +77,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-09-23",
+    "last_verified": "2026-09-24",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -713,6 +713,12 @@
         "input_per_mtok": 0.435,
         "output_per_mtok": 0.87,
         "cached_per_mtok": 0.0036
+      },
+      {
+        "id": "anthropic/claude-opus-5-5",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.2
       }
     ]
   },
@@ -1791,7 +1797,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-09-23",
+    "last_verified": "2026-09-24",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3617,8 +3623,8 @@
       },
       {
         "id": "~anthropic/claude-opus-latest",
-        "input_per_mtok": 4.0,
-        "output_per_mtok": 20.0,
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
         "cached_per_mtok": 0.2
       },
       {
@@ -4695,12 +4701,35 @@
         "input_per_mtok": 0.05,
         "output_per_mtok": 0.2,
         "cached_per_mtok": 0.005
+      },
+      {
+        "id": "fireworks/ember-1",
+        "input_per_mtok": 3,
+        "output_per_mtok": 15,
+        "cached_per_mtok": 0.3
+      },
+      {
+        "id": "qwen/qwen3.8-max-prime",
+        "input_per_mtok": 4,
+        "output_per_mtok": 12,
+        "cached_per_mtok": 0.5
+      },
+      {
+        "id": "stealth/space-bunny-alpha",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "z-ai/glm-5.3-prime",
+        "input_per_mtok": 2.8,
+        "output_per_mtok": 8.8,
+        "cached_per_mtok": 0.56
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-09-23",
+    "last_verified": "2026-09-24",
     "models": [
       {
         "id": "glm-4.5v",
@@ -4819,12 +4848,18 @@
         "input_per_mtok": 0.37,
         "output_per_mtok": 1.25,
         "cached_per_mtok": 0.075
+      },
+      {
+        "id": "glm-5.3-prime",
+        "input_per_mtok": 2.8,
+        "output_per_mtok": 8.8,
+        "cached_per_mtok": 0.56
       }
     ]
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-09-23",
+    "last_verified": "2026-09-24",
     "models": [
       {
         "id": "glm-4.5",
@@ -4943,6 +4978,12 @@
         "input_per_mtok": 0.37,
         "output_per_mtok": 1.25,
         "cached_per_mtok": 0.075
+      },
+      {
+        "id": "glm-5.3-prime",
+        "input_per_mtok": 2.8,
+        "output_per_mtok": 8.8,
+        "cached_per_mtok": 0.56
       }
     ]
   }

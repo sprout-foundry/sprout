@@ -355,6 +355,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 			Format:         "sse",
 			ChunkTimeoutMs: normalized.ChunkTimeoutMs,
 			DoneMarker:     "[DONE]",
+			IncludeUsage:   normalized.IncludeUsage,
 		},
 		Models: providers.ModelConfig{
 			DefaultContextLimit: normalized.ContextSize,

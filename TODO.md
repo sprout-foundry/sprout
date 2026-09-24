@@ -432,6 +432,27 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ---
 
+## SP-142 — Chat Mode Lanes (`roadmap/SP-142-chat-mode-lanes.md`)
+
+- [ ] **142.1** Server: `Mode` field on chatSession (`""` = legacy, reads
+      as code); create stamps the mode; summary/list/switch carry it;
+      cross-mode switch → `409 mode_mismatch`; TS mirror update
+      (`types/generated.ts`, `services/chatSessions.ts`). Spec: SP-142 §1.
+- [ ] **142.2** Client: mode-filtered tab strip in `useChatSessionsSync`;
+      pin writes scoped to in-mode switches; `mode_mismatch` fallback to
+      the mode pin or a fresh session. Spec: SP-142 §2.
+- [ ] **142.3** Server: workspace query gate — a query from a second chat
+      while another runs in the same client context returns
+      `409 workspace_busy` naming the running chat; releases on
+      `query_completed`; shared-mode unchanged. Spec: SP-142 §3.
+- [ ] **142.4** Client: busy notice in the composer ("send anyway"
+      queues behind the running chat; drains on completion; cancel
+      clears). Spec: SP-142 §3.
+- [ ] **142.5** Design agent panel header: design chat name + scoped
+      New Chat affordance. Spec: SP-142 §4.
+
+---
+
 ## Status
 
 SP-140-6 (loop surface, items 6.1–6.8) and SP-140-7 (human co-editing,

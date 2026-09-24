@@ -1,9 +1,9 @@
 # SP-140-8 — Screen-Centric IA: The Design Shell Organizes Around Screens
 
-> **Status (2026-09-23):** In progress. Follow-up to SP-140-6/7 (shipped).
+> **Status (2026-09-24):** In progress. Follow-up to SP-140-6/7 (shipped).
 > Item 8.1 (rail rework — data-driven Screens group + Library group, status
 > dot + open-annotation badge, selection routing) has landed; the workbench
-> (8.2) and adaptive chrome (8.3) remain.
+> (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) remains.
 > The token-display rework that motivated this (tile grid, proportional spacing
 > scale, schema-wall removal) landed in the same review pass on
 > `feat-design-workspace` and is *not* part of this spec.

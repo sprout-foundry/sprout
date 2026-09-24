@@ -134,6 +134,12 @@ type StreamingConfig struct {
 	// which would kill legitimately long streams.
 	IdleChunkTimeoutMs int    `json:"idle_chunk_timeout_ms"`
 	DoneMarker         string `json:"done_marker"`
+	// IncludeUsage adds stream_options: {"include_usage": true} to streaming
+	// requests. Strict-OpenAI backends (vLLM, SGLang, llama.cpp server) omit
+	// the usage block from the SSE stream unless the client asks for it, so
+	// token/cost/cache tracking silently reads zero for those providers.
+	// Off by default; enable for backends that follow the strict spec.
+	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
 // PatternOverride defines context limit overrides for model patterns

@@ -67,6 +67,13 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		"stream":   stream,
 	}
 
+	// Ask strict-OpenAI backends for the usage block on streams. Without
+	// this flag they stream no token counts at all, and every response
+	// tracks as zero tokens / zero cost / zero cache for the session.
+	if stream && p.config.Streaming.IncludeUsage {
+		request["stream_options"] = map[string]interface{}{"include_usage": true}
+	}
+
 	// Add default parameters
 	if p.config.Defaults.Temperature != nil {
 		request["temperature"] = *p.config.Defaults.Temperature

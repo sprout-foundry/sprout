@@ -87,10 +87,12 @@ jobs:
   # plus the embedded-UI commit to the release tag (all platform builds share
   # those committed assets via -refs/tags checkout). The Apple-Silicon macOS
   # binary is built separately in the `macos-build` job on a self-hosted Mac,
-  # because it needs cgo + Apple's MLX C library — cross-compiling darwin/arm64
-  # from a Linux runner disables cgo, silently swapping in the local-LLM stub
-  # (pkg/localmodel/local_provider_stub.go) and breaking local models on every
-  # Apple Silicon Mac. See the `macos-build` job for the cgo guard.
+  # because it needs cgo — cross-compiling darwin/arm64 from a Linux runner
+  # disables cgo and silently compiles the local-LLM stub
+  # (pkg/localmodel/local_provider_stub.go), omitting local-model support on
+  # every Apple Silicon Mac. The binary itself has no build-time dependency
+  # on Apple's MLX C library: sinter dlopens it at runtime (optional — sprout
+  # works without it). See the `macos-build` job for the cgo guard.
   build:
     name: Build (Linux / Windows / Intel-macOS)
     needs: test
@@ -264,8 +266,8 @@ jobs:
         GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-darwin-amd64 .
         tar -czvf sprout-darwin-amd64.tar.gz sprout-darwin-amd64
 
-        # darwin/arm64 (Apple Silicon) is NOT built here — it needs cgo + the
-        # MLX C library and is built natively in the `macos-build` job.
+        # darwin/arm64 (Apple Silicon) is NOT built here — it needs cgo and is
+        # built natively in the `macos-build` job.
         ls -la sprout-linux-amd64.tar.gz sprout-linux-arm64.tar.gz sprout-windows-amd64.zip sprout-darwin-amd64.tar.gz
 
     - name: Upload Linux / Windows / Intel-macOS binaries
@@ -301,12 +303,17 @@ jobs:
         if-no-files-found: error
 
   # Builds the Apple-Silicon macOS binary (darwin/arm64) natively on a
-  # self-hosted Mac. Local LLM (MLX) requires cgo plus Apple's MLX C library:
-  # cross-compiling darwin/arm64 from a Linux runner disables cgo, which
-  # silently compiles the local-LLM stub (pkg/localmodel/local_provider_stub.go)
-  # and makes `local LLM requires Apple Silicon with MLX` fail on every correct
-  # Apple Silicon Mac. Building on a native macOS/arm64 runner keeps cgo on and
-  # links the real MLX provider.
+  # self-hosted Mac. The local LLM backend (MLX) requires cgo: cross-compiling
+  # darwin/arm64 from a Linux runner disables cgo, which silently compiles the
+  # local-LLM stub (pkg/localmodel/local_provider_stub.go) and makes `no local
+  # LLM backend available` the response on every Apple Silicon Mac. Building
+  # on a native macOS/arm64 runner keeps cgo on and compiles the real provider.
+  #
+  # The MLX C library itself is an optional RUNTIME dependency — sinter
+  # dlopens it at startup and degrades gracefully when absent (the binary must
+  # never hard-link libmlx/libmlxc, or Macs without the Homebrew formula abort
+  # with a dyld 'Library not loaded' error before any sprout code runs). The
+  # portability guard below enforces that.
   #
   # Runs after `build` so the embedded UI assets committed to the release tag
   # by that job are present in this job's checkout (binaries embed
@@ -342,30 +349,24 @@ jobs:
       with:
         go-version: '1.26'
 
-    - name: Install MLX C library (Apple Silicon)
-      run: |
-        brew install mlx-c
-        # Fail fast if the MLX C library isn't actually linkable — a missing
-        # -lmlx/-lmlxc would otherwise surface as the local-LLM stub silently.
-        ls -1 /opt/homebrew/lib/libmlx*.dylib
-        test -d /opt/homebrew/include
-
     - name: Download module deps and copy grammar blobs for embedding
       run: |
         go mod download
         make prepare-grammars
 
-    - name: Guard — darwin/arm64 build MUST have cgo enabled (MLX)
+    - name: Guard — darwin/arm64 build MUST have cgo enabled (MLX loader)
       # Regression guard: if this ever builds with cgo off (e.g. someone moves
       # this back onto a cross-compile runner), the darwin/arm64 binary embeds
-      # the local-LLM stub and silently breaks local models. Fail loudly instead.
+      # the local-LLM stub and silently omits local-model support. Fail loudly
+      # instead. (The MLX C library itself is loaded at runtime — no brew
+      # dependency for the build.)
       run: |
         if [ "$(go env CGO_ENABLED)" != "1" ]; then
-          echo "ERROR: Apple-Silicon (darwin/arm64) build requires cgo for MLX, but CGO_ENABLED=$(go env CGO_ENABLED)" >&2
-          echo "This binary must be built on a native macOS/arm64 runner with 'brew install mlx-c'." >&2
+          echo "ERROR: Apple-Silicon (darwin/arm64) build requires cgo for the MLX runtime loader, but CGO_ENABLED=$(go env CGO_ENABLED)" >&2
+          echo "This binary must be built on a native macOS/arm64 runner." >&2
           exit 1
         fi
-        echo "cgo enabled — real MLX provider will be linked."
+        echo "cgo enabled — real MLX provider will compile in."
 
     - name: Build darwin/arm64 binary (native, cgo + MLX)
       run: |
@@ -382,14 +383,20 @@ jobs:
         GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
         tar -czvf sprout-darwin-arm64.tar.gz sprout-darwin-arm64
 
-    - name: Verify the built binary links MLX (is not the local-LLM stub)
-      # The local-LLM stub is what ships when cgo is off. Confirm the real
-      # MLX provider is present by checking the binary's dynamic links against
-      # Apple's MLX C library (libmlx/libmlxc). otool is native to macOS.
+    - name: Verify the built binary is portable (no hard MLX dep) and carries the runtime loader
+      # sinter loads the MLX C library via dlopen at startup: the binary must
+      # NOT hard-link libmlx/libmlxc (a missing keg would abort every command
+      # with a dyld 'Library not loaded' error before main), and it must carry
+      # the loader's libmlxc.dylib candidate path — proof the cgo shim
+      # compiled in rather than the local-LLM stub. otool/strings are native.
       run: |
-        otool -L sprout-darwin-arm64 | grep -E "libmlx" \
-          || { echo "ERROR: darwin/arm64 binary does not link MLX — the local-LLM stub was compiled." >&2; exit 1; }
-        echo "Verified: darwin/arm64 binary links the MLX C library."
+        if otool -L sprout-darwin-arm64 | grep -E "libmlx"; then
+          echo "ERROR: darwin/arm64 binary hard-links the MLX C library — it would abort on Macs without the mlx-c formula." >&2
+          exit 1
+        fi
+        strings sprout-darwin-arm64 | grep -q "libmlxc.dylib" \
+          || { echo "ERROR: MLX runtime loader not found in the binary — the local-LLM stub was compiled." >&2; exit 1; }
+        echo "Verified: no hard MLX dependency; runtime loader present."
         ./sprout-darwin-arm64 version
 
     - name: Upload Apple-Silicon macOS binary

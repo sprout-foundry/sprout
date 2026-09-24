@@ -84,13 +84,13 @@ export function LocalLLMSettingsTab(): ReactElement {
   }
 
   if (!status?.available) {
+    const hint =
+      status?.hint ||
+      `Local LLM requires Apple Silicon (M-series Mac). Your platform (${status?.platform || 'unknown'}) is not supported.`;
     return (
       <div className="settings-section">
         <h3 className="settings-section-title">Local LLM</h3>
-        <p className="settings-description">
-          Local LLM requires Apple Silicon (M-series Mac). Your platform ({status?.platform || 'unknown'}) is not
-          supported.
-        </p>
+        <p className="settings-description">{hint}</p>
       </div>
     );
   }

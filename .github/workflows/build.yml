@@ -83,6 +83,9 @@ jobs:
         /usr/bin/google-chrome-stable --version
 
     - name: Install MLX C library (macOS)
+      # Runtime-only: the darwin/arm64 unit tests that load real models need
+      # the MLX dylib at test time. The build itself no longer depends on it
+      # (sinter dlopens the MLX C library at runtime).
       if: runner.os == 'macOS' && runner.arch == 'ARM64'
       run: brew install mlx-c
 
@@ -417,7 +420,9 @@ jobs:
         else
           OS_NAME="linux"
         fi
-        # MLX C library is only available on macOS arm64 (Apple Silicon runners)
+        # MLX C library is only available on macOS arm64 (Apple Silicon runners).
+        # Needed at RUNTIME for the local-LLM e2e paths (build itself no longer
+        # depends on it — sinter dlopens it).
         if [[ "${{ matrix.os }}" == "macos-latest" && "${{ matrix.arch }}" == "arm64" ]]; then
           brew install mlx-c
           BUILD_TAGS="browser mlx"

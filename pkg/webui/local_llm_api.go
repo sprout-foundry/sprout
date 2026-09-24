@@ -20,7 +20,9 @@ import (
 
 // localLLMStatus describes the current state of the local LLM engine.
 type localLLMStatus struct {
-	Available        bool            `json:"available"`     // MLX available + platform supported
+	Available        bool            `json:"available"`     // platform supports the local LLM backend
+	MLXAvailable     bool            `json:"mlx_available"` // MLX C library found at runtime (optional)
+	Hint             string          `json:"hint,omitempty"`
 	Running          bool            `json:"running"`       // server process is alive and healthy
 	ModelPresent     bool            `json:"model_present"` // at least one model is downloaded
 	ModelDir         string          `json:"model_dir"`     // path to model cache
@@ -123,7 +125,15 @@ func probeLocalLLMStatus() *localLLMStatus {
 	}
 
 	// Only Apple Silicon supports MLX inference.
-	status.Available = runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		// MLX is an optional runtime dependency (dlopen'd by sinter): the
+		// rest of sprout works without it, the local LLM backend needs it.
+		status.MLXAvailable = localmodel.MLXAvailable()
+		if !status.MLXAvailable {
+			status.Hint = "The MLX C libraries are not installed. Install with: brew install mlx-c, then restart sprout."
+		}
+		status.Available = status.MLXAvailable
+	}
 	if !status.Available {
 		return status
 	}
@@ -161,6 +171,19 @@ func probeLocalLLMStatus() *localLLMStatus {
 	return status
 }
 
+// localLLMUnavailableMessage explains why the local LLM backend is
+// unavailable: either the platform is unsupported, or the optional MLX C
+// library was not found at runtime.
+func localLLMUnavailableMessage(status *localLLMStatus) string {
+	if status.Platform != "darwin-arm64" {
+		return "Local LLM requires Apple Silicon (M-series Mac)"
+	}
+	if !status.MLXAvailable {
+		return status.Hint
+	}
+	return "Local LLM is unavailable"
+}
+
 // handleLocalLLMStatus handles GET /api/local-llm/status
 func (ws *ReactWebServer) handleLocalLLMStatus(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
@@ -180,7 +203,7 @@ func (ws *ReactWebServer) handleLocalLLMStart(w http.ResponseWriter, r *http.Req
 	status := getLocalLLMStatus()
 	if !status.Available {
 		writeJSONErr(w, http.StatusBadRequest, "not_available",
-			"Local LLM requires Apple Silicon (M-series Mac)")
+			localLLMUnavailableMessage(status))
 		return
 	}
 	if !status.ModelPresent {
@@ -332,7 +355,7 @@ func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.
 	status := getLocalLLMStatus()
 	if !status.Available {
 		writeJSONErr(w, http.StatusBadRequest, "not_available",
-			"Local LLM requires Apple Silicon (M-series Mac)")
+			localLLMUnavailableMessage(status))
 		return
 	}
 

@@ -397,12 +397,14 @@ verify_installation() {
         exit 1
     fi
 
-    # Actually exec the binary. Catches the only mode where a wrong-libc
-    # binary can land cleanly on disk but blow up at runtime — most
-    # commonly: Termux pulling a glibc-linked binary, an older glibc host
-    # running a binary built against newer glibc, or someone uname spoofing.
-    # The release pipeline cross-compiles linux-arm64 with CGO disabled so
-    # this should normally pass on Termux too.
+    # Actually exec the binary. Catches the mode where a binary can land
+    # cleanly on disk but blow up at runtime — most commonly: Termux pulling
+    # a glibc-linked binary, an older glibc host running a binary built
+    # against newer glibc, or someone uname spoofing. On Apple-Silicon Macs
+    # it also catches the missing MLX C libraries (dyld 'Library not loaded')
+    # that the darwin/arm64 release binary needs. The release pipeline
+    # cross-compiles linux-arm64 with CGO disabled so this should normally
+    # pass on Termux too.
     local run_output run_status
     run_output=$("$binary_path" version 2>&1)
     run_status=$?
@@ -426,6 +428,27 @@ verify_installation() {
             log_error "  2. Pin to an older sprout release built against older glibc:"
             log_error "     SPROUT_VERSION=v0.13.0 curl -fsSL .../install.sh | sh"
             log_error "  3. Build from source (recent Go and Node required)."
+        elif printf '%s' "$run_output" | grep -q "Library not loaded"; then
+            # Older release binaries (built before the MLX runtime loader)
+            # hard-linked Apple's MLX C libraries (libmlx/libmlxc, keg-only
+            # under /opt/homebrew/opt/mlx) for the built-in local LLM. On a
+            # Mac without the Homebrew mlx-c formula, dyld aborts before
+            # sprout's own code runs. Current builds dlopen MLX at runtime
+            # and never fail this way — this branch covers upgrades from
+            # those older binaries.
+            log_error "macOS cannot load a dynamic library an older sprout binary"
+            log_error "needs (dyld reports 'Library not loaded'). The install"
+            log_error "itself succeeded — fix the missing runtime dependency"
+            log_error "with Homebrew, then start using sprout:"
+            log_error ""
+            log_error "  brew install mlx-c"
+            log_error ""
+            log_error "  (or reinstall the latest sprout, which works without"
+            log_error "   MLX installed — local models need 'brew install mlx-c').")
+            log_error ""
+            log_error "If your Homebrew is not at /opt/homebrew, or you don't"
+            log_error "use Homebrew, build sprout from source on this Mac"
+            log_error "instead (https://github.com/sprout-foundry/sprout#from-source)."
         elif is_termux; then
             log_error "On Termux this usually means the binary is dynamically linked"
             log_error "against glibc and won't load on Bionic libc."
@@ -487,6 +510,18 @@ print_success() {
     echo ""
     echo "  Run 'sprout version' to verify the installation"
     echo ""
+
+    # The darwin/arm64 release binary loads Apple's MLX C libraries at
+    # runtime (dlopen) for the optional local LLM. Sprout works without them;
+    # without them only the local-model feature is unavailable.
+    if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
+        echo "  Optional, for the local LLM (Apple's MLX C libraries):"
+        echo "    brew install mlx-c"
+        echo ""
+        echo "  Without it sprout runs normally; the built-in local models"
+        echo "  are unavailable until it is installed."
+        echo ""
+    fi
 }
 
 # Print --help text. Mirrors what install.ps1 -? would show on Windows so

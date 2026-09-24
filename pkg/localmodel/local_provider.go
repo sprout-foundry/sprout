@@ -111,7 +111,7 @@ func (p *LocalProvider) ensureLoaded() (*llm.Model, error) {
 // ensureLoadedLocked is ensureLoaded's body; callers must already hold p.mu.
 func (p *LocalProvider) ensureLoadedLocked() (*llm.Model, error) {
 	if p.backend == "none" {
-		p.loadErr = fmt.Errorf("no local LLM backend available (requires Apple Silicon with MLX)")
+		p.loadErr = fmt.Errorf("no local LLM backend available (requires Apple Silicon with the MLX C libraries — install with: brew install mlx-c)")
 		return nil, p.loadErr
 	}
 

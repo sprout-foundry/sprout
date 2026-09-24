@@ -11,7 +11,9 @@ subagents, commit messages) works exactly as with a cloud provider.
 - Apple Silicon Mac (M1/M2/M3/M4), macOS 12+
 - 8 GB RAM minimum; 16 GB recommended for the balanced 4B model
 - `hf` CLI for model downloads (`pip install -U huggingface_hub`)
-- MLX libraries (`brew install mlx` — see the gomlx module docs)
+- MLX C libraries, for the local LLM only (`brew install mlx-c` — keg-only;
+  loaded at runtime. Sprout works without them; without them the
+  `sprout-local` provider is simply unavailable.)
 
 ## Quick start
 
@@ -69,10 +71,13 @@ generation on a memory-constrained machine.
 
 ## Model catalog
 
-The catalog lives in `pkg/gomlx/llm/catalog.go`. To add a model:
+The catalog lives in sinter's `llm/catalog/catalog.go`
+(`github.com/sprout-foundry/sinter/llm/catalog`). To add a model:
 
-1. Download it (mlx-community quantized layout) into `~/dev/llm-models/`
-2. Add one entry: `{Name, Dir, HFRepo, MinRAM}`
+1. Download it (mlx-community quantized layout) into your models root
+   (`~/.sprout-local/models` by default)
+2. Add one entry to `ModelCatalog`:
+   `{Name, Dir, HFRepo, MinRAMSelect, MinRAMSuggested}`
 3. Selection, memory gating, and provider discovery follow automatically
 
 ## Memory behavior

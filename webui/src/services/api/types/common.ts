@@ -109,6 +109,8 @@ export interface LocalLLMModel {
 
 export interface LocalLLMStatus {
   available: boolean;
+  mlx_available: boolean;
+  hint?: string;
   running: boolean;
   model_present: boolean;
   model_dir: string;

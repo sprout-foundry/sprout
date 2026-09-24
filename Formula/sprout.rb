@@ -78,6 +78,13 @@ class Sprout < Formula
 
       The Web UI runs on port 56000 by default — open http://localhost:56000
       once the daemon is running.
+
+      On Apple-Silicon Macs the optional local-LLM feature uses Apple's MLX C
+      libraries, which sprout loads at runtime (dlopen). The binary works
+      without them; without them the local LLM simply cannot start. To enable
+      local models:
+
+        brew install mlx-c
     EOS
   end
 end

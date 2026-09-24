@@ -31,6 +31,7 @@ type CustomProviderConfig struct {
 	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
 	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
 	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds
+	IncludeUsage           bool                        `json:"include_usage,omitempty"`            // Request usage stats in streaming responses (stream_options.include_usage)
 	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`       // Message conversion configuration
 	SupportsVision         bool                        `json:"supports_vision,omitempty"`          // Whether this provider supports vision requests
 	VisionModel            string                      `json:"vision_model,omitempty"`             // Vision-capable model for this provider

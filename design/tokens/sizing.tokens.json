@@ -1,20 +1,50 @@
 {
   "$description": "Sprout sizing tokens for fixed chrome metrics, distilled from webui/src/App.css and component CSS. These are the hard layout constants the shell renders against (header height, terminal strip, sidebar widths, diff row height).",
-  "header": {
-    "height": { "$value": "35px", "$type": "dimension", "$description": "Workspace bar (MenuBar + WorkspaceBar) height." }
-  },
-  "terminal": {
-    "reserved-height": { "$value": "42px", "$type": "dimension", "$description": "Bottom terminal strip height (reserved even when collapsed)." }
-  },
-  "sidebar": {
-    "width": { "$value": "288px", "$type": "dimension", "$description": "Expanded sidebar width." },
-    "collapsed-width": { "$value": "48px", "$type": "dimension", "$description": "Collapsed icon-rail width." }
-  },
-  "diff": {
-    "row-height": { "$value": "20px", "$type": "dimension", "$description": "Unified diff renderer row height (kept in sync with DiffSurface virtualization)." }
-  },
-  "control": {
-    "icon-button": { "$value": "28px", "$type": "dimension", "$description": "Standard icon control size (header toggles, mode switcher trigger)." },
-    "avatar": { "$value": "20px", "$type": "dimension", "$description": "User avatar / identity badge." }
+  "sizing": {
+    "header": {
+      "height": {
+        "$value": "35px",
+        "$type": "dimension",
+        "$description": "Workspace bar (MenuBar + WorkspaceBar) height."
+      }
+    },
+    "terminal": {
+      "reserved-height": {
+        "$value": "42px",
+        "$type": "dimension",
+        "$description": "Bottom terminal strip height (reserved even when collapsed)."
+      }
+    },
+    "sidebar": {
+      "width": {
+        "$value": "288px",
+        "$type": "dimension",
+        "$description": "Expanded sidebar width."
+      },
+      "collapsed-width": {
+        "$value": "48px",
+        "$type": "dimension",
+        "$description": "Collapsed icon-rail width."
+      }
+    },
+    "diff": {
+      "row-height": {
+        "$value": "20px",
+        "$type": "dimension",
+        "$description": "Unified diff renderer row height (kept in sync with DiffSurface virtualization)."
+      }
+    },
+    "control": {
+      "icon-button": {
+        "$value": "28px",
+        "$type": "dimension",
+        "$description": "Standard icon control size (header toggles, mode switcher trigger)."
+      },
+      "avatar": {
+        "$value": "20px",
+        "$type": "dimension",
+        "$description": "User avatar / identity badge."
+      }
+    }
   }
 }

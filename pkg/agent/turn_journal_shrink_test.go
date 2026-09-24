@@ -37,6 +37,13 @@ func newFakeSeedState(msgs []fakeMsg) *core.State {
 // the live list, and not silence (which leaves the journal permanently
 // ahead of state). Replay must replace, not append.
 func TestTurnJournalCompactionShrinkEvent(t *testing.T) {
+	// Route session persistence (the journal lives beside the session file
+	// under the real state dir) into a sandbox — without this the journal
+	// leaks into ~/.local/state/sprout/sessions and trips the state-leak
+	// detector on clean runners.
+	restoreState := NewTestStateDir(t)
+	defer restoreState()
+
 	dir := t.TempDir()
 
 	a := &Agent{workspaceRoot: dir}

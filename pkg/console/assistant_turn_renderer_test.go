@@ -616,19 +616,25 @@ func TestSubscriberStdoutInterleaveDoesNotEraseRenderedProse(t *testing.T) {
 
 	// Goroutine 2: simulates subscriber's locked external writes.
 	go func() {
-		// Simulate a tool start blank line mid-stream.
+		// Simulate a tool start blank line mid-stream. Both external writes
+		// run under captureRendererStdout so the os.Stdout swap in goroutine
+		// 1 and any flush emit here serialize on captureMu — without it this
+		// test races the stdout swap under -race (fmt.Print reads os.Stdout
+		// while captureRendererStdout writes it).
 		time.Sleep(1 * time.Millisecond)
-		LockOutput()
-		// Write happens here (we can't capture it in a test pipe
-		// without redirecting os.Stdout, so just simulate the effect).
-		UnlockOutput()
-		r.OnExternalWriteRows(1)
+		captureRendererStdout(t, func() {
+			LockOutput()
+			UnlockOutput()
+			r.OnExternalWriteRows(1)
+		})
 
 		// Simulate another tool start.
 		time.Sleep(2 * time.Millisecond)
-		LockOutput()
-		UnlockOutput()
-		r.OnExternalWriteRows(1)
+		captureRendererStdout(t, func() {
+			LockOutput()
+			UnlockOutput()
+			r.OnExternalWriteRows(1)
+		})
 
 		done <- struct{}{}
 	}()

@@ -107,6 +107,7 @@ func TestFindChecksumLine(t *testing.T) {
 func TestRollbackBinary_NoBackup(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "sprout")
+	// #nosec G302 -- fixture binary must be executable
 	if err := os.WriteFile(target, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -160,10 +161,11 @@ func TestProbeWritableInstallDir(t *testing.T) {
 			t.Skip("root bypasses mode bits; run as a normal user to exercise this")
 		}
 		dir := t.TempDir()
+		// #nosec G302 -- deliberately restrictive dir mode is the test's subject
 		if err := os.Chmod(dir, 0o500); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // #nosec G302 -- restore TempDir for cleanup
 		if err := probeWritableInstallDir(dir); err == nil {
 			t.Fatal("expected write failure in read-only dir, got nil")
 		}
@@ -177,10 +179,11 @@ func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
 		t.Skip("root bypasses mode bits; run as a normal user to exercise this")
 	}
 	dir := t.TempDir()
+	// #nosec G302 -- deliberately restrictive dir mode is the test's subject
 	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // #nosec G302 -- restore TempDir for cleanup
 	execPath := filepath.Join(dir, "sprout")
 
 	err := requireWritableInstallDir(execPath)
@@ -208,18 +211,21 @@ func TestReplaceBinary_StagePermissionDenied(t *testing.T) {
 	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "sprout")
+	// #nosec G302 -- fixture binary must be executable
 	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	fresh := filepath.Join(t.TempDir(), "sprout-fresh")
+	// #nosec G302 -- fixture binary must be executable
 	if err := os.WriteFile(fresh, []byte("new"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
+	// #nosec G302 -- deliberately restrictive dir mode is the test's subject
 	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // #nosec G302 -- restore TempDir for cleanup
 
 	err := replaceBinary(target, fresh)
 	if err == nil {

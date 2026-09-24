@@ -1592,6 +1592,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Opus 5.5 is Anthropic's most capable Opus model. Better at coding, knowledge work, and long-running tasks. It's easier to collaborate with and more cost efficient than ever.",
+        "id": "anthropic/claude-opus-5-5",
+        "input_cost": 4,
+        "name": "Claude Opus 5.5",
+        "output_cost": 20,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

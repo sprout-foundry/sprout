@@ -257,8 +257,11 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
-# Build sprout binary
-# MLX is now auto-included on Darwin-arm64 via build constraints (no tag needed).
+# Build sprout binary.
+# MLX (local LLM) is a runtime-optional dependency on Darwin-arm64: sinter
+# dlopens the MLX C library at runtime, so building no longer requires
+# mlx-c — the binary works everywhere and the local LLM degrades gracefully
+# when the library is absent (brew install mlx-c enables it).
 BUILD_TAGS := grammar_blobs_external
 
 build: prepare-grammars
@@ -338,7 +341,8 @@ automate-run: build
 # Download the model the catalog recommends for this machine's RAM.
 local-model:
 	@echo "Downloading recommended local model..."
-	cd pkg/gomlx && go run -tags mlx ../../cmd/llm_download
+	@[ "$$(go env GOOS)-$$(go env GOARCH)" = "darwin-arm64" ] || { echo "local models require Apple Silicon (darwin/arm64)"; exit 1; }
+	go run ./cmd/llm_download
 
 # Build and run the local LLM server (auto-selects the best installed model
 # for this machine's RAM; serves OpenAI-compatible API on 127.0.0.1:18081).

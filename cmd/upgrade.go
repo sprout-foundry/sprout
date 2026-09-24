@@ -3,23 +3,16 @@
 package cmd
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bufio"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -196,6 +189,10 @@ func performUpgrade(target string) error {
 		return fmt.Errorf("resolve binary path: %w", err)
 	}
 
+	if err := requireWritableInstallDir(execPath); err != nil {
+		return err
+	}
+
 	archiveName, isZip := archiveNameForPlatform()
 	if archiveName == "" {
 		return fmt.Errorf("no release archive published for %s/%s — build from source instead", runtime.GOOS, runtime.GOARCH)
@@ -281,264 +278,6 @@ func archiveNameForPlatform() (string, bool) {
 	}
 }
 
-// downloadTo fetches a URL into dst with a 60s connect timeout and a
-// total deadline of 5 minutes. Caller's responsibility to size that for
-// their needs — release tarballs are ~30MB so 5m is enormous headroom.
-func downloadTo(url, dst string) error {
-	resp, err := httpClient().Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
-	}
-	f, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	src := io.Reader(resp.Body)
-	if resp.ContentLength > 0 {
-		bar := newProgressBar(resp.ContentLength)
-		src = bar.reader(resp.Body)
-		defer bar.done()
-	} else {
-		// No Content-Length (e.g. chunked encoding): just count bytes
-		// so the user sees movement instead of a silent hang.
-		counter := &countingReader{}
-		src = io.TeeReader(resp.Body, counter)
-		defer fmt.Fprintf(os.Stderr, "\rDownloaded %s      \n", humanBytes(counter.n))
-	}
-
-	if _, err := io.Copy(f, src); err != nil {
-		f.Close()
-		return err
-	}
-	// Close explicitly so flush/write errors surfaced at close time (e.g.
-	// disk full, NFS commit failure) are not silently dropped — a partially
-	// written archive would otherwise be treated as a complete download.
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("flush %s: %w", dst, err)
-	}
-	return nil
-}
-
-// countingReader is a minimal Writer that just tallies bytes, for the
-// unknown-content-length path of downloadTo.
-type countingReader struct{ n int64 }
-
-func (c *countingReader) Write(p []byte) (int, error) {
-	c.n += int64(len(p))
-	return len(p), nil
-}
-
-// humanBytes renders a byte count as a short human-readable string
-// (e.g. "12.3 MB"). Used by downloadTo's fallback progress line.
-func humanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for x := n / unit; x >= unit; x /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
-}
-
-// progressBar prints a single-line ASCII progress bar to stderr. It's
-// deliberately dependency-free: the upgrade command runs in a terminal,
-// not a TUI, so a plain \r-overwriting line is the right UX. The bar
-// throttles redraws to ~10fps to avoid spamming slow terminals.
-type progressBar struct {
-	total    int64
-	written  int64
-	lastDraw time.Time
-}
-
-const progressRedrawInterval = 100 * time.Millisecond
-
-func newProgressBar(total int64) *progressBar {
-	return &progressBar{total: total}
-}
-
-// reader wraps r so every copy chunk updates the bar.
-func (b *progressBar) reader(r io.Reader) io.Reader {
-	return &progressReader{r: r, bar: b}
-}
-
-func (b *progressBar) maybeDraw(force bool) {
-	now := time.Now()
-	if !force && now.Sub(b.lastDraw) < progressRedrawInterval {
-		return
-	}
-	b.lastDraw = now
-
-	const barWidth = 30
-	frac := float64(b.written) / float64(b.total)
-	if frac > 1 {
-		frac = 1
-	}
-	filled := int(frac * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
-	}
-
-	bar := strings.Repeat("=", filled) + strings.Repeat(" ", barWidth-filled)
-	fmt.Fprintf(os.Stderr, "\r  [%s] %5.1f%%  %s / %s",
-		bar, frac*100,
-		humanBytes(b.written), humanBytes(b.total))
-}
-
-// done prints a final newline so subsequent output doesn't overwrite the bar.
-func (b *progressBar) done() {
-	b.maybeDraw(true)
-	fmt.Fprintln(os.Stderr)
-}
-
-type progressReader struct {
-	r   io.Reader
-	bar *progressBar
-}
-
-func (pr *progressReader) Read(p []byte) (int, error) {
-	n, err := pr.r.Read(p)
-	pr.bar.written += int64(n)
-	pr.bar.maybeDraw(false)
-	return n, err
-}
-
-// verifyChecksum compares the SHA256 of `archive` against the entry for
-// `name` in `sumsPath`. The SHA256SUMS file is the standard `<hex>  <name>`
-// format produced by sha256sum / shasum -a 256.
-func verifyChecksum(archive, sumsPath, name string) error {
-	expected, err := findChecksumLine(sumsPath, name)
-	if err != nil {
-		return err
-	}
-	actual, err := sha256OfFile(archive)
-	if err != nil {
-		return fmt.Errorf("hash downloaded archive: %w", err)
-	}
-	if !strings.EqualFold(expected, actual) {
-		return fmt.Errorf("checksum mismatch for %s\n  expected: %s\n  actual:   %s\n\nRefusing to install. The download may be corrupted or tampered with", name, expected, actual)
-	}
-	fmt.Printf("Checksum verified (%s)\n", expected)
-	return nil
-}
-
-func findChecksumLine(sumsPath, name string) (string, error) {
-	f, err := os.Open(sumsPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		// Strip the leading '*' that sha256sum's binary-mode output adds.
-		fname := strings.TrimPrefix(fields[1], "*")
-		if fname == name {
-			return fields[0], nil
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-	return "", fmt.Errorf("%s not listed in SHA256SUMS", name)
-}
-
-func sha256OfFile(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// extractBinaryFromTarGz unpacks the single binary inside the tarball.
-// Release tarballs contain exactly one regular file (e.g. sprout-linux-amd64),
-// so we don't try to preserve a directory layout — just write the first
-// regular file to dst.
-func extractBinaryFromTarGz(tgz, dst string) error {
-	f, err := os.Open(tgz)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gz.Close()
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return errors.New("tarball contained no regular files")
-		}
-		if err != nil {
-			return err
-		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
-			continue
-		}
-		out, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
-		_, copyErr := io.Copy(out, tr)
-		closeErr := out.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		return closeErr
-	}
-}
-
-// extractBinaryFromZip extracts the first .exe in the archive (Windows).
-func extractBinaryFromZip(zipPath, binaryName, dst string) error {
-	zr, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer zr.Close()
-	for _, entry := range zr.File {
-		if !strings.EqualFold(filepath.Base(entry.Name), binaryName) &&
-			!strings.HasSuffix(strings.ToLower(entry.Name), ".exe") {
-			continue
-		}
-		in, err := entry.Open()
-		if err != nil {
-			return err
-		}
-		out, err := os.Create(dst)
-		if err != nil {
-			in.Close()
-			return err
-		}
-		_, copyErr := io.Copy(out, in)
-		_ = in.Close()
-		closeErr := out.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		return closeErr
-	}
-	return errors.New("no .exe entry found in zip")
-}
-
 // replaceBinary swaps the running binary with the freshly-downloaded one.
 // Unix can rename(2) over a running ELF/Mach-O file — the kernel keeps
 // the old inode open for the running process and frees it on exit, so
@@ -568,7 +307,8 @@ func replaceBinary(targetPath, newPath string) error {
 		if err := moveFile(newPath, targetPath); err != nil {
 			// Best-effort rollback: put the original back.
 			_ = os.Rename(backup, targetPath)
-			return fmt.Errorf("install new binary at %s: %w", targetPath, err)
+			return fmt.Errorf("install new binary at %s: %w\n\n%s",
+				targetPath, err, upgradeNotWritableHelp(targetPath))
 		}
 		fmt.Printf("Previous binary saved at %s (use `sprout upgrade --rollback` to restore).\n", backup)
 		return nil
@@ -579,7 +319,8 @@ func replaceBinary(targetPath, newPath string) error {
 	stagingPath := filepath.Join(dir, ".sprout.upgrade.tmp")
 	_ = os.Remove(stagingPath)
 	if err := moveFile(newPath, stagingPath); err != nil {
-		return fmt.Errorf("stage new binary in install dir: %w", err)
+		return fmt.Errorf("stage new binary in install dir: %w\n\n%s",
+			err, upgradeNotWritableHelp(targetPath))
 	}
 
 	// Save the previous version first so we can offer --rollback.
@@ -622,6 +363,9 @@ func rollbackBinary() error {
 	if err != nil {
 		return fmt.Errorf("resolve binary path: %w", err)
 	}
+	if err := requireWritableInstallDir(execPath); err != nil {
+		return err
+	}
 	backup := execPath + upgradeBackupSuffix
 	if _, err := os.Stat(backup); err != nil {
 		return fmt.Errorf("no rollback available: %s does not exist", backup)
@@ -655,29 +399,6 @@ func rollbackBinary() error {
 	return nil
 }
 
-// moveFile copies src → dst then removes src. Used instead of os.Rename
-// when the staging temp dir is on a different filesystem than the install
-// dir (common: /tmp is tmpfs, /usr/local is the root fs).
-func moveFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-	return os.Remove(src)
-}
-
 // confirm reads a single Y/N answer from stdin, defaulting to yes.
 func confirm(prompt string) bool {
 	fmt.Printf("%s [Y/n] ", prompt)
@@ -687,8 +408,4 @@ func confirm(prompt string) bool {
 	}
 	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 	return answer == "" || answer == "y" || answer == "yes"
-}
-
-func httpClient() *http.Client {
-	return &http.Client{Timeout: 5 * time.Minute}
 }

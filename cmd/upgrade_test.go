@@ -138,3 +138,116 @@ func TestSha256OfFile(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// probeWritableInstallDir is the pre-download guard that catches the
+// "installed to a root-owned /usr/local/bin via sudo" case. The
+// positive path is trivial; the contract worth pinning is the negative
+// one: a read-only dir must fail (not silently pass) and the wrapper's
+// error must carry an actionable hint.
+func TestProbeWritableInstallDir(t *testing.T) {
+	t.Run("writable", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := probeWritableInstallDir(dir); err != nil {
+			t.Fatalf("expected writable, got %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, ".sprout.write-probe")); !os.IsNotExist(err) {
+			t.Fatalf("probe file must be cleaned up, stat err = %v", err)
+		}
+	})
+
+	t.Run("read-only", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root bypasses mode bits; run as a normal user to exercise this")
+		}
+		dir := t.TempDir()
+		if err := os.Chmod(dir, 0500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(dir, 0755) })
+		if err := probeWritableInstallDir(dir); err == nil {
+			t.Fatal("expected write failure in read-only dir, got nil")
+		}
+	})
+}
+
+// requireWritableInstallDir's error is the contract users see when they
+// installed via sudo — assert the actionable guidance survives refactors.
+func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode bits; run as a normal user to exercise this")
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	execPath := filepath.Join(dir, "sprout")
+
+	err := requireWritableInstallDir(execPath)
+	if err == nil {
+		t.Fatal("expected error for non-writable dir")
+	}
+	msg := err.Error()
+	for _, want := range []string{"is not writable", "sudo sprout upgrade", "SPROUT_INSTALL_DIR", execPath} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error missing %q:\n%s", want, msg)
+		}
+	}
+}
+
+// The exact failure mode from the field: staging into a non-writable
+// install dir. It must not be a bare "permission denied" — it has to name
+// the fix (sudo / chown / install script). Unix-only: the Windows path
+// uses rename-over-running-image and can't be exercised on Linux.
+func TestReplaceBinary_StagePermissionDenied(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix staging path")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode bits; run as a normal user to exercise this")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "sprout")
+	if err := os.WriteFile(target, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(t.TempDir(), "sprout-fresh")
+	if err := os.WriteFile(fresh, []byte("new"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+
+	err := replaceBinary(target, fresh)
+	if err == nil {
+		t.Fatal("expected staging to fail in non-writable dir")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "stage new binary in install dir") {
+		t.Fatalf("expected staging error, got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "sudo sprout upgrade") {
+		t.Fatalf("expected actionable hint in error, got:\n%s", msg)
+	}
+
+	// The upgrade must not have touched the running binary or left
+	// staging/backup litter behind.
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "old" {
+		t.Fatalf("running binary was modified: %q", data)
+	}
+	for _, litter := range []string{
+		filepath.Join(dir, ".sprout.upgrade.tmp"),
+		target + upgradeBackupSuffix,
+	} {
+		if _, err := os.Stat(litter); err == nil {
+			t.Fatalf("leftover %s after failed upgrade", litter)
+		}
+	}
+}

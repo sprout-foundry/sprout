@@ -163,6 +163,7 @@ func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientTyp
 			modelIDs = append(modelIDs, id)
 		}
 		if len(modelIDs) > 0 {
+			sort.Strings(modelIDs)
 			return modelIDs
 		}
 	}
@@ -189,6 +190,7 @@ func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientTyp
 					slog.Any("err", err),
 				)
 			}
+			sort.Strings(modelIDs)
 			return modelIDs
 		}
 	}
@@ -379,8 +381,15 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		// keeps the model picker modal consistent with the settings dropdown
 		// (which uses modelsForProviderFromAPICtx and already falls back).
 		if provider, ok := providercatalog.FindProvider(string(clientType)); ok && len(provider.Models) > 0 {
-			result := make([]map[string]interface{}, 0, len(provider.Models))
-			for _, m := range provider.Models {
+			// Sort a copy so the picker is alphabetical without mutating the
+			// shared catalog (FindProvider returns a live slice).
+			catalogModels := make([]providercatalog.Model, len(provider.Models))
+			copy(catalogModels, provider.Models)
+			sort.SliceStable(catalogModels, func(i, j int) bool {
+				return catalogModels[i].ID < catalogModels[j].ID
+			})
+			result := make([]map[string]interface{}, 0, len(catalogModels))
+			for _, m := range catalogModels {
 				id := strings.TrimSpace(m.ID)
 				if id == "" {
 					continue
@@ -413,8 +422,17 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	result := make([]map[string]interface{}, 0, len(models))
-	for _, m := range models {
+	// Sort a copy so the picker lists models alphabetically without mutating
+	// the slice returned by GetModelsForProviderCtx (other consumers read it in
+	// provider order for default-model selection).
+	displayModels := make([]api.ModelInfo, len(models))
+	copy(displayModels, models)
+	sort.SliceStable(displayModels, func(i, j int) bool {
+		return displayModels[i].ID < displayModels[j].ID
+	})
+
+	result := make([]map[string]interface{}, 0, len(displayModels))
+	for _, m := range displayModels {
 		result = append(result, map[string]interface{}{
 			"id":                m.ID,
 			"name":              m.Name,

@@ -64,9 +64,11 @@ func TestScanValidTree(t *testing.T) {
 
 	assert.True(t, sort.StringsAreSorted(assetRowPaths(inv.Assets)), "asset rows must be sorted by path")
 
-	// Token group counts: color.brand has two leaves.
-	require.Len(t, inv.TokenGroups, 1)
-	assert.Equal(t, TokenGroupCount{Group: "color", Tokens: 2}, inv.TokenGroups[0])
+	// Token group counts: color.brand + color.semantic = 3 leaves;
+	// typography.label = 1 leaf.
+	require.Len(t, inv.TokenGroups, 2)
+	assert.Equal(t, TokenGroupCount{Group: "color", Tokens: 3}, inv.TokenGroups[0])
+	assert.Equal(t, TokenGroupCount{Group: "typography", Tokens: 1}, inv.TokenGroups[1])
 
 	// Flow node/edge counts: login -> home plus the self-loop home -> home is
 	// 2 nodes and 2 edges (the self-loop keeps every wireframe stem referenced

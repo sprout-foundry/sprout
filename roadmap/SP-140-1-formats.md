@@ -36,6 +36,15 @@ Location `design/tokens/*.tokens.json`. Requirements:
   (`color`, `dimension`, `fontFamily`, `fontWeight`, `number`,
   `duration`, `cubicBezier`, `strokeStyle`, `border`). Unknown `$type`
   values are a validator error, not a silent pass.
+- **Tier self-nesting:** a tier file's top level contains a group named for
+  the tier — `color.tokens.json` holds `{"color": {...}}`,
+  `typography.tokens.json` holds `{"typography": {...}}`. Every
+  `{group.token}` reference (§1e wireframe comments, brand palette entries)
+  and every export var walks from that group. A tier file with bare
+  sub-groups parses and exports cleanly while dangling every reference
+  against it; the consistency pack's `consistency_token_ref_dangling`
+  finding (§4b) catches this cross-file, and the remedy is self-nesting the
+  file — references are the contract, the file shape serves them.
 - Alias references use `{group.token}` dot paths; the validator must
   resolve every reference and reject cycles and dangling paths.
 - One file per tier (`color`, `typography`, `spacing`, `sizing`,

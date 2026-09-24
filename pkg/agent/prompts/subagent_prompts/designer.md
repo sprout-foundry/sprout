@@ -40,7 +40,13 @@ paths; dangling and cyclic references are errors. One file per tier
 (`color`, `typography`, `spacing`, `sizing`, `motion`) plus project tiers;
 no `index.json` aggregation — consumers glob. `$extensions` is passed
 through untouched. Tokens are authoritative: literal colors and font
-strings in screens and wireframes are drift.
+strings in screens and wireframes are drift. **Each tier file self-nests
+under its own group** — `color.tokens.json` holds `{"color": {...}}` —
+because every `{group.token}` reference walks from that group
+(`{color.dark.bg.primary}` resolves against the top-level `color`). A tier
+file with bare sub-groups parses and exports cleanly while dangling every
+reference against it; the `consistency_token_ref_dangling` finding names
+this — fix it by self-nesting the file, never by rewriting the refs.
 
 **Wireframes (`design/wireframes/<screen-name>.svg`)** — root
 `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">` with integer

@@ -51,6 +51,9 @@ const validTokenJSON = `{
     "brand": {
       "primary": {"$value": "#0055ff", "$type": "color"},
       "secondary": {"$value": "{color.brand.primary}", "$type": "color"}
+    },
+    "semantic": {
+      "surface": {"$value": "#ffffff", "$type": "color"}
     }
   }
 }`
@@ -92,6 +95,13 @@ func writeValidDesignTree(t *testing.T, root string) {
 	}
 	write("design/README.md", validTreeManifest)
 	write("design/tokens/color.tokens.json", validTokenJSON)
+	write("design/tokens/typography.tokens.json", `{
+  "typography": {
+    "label": {
+      "font-family": {"$value": "Inter, sans-serif", "$type": "fontFamily"}
+    }
+  }
+}`)
 	write("design/wireframes/login.svg", validWireframeBody)
 	write("design/wireframes/home.svg", validHomeWireframeBody)
 	write("design/components/button.svg", validComponentBody)

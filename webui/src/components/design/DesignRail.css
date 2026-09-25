@@ -12,6 +12,25 @@
   gap: var(--space-1);
 }
 
+/*
+ * §8d empty state — a design/ tree with no screens yet. A non-interactive
+ * sibling of the screen entries: same icon slot, muted, with the full
+ * message on title/hover (the rail is an icon column; the message lives in
+ * the tooltip, not cramped into 36px).
+ */
+.design-rail-empty {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 /* Screen entries anchor their overlays on the 36px icon hit area. */
 .design-rail-screen {
   position: relative;

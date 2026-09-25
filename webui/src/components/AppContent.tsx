@@ -30,6 +30,7 @@ import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { useChatModePinning } from '../workspaces/useChatModePinning';
+import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
 import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
@@ -460,8 +461,9 @@ const AppContent: React.FC<AppContentProps> = ({
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
   // because the rail (Sidebar) and the surface are siblings and must agree on
-  // it: the rail drives it, the surface renders it.
-  const [designSection, setDesignSection] = useState<DesignTab>('flows');
+  // it: the rail drives it, the surface renders it. Persisted per instance
+  // (SP-140-8 item 8.5) so a reload returns to the section the user left.
+  const { section: designSection, setSection: setDesignSection } = useDesignSectionPersistence();
 
   /**
    * Selecting a mode moves the view. The workspace-mode state is the source of

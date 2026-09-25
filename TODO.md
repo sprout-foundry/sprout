@@ -453,6 +453,29 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ---
 
+## SP-140 — Vision tier follow-ups (`roadmap/SP-140-vision-capability-first-class.md`)
+
+- [ ] **V-1** Vision-tier model preference: the registry `vision_model`
+      pin beats the active model in `GetVisionModelForProvider`
+      (pkg/agent_tools/vision_client.go), so an agent running a
+      natively-multimodal model (e.g. glm-5.3-flash on zai-coding,
+      catalog-tagged `vision`) still forks its vision calls to the
+      pinned model — observed live: a designer-persona run's
+      design_critique vision calls went to the registry-pinned
+      glm-5v-turbo, which the user's plan does not include, 429'd
+      three times, and degraded to OCR. Fix: prefer the ACTIVE model
+      when it is itself vision-capable (SP-137 runtime > declared
+      precedence); fall back to the registry `vision_model` only when
+      the active model lacks vision. Also review the zai registry
+      configs' vision_model staleness (glm-5.3-flash is the current
+      natively-multimodal flash tier).
+- [ ] **V-2** Skill nit: design-system SKILL.md Step 1 should say to
+      use structured-file writes for token JSON (a live
+      designer-persona run hand-edited valid-but-mangled indentation;
+      semantics were correct, formatting was not).
+
+---
+
 ## Status
 
 SP-140-6 (loop surface, items 6.1–6.8) and SP-140-7 (human co-editing,

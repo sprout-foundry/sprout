@@ -478,9 +478,12 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 		return query, nil
 	}
 
-	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
-	if err != nil {
-		return query, agenterrors.NewAgent("conversation", "failed to create vision processor", err)
+	// The agent's cached processor (agent_accessors.go): one resolution per
+	// provider swap, not one per call — and the same tier the design tools
+	// receive via env.VisionProcessor, so every consumer agrees.
+	processor := a.GetVisionProcessor()
+	if processor == nil {
+		return query, agenterrors.NewAgent("conversation", "failed to create vision processor", nil)
 	}
 
 	enhancedQuery, analyses, err := processor.ProcessImagesInText(a.InterruptCtx(), query)

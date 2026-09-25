@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -195,19 +196,31 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured: %w", providerType, globalErr)
 }
 
-// GetVisionModelForProvider returns the appropriate vision model for a given provider.
+// GetVisionModelForProvider returns the appropriate vision model for a given
+// provider, preferring the ACTIVE model when it is itself vision-capable.
 //
-// Resolution order (SP-137: provider-neutral):
-//  1. Custom providers check their explicit vision_model / model_name config.
-//  2. All other providers read from the provider JSON config via a temporary
-//     client's GetVisionModel(). No provider is special-cased.
-//
-// Vision models are configured in the provider JSON config files in
-// pkg/agent_providers/configs/*.json under the "vision_model" field.
+// Resolution order (SP-137: runtime > declared, provider-neutral):
+//  1. The provider's active (default) model, when its model_info entry is
+//     tagged vision-capable — a natively-multimodal active model must not
+//     be forked away from. (Observed failure this fixes: an agent running
+//     glm-5.3-flash had every vision call forked to the registry-pinned
+//     glm-5v-turbo, which the user's plan did not include.)
+//  2. Custom providers' explicit vision_model / model_name config.
+//  3. The registry vision_model pin (pkg/agent_providers/configs/*.json).
+//  4. The provider's default model via a client's GetVisionModel().
 func GetVisionModelForProvider(providerType api.ClientType) string {
 	switch providerType {
 	case api.TestClientType:
 		return ""
+	}
+
+	// The active model first: when it is itself vision-capable, the vision
+	// tier IS the active model. The declared-capability read mirrors
+	// SupportsVision's model_info tier (tags over provider flag).
+	if cfg, err := factory.GlobalFactory().GetProviderConfig(string(providerType)); err == nil && cfg != nil {
+		if active := strings.TrimSpace(cfg.Defaults.Model); active != "" && providerModelSeesImages(cfg, active) {
+			return active
+		}
 	}
 
 	// Check custom provider config first for explicit vision settings.
@@ -221,7 +234,7 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 		return strings.TrimSpace(customConfig.ModelName)
 	}
 
-	// Registry config first: an explicit vision_model beats everything and
+	// Registry config: an explicit vision_model beats everything below and
 	// works even when defaults.model is unset (SP-137: config-driven, no
 	// throwaway client needed for the common case).
 	if cfg, err := factory.GlobalFactory().GetProviderConfig(string(providerType)); err == nil && cfg != nil {
@@ -244,6 +257,32 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 
 	// Get vision model from the provider
 	return client.GetVisionModel()
+}
+
+// providerModelSeesImages reports whether one model of a provider config is
+// vision-capable — the same declared-capability read the live client's
+// SupportsVision performs, applied to the config's model table so the check
+// needs no client construction. Mirrors its semantics exactly: a false
+// provider-wide supports_vision vetoes everything; a model_info entry makes
+// the tag list authoritative; otherwise the provider flag decides.
+func providerModelSeesImages(cfg *providers.ProviderConfig, model string) bool {
+	if cfg == nil || !cfg.Models.SupportsVision {
+		return false
+	}
+	if info := cfg.GetModelInfo(model); info != nil {
+		return modelInfoSeesImages(*info)
+	}
+	return true
+}
+
+// modelInfoSeesImages reads one model_info entry's vision tags.
+func modelInfoSeesImages(info providers.ModelInfo) bool {
+	for _, tag := range info.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
+			return true
+		}
+	}
+	return false
 }
 
 // GetDefaultModelForProvider returns the provider's configured default

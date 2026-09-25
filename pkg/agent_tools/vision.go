@@ -13,8 +13,6 @@ package tools
 // - AnalyzeImage(imagePath, analysisPrompt, analysisMode) - Main entry point for image analysis
 // - HasVisionCapability() - Check if vision is available
 // - ProcessPDFWithVision(pdfPath) - Process PDF files with OCR
-// - GetLastVisionUsage() - Get token usage from last vision call
-// - GetVisionCacheStats() - Get cache statistics
 //
 // Example usage:
 //

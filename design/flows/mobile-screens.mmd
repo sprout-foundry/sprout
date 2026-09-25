@@ -1,0 +1,12 @@
+%% mobile-screens — the SP-143 143.7 dogfood pair: the kit's phone screens
+%% and the runtime's in-place data-nav swap between them. Node ids are
+%% wireframe stems. Triggers live in the %% comments (the design/flows
+%% contract keeps edges label-free): the triggers the screens' data-nav
+%% anchors author.
+flowchart TD
+  mobile-sessions["mobile-sessions — session list"]
+  mobile-session["mobile-session — session detail"]
+  %% tap a session row (the screen kit's first real navigation)
+  mobile-sessions --> mobile-session
+  %% tap back in the detail top bar
+  mobile-session --> mobile-sessions

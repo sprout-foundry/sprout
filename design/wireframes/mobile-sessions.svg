@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <!-- mobile-sessions: phone session list (SP-143 143.7 dogfood). Palette tokens: {color.dark.bg.primary} {color.dark.text.primary} {color.dark.text.muted} {color.dark.border.subtle} {color.dark.accent.success} {typography.size.xl} {typography.size.base} {typography.size.xs} -->
+  <style>
+    .bg { fill: #282c34; }
+    .t1 { fill: #abb2bf; font: 20px sans-serif; }
+    .t2 { fill: #abb2bf; font: 14px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .ok { fill: #98c379; }
+    .idle { fill: #5c6370; }
+  </style>
+
+  <rect x="0" y="0" width="390" height="844" class="bg"/>
+
+  <!-- status bar inset (chrome.css owns the rendered bar) -->
+  <rect x="0" y="0" width="390" height="47" class="bg"/>
+
+  <text x="16" y="84" class="t1">Sessions</text>
+
+  <!-- session rows; the primary tap target navigates (data-nav, SP-140-9 9a) -->
+  <g id="session-row-1">
+    <circle cx="22" cy="128" r="5" class="ok"/>
+    <text x="38" y="133" class="t2">Refactor the export pipeline</text>
+    <text x="374" y="133" text-anchor="end" class="tm">now</text>
+    <line x1="16" y1="152" x2="374" y2="152" class="b1"/>
+  </g>
+  <g id="session-row-2">
+    <circle cx="22" cy="184" r="5" class="idle"/>
+    <text x="38" y="189" class="t2">Fix the flaky diff test</text>
+    <text x="374" y="189" text-anchor="end" class="tm">2h</text>
+    <line x1="16" y1="208" x2="374" y2="208" class="b1"/>
+  </g>
+  <g id="session-row-3">
+    <circle cx="22" cy="240" r="5" class="idle"/>
+    <text x="38" y="245" class="t2">Draft the release notes</text>
+    <text x="374" y="245" text-anchor="end" class="tm">1d</text>
+    <line x1="16" y1="264" x2="374" y2="264" class="b1"/>
+  </g>
+
+  <!-- home indicator inset (chrome.css owns the rendered indicator) -->
+  <rect x="0" y="820" width="390" height="24" class="bg"/>
+</svg>

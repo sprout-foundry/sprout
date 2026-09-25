@@ -1,6 +1,6 @@
 {
   "provenance": "Generated from design/screens/*.html data-attributes (SP-143 §4). Do not edit by hand; regenerate with design_export_tokens targets:screens.",
-  "source-hash": "fnv1a64:85d811361464d199",
+  "source-hash": "fnv1a64:f0ab203ca7934b8f",
   "source": "design/screens/*.html. Recompute the hash from those bytes (concat in stem order, fnv1a64) to verify.",
   "format-version": 1,
   "screens": [
@@ -10,6 +10,34 @@
       "frame": 1440,
       "states": [],
       "nav": []
+    },
+    {
+      "stem": "mobile-session",
+      "device": "phone",
+      "frame": 390,
+      "states": [
+        "ready",
+        "loading",
+        "error"
+      ],
+      "nav": [
+        {
+          "to": "mobile-sessions",
+          "trigger": "tap back"
+        }
+      ]
+    },
+    {
+      "stem": "mobile-sessions",
+      "device": "phone",
+      "frame": 390,
+      "states": [],
+      "nav": [
+        {
+          "to": "mobile-session",
+          "trigger": "tap session row"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  Sprout screen kit dogfood: mobile-session (SP-143 143.7). A copy of
+  design/runtime/base/phone.html with the stem replaced — session detail for
+  a phone, with declared states (ready/loading/error) the runtime's
+  preview-gated switcher toggles, and a data-nav anchor back to
+  mobile-sessions. Styled utilities-first from ../generated/tokens.css (143.1).
+-->
+<html lang="en" data-device="phone" data-sprout-screens="1" data-states="ready,loading,error">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mobile-session — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<link rel="stylesheet" href="../runtime/chrome.css">
+<style>
+  /* The declared README frame this screen lays out at. Chrome.css draws the
+     bezel around these; the validator's frame check reads the same numbers. */
+  html {
+    --sprout-frame-width: 390px;
+    --sprout-frame-height: 844px;
+    color-scheme: dark;
+  }
+  body { margin: 0; }
+  .glass {
+    box-sizing: border-box;
+    width: 390px;
+    height: 844px;
+    padding: 56px var(--space-4) 24px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    background: var(--color-dark-bg-primary);
+    color: var(--color-dark-text-primary);
+    font-family: var(--typography-font-sans);
+  }
+  .topbar { display: flex; align-items: center; gap: var(--space-4); }
+  .back-link { color: var(--color-dark-accent-primary); text-decoration: none; font-size: var(--typography-size-base); }
+  .screen-title { margin: 0; font-size: var(--typography-size-lg); }
+  .state-pane { padding: var(--space-4); border-radius: var(--radius-lg); }
+  .state-ready { background: var(--color-dark-bg-success); color: var(--color-dark-accent-success); }
+  .state-loading { background: var(--color-dark-bg-info); color: var(--color-dark-accent-primary); }
+  .state-error { background: var(--color-dark-bg-error); color: var(--color-dark-accent-error); }
+</style>
+</head>
+<body data-sprout-screen="mobile-session">
+<div data-sprout-home></div>
+<main class="glass">
+  <div class="topbar">
+    <a class="back-link" href="../screens/mobile-sessions.html" data-nav="to:mobile-sessions;trigger:tap back">&larr; Sessions</a>
+    <h1 class="screen-title">Refactor the export pipeline</h1>
+  </div>
+  <section class="state-pane state-ready" data-state="ready">
+    Ready — agent idle, last turn committed the export refactor.
+  </section>
+  <section class="state-pane state-loading" data-state="loading">
+    Loading — agent is streaming the diff review.
+  </section>
+  <section class="state-pane state-error" data-state="error">
+    Error — the session hit a tool failure. Retry the turn.
+  </section>
+</main>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

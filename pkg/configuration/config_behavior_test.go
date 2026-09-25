@@ -36,7 +36,6 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.Equal(t, 1800, cfg.APITimeouts.OverallTimeoutSec)
 	assert.True(t, cfg.EnableZshCommandDetection)
 	assert.True(t, cfg.AutoExecuteDetectedCommands)
-	assert.Equal(t, "", cfg.OCRFallbackModel, "OCR fallback should default empty (native/provider paths)")
 	assert.NotEmpty(t, cfg.SubagentTypes, "SubagentTypes should contain defaults")
 	assert.NotEmpty(t, cfg.Skills, "Skills should contain defaults")
 	assert.True(t, cfg.Wakeup.Enabled, "Wakeup should default to enabled")
@@ -87,18 +86,11 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 
 func TestConfigValidateMultipleErrors(t *testing.T) {
 	cfg := NewConfig()
-	// Set an invalid field: OCR fallback must be provider-qualified.
-	cfg.OCRFallbackModel = "no-slash-model"
+	// Set an invalid field: output verbosity outside the allowed set.
+	cfg.OutputVerbosity = "loud"
 
 	err := cfg.Validate()
-	// The Validate method returns the first error encountered, but we can
-	// verify the config truly has multiple problems by testing each one
-	// individually to confirm they are independently invalid.
 	assert.Error(t, err, "Validate should return an error for invalid config")
-
-	// Confirm the condition is independently invalid
-	singleErr := (&Config{OCRFallbackModel: "no-slash-model"}).Validate()
-	assert.Error(t, singleErr)
 }
 
 // ---------------------------------------------------------------------------

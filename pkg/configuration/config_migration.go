@@ -225,32 +225,17 @@ func applyAPITimeoutDefaults(raw map[string]interface{}) {
 	raw["api_timeouts"] = apiTimeouts
 }
 
-// applyPDFOCRDefaults migrated the legacy provider-coupled PDF OCR config
-// into the neutral ocr_fallback_model field (SP-137). The old
-// provider+model pair is folded into "provider/model"; users who never
-// customized the old defaults (the hardcoded legacy pair) get an empty
-// fallback — native OCR or any configured vision provider serves instead.
-// The legacy keys are removed from the map so they stop round-tripping.
+// applyPDFOCRDefaults strips the legacy PDF-OCR config keys. The
+// second-tier OCR-fallback machinery they fed was removed (vision-first:
+// pixels attach inline; non-vision primaries get native OCR); the keys are
+// deleted from the map so they stop round-tripping through config saves.
 func applyPDFOCRDefaults(raw map[string]interface{}) {
-	provider, _ := raw["pdf_ocr_provider"].(string)
-	model, _ := raw["pdf_ocr_model"].(string)
-	provider = strings.TrimSpace(provider)
-	model = strings.TrimSpace(model)
-
-	_, hasNeutral := raw["ocr_fallback_model"]
-
-	// The legacy default pair was written by applyPDFOCRDefaults for years;
-	// migrating it forward would silently re-couple users to a provider
-	// they never chose. Only a user-customized pair migrates.
-	legacyDefault := provider == "ollama" && model == "glm-ocr"
-
-	if provider != "" && model != "" && !legacyDefault && !hasNeutral {
-		raw["ocr_fallback_model"] = provider + "/" + model
-	}
 	delete(raw, "pdf_ocr_provider")
 	delete(raw, "pdf_ocr_model")
 	delete(raw, "pdf_ocr_enabled")
 	delete(raw, "pdf_ocr_downloaded")
+	delete(raw, "ocr_fallback_model")
+	delete(raw, "vision_fallback_to_ocr")
 }
 
 // applyZshCommandDetectionDefaults ensures zsh command detection fields have values.

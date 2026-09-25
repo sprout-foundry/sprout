@@ -379,38 +379,3 @@ func decodeBase64ImagePayload(output []byte) [][]byte {
 	}
 	return images
 }
-
-func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
-	fileInfo, err := os.Stat(pdfPath)
-	if err != nil {
-		return nil, fmt.Errorf("stat PDF file: %w", err)
-	}
-	maxSize := int64(20 * 1024 * 1024)
-	if fileInfo.Size() > maxSize {
-		return nil, fmt.Errorf("PDF file too large (%d MB, maximum size is %d MB)", fileInfo.Size()/1024/1024, maxSize/1024/1024)
-	}
-	f, r, err := pdf.Open(pdfPath)
-	defer func() {
-		if f != nil {
-			_ = f.Close()
-		}
-	}()
-	if err != nil {
-		return nil, fmt.Errorf("open PDF: %w", err)
-	}
-	info := make(map[string]interface{})
-	info["page_count"] = r.NumPage()
-	info["has_text"] = false
-	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
-		p := r.Page(pageNum)
-		if p.V.IsNull() {
-			continue
-		}
-		text, err := p.GetPlainText(nil)
-		if err == nil && strings.TrimSpace(text) != "" {
-			info["has_text"] = true
-			break
-		}
-	}
-	return info, nil
-}

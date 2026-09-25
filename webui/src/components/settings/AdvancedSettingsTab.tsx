@@ -174,27 +174,6 @@ export default function AdvancedSettingsTab({
         </div>
       </Collapsible>
 
-      {/* OCR fallback (SP-137: provider-neutral) */}
-      <Collapsible title="OCR" variant="flush">
-        <div className="settings-section-spaced">
-          <h4>OCR Fallback</h4>
-          {renderTextInput(
-            'ocr_fallback_model',
-            'OCR fallback model',
-            'provider/model (e.g. openai/gpt-4o). Leave empty for native OCR only.',
-          )}
-          <div className="settings-section-spaced-bordered">
-            <h4>PDF OCR Routing</h4>
-            <div className="config-help settings-help-spaced">
-              Route PDF text extraction to a specific provider and model instead of the session default. Leave empty to
-              inherit.
-            </div>
-            {renderTextInput('pdf_ocr_provider', 'PDF OCR provider', 'e.g. openai — leave empty to inherit')}
-            {renderTextInput('pdf_ocr_model', 'PDF OCR model', 'e.g. openai/gpt-4o — leave empty to inherit')}
-          </div>
-        </div>
-      </Collapsible>
-
       {/* Context engine + display + update + git-safety toggles */}
       <Collapsible title="Context & Display" variant="flush">
         <div className="settings-section-spaced">

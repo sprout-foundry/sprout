@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -185,21 +184,6 @@ type Config struct {
 	CompletionProvider string `json:"completion_provider,omitempty"` // Provider for code completions (defaults to LastUsedProvider)
 	CompletionModel    string `json:"completion_model,omitempty"`    // Model for code completions (defaults to provider's default model)
 
-	// VisionFallbackToOCR enables transparent fallback to the OCR model when
-	// the primary vision model fails after retries. Default: true.
-	VisionFallbackToOCR bool `json:"vision_fallback_to_ocr,omitempty"`
-
-	// OCRFallbackModel is the provider-qualified model ("provider/model")
-	// used for text-extraction fallback when the primary vision path fails
-	// and for OCR-only workflows. Empty = native OCR only (SP-137).
-	OCRFallbackModel string `json:"ocr_fallback_model,omitempty"`
-
-	// Legacy PDF OCR fields (pre-SP-137). Read-only compat surface: the
-	// loader migrates pdf_ocr_provider+pdf_ocr_model into ocr_fallback_model
-	// and these fields are no longer consulted by vision code.
-	PDFOCRProvider string `json:"pdf_ocr_provider,omitempty"`
-	PDFOCRModel    string `json:"pdf_ocr_model,omitempty"`
-
 	// Embedding Index Configuration
 	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
 
@@ -377,7 +361,6 @@ func NewConfig() *Config {
 		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
-		OCRFallbackModel:            "",
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		Wakeup:                      DefaultWakeupConfig(),
@@ -398,11 +381,6 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("invalid output_verbosity %q: must be one of %q, %q, %q",
 			c.OutputVerbosity, OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose)
-	}
-
-	// Validate OCR fallback: when set it must be provider-qualified.
-	if c.OCRFallbackModel != "" && !strings.Contains(c.OCRFallbackModel, "/") {
-		return fmt.Errorf("ocr_fallback_model must be provider-qualified (provider/model), got %q", c.OCRFallbackModel)
 	}
 
 	// Validate shell config

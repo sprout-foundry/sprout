@@ -365,7 +365,6 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 
 		// This is a retry — increment counters.
 		retryCount++
-		IncVisionRetry()
 
 		// Compute backoff delay.
 		delay := computeBackoff(attempt, baseDelay, maxDelay, jitterPct)
@@ -396,7 +395,6 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 			goto done
 		case <-time.After(delay):
 			totalSleep += delay
-			AddVisionLatencyRetrySleep(delay)
 		}
 	}
 
@@ -407,10 +405,6 @@ done:
 		stats.SleepDuration = totalSleep
 		stats.LastError = lastErr
 	}
-
-	// Classify and record the failure reason.
-	reason := classifyVisionError(lastErr)
-	IncVisionFailure(reason)
 
 	// Log give-up message.
 	logVisionGiveUp(opName, maxAttempts, lastErr)

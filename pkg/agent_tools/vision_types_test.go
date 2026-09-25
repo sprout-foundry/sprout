@@ -2,7 +2,6 @@ package tools
 
 import (
 	"encoding/json"
-	"math"
 	"testing"
 )
 
@@ -22,120 +21,6 @@ func TestGetVisionMaxReturnedTextChars(t *testing.T) {
 	// may have caching behavior or use a different mechanism than direct os.Getenv.
 	// In a real test environment, you would need to test with the actual configuration
 	// system set up or inject the value through the proper configuration layer.
-}
-
-// TestVisionUsage tests GetLastVisionUsage and ClearLastVisionUsage.
-// Note: These tests cannot be parallel because they modify global state.
-func TestVisionUsage(t *testing.T) {
-	// Clear global state at the start
-	ClearLastVisionUsage()
-
-	t.Run("initially nil", func(t *testing.T) {
-		got := GetLastVisionUsage()
-		if got != nil {
-			t.Errorf("GetLastVisionUsage() = %v, want nil", got)
-		}
-	})
-
-	t.Run("set and retrieve", func(t *testing.T) {
-		// Set via recordVisionUsage helper (no processor, only global mirror)
-		recordVisionUsage(nil, &VisionUsageInfo{
-			PromptTokens:     1000,
-			CompletionTokens: 500,
-			TotalTokens:      1500,
-			EstimatedCost:    0.01,
-		})
-
-		got := GetLastVisionUsage()
-
-		if got == nil {
-			t.Error("GetLastVisionUsage() = nil, want non-nil")
-		} else {
-			if got.PromptTokens != 1000 {
-				t.Errorf("PromptTokens = %v, want 1000", got.PromptTokens)
-			}
-			if got.CompletionTokens != 500 {
-				t.Errorf("CompletionTokens = %v, want 500", got.CompletionTokens)
-			}
-			if got.TotalTokens != 1500 {
-				t.Errorf("TotalTokens = %v, want 1500", got.TotalTokens)
-			}
-			if got.EstimatedCost != 0.01 {
-				t.Errorf("EstimatedCost = %v, want 0.01", got.EstimatedCost)
-			}
-		}
-	})
-
-	t.Run("clear returns nil", func(t *testing.T) {
-		ClearLastVisionUsage()
-
-		got := GetLastVisionUsage()
-		if got != nil {
-			t.Errorf("GetLastVisionUsage() after ClearLastVisionUsage() = %v, want nil", got)
-		}
-	})
-
-	// Reset for other tests
-	ClearLastVisionUsage()
-}
-
-// TestVisionCacheStats tests the GetVisionCacheStats function.
-// Note: This test cannot be parallel because it modifies global state.
-func TestVisionCacheStats(t *testing.T) {
-	// Clear global state at the start
-	resetVisionCache()
-
-	t.Run("empty cache", func(t *testing.T) {
-		stats := GetVisionCacheStats()
-
-		if stats["cached_results"] != 0 {
-			t.Errorf("cached_results = %v, want 0", stats["cached_results"])
-		}
-		if stats["estimated_savings"] != 0.0 {
-			t.Errorf("estimated_savings = %v, want 0.0", stats["estimated_savings"])
-		}
-	})
-
-	t.Run("single cached result", func(t *testing.T) {
-		visionLRU.Put("key1", "result1", &VisionUsageInfo{
-			TotalTokens:   1000,
-			EstimatedCost: 0.01,
-		})
-
-		stats := GetVisionCacheStats()
-
-		if stats["cached_results"] != 1 {
-			t.Errorf("cached_results = %v, want 1", stats["cached_results"])
-		}
-		if stats["estimated_savings"] != 0.01 {
-			t.Errorf("estimated_savings = %v, want 0.01", stats["estimated_savings"])
-		}
-	})
-
-	t.Run("multiple cached results", func(t *testing.T) {
-		visionLRU.Put("key2", "result2", &VisionUsageInfo{
-			TotalTokens:   2000,
-			EstimatedCost: 0.02,
-		})
-		visionLRU.Put("key3", "result3", &VisionUsageInfo{
-			TotalTokens:   1500,
-			EstimatedCost: 0.015,
-		})
-
-		stats := GetVisionCacheStats()
-
-		if stats["cached_results"] != 3 {
-			t.Errorf("cached_results = %v, want 3", stats["cached_results"])
-		}
-		// 0.01 + 0.02 + 0.015 = 0.045
-		got := stats["estimated_savings"].(float64)
-		if math.Abs(got-0.045) > 1e-9 {
-			t.Errorf("estimated_savings = %v, want 0.045", got)
-		}
-	})
-
-	// Clean up global state for other tests
-	resetVisionCache()
 }
 
 // TestGetBaseName tests the GetBaseName function.

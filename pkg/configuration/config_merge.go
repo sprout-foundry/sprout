@@ -250,14 +250,6 @@ func MergeConfig(base, override *Config) *Config {
 		result.ReviewModel = override.ReviewModel
 	}
 
-	// Override OCR fallback model (SP-137 neutral field)
-	if override.OCRFallbackModel != "" {
-		result.OCRFallbackModel = override.OCRFallbackModel
-	}
-	if override.overrides("vision_fallback_to_ocr", override.VisionFallbackToOCR) {
-		result.VisionFallbackToOCR = override.VisionFallbackToOCR
-	}
-
 	// Merge Skills
 	if len(override.Skills) > 0 {
 		if result.Skills == nil {

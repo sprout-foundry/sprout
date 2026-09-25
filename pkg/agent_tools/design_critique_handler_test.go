@@ -1009,12 +1009,11 @@ func TestAppendNote(t *testing.T) {
 // TestDesignCritiqueHandler_NoVisionTierIsHermetic pins that the no-processor
 // branch of the vision pass never issues a live request: when no tier is
 // available the pass degrades on the capability probe alone. It pins the
-// capability and the fallback env so the outcome cannot depend on the host's
-// provider configuration or network.
+// capability so the outcome cannot depend on the host's provider
+// configuration or network.
 func TestDesignCritiqueHandler_NoVisionTierIsHermetic(t *testing.T) {
 	restoreCapability := SetVisionCapabilityForTest(false)
 	t.Cleanup(restoreCapability)
-	setEnvSuffix(t, "VISION_FALLBACK_TO_OCR", "")
 
 	root := t.TempDir()
 	dcWriteTree(t, root)

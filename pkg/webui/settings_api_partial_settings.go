@@ -356,19 +356,6 @@ func applyProviderRoutingSettings(cfg *configuration.Config, patch map[string]in
 }
 
 // ---------------------------------------------------------------------------
-// PDF OCR
-// ---------------------------------------------------------------------------
-
-func applyPDFOCRSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
-	if v, ok := patch["ocr_fallback_model"]; ok {
-		knownKeys["ocr_fallback_model"] = true
-		s, _ := v.(string)
-		cfg.OCRFallbackModel = truncateString(s, maxSettingNameLength)
-	}
-	return nil
-}
-
-// ---------------------------------------------------------------------------
 // Shell command detection
 // ---------------------------------------------------------------------------
 
@@ -749,20 +736,6 @@ func applyMiscAgentSettings(cfg *configuration.Config, patch map[string]interfac
 	return nil
 }
 
-func applyPDFOCRProviderSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
-	if v, ok := patch["pdf_ocr_provider"]; ok {
-		knownKeys["pdf_ocr_provider"] = true
-		s, _ := v.(string)
-		cfg.PDFOCRProvider = truncateString(s, maxSettingNameLength)
-	}
-	if v, ok := patch["pdf_ocr_model"]; ok {
-		knownKeys["pdf_ocr_model"] = true
-		s, _ := v.(string)
-		cfg.PDFOCRModel = truncateString(s, maxSettingNameLength)
-	}
-	return nil
-}
-
 // applyShellAllowlistSettings mirrors approved_shell_commands (already
 // handled by the risk/safety applier) for the wildcard-pattern twin.
 func applyShellAllowlistSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
@@ -895,7 +868,6 @@ var partialSettingsAppliers = []func(*configuration.Config, map[string]interface
 	applyRiskAndSafetySettings,
 	applySubagentSettings,
 	applyProviderRoutingSettings,
-	applyPDFOCRSettings,
 	applyShellDetectionSettings,
 	applyAPITimeoutsSettings,
 	applyVersionSettings,
@@ -909,7 +881,6 @@ var partialSettingsAppliers = []func(*configuration.Config, map[string]interface
 	applyWakeupSettings,
 	applyCommandPoliciesSettings,
 	applyMiscAgentSettings,
-	applyPDFOCRProviderSettings,
 	applyShellAllowlistSettings,
 	applyVisionPipelineSettings,
 	applyNotificationsAgentSettings,

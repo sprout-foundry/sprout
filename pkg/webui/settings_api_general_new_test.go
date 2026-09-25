@@ -196,20 +196,6 @@ func TestApplyPartialSettings_DisableThinking(t *testing.T) {
 	}
 }
 
-func TestApplyPartialSettings_OCRFallbackModel(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{
-		"ocr_fallback_model": "openai/gpt-4o",
-	}
-	_, err := applyPartialSettings(cfg, patch)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.OCRFallbackModel != "openai/gpt-4o" {
-		t.Errorf("OCRFallbackModel = %q, want %q", cfg.OCRFallbackModel, "openai/gpt-4o")
-	}
-}
-
 func TestApplyPartialSettings_CommitFields(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{

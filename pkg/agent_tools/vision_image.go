@@ -301,30 +301,6 @@ func detectImageMimeType(path string) string {
 // Main AnalyzeImage Function
 // ============================================================================
 
-// getCachedVisionResult checks the vision cache and returns the cached result if present.
-// Returns (result, true, nil) when a cache hit occurs, (result, false, nil) otherwise.
-func getCachedVisionResult(cacheKey, imagePath, analysisMode string) (string, bool, error) {
-	cachedResult, cachedUsage, ok := visionLRU.Get(cacheKey)
-	if !ok {
-		return "", false, nil
-	}
-
-	fmt.Printf("[~] Using cached vision analysis for %s [%s]\n", GetBaseName(imagePath), analysisMode)
-
-	if cachedUsage != nil {
-		recordVisionUsage(nil, cachedUsage)
-	}
-
-	var cachedResp ImageAnalysisResponse
-	if err := json.Unmarshal([]byte(cachedResult), &cachedResp); err == nil {
-		cachedResp.Success = true
-		respJSON, _ := json.Marshal(cachedResp)
-		return string(respJSON), true, nil
-	}
-
-	return cachedResult, true, nil
-}
-
 // AnalyzeImage is the tool function called by the agent for image analysis
 // Returns a structured JSON response with metadata for robust error handling
 func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, analysisMode string) (string, error) {
@@ -423,12 +399,6 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		return string(respJSON), nil
 	}
 
-	cacheKey := visionCacheKey(imagePath, analysisMode, analysisPrompt)
-
-	if cached, hit, _ := getCachedVisionResult(cacheKey, imagePath, analysisMode); hit {
-		return cached, nil
-	}
-
 	processor, err := NewVisionProcessorWithMode(false, analysisMode)
 	if err != nil {
 		response.Success = false
@@ -495,8 +465,6 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
 	}
-
-	visionLRU.Put(cacheKey, string(respJSON), GetLastVisionUsage())
 
 	return string(respJSON), nil
 }

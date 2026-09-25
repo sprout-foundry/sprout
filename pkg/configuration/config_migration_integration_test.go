@@ -43,9 +43,13 @@ func TestConfigMigration_Integration_WithLoad(t *testing.T) {
 	assert.Equal(t, 1800, cfg.APITimeouts.OverallTimeoutSec)
 	assert.Equal(t, 300, cfg.APITimeouts.CommitMessageTimeoutSec)
 
-	// Verify the legacy PDF OCR keys were migrated away (SP-137):
-	// unset users get an empty neutral fallback, no provider coupling.
-	assert.Equal(t, "", cfg.OCRFallbackModel)
+	// Verify the legacy PDF OCR keys were stripped (the second-tier
+	// OCR-fallback machinery they fed was removed with the vision-first
+	// rework): nothing re-couples config to an OCR provider.
+	saved, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(saved), "pdf_ocr_provider")
+	assert.NotContains(t, string(saved), "ocr_fallback_model")
 
 	// Verify zsh command detection defaults were applied
 	assert.True(t, cfg.EnableZshCommandDetection)

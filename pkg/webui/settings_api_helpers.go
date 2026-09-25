@@ -136,7 +136,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"commit_model":                   cfg.CommitModel,
 		"review_provider":                cfg.ReviewProvider,
 		"review_model":                   cfg.ReviewModel,
-		"ocr_fallback_model":             cfg.OCRFallbackModel,
 		"skills":                         cfg.Skills,
 		"disable_thinking":               cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,

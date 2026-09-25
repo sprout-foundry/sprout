@@ -22,26 +22,9 @@ func TestConfigValidate(t *testing.T) {
 		errorMsg    string
 	}{
 		{
-			name: "OCR fallback unset - should pass",
-			config: &Config{
-				OCRFallbackModel: "",
-			},
+			name:        "zero config - passes",
+			config:      &Config{},
 			expectError: false,
-		},
-		{
-			name: "OCR fallback provider-qualified - should pass",
-			config: &Config{
-				OCRFallbackModel: "openai/gpt-4o",
-			},
-			expectError: false,
-		},
-		{
-			name: "OCR fallback missing provider qualifier - should fail",
-			config: &Config{
-				OCRFallbackModel: "gpt-4o",
-			},
-			expectError: true,
-			errorMsg:    "ocr_fallback_model must be provider-qualified",
 		},
 	}
 

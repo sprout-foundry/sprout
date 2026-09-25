@@ -1,6 +1,6 @@
 # SP-143 — Screen Kit: Interactive, Token-Driven Screens
 
-Status: Draft v2 (2026-09-25). v1 scoped a bare runtime; v2 widens to the
+Status: Shipped v1 (2026-09-25) — items 143.1–143.7 landed; acceptance criteria verified by test/webui/design_kit.spec.ts. v1 scoped a bare runtime; v2 widens to the
 full kit (generated utilities, device chrome, states, base templates,
 derived index) after scoping discussion. Depends on SP-140-9 §9a (the
 screen `data-nav` contract); independent of its migration items.
@@ -133,19 +133,19 @@ HTML at read time.
 
 ## Acceptance criteria
 
-- [ ] A phone screen previewed in the workbench shows iPhone chrome at the
+- [x] A phone screen previewed in the workbench shows iPhone chrome at the
       declared frame size, themed entirely from `generated/tokens.css`
       (vars + utilities), with in-place `data-nav` navigation (back works)
       and a working state switcher; no full reloads.
-- [ ] The same file opened from disk (`file://`) navigates between screens
+- [x] The same file opened from disk (`file://`) navigates between screens
       via plain links, still themed.
-- [ ] `design_render`/`design_critique` on a runtime-present screen render
+- [x] `design_render`/`design_critique` on a runtime-present screen render
       it identically to a runtime-absent one (runtime inert in static
       renders; states pinnable via URL hash for render/critique targets).
-- [ ] Editing one token + re-exporting restyles every screen with zero
+- [x] Editing one token + re-exporting restyles every screen with zero
       screen-file writes.
-- [ ] `screens.json` regenerates deterministically; a hand-edit (hash
+- [x] `screens.json` regenerates deterministically; a hand-edit (hash
       mismatch) is a validator error; trees without the runtime validate
       clean (missing runtime = info).
-- [ ] A fresh scaffolded tree includes the runtime assets, base templates,
+- [x] A fresh scaffolded tree includes the runtime assets, base templates,
       and a starter screen wired to tokens with working nav.

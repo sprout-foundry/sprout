@@ -1,18 +1,19 @@
-%% design-mode — mode switching between Code and Design, design-rail
-%% navigation, and the file handoff back to Code.
+%% design-mode — the SP-140-8 item 8.6 dogfood: the Design workspace's own
+%% IA as a screen. Node ids are wireframe stems. Triggers live in the %%
+%% comments (the design/flows contract keeps edges label-free): the
+%% triggers the screen's data-nav anchors author. The screen depicts one
+%% workspace; its rail self-edges are the rail's own section switches.
 flowchart TD
-  app-shell["app-shell — Code mode"]
-  design-flows["design-flows — flows canvas"]
+  design-mode["design-mode — the Design workspace IA"]
   design-screens["design-screens — screens browser"]
-  editor["editor — Code mode file"]
-  %% switch to Design mode from the top-left mode switcher
-  app-shell --> design-flows
-  %% select the Screens rail tab
-  design-flows --> design-screens
-  %% select the Flows rail tab
-  design-screens --> design-flows
-  %% open a wireframe's source file — handoff back to Code mode
-  design-screens --> editor
-  %% switch back to Code mode from the mode switcher
-  design-flows --> app-shell
-  editor --> app-shell
+  design-flows["design-flows — flows canvas"]
+  %% open the Design mode (the rail's mode entry)
+  design-mode --> design-mode
+  %% the Screens group's workbench targets the screens browser's domain
+  design-mode --> design-screens
+  %% the Library group's Flows entry targets the flows canvas
+  design-mode --> design-flows
+  %% the workbench's flows facet links into the flow graph
+  design-flows --> design-mode
+  %% a screen picked in the browser opens the same workbench
+  design-screens --> design-mode

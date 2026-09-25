@@ -49,6 +49,7 @@ and its purpose.
 - `command-palette` — draft — ⌘K overlay: files, symbols, actions
 - `design-flows` — draft — Design mode: flow canvas with wireframe nodes and the design rail
 - `design-screens` — draft — Design mode: screens browser with detail pane
+- `design-mode` — draft — the Design workspace's own IA (SP-140-8 item 8.6): mode rail with the Screens group (status dots, open-annotation badges) + Library group, the workbench facets in §8b order (render, status, feedback, flows, tokens, agent), and the global health strip
 - `mobile-sessions` — draft — the screen kit's phone dogfood (SP-143 143.7): session list with data-nav rows into `mobile-session`
 - `mobile-session` — draft — phone session detail with declared states (ready/loading/error) and a data-nav back link
 
@@ -88,6 +89,7 @@ wireframe shows placement, the component spec shows the part. Edit the part.
 | `command-palette`  | `input` (query) · `file-tree-row` (results) · `button` (actions)               |
 | `design-flows`     | `tab` (rail) · `panel-section` (node detail) · `badge` (status)                |
 | `design-screens`   | `tab` (rail) · `file-tree-row` (screen list) · `token-card` (detail pane)      |
+| `design-mode`      | `sidebar` (mode rail: Screens group + Library group) · `token-card` (tokens facet) · `badge` (status dot, annotation badge, health pills) |
 | `mobile-sessions`  | `sidebar` (phone session rail, collapsed to a list) · `chat-message` teaser rows |
 | `mobile-session`   | `chat-message` (detail) · `badge` (state pane: ready/loading/error)            |
 
@@ -97,7 +99,7 @@ One line per flow: the flow name (matching a `flows/` file stem) and its
 purpose.
 
 - `navigation` — draft — Code-mode navigation map between the main surfaces
-- `design-mode` — draft — mode switching between Code and Design, design rail navigation, file handoff back to Code
+- `design-mode` — draft — mode switching between Code and Design, design rail navigation, file handoff back to Code; now also the 8.6 screen's own rail/workbench edges (`design-mode` self-edges = the rail's section switches)
 - `agent-turn` — draft — one chat turn end to end: send, tool execution, todos, changes, review/commit (non-screen flow; node ids are generic)
 - `mobile-screens` — draft — the SP-143 143.7 dogfood pair: phone session list ↔ detail via the runtime's data-nav swap
 

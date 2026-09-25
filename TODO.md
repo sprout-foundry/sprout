@@ -469,8 +469,8 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       the active model lacks vision. Also review the zai registry
       configs' vision_model staleness (glm-5.3-flash is the current
       natively-multimodal flash tier).
-- [ ] **V-2** Skill nit: design-system SKILL.md Step 1 should say to
-      use structured-file writes for token JSON (a live
+- [x] **V-2** Skill nit: design-system SKILL.md Step 1 now says to use
+      structured-file writes for token JSON (a live
       designer-persona run hand-edited valid-but-mangled indentation;
       semantics were correct, formatting was not).
 

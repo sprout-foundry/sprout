@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900">
+  <!-- design-mode: the Design workspace's own IA (SP-140-8 §8a/§8b). Source: webui/src DesignRail / ScreenWorkbench / HealthStrip structure.
+       Palette tokens: {color.dark.bg.primary} {color.dark.bg.secondary} {color.dark.bg.tertiary} {color.dark.bg.elevated} {color.dark.border.subtle} {color.dark.border.default} {color.dark.text.primary} {color.dark.text.secondary} {color.dark.text.muted} {color.dark.brand.active-cyan} {color.dark.accent.success} {color.dark.accent.warning} {color.dark.accent.error} {radius.md} {radius.lg} -->
+  <style>
+    .bg { fill: #282c34; }
+    .panel { fill: #21252b; }
+    .tertiary { fill: #2c313a; }
+    .elev { fill: #303742; }
+    .none { fill: none; }
+    .b1 { fill: none; stroke: rgba(171, 178, 191, 0.14); }
+    .b2 { fill: none; stroke: rgba(171, 178, 191, 0.22); }
+    .t1 { fill: #abb2bf; font: 14px sans-serif; }
+    .t2 { fill: #9aa3b2; font: 13px sans-serif; }
+    .tm { fill: #5c6370; font: 12px sans-serif; }
+    .cy { fill: #22d3ee; font: 13px sans-serif; }
+    .ok { fill: #98c379; font: 12px sans-serif; }
+    .warn { fill: #e5c07b; font: 12px sans-serif; }
+    .err { fill: #e06c75; font: 12px sans-serif; }
+    .dot-draft { fill: #e5c07b; }
+    .dot-ready { fill: #98c379; }
+    .dot-review { fill: #61afef; }
+  </style>
+
+  <rect x="0" y="0" width="1440" height="900" class="bg"/>
+
+  <!-- icon rail: Screens group (status dots + open-annotation badges) + Library group -->
+  <rect x="0" y="0" width="48" height="900" class="panel"/>
+  <line x1="48" y1="0" x2="48" y2="900" class="b1" stroke-width="1"/>
+  <rect id="rail-mode" x="8" y="12" width="32" height="32" rx="6" class="elev"/>
+  <text x="18" y="33" class="t2">D</text>
+  <text x="10" y="72" class="tm">SCRNS</text>
+  <rect id="rail-screen-login" x="8" y="80" width="32" height="32" rx="6" class="none" data-nav="design-screens"/>
+  <rect x="8" y="80" width="32" height="32" rx="6" class="elev"/>
+  <line x1="8" y1="80" x2="40" y2="112" class="b2" stroke-width="1"/>
+  <text x="18" y="101" class="cy">L</text>
+  <circle cx="36" cy="86" r="3" class="dot-draft"/>
+  <rect x="28" y="100" width="13" height="11" rx="5" class="none"/>
+  <text x="30" y="109" class="err">1</text>
+  <rect id="rail-screen-home" x="8" y="120" width="32" height="32" rx="6" class="none" data-nav="design-screens"/>
+  <text x="18" y="141" class="t2">H</text>
+  <circle cx="36" cy="126" r="3" class="dot-ready"/>
+  <rect id="rail-screen-landing" x="8" y="160" width="32" height="32" rx="6" class="none" data-nav="design-screens"/>
+  <text x="15" y="181" class="t2">La</text>
+  <circle cx="36" cy="166" r="3" class="dot-review"/>
+  <line x1="12" y1="208" x2="36" y2="208" class="b1" stroke-width="1"/>
+  <text x="10" y="230" class="tm">LIBRY</text>
+  <rect id="rail-tokens" x="8" y="238" width="32" height="32" rx="6" class="none" data-nav="design-screens"/>
+  <text x="18" y="259" class="t2">T</text>
+  <rect id="rail-flows" x="8" y="278" width="32" height="32" rx="6" class="none" data-nav="design-screens"/>
+  <text x="18" y="299" class="t2">F</text>
+
+  <!-- health strip (global, above the workbench) -->
+  <rect x="48" y="0" width="1392" height="30" class="panel"/>
+  <line x1="48" y1="30" x2="1440" y2="30" class="b1" stroke-width="1"/>
+  <circle cx="68" cy="15" r="4" class="dot-draft"/>
+  <text x="78" y="19" class="warn">1 screen pending</text>
+  <circle cx="182" cy="15" r="4" class="dot-draft"/>
+  <text x="192" y="19" class="t2">3 open annotations</text>
+  <circle cx="312" cy="15" r="4" class="dot-ready"/>
+  <text x="322" y="19" class="ok">tokens clean</text>
+  <text x="1330" y="19" class="tm">design/ · 6 screens · 3 flows</text>
+
+  <!-- workbench: render facet -->
+  <rect x="72" y="54" width="1020" height="330" rx="8" class="none"/>
+  <rect x="72" y="54" width="1020" height="330" rx="8" class="elev" opacity="0.3"/>
+  <text x="88" y="78" class="tm">RENDER</text>
+  <rect x="88" y="92" width="988" height="276" rx="6" class="tertiary"/>
+  <rect x="360" y="150" width="440" height="160" rx="6" class="elev" opacity="0.5"/>
+  <rect x="380" y="170" width="180" height="22" rx="6" class="elev"/>
+  <rect x="380" y="204" width="280" height="22" rx="6" class="elev" opacity="0.6"/>
+  <rect x="380" y="252" width="120" height="30" rx="6" class="elev"/>
+  <text x="392" y="272" class="t2">Sign in</text>
+  <circle cx="700" cy="180" r="10" class="none"/>
+  <circle cx="700" cy="180" r="10" fill="none" stroke="#e5c07b" stroke-width="1.5"/><!-- {color.dark.accent.warning} -->
+  <line x1="710" y1="180" x2="760" y2="180" class="b1" stroke-width="1"/>
+  <rect x="760" y="168" width="130" height="24" rx="6" class="none"/>
+  <rect x="760" y="168" width="130" height="24" rx="6" class="elev" opacity="0.6"/>
+  <text x="768" y="184" class="warn">[hierarchy] pin</text>
+  <text x="88" y="372" class="tm">design/wireframes/login.svg · 1440x900 (scaled)</text>
+
+  <!-- status facet -->
+  <rect x="72" y="404" width="330" height="86" rx="8" class="none"/>
+  <rect x="72" y="404" width="330" height="86" rx="8" class="elev" opacity="0.3"/>
+  <text x="88" y="428" class="tm">STATUS</text>
+  <circle cx="96" cy="452" r="5" class="dot-draft"/>
+  <text x="108" y="457" class="t1">draft</text>
+  <text x="88" y="478" class="t2">sign-in entry point</text>
+
+  <!-- feedback facet -->
+  <rect x="418" y="404" width="330" height="86" rx="8" class="none"/>
+  <rect x="418" y="404" width="330" height="86" rx="8" class="elev" opacity="0.3"/>
+  <text x="434" y="428" class="tm">FEEDBACK</text>
+  <text x="434" y="452" class="warn">1 open</text>
+  <text x="434" y="474" class="t2">[hierarchy] Primary CTA reads as</text>
+
+  <!-- flows facet -->
+  <rect x="764" y="404" width="328" height="86" rx="8" class="none"/>
+  <rect x="764" y="404" width="328" height="86" rx="8" class="elev" opacity="0.3"/>
+  <text x="780" y="428" class="tm">FLOWS</text>
+  <text x="780" y="450" class="t2">&#9664; landing (no trigger)</text>
+  <text x="780" y="470" class="t2">&#9654; home &#8212; "tap Submit"</text>
+
+  <!-- tokens facet -->
+  <rect x="1108" y="404" width="308" height="86" rx="8" class="none"/>
+  <rect x="1108" y="404" width="308" height="86" rx="8" class="elev" opacity="0.3"/>
+  <text x="1124" y="428" class="tm">TOKENS</text>
+  <text x="1124" y="450" class="ok">{color.dark.brand.active-cyan}</text>
+  <text x="1124" y="470" class="err">color.legacy.accent &#183; unknown</text>
+
+  <!-- agent-state slice (§8b facet 6, right column) -->
+  <rect x="1416" y="0" width="0" height="0" class="none"/>
+  <rect x="1232" y="54" width="208" height="436" rx="8" class="none"/>
+  <rect x="1232" y="54" width="208" height="436" rx="8" class="panel"/>
+  <line x1="1232" y1="54" x2="1440" y2="490" class="b2" stroke-width="1"/>
+  <text x="1248" y="82" class="tm">AGENT &#183; login</text>
+  <text x="1248" y="110" class="t2">subagent: coder</text>
+  <text x="1248" y="130" class="tm">login.svg &#183; 2m</text>
+  <text x="1248" y="150" class="tm">login.json &#183; 1 open</text>
+  <text x="1248" y="170" class="tm">flows/design-mode.mmd</text>
+  <line x1="1248" y1="190" x2="1424" y2="190" class="b1" stroke-width="1"/>
+  <text x="1248" y="214" class="tm">FACET ORDER</text>
+  <text x="1248" y="236" class="t2">render</text>
+  <text x="1248" y="256" class="t2">status</text>
+  <text x="1248" y="276" class="t2">feedback</text>
+  <text x="1248" y="296" class="t2">flows</text>
+  <text x="1248" y="316" class="t2">tokens</text>
+  <text x="1248" y="336" class="t2">agent</text>
+</svg>

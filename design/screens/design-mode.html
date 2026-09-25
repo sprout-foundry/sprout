@@ -1,0 +1,250 @@
+<!doctype html>
+<!--
+  Sprout screen kit dogfood: design-mode (SP-140-8 item 8.6). A copy of
+  design/runtime/base/desktop.html with the stem replaced — the Design
+  workspace's own IA at the desktop frame: the mode rail (Screens group with
+  status dots + open-annotation badges, Library group), the screen workbench
+  facets in §8b order (render, status, feedback, flows, tokens, agent), and
+  the global health strip. Styled utilities-first from ../generated/tokens.css.
+-->
+<html lang="en" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>design-mode — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  /* The declared README frame this screen lays out at. The validator's frame
+     check reads the same numbers. */
+  html {
+    --sprout-frame-width: 1440px;
+    --sprout-frame-height: 900px;
+    color-scheme: dark;
+  }
+  body { margin: 0; }
+  .app {
+    box-sizing: border-box;
+    width: 1440px;
+    height: 900px;
+    display: flex;
+    background: var(--color-dark-bg-primary);
+    color: var(--color-dark-text-primary);
+    font-family: var(--typography-font-sans);
+    font-size: var(--typography-size-sm);
+  }
+  .rail {
+    flex: none;
+    width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-6) 0;
+    background: var(--color-dark-bg-secondary);
+    border-right: 1px solid var(--color-dark-border-subtle);
+  }
+  .rail-button {
+    position: relative;
+    box-sizing: border-box;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    background: none;
+    border: none;
+    color: var(--color-dark-text-muted);
+    font-size: var(--typography-size-xs);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .rail-button.active {
+    background: var(--color-dark-bg-elevated);
+    color: var(--color-dark-brand-active-cyan);
+  }
+  .rail-divider { width: 24px; border-top: 1px solid var(--color-dark-border-subtle); }
+  .rail-label { font-size: 10px; line-height: 1; }
+  .status-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+  }
+  .status-dot.draft { background: var(--color-dark-accent-warning); }
+  .status-dot.review { background: var(--color-dark-accent-info); }
+  .status-dot.ready { background: var(--color-dark-accent-success); }
+  .badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    min-width: 12px;
+    padding: 1px 3px;
+    border-radius: var(--radius-pill);
+    background: var(--color-dark-accent-error);
+    color: var(--color-dark-accent-fg);
+    font-size: 9px;
+    line-height: 1.2;
+    text-align: center;
+  }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .health {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-3) var(--space-6);
+    background: var(--color-dark-bg-secondary);
+    border-bottom: 1px solid var(--color-dark-border-subtle);
+    font-size: var(--typography-size-xs);
+    color: var(--color-dark-text-muted);
+  }
+  .health-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-4);
+    border-radius: var(--radius-pill);
+    background: var(--color-dark-bg-elevated);
+  }
+  .health-pill.open { color: var(--color-dark-accent-warning); }
+  .workbench { flex: 1; display: flex; min-height: 0; }
+  .content { flex: 1; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); min-width: 0; }
+  .facet {
+    border: 1px solid var(--color-dark-border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--color-dark-bg-secondary);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .facet h2 { margin: 0; font-size: var(--typography-size-xs); font-weight: 500; color: var(--color-dark-text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .facet-render { flex: none; height: 300px; }
+  .facet-render .canvas {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    background: var(--color-dark-bg-tertiary);
+    color: var(--color-dark-text-muted);
+    font-size: var(--typography-size-xs);
+  }
+  .facet-row { display: flex; align-items: center; gap: var(--space-4); font-size: var(--typography-size-xs); }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-dark-bg-elevated);
+    color: var(--color-dark-text-secondary);
+    text-decoration: none;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--color-dark-accent-warning); }
+  .chip.edge { color: var(--color-dark-accent-cyan); }
+  .chip.token-known { color: var(--color-dark-accent-success); }
+  .chip.token-unknown { color: var(--color-dark-accent-error); }
+  .facet-grid { display: flex; gap: var(--space-4); }
+  .facet-grid .facet { flex: 1; min-width: 0; }
+  .note { border-left: 3px solid var(--color-dark-accent-warning); padding-left: var(--space-4); color: var(--color-dark-text-secondary); font-size: var(--typography-size-xs); }
+  .side {
+    flex: none;
+    width: 300px;
+    border-left: 1px solid var(--color-dark-border-subtle);
+    background: var(--color-dark-bg-secondary);
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    font-size: var(--typography-size-xs);
+    color: var(--color-dark-text-secondary);
+  }
+  .side h3 { margin: 0; font-size: var(--typography-size-xs); font-weight: 500; color: var(--color-dark-text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .side a { color: var(--color-dark-accent-cyan); text-decoration: none; }
+  .agent-line { color: var(--color-dark-text-muted); }
+  .agent-line b { color: var(--color-dark-subagent-depth-0); font-weight: 500; }
+</style>
+</head>
+<body data-sprout-screen="design-mode">
+<div data-sprout-home></div>
+<main class="app">
+  <nav class="rail" aria-label="Design navigation">
+    <a class="rail-button" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:open design mode" title="Design">D</a>
+    <div class="rail-divider" role="separator"></div>
+    <span class="rail-label">Screens</span>
+    <a class="rail-button active" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:select login workbench" title="login · draft · 1 open">
+      L<span class="status-dot draft"></span><span class="badge">1</span>
+    </a>
+    <a class="rail-button" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:select home workbench" title="home · ready">
+      H<span class="status-dot ready"></span>
+    </a>
+    <a class="rail-button" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:select landing workbench" title="landing · review">
+      L<span class="status-dot review"></span>
+    </a>
+    <div class="rail-divider" role="separator"></div>
+    <span class="rail-label">Library</span>
+    <a class="rail-button" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:open tokens library" title="Tokens">T</a>
+    <a class="rail-button" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:open flows library" title="Flows">F</a>
+  </nav>
+
+  <div class="main">
+    <div class="health">
+      <span class="health-pill open">1 screen pending</span>
+      <span class="health-pill">3 open annotations</span>
+      <span class="health-pill">tokens clean</span>
+      <span>design/ · 6 screens · 3 flows</span>
+    </div>
+
+    <div class="workbench">
+      <div class="content">
+        <section class="facet facet-render">
+          <h2>Render</h2>
+          <div class="canvas">design/wireframes/login.svg — 1440x900 (scaled) · §7c annotation pins overlay</div>
+        </section>
+
+        <div class="facet-grid">
+          <section class="facet">
+            <h2>Status</h2>
+            <div class="facet-row"><span class="chip"><span class="dot"></span>draft</span><span>sign-in entry point</span></div>
+          </section>
+
+          <section class="facet">
+            <h2>Feedback</h2>
+            <div class="note">[hierarchy] Primary CTA reads as secondary</div>
+          </section>
+        </div>
+
+        <div class="facet-grid">
+          <section class="facet">
+            <h2>Flows</h2>
+            <div class="facet-row"><a class="chip edge" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:open sign-up flow">in ← landing (no trigger)</a></div>
+            <div class="facet-row"><a class="chip edge" href="../screens/design-mode.html" data-nav="to:design-mode;trigger:open sign-up flow">out → home — "tap Submit"</a></div>
+          </section>
+
+          <section class="facet">
+            <h2>Tokens</h2>
+            <div class="facet-row"><span class="chip token-known">{color.brand.primary}</span></div>
+            <div class="facet-row"><span class="chip token-unknown">{color.legacy.accent}</span></div>
+          </section>
+        </div>
+      </div>
+
+      <aside class="side">
+        <h3>Agent state — login</h3>
+        <div class="agent-line"><b>subagent:</b> coder · login.svg rework</div>
+        <div class="agent-line">design/wireframes/login.svg · edited 2m ago</div>
+        <div class="agent-line">design/feedback/login.json · 1 open</div>
+        <div class="agent-line">flows/design-mode.mmd · read 5m ago</div>
+        <h3>Workbench</h3>
+        <div class="agent-line">facet order: render → status → feedback → flows → tokens → agent</div>
+      </aside>
+    </div>
+  </div>
+</main>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

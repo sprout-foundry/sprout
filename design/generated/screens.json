@@ -1,6 +1,6 @@
 {
   "provenance": "Generated from design/screens/*.html data-attributes (SP-143 §4). Do not edit by hand; regenerate with design_export_tokens targets:screens.",
-  "source-hash": "fnv1a64:f0ab203ca7934b8f",
+  "source-hash": "fnv1a64:e9027b8a58b33fb6",
   "source": "design/screens/*.html. Recompute the hash from those bytes (concat in stem order, fnv1a64) to verify.",
   "format-version": 1,
   "screens": [
@@ -10,6 +10,42 @@
       "frame": 1440,
       "states": [],
       "nav": []
+    },
+    {
+      "stem": "design-mode",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "design-mode",
+          "trigger": "open design mode"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "open flows library"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "open sign-up flow"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "open tokens library"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "select home workbench"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "select landing workbench"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "select login workbench"
+        }
+      ]
     },
     {
       "stem": "mobile-session",

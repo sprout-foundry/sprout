@@ -130,6 +130,17 @@ func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
 		"critique vocabulary": {
 			"hierarchy", "affordance", "consistency", "spacing rhythm", "contrast",
 		},
+		// SP-143 §143.6: the screen-kit generator surface — prompt and
+		// validator must state the same rules (the review blocker).
+		"screen kit": {
+			"design/runtime/base/phone.html",
+			`data-nav="to:<stem>;trigger:<label>"`,
+			"data-states=",
+			".bg-*", ".p-*", ".rounded-*", ".shadow-*", "var(--token)",
+			"design_export_tokens targets:screens",
+			"screen_runtime_hash",
+			"never hand-edited",
+		},
 	}
 	for block, needles := range blocks {
 		for _, needle := range needles {

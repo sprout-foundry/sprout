@@ -524,9 +524,20 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       design_export_screens_test.go); dogfood screens.json regenerated and
       the tree design_validate clean (the legacy `data-nav="app-shell"`
       back button, pre-§9a and targetless, dropped its dead attribute).
-- [ ] **143.6** Generator surface: SKILL.md / designer persona / tool
+- [x] **143.6** Generator surface: SKILL.md / designer persona / tool
       docs — base templates, utilities-first, data-nav anchors, states.
-      Spec: SP-143 §143.6.
+      Spec: SP-143 §143.6. — Landed: SKILL.md Step 4 rewritten to the kit
+      contract (start from a copy of design/runtime/base/, utilities-first
+      from tokens.css — the full color/space/font/radius/shadow vocabulary —
+      real `to:<stem>;trigger:<label>` anchors, declared states, runtime/
+      tokens referenced never authored, screens.json regenerated via
+      `design_export_tokens targets:screens` never hand-edited) plus the
+      runtime/ paragraph (source-hash checked, `screen_runtime_hash`) and
+      the close-the-loop export step; designer persona Screens charter and
+      export bullet state the same rules; design_export_tokens tool docs
+      carry the screens target (143.5); prompt/validator agreement pinned
+      by new needle tests (TestDesignSystemSkillScreenKit, designer-prompt
+      screen-kit block), both green.
 - [ ] **143.7** E2E: phone-framed themed screen pair with in-place nav,
       states, token-edit restyle. Spec: SP-143 §143.7.
 

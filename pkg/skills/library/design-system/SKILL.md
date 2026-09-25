@@ -185,20 +185,43 @@ Then **validate**: `design_validate design/flows`.
 
 ### Step 4 — Screens
 
-Write `design/screens/<screen-name>.html` — hi-fi, self-contained, consuming
-the tokens from Step 1. Root container width should match a declared frame.
+Write `design/screens/<screen-name>.html` — **start from a copy of a base
+template** (`design/runtime/base/phone.html` for `data-device="phone"`,
+`base/desktop.html` for the default), saved under the screen's stem. The base
+carries the fixed reference lines — `../generated/tokens.css`,
+`../runtime/sprout-screens.js`, `../runtime/chrome.css` (phone) — plus the
+device and declared-states attributes; keep everything its header marks
+fixed, author only what is yours. Style **utilities-first** from the
+generated theme, not hand-rolled CSS: `color.*` → `.bg-*`/`.text-*`/
+`.border-*`, `space.*` → `.p-*`/`.m-*`/`.gap-*`, `font.*` (+ a project's
+`typography.*`) → `.font-*`/`.text-*-size`/`.text-*-weight`, `radius.*` →
+`.rounded-*`, `shadow.*` → `.shadow-*`, with `var(--token)` for anything the
+utilities do not cover. Navigate with **real anchors**:
+`<a data-nav="to:<stem>;trigger:<label>">` — the runtime swaps screens in
+place, and every `to:` must name an existing screen stem (hard error).
+Declare the screen's states on `<html data-states="a,b,c">` and mark
+sections `data-state="a"` — a used state that is not declared is a hard
+error. The runtime, chrome, and tokens files are **referenced, never
+authored**; the derived `design/generated/screens.json` index is
+**regenerated (`design_export_tokens targets:screens`), never hand-edited**
+— drift is a validator error.
 
 Then **validate**: `design_validate`.
 
 - No network `<script>`, no CDN references, no external fonts.
-- Literal colors where a token exists are drift — replace with the token.
+- Literal colors where a token exists are drift — replace with the token
+  (a utility class or `var(--token)`).
+- Fix every `screen_*` finding: nav targets resolve, states are declared,
+  the runtime copy is untouched, and screens.json is current.
 
 ### Step 5 — Close the loop
 
 - **Export, then sync**: after the artifacts are settled, run
-  `design_export_tokens` so the theme matches the tokens (design-ahead), and if
-  this turn also changed implementation code that consumes the design, end it
-  with `design_sync` (code-ahead) so the tree adopts what the code learned. See
+  `design_export_tokens` so the theme matches the tokens (design-ahead), and
+  `design_export_tokens targets:screens` when screens were added or changed,
+  so `design/generated/screens.json` matches the screen graph; if this turn
+  also changed implementation code that consumes the design, end it with
+  `design_sync` (code-ahead) so the tree adopts what the code learned. See
   **Sync — keep the tree truthful** below.
 - Run the **critique-and-revise loop** (below) on the rendered output: write →
   `design_validate` → `design_critique` → fix → repeat, until the stopping
@@ -237,16 +260,23 @@ is referenced by the next, so validate as you go. The canonical order:
 The scaffold directories: `mkdir -p design/{tokens,brand,icons,wireframes,screens,flows,feedback}`.
 
 **`design/runtime/` — the fixed screen-kit assets.** The scaffold copies these
-into the tree (device chrome `chrome.css` + the base documents
-`base/phone.html` / `base/desktop.html`); they are versioned, tool-owned
-assets — referenced by screens, never hand-edited, and a re-scaffold never
-overwrites a copy the project has pinned. If `design/runtime/` is missing on
-an existing tree, copy the kit in (the scaffold's `ScaffoldRuntimeAssets` is
-the byte source); do not author lookalikes. New screens start as a copy of a
-base document saved as `design/screens/<stem>.html` — the base carries the
+into the tree (the screen runtime `sprout-screens.js`, device chrome
+`chrome.css`, and the base documents `base/phone.html` / `base/desktop.html`);
+they are versioned, tool-owned assets — referenced by screens, never
+hand-edited, and a re-scaffold never overwrites a copy the project has
+pinned. The runtime copy's `source-hash` header is checked by the validator:
+edit the file and `design_validate` reports `screen_runtime_hash`; restore
+the fixed asset instead. If `design/runtime/` is missing on an existing
+tree, copy the kit in (the scaffold's `ScaffoldRuntimeAssets` is the byte
+source); do not author lookalikes. New screens start as a copy of a base
+document saved as `design/screens/<stem>.html` — the base carries the
 token/runtime reference lines, the device attribute, and the declared-states
 attribute; what is marked fixed in its header stays, everything inside
-`<body>` is authored.
+`<body>` is authored. After adding or changing screens, regenerate the
+derived index with `design_export_tokens targets:screens` —
+`design/generated/screens.json` is machine-derived from the screens'
+data-attributes and is never hand-written (drift, `screen_index_drift`, is
+an error; other tooling reads it instead of parsing HTML).
 
 If `design_validate` reports no `design/` directory, that is the scaffold cue
 — `design_assets` will also return `{exists: false}` with this same sequence.

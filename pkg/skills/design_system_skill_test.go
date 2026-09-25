@@ -66,3 +66,40 @@ func TestDesignSystemSkillCoCommit(t *testing.T) {
 		}
 	}
 }
+
+// TestDesignSystemSkillScreenKit pins the SP-143 §143.6 generator surface in
+// the design-system skill: screens start from the base templates, style
+// utilities-first from the generated theme, navigate with real data-nav
+// anchors, declare their states, reference the runtime instead of authoring
+// it, and regenerate screens.json instead of hand-editing it. The skill is
+// prose, so the test asserts the load-bearing sentences exist — prompt and
+// validator must state the same rules (the review blocker §143.6 names).
+func TestDesignSystemSkillScreenKit(t *testing.T) {
+	content, err := ReadContent("design-system")
+	if err != nil {
+		t.Fatalf("design-system skill must be embedded: %v", err)
+	}
+	body := strings.ToLower(content)
+
+	needles := map[string]string{
+		"base templates":      "base/phone.html",
+		"runtime referenced":  "never hand-edited",
+		"runtime hash check":  "screen_runtime_hash",
+		"data-nav anchors":    `data-nav="to:<stem>;trigger:<label>"`,
+		"nav targets resolve": "hard error",
+		"declared states":     `data-states="a,b,c"`,
+		"state sections":      `data-state="a"`,
+		"utilities-first":     ".bg-*",
+		"spacing utilities":   ".p-*",
+		"radius utilities":    ".rounded-*",
+		"shadow utilities":    ".shadow-*",
+		"var references":      "var(--token)",
+		"derived index":       "design_export_tokens targets:screens",
+		"index drift":         "screen_index_drift",
+	}
+	for label, needle := range needles {
+		if !strings.Contains(body, strings.ToLower(needle)) {
+			t.Errorf("design-system skill must mention %q (%s)", needle, label)
+		}
+	}
+}

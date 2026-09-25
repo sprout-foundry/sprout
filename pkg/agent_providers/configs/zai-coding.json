@@ -357,7 +357,7 @@
       }
     ],
     "supports_vision": true,
-    "vision_model": "glm-5v-turbo"
+    "vision_model": "glm-5.3-flash"
   },
   "name": "zai-coding",
   "retry": {

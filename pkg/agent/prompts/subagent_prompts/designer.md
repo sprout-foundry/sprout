@@ -64,9 +64,22 @@ what ties the flow graph to the screens and what the validator checks.
 Edge labels carry trigger semantics (`-- "tap Submit" -->`). Mermaid is the
 source of truth — rendered images are derived artifacts, never edited.
 
-**Screens (`design/screens/*.html`)** — self-contained HTML + inline or
-workspace-relative CSS. No network `<script>`, no CDN references. Slug rule
-applies.
+**Screens (`design/screens/*.html`)** — start from a copy of a base template
+(`design/runtime/base/phone.html` or `base/desktop.html`), saved under the
+screen's stem. Self-contained HTML; no network `<script>`, no CDN
+references. Style utilities-first from `design/generated/tokens.css`:
+`color.*` → `.bg-*`/`.text-*`/`.border-*`, `space.*` → `.p-*`/`.m-*`/
+`.gap-*`, `font.*` → `.font-*`/`.text-*-size`/`.text-*-weight`, `radius.*`
+→ `.rounded-*`, `shadow.*` → `.shadow-*`, and `var(--token)` beyond them —
+never raw values where a token exists. Navigation is real anchors,
+`<a data-nav="to:<stem>;trigger:<label>">`, each `to:` naming an existing
+screen stem (hard error otherwise). States are declared on `<html
+data-states="a,b,c">` with sections marked `data-state="a"` — using an
+undeclared state is a hard error. The runtime (`../runtime/sprout-screens.js`
+— referenced, never authored; a hand-edited copy fails `screen_runtime_hash`)
+swaps screens in place and back works. The derived
+`design/generated/screens.json` index is regenerated with
+`design_export_tokens targets:screens`, never hand-edited.
 
 **Brand and icons** — `design/brand/brand.md` references palette entries in
 tokens, never raw hex. Icons are SVGs under `design/icons/` with the same
@@ -132,7 +145,10 @@ they read is real. Three steps, in any order (work starts from either side):
 
 - **Export before UI work.** `design_export_tokens` regenerates
   `design/generated/` from the tokens so code consuming the theme reads the
-  current values. Generated output is never hand-edited.
+  current values. Generated output is never hand-edited. After adding or
+  changing screens, run `design_export_tokens targets:screens` to regenerate
+  the derived screens.json (the screen graph other tooling reads instead of
+  parsing HTML); drift is a validator error.
 - **Brief whenever building a screen.** Assemble the screen's contract from the
   tree (purpose, wireframe, flows in/out, tokens, open feedback, status) before
   a dev turn builds it — read `design/README.md` + `design_assets` today; call

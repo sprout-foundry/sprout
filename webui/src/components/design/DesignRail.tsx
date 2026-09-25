@@ -27,7 +27,7 @@
  * mode's rail lists what that mode does.
  */
 
-import { FileText, Layers, Palette, type LucideIcon } from 'lucide-react';
+import { FileText, Layers, MonitorSmartphone, Palette, type LucideIcon } from 'lucide-react';
 import React, { useMemo } from 'react';
 import type { ModeRailProps } from '../../workspaces/rail';
 import type { DesignTab } from './DesignView';
@@ -62,6 +62,10 @@ export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
   const screens = useMemo(() => workspace?.inventory?.screens ?? [], [workspace?.inventory?.screens]);
   const feedback = useMemo(() => workspace?.inventory?.feedback ?? [], [workspace?.inventory?.feedback]);
   const selected = workspace?.selected ?? null;
+  // Whether the current selection is one of this section's screens. Drives
+  // the section entry's active state: a selected screen IS the Screens
+  // section's workbench view (SP-140-8 item 8.2), so the entry stays lit.
+  const screensGroupActive = activeId === 'screens';
 
   // Open-annotation count per wireframe stem. A feedback file is keyed
   // design/feedback/<stem>.json, so its stem is the name minus the
@@ -107,6 +111,23 @@ export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
           aria-label="Screens"
           data-testid="design-rail-screens"
         >
+          {/* Section-level entry: switches to the Screens section WITHOUT
+              selecting a screen. Post-8.2 this is the only way back to the
+              screens grid once a selection exists (a per-screen button below
+              opens that screen's workbench), so the group needs a
+              selection-free handle. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={screensGroupActive}
+            aria-label="Screens section"
+            title="Screens"
+            className={`rail-icon design-rail-section ${screensGroupActive ? 'active' : ''}`}
+            onClick={() => onSelect('screens')}
+            data-testid="design-rail-screens-section"
+          >
+            <MonitorSmartphone size={18} strokeWidth={1.5} />
+          </button>
           {wireframes.map((wf) => {
             const stem = stemOf(wf.name);
             const rawStatus = wf.status || statusByStem.get(stem.toLowerCase()) || '';

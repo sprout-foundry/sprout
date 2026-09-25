@@ -122,6 +122,18 @@ describe('DesignRail (SP-140-8 §8a)', () => {
     expect(onSelect).toHaveBeenCalledWith('tokens');
   });
 
+  it('the Screens section entry switches the section without selecting a screen', () => {
+    // Post-8.2 a selected screen renders the workbench, so the grid is only
+    // reachable through a selection-free section switch.
+    const { select, onSelect } = renderRail('flows');
+
+    fireEvent.click(screen.getByTestId('design-rail-screens-section'));
+
+    expect(select).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('screens');
+  });
+
   it('marks the active screen when the selection matches', () => {
     renderRail('screens');
 

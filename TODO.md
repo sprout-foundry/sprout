@@ -453,6 +453,25 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ---
 
+## SP-143 — Screen Runtime (`roadmap/SP-143-screen-runtime.md`)
+
+- [ ] **143.1** Preview ref rewriting: `rewriteScreenRefs` helper +
+      wired in ScreensTabContainer / ScreenWorkbenchContainer render path;
+      `/api/file` MIME check for `.js`. Spec: SP-143 §1.1.
+- [ ] **143.2** The runtime asset `design/runtime/sprout-screens.js`
+      (data-nav interception, in-place swap, history, standalone fallback)
+      + skill scaffold copy. Spec: SP-143 §1.2.
+- [ ] **143.3** Validator + tree registration for `design/runtime/*.js`
+      (hash check when present; missing = info). Spec: SP-143 §1.3.
+- [ ] **143.4** Token wiring convention (screens ref
+      `../generated/tokens.css`; advisory raw-hex finding). Spec: SP-143 §1.4.
+- [ ] **143.5** Generator surface: SKILL.md / designer persona / tool docs
+      carry the two reference lines + data-nav anchor rule. Spec: SP-143 §1.5.
+- [ ] **143.6** E2E: click-through flow preview + token-edit restyles all
+      screens. Spec: SP-143 §1.6.
+
+---
+
 ## SP-140 — Vision tier follow-ups (`roadmap/SP-140-vision-capability-first-class.md`)
 
 - [x] **V-1** Vision-tier model preference: FIXED —

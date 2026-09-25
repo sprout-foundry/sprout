@@ -16,7 +16,12 @@
  *   - data-nav: <a data-nav="to:<stem>;trigger:<label>"> clicks swap the
  *     document in place (fetch + head/body/title replace), pushState, and
  *     back/forward just work; the anchor href stays authored so the browser
- *     can navigate plainly wherever fetch is refused.
+ *     can navigate plainly wherever fetch is refused. Where the history API
+ *     refuses entirely (the preview iframe is an about:srcdoc document —
+ *     null origin, both pushState and replaceState throw), a same-document
+ *     fragment carries the stem instead: location.hash = ... still writes a
+ *     real history entry in a srcdoc page, so back/forward pop and popstate
+ *     re-swaps.
  *   - screen URLs derive from the runtime's own <script src>; when that src
  *     is the webui preview proxy form (/api/file?path=…, SP-143 §143.4) the
  *     kit root comes from the decoded path param and both the swap fetch and
@@ -33,7 +38,7 @@
  *     of the source-hash line itself replaced by zeros — recomputable
  *     offline, the SP-140-5 §5f convention adapted to a fixed asset).
  *
- * source-hash: fnv1a64:5a616afe34efcf60
+ * source-hash: fnv1a64:b2dbf3de3df69eaa
  * version: 1
  */
 (function () {
@@ -218,14 +223,29 @@
   function replaceQuiet(hash) {
     try {
       history.replaceState(history.state, '', hash);
-    } catch (e) { /* states are URL-hash convenience, never load-bearing */ }
+      return true;
+    } catch (e) {
+      // An about:srcdoc document (the webui preview iframe) throws on every
+      // URL-form rewrite — it has no base URL to rewrite against. The one
+      // history-writing act that still works there is a same-document hash
+      // assignment, so the recorded position degrades to a fragment.
+      try {
+        location.hash = hash;
+        return true;
+      } catch (e2) { return false; }
+    }
   }
 
   function pushQuiet(url, stem) {
     try {
       history.pushState({ sprout: VERSION, sproutScreen: stem }, '', url);
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      // Same srcdoc story as replaceQuiet: a fragment assignment is the only
+      // writer left, and unlike replaceState it pushes a real entry — the
+      // swap stays history-navigable in the preview.
+      return replaceQuiet('#sprout-screen=' + stem);
+    }
   }
 
   // --- navigation ---------------------------------------------------------
@@ -305,11 +325,15 @@
     for (var k = 0; k < scripts.length; k++) scripts[k].parentNode.removeChild(scripts[k]);
     document.body.replaceWith(body);
     document.title = doc.title;
+    // The toggle rule lives in the head, which applyDocument replaced
+    // wholesale — re-inject it or every data-state section shows at once.
+    injectHiddenRule();
   }
 
   function swapTo(stem, push) {
     if (!screensBaseURL) return;
     var url = screensBaseURL.resolve(stem + '.html');
+    void push;
     if (typeof fetch !== 'function') {
       // fetch itself is unavailable: the spec'd standalone fallback is plain
       // browser navigation, which works everywhere the document does.
@@ -325,16 +349,13 @@
       applyDocument(doc);
       currentStem = stem;
       document.documentElement.setAttribute('data-sprout-screen-stem', stem);
-      if (push && !pushQuiet(url, stem)) {
-        // History refused the rewrite (an opaque origin like about:srcdoc
-        // throws on URL-form entries). The document is already swapped, so
-        // recording a fragment is enough for back to reach the boot entry
-        // and popstate to re-swap; never location.replace the proxy URL —
-        // in the preview the document would reload inside srcDoc, which has
-        // no persistent URL for it.
-        replaceQuiet('#sprout-screen=' + stem);
-        return;
-      }
+      // History refused the rewrite (an opaque origin like about:srcdoc
+      // throws on URL-form entries): pushQuiet's fallback records a
+      // fragment entry, so back reaches the boot position and popstate
+      // re-swaps. Never location.replace the proxy URL — in the preview the
+      // document would reload inside srcDoc, which has no persistent URL
+      // for it.
+      pushQuiet(url, stem);
       applyState(resolveActiveState());
       window.scrollTo(0, 0);
       dispatch('sprout:navigated', { stem: stem });
@@ -373,6 +394,18 @@
   }
 
   function onPopstate(event) {
+    // Chrome fires popstate alongside every fragment-navigation hashchange
+    // (a history difference that is only a same-document fragment change).
+    // The #sprout-screen= fragments the history fallback records drive
+    // screen pops here; a #state= pop is screen-preserving (the hashchange
+    // listener applies it); everything else is a pop back to the boot
+    // position, so the boot screen is restored.
+    var m = /^#sprout-screen=([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(location.hash || '');
+    if (m) {
+      if (m[1] !== currentStem) swapTo(m[1], false);
+      return;
+    }
+    if (stateFromHash()) return;
     var stem = event.state && event.state.sprout
       ? event.state.sproutScreen
       : stemFromLocation() || bootStem;
@@ -422,8 +455,9 @@
   // --- boot ----------------------------------------------------------------
 
   function injectHiddenRule() {
-    // One style element for the state toggle; idempotent across swaps (head
-    // is replaced wholesale, so re-inject on every boot/swap is the rule).
+    // One style element for the state toggle; idempotent across swaps (the
+    // swapped head is a fresh parse, so re-inject on every boot/swap is the
+    // rule).
     var style = document.createElement('style');
     style.id = 'sprout-screens-state-rule';
     style.textContent = '[data-state][data-sprout-hidden]{display:none!important}';
@@ -441,6 +475,15 @@
     if (!self) return; // renamed or inlined copy: no screen-resolution basis
     screensBaseURL = screensBase(self);
     bootStem = stemFromLocation();
+    if (!bootStem && screensBaseURL.proxy) {
+      // A srcdoc page has no location to read the stem from; the authoring
+      // contract stamps it on the body (the base templates ship it). Boot
+      // position for back/forward pops in the preview.
+      var bodyStem = document.body ? document.body.getAttribute('data-sprout-screen') : null;
+      if (bodyStem && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(bodyStem) && bodyStem !== 'REPLACE_WITH_STEM') {
+        bootStem = bodyStem.toLowerCase();
+      }
+    }
 
     document.documentElement.setAttribute('data-sprout-screens', VERSION);
     document.addEventListener('click', onClick, true);
@@ -449,14 +492,6 @@
 
     injectHiddenRule();
     currentStem = bootStem;
-    if (!currentStem && screensBaseURL.proxy) {
-      // A srcdoc page has no location to read the stem from; the authoring
-      // contract stamps it on the body (the base templates ship it).
-      var bodyStem = document.body ? document.body.getAttribute('data-sprout-screen') : null;
-      if (bodyStem && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(bodyStem) && bodyStem !== 'REPLACE_WITH_STEM') {
-        currentStem = bodyStem.toLowerCase();
-      }
-    }
     if (currentStem) document.documentElement.setAttribute('data-sprout-screen-stem', currentStem);
     applyState(resolveActiveState());
   }

@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+  Sprout screen kit dogfood: mobile-sessions (SP-143 143.7). A copy of
+  design/runtime/base/phone.html with the stem replaced — session list for a
+  phone, navigating to mobile-session via the runtime's in-place data-nav
+  swap. Styled utilities-first from ../generated/tokens.css (143.1); the
+  device chrome comes from ../runtime/chrome.css at the mobile frame.
+-->
+<html lang="en" data-device="phone" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mobile-sessions — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<link rel="stylesheet" href="../runtime/chrome.css">
+<style>
+  /* The declared README frame this screen lays out at. Chrome.css draws the
+     bezel around these; the validator's frame check reads the same numbers. */
+  html {
+    --sprout-frame-width: 390px;
+    --sprout-frame-height: 844px;
+    color-scheme: dark;
+  }
+  body { margin: 0; }
+  .glass {
+    box-sizing: border-box;
+    width: 390px;
+    height: 844px;
+    padding: 56px var(--space-4) 24px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    background: var(--color-dark-bg-primary);
+    color: var(--color-dark-text-primary);
+    font-family: var(--typography-font-sans);
+  }
+  .screen-title { margin: 0; font-size: var(--typography-size-xl); }
+  .session-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-2);
+    border-bottom: 1px solid var(--color-dark-border-subtle);
+    color: inherit;
+    text-decoration: none;
+  }
+  .session-dot { flex: none; width: 10px; height: 10px; border-radius: var(--radius-pill); }
+  .session-dot.running { background-color: var(--color-dark-accent-success); }
+  .session-dot.idle { background-color: var(--color-dark-text-muted); }
+  .session-name { font-size: var(--typography-size-base); }
+  .session-meta { margin-left: auto; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+</style>
+</head>
+<body data-sprout-screen="mobile-sessions">
+<div data-sprout-home></div>
+<main class="glass">
+  <h1 class="screen-title">Sessions</h1>
+  <a class="session-row" href="../screens/mobile-session.html" data-nav="to:mobile-session;trigger:tap session row">
+    <span class="session-dot running"></span>
+    <span class="session-name">Refactor the export pipeline</span>
+    <span class="session-meta">now</span>
+  </a>
+  <a class="session-row" href="../screens/mobile-session.html" data-nav="to:mobile-session;trigger:tap session row">
+    <span class="session-dot idle"></span>
+    <span class="session-name">Fix the flaky diff test</span>
+    <span class="session-meta">2h</span>
+  </a>
+  <a class="session-row" href="../screens/mobile-session.html" data-nav="to:mobile-session;trigger:tap session row">
+    <span class="session-dot idle"></span>
+    <span class="session-name">Draft the release notes</span>
+    <span class="session-meta">1d</span>
+  </a>
+</main>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

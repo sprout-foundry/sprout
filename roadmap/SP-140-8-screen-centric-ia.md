@@ -199,11 +199,21 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
       (8.5 owns deep links; the rail's Library group carries Tokens and
       Flows — Feedback's library placement still needs 8.5's resolution.)
 - [x] A workspace without `design/` shows the single guided empty state.
-- [ ] The workbench's data is `design_brief` (no second aggregation path —
+- [x] The workbench's data is `design_brief` (no second aggregation path —
       one truth, per the SP-140-5 premise). (The shipped workbench derives
       the same contract client-side — `screenBrief.ts` mirrors the §5g
-      brief over /api/file reads — rather than calling the Go design_brief;
-      whether that satisfies "one truth" is an open judgment for 8.5/8.6.)
+      brief over /api/file reads, the SP-140-3 §3f zero-new-endpoint rule —
+      rather than calling the Go design_brief. That mirror is now pinned,
+      which is what makes it the one truth rather than a second one: the
+      shared fixture `pkg/design/testdata/webui-brief/screen-brief.json`
+      carries both halves (the seeded design/ tree and the Go brief over
+      it); `webui/src/components/design/screenBrief.parity.test.ts`
+      re-derives the brief client-side from those bytes and pins the
+      projected fields equal, and `pkg/design/brief_parity_test.go` fails
+      when the committed Go half goes stale. Known, documented divergences
+      survive the pin (the alias-aware known-token set, target-keyed
+      feedback matching, inline node-label `otherLabel`) — the parity tests
+      enumerate what the two arms must agree on, not everything they do.)
 - [x] All new testids registered; vitest green; the DesignView lazy chunk
       pin (`designChunk.test.ts`) still holds.
 - [ ] A `design_critique` pass on the new layout reports no

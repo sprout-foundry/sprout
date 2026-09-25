@@ -538,8 +538,11 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       carry the screens target (143.5); prompt/validator agreement pinned
       by new needle tests (TestDesignSystemSkillScreenKit, designer-prompt
       screen-kit block), both green.
-- [ ] **143.7** E2E: phone-framed themed screen pair with in-place nav,
-      states, token-edit restyle. Spec: SP-143 §143.7.
+- [x] **143.7** E2E: phone-framed themed screen pair with in-place nav,
+      states, token-edit restyle. Spec: SP-143 §143.7. LANDED:
+      `test/webui/design_kit.spec.ts` (4 tests green) + the §8b render-first
+      fix (wireframe selection renders the delivered HTML screen) + the
+      `designtokencss` fixture driving the real export pipeline.
 
 ---
 

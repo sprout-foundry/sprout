@@ -67,11 +67,14 @@
   .rail-label { font-size: 10px; line-height: 1; }
   .status-dot {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 6px;
-    height: 6px;
+    top: 3px;
+    right: 3px;
+    width: 8px;
+    height: 8px;
     border-radius: var(--radius-pill);
+    /* 1px elevated ring separates the dot from the dark rail (critique:
+       6px accent dots were borderline-invisible at a glance). */
+    box-shadow: 0 0 0 1px var(--color-dark-bg-elevated);
   }
   .status-dot.draft { background: var(--color-dark-accent-warning); }
   .status-dot.review { background: var(--color-dark-accent-info); }
@@ -135,15 +138,19 @@
   }
   .facet-row { display: flex; align-items: center; gap: var(--space-4); font-size: var(--typography-size-xs); }
   .chip {
+    /* One chip shape everywhere; role is color + the leading dot only
+       (critique: mixed roundness/padding across facets read as two
+       different components). */
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
     padding: 2px var(--space-4);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-pill);
     background: var(--color-dark-bg-elevated);
     color: var(--color-dark-text-secondary);
     text-decoration: none;
   }
+  a.chip:hover { border-color: var(--color-dark-accent-cyan); outline: 1px solid var(--color-dark-accent-cyan); }
   .chip .dot { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--color-dark-accent-warning); }
   .chip.edge { color: var(--color-dark-accent-cyan); }
   .chip.token-known { color: var(--color-dark-accent-success); }

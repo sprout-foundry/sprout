@@ -41,11 +41,14 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   box-sizing: border-box;
   pointer-events: none;
+  /* Ring separates the dot from the dark rail background (a 7px accent dot
+     was borderline at a glance; the draft grey especially). */
+  box-shadow: 0 0 0 1px var(--bg-elevated);
 }
 
 .design-rail-status--draft {

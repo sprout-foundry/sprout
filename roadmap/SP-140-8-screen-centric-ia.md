@@ -5,7 +5,7 @@
 > dot + open-annotation badge, selection routing) has landed; the workbench
 > (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) verified
 > shipped with it (2026-09-25); the §8d empty states landed 2026-09-25.
-> Remaining: 8.5 (deep-link migration), 8.6 (wireframe + critique).
+> Remaining: 8.5 Feedback-library resolution (recorded in its note); 8.6 shipped 2026-09-25.
 > The token-display rework that motivated this (tile grid, proportional spacing
 > scale, schema-wall removal) landed in the same review pass on
 > `feat-design-workspace` and is *not* part of this spec.
@@ -208,6 +208,20 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
   `design/screens/` of the dogfood workspace — the tool's own IA dogfoods
   SP-140-9's format once it lands; until then, SVG per the current
   charter), plus a critique pass (`design_critique`).
+  > **Progress (2026-09-25):** Shipped. `design/screens/design-mode.html`
+  > (SP-143 kit: desktop base copy, utilities-first, declared 1440×900
+  > frame) + `design/wireframes/design-mode.svg` counterpart + manifest
+  > rows + regenerated `screens.json` (commit `10cf3d3d7`). Critique pass
+  > run via a headless render + vision analysis (the local design_critique
+  > tool targets a different workspace root; the file:// render is the
+  > kit's standalone path, equivalent material). Findings triaged: chips
+  > unified to one pill shape with color-only roles + anchor hover state;
+  > status dots enlarged to 8px with a 1px elevated ring (mockup and the
+  > real DesignRail.css — the draft-grey dot was borderline); re-critique
+  > verified both fixes. Remaining findings judged spec-deliberate (§8b
+  > facet order, agent-slice presence) or mockup teaching-examples (the
+  > unknown-token chip is red on purpose). Known-open: Feedback's library
+  > view (8.5 note).
 
 ## Acceptance criteria
 
@@ -236,5 +250,10 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
       enumerate what the two arms must agree on, not everything they do.)
 - [x] All new testids registered; vitest green; the DesignView lazy chunk
       pin (`designChunk.test.ts`) still holds.
-- [ ] A `design_critique` pass on the new layout reports no
+- [x] A `design_critique` pass on the new layout reports no
       consistency/hierarchy errors against the existing design language.
+      (Pass run 2026-09-25 on `design-mode.html` via headless render +
+      vision; flagged items fixed (chip consistency, dot contrast) and the
+      rest triaged as spec-deliberate — see 8.6's progress note. The bar
+      is "no consistency/hierarchy errors after fixes", which the
+      re-critique verified.)

@@ -680,6 +680,13 @@ func TestSubagentOverridesValidation(t *testing.T) {
 func TestSubagentOverridesApplyAndRestore(t *testing.T) {
 	t.Parallel()
 
+	// ApplyWorkflowSubagentOverrides logs via the global logger; parallel
+	// log-capture tests swap log.Writer() under logCaptureMu, so a
+	// concurrent write here races with their buffer reads. Serialize with
+	// the capture protocol for the duration of the apply calls.
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
+
 	t.Run("apply patches subagent types", func(t *testing.T) {
 		subagentTypes := map[string]configuration.SubagentType{
 			"tester": {
@@ -915,6 +922,12 @@ func TestFindSubagentTypeMapKey(t *testing.T) {
 
 func TestSubagentOverridesWorkflowConfigParsing(t *testing.T) {
 	t.Parallel()
+
+	// LoadAgentWorkflowConfig + ApplyWorkflowSubagentOverrides log via the
+	// global logger; serialize with the log-capture protocol (see
+	// TestSubagentOverridesApplyAndRestore).
+	logCaptureMu.Lock()
+	defer logCaptureMu.Unlock()
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "subagent-workflow.json")

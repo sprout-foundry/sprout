@@ -394,13 +394,24 @@ func tokenExportSources(root string) ([]TokenExportSource, error) {
 
 // provenanceSourceHash extracts the `source-hash:` value from a generated
 // artifact's §5a provenance banner. It returns "" when the artifact carries no
-// header (an older or hand-written file). The banner shape is fixed by
-// provenanceHeader: a "source-hash: fnv1a64:<hex>" line inside the comment.
+// header (an older or hand-written file). Two banner shapes are legal — the
+// one provenanceHeader renders (a "source-hash: fnv1a64:<hex>" line inside a
+// comment) and the JSON target's field form ("source-hash": "<hex>"), which
+// exists because JSON has no comment syntax; both carry the same value and
+// this extractor is the one place that must agree on them.
 func provenanceSourceHash(artifact string) string {
 	for _, line := range strings.Split(artifact, "\n") {
 		trimmed := strings.TrimSpace(line)
 		trimmed = strings.TrimLeft(trimmed, "/*#- \t")
 		if !strings.HasPrefix(trimmed, "source-hash:") {
+			if !strings.HasPrefix(trimmed, `"source-hash":`) {
+				continue
+			}
+			value := strings.TrimSpace(strings.TrimPrefix(trimmed, `"source-hash":`))
+			value = strings.Trim(value, `",`)
+			if value != "" {
+				return value
+			}
 			continue
 		}
 		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "source-hash:"))

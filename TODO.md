@@ -455,9 +455,16 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ## SP-143 — Screen Kit (`roadmap/SP-143-screen-runtime.md`)
 
-- [ ] **143.1** Export growth: utility-class layer in the css target +
+- [x] **143.1** Export growth: utility-class layer in the css target +
       `json` target (`design_export_tokens`; group→utility vocabulary;
-      determinism + hash pins). Spec: SP-143 §143.1.
+      determinism + hash pins). Spec: SP-143 §143.1. — Landed: css target
+      emits the utility layer under the vars (`pkg/design/utilities.go`:
+      color→.bg/.text/.border, space→.p/.m/.gap, font+typography→.font-*/
+      .text-*-size/.text-*-weight, radius→.rounded-, length-bearing
+      shadow→.shadow-); new `json` target writes tokens.json (resolved
+      values + cssVar map, JSON-field provenance banner the shared
+      provenanceSourceHash reads); determinism/hash pins in
+      utilities_test.go; dogfood tokens.css + tokens.json regenerated.
 - [ ] **143.2** Chrome + base templates: `chrome.css` (iPhone chrome for
       `data-device="phone"`, none for desktop), `base/phone.html`,
       `base/desktop.html`; skill scaffold copies them. Spec: SP-143 §143.2.

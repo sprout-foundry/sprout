@@ -42,9 +42,14 @@ func (h *designExportHandler) Definition() ToolDefinition {
 		Name: "design_export_tokens",
 		Description: "Export the design tokens (design/tokens/*.tokens.json, W3C DTCG) into " +
 			"code-side artifacts under design/generated/: " +
-			"`css` → tokens.css (CSS custom properties), `ts` → tokens.ts (typed token map + " +
-			"cssVar lookup), `tailwind` → tailwind.theme.css (a Tailwind v4 @theme block), " +
-			"`swift` → tokens.swift, `kotlin` → tokens.kt. " +
+			"`css` → tokens.css (CSS custom properties PLUS the generated utility layer: " +
+			".bg-*/.text-*/.border-*, .p-*/.m-*/.gap-*, .font-*/.text-*-size/.text-*-weight, " +
+			".rounded-*, .shadow-* — style screens with these, SP-143), `ts` → tokens.ts (typed " +
+			"token map + cssVar lookup), `json` → tokens.json (resolved token values + cssVar map " +
+			"for JS, e.g. the screen runtime), `tailwind` → tailwind.theme.css (a Tailwind v4 " +
+			"@theme block), `swift` → tokens.swift, `kotlin` → tokens.kt. " +
+			"Utilities come only from the known groups (color, space, font/typography, radius, " +
+			"shadow); unknown groups stay variables-only. " +
 			"Output is deterministic and byte-identical for the same tokens, so re-running the " +
 			"export after no token change is a no-op. Every generated file opens with a " +
 			"provenance header carrying `source-hash: fnv1a64:<hex>` — a content hash of the " +
@@ -64,7 +69,7 @@ func (h *designExportHandler) Definition() ToolDefinition {
 				Name:        "targets",
 				Type:        "string",
 				Required:    false,
-				Description: "Which exporters to run: `all` (default), one target, or a comma-separated list. Targets: css, ts, tailwind, swift, kotlin.",
+				Description: "Which exporters to run: `all` (default), one target, or a comma-separated list. Targets: css, ts, json, tailwind, swift, kotlin.",
 			},
 			{
 				Name:        "out_dir",

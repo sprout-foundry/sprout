@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -21,6 +22,9 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	var pendingContent string
 	var pendingReasoning string // preserved for compatible providers
 	var pendingMeta map[string]string
+	// Images attached to tool results, recorded per emitted batch position
+	// for per-batch delivery after the loop (insertToolResultImageDeliveries).
+	var toolImageBatches []toolImageBatch
 
 	flush := func() {
 		if pendingRole == "" {
@@ -63,11 +67,17 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 
 		if !isMergeable {
 			// Emit directly without buffering.
-			// Tool-role messages must keep string content: most providers
-			// (e.g. Qwen/ai-worker, DeepSeek, MiniMax) reject tool results
-			// whose content is a multimodal array ("tool messages must
-			// contain string content"). Images attached to a tool result
-			// are informational only — drop them and keep the text.
+			// Tool-role messages must keep string content: strict backends
+			// (Qwen/vLLM, DeepSeek, MiniMax) reject tool results whose
+			// content is a multimodal array ("tool messages must contain
+			// string content"). The pixels are not dropped — they are
+			// re-delivered as user messages at their historical positions
+			// right after the tool batch
+			// (insertToolResultImageDeliveries), the OpenAI-compat
+			// pattern for tool output images. Seed strips images for
+			// non-vision models before this layer; a vision model whose
+			// provider still rejects them self-heals via
+			// reconcileVisionCapability.
 			content := interface{}(msg.Content)
 			if content == "" {
 				content = nil
@@ -84,6 +94,19 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 					convertedMsg["role"] = "user"
 				}
 				converted = append(converted, convertedMsg)
+				// Pixels ride in a per-batch delivery user message right
+				// after the tool run (see insertToolResultImageDeliveries),
+				// but only when this provider takes images at all — an
+				// explicitly non-vision provider would 400 on every
+				// request. Seed normally strips these earlier; this gate
+				// covers direct callers. Mis-declared vision self-heals
+				// via reconcileVisionCapability on first rejection.
+				if p.SupportsVision() && len(msg.Images) > 0 {
+					toolImageBatches = append(toolImageBatches, toolImageBatch{
+						afterIndex: len(converted), // delivery inserts after the tool message
+						images:     msg.Images,
+					})
+				}
 				continue
 			}
 			if len(msg.Images) > 0 {
@@ -131,6 +154,11 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	if p.config.Conversion.NeutralizeSpecialTokens {
 		converted = neutralizeSpecialTokensInConverted(converted)
 	}
+
+	// Deliver tool-result images as user messages at their historical
+	// positions (right after each tool batch) so the wire prefix stays
+	// cache-stable across iterations: older deliveries never move.
+	converted = p.insertToolResultImageDeliveries(converted, toolImageBatches)
 
 	// Conversation state repair: clean up orphaned tool calls and tool
 	// results that arise from checkpoint compaction, session persistence
@@ -656,4 +684,106 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 		out[k] = v
 	}
 	return out
+}
+
+// toolImageBatch records one tool result's images and the converted-index
+// position the delivery message should take (right after that tool message).
+type toolImageBatch struct {
+	afterIndex int
+	images     []api.ImageData
+}
+
+// insertToolResultImageDeliveries delivers images attached to tool results
+// as user messages at their historical positions — one delivery per tool
+// batch, inserted directly after the tool run it belongs to. Strict
+// backends require string content on tool messages ("tool messages must
+// contain string content"), so the pixels cannot ride inside the tool
+// message itself; a follow-up user turn is the OpenAI-compat delivery
+// pattern. Positional insertion keeps the wire prefix cache-stable across
+// iterations: a delivery emitted in iteration N never moves when iteration
+// N+1 appends more history, so provider prompt caching (vLLM auto-prefix,
+// Anthropic cache_control) keeps hitting.
+//
+// Seed strips images for non-vision models upstream, so images arriving
+// here are bound for a multimodal model; a provider that still rejects
+// them self-heals via reconcileVisionCapability (strip + one retry +
+// learned known-false).
+func (p *GenericProvider) insertToolResultImageDeliveries(converted []map[string]interface{}, batches []toolImageBatch) []map[string]interface{} {
+	if len(batches) == 0 {
+		return converted
+	}
+
+	caps := api.VisionCapabilitiesOrDefault(p.VisionCapabilities())
+
+	// Batches are recorded in emission order; deliver back-to-front so
+	// earlier afterIndex values stay valid as later insertions grow the
+	// slice. Adjacent batches (afterIndex differs by exactly 1 — nothing
+	// but the next tool result between them) belong to ONE tool run: they
+	// must merge into a single delivery after the run's last tool result.
+	// Inserting between two results of the same run would break the strict
+	// tool-result threading most backends enforce.
+	type pendingDelivery struct {
+		afterIndex int
+		images     []api.ImageData
+	}
+	var deliveries []pendingDelivery
+	for _, b := range batches {
+		if n := len(deliveries); n > 0 && b.afterIndex-deliveries[n-1].afterIndex == 1 {
+			deliveries[n-1].afterIndex = b.afterIndex
+			deliveries[n-1].images = append(deliveries[n-1].images, b.images...)
+			continue
+		}
+		deliveries = append(deliveries, pendingDelivery(b))
+	}
+
+	for i := len(deliveries) - 1; i >= 0; i-- {
+		d := deliveries[i]
+		images := d.images
+		omitted := 0
+		if caps.MaxImageCount > 0 && len(images) > caps.MaxImageCount {
+			omitted = len(images) - caps.MaxImageCount
+			images = images[len(images)-caps.MaxImageCount:]
+		}
+		note := "Images from the tool results above, in call order."
+		if omitted > 0 {
+			note += fmt.Sprintf(" %d older image(s) omitted to stay within the per-request image cap.", omitted)
+		}
+
+		insertAt := d.afterIndex
+		// Two fold paths avoid inserting a user message adjacent to an
+		// existing user message (the main loop merges those, but this
+		// insertion runs post-loop):
+		//
+		//   1. ConvertToolRoleToUser providers render the tool result
+		//      itself as a user message → fold into it (append note).
+		//   2. A transient user message may directly follow the tool run
+		//      ("Please continue…") → fold into it (prepend note).
+		if insertAt > 0 {
+			prev := converted[insertAt-1]
+			if role, _ := prev["role"].(string); role == "user" {
+				if s, ok := prev["content"].(string); ok {
+					prev["content"] = p.buildMultiModalContent(s+"\n"+note, images)
+					continue
+				}
+			}
+		}
+		if insertAt < len(converted) {
+			next := converted[insertAt]
+			if role, _ := next["role"].(string); role == "user" {
+				if s, ok := next["content"].(string); ok {
+					next["content"] = p.buildMultiModalContent(note+"\n"+s, images)
+					continue
+				}
+			}
+		}
+
+		delivery := map[string]interface{}{
+			"role":    "user",
+			"content": p.buildMultiModalContent(note, images),
+		}
+		converted = append(converted, nil)
+		copy(converted[insertAt+1:], converted[insertAt:])
+		converted[insertAt] = delivery
+	}
+	return converted
 }

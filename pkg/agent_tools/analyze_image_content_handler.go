@@ -22,12 +22,12 @@ func (h *analyzeImageContentHandler) Name() string { return "analyze_image_conte
 func (h *analyzeImageContentHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_image_content",
-		Description: "Analyze images/PDFs for text extraction (OCR), structured extraction, or general visual insights. Supports local paths and HTTP(S) URLs.",
+		Description: "See an image or PDF: pixels are attached inline for vision-capable models; analysis_mode='ocr' extracts text, analysis_mode='general' describes content. Supports local paths and HTTP(S) URLs.",
 		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
 			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to image/PDF"},
 			{Name: "analysis_prompt", Type: "string", Description: "Custom vision prompt"},
-			{Name: "analysis_mode", Type: "string", Description: "Mode: 'ocr' for text extraction, 'general' for description"},
+			{Name: "analysis_mode", Type: "string", Description: "Mode: 'ocr' for text extraction, 'general' for description. Leave unset when you can see the image — pixels are attached inline."},
 		},
 	}
 }

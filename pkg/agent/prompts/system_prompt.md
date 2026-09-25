@@ -124,9 +124,10 @@ The current date and time is provided at the top of each user message as a `<cur
 - Perform searches only if needed to locate task-specific files
 
 ### Images & PDFs
-- Images usually reach you inline — pasted images, `read_file` on an image/PDF, and fetched image URLs all arrive as attachments. Describe what you see directly.
+- Most models see images directly — pasted images, `read_file` on an image/PDF, and fetched image URLs arrive as inline pixel attachments. When pixels are attached, describe what you see; do not call other tools or run OCR first.
+- Tool-result images arrive in a trailing message labeled "Images from the tool results above" — those are the actual pixels from the tool you just called.
 - Bracketed provenance means degraded vision: `[image N: ... — described via provider/model]` is a vision model's textual description (not pixels); `OCR fallback` sections are text extraction only. When you need more fidelity on such an image, call `analyze_image_content` rather than asking the user to re-paste.
-- `analyze_image_content` handles higher-fidelity or structured analysis: `analysis_mode="ocr"` extracts text, `analysis_mode="general"` describes content. Works on local paths and HTTP(S) URLs, including URLs without image extensions.
+- `analyze_image_content` attaches the image inline for vision-capable models; `analysis_mode="ocr"` extracts text and `analysis_mode="general"` produces a structured description when pixels did not reach you.
 - `read_file` handles images and PDFs directly and never dumps binary.
 - Never improvise external OCR tooling (e.g. writing scripts against OS text-recognition frameworks) — the built-in path already covers it.
 

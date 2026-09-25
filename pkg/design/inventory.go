@@ -22,7 +22,12 @@ const (
 	KindScreen    = "screen"
 	KindFlow      = "flow"
 	KindFeedback  = "feedback"
-	KindUnkn      = "unknown"
+	// KindRuntime lists the SP-143 screen-kit fixed assets under
+	// design/runtime/ (the runtime, device chrome, base documents). They are
+	// tool-owned, not an authoring tier, but design_assets lists the tier so
+	// a model sees what is actually in the tree (SP-143 §143.5).
+	KindRuntime = "runtime"
+	KindUnkn    = "unknown"
 )
 
 // AssetRow is one inventory entry `{path, kind, name, status?, summary?}`
@@ -184,7 +189,7 @@ func scanAssets(root string) ([]AssetRow, error) {
 	designRoot := filepath.Join(root, DirName)
 	rows := []AssetRow{}
 
-	for _, sub := range Subdirs {
+	for _, sub := range append(append([]string(nil), Subdirs...), RuntimeSubdir) {
 		dir := filepath.Join(designRoot, sub)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -194,19 +199,39 @@ func scanAssets(root string) ([]AssetRow, error) {
 			return nil, err
 		}
 		for _, e := range entries {
-			if e.IsDir() {
+			if !e.IsDir() {
+				name := e.Name()
+				if name == ".gitkeep" || strings.HasPrefix(name, ".") {
+					continue
+				}
+				rows = append(rows, AssetRow{
+					Path: path.Join(DirName, sub, name),
+					Kind: assetKind(sub, name),
+					Name: assetName(name),
+				})
 				continue
 			}
-			name := e.Name()
-			if name == ".gitkeep" || strings.HasPrefix(name, ".") {
-				continue
+			// runtime/base/ and any other one-level grouping under a tier:
+			// the row keeps the nested slash path so the tree stays truthful.
+			nested := filepath.Join(dir, e.Name())
+			files, err := os.ReadDir(nested)
+			if err != nil {
+				return nil, err
 			}
-			rel := path.Join(DirName, sub, name)
-			rows = append(rows, AssetRow{
-				Path: rel,
-				Kind: assetKind(sub, name),
-				Name: assetName(name),
-			})
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				name := f.Name()
+				if name == ".gitkeep" || strings.HasPrefix(name, ".") {
+					continue
+				}
+				rows = append(rows, AssetRow{
+					Path: path.Join(DirName, sub, e.Name(), name),
+					Kind: assetKind(sub, name),
+					Name: assetName(name),
+				})
+			}
 		}
 	}
 	return rows, nil
@@ -248,6 +273,12 @@ func assetKind(sub, name string) string {
 		if strings.HasSuffix(name, ".json") {
 			return KindFeedback
 		}
+	case RuntimeSubdir:
+		// SP-143: the fixed screen-kit assets (runtime js, chrome.css, and
+		// the base/ documents). Every file in the tier is runtime — it is
+		// tool-owned, so an unknown file there is still listed as runtime
+		// rather than inventing a kind per extension.
+		return KindRuntime
 	}
 	return KindUnkn
 }

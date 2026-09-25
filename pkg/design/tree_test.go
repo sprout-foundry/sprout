@@ -109,6 +109,8 @@ func writeValidDesignTree(t *testing.T, root string) {
 	write("design/screens/login.html", validScreenHTML)
 	write("design/icons/home.svg", validTreeIconSVG)
 	write("design/brand/brand.md", validBrandMD)
+	// SP-143 §143.5: the screen contract artifacts — derived index + runtime.
+	writeScreensKitArtifacts(t, root)
 	// Repository-level git contract: present, with unrelated rules that must
 	// stay untouched, plus the required design lines.
 	write(GitContractFile, "* text=auto eol=lf\n*.png binary\n"+GitAttributesDiffHTMLLine+"\n")

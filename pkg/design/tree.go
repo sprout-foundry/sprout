@@ -1,6 +1,7 @@
 package design
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -59,6 +60,16 @@ func ValidateTree(root string) ([]Finding, error) {
 		errs = append(errs, err)
 	} else {
 		findings = append(findings, screens...)
+	}
+
+	// SP-143 §143.5: the screen runtime's source-hash and the screens.json
+	// drift are whole-tree checks (one artifact each, spanning every
+	// screen); they run right after the per-screen pass that feeds them.
+	index, err := ValidateScreensIndex(root)
+	if err != nil {
+		errs = append(errs, err)
+	} else {
+		findings = append(findings, index...)
 	}
 
 	icons, err := ValidateIconsDir(root)
@@ -192,12 +203,58 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		return findings, nil
 
 	case strings.HasPrefix(rel, DirName+"/screens/") && strings.HasSuffix(rel, ".html"):
-		return validateScreen(rel, data, manifestFrames(root)), nil
+		// SP-143 §143.5 graph rules run with the per-file rules so a
+		// single-file run surfaces nav-target/state findings too.
+		findings := validateScreen(rel, data, manifestFrames(root))
+		findings = append(findings, validateScreenIndexGraph(rel, data, screenStemSet(root))...)
+		return findings, nil
+
+	case strings.HasPrefix(rel, DirName+"/"+RuntimeSubdir+"/"):
+		// SP-143 §143.5: the runtime tier is recognized — tool-owned fixed
+		// assets, never authored. The runtime's copy is checked by its
+		// self-zeroing source-hash; the other assets (chrome.css, the base
+		// documents) have no hash contract and validate as present.
+		if path.Base(rel) == RuntimeFilename {
+			return validateRuntimeAsset(root), nil
+		}
+		return []Finding{}, nil
+
+	case rel == DirName+"/"+GeneratedSubdir+"/"+ScreensIndexFilename:
+		// SP-143 §143.5: the derived index is a validatable artifact of the
+		// tree, so a single-file run can check its drift directly.
+		if err := validateScreensIndexArtifact(root, data); err != nil {
+			return nil, err
+		}
+		return ValidateScreensIndex(root)
 
 	default:
-		return nil, fmt.Errorf("%s is not a recognized design asset (expected a tokens/*.tokens.json, wireframes/*.svg, components/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, %s, or brand/brand.md under %s/)",
+		return nil, fmt.Errorf("%s is not a recognized design asset (expected a tokens/*.tokens.json, wireframes/*.svg, components/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, runtime/* (SP-143), %s, or brand/brand.md under %s/)",
 			rel, ManifestName, DirName)
 	}
+}
+
+// screenStemSet is the map form of assetStems(root, "screens", ".html") for
+// the data-nav target resolution (SP-143 §143.5 rule a).
+func screenStemSet(root string) map[string]bool {
+	stems := map[string]bool{}
+	for _, stem := range assetStems(root, "screens", ".html") {
+		stems[stem] = true
+	}
+	return stems
+}
+
+// validateScreensIndexArtifact keeps the single-file screens.json run honest:
+// the validated bytes must be the artifact design/generated/ actually holds,
+// not a path that merely routes there.
+func validateScreensIndexArtifact(root string, data []byte) error {
+	existing, err := os.ReadFile(filepath.Join(root, DirName, GeneratedSubdir, ScreensIndexFilename))
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", ScreensIndexFilename, err)
+	}
+	if !bytes.Equal(existing, data) {
+		return fmt.Errorf("validated content does not match %s on disk", ScreensIndexFilename)
+	}
+	return nil
 }
 
 // manifestFrames reads the device frames declared in the design README so

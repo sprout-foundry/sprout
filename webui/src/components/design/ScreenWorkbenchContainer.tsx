@@ -115,13 +115,19 @@ export function ScreenWorkbenchContainer({
       const readmePath = inv.manifest?.path ?? 'design/README.md';
       const wireframePath =
         inv.wireframes.find((entry) => stemOf(entry.name) === stem)?.path ?? `design/wireframes/${stem}.svg`;
+      // §8b "render first" prefers the delivered HTML screen: a wireframe
+      // selection (the rail's screen buttons select wireframes) renders the
+      // screen file when one exists — the kit's runtime, chrome, and states
+      // live on the HTML tier, and the wireframe is the planning sketch.
+      const screenEntry = inv.screens.find((entry) => stemOf(entry.name) === stem);
+      const renderPath = screenEntry?.path ?? selectedPath;
       // The selected asset's text is the pane's anchor: a transport failure
       // there (a 404 is data — a missing file — and readAsset yields '')
       // surfaces as an error line and skips the degrade reads entirely.
       // Everything else degrades: an unreadable flow is skipped, a missing
       // token file drops from the known set — the brief's "missing is data"
       // rule (mirroring the Go brief).
-      const renderText = await readAsset(read, selectedPath);
+      const renderText = await readAsset(read, renderPath);
       const [readmeText, feedbackFile, flowTexts, tokenTexts, wireframeText] = await Promise.all([
         readOrEmpty(() => readAsset(read, readmePath)),
         (async () => {
@@ -155,7 +161,7 @@ export function ScreenWorkbenchContainer({
           feedback: feedbackFile,
         }),
       );
-      setRender({ content: renderText, path: selectedPath });
+      setRender({ content: renderText, path: renderPath });
       setAnnotations(feedbackFile?.annotations ?? []);
       setLoading(false);
     })().catch((err: unknown) => {

@@ -18,5 +18,12 @@ export const WORKSPACE_MODE_STORAGE_KEY = 'sprout:webui:workspaceMode:v1';
  * Design mode never falls back to a Code session (no pin = fresh chat).
  */
 export const CHAT_MODE_PIN_STORAGE_KEY = 'sprout:webui:chatModePin:v1';
+/**
+ * Active Design-mode section (its rail entry), scoped per instance
+ * (`<key>:<pid>:<scope>`) like `WORKSPACE_MODE_STORAGE_KEY`, so a reload
+ * returns to the section the user left (SP-140-8 item 8.5). See
+ * `webui/src/workspaces/useDesignSectionPersistence.ts`.
+ */
+export const DESIGN_SECTION_STORAGE_KEY = 'sprout:webui:designSection:v1';
 export const MAX_PERSISTED_LOGS = 1000;
 export const MAX_LOG_ENTRIES = 1000;

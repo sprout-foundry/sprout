@@ -184,6 +184,26 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
   > no-workspace / no-tree rail omission (Library only) is unchanged.
 - **8.5** Migration of the existing four-tab rail (state preservation: a
   deep link into "Flows" still lands on the Flows library view).
+  > **Progress (2026-09-25):** landed, with one §8a deviation. The
+  > state-preservation half is done: the Design mode's section
+  > (`designSection`) now persists per instance through the same store the
+  > workspace mode uses (`DESIGN_SECTION_STORAGE_KEY` keyed
+  > `<key>:<pid>:<scope>`, `useDesignSectionPersistence` mirroring
+  > `useWorkspaceMode`; best-effort — corrupt storage and write failures
+  > degrade to the `flows` default, and an unknown persisted id is ignored,
+  > so a future section rename cannot wedge the surface). A reload returns
+  > to the section the user left; the four-tab rail's "Flows deep link"
+  > guarantee is carried by the Library rail driving the same shared
+  > section (`Sidebar.designNav.test.tsx`), pinned for persistence in
+  > `useDesignSectionPersistence.test.ts`. Deviation: the Library group
+  > ships Tokens / Flows only — the §8a Feedback library view (a global
+  > queue over every `design/feedback/*.json` with target, status, open
+  > counts, and click-through to resolution) is real scope and did not fit
+  > this pass. Where feedback lives today is unchanged: per-screen in the
+  > workbench (§8b facet 3, from `DesignFeedbackResolution`/
+  > `DesignFeedbackAffordance`) and workspace-wide on the health strip's
+  > pending list. Follow-up: build the Feedback library view, or amend §8a
+  > to bless the workbench + health strip as the feedback surfaces.
 - **8.6** Meta: a wireframe of the new layout (an HTML screen in
   `design/screens/` of the dogfood workspace — the tool's own IA dogfoods
   SP-140-9's format once it lands; until then, SVG per the current

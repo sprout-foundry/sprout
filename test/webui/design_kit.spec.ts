@@ -174,8 +174,8 @@ test.beforeAll(async () => {
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
   page = handle.page;
-  // /api/file sends no cache headers, so the browser heuristically caches
-  // tokens.css; the token-edit scenario must observe the REGENERATED css on
+  // /api/file answers with Cache-Control: no-cache and conditional 304s, but
+  // the token-edit scenario must still observe the REGENERATED css on
   // reload. Disabling the cache keeps every proxy fetch honest without
   // weakening the assertion (the theming still flows through /api/file).
   const cdp = await page.context().newCDPSession(page);

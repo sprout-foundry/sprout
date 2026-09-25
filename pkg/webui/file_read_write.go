@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -121,17 +122,31 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// no-cache (not no-store): re-exporting e.g. design/generated/tokens.css
+	// rewrites the file in place with no URL change, so the browser must
+	// revalidate instead of heuristically trusting its mtime-based
+	// freshness heuristic. Last-Modified + a conditional 304 keep the
+	// revalidation cheap, and safe-write clients (SP-140-7 §7a) echo the
+	// same value back as baseMtime on the POST.
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
+
+	// Serve a conditional 304 before reading content: If-Modified-Since has
+	// second granularity (no sub-second in HTTP dates), so truncate before
+	// comparing — an mtime that truncates to the sent value is unmodified.
+	if im := r.Header.Get("If-Modified-Since"); im != "" {
+		if since, err := http.ParseTime(im); err == nil && !info.ModTime().Truncate(time.Second).After(since) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+
 	// Read file content
 	content, err := os.ReadFile(canonicalPath)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_read_file", fmt.Sprintf("Failed to read file: %v", err))
 		return
 	}
-
-	// Last-Modified lets safe-write clients (SP-140-7 §7a) echo this value
-	// back as baseMtime on the POST, turning blind overwrites into
-	// revision-checked writes with no extra round-trip.
-	w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
 
 	// Determine content type
 	// First, try to detect content type from the file content (magic bytes)

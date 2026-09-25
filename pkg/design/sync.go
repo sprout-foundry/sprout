@@ -673,7 +673,7 @@ func tokenDesignFiles(tree syncTree, tokenPath string) (designFiles []string, to
 		tokEntry = tokenPath
 	}
 	// The generated artifacts follow from the token §5a machinery.
-	for _, name := range []string{"tokens.css", "tokens.ts", "tailwind.theme.css", "tokens.swift", "tokens.kt"} {
+	for _, name := range []string{"tokens.css", "tokens.ts", "tokens.json", "tailwind.theme.css", "tokens.swift", "tokens.kt"} {
 		files = append(files, path.Join(DirName, GeneratedSubdir, name))
 	}
 	return files, tokFile, tokEntry

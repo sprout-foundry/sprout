@@ -475,10 +475,17 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       refs, data-sprout-screens/data-states stamps); design-system skill
       documents runtime/ + copy-from-base; dogfood tree carries the kit,
       design_validate clean (runtime_test.go).
-- [ ] **143.3** Runtime v1: data-nav in-place swap + history, states
+- [x] **143.3** Runtime v1: data-nav in-place swap + history, states
       (`data-states`/`data-state` + `#state=` hash; preview-gated
       switcher), `window.SproutScreens` API, standalone fallback,
-      version/hash stamps. Spec: SP-143 §143.3.
+      version/hash stamps. Spec: SP-143 §143.3. — Landed:
+      design/runtime/sprout-screens.js as a fourth scaffold asset;
+      delegated data-nav click → in-place head/body/title swap + pushState
+      (screen URLs derive from the runtime's own script src), fetch-refused
+      → plain-navigation fallback vs 404 → stay + sprout:navfailed events;
+      #state= hash states with preview-gated switcher (data-sprout-preview);
+      window.SproutScreens nav/setState/version; self-zeroing source-hash
+      pinned by test; browser-verified on http:// and file:// harnesses.
 - [ ] **143.4** Preview integration: `rewriteScreenRefs` → `/api/file`,
       preview marker injection, MIME check for `.js`/`.css`. Spec:
       SP-143 §143.4.

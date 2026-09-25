@@ -14,18 +14,20 @@ var manifestTemplate embed.FS
 
 const manifestTemplatePath = "templates/manifest.md"
 
-//go:embed templates/runtime/chrome.css templates/runtime/base/phone.html templates/runtime/base/desktop.html
+//go:embed templates/runtime/sprout-screens.js templates/runtime/chrome.css
+//go:embed templates/runtime/base/phone.html templates/runtime/base/desktop.html
 var runtimeTemplates embed.FS
 
 // runtimeTemplateDir is the embedded prefix the runtime kit lives under.
 const runtimeTemplateDir = "templates/runtime/"
 
 // RuntimeAssets are the SP-143 fixed screen-kit assets the scaffold copies
-// into design/runtime/, in copy order: device chrome, then the base
-// documents new screens start from. They are versioned assets, not user
-// content — Scaffold never overwrites an existing file, so a tree may pin
-// its own copy without the scaffold fighting it.
+// into design/runtime/, in copy order: the runtime itself, device chrome,
+// then the base documents new screens start from. They are versioned assets,
+// not user content — Scaffold never overwrites an existing file, so a tree
+// may pin its own copy without the scaffold fighting it.
 var RuntimeAssets = []string{
+	"sprout-screens.js",
 	"chrome.css",
 	"base/phone.html",
 	"base/desktop.html",

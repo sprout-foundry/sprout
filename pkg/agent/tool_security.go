@@ -276,6 +276,10 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// Interactive off-workspace approval: handlers consult this for
 		// "prompt" verdicts instead of failing with the raw error.
 		env.FileAccessPrompter = agent
+		env.PrimaryAcceptsImages = func() bool {
+			c := agent.getClient()
+			return c != nil && api.ResolveVisionCapability(c).AcceptsImages
+		}
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

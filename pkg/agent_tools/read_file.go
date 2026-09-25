@@ -25,7 +25,7 @@ func (h *readFileHandler) Name() string {
 func (h *readFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "read_file",
-		Description: "Read the contents of a file. Supports text files, PDFs, and images (images are attached for visual analysis or OCR-extracted, never dumped as binary). For large files, use view_range to read specific line ranges.",
+		Description: "Read the contents of a file. Text files return lines; images and PDFs are attached inline for visual analysis (never dumped as binary). For large files, use view_range to read specific line ranges.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
@@ -308,16 +308,18 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		}, fmt.Errorf("unrecognized image format: %s", path)
 	}
 
-	// Always attach the image data for vision-capable models (seed strips
-	// it for non-vision providers) and try to give everyone some text:
-	// native OCR when available, else a stub note.
+	// Vision-capable primary: pixels are the analysis — no OCR text needed
+	// (seed strips Images for non-vision models, which get OCR below).
+	// Native OCR runs only when the primary cannot see, keeping it a
+	// fallback rather than a default.
 	var textContent string
 	images := []ImageData{{
 		URI:      fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)),
 		MIMEType: mimeType,
 	}}
 
-	if nativeOCRAvailable() {
+	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
+	if !primarySees && nativeOCRAvailable() {
 		if ocrText, ocrErr := nativeOCR(ctx, cleanPath); ocrErr == nil {
 			trimmed, truncated, _ := limitVisionOutputText(strings.TrimSpace(ocrText))
 			if truncated {
@@ -330,8 +332,13 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		}
 	}
 	if textContent == "" {
-		textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached for visual analysis]",
-			filepath.Base(path), info.Size(), mimeType)
+		if primarySees {
+			textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached — describe what you see]",
+				filepath.Base(path), info.Size(), mimeType)
+		} else {
+			textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached for visual analysis; OCR text unavailable — use analyze_image_content]",
+				filepath.Base(path), info.Size(), mimeType)
+		}
 	}
 
 	return ToolResult{

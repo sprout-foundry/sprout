@@ -193,3 +193,59 @@ func TestVisionTierNoProviderNames(t *testing.T) {
 		}
 	}
 }
+
+// TestReadFile_ImageBranch_VisionPrimarySkipsOCR pins the vision-first
+// behavior: when the primary model sees images, read_file attaches pixels
+// and does NOT spend time on native OCR — the pixels are the analysis.
+// OCR text is the fallback for non-vision primaries, not a default.
+func TestReadFile_ImageBranch_VisionPrimarySkipsOCR(t *testing.T) {
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, validPNG(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &readFileHandler{}
+	res, err := h.Execute(context.Background(), ToolEnv{
+		PrimaryAcceptsImages: func() bool { return true },
+	}, map[string]any{"path": imgPath})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(res.Images) != 1 {
+		t.Fatalf("expected inline image, got %d", len(res.Images))
+	}
+	if strings.Contains(res.Output, "OCR text") {
+		t.Errorf("vision primary should not receive OCR text, got %q", res.Output)
+	}
+	if !strings.Contains(res.Output, "describe what you see") {
+		t.Errorf("expected see-the-pixels note, got %q", res.Output)
+	}
+}
+
+// TestReadFile_ImageBranch_NonVisionPrimaryGetsOCRText pins the fallback:
+// a non-vision primary gets OCR text when native OCR is available; the
+// attached pixels are stripped upstream by seed for non-vision models.
+func TestReadFile_ImageBranch_NonVisionPrimaryGetsOCRText(t *testing.T) {
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, validPNG(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &readFileHandler{}
+	res, err := h.Execute(context.Background(), ToolEnv{
+		PrimaryAcceptsImages: func() bool { return false },
+	}, map[string]any{"path": imgPath})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	// A 1x1 white PNG has no text; either OCR-empty note or the
+	// non-vision note is acceptable — but never the vision-primary note.
+	if strings.Contains(res.Output, "describe what you see") {
+		t.Errorf("non-vision primary got the vision note: %q", res.Output)
+	}
+	if !strings.HasPrefix(res.Output, "[image") {
+		t.Errorf("expected '[image: ...]' output, got %q", res.Output)
+	}
+}

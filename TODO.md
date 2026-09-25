@@ -453,22 +453,29 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
 
 ---
 
-## SP-143 — Screen Runtime (`roadmap/SP-143-screen-runtime.md`)
+## SP-143 — Screen Kit (`roadmap/SP-143-screen-runtime.md`)
 
-- [ ] **143.1** Preview ref rewriting: `rewriteScreenRefs` helper +
-      wired in ScreensTabContainer / ScreenWorkbenchContainer render path;
-      `/api/file` MIME check for `.js`. Spec: SP-143 §1.1.
-- [ ] **143.2** The runtime asset `design/runtime/sprout-screens.js`
-      (data-nav interception, in-place swap, history, standalone fallback)
-      + skill scaffold copy. Spec: SP-143 §1.2.
-- [ ] **143.3** Validator + tree registration for `design/runtime/*.js`
-      (hash check when present; missing = info). Spec: SP-143 §1.3.
-- [ ] **143.4** Token wiring convention (screens ref
-      `../generated/tokens.css`; advisory raw-hex finding). Spec: SP-143 §1.4.
-- [ ] **143.5** Generator surface: SKILL.md / designer persona / tool docs
-      carry the two reference lines + data-nav anchor rule. Spec: SP-143 §1.5.
-- [ ] **143.6** E2E: click-through flow preview + token-edit restyles all
-      screens. Spec: SP-143 §1.6.
+- [ ] **143.1** Export growth: utility-class layer in the css target +
+      `json` target (`design_export_tokens`; group→utility vocabulary;
+      determinism + hash pins). Spec: SP-143 §143.1.
+- [ ] **143.2** Chrome + base templates: `chrome.css` (iPhone chrome for
+      `data-device="phone"`, none for desktop), `base/phone.html`,
+      `base/desktop.html`; skill scaffold copies them. Spec: SP-143 §143.2.
+- [ ] **143.3** Runtime v1: data-nav in-place swap + history, states
+      (`data-states`/`data-state` + `#state=` hash; preview-gated
+      switcher), `window.SproutScreens` API, standalone fallback,
+      version/hash stamps. Spec: SP-143 §143.3.
+- [ ] **143.4** Preview integration: `rewriteScreenRefs` → `/api/file`,
+      preview marker injection, MIME check for `.js`/`.css`. Spec:
+      SP-143 §143.4.
+- [ ] **143.5** `screens.json` derived index generator + validator rules
+      (nav-target existence, states-declared, runtime hash, index drift;
+      `design/runtime/*` registration). Spec: SP-143 §143.5.
+- [ ] **143.6** Generator surface: SKILL.md / designer persona / tool
+      docs — base templates, utilities-first, data-nav anchors, states.
+      Spec: SP-143 §143.6.
+- [ ] **143.7** E2E: phone-framed themed screen pair with in-place nav,
+      states, token-edit restyle. Spec: SP-143 §143.7.
 
 ---
 

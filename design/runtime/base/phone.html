@@ -1,0 +1,47 @@
+<!doctype html>
+<!--
+  Sprout base template: PHONE (SP-143 §143.2). A fixed asset copied into
+  trees by the scaffold; new screens start from a copy of this file saved
+  as design/screens/<stem>.html (stem matching ^[a-z0-9]+(-[a-z0-9]+)*$).
+
+  What is fixed here (do not edit when copying):
+    - the runtime reference (../runtime/sprout-screens.js) — deferred;
+    - the chrome reference (../runtime/chrome.css) and data-device="phone";
+    - the --sprout-frame-* variables — set them to YOUR screen's declared
+      README frame (the frame the screen name matches, machine-read from
+      design/README.md's frames: block);
+    - the token reference (../generated/tokens.css) — generated, never
+      hand-edited; regenerate with design_export_tokens;
+    - the home-indicator element (chrome.css styles it).
+
+  Everything inside <body data-sprout-screen="STEM"> is yours: lay out with
+  the generated utilities (.bg-*, .p-*, .text-*-size, .rounded-*, …) and
+  var(--token) references; navigate with <a data-nav="to:<stem>;trigger:<label>">;
+  declare the screen's states on <html data-states="empty,error,ready"> and
+  mark sections with data-state="empty".
+-->
+<html lang="en" data-device="phone" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>screen — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<link rel="stylesheet" href="../runtime/chrome.css">
+<style>
+  /* The declared README frame this screen lays out at. Chrome.css draws the
+     bezel around these; the validator's frame check reads the same numbers. */
+  html {
+    --sprout-frame-width: 390px;
+    --sprout-frame-height: 844px;
+  }
+  body { margin: 0; }
+</style>
+</head>
+<body data-sprout-screen="REPLACE_WITH_STEM">
+<div data-sprout-home></div>
+<!-- Author the screen here: one element per declared state carrying
+     data-state="<name>", utility classes for layout, data-nav anchors for
+     navigation. -->
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

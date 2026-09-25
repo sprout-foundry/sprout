@@ -465,9 +465,16 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       values + cssVar map, JSON-field provenance banner the shared
       provenanceSourceHash reads); determinism/hash pins in
       utilities_test.go; dogfood tokens.css + tokens.json regenerated.
-- [ ] **143.2** Chrome + base templates: `chrome.css` (iPhone chrome for
+- [x] **143.2** Chrome + base templates: `chrome.css` (iPhone chrome for
       `data-device="phone"`, none for desktop), `base/phone.html`,
       `base/desktop.html`; skill scaffold copies them. Spec: SP-143 §143.2.
+      — Landed: embedded templates/runtime/* copied into design/runtime/ by
+      ScaffoldRuntimeAssets (idempotent, overwrite-free; Scaffold calls it);
+      runtime/ deliberately outside Subdirs (tool-owned, not an authoring
+      tier); template contract pinned (data-device, runtime/tokens/chrome
+      refs, data-sprout-screens/data-states stamps); design-system skill
+      documents runtime/ + copy-from-base; dogfood tree carries the kit,
+      design_validate clean (runtime_test.go).
 - [ ] **143.3** Runtime v1: data-nav in-place swap + history, states
       (`data-states`/`data-state` + `#state=` hash; preview-gated
       switcher), `window.SproutScreens` API, standalone fallback,

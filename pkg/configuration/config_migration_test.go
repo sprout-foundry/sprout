@@ -59,11 +59,10 @@ func TestConfigMigration_0_0_to_2_0_PartialAPITimeouts(t *testing.T) {
 	assert.Equal(t, 300.0, apiTimeouts["commit_message_timeout_sec"].(float64)) // Default applied
 }
 
-// TestConfigMigration_0_0_to_2_0_PartialPDFOCR pins the SP-137 migration:
-// legacy pdf_ocr_* keys are folded into the neutral ocr_fallback_model and
-// removed. A user-customized pair migrates; the legacy default pair
-// (ollama/glm-ocr, written by old applyPDFOCRDefaults) does not — those
-// users get an empty neutral fallback instead of silent recoupling.
+// TestConfigMigration_0_0_to_2_0_PartialPDFOCR pins the strip-only
+// migration: the second-tier OCR-fallback machinery was removed with the
+// vision-first rework, so legacy pdf_ocr_* keys are deleted and nothing
+// migrates forward — no silent provider recoupling.
 func TestConfigMigration_0_0_to_2_0_PartialPDFOCR(t *testing.T) {
 	raw := map[string]interface{}{
 		"pdf_ocr_provider": "openai",
@@ -71,9 +70,10 @@ func TestConfigMigration_0_0_to_2_0_PartialPDFOCR(t *testing.T) {
 	}
 	migrated, err := MigrateConfig(raw, "2.0")
 	require.NoError(t, err)
-	assert.Equal(t, "openai/gpt-4o", migrated["ocr_fallback_model"])
 	_, hasLegacy := migrated["pdf_ocr_provider"]
 	assert.False(t, hasLegacy, "legacy key must be removed")
+	_, hasNeutral := migrated["ocr_fallback_model"]
+	assert.False(t, hasNeutral, "no forward migration to a removed field")
 }
 
 func TestConfigMigration_LegacyDefaultPDFOCRNotCarriedForward(t *testing.T) {
@@ -83,9 +83,8 @@ func TestConfigMigration_LegacyDefaultPDFOCRNotCarriedForward(t *testing.T) {
 	}
 	migrated, err := MigrateConfig(raw, "2.0")
 	require.NoError(t, err)
-	if v, has := migrated["ocr_fallback_model"]; has {
-		assert.Equal(t, "", v)
-	} // key may be absent — absence is the empty state
+	_, hasNeutral := migrated["ocr_fallback_model"]
+	assert.False(t, hasNeutral, "no forward migration to a removed field")
 	_, hasLegacy := migrated["pdf_ocr_model"]
 	assert.False(t, hasLegacy, "legacy key must be removed")
 }
@@ -169,11 +168,12 @@ func TestConfigMigration_1_0_to_2_0_PreservesExistingValues(t *testing.T) {
 	assert.Equal(t, 2400.0, apiTimeouts["overall_timeout_sec"].(float64))
 	assert.Equal(t, 400.0, apiTimeouts["commit_message_timeout_sec"].(float64))
 
-	// SP-137: the customized pair migrates to the neutral field and the
-	// legacy keys disappear.
-	assert.Equal(t, "tesseract/custom-ocr", migrated["ocr_fallback_model"])
+	// The legacy OCR keys disappear; nothing migrates forward (the
+	// OCR-fallback field itself was removed).
 	_, hasLegacy := migrated["pdf_ocr_provider"]
 	assert.False(t, hasLegacy)
+	_, hasNeutral := migrated["ocr_fallback_model"]
+	assert.False(t, hasNeutral)
 
 	assert.False(t, migrated["enable_zsh_command_detection"].(bool))
 	assert.False(t, migrated["auto_execute_detected_commands"].(bool))

@@ -48,8 +48,6 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"provider_models":    map[string]interface{}{"openai": "gpt-4"},
 		"provider_priority":  []interface{}{"openai"},
 		"last_used_provider": "openai",
-		// applyPDFOCRSettings
-		"ocr_fallback_model": "openai/gpt-4o",
 		// applyShellDetectionSettings
 		"enable_zsh_command_detection":   true,
 		"auto_execute_detected_commands": true,
@@ -90,9 +88,6 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"disable_coordinator_auto_activate":     true,
 		"completion_provider":                   "openai",
 		"completion_model":                      "gpt-4",
-		// applyPDFOCRProviderSettings
-		"pdf_ocr_provider": "openai",
-		"pdf_ocr_model":    "gpt-4o",
 		// applyShellAllowlistSettings
 		"approved_shell_command_patterns": []interface{}{"git *"},
 		// applyVisionPipelineSettings
@@ -129,8 +124,6 @@ func TestApplyPartialSettings_MiscAgent_Patch(t *testing.T) {
 		"allow_git_history_rewrite":       true,
 		"completion_provider":             "openai",
 		"completion_model":                "gpt-4",
-		"pdf_ocr_provider":                "openai",
-		"pdf_ocr_model":                   "gpt-4o",
 		"approved_shell_command_patterns": []interface{}{"git *", "  ", "npm test"},
 		"notifications":                   map[string]interface{}{"cli_bell": true, "min_seconds": float64(5)},
 		"edit_approval":                   map[string]interface{}{"mode": "gate"},
@@ -150,9 +143,6 @@ func TestApplyPartialSettings_MiscAgent_Patch(t *testing.T) {
 	}
 	if cfg.CompletionProvider != "openai" || cfg.CompletionModel != "gpt-4" {
 		t.Errorf("completion routing = %q/%q, want openai/gpt-4", cfg.CompletionProvider, cfg.CompletionModel)
-	}
-	if cfg.PDFOCRProvider != "openai" || cfg.PDFOCRModel != "gpt-4o" {
-		t.Errorf("pdf ocr = %q/%q, want openai/gpt-4o", cfg.PDFOCRProvider, cfg.PDFOCRModel)
 	}
 	if len(cfg.ApprovedShellCommandPatterns) != 2 {
 		t.Errorf("ApprovedShellCommandPatterns = %v, want 2 entries (blank dropped)", cfg.ApprovedShellCommandPatterns)
@@ -481,7 +471,6 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyRiskAndSafetySettings",
 		"applySubagentSettings",
 		"applyProviderRoutingSettings",
-		"applyPDFOCRSettings",
 		"applyShellDetectionSettings",
 		"applyAPITimeoutsSettings",
 		"applyVersionSettings",
@@ -495,7 +484,6 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyWakeupSettings",
 		"applyCommandPoliciesSettings",
 		"applyMiscAgentSettings",
-		"applyPDFOCRProviderSettings",
 		"applyShellAllowlistSettings",
 		"applyVisionPipelineSettings",
 		"applyNotificationsAgentSettings",

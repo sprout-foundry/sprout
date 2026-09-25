@@ -131,15 +131,13 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	// Note: The current implementation only overrides booleans when they are true
 	// This test reflects the actual behavior, not necessarily desired behavior
 	base := &Config{
-		DisableThinking:     false,
-		SkipPrompt:          false,
-		VisionFallbackToOCR: false,
+		DisableThinking: false,
+		SkipPrompt:      false,
 	}
 
 	override := &Config{
-		DisableThinking:     true,
-		SkipPrompt:          true,
-		VisionFallbackToOCR: true,
+		DisableThinking: true,
+		SkipPrompt:      true,
 	}
 
 	result := MergeConfig(base, override)
@@ -147,7 +145,6 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, true, result.DisableThinking)
 	assert.Equal(t, true, result.SkipPrompt)
-	assert.Equal(t, true, result.VisionFallbackToOCR)
 }
 
 func TestMergeConfig_IntOverrides(t *testing.T) {

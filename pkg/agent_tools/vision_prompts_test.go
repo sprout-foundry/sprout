@@ -178,34 +178,6 @@ func TestGeneratePromptForMode(t *testing.T) {
 	}
 }
 
-// TestGetUIElementPrompt tests the GetUIElementPrompt function.
-func TestGetUIElementPrompt(t *testing.T) {
-	got := GetUIElementPrompt()
-
-	if got == "" {
-		t.Error("GetUIElementPrompt() returned empty string")
-	}
-
-	expectedKeywords := []string{
-		"UI elements",
-		"button",
-		"input",
-		"text",
-		"link",
-		"image",
-		"dropdown",
-		"checkbox",
-		"radio",
-		"position",
-	}
-
-	for _, keyword := range expectedKeywords {
-		if !strings.Contains(got, keyword) {
-			t.Errorf("GetUIElementPrompt() does not contain expected keyword %q\nGot: %s", keyword, got)
-		}
-	}
-}
-
 // TestGetOCRPrompt tests the GetOCRPrompt function.
 func TestGetOCRPrompt(t *testing.T) {
 	got := GetOCRPrompt()

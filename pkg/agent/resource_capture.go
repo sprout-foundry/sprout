@@ -1,22 +1,16 @@
 package agent
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 const resourceCaptureMaxSizeBytes = 50 * 1024 * 1024
@@ -72,127 +66,6 @@ func (a *Agent) captureWebText(kind, source, text string) {
 		return
 	}
 	a.appendResourceCaptureLog("saved_text", source, path, int64(len(text)), "")
-}
-
-func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
-	dir := a.resourceDirectory()
-	if dir == "" || strings.TrimSpace(imagePath) == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		a.Logger().Debug("resource capture: failed to create directory %s: %v\n", dir, err)
-		return
-	}
-
-	if savedPath, size, err := a.captureVisionAsset(imagePath, dir); err != nil {
-		a.Logger().Debug("resource capture: failed asset capture for %s: %v\n", imagePath, err)
-	} else if savedPath != "" {
-		a.appendResourceCaptureLog("saved_asset", imagePath, savedPath, size, "")
-	}
-
-	extracted, meta := extractVisionTextAndMetadata(rawResult)
-	if strings.TrimSpace(extracted) != "" {
-		textPath := filepath.Join(dir, captureBaseName("vision_text", imagePath)+".txt")
-		if err := os.WriteFile(textPath, []byte(extracted), 0o644); err != nil {
-			a.Logger().Debug("resource capture: failed writing OCR text %s: %v\n", textPath, err)
-		} else {
-			logMeta := map[string]interface{}{}
-			if meta.OutputTruncated {
-				logMeta["output_truncated"] = true
-				logMeta["original_chars"] = meta.OriginalChars
-				logMeta["returned_chars"] = meta.ReturnedChars
-			}
-			if meta.FullOutputPath != "" {
-				logMeta["full_output_path"] = meta.FullOutputPath
-			}
-			a.appendResourceCaptureLogWithMeta("saved_text", imagePath, textPath, int64(len(extracted)), "", logMeta)
-		}
-	}
-
-	if meta.FullOutputPath != "" {
-		fullPath := meta.FullOutputPath
-		if strings.HasPrefix(fullPath, "./") || strings.HasPrefix(fullPath, "../") {
-			// Clean and resolve relative paths to prevent path traversal
-			relativePath := filepath.Clean(filepath.FromSlash(meta.FullOutputPath))
-			fullPath = filepath.Join(a.currentWorkspaceRoot(), relativePath)
-		}
-		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
-			a.appendResourceCaptureLogWithMeta("saved_full_text", imagePath, meta.FullOutputPath, info.Size(), "", map[string]interface{}{
-				"output_truncated": true,
-			})
-		}
-	}
-}
-
-func (a *Agent) captureVisionAsset(imagePath, dir string) (string, int64, error) {
-	if strings.HasPrefix(imagePath, "http://") || strings.HasPrefix(imagePath, "https://") {
-		return a.captureRemoteAsset(imagePath, dir)
-	}
-
-	info, err := os.Stat(imagePath)
-	if err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to stat vision asset %s", imagePath), err)
-	}
-	if info.Size() > resourceCaptureMaxSizeBytes {
-		a.appendResourceCaptureLog("skipped_large", imagePath, "", info.Size(), "asset exceeds 50MB limit")
-		return "", info.Size(), nil
-	}
-
-	data, err := os.ReadFile(imagePath)
-	if err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to read vision asset %s", imagePath), err)
-	}
-	ext := strings.ToLower(filepath.Ext(imagePath))
-	if ext == "" {
-		ext = ".bin"
-	}
-	out := filepath.Join(dir, captureBaseName("vision_asset", imagePath)+ext)
-	if err := os.WriteFile(out, data, 0o644); err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to write vision asset to %s", out), err)
-	}
-	return out, int64(len(data)), nil
-}
-
-func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
-	client := &http.Client{Timeout: 45 * time.Second}
-	req, err := http.NewRequest("GET", source, nil)
-	if err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to create HTTP request for %s", source), err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed HTTP request for %s", source), err)
-	}
-	defer resp.Body.Close()
-
-	if resp.ContentLength > resourceCaptureMaxSizeBytes {
-		a.appendResourceCaptureLog("skipped_large", source, "", resp.ContentLength, "asset exceeds 50MB limit")
-		return "", resp.ContentLength, nil
-	}
-
-	limited := io.LimitReader(resp.Body, resourceCaptureMaxSizeBytes+1)
-	data, err := io.ReadAll(limited)
-	if err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to read remote asset from %s", source), err)
-	}
-	if int64(len(data)) > resourceCaptureMaxSizeBytes {
-		a.appendResourceCaptureLog("skipped_large", source, "", int64(len(data)), "asset exceeds 50MB limit")
-		return "", int64(len(data)), nil
-	}
-
-	ext := extensionFromSource(source)
-	if ext == "" {
-		ext = extensionFromContentType(resp.Header.Get("Content-Type"))
-	}
-	if ext == "" {
-		ext = ".bin"
-	}
-
-	out := filepath.Join(dir, captureBaseName("vision_asset", source)+ext)
-	if err := os.WriteFile(out, data, 0o644); err != nil {
-		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to write remote asset to %s", out), err)
-	}
-	return out, int64(len(data)), nil
 }
 
 func (a *Agent) appendResourceCaptureLog(action, source, path string, size int64, note string) {
@@ -261,72 +134,4 @@ func sanitizeFileComponent(s string) string {
 		"\r", "_",
 	).Replace(s)
 	return strings.Trim(s, "._-")
-}
-
-func extensionFromSource(source string) string {
-	u, err := url.Parse(source)
-	if err != nil {
-		return strings.ToLower(filepath.Ext(source))
-	}
-	return strings.ToLower(filepath.Ext(u.Path))
-}
-
-func extensionFromContentType(ct string) string {
-	ct = strings.ToLower(strings.TrimSpace(ct))
-	switch {
-	case strings.Contains(ct, "pdf"):
-		return ".pdf"
-	case strings.Contains(ct, "png"):
-		return ".png"
-	case strings.Contains(ct, "jpeg"), strings.Contains(ct, "jpg"):
-		return ".jpg"
-	case strings.Contains(ct, "webp"):
-		return ".webp"
-	case strings.Contains(ct, "gif"):
-		return ".gif"
-	case strings.Contains(ct, "text/plain"):
-		return ".txt"
-	default:
-		return ""
-	}
-}
-
-type visionCaptureMetadata struct {
-	OutputTruncated bool
-	OriginalChars   int
-	ReturnedChars   int
-	FullOutputPath  string
-}
-
-func extractVisionTextAndMetadata(rawResult string) (string, visionCaptureMetadata) {
-	meta := visionCaptureMetadata{}
-	rawResult = strings.TrimSpace(rawResult)
-	if rawResult == "" || !strings.HasPrefix(rawResult, "{") {
-		return rawResult, meta
-	}
-	var parsed tools.ImageAnalysisResponse
-	if err := json.Unmarshal([]byte(rawResult), &parsed); err != nil {
-		return rawResult, meta
-	}
-	meta.OutputTruncated = parsed.OutputTruncated
-	meta.OriginalChars = parsed.OriginalChars
-	meta.ReturnedChars = parsed.ReturnedChars
-	meta.FullOutputPath = strings.TrimSpace(parsed.FullOutputPath)
-
-	if txt := strings.TrimSpace(parsed.ExtractedText); txt != "" {
-		return txt, meta
-	}
-	if parsed.Analysis != nil {
-		if desc := strings.TrimSpace(parsed.Analysis.Description); desc != "" {
-			return desc, meta
-		}
-	}
-	// Preserve raw JSON if no extracted field to keep debuggability.
-	var out bytes.Buffer
-	enc := json.NewEncoder(&out)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(parsed); err == nil {
-		return strings.TrimSpace(out.String()), meta
-	}
-	return rawResult, meta
 }

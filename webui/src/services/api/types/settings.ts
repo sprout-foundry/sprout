@@ -18,7 +18,6 @@ export interface SproutSettings {
   subagent_max_parallel?: number;
   subagent_parallel_enabled?: boolean;
   default_subagent_persona: string;
-  ocr_fallback_model?: string;
   api_timeouts: {
     connection_timeout_sec: number;
     first_chunk_timeout_sec: number;

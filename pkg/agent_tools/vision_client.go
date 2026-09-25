@@ -320,13 +320,6 @@ func CreateVisionClient() (api.ClientInterface, error) {
 	return nil, fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable")
 }
 
-// CreateVisionClientWithModel creates a vision client using a specific model.
-// Provider resolution is registry-driven; no vendor namespaces are
-// special-cased (SP-137).
-func CreateVisionClientWithModel(modelName string) (api.ClientInterface, error) {
-	return CreateVisionClient()
-}
-
 // isLocalRuntimeProvider reports whether the provider needs no credentials
 // (a local model runtime). Derived from the provider config's auth type —
 // "none" means no key is ever required — plus the built-in local client

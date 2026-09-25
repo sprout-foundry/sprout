@@ -25,6 +25,13 @@ const (
 
 	// FlowSubdir holds the mermaid *.mmd flow sources.
 	FlowSubdir = "flows"
+
+	// RuntimeSubdir holds the SP-143 screen-kit fixed assets: device chrome
+	// (chrome.css) and the base documents screens start from (base/*.html).
+	// It is NOT in Subdirs — it is scaffolded tool-owned content, not a user
+	// authoring tier, so it never appears in the manifest's directory
+	// contract. The validator (SP-143 §143.5) registers it separately.
+	RuntimeSubdir = "runtime"
 )
 
 // Subdirs are the canonical design workspace subdirectories, in contract

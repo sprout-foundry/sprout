@@ -14,6 +14,23 @@ var manifestTemplate embed.FS
 
 const manifestTemplatePath = "templates/manifest.md"
 
+//go:embed templates/runtime/chrome.css templates/runtime/base/phone.html templates/runtime/base/desktop.html
+var runtimeTemplates embed.FS
+
+// runtimeTemplateDir is the embedded prefix the runtime kit lives under.
+const runtimeTemplateDir = "templates/runtime/"
+
+// RuntimeAssets are the SP-143 fixed screen-kit assets the scaffold copies
+// into design/runtime/, in copy order: device chrome, then the base
+// documents new screens start from. They are versioned assets, not user
+// content — Scaffold never overwrites an existing file, so a tree may pin
+// its own copy without the scaffold fighting it.
+var RuntimeAssets = []string{
+	"chrome.css",
+	"base/phone.html",
+	"base/desktop.html",
+}
+
 // ErrManifestExists is returned by Scaffold when the design manifest
 // already exists, so callers can detect that a scaffold would be a no-op
 // rather than clobbering user work.
@@ -86,8 +103,39 @@ func Scaffold(dir string) error {
 		return fmt.Errorf("creating %s: %w", manifest, err)
 	}
 
+	if err := ScaffoldRuntimeAssets(designRoot); err != nil {
+		return err
+	}
+
 	if err := AppendGitContract(dir); err != nil {
 		return err
+	}
+	return nil
+}
+
+// ScaffoldRuntimeAssets copies the SP-143 screen-kit assets (device chrome
+// + base templates) from the embedded templates into root/design/runtime/,
+// creating the directory. Idempotent and overwrite-free: an existing asset
+// is left byte-for-byte alone, so a scaffold over a brownfield tree never
+// clobbers user work — the same posture as the manifest.
+func ScaffoldRuntimeAssets(designRoot string) error {
+	for _, name := range RuntimeAssets {
+		target := filepath.Join(designRoot, RuntimeSubdir, filepath.FromSlash(name))
+		if _, err := os.Stat(target); err == nil {
+			continue
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("checking %s: %w", target, err)
+		}
+		content, err := runtimeTemplates.ReadFile(runtimeTemplateDir + name)
+		if err != nil {
+			return fmt.Errorf("reading embedded runtime asset %s: %w", name, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("creating %s: %w", filepath.Dir(target), err)
+		}
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return fmt.Errorf("creating %s: %w", target, err)
+		}
 	}
 	return nil
 }

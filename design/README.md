@@ -18,6 +18,7 @@ current as screens and flows are added.
 | `wireframes/` | One SVG per screen. File stem is the screen name. Interactive elements carry stable `id` attributes; navigation targets carry `data-nav="<screen-name>"`. A screen is a *composition* of `components/` — its layout and placement, not the component internals. |
 | `components/` | One SVG per reusable component, in its key variants and states, with `{group.token}` refs. File stem is the component name. The composable layer beneath screens: change a component once and every screen that composes it follows. |
 | `screens/`   | One self-contained HTML + CSS file per screen. (Not yet populated.) |
+| `runtime/`   | Fixed screen-kit assets copied in by the scaffold (SP-143): device chrome `chrome.css` + base documents `base/phone.html` / `base/desktop.html`. Referenced by screens, never hand-edited. |
 | `flows/`     | One mermaid `flowchart` per `.mmd` file. For screen flows, node ids are wireframe file stems; edge labels carry trigger semantics (`-- "tap Submit" -->`). |
 | `feedback/`  | Human annotations, one JSON file per target. |
 

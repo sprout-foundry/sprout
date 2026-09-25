@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  Sprout base template: DESKTOP (SP-143 §143.2). A fixed asset copied into
+  trees by the scaffold; new screens start from a copy of this file saved
+  as design/screens/<stem>.html (stem matching ^[a-z0-9]+(-[a-z0-9]+)*$).
+
+  What is fixed here (do not edit when copying):
+    - the runtime reference (../runtime/sprout-screens.js) — deferred;
+    - the token reference (../generated/tokens.css) — generated, never
+      hand-edited; regenerate with design_export_tokens.
+
+  There is no chrome reference and no data-device attribute: desktop is
+  the default layout and chrome.css does nothing to it. Everything inside
+  <body data-sprout-screen="STEM"> is yours: lay out with the generated
+  utilities (.bg-*, .p-*, .text-*-size, .rounded-*, …) and var(--token)
+  references; navigate with <a data-nav="to:<stem>;trigger:<label>">;
+  declare the screen's states on <html data-states="empty,error,ready">
+  and mark sections with data-state="empty". Size the root container to
+  the declared README frame (e.g. 1440x900) so the validator's frame
+  check passes.
+-->
+<html lang="en" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>screen — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  /* Lay out at the declared desktop frame. */
+  html, body { margin: 0; }
+</style>
+</head>
+<body data-sprout-screen="REPLACE_WITH_STEM">
+<!-- Author the screen here: one element per declared state carrying
+     data-state="<name>", utility classes for layout, data-nav anchors for
+     navigation. -->
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

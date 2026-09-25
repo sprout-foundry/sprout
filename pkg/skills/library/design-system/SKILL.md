@@ -42,6 +42,7 @@ design/
   icons/                    # icon SVGs + optional sprite.svg
   wireframes/               # one SVG per screen, stem == screen name
   screens/                  # hi-fi HTML/CSS screens, self-contained
+  runtime/                  # FIXED screen-kit assets (scaffold-copied; never hand-edited)
   flows/                    # mermaid flow sources, one .mmd per flow
   feedback/                 # human annotations, JSON per target
   .cache/                   # render PNGs + critique scratch (gitignored)
@@ -234,6 +235,18 @@ is referenced by the next, so validate as you go. The canonical order:
    choice.
 
 The scaffold directories: `mkdir -p design/{tokens,brand,icons,wireframes,screens,flows,feedback}`.
+
+**`design/runtime/` — the fixed screen-kit assets.** The scaffold copies these
+into the tree (device chrome `chrome.css` + the base documents
+`base/phone.html` / `base/desktop.html`); they are versioned, tool-owned
+assets — referenced by screens, never hand-edited, and a re-scaffold never
+overwrites a copy the project has pinned. If `design/runtime/` is missing on
+an existing tree, copy the kit in (the scaffold's `ScaffoldRuntimeAssets` is
+the byte source); do not author lookalikes. New screens start as a copy of a
+base document saved as `design/screens/<stem>.html` — the base carries the
+token/runtime reference lines, the device attribute, and the declared-states
+attribute; what is marked fixed in its header stays, everything inside
+`<body>` is authored.
 
 If `design_validate` reports no `design/` directory, that is the scaffold cue
 — `design_assets` will also return `{exists: false}` with this same sequence.

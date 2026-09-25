@@ -113,8 +113,15 @@ type ReactWebServer struct {
 //
 // This is the non-daemon interactive case: `sprout` started with a TTY
 // passes its agent to NewReactWebServer, while `sprout daemon` passes nil.
+// SPROUT_DAEMON=1 marks the daemon (set in RunAgent when daemonMode is
+// true) even when the daemon carries a live agent — a daemon with a
+// provider still serves per-client sessions, so it must NOT report shared
+// mode or every chat-session create/switch 403s (SP-142 regression).
 func (ws *ReactWebServer) IsSharedMode() bool {
-	return ws.agent != nil && !ws.serviceMode
+	if ws.agent == nil || ws.serviceMode {
+		return false
+	}
+	return configuration.GetEnvSimple("DAEMON") != "1"
 }
 
 // NewReactWebServer creates a new React web server

@@ -3,7 +3,9 @@
 > **Status (2026-09-24):** In progress. Follow-up to SP-140-6/7 (shipped).
 > Item 8.1 (rail rework — data-driven Screens group + Library group, status
 > dot + open-annotation badge, selection routing) has landed; the workbench
-> (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) remains.
+> (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) verified
+> shipped with it (2026-09-25); the §8d empty states landed 2026-09-25.
+> Remaining: 8.5 (deep-link migration), 8.6 (wireframe + critique).
 > The token-display rework that motivated this (tile grid, proportional spacing
 > scale, schema-wall removal) landed in the same review pass on
 > `feat-design-workspace` and is *not* part of this spec.
@@ -159,7 +161,27 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
   brief/feedback services; no new endpoints.)
 - **8.3** Adaptive chrome: default-to-library when unselected; workbench
   header with the screen-relevant health subset.
+  > **Progress (2026-09-25):** verified shipped with 8.2, no new code
+  > needed. Cold open lands on a Library view (`designSection` defaults to
+  > `'flows'` in AppContent; DesignView's own default pins the same), and
+  > the workbench renders only on selection (`activeTab === 'screens' &&
+  > selectedAsset` in DesignView; the Screens grid is the no-selection
+  > view). The health strip stays global (DesignSurface, above DesignView);
+  > the workbench header carries the screen-relevant subset — status chip +
+  > open-annotation count — pinned in `ScreenWorkbench.test.tsx`
+  > ("renders the header health subset"). The Library group is reachable
+  > while a screen is selected (the rail renders it unconditionally;
+  > `Sidebar.designNav.test.tsx`).
 - **8.4** Empty states: no `design/` and screens-less `design/`.
+  > **Progress (2026-09-25):** both halves landed. No `design/` →
+  > DesignSurface renders the guided empty state (DesignEmptyState starter
+  > cards + the agent panel) instead of dead tabs
+  > (`DesignSurface.empty.test.tsx`). Screens-less `design/` → the rail's
+  > Screens group stays present with its §8d empty marker
+  > (`design-rail-screens-empty`, aria-label "No screens yet", tooltip
+  > "No screens yet — the token palette is ready") while the Library views
+  > remain the default content; pinned in `DesignRail.test.tsx`. The
+  > no-workspace / no-tree rail omission (Library only) is unchanged.
 - **8.5** Migration of the existing four-tab rail (state preservation: a
   deep link into "Flows" still lands on the Flows library view).
 - **8.6** Meta: a wireframe of the new layout (an HTML screen in
@@ -169,15 +191,20 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
 
 ## Acceptance criteria
 
-- [ ] From the rail, selecting `login` shows its render, status, open
+- [x] From the rail, selecting `login` shows its render, status, open
       annotations, flows in/out with triggers, token refs, and agent-state
       slice in one pane — no tab switching.
 - [ ] The three library views (Tokens / Flows / Feedback) behave exactly
       as before, now under the Library group; deep links still resolve.
-- [ ] A workspace without `design/` shows the single guided empty state.
+      (8.5 owns deep links; the rail's Library group carries Tokens and
+      Flows — Feedback's library placement still needs 8.5's resolution.)
+- [x] A workspace without `design/` shows the single guided empty state.
 - [ ] The workbench's data is `design_brief` (no second aggregation path —
-      one truth, per the SP-140-5 premise).
-- [ ] All new testids registered; vitest green; the DesignView lazy chunk
+      one truth, per the SP-140-5 premise). (The shipped workbench derives
+      the same contract client-side — `screenBrief.ts` mirrors the §5g
+      brief over /api/file reads — rather than calling the Go design_brief;
+      whether that satisfies "one truth" is an open judgment for 8.5/8.6.)
+- [x] All new testids registered; vitest green; the DesignView lazy chunk
       pin (`designChunk.test.ts`) still holds.
 - [ ] A `design_critique` pass on the new layout reports no
       consistency/hierarchy errors against the existing design language.

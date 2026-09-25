@@ -341,6 +341,7 @@ const TESTIDS = {
   "design-rail": "design-rail",
   "design-rail-flows": "design-rail-flows",
   "design-rail-screens": "design-rail-screens",
+  "design-rail-screens-section": "design-rail-screens-section",
   "design-rail-tokens": "design-rail-tokens",
   "design-rail-library": "design-rail-library",
   "design-rail-screen-login": "design-rail-screen-login", // pattern design-rail-screen-${stem} (DesignRail.tsx)
@@ -519,9 +520,12 @@ const TESTIDS = {
   "design-workbench-agent-ask": "design-workbench-agent-ask",
   "design-workbench-annotation-a1": "design-workbench-annotation-a1", // pattern design-workbench-annotation-${annotation.id}
   "design-workbench-annotation-ask-a1": "design-workbench-annotation-ask-a1", // pattern design-workbench-annotation-ask-${annotation.id}
-  "design-workbench-flow-in-sign-up-open": "design-workbench-flow-in-sign-up-open", // patterns design-workbench-flow-in-${flowName} + ${testid}-open
-  "design-workbench-flow-out-sign-up-open": "design-workbench-flow-out-sign-up-open", // pattern design-workbench-flow-out-${flowName}
-  "design-workbench-token-ref-color.primary": "design-workbench-token-ref-color.primary", // pattern design-workbench-token-ref-${ref.path}
+  "design-workbench-flow-in-sign-up-open":
+    "design-workbench-flow-in-sign-up-open", // patterns design-workbench-flow-in-${flowName} + ${testid}-open
+  "design-workbench-flow-out-sign-up-open":
+    "design-workbench-flow-out-sign-up-open", // pattern design-workbench-flow-out-${flowName}
+  "design-workbench-token-ref-color.primary":
+    "design-workbench-token-ref-color.primary", // pattern design-workbench-token-ref-${ref.path}
   // SP-140-7 status menu (§7d, ScreenStatusMenu.tsx)
   "design-status-menu-login": "design-status-menu-login", // pattern design-status-menu-${stem}
   "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}

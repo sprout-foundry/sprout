@@ -331,7 +331,10 @@ test.describe("SP-140-3 DesignView", () => {
 
   test("Screens tab renders the fixture cards with their README statuses", async () => {
     await openDesignView();
-    await page.getByTestId(TESTIDS["design-rail-screens"]).click();
+    // The section entry (not a per-screen button): post-8.2 a selected
+    // screen renders its workbench instead of the grid, so the grid test
+    // must switch sections without selecting anything.
+    await page.getByTestId(TESTIDS["design-rail-screens-section"]).click();
 
     const grid = page.getByTestId("design-screens-grid");
     await expect(grid).toBeVisible({ timeout: 30_000 });
@@ -365,31 +368,33 @@ test.describe("SP-140-3 DesignView", () => {
 
   test("opening a screen from the detail pane opens it in the editor", async () => {
     await openDesignView();
-    await page.getByTestId(TESTIDS["design-rail-screens"]).click();
+    await page.getByTestId(TESTIDS["design-rail-screens-section"]).click();
     await expect(page.getByTestId("design-screens-cards")).toBeVisible({
       timeout: 30_000,
     });
 
-    // Click the screen card: the pane selection plus the LivePreview split view
-    // is the §3c contract, and the app must stay on the design surface.
+    // Click the screen card: the selection plus the §8b workbench (the
+    // selected screen's facet pane over the brief, with its own render
+    // preview) is the post-8.2 contract, and the app stays on the design
+    // surface.
     await page.getByTestId("design-screen-card-login").click();
     await expect(page.getByTestId("design-detail-content")).toHaveAttribute(
       "data-selected",
       "design/screens/login.html",
     );
-    await expect(page.getByTestId("design-screen-detail")).toBeVisible({
+    await expect(page.getByTestId("design-workbench")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.locator(".live-preview")).toBeVisible({
+    await expect(page.getByTestId("design-workbench-render")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.locator(".live-preview-iframe")).toBeVisible({
+    await expect(page.locator(".live-preview-iframe").first()).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.getByTestId("design-view")).toBeVisible();
 
-    // "Open in editor" is the pane's hand-off: it switches to the editor surface
-    // with the screen file open in a tab.
+    // "Open in editor" is the detail pane's hand-off: it switches to the
+    // editor surface with the screen file open in a tab.
     await page.locator(".design-detail-open").click();
     await expect(page.getByTestId(TESTIDS["editor-pane"])).toBeVisible({
       timeout: 30_000,

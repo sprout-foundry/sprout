@@ -48,6 +48,9 @@ const dvTestTokenJSON = `{
   "color": {
     "brand": {
       "primary": {"$value": "#0055ff", "$type": "color"}
+    },
+    "semantic": {
+      "surface": {"$value": "#ffffff", "$type": "color"}
     }
   }
 }`

@@ -185,6 +185,12 @@ func buildFindingsOutput(findings []design.Finding) findingsOutput {
 // renderFindingsSummary builds the human-readable one-liner. Findings are
 // advisory: a run full of error-severity findings still reports success —
 // only tool/I-O failure (handled above) sets IsError.
+// renderFindingsSummary renders the text summary a direct-mode agent reads.
+// Besides the severity tallies it lists the findings themselves (capped) —
+// the `fix`-severity messages carry machine-applicable content (the exact
+// line to append), and without the rows an agent sees only "2 fix(es) to
+// apply" with no way to learn what to apply. The cap keeps a pathological
+// tree from flooding context; the tallies still report the true counts.
 func renderFindingsSummary(root string, out findingsOutput) string {
 	driftSuffix := ""
 	if design.FileExists(root) {
@@ -216,7 +222,23 @@ func renderFindingsSummary(root string, out findingsOutput) string {
 			parts = append(parts, fmt.Sprintf("%d %s(s)", n, sev))
 		}
 	}
-	return fmt.Sprintf("design_validate: %d finding(s) — %s", out.Count, strings.Join(parts, ", ")) + driftSuffix
+	head := fmt.Sprintf("design_validate: %d finding(s) — %s", out.Count, strings.Join(parts, ", ")) + driftSuffix
+
+	const detailCap = 20
+	rows := make([]string, 0, min(detailCap, len(out.Findings)))
+	for i, f := range out.Findings {
+		if i >= detailCap {
+			remaining := len(out.Findings) - detailCap
+			rows = append(rows, fmt.Sprintf("  … and %d more (pass a path for a focused run)", remaining))
+			break
+		}
+		if f.Line > 0 {
+			rows = append(rows, fmt.Sprintf("  %s %s:%d [%s] %s", f.Severity, f.File, f.Line, f.Rule, f.Message))
+		} else {
+			rows = append(rows, fmt.Sprintf("  %s %s [%s] %s", f.Severity, f.File, f.Rule, f.Message))
+		}
+	}
+	return head + "\n" + strings.Join(rows, "\n")
 }
 
 // driftRows converts the tool-layer drift rows back into the pure

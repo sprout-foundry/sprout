@@ -139,6 +139,11 @@ format charter above). Every value that later artifacts reference (palette,
 type scale, spacing steps, radii, motion) belongs here first, because tokens
 are what screens and wireframes consume.
 
+Write token files with a **structured-file tool** (`write_structured_file` /
+`patch_structured_file`), never freehand text edits — token JSON is
+machine-parsed by export, the brief, and the validator, and a hand-indented
+rewrite ships valid-but-mangled formatting that survives all of them.
+
 Then **validate**: `design_validate` (or the token path).
 
 - Fix `error` findings: bad JSON, unknown `$type`, dangling/cyclic aliases.

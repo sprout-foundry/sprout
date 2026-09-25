@@ -17,6 +17,11 @@
  *     document in place (fetch + head/body/title replace), pushState, and
  *     back/forward just work; the anchor href stays authored so the browser
  *     can navigate plainly wherever fetch is refused.
+ *   - screen URLs derive from the runtime's own <script src>; when that src
+ *     is the webui preview proxy form (/api/file?path=…, SP-143 §143.4) the
+ *     kit root comes from the decoded path param and both the swap fetch and
+ *     the swapped document's relative refs are re-expressed through the same
+ *     proxy, in memory.
  *   - states: <html data-states="a,b,c"> declares; [data-state="a"] sections
  *     toggle via the #state=a hash (first declared state is active without
  *     one). The switcher renders only when the preview wrapper has stamped
@@ -28,7 +33,7 @@
  *     of the source-hash line itself replaced by zeros — recomputable
  *     offline, the SP-140-5 §5f convention adapted to a fixed asset).
  *
- * source-hash: fnv1a64:a6ab060c6d6088f8
+ * source-hash: fnv1a64:5a616afe34efcf60
  * version: 1
  */
 (function () {
@@ -39,9 +44,11 @@
   var NAV_RE = /(?:^|;)\s*to:([a-z0-9]+(?:-[a-z0-9]+)*)/i;
   var STATE_HASH_RE = /^#state=([a-z0-9]+(?:-[a-z0-9]+)*)$/;
   var ZERO_HASH = 'fnv1a64:0000000000000000';
+  var PATH_QUERY_RE = /[?&]path=([^&]+)/;
 
   var screensBaseURL = null;
   var currentStem = null;
+  var bootStem = null;
 
   // --- location -----------------------------------------------------------
 
@@ -53,22 +60,98 @@
   function findSelf() {
     var scripts = document.querySelectorAll('script[src]');
     for (var i = scripts.length - 1; i >= 0; i--) {
-      if (/sprout-screens\.js(?:[?#]|$)/.test(scripts[i].getAttribute('src'))) {
-        return new URL(scripts[i].getAttribute('src'), location.href);
+      var src = scripts[i].getAttribute('src');
+      if (!/sprout-screens\.js(?:[?#]|$)/.test(src)) continue;
+      // about:srcdoc pages (the webui preview iframe) have no resolvable
+      // base URL, so URL construction throws there; the attribute itself
+      // still carries everything needed (its path= query names this file).
+      try {
+        return new URL(src, location.href);
+      } catch (e) {
+        return src;
       }
     }
     return null;
   }
 
+  // resolveRel joins `rel` onto the directory `baseDir` (both slash-form
+  // paths, baseDir's trailing slash optional), honouring ./ and ../ — the
+  // one path algebra the runtime needs in both worlds (URL resolution does
+  // it natively for real directories; the proxy world has no directories).
+  function resolveRel(baseDir, rel) {
+    var segs = [];
+    var base = baseDir.split('/');
+    for (var b = 0; b < base.length; b++) {
+      if (base[b] !== '' && base[b] !== '.') segs.push(base[b]);
+    }
+    var parts = rel.split('/');
+    for (var i = 0; i < parts.length; i++) {
+      var seg = parts[i];
+      if (seg === '' || seg === '.') continue;
+      if (seg === '..') segs.pop();
+      else segs.push(seg);
+    }
+    return segs.join('/');
+  }
+
+  // The preview proxy serves any workspace file at one opaque URL
+  // (/api/file?path=<workspace path>), so a plain '../screens/' climb off it
+  // would resolve against /api/file and break. When the self URL carries a
+  // path param, the decoded value is the runtime's real workspace location:
+  // the screens dir is re-derived from it and every screen fetch goes back
+  // through the same proxy with the path re-rooted on the kit.
+  //
+  // Under srcDoc the page has no origin at all (about:srcdoc), so the proxy
+  // URLs are emitted path-only ("/api/file?path=…") and the browser resolves
+  // them against the inherited parent base — the same absolute-path form the
+  // preview wrapper writes into the document.
   function screensBase(selfURL) {
-    // runtime sits at <kit>/runtime/sprout-screens.js; screens at <kit>/screens/.
-    return new URL('../screens/', selfURL);
+    var raw = typeof selfURL === 'string' ? selfURL : selfURL.href;
+    var match = PATH_QUERY_RE.exec(raw);
+    var proxyPath = match ? decodeURIComponent(match[1]) : null;
+    if (proxyPath && /runtime\/sprout-screens\.js$/.test(proxyPath)) {
+      var kitRoot = proxyPath.slice(0, -'runtime/sprout-screens.js'.length);
+      var screensDir = kitRoot + 'screens/';
+      var proxy = function (path) {
+        return '/api/file?path=' + encodeURIComponent(path);
+      };
+      return {
+        proxy: true,
+        resolve: function (rel) {
+          return proxy(resolveRel(screensDir, rel));
+        },
+        // rewrite maps one relative URL that may climb out of screens/
+        // (../generated/tokens.css, ../runtime/chrome.css) to its proxy URL;
+        // anything not a workspace-relative URL (absolute, protocol-relative,
+        // root-relative — an already-proxied ref —, data:, a fragment) comes
+        // back unchanged, so foreign refs keep their meaning.
+        rewrite: function (rawValue) {
+          var value = (rawValue || '').trim();
+          if (!value || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|\/)/i.test(value)) return value;
+          return proxy(resolveRel(screensDir, value));
+        },
+      };
+    }
+    // Plain (file://, or any server serving real paths): the directory climb
+    // works and resolution is the URL constructor's own; nothing needs
+    // re-rooting, so rewrite is the identity.
+    var base = new URL('../screens/', selfURL);
+    return {
+      proxy: false,
+      resolve: function (rel) {
+        return new URL(rel, base).href;
+      },
+      rewrite: function (rawValue) {
+        return rawValue;
+      },
+    };
   }
 
   function stemFromLocation() {
-    var pathParam = new URLSearchParams(location.search).get('path');
-    if (pathParam) {
-      var m = /\/screens\/([a-z0-9]+(?:-[a-z0-9]+)*)\.html$/i.exec(pathParam);
+    var search = location.search || '';
+    var match = PATH_QUERY_RE.exec(search);
+    if (match) {
+      var m = /\/screens\/([a-z0-9]+(?:-[a-z0-9]+)*)\.html$/i.exec(decodeURIComponent(match[1]));
       if (m) return m[1];
     }
     var n = /\/screens\/([a-z0-9]+(?:-[a-z0-9]+)*)\.html$/i.exec(location.pathname);
@@ -153,7 +236,56 @@
     location.assign(url);
   }
 
+  // --- in-place swap --------------------------------------------------------
+
+  // CSS url(…) tokens, quoted or bare; the parens inside a URL must be
+  // escaped in CSS, so a lazy scan to the first unescaped `)` is exact
+  // enough for generated values.
+  var CSS_URL_RE = /url\(\s*(?:'([^']*)'|"([^"]*)"|([^)'"]*))\s*\)/gi;
+
+  // rewriteCSS rewrites only relative url() targets (../icons/x.svg); a
+  // whole-stylesheet rewrite would eat selectors, so the substitution is
+  // token-by-token and leaves non-relative targets byte-identical.
+  function rewriteCSS(css) {
+    if (!css) return css;
+    return css.replace(CSS_URL_RE, function (whole, sq, dq, bare) {
+      var target = sq !== undefined ? sq : dq !== undefined ? dq : bare;
+      if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(target.trim())) return whole;
+      return 'url(' + screensBaseURL.rewrite(target) + ')';
+    });
+  }
+
+  // A swapped document arrives as text; its relative URLs would resolve
+  // against the page (or the proxy endpoint), not the file they name. While
+  // the DOM is in memory — never the fetched text, never any file — every
+  // reference to a sibling kit file is re-rooted through the same resolver
+  // the runtime fetches with, so the swap stays one consistent world.
+  function rewriteSwappedDoc(doc) {
+    if (!screensBaseURL || !screensBaseURL.rewrite) return;
+    var pairs = [
+      ['link', 'href'],
+      ['script', 'src'],
+      ['img', 'src'],
+      ['source', 'src'],
+      ['video', 'src'],
+      ['audio', 'src'],
+    ];
+    for (var p = 0; p < pairs.length; p++) {
+      var nodes = doc.querySelectorAll(pairs[p][0] + '[' + pairs[p][1] + ']');
+      for (var i = 0; i < nodes.length; i++) {
+        var raw = nodes[i].getAttribute(pairs[p][1]) || '';
+        var next = screensBaseURL.rewrite(raw);
+        if (next) nodes[i].setAttribute(pairs[p][1], next);
+      }
+    }
+    var styles = doc.querySelectorAll('style');
+    for (var s = 0; s < styles.length; s++) {
+      styles[s].textContent = rewriteCSS(styles[s].textContent || '');
+    }
+  }
+
   function applyDocument(doc) {
+    rewriteSwappedDoc(doc);
     var head = document.head;
     while (head.firstChild) head.removeChild(head.firstChild);
     for (var i = 0; i < doc.head.childNodes.length; i++) {
@@ -161,7 +293,10 @@
     }
     for (var j = doc.documentElement.attributes.length - 1; j >= 0; j--) {
       var attr = doc.documentElement.attributes[j];
-      if (attr.name === 'data-sprout-screens') continue; // runtime owns the stamp
+      // The preview marker is the wrapper's runtime contract for this iframe,
+      // not the document's content — a swap must not strip it. The version
+      // stamp is re-stamped below by convention.
+      if (attr.name === 'data-sprout-screens' || attr.name === 'data-sprout-preview') continue;
       document.documentElement.setAttribute(attr.name, attr.value);
     }
     var body = document.importNode(doc.body, true);
@@ -174,7 +309,13 @@
 
   function swapTo(stem, push) {
     if (!screensBaseURL) return;
-    var url = new URL(stem + '.html', screensBaseURL).href;
+    var url = screensBaseURL.resolve(stem + '.html');
+    if (typeof fetch !== 'function') {
+      // fetch itself is unavailable: the spec'd standalone fallback is plain
+      // browser navigation, which works everywhere the document does.
+      standaloneFallback(url);
+      return;
+    }
     fetch(url, { redirect: 'error' }).then(function (res) {
       if (!res.ok) throw { sproutStatus: res.status }; // a real answer: stay put
       return res.text();
@@ -185,7 +326,13 @@
       currentStem = stem;
       document.documentElement.setAttribute('data-sprout-screen-stem', stem);
       if (push && !pushQuiet(url, stem)) {
-        location.replace(url); // history refused (opaque origin): load plainly
+        // History refused the rewrite (an opaque origin like about:srcdoc
+        // throws on URL-form entries). The document is already swapped, so
+        // recording a fragment is enough for back to reach the boot entry
+        // and popstate to re-swap; never location.replace the proxy URL —
+        // in the preview the document would reload inside srcDoc, which has
+        // no persistent URL for it.
+        replaceQuiet('#sprout-screen=' + stem);
         return;
       }
       applyState(resolveActiveState());
@@ -226,8 +373,10 @@
   }
 
   function onPopstate(event) {
-    var stem = (event.state && event.state.sprout) ? event.state.sproutScreen : stemFromLocation();
-    if (stem) swapTo(stem, false);
+    var stem = event.state && event.state.sprout
+      ? event.state.sproutScreen
+      : stemFromLocation() || bootStem;
+    if (stem && stem !== currentStem) swapTo(stem, false);
   }
 
   function onHashchange() {
@@ -291,6 +440,7 @@
     var self = findSelf();
     if (!self) return; // renamed or inlined copy: no screen-resolution basis
     screensBaseURL = screensBase(self);
+    bootStem = stemFromLocation();
 
     document.documentElement.setAttribute('data-sprout-screens', VERSION);
     document.addEventListener('click', onClick, true);
@@ -298,7 +448,15 @@
     window.addEventListener('hashchange', onHashchange);
 
     injectHiddenRule();
-    currentStem = stemFromLocation();
+    currentStem = bootStem;
+    if (!currentStem && screensBaseURL.proxy) {
+      // A srcdoc page has no location to read the stem from; the authoring
+      // contract stamps it on the body (the base templates ship it).
+      var bodyStem = document.body ? document.body.getAttribute('data-sprout-screen') : null;
+      if (bodyStem && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(bodyStem) && bodyStem !== 'REPLACE_WITH_STEM') {
+        currentStem = bodyStem.toLowerCase();
+      }
+    }
     if (currentStem) document.documentElement.setAttribute('data-sprout-screen-stem', currentStem);
     applyState(resolveActiveState());
   }

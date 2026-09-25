@@ -51,13 +51,21 @@ vi.mock('../LivePreview', () => ({
     language,
     fileName,
     onContentChange,
+    previewPath,
   }: {
     content: string;
     language: string;
     fileName: string;
     onContentChange?: (content: string) => void;
+    previewPath?: string;
   }) => (
-    <div data-testid="live-preview-mock" data-language={language} data-file-name={fileName} data-content={content}>
+    <div
+      data-testid="live-preview-mock"
+      data-language={language}
+      data-file-name={fileName}
+      data-content={content}
+      data-preview-path={previewPath ?? ''}
+    >
       <textarea
         data-testid="live-preview-editor"
         value={content}
@@ -167,6 +175,23 @@ describe('ScreensGrid cards', () => {
     expect(loginThumb.tagName).toBe('IFRAME');
     expect(loginThumb.getAttribute('sandbox')).toBe('');
     expect(loginThumb.getAttribute('srcdoc')).toContain('<!doctype html>');
+  });
+
+  // SP-143 §143.4: the scriptless thumb still wants its CSS refs resolved
+  // (the srcDoc copy has no base URL), but never the runtime's preview
+  // marker — the runtime is inert in static renders.
+  it('rewrites thumb refs through the proxy without the preview marker', () => {
+    renderGrid({
+      contentByPath: {
+        ...CONTENT,
+        'design/screens/login.html':
+          '<!doctype html><html><head><link rel="stylesheet" href="../generated/tokens.css"></head><body><h1>Login</h1></body></html>',
+      },
+    });
+
+    const srcdoc = screen.getByTestId('design-screen-thumb-login').getAttribute('srcdoc') ?? '';
+    expect(srcdoc).toContain(`/api/file?path=${encodeURIComponent('design/generated/tokens.css')}`);
+    expect(srcdoc).not.toContain('data-sprout-preview');
   });
 
   it('does not duplicate a wireframe that already has a screen', () => {
@@ -292,6 +317,25 @@ describe('ScreensGrid → LivePreview detail pane', () => {
     expect(preview.getAttribute('data-language')).toBe('svg');
     expect(preview.getAttribute('data-file-name')).toBe('design/wireframes/dash.svg');
     expect(preview.getAttribute('data-content')).toBe(DASH_SVG);
+  });
+
+  // SP-143 §143.4: the render facet feeds LivePreview the screen's workspace
+  // path so only its iframe copy is rewritten/marked — the edited content
+  // stays the original text.
+  it('hands screens a previewPath but keeps the edited content original', () => {
+    renderGrid();
+    fireEvent.click(screen.getByTestId('design-screen-card-login'));
+
+    const preview = screen.getByTestId('live-preview-mock');
+    expect(preview.getAttribute('data-preview-path')).toBe('design/screens/login.html');
+    expect(preview.getAttribute('data-content')).toBe(LOGIN_HTML);
+  });
+
+  it('does not hand wireframes a previewPath', () => {
+    renderGrid();
+    fireEvent.click(screen.getByTestId('design-screen-card-dash'));
+
+    expect(screen.getByTestId('live-preview-mock').getAttribute('data-preview-path')).toBe('');
   });
 
   it('reports the selection through the shared tab props', () => {

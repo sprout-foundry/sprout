@@ -21,6 +21,7 @@
 
 import React, { useState } from 'react';
 import type { DesignFeedbackAnnotation } from '../../services/api/types';
+import { designRootPath } from '../../services/api/designApiPaths';
 import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import type { ScreenBriefModel } from './screenBrief';
@@ -180,7 +181,14 @@ export default function ScreenWorkbench({
       {/* §8b 1 — Render (the screen is what you came to see). */}
       <section className="design-workbench-render" data-testid="design-workbench-render">
         <div className="design-workbench-render-stage">
-          <LivePreview content={renderContent} language={renderLanguage} fileName={renderFileName} />
+          <LivePreview
+            content={renderContent}
+            language={renderLanguage}
+            fileName={renderFileName}
+            // Design screens preview through the §143.4 ref rewriter (the
+            // iframe copy only); a wireframe SVG has no external refs.
+            previewPath={renderLanguage === 'html' ? designRootPath(renderFileName) : undefined}
+          />
           <AnnotationPins
             target={renderFileName}
             annotations={[...annotations]}

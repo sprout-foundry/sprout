@@ -55,6 +55,7 @@ import type {
   DesignFeedbackAnnotation,
 } from '../../services/api/types';
 import LivePreview from '../LivePreview';
+import { injectPreviewMarker, rewriteScreenRefs } from '../../design/screenRefs';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
 import ConflictBanner from './ConflictBanner';
@@ -536,6 +537,7 @@ export default function ScreensGrid({
   }
 
   const selectedCard = cards.find((card) => card.path === selected) ?? null;
+  const cardKind = selectedCard?.kind ?? 'screen';
 
   return (
     <div
@@ -587,11 +589,15 @@ export default function ScreensGrid({
                         // empty placeholder forever (wireframes — SVG — were
                         // the only thumbs that ever rendered). Render the read
                         // HTML in a scriptless sandboxed iframe, scaled down.
+                        // The srcDoc is a rewritten copy (SP-143 §143.4): the
+                        // thumbnail has no base URL either, so its CSS refs
+                        // resolve through the file proxy; sandbox="" keeps the
+                        // runtime inert here, so no preview marker.
                         <iframe
                           className="design-screen-thumb-frame"
                           title={card.name}
                           sandbox=""
-                          srcDoc={content}
+                          srcDoc={rewriteScreenRefs(content, { previewPath: card.path })}
                           loading="lazy"
                           data-testid={`design-screen-thumb-${card.name}`}
                         />
@@ -697,6 +703,7 @@ export default function ScreensGrid({
               content={contentFor(selectedCard.path)}
               language={languageForScreen(selectedCard.path)}
               fileName={selectedCard.path}
+              previewPath={cardKind === 'screen' ? designRootPath(selectedCard.path) : undefined}
               onContentChange={
                 onEditAsset ? (content: string) => handleContentChange(selectedCard.path, content) : undefined
               }

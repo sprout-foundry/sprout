@@ -504,9 +504,26 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       /api/file; vitest on rewriter + wiring (328 design-area tests),
       three-world jsdom harness (proxy/srcdoc, file://, real-path http://)
       green; dogfood tree design_validate clean.
-- [ ] **143.5** `screens.json` derived index generator + validator rules
+- [x] **143.5** `screens.json` derived index generator + validator rules
       (nav-target existence, states-declared, runtime hash, index drift;
-      `design/runtime/*` registration). Spec: SP-143 §143.5.
+      `design/runtime/*` registration). Spec: SP-143 §143.5. — Landed:
+      `design/generated/screens.json` derived from the screens'
+      data-attributes (per stem: device/frame/states/data-nav+trigger;
+      fnv1a64 source-hash over the screen bytes in stem order, the
+      TokenExportInputHash fold) with a new `design_export_tokens
+      targets:screens` write path (explicit-only, refused mixed with token
+      targets, empty tier refused); validator rules `screen_nav_target` /
+      `screen_nav_format` (hard), `screen_state_declared` (hard),
+      `screen_runtime_hash` (hard; missing runtime = info,
+      `screen_runtime_missing`), `screen_index_drift` (hard; missing/stale/
+      hand-edited/unparsable all error, graph-compared so a matching-hash
+      hand-edit still drifts); `design/runtime/*` recognized in ValidateFile
+      dispatch + listed in the inventory (kind `runtime`, base/ walked);
+      determinism/graph/hash pins + a test per rule
+      (screensindex_test.go, screensindex_rules_test.go,
+      design_export_screens_test.go); dogfood screens.json regenerated and
+      the tree design_validate clean (the legacy `data-nav="app-shell"`
+      back button, pre-§9a and targetless, dropped its dead attribute).
 - [ ] **143.6** Generator surface: SKILL.md / designer persona / tool
       docs — base templates, utilities-first, data-nav anchors, states.
       Spec: SP-143 §143.6.

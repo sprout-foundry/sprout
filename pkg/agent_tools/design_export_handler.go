@@ -48,6 +48,11 @@ func (h *designExportHandler) Definition() ToolDefinition {
 			"token map + cssVar lookup), `json` → tokens.json (resolved token values + cssVar map " +
 			"for JS, e.g. the screen runtime), `tailwind` → tailwind.theme.css (a Tailwind v4 " +
 			"@theme block), `swift` → tokens.swift, `kotlin` → tokens.kt. " +
+			"Additionally `screens` → screens.json (SP-143): the machine-readable screen graph " +
+			"derived from design/screens/*.html data-attributes (per stem: device/frame, declared " +
+			"states, data-nav edges with triggers), provenance-hashed over the screen bytes. It is " +
+			"NOT part of `all` — request it explicitly (targets:screens) after adding/changing " +
+			"screens; the validator flags drift as an error. " +
 			"Utilities come only from the known groups (color, space, font/typography, radius, " +
 			"shadow); unknown groups stay variables-only. " +
 			"Output is deterministic and byte-identical for the same tokens, so re-running the " +
@@ -69,7 +74,7 @@ func (h *designExportHandler) Definition() ToolDefinition {
 				Name:        "targets",
 				Type:        "string",
 				Required:    false,
-				Description: "Which exporters to run: `all` (default), one target, or a comma-separated list. Targets: css, ts, json, tailwind, swift, kotlin.",
+				Description: "Which exporters to run: `all` (default — the token targets), one target, or a comma-separated list. Targets: css, ts, json, tailwind, swift, kotlin, screens (the SP-143 screens.json index; explicit only, never in `all`).",
 			},
 			{
 				Name:        "out_dir",
@@ -194,6 +199,67 @@ func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map
 			Files:      []designExportFile{},
 			Guidance: "No design/ directory found. Scaffold the tree with the design-system " +
 				"skill (design/tokens/ first: W3C DTCG *.tokens.json) before exporting tokens.",
+		}
+		return ToolResult{Output: renderDesignExportSummary(out), StructuredOut: out, IsError: false}, nil
+	}
+
+	// SP-143 §143.5: the screens target derives from design/screens/*.html,
+	// not the token sources — it may not be mixed with the token targets
+	// (a screens-only run must not demand tokens, and a token run must not
+	// silently rewrite the screen graph).
+	screensOnly := false
+	for _, t := range targets {
+		if t.Name == design.ExportTargetScreens {
+			if len(targets) > 1 {
+				msg := "design_export_tokens: the screens target derives from design/screens/*.html, not the token sources — request it alone (targets:screens), not mixed with the token targets."
+				return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %s target must be requested alone", design.ExportTargetScreens)
+			}
+			screensOnly = true
+		}
+	}
+	if screensOnly {
+		artifact, err := design.RenderScreensIndexArtifact(root)
+		if err != nil {
+			if errors.Is(err, design.ErrNoScreensForIndex) {
+				out := designExportOutput{
+					Exists:     true,
+					TokensPath: tokensPath,
+					OutDir:     filepath.ToSlash(outDir),
+					Files:      []designExportFile{},
+				}
+				msg := "design_export_tokens: no screens found under " + path.Join(design.DirName, "screens") + "/ — add a screen document first."
+				return ToolResult{Output: msg, StructuredOut: out, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
+			}
+			msg := fmt.Sprintf("design_export_tokens failed: %v", err)
+			return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
+		}
+		if _, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "design_export_tokens", artifact.RelPath); decision == "deny" {
+			msg := fmt.Sprintf("design_export_tokens blocked: %s is denied by the active file-access policy", artifact.RelPath)
+			return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens blocked: %s is declared denied", artifact.RelPath)
+		}
+		relocated, err := relocateArtifacts([]design.ExportedArtifact{artifact}, outDir)
+		if err != nil {
+			msg := fmt.Sprintf("design_export_tokens: %v", err)
+			return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
+		}
+		if err := design.WriteExportedArtifactsAt(root, relocated); err != nil {
+			msg := fmt.Sprintf("design_export_tokens failed: %v", err)
+			return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %w", err)
+		}
+		out := designExportOutput{
+			Exists:      true,
+			TokensPath:  tokensPath,
+			OutDir:      filepath.ToSlash(outDir),
+			TargetCount: 1,
+			Files:       make([]designExportFile, 0, 1),
+		}
+		for _, a := range relocated {
+			out.Files = append(out.Files, designExportFile{
+				Target:      a.Target,
+				Path:        a.RelPath,
+				Bytes:       len(a.Content),
+				ContentHash: a.Hash,
+			})
 		}
 		return ToolResult{Output: renderDesignExportSummary(out), StructuredOut: out, IsError: false}, nil
 	}

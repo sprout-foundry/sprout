@@ -23,7 +23,270 @@ const (
 	// ruleScreenDeviceFrame is advisory: a container width that does not
 	// match any declared device frame.
 	ruleScreenDeviceFrame = "screen_device_frame"
+
+	// SP-143 §143.5 screen-graph rules (the runtime contract the kit's
+	// navigation and state machinery depends on).
+	//
+	// ruleScreenNavTarget (hard): a data-nav `to:<stem>` that resolves to no
+	// screen stem in design/screens/ — the runtime would 404 the swap.
+	ruleScreenNavTarget = "screen_nav_target"
+	// ruleScreenNavFormat (hard): a data-nav value with no parsable
+	// to:<stem> segment.
+	ruleScreenNavFormat = "screen_nav_format"
+	// ruleScreenStateDeclared (hard): a data-state section on a screen whose
+	// <html> does not declare that name in data-states — the runtime would
+	// hide it (or leave it) forever.
+	ruleScreenStateDeclared = "screen_state_declared"
+
+	// SP-143 §143.5 index/runtime rules (the generated-contract checks).
+	//
+	// ruleScreenIndexDrift (hard): design/generated/screens.json is missing
+	// (a screens tier exists) or differs from the derived index — a
+	// hand-edit or staleness; the remedy is regeneration, not editing.
+	ruleScreenIndexDrift = "screen_index_drift"
+	// ruleScreenRuntimeHash (hard): design/runtime/sprout-screens.js is
+	// present and its self-zeroing source-hash does not verify — a
+	// hand-edited or truncated runtime copy. A missing runtime is info only
+	// (old trees stay clean).
+	ruleScreenRuntimeHash = "screen_runtime_hash"
+	// ruleScreenRuntimeMissing (info): the screens tier has screens but no
+	// design/runtime/sprout-screens.js — the kit is not scaffolded yet.
+	ruleScreenRuntimeMissing = "screen_runtime_missing"
 )
+
+// RuntimeFilename is the screen runtime's fixed asset name under
+// design/runtime/ (SP-143 §2).
+const RuntimeFilename = "sprout-screens.js"
+
+// runtimeSelfZeroedSourceHash recomputes the runtime's source-hash the way
+// its header documents (SP-143 §3): fnv1a64 over the bytes with the 16 hex
+// digits of the source-hash line replaced by the zero digest, removing the
+// circularity of hashing a file that contains its own hash. Shared by the
+// validator (this check) and the runtime stamp pins.
+func runtimeSelfZeroedSourceHash(content []byte) string {
+	return tokenExportHash(runtimeSourceHashZeroRegexp.ReplaceAll(content,
+		[]byte("source-hash: "+TokenExportSourceHashLabel+":0000000000000000")))
+}
+
+// runtimeSourceHashZeroRegexp matches the runtime's source-hash value for
+// the self-zeroing recompute; submatch 1 is the recorded digest.
+var runtimeSourceHashZeroRegexp = regexp.MustCompile(`source-hash: (` + regexp.QuoteMeta(TokenExportSourceHashLabel) + `:[0-9a-f]{16})`)
+
+// runtimeRecordedSourceHash extracts the recorded digest (fnv1a64:<hex>)
+// from a runtime copy; "" when the file carries no parsable source-hash line.
+func runtimeRecordedSourceHash(content []byte) string {
+	m := runtimeSourceHashZeroRegexp.FindSubmatch(content)
+	if m == nil || len(m) < 2 {
+		return ""
+	}
+	return string(m[1])
+}
+
+// validateRuntimeAsset checks the design/runtime/sprout-screens.js copy when
+// present (SP-143 §143.5 rule c): its self-zeroing source-hash must verify.
+// A hand-edited or truncated runtime would silently change navigation or
+// state behavior on every screen that references it. A missing runtime is
+// not an error here — trees predating the kit validate clean — but a
+// screens tier with screens and no runtime earns an info pointing at the
+// scaffold. The result is never nil.
+func validateRuntimeAsset(root string) []Finding {
+	findings := []Finding{}
+	abs := filepath.Join(root, DirName, RuntimeSubdir, RuntimeFilename)
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		if screensTierHasScreens(root) {
+			findings = append(findings, Finding{
+				File:     path.Join(DirName, RuntimeSubdir, RuntimeFilename),
+				Rule:     ruleScreenRuntimeMissing,
+				Severity: SeverityInfo,
+				Message:  fmt.Sprintf("no %s/%s runtime found; screens will render but not navigate in place (scaffold the screen kit to add it)", RuntimeSubdir, RuntimeFilename),
+			})
+		}
+		return findings
+	}
+
+	recorded := runtimeRecordedSourceHash(data)
+	if recorded == "" {
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, RuntimeSubdir, RuntimeFilename),
+			Rule:     ruleScreenRuntimeHash,
+			Severity: SeverityError,
+			Message:  "runtime copy carries no parsable source-hash header; restore the fixed asset (scaffold the screen kit or copy from the skill templates)",
+		})
+		return findings
+	}
+	if recorded != runtimeSelfZeroedSourceHash(data) {
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, RuntimeSubdir, RuntimeFilename),
+			Rule:     ruleScreenRuntimeHash,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("runtime source-hash does not verify (%s is not the self-zeroed recompute of these bytes); the runtime is a fixed asset — restore it instead of editing it", recorded),
+		})
+	}
+	return findings
+}
+
+// screensTierHasScreens reports whether design/screens/ holds at least one
+// .html screen.
+func screensTierHasScreens(root string) bool {
+	matches, err := filepath.Glob(filepath.Join(root, DirName, "screens", "*.html"))
+	return err == nil && len(matches) > 0
+}
+
+// ValidateScreensIndex runs the SP-143 §143.5 index/runtime checks: the
+// screens.json drift (rule d) and the runtime source-hash (rule c). It is a
+// whole-tree check (the index is one artifact spanning every screen), called
+// from ValidateTree; a tree with no screens tier contributes nothing.
+func ValidateScreensIndex(root string) ([]Finding, error) {
+	findings := []Finding{}
+
+	sources, err := ScreensIndexSources(root)
+	if err != nil {
+		return nil, err
+	}
+	if len(sources) == 0 {
+		return findings, nil
+	}
+
+	// Runtime source-hash check (rule c).
+	findings = append(findings, validateRuntimeAsset(root)...)
+
+	// Index drift (rule d): derive the current index from the screen bytes
+	// and compare against the artifact on disk.
+	derived, err := DeriveScreensIndex(root)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := RenderScreensIndex(derived); err != nil {
+		return nil, err
+	}
+	indexPath := filepath.Join(root, DirName, GeneratedSubdir, ScreensIndexFilename)
+	existing, err := os.ReadFile(indexPath)
+	if err != nil {
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, GeneratedSubdir, ScreensIndexFilename),
+			Rule:     ruleScreenIndexDrift,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("no design/generated/%s for %d screen(s); the index is generated — run design_export_tokens targets:screens, never hand-write it", ScreensIndexFilename, len(sources)),
+		})
+		return findings, nil
+	}
+	parsed, parseErr := ReadScreensIndex(existing)
+	switch {
+	case parseErr != nil:
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, GeneratedSubdir, ScreensIndexFilename),
+			Rule:     ruleScreenIndexDrift,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("design/generated/%s does not parse (%v); it is generated — regenerate with design_export_tokens targets:screens", ScreensIndexFilename, parseErr),
+		})
+	case derived.SourceHash != parsed.SourceHash || !screensIndexGraphEqual(derived.Screens, parsed.Screens):
+		findings = append(findings, Finding{
+			File:     path.Join(DirName, GeneratedSubdir, ScreensIndexFilename),
+			Rule:     ruleScreenIndexDrift,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("design/generated/%s is stale or hand-edited: it does not match the screens' data-attributes (index hash %s, derived %s); regenerate with design_export_tokens targets:screens", ScreensIndexFilename, parsed.SourceHash, derived.SourceHash),
+		})
+	}
+	return findings, nil
+}
+
+// screensIndexGraphEqual compares the derived and parsed screen graphs so a
+// drift finding can distinguish "stale" from "hand-edited but hash-matching"
+// (the latter being a provenance lie the hash alone would miss). Order and
+// content must both match; the field sets are fixed by the format.
+func screensIndexGraphEqual(derived, parsed []ScreenIndexEntry) bool {
+	if len(derived) != len(parsed) {
+		return false
+	}
+	for i := range derived {
+		if derived[i].Stem != parsed[i].Stem || derived[i].Device != parsed[i].Device ||
+			derived[i].Frame != parsed[i].Frame {
+			return false
+		}
+		if len(derived[i].States) != len(parsed[i].States) {
+			return false
+		}
+		for j := range derived[i].States {
+			if derived[i].States[j] != parsed[i].States[j] {
+				return false
+			}
+		}
+		if len(derived[i].Nav) != len(parsed[i].Nav) {
+			return false
+		}
+		for j := range derived[i].Nav {
+			if derived[i].Nav[j] != parsed[i].Nav[j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// validateScreenIndexGraph runs the SP-143 §143.5 per-screen graph rules
+// against one screen: (a) every data-nav `to:<stem>` resolves to a screen
+// stem in the tree, and (b) every data-state section is declared in the
+// screen's data-states. Both are hard errors: the runtime's in-place swap
+// and state toggling silently do nothing useful otherwise. findings is the
+// running slice; the result is never nil.
+func validateScreenIndexGraph(relPath string, content []byte, allStems map[string]bool) []Finding {
+	findings := []Finding{}
+
+	for _, nav := range extractDataNavs(content) {
+		if allStems[nav.value] {
+			continue
+		}
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     nav.line,
+			Rule:     ruleScreenNavTarget,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("data-nav target %q does not resolve to a screen in %s/screens/; add the target screen or fix the stem", nav.value, DirName),
+		})
+	}
+	for _, occ := range screenAttrOccurrences(string(content), "data-nav") {
+		if dataNavSpecRe.FindStringSubmatch(occ.value) != nil {
+			continue
+		}
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     occ.line,
+			Rule:     ruleScreenNavFormat,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("data-nav %q carries no to:<stem>; the runtime cannot navigate without a target", occ.value),
+		})
+	}
+
+	declared := htmlElementAttrs(content)["data-states"]
+	declaredSet := map[string]bool{}
+	for _, name := range strings.Split(declared, ",") {
+		declaredSet[strings.TrimSpace(name)] = true
+	}
+	for _, used := range collectUsedStates(content) {
+		if declaredSet[used.value] {
+			continue
+		}
+		if declared == "" {
+			findings = append(findings, Finding{
+				File:     relPath,
+				Line:     used.line,
+				Rule:     ruleScreenStateDeclared,
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("data-state %q on a screen whose <html> declares no data-states; declare it (data-states=\"%s\") or drop the section", used.value, used.value),
+			})
+			continue
+		}
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     used.line,
+			Rule:     ruleScreenStateDeclared,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("data-state %q is not declared in this screen's data-states (%q); declare it on <html> or drop the section", used.value, declared),
+		})
+	}
+	return findings
+}
 
 // screenAttrValueRe captures the value of a src= or href= attribute, in
 // double-, single-, or unquoted form. Submatches: 1 = attribute name,
@@ -68,6 +331,13 @@ func ValidateScreensDir(root string) ([]Finding, error) {
 		frames, _ = ParseFrames(string(data))
 	}
 
+	// SP-143 §143.5 rule (a): data-nav targets resolve against every screen
+	// stem in the tree, not just this file's siblings.
+	stems := map[string]bool{}
+	for _, stem := range assetStems(root, "screens", ".html") {
+		stems[stem] = true
+	}
+
 	for _, match := range matches {
 		data, err := os.ReadFile(match)
 		if err != nil {
@@ -78,6 +348,7 @@ func ValidateScreensDir(root string) ([]Finding, error) {
 			return nil, fmt.Errorf("resolving %s relative to %s: %w", match, root, err)
 		}
 		findings = append(findings, validateScreen(filepath.ToSlash(rel), data, frames)...)
+		findings = append(findings, validateScreenIndexGraph(filepath.ToSlash(rel), data, stems)...)
 	}
 	sortFindings(findings)
 	return findings, nil

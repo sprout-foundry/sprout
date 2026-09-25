@@ -561,23 +561,32 @@ func ResolveExportTargets(raw string) ([]ExportTarget, error) {
 		if name == ExportTargetAll {
 			return exportTargetList(ExportTargets), nil
 		}
-		if _, ok := ExportFilenames[name]; !ok {
-			return nil, fmt.Errorf("unknown export target %q (want one of: %s)", name, strings.Join(ExportTargets, ", "))
+		// The screens index is a recognized explicit target but never part
+		// of `all`: it derives from design/screens/*.html, not the token
+		// sources, so a token re-theme must not rewrite the screen graph.
+		if name != ExportTargetScreens {
+			if _, ok := ExportFilenames[name]; !ok {
+				return nil, fmt.Errorf("unknown export target %q (want one of: %s, %s)", name, strings.Join(ExportTargets, ", "), ExportTargetScreens)
+			}
 		}
 		seen[name] = struct{}{}
 	}
 	if len(seen) == 0 {
-		return nil, fmt.Errorf("no export targets given (want one of: %s)", strings.Join(ExportTargets, ", "))
+		return nil, fmt.Errorf("no export targets given (want one of: %s, %s)", strings.Join(ExportTargets, ", "), ExportTargetScreens)
 	}
 
 	// Emit in canonical order, not argument order: identical target sets must
 	// produce identical artifacts and identical summaries regardless of how
-	// the caller spelled them.
+	// the caller spelled them. The screens target is appended last: it is not
+	// part of the token-export pipeline and its file is resolved separately.
 	targets := make([]ExportTarget, 0, len(seen))
 	for _, name := range ExportTargets {
 		if _, ok := seen[name]; ok {
 			targets = append(targets, ExportTarget{Name: name, File: ExportFilenames[name]})
 		}
+	}
+	if _, ok := seen[ExportTargetScreens]; ok {
+		targets = append(targets, ExportTarget{Name: ExportTargetScreens, File: ScreensIndexFilename})
 	}
 	return targets, nil
 }

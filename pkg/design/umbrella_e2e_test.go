@@ -227,6 +227,8 @@ func umbProducedTree(t *testing.T, root string) {
 	umbWrite(t, root, "design/wireframes/confirm.svg", umbConfirmSVG)
 	umbWrite(t, root, "design/flows/check-deposit.mmd", umbFlowMMD)
 	umbWrite(t, root, "design/screens/deposit.html", umbDepositHTML)
+	// SP-143 §143.5: the screen contract artifacts — derived index + runtime.
+	writeScreensKitArtifacts(t, root)
 }
 
 // umbExport runs the §5a export over the tree (the pure core the

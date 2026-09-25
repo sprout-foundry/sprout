@@ -753,6 +753,9 @@ func TestUmbrella_NoProprietaryFormatsInTree(t *testing.T) {
 	allowed := map[string]bool{
 		".svg": true, ".html": true, ".mmd": true, ".json": true,
 		".md": true, ".css": true, ".ts": true, ".swift": true, ".kt": true,
+		// SP-143: the screen kit's fixed runtime asset is standard
+		// JavaScript (classic script, git-diffable text).
+		".js":      true,
 		".gitkeep": true, ".gitattributes": true, ".gitignore": true,
 	}
 	walkErr := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {

@@ -3,12 +3,23 @@ package design
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// runtimeRecordedSourceHashRe extracts the digest from the runtime's
+// `source-hash: fnv1a64:<hex>` header line.
+var runtimeRecordedSourceHashRe = regexp.MustCompile(`source-hash: (fnv1a64:[0-9a-f]{16})`)
+
+// runtimeSourceHashLineRe matches the whole hash line value for the
+// self-zeroing recompute (the digest is replaced with the zero digest
+// before hashing, removing the circularity of hashing a file that
+// contains its own hash).
+var runtimeSourceHashLineRe = regexp.MustCompile(`source-hash: fnv1a64:[0-9a-f]{16}`)
 
 // runtimeAssetOnDisk reads the scaffolded copy of a runtime asset out of a
 // scaffolded tree (slash-separated rel, e.g. "base/phone.html").
@@ -17,6 +28,91 @@ func runtimeAssetOnDisk(t *testing.T, root, rel string) string {
 	data, err := os.ReadFile(filepath.Join(root, DirName, RuntimeSubdir, filepath.FromSlash(rel)))
 	require.NoError(t, err)
 	return string(data)
+}
+
+// runtimeSelfZeroedHash recomputes the screen runtime's source-hash the way
+// the file's header documents: fnv1a64 over the runtime's bytes with the 16
+// hex digits of the source-hash line itself replaced by the zero digest —
+// the SP-140-5 §5f offline-recompute convention adapted to a fixed asset, so
+// a hand-edited copy is detectable at any checkout without trusting the
+// recorded digest. The zero placeholder must match the one used when the
+// header was authored.
+func runtimeSelfZeroedHash(content []byte) string {
+	zeroed := runtimeSourceHashLineRe.ReplaceAll(content,
+		[]byte("source-hash: fnv1a64:0000000000000000"))
+	return tokenExportHash(zeroed)
+}
+
+// TestSproutScreensRuntimeStamps pins the runtime's identity stamps
+// (SP-143 §143.3): a self-consistent self-zeroing source-hash, the version
+// line, and the version the runtime stamps onto <html data-sprout-screens>.
+func TestSproutScreensRuntimeStamps(t *testing.T) {
+	data, err := runtimeTemplates.ReadFile(runtimeTemplateDir + "sprout-screens.js")
+	require.NoError(t, err)
+	text := string(data)
+
+	recorded := runtimeRecordedSourceHashRe.FindStringSubmatch(text)
+	require.Len(t, recorded, 2, "runtime must carry a source-hash: fnv1a64:<hex> header line")
+	assert.Equal(t, recorded[1], runtimeSelfZeroedHash(data),
+		"runtime source-hash must match the self-zeroing recompute — if the "+
+			"runtime changed, recompute the header hash (zero the hex digits, "+
+			"fnv1a64 the bytes, write the digest back)")
+
+	assert.Regexp(t, `(?m)^\s*\*\s+version: 1$`, text, "runtime header must declare its version")
+	assert.Contains(t, text, `var VERSION = '1'`,
+		"runtime must carry the version it stamps onto <html data-sprout-screens>")
+}
+
+// TestSproutScreensRuntimeIsClassicScript pins the no-ESM rule (SP-143
+// Premise §2): file:// pages run under a null origin where ES modules are
+// CORS-blocked, so the runtime must stay a classic script with zero
+// imports/exports/dynamic-imports; its single network act is the one fetch
+// a swap performs.
+func TestSproutScreensRuntimeIsClassicScript(t *testing.T) {
+	data, err := runtimeTemplates.ReadFile(runtimeTemplateDir + "sprout-screens.js")
+	require.NoError(t, err)
+	text := string(data)
+
+	for _, banned := range []string{"import ", "export ", "import(", "require(", "XMLHttpRequest"} {
+		assert.NotContains(t, text, banned, "runtime must not use %q", banned)
+	}
+	assert.LessOrEqual(t, strings.Count(text, "fetch("), 1,
+		"the swap's fetch is the runtime's only network act")
+}
+
+// TestSproutScreensRuntimeSurface pins the behavioral surface the SP-143
+// acceptance criteria exercise: delegated data-nav interception, in-place
+// swap + pushState/popstate, the #state= hash contract, the preview-gated
+// switcher, and the window.SproutScreens API — the markers 143.7's E2E and
+// the 143.4 preview rely on, so a refactor that renames them out fails here,
+// not in a browser.
+func TestSproutScreensRuntimeSurface(t *testing.T) {
+	data, err := runtimeTemplates.ReadFile(runtimeTemplateDir + "sprout-screens.js")
+	require.NoError(t, err)
+	text := string(data)
+
+	for label, needle := range map[string]string{
+		"nav attribute parse":     `to:`,
+		"delegated click":         "addEventListener('click', onClick",
+		"history integration":     "history.pushState",
+		"back/forward":            "popstate",
+		"state hash contract":     "#state=",
+		"preview gate":            "data-sprout-preview",
+		"state sections":          "[data-state]",
+		"switcher element":        "sprout-state-switcher",
+		"api export":              "window.SproutScreens",
+		"nav API":                 "nav: nav",
+		"setState API":            "setState: setState",
+		"in-place swap":           "replaceWith",
+		"standalone fallback":     "standaloneFallback",
+		"version stamp on html":   `setAttribute('data-sprout-screens'`,
+		"source-hash stamp doc":   "self-zeroing recipe",
+		"screen URL from script":  "sprout-screens\\.js",
+		"screens dir derivation":  `'../screens/'`,
+		"never full reload first": "preventDefault",
+	} {
+		assert.Contains(t, text, needle, "runtime must keep: %s", label)
+	}
 }
 
 // TestScaffoldCopiesRuntimeAssets pins SP-143 §143.2: a fresh scaffold
@@ -28,7 +124,7 @@ func TestScaffoldCopiesRuntimeAssets(t *testing.T) {
 
 	require.NoError(t, Scaffold(root))
 
-	require.Len(t, RuntimeAssets, 3, "chrome + two base documents")
+	require.Len(t, RuntimeAssets, 4, "runtime js + chrome + two base documents")
 	for _, name := range RuntimeAssets {
 		embedded, err := runtimeTemplates.ReadFile(runtimeTemplateDir + name)
 		require.NoError(t, err)

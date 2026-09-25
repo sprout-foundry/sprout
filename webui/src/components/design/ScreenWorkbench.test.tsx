@@ -17,8 +17,8 @@ import type { ScreenBriefModel } from './screenBrief';
 import ScreenWorkbench from './ScreenWorkbench';
 
 vi.mock('../LivePreview', () => ({
-  default: ({ content, fileName }: { content: string; fileName: string }) => (
-    <div data-testid="mock-live-preview" data-file={fileName}>
+  default: ({ content, fileName, previewPath }: { content: string; fileName: string; previewPath?: string }) => (
+    <div data-testid="mock-live-preview" data-file={fileName} data-preview-path={previewPath ?? ''}>
       {content}
     </div>
   ),
@@ -140,6 +140,19 @@ describe('ScreenWorkbench', () => {
     expect(screen.getByTestId('design-pins')).toBeInTheDocument();
     expect(screen.getByTestId('design-pin-a1')).toBeInTheDocument();
     expect(screen.getByTestId('design-pin-a2')).toBeInTheDocument();
+  });
+
+  // SP-143 §143.4: an HTML screen's render facet previews through the ref
+  // rewriter (the iframe copy only — the edited content stays original);
+  // a wireframe SVG has no external refs and gets no preview path.
+  it('hands the preview the workspace path for a screen, not for a wireframe', () => {
+    renderWorkbench();
+    expect(screen.getByTestId('mock-live-preview').getAttribute('data-preview-path')).toBe('design/screens/login.html');
+  });
+
+  it('hands a wireframe render no preview path', () => {
+    renderWorkbench({ renderLanguage: 'svg', renderFileName: 'design/wireframes/login.svg' });
+    expect(screen.getByTestId('mock-live-preview').getAttribute('data-preview-path')).toBe('');
   });
 
   it('lists the open feedback notes, each with an agent prefill, plus the resolution link', () => {

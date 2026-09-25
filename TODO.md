@@ -486,9 +486,24 @@ is marked `[x]` and carries a summary of what landed; the SP-140 specs under
       #state= hash states with preview-gated switcher (data-sprout-preview);
       window.SproutScreens nav/setState/version; self-zeroing source-hash
       pinned by test; browser-verified on http:// and file:// harnesses.
-- [ ] **143.4** Preview integration: `rewriteScreenRefs` → `/api/file`,
+- [x] **143.4** Preview integration: `rewriteScreenRefs` → `/api/file`,
       preview marker injection, MIME check for `.js`/`.css`. Spec:
-      SP-143 §143.4.
+      SP-143 §143.4. — Landed: `webui/src/design/screenRefs.ts`
+      (workspace-relative href/src + inline-CSS url()/@import →
+      `/api/file?path=<workspace path>` resolved against the screen's own
+      directory; absolute/protocol-relative/data:/root-relative/fragment
+      untouched; `injectPreviewMarker` stamps `data-sprout-preview`);
+      LivePreview grows a preview-only iframe transform (previewPath — the
+      edited text/write-back is never the rewritten copy); wired into
+      ScreensGrid (detail pane + scriptless thumbs, refs rewritten, marker
+      omitted) and the ScreenWorkbench render facet; the runtime self-locates
+      through the proxy form (path param → kit root, path-only proxy URLs,
+      fragment history fallback for about:srcdoc, swapped docs re-rooted
+      in memory, preview marker survives swaps, source-hash repinned
+      fnv1a64:5a616afe34efcf60); MIME for .js/.css/.html confirmed served by
+      /api/file; vitest on rewriter + wiring (328 design-area tests),
+      three-world jsdom harness (proxy/srcdoc, file://, real-path http://)
+      green; dogfood tree design_validate clean.
 - [ ] **143.5** `screens.json` derived index generator + validator rules
       (nav-target existence, states-declared, runtime hash, index drift;
       `design/runtime/*` registration). Spec: SP-143 §143.5.

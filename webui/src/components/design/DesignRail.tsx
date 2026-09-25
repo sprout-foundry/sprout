@@ -18,10 +18,12 @@
  * `screens` entry of the same stem, with a wireframe's own `status` as a
  * fallback if a future data layer populates it.
  *
- * The rail is data-driven from the design workspace inventory. When no
- * workspace context is present (standalone render, tests) or the inventory
- * has no wireframes, the Screens group omits itself and only the Library
- * group renders — the rail never crashes on an empty tree.
+ * The rail is data-driven from the design workspace inventory. When a tree
+ * exists but has no wireframes (tokens only), the Screens group stays with
+ * its own empty marker (§8d) — the Library views are the default content.
+ * With no workspace context (standalone render, tests) or no design/ tree,
+ * the Screens group omits itself and only the Library group renders — the
+ * rail never crashes on an absent tree.
  *
  * Deliberately does NOT carry the Code rail's entries (Git/Files/Search) — a
  * mode's rail lists what that mode does.
@@ -99,7 +101,7 @@ export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
     onSelect('screens');
   };
 
-  const showScreens = wireframes.length > 0;
+  const showScreens = workspace?.inventory?.exists ?? false;
 
   return (
     <nav aria-label="Design navigation" className="design-rail" data-testid="design-rail">
@@ -128,6 +130,20 @@ export default function DesignRail({ activeId, onSelect }: ModeRailProps) {
           >
             <MonitorSmartphone size={18} strokeWidth={1.5} />
           </button>
+          {wireframes.length === 0 && (
+            // §8d empty state: a tree with no screens yet. The lightest
+            // marker that keeps the group present and the slot addressable —
+            // a disabled entry, not a dead omission.
+            <span
+              className="design-rail-empty"
+              role="note"
+              aria-label="No screens yet"
+              title="No screens yet — the token palette is ready"
+              data-testid="design-rail-screens-empty"
+            >
+              <FileText size={18} strokeWidth={1.5} />
+            </span>
+          )}
           {wireframes.map((wf) => {
             const stem = stemOf(wf.name);
             const rawStatus = wf.status || statusByStem.get(stem.toLowerCase()) || '';

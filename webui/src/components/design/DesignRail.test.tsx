@@ -6,8 +6,9 @@
  * IA: the Screens group lists the wireframe stems with a status dot and an
  * open-annotation badge; selecting a screen drives the shared selection and
  * lands on the Screens section; the Library group switches kind sections;
- * and the rail degrades gracefully (Library only) when there is no workspace
- * or no wireframes.
+ * and the rail degrades gracefully: a tree with no screens renders the
+ * group with its §8d empty marker, while no workspace context or no
+ * design/ tree renders the Library group only.
  *
  * Status source mirrors the data layer: the README status marker is
  * populated on the inventory's `screens` entries (designApi.listAssets keys
@@ -141,7 +142,9 @@ describe('DesignRail (SP-140-8 §8a)', () => {
     expect(screen.getByTestId('design-rail-screen-dashboard').getAttribute('aria-selected')).toBe('false');
   });
 
-  it('omits the Screens group when the inventory has no wireframes', () => {
+  it('renders the Screens group with its empty marker when a tree exists but has no screens', () => {
+    // §8d: tokens-only tree — the group stays with a "no screens yet"
+    // marker; the Library views remain the default content.
     wsFixture.value = {
       inventory: { exists: true, wireframes: [], feedback: [] },
       selected: null,
@@ -149,17 +152,35 @@ describe('DesignRail (SP-140-8 §8a)', () => {
     };
     render(<DesignRail activeId="flows" onSelect={vi.fn()} />);
 
-    expect(screen.queryByTestId('design-rail-screens')).toBeNull();
-    // The Library group is still reachable.
+    expect(screen.getByTestId('design-rail-screens')).toBeTruthy();
+    const empty = screen.getByTestId('design-rail-screens-empty');
+    expect(empty.getAttribute('aria-label')).toBe('No screens yet');
+    expect(empty.getAttribute('title')).toBe('No screens yet — the token palette is ready');
+    // No interactive screen entries, and the Library group is still reachable.
+    expect(screen.queryByTestId(/^design-rail-screen-/)).toBeNull();
     expect(screen.getByTestId('design-rail-tokens')).toBeTruthy();
     expect(screen.getByTestId('design-rail-flows')).toBeTruthy();
   });
 
-  it('renders the Library group (and nothing else) when there is no workspace', () => {
+  it('omits the Screens group when there is no workspace context', () => {
     wsFixture.value = null;
     render(<DesignRail activeId="flows" onSelect={vi.fn()} />);
 
     expect(screen.queryByTestId('design-rail-screens')).toBeNull();
+    expect(screen.getByTestId('design-rail-tokens')).toBeTruthy();
+    expect(screen.getByTestId('design-rail-flows')).toBeTruthy();
+  });
+
+  it('omits the Screens group when no design/ tree exists', () => {
+    wsFixture.value = {
+      inventory: { exists: false, wireframes: [], feedback: [] },
+      selected: null,
+      select: vi.fn(),
+    };
+    render(<DesignRail activeId="flows" onSelect={vi.fn()} />);
+
+    expect(screen.queryByTestId('design-rail-screens')).toBeNull();
+    expect(screen.queryByTestId('design-rail-screens-empty')).toBeNull();
     expect(screen.getByTestId('design-rail-tokens')).toBeTruthy();
     expect(screen.getByTestId('design-rail-flows')).toBeTruthy();
   });

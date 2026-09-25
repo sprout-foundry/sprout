@@ -342,6 +342,7 @@ const TESTIDS = {
   "design-rail-flows": "design-rail-flows",
   "design-rail-screens": "design-rail-screens",
   "design-rail-screens-section": "design-rail-screens-section",
+  "design-rail-screens-empty": "design-rail-screens-empty", // §8d: tokens-only tree, the Screens group's empty marker
   "design-rail-tokens": "design-rail-tokens",
   "design-rail-library": "design-rail-library",
   "design-rail-screen-login": "design-rail-screen-login", // pattern design-rail-screen-${stem} (DesignRail.tsx)

@@ -1,131 +1,151 @@
-# SP-143 — Screen Runtime: Interactive Screens with Tokens and Flows
+# SP-143 — Screen Kit: Interactive, Token-Driven Screens
 
-Status: Draft (2026-09-25). Depends on SP-140-9 §9a (screens-first tier, screen
-`data-nav`); the preview-fix item (1.1) is independently shippable today.
+Status: Draft v2 (2026-09-25). v1 scoped a bare runtime; v2 widens to the
+full kit (generated utilities, device chrome, states, base templates,
+derived index) after scoping discussion. Depends on SP-140-9 §9a (the
+screen `data-nav` contract); independent of its migration items.
 
 ## Problem
 
-A `design/screens/*.html` today is a static picture. It cannot:
+A `design/screens/*.html` today is a static, themeless, deviceless picture:
 
-1. **Consume the theme.** `design_export_tokens` deterministically emits
-   `design/generated/tokens.css` (CSS custom properties, provenance-hashed) —
-   and nothing references it. Screens hand-repeat hex values, so a token edit
-   never reaches a screen and the "one theme" premise leaks at the last mile.
-2. **Flow.** The only interactive contract is `data-nav` (on SVG wireframes
-   today; screens per SP-140-9 §9a). Clicking one in a rendered screen does
-   nothing — multiscreen "does this flow feel right" checks mean opening files
-   one at a time.
-3. **Preview honestly.** The webui renders screens as
-   `<iframe srcDoc={content}>` (`webui/src/components/LivePreview.tsx`). srcDoc
-   has **no base URL**, so every workspace-relative reference in a screen —
-   `<link href="../generated/tokens.css">`, `<script src="../runtime/…">` —
-   silently breaks in the tool that is supposed to show the design. (The
-   agent-side render/critique path loads the file via `file://`
-   (`render_input.go`), where relative refs DO resolve — the two paths
-   disagree about what a screen looks like.)
+1. **No theme reach.** `design_export_tokens` emits a deterministic
+   `tokens.css` and nothing consumes it. Screens hand-repeat values, so a
+   token edit never reaches a screen.
+2. **No utilities.** Every screen re-derives its button/spacing/type CSS
+   from scratch — big writes (LLM time), drifting results, no shared
+   vocabulary.
+3. **No device.** A phone screen renders as an unbounded document. Nothing
+   frames it at 393×852 with iPhone chrome; desktop is indistinguishable
+   from phone.
+4. **No flow, no states.** `data-nav` edges do nothing when clicked; a
+   screen shows one frozen moment (never its empty/loading/error states).
+5. **Dishonest previews.** The webui renders screens as
+   `<iframe srcDoc>` (`LivePreview.tsx`) — srcDoc has no base URL, so every
+   workspace-relative reference silently breaks in the tool while resolving
+   fine in the agent's `file://` render/critique path.
 
-The result: the LLM pays for big self-contained screen writes (every screen
-inlines everything), the previews can't show theme or flow, and "does it feel
-real" is unanswerable without hand-assembly. The difference between this
-tooling being usable or not is a small shared runtime plus honest previews —
-screens stay one small write each.
+## Premise — the kit: tool-owned assets, one authored artifact per screen
 
-## Premise: one small runtime, referenced — never authored — per screen
+The model authors exactly one thing per screen. Everything else is
+generated, derived, or a fixed checked-in asset.
 
-- **The runtime is an asset, not an output.** One checked-in,
-  provenance-hashed `design/runtime/sprout-screens.js` per tree. Screens
-  reference it; no screen embeds it. The LLM never writes runtime code.
-- **Tokens by reference.** Screens declare
-  `<link rel="stylesheet" href="../generated/tokens.css">` and style with
-  `var(--…)`. One token write restyles every screen (the export's
-  determinism makes this safe to regenerate).
-- **Flows are anchors.** Screen-to-screen edges are real
-  `<a data-nav="to:<stem>;trigger:<label>">` elements (the §9a contract).
-  The runtime intercepts them; standalone file opens degrade to plain
-  navigation (`../screens/<stem>.html` — works under `file://`).
-- **Preview composes; files stay self-contained-ish.** The screens
-  convention (SP-140-1 §1i) already permits workspace-relative refs and bans
-  network refs — that rule is exactly right. The **preview path** rewrites
-  relative refs to absolute `/api/file?path=…` URLs before srcDoc (the
-  iframe sandbox is `allow-scripts allow-same-origin`, so runtime fetches of
-  sibling screens resolve same-origin). The file stays valid on disk and
-  under `file://`; only the in-memory preview copy is rewritten.
-- **No framework, no build step.** One classic-script file (~a few hundred
-  lines), no dependencies, no bundler. ES modules are blocked under
-  `file://` (CORS null-origin), so classic script it is.
+### 1. Generated from project tokens (deterministic, provenance-hashed, never hand-edited)
 
-## §1 — Items
+- `design/generated/tokens.css` — `:root` custom properties **plus a fixed
+  vocabulary of utility classes** derived from token groups:
+  `color.*` → `.bg-*`/`.text-*`/`.border-*`, `space.*` → `.p-*`/`.m-*`/
+  `.gap-*`, `font.*` → `.text-*-{size,weight}`/`.font-*`, `radius.*` →
+  `.rounded-*`, `shadow.*` → `.shadow-*`. Known group names map to
+  utilities; unknown groups pass through as vars only. Emitted by
+  `design_export_tokens` (css target grows the utility layer).
+- `design/generated/tokens.json` — resolved token values for JS (new
+  `json` export target; same generator, same hash convention).
 
-- **1.1 Preview ref rewriting (webui, independently shippable).** A pure
-  `rewriteScreenRefs(html, screenPath)` helper: workspace-relative
-  `href`/`src` (and CSS `url(...)`) → absolute `/api/file?path=<workspace
-  path>`; absolute/data: refs untouched. Applied in `ScreensTabContainer`
-  and the `ScreenWorkbenchContainer` render facet before `LivePreview`.
-  Verify `/api/file` serves `.js` with an executable MIME (nosniff would
-  block the runtime tag — if so, teach the file endpoint content-types, not
-  the screens). Vitest: relative link/script/style/img rewritten, external
-  and data: untouched, `design/`-rooted and workspace-rooted path forms both
-  handled.
-- **1.2 The runtime asset.** `design/runtime/sprout-screens.js`, committed
-  to the skill's scaffold and copied into trees by the design-system skill
-  (like README scaffolding today). v1 surface:
-  - auto-boot on DOMContentLoaded;
-  - `[data-nav]` click interception → swap to the target screen in place:
-    fetch (preview/same-origin) with standalone fallback
-    (`location.href = ../screens/<stem>.html`) when fetch is blocked;
-  - swap = replace `<body>` children + `<title>`, `history.pushState`,
-    back button works, no full reload (that is the "feels real" part);
-  - `window.SproutScreens.nav(stem)` programmatic API;
-  - a version banner in a `data-sprout-screens` attribute on `<html>`
-    (debuggable, zero UI).
-  Provenance: `source-hash` header comment (the `.mmd`/token-export
-  convention) so hand-edits are detectable.
-- **1.3 Validator + tree registration.** `pkg/design/tree.go` recognizes
-  `design/runtime/*.js`; `design_validate` checks the provenance hash when
-  the runtime is present (missing runtime = info, not error — old trees keep
-  validating). `design_assets` inventory lists the tier.
-- **1.4 Token wiring convention.** Skill + validator advisory: a screen
-  styling with raw hex where a token exists → advisory `info` finding
-  (the brand.md rule, extended to screens, advisory-only per the
-  findings-never-block rule). Screens reference
-  `../generated/tokens.css`; `design_export_tokens`'s css target becomes
-  part of the screens loop (regenerate on token change — the design-ahead
-  drift row already says this).
-- **1.5 Generator-surface updates (the fix-where-it's-generated rule).**
-  `design-system` SKILL.md screens section + `designer` persona + tool docs:
-  screens carry the two reference lines (runtime + tokens), `var(--…)`
-  styling, real `data-nav` anchors; the runtime is referenced, never
-  written; flows across screens are wired in markup, not prose.
-- **1.6 E2E.** A screen pair with `data-nav` edges: in the workbench
-  preview, a click swaps screens in place (no navigation), back returns;
-  token edit → export → screens restyle without a screen write.
+### 2. Fixed assets, versioned, copied into trees by the skill scaffold
 
-## §2 — Non-goals
+- `design/runtime/sprout-screens.js` — the runtime. Classic script (file://
+  CORS null-origin rules out ES modules), no dependencies:
+  - `[data-nav]` interception → in-place screen swap (fetch + body/title
+    replace, `history.pushState`, back works, no full reload); standalone
+    fallback to plain `../screens/<stem>.html` navigation when fetch is
+    blocked;
+  - states: a screen declares `data-states="a,b,c"` on `<html>`; sections
+    carry `data-state="a"`; the runtime toggles via `#state=a` hash and
+    renders a state switcher **only in preview mode** (marker injected by
+    the webui preview wrapper — static renders stay clean);
+  - `window.SproutScreens.nav(stem)` / `.setState(name)` API;
+  - `data-sprout-screens` version attribute on `<html>`; `source-hash`
+    header comment (hand-edits detectable).
+- `design/runtime/chrome.css` — device chrome. `data-device="phone"` on
+  `<html>` → iPhone chrome by default (rounded bezel, dynamic island,
+  status bar, home indicator) sized by the README `frames:` entry; absent/
+  `desktop` → no chrome (desktop is the default layout). Chrome is fixed
+  hardware realism, not project-themed (light/dark via `color-scheme`
+  only).
+- `design/runtime/base/phone.html`, `base/desktop.html` — base documents
+  with the reference lines (runtime, tokens.css, chrome.css), the device
+  attribute, and a body slot. New screens start from a copy.
 
-- No component framework, no templating language, no build tooling. If a
-  screen needs more than markup + CSS vars + data-nav, that is a signal the
-  design is specifying an app, not a screen.
-- No state management beyond history (v1 has no form state, no variants; a
-  `data-variant` toggle is a later addition if dogfooding asks for it).
-- No changes to the flows canvas, `design_brief`, or SP-140-9's `.json`
-  flow sources — the runtime consumes §9a `data-nav` edges only.
-- The runtime never writes files, never talks to the agent, never leaves the
-  preview/document it is loaded in.
+### 3. Model-authored, one per screen: `design/screens/<stem>.html`
 
-## §3 — Acceptance criteria
+A full HTML document from a base template. Layout via utilities +
+`var(--…)`; navigation as real `<a data-nav="to:<stem>;trigger:<label>">`
+elements; states as declared `data-states` + `data-state` sections.
+Dynamic by construction (HTML/CSS is unbounded); locked by the validator
+contract: slug stems, self-containment with workspace-relative-only refs
+(existing §1i), `data-nav` targets exist as stems, states declared before
+use, utilities/vars over raw values where a token exists (advisory),
+container width matches a declared frame (advisory, existing).
 
-- [ ] The webui workbench preview of a screen shows themed styling from
-      `generated/tokens.css` and clicking a `data-nav` anchor swaps to the
-      target screen in place, with working back navigation.
-- [ ] The same screen file opened directly from disk (file://) navigates
-      between screens via plain links, styled by the same tokens.
-- [ ] `design_render`/`design_critique` on a screen are unchanged (file://
-      path already resolves relative refs) and a runtime-present screen
-      renders identically with the runtime inert (no boot side effects in a
-      static render).
+**Format decision — HTML, not JSON screens.** JSON layout needs a bespoke
+renderer and a layout schema — the combination where LLM output is
+weakest — while HTML+CSS is the densest-trained layout medium there is and
+renders with zero new code. Machine-readability does not come from
+authoring JSON; it comes from the derived index (below). A JSON screen
+format stays out until dogfooding demands it.
+
+### 4. Derived, never hand-edited: `design/generated/screens.json`
+
+The screen graph — per stem: device/frame, declared states, nav edges with
+triggers — generated from the screens' data-attributes, provenance-hashed
+over the inputs; drift = validator error (the `.mmd`/token convention).
+This is the machine-readable index other tooling consumes (`design_brief`,
+`design_sync` structural proposals, cross-agent context) without parsing
+HTML at read time.
+
+## Items
+
+- **143.1 Export:** utilities in the `css` target + the `json` target
+  (`design_export_tokens`; group→utility vocabulary mapping; determinism
+  pins; hash headers).
+- **143.2 Chrome + base templates** as scaffold assets (`chrome.css`,
+  `base/phone.html`, `base/desktop.html`; `data-device` contract; skill
+  scaffold copies them).
+- **143.3 Runtime v1** (nav/swap/history, states + preview-gated switcher,
+  device behavior, API, version/hash stamps).
+- **143.4 Preview integration** (`rewriteScreenRefs` → `/api/file` for all
+  workspace-relative refs including `../generated/*` and `../runtime/*`;
+  preview marker injection; `/api/file` MIME check for `.js`/`.css`;
+  vitest on the rewriter).
+- **143.5 `screens.json` generator + validator rules** (data-nav target
+  existence, states-declared-before-use, runtime hash when present,
+  screens.json drift; `design/runtime/*` tree registration).
+- **143.6 Generator surface:** SKILL.md + designer persona + tool docs —
+  screens start from base templates, utilities-first styling, data-nav
+  anchors, declared states; runtime/tokens referenced, never authored.
+- **143.7 E2E:** a phone-framed screen pair — themed from tokens, iPhone
+  chrome at the declared frame, in-place navigation with back, state
+  switching, and a token edit restyling every screen with zero screen
+  writes.
+
+## Non-goals
+
+- No component framework, no templating language, no bundler, no ESM.
+- No JSON screen renderer in v1.
+- No state persistence beyond the URL hash; no form state.
+- Device chrome is fixed realism (an iPhone is an iPhone); not themed from
+  project tokens.
+- The runtime never writes files, never talks to the agent, never leaves
+  the document it runs in.
+- No changes to the flows canvas or SP-140-9's `.json` flow sources; the
+  runtime consumes screen `data-nav` edges only.
+
+## Acceptance criteria
+
+- [ ] A phone screen previewed in the workbench shows iPhone chrome at the
+      declared frame size, themed entirely from `generated/tokens.css`
+      (vars + utilities), with in-place `data-nav` navigation (back works)
+      and a working state switcher; no full reloads.
+- [ ] The same file opened from disk (`file://`) navigates between screens
+      via plain links, still themed.
+- [ ] `design_render`/`design_critique` on a runtime-present screen render
+      it identically to a runtime-absent one (runtime inert in static
+      renders; states pinnable via URL hash for render/critique targets).
 - [ ] Editing one token + re-exporting restyles every screen with zero
       screen-file writes.
-- [ ] `design_validate` flags a hand-edited runtime (hash mismatch) as an
-      error and a missing runtime as info; old trees validate clean.
-- [ ] A fresh scaffolded tree (design-system skill) includes the runtime
-      asset and its two reference lines in the starter screen.
+- [ ] `screens.json` regenerates deterministically; a hand-edit (hash
+      mismatch) is a validator error; trees without the runtime validate
+      clean (missing runtime = info).
+- [ ] A fresh scaffolded tree includes the runtime assets, base templates,
+      and a starter screen wired to tokens with working nav.

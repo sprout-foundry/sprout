@@ -31,6 +31,12 @@ vi.mock('../contexts/NotificationContext', () => ({
 // pre-populated results so context menu tests work reliably.
 const defaultOnFileClick = vi.fn();
 
+const replaceMock = vi.hoisted(() => ({
+  showReplace: false,
+  replaceQuery: '',
+  handleReplace: null as null | ReturnType<typeof vi.fn>,
+}));
+
 vi.mock('./search/useSearchState', () => {
   const React = require('react');
   const MOCK_RESULTS = [
@@ -96,7 +102,7 @@ vi.mock('./search/useSearchState', () => {
 
       return {
         searchQuery: 'handleClick',
-        replaceQuery: '',
+        replaceQuery: replaceMock.replaceQuery,
         setSearchQuery: vi.fn(),
         setReplaceQuery: vi.fn(),
         caseSensitive: false,
@@ -120,9 +126,9 @@ vi.mock('./search/useSearchState', () => {
         isSearching: false,
         error: null,
         replaceStatus: null,
-        showReplace: false,
+        showReplace: replaceMock.showReplace,
         setShowReplace: vi.fn(),
-        handleReplace: vi.fn().mockResolvedValue(undefined),
+        handleReplace: replaceMock.handleReplace ?? vi.fn().mockResolvedValue(undefined),
         excludePatterns,
         setExcludePatterns,
         semanticThreshold: 0.3,
@@ -513,5 +519,37 @@ describe('SearchView context menu - dismissal', () => {
     await flushPromises();
 
     expect(document.querySelector('.context-menu')).toBeNull();
+  });
+});
+
+describe('SearchView replace all', () => {
+  afterEach(() => {
+    replaceMock.showReplace = false;
+    replaceMock.replaceQuery = '';
+    replaceMock.handleReplace = null;
+  });
+
+  it('asks for a second click before replacing across files', async () => {
+    const handleReplace = vi.fn().mockResolvedValue(undefined);
+    replaceMock.showReplace = true;
+    replaceMock.replaceQuery = 'onClick';
+    replaceMock.handleReplace = handleReplace;
+    await renderSearch();
+
+    const btn = container!.querySelector('.search-replace-btn') as HTMLButtonElement;
+    expect(btn.textContent).toBe('Replace all');
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(handleReplace).not.toHaveBeenCalled();
+    expect(btn.textContent).toBe('Confirm');
+    expect(btn.title).toContain('2 file(s)');
+
+    await act(async () => {
+      btn.click();
+    });
+    expect(handleReplace).toHaveBeenCalledTimes(1);
+    expect(btn.textContent).toBe('Replace all');
   });
 });

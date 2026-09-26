@@ -32,37 +32,41 @@ const fail = (stderr: string, exitCode = 1): ShellGitResult => ({ stdout: '', st
 
 // ── Subcommand formatting ────────────────────────────────────────────────
 
-/** git status — short-format labels then long-format hint. */
+/** git status — git's long format by default, `-s`/`--short` for XY lines. */
 async function runStatus(args: string[]): Promise<ShellGitResult> {
   const short = args.includes('-s') || args.includes('--short');
-  const { staged, unstaged } = await gitStatus();
+  const { staged, unstaged, untracked = [] } = await gitStatus();
 
-  const lines: string[] = [];
-  const emit = (list: Array<{ path: string; status: string }>, stagedCol: string) => {
-    for (const f of list) {
-      if (short) {
-        lines.push(`${stagedCol}${statusChar(f.status)} ${f.path}`);
-      } else {
-        lines.push(`${stagedCol}${statusChar(f.status)} ${describeStatus(f.status)}:   ${f.path}`);
-      }
-    }
-  };
-
-  emit(staged, ' ');
-  emit(unstaged, ' ');
-
-  if (lines.length === 0) {
-    return ok(short ? '' : 'On branch main\nnothing to commit, working tree clean\n');
+  if (short) {
+    const lines = [
+      ...staged.map((f) => `${statusChar(f.status)}  ${f.path}`),
+      ...unstaged.map((f) => ` ${statusChar(f.status)} ${f.path}`),
+      ...untracked.map((f) => `?? ${f.path}`),
+    ];
+    return ok(lines.length ? lines.join('\n') + '\n' : '');
   }
-  if (short) return ok(lines.join('\n') + '\n');
-  return ok(
-    'On branch main\nChanges to be committed:\n  (use "git restore --staged <file>…" to unstage)\n' +
-      staged.map((f) => `\t${statusChar(f.status)}  ${f.path}`).join('\n') +
-      (staged.length ? '\n' : '') +
-      'Changes not staged for commit:\n' +
-      unstaged.map((f) => `\t${statusChar(f.status)}  ${f.path}`).join('\n') +
-      (unstaged.length ? '\n' : ''),
-  );
+
+  const branch = (await gitBranch()).find((b) => b.current)?.name;
+  const sections: string[] = [branch ? `On branch ${branch}` : 'Not currently on any branch.'];
+  const listed = (list: Array<{ path: string; status: string }>) =>
+    list.map((f) => `\t${describeStatus(f.status)}:   ${f.path}`).join('\n');
+  if (staged.length > 0) {
+    sections.push('Changes to be committed:\n  (use "git restore --staged <file>..." to unstage)\n' + listed(staged));
+  }
+  if (unstaged.length > 0) {
+    sections.push(
+      'Changes not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n' +
+        listed(unstaged),
+    );
+  }
+  if (untracked.length > 0) {
+    sections.push(
+      'Untracked files:\n  (use "git add <file>..." to include in what will be committed)\n' +
+        untracked.map((f) => `\t${f.path}`).join('\n'),
+    );
+  }
+  if (sections.length === 1) sections.push('nothing to commit, working tree clean');
+  return ok(sections.join('\n\n') + '\n');
 }
 
 function statusChar(status: string): string {

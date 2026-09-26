@@ -81,6 +81,12 @@ export interface PullOptions {
   author?: GitAuthor;
 }
 
+// isomorphic-git reads username/password (sent as Basic auth); GitHub takes
+// a token as the password with any username.
+function tokenAuth(token: string | undefined): GitAuth {
+  return { username: 'x-access-token', password: token ?? '' };
+}
+
 class GitClient {
   private fs: LightningFS;
   private pfs: LightningFS['promises'];
@@ -132,7 +138,7 @@ class GitClient {
         singleBranch: opts.singleBranch ?? true,
         ref: opts.branch ?? 'main',
         corsProxy: gitCorsProxy(),
-        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
         onProgress: opts.onProgress
           ? ({ phase, loaded, total }) => opts.onProgress!({ phase, loaded, total })
           : undefined,
@@ -151,7 +157,7 @@ class GitClient {
         ref: opts.branch,
         singleBranch: true,
         author: opts.author,
-        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
   }
@@ -167,7 +173,7 @@ class GitClient {
         remote: opts.remote ?? 'origin',
         ref: opts.branch,
         force: opts.force ?? false,
-        onAuth: () => Promise.resolve({ token: opts.token } as GitAuth),
+        onAuth: () => Promise.resolve(tokenAuth(opts.token)),
       });
     });
   }

@@ -28,7 +28,11 @@ const {
   mockGitPush,
   mockReadBlob,
   mockFsReadFile,
+  mockCurrentBranch,
+  mockListRemotes,
 } = vi.hoisted(() => ({
+  mockCurrentBranch: vi.fn(),
+  mockListRemotes: vi.fn(),
   mockReadBlob: vi.fn(),
   mockFsReadFile: vi.fn(),
   mockGitAdd: vi.fn(),
@@ -64,7 +68,8 @@ vi.mock('isomorphic-git', () => ({
   push: mockGitPush,
   setConfig: vi.fn(),
   listBranches: vi.fn().mockResolvedValue([]),
-  currentBranch: vi.fn().mockResolvedValue(null),
+  currentBranch: (...args: unknown[]) => mockCurrentBranch(...args),
+  listRemotes: (...args: unknown[]) => mockListRemotes(...args),
   checkout: vi.fn(),
   clone: vi.fn(),
   resolveRef: vi.fn().mockResolvedValue('head-oid'),
@@ -80,6 +85,8 @@ import { configureBrowserGit, executeGitOp, __resetBrowserGitForTest } from './b
 describe('executeGitOp dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCurrentBranch.mockResolvedValue(null);
+    mockListRemotes.mockResolvedValue([{ remote: 'origin', url: 'https://github.com/o/n.git' }]);
     // Provide a no-op VFS bridge so ensureInitialized/syncVfsToGitFs succeed.
     configureBrowserGit({
       name: 'Test',
@@ -176,6 +183,23 @@ describe('executeGitOp dispatch', () => {
     it('push delegates to gitPush', async () => {
       await executeGitOp('push', { remote: 'origin', branch: 'main' });
       expect(mockGitPush).toHaveBeenCalled();
+    });
+
+    it('push defaults to the current branch, not "main"', async () => {
+      mockCurrentBranch.mockResolvedValue('master');
+      await executeGitOp('push', {});
+      expect(mockGitPush).toHaveBeenCalledWith(expect.objectContaining({ remote: 'origin', ref: 'master' }));
+    });
+
+    it('push explains a missing remote instead of failing inside git', async () => {
+      mockListRemotes.mockResolvedValue([]);
+      await expect(executeGitOp('push', {})).rejects.toThrow(/no "origin" remote/);
+      expect(mockGitPush).not.toHaveBeenCalled();
+    });
+
+    it('push explains a GitHub auth rejection', async () => {
+      mockGitPush.mockRejectedValueOnce(Object.assign(new Error('HTTP Error: 403'), { data: { statusCode: 403 } }));
+      await expect(executeGitOp('push', {})).rejects.toThrow(/GitHub rejected the push/);
     });
   });
 

@@ -193,9 +193,14 @@ async function syncGitFsToVfs() {
   return files.length;
 }
 
+/** GitHub's git endpoints take a token as Basic auth, not Bearer. */
+function gitHubTokenAuth(token: string): string {
+  return `Basic ${btoa(`x-access-token:${token}`)}`;
+}
+
 function getAuth() {
   if (config?.token) {
-    return { headers: { Authorization: `Bearer ${config.token}` } };
+    return { headers: { Authorization: gitHubTokenAuth(config.token) } };
   }
   return undefined;
 }
@@ -447,7 +452,7 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   // isomorphic-git as a request header — it is never stored or logged here.
   const headers: Record<string, string> = { ...(getAuth()?.headers ?? {}) };
   if (opts?.token) {
-    headers.Authorization = `Bearer ${opts.token}`;
+    headers.Authorization = gitHubTokenAuth(opts.token);
   }
   await git.clone({
     fs,
@@ -470,18 +475,43 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   return { message: 'ok', url, branch, files };
 }
 
-export async function gitPush(remote = 'origin', branch = 'main') {
+export async function gitPush(remote = 'origin', branch?: string) {
   await ensureInitialized();
-  await git.push({
-    fs: getFs().promises,
-    http,
-    corsProxy: gitCorsProxy(),
-    dir: REPO_DIR,
-    remote,
-    ref: branch,
-    headers: getAuth()?.headers,
-  });
+  const fs = getFs().promises;
+  const remotes = await git.listRemotes({ fs, dir: REPO_DIR });
+  if (!remotes.some((r) => r.remote === remote)) {
+    throw new Error(
+      `This repository has no "${remote}" remote to push to. Add the repository from GitHub (Files › Add repository) to push.`,
+    );
+  }
+  const ref = branch || (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
+  try {
+    await git.push({
+      fs,
+      http,
+      corsProxy: gitCorsProxy(),
+      dir: REPO_DIR,
+      remote,
+      ref,
+      headers: getAuth()?.headers,
+    });
+  } catch (err) {
+    throw new Error(describePushError(err));
+  }
   return { message: 'ok', pushed: true };
+}
+
+/** Plain-language reason for a failed push; GitHub's auth failures surface as HTTP 401/403. */
+function describePushError(err: unknown): string {
+  const status = (err as { data?: { statusCode?: number } })?.data?.statusCode;
+  if (status === 401 || status === 403) {
+    return 'GitHub rejected the push. Connect a GitHub account with write access to this repository (Settings › GitHub), then try again.';
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  if (/not a simple fast-forward|rejected/i.test(message)) {
+    return "The remote has commits you don't have yet. Pull is not available in the browser; run the push from a cloud container instead.";
+  }
+  return `Push failed: ${message}`;
 }
 
 export async function gitInit() {

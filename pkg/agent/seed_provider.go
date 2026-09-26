@@ -5,7 +5,6 @@ package agent
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -522,28 +521,11 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 	return nil
 }
 
-// classifyTerminal types errors that must end the turn instead of being
-// retried. HTTP 402 (out of credits, payment required) cannot succeed on
-// retry, but seed v1.5.2 classifies it as transient, and its non-streaming
-// retry loop only fails fast on auth and context errors — a ClientError is
-// retried too. An AuthError is the typed error that loop honours; the
-// message keeps the 402 text for display.
-func (sp *sproutProvider) classifyTerminal(err error) error {
-	if err == nil || extractHTTPStatusCode(err.Error()) != http.StatusPaymentRequired {
-		return err
-	}
-	provider := ""
-	if sp.agent != nil {
-		provider = sp.agent.GetProvider()
-	}
-	return &core.AuthError{Provider: provider, Wrapped: err}
-}
-
 // Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	resp, err := sp.doChatWithRetry(ctx, req)
 	sp.fireSteerFlushHook()
-	return resp, sp.classifyTerminal(err)
+	return resp, err
 }
 
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
@@ -577,7 +559,6 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
 	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback)
 	sp.fireSteerFlushHook()
-	err = sp.classifyTerminal(err)
 	if err != nil {
 		handler.OnError(err)
 		return err

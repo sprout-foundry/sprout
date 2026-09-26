@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sprout-foundry/sprout/pkg/design"
 )
 
 // ---------------------------------------------------------------------------
@@ -285,6 +287,38 @@ func TestBuildMermaidHTML_EscapesClosingScriptTag(t *testing.T) {
 	require.NotContains(t, html, "</script><script>alert(1)</script>",
 		"the embedded source must not be able to inject a script tag")
 	require.Contains(t, html, `\u003c/script`)
+}
+
+// TestBuildMermaidHTML_RendersDerivedFlowExport pins the §9c canvas contract
+// at the render-page layer: the derived .mmd (banner comments, quoted node
+// labels, |label| triggers) embeds into the standalone mermaid page unchanged
+// — no new renderer, the vendored bundle consumes it as ordinary mermaid.
+func TestBuildMermaidHTML_RendersDerivedFlowExport(t *testing.T) {
+	t.Parallel()
+	src := &design.FlowSource{
+		Name: "sign-up",
+		Steps: []design.FlowStep{
+			{ID: "s1", Label: "Start", Screen: "login"},
+			{ID: "s2", Label: "Verify", Screen: "login", Trigger: "submit code", Next: "s2"},
+		},
+	}
+	screens := &design.ScreenIndexDoc{Screens: []design.ScreenIndexEntry{
+		{Stem: "login", Nav: []design.ScreenIndexNav{{To: "help", Trigger: "tap Forgot"}}},
+		{Stem: "help"},
+	}}
+	mmd := string(design.RenderFlowMMD(design.DeriveFlowMMD(src, screens), "fnv1a64:0123456789abcdef"))
+
+	html, err := buildMermaidHTML(mmd, "")
+	require.NoError(t, err)
+	// The whole derived source rides the page inside the JSON string: the
+	// banner, the declaration, and every label verbatim. (json.Marshal
+	// escapes `<`/`>` per its HTML-safe default, so the arrows are
+	// `\u003e` on the page — mermaid reads the decoded JSON string.)
+	require.Contains(t, html, `flow-source-hash: fnv1a64:0123456789abcdef`)
+	require.Contains(t, html, `flowchart TD`)
+	require.Contains(t, html, `s1[\"Start\"]`, "quoted node labels survive the JSON embed")
+	require.Contains(t, html, `|submit code|`, "|label| triggers ride verbatim")
+	require.Contains(t, html, `|tap Forgot|`)
 }
 
 // ---------------------------------------------------------------------------

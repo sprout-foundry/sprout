@@ -100,6 +100,7 @@ vi.mock('../services/clientSession', () => ({
 
 vi.mock('../bootstrapAdapter', () => ({
   fetchRuntimeConfig: async () => ({ appMode: 'cloud', user: { id: 'u' } }),
+  getBootstrapUser: () => ({ id: 'u', email: 'dev@example.com', tier: 'free' }),
 }));
 
 // Cloud-mode dynamic imports the hook reaches (git + agent-dispatcher);
@@ -298,7 +299,9 @@ describe('useAppInitialization — R-4 git guard INACTIVE (default build)', () =
     // Block 1: browser-native git configured with the VFS callbacks.
     expect(configureBrowserGitMock).toHaveBeenCalledTimes(1);
     const gitConfig = configureBrowserGitMock.mock.calls[0][0] as Record<string, unknown>;
-    expect(gitConfig.name).toBe('Browser IDE');
+    // Commits are authored as the signed-in account.
+    expect(gitConfig.name).toBe('dev');
+    expect(gitConfig.email).toBe('dev@example.com');
     expect(typeof gitConfig.readVfsFiles).toBe('function');
 
     // Block 2: agent git tool bridge (global + the WASM hook install).

@@ -100,6 +100,16 @@
 - **142.3** Server: workspace query gate + `workspace_busy` payload.
   Go unit tests: second-chat query rejected while first runs, released
   after completion, shared-mode unaffected.
+  > **Progress (2026-09-26):** Shipped. `busyChatInWorkspace`
+  > (pkg/webui/chat_sessions.go) is the read-side gate: the shared runner
+  > (api_query_shared.go step 2) rejects a cross-chat submit with
+  > `409 workspace_busy` naming the running chat
+  > (`{error, code, running_chat_id, running_chat_name}` — the 142.1
+  > mode_mismatch wire shape plus the spec's two fields). Same-chat submits
+  > keep the existing `query_in_progress` semantics; release is the existing
+  > query_completed lifecycle (no new release action). Tests in
+  > chat_sessions_mode_test.go: second-chat rejected, released after
+  > completion, same-chat unaffected.
 - **142.4** Client: busy notice + send-anyway queueing. Vitest: notice on
   409, queue drains after completion, cancel path clears.
 - **142.5** Design agent panel header (name + scoped New Chat). Vitest +

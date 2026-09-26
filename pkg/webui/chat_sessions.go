@@ -634,6 +634,35 @@ func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	return cs.ActiveQuery
 }
 
+// busyChatInWorkspace returns another chat in this client context that has a
+// query running (SP-142 §3), or nil when the workspace is free. The chats in
+// one client context share one workspace file tree, so a query from a second
+// chat must serialize behind the running one. excludeChatID ("" = the active
+// chat) is never reported — a same-chat submit follows the existing
+// query_in_progress semantics instead. Read-side gate: callers check this at
+// submit time; release is the existing query_completed lifecycle (no explicit
+// release action). Caller holds ws.mutex.
+func (cc *webClientContext) busyChatInWorkspace(excludeChatID string) *chatSession {
+	if cc.ChatSessions == nil {
+		return nil
+	}
+	if excludeChatID == "" {
+		excludeChatID = cc.DefaultChatID
+	}
+	for id, cs := range cc.ChatSessions {
+		if cs == nil || id == excludeChatID {
+			continue
+		}
+		cs.mu.RLock()
+		active := cs.ActiveQuery
+		cs.mu.RUnlock()
+		if active {
+			return cs
+		}
+	}
+	return nil
+}
+
 // setChatQueryActive sets the active query state for a specific chat and
 // keeps the top-level ActiveQuery in sync (backward compat).
 func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query string) {

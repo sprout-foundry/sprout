@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -204,6 +205,32 @@ func (ws *ReactWebServer) runChatQuery(
 	if ctx.hasActiveQueryForChat(chatID) {
 		ws.mutex.Unlock()
 		writeJSONErr(w, http.StatusConflict, "query_in_progress", "A query is already running for this chat")
+		return
+	}
+	// Workspace gate (SP-142 §3): one workspace, one runner. The chats of a
+	// client context share the same file tree, so a query from another chat
+	// must not start concurrently — the client gets a machine-readable busy
+	// payload naming the running chat so it can offer send-anyway queueing.
+	// The wire mirrors the 142.1 mode_mismatch 409 (error/code) plus the
+	// running-chat fields the spec names.
+	if busy := ctx.busyChatInWorkspace(chatID); busy != nil {
+		busy.mu.RLock()
+		runningChatID := busy.ID
+		runningChatName := busy.Name
+		busy.mu.RUnlock()
+		ws.mutex.Unlock()
+		ws.log().Info("workspace busy, rejecting cross-chat query",
+			slog.String("chat_id", chatID),
+			slog.String("running_chat_id", runningChatID),
+		)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":             fmt.Sprintf("Another chat (%s) is working in this workspace", runningChatName),
+			"code":              "workspace_busy",
+			"running_chat_id":   runningChatID,
+			"running_chat_name": runningChatName,
+		})
 		return
 	}
 	// Atomically mark the query as active while still holding the lock so

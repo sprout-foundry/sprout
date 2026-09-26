@@ -5,7 +5,7 @@ import type { HotkeyEntry } from '../services/api/types/settings';
  * complete set in browser (cloud) mode, where there is no daemon to hold a
  * user config or apply presets.
  */
-export const BROWSER_DEFAULT_HOTKEYS: HotkeyEntry[] = ([] = [
+export const BROWSER_DEFAULT_HOTKEYS: HotkeyEntry[] = [
   { key: 'Ctrl+1', command_id: 'focus_tab_1' },
   { key: 'Cmd+1', command_id: 'focus_tab_1' },
   { key: 'Ctrl+2', command_id: 'focus_tab_2' },
@@ -45,4 +45,4 @@ export const BROWSER_DEFAULT_HOTKEYS: HotkeyEntry[] = ([] = [
   { key: 'Alt+1', command_id: 'switch_to_editor', global: false },
   { key: 'Alt+2', command_id: 'switch_to_chat', global: false },
   { key: 'Alt+3', command_id: 'switch_to_git', global: false },
-]);
+];

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { AgentEscalationBridge } from './AgentEscalationBridge';
 
 vi.mock('../config/mode', () => ({ isCloud: true, mode: 'cloud' }));
@@ -14,7 +14,6 @@ type Bridge = { run: (c: string) => Promise<{ ran: boolean; stdout?: string; exi
 const bridge = () => (globalThis as unknown as { __sproutEscalate?: Bridge }).__sproutEscalate;
 
 afterEach(() => {
-  cleanup();
   runTxnCommand.mockReset();
   window.localStorage.clear();
 });

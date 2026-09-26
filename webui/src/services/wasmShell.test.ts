@@ -525,7 +525,9 @@ describe('listDir wire format', () => {
   }
 
   it('reads the bare entry array the WASM export returns', async () => {
-    installWasmListDir('[{"name":"src","type":"dir","size":0,"mode":2147484141},{"name":"go.mod","type":"file","size":21,"mode":420}]');
+    installWasmListDir(
+      '[{"name":"src","type":"dir","size":0,"mode":2147484141},{"name":"go.mod","type":"file","size":21,"mode":420}]',
+    );
     const shell = await initWasmShell();
     expect(shell.listDir('/')).toEqual({
       entries: [

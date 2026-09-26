@@ -215,7 +215,7 @@ function ManagedModelSection(): JSX.Element {
         The agent runs on Sprout Foundry&apos;s managed model, which picks a model for each request. Usage is billed in
         platform credits.
       </p>
-      <a className="settings-link-btn" href={platformHref('/#/billing')} target="_blank" rel="noopener noreferrer">
+      <a className="settings-link-btn" href={platformHref('/#/account/billing')} target="_blank" rel="noopener noreferrer">
         View usage and billing
       </a>
     </div>

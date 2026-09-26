@@ -31,7 +31,9 @@ const {
   mockCurrentBranch,
   mockListRemotes,
   mockGitBranch,
+  mockFastForward,
 } = vi.hoisted(() => ({
+  mockFastForward: vi.fn(),
   mockGitBranch: vi.fn(),
   mockCurrentBranch: vi.fn(),
   mockListRemotes: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock('isomorphic-git', () => ({
   currentBranch: (...args: unknown[]) => mockCurrentBranch(...args),
   listRemotes: (...args: unknown[]) => mockListRemotes(...args),
   branch: (...args: unknown[]) => mockGitBranch(...args),
+  fastForward: (...args: unknown[]) => mockFastForward(...args),
   checkout: vi.fn(),
   clone: vi.fn(),
   resolveRef: vi.fn().mockResolvedValue('head-oid'),
@@ -208,6 +211,19 @@ describe('executeGitOp dispatch', () => {
       expect(mockGitBranch).toHaveBeenCalledWith(expect.objectContaining({ ref: 'feature/x', checkout: true }));
     });
 
+    it('pull fast-forwards a clean working tree through the proxy-aware client', async () => {
+      mockGitStatusMatrix.mockResolvedValue([]);
+      mockCurrentBranch.mockResolvedValue('master');
+      await expect(executeGitOp('pull', {})).resolves.toEqual({ message: 'ok', pulled: true });
+      expect(mockFastForward).toHaveBeenCalledWith(expect.objectContaining({ ref: 'master', singleBranch: true }));
+    });
+
+    it('pull refuses to run over uncommitted changes', async () => {
+      mockGitStatusMatrix.mockResolvedValue([['a.txt', 1, 2, 1]]);
+      await expect(executeGitOp('pull', {})).rejects.toThrow(/Commit or undo your changes/);
+      expect(mockFastForward).not.toHaveBeenCalled();
+    });
+
     it('push explains a GitHub auth rejection', async () => {
       mockGitPush.mockRejectedValueOnce(Object.assign(new Error('HTTP Error: 403'), { data: { statusCode: 403 } }));
       await expect(executeGitOp('push', {})).rejects.toThrow(/GitHub rejected the push/);
@@ -223,7 +239,6 @@ describe('executeGitOp dispatch', () => {
       'unstage-all',
       'reset',
       'discard',
-      'pull',
       'revert',
       'commit-message',
       'pull-request',

@@ -55,6 +55,11 @@ export interface SproutStore {
 export interface WasmShell {
   /** Execute a shell command string. */
   executeCommand(input: string): WasmShellResult;
+  /**
+   * Execute off the JS event loop. Required for commands backed by JS
+   * Promises (git): the synchronous call deadlocks on them.
+   */
+  executeCommandAsync?(input: string): Promise<WasmShellResult>;
   /** Tab-complete a partial command. */
   autoComplete(input: string): WasmCompletionResult;
   /** Get the current working directory. */
@@ -215,6 +220,8 @@ const debug = (...args: unknown[]) => {
 export interface SproutWasmAPI {
   init(config?: string): string;
   executeCommand(input: string): string;
+  /** Absent in binaries built before the async export existed. */
+  executeCommandAsync?(input: string): Promise<string>;
   autoComplete(input: string): string;
   getCwd(): string;
   changeDir(dir: string): string;
@@ -395,6 +402,16 @@ export async function initWasmShell(config?: {
     const shell: WasmShell = {
       executeCommand(input: string): WasmShellResult {
         const json = wasm.executeCommand(input);
+        return safeJsonParse<WasmShellResult>(json, {
+          stdout: '',
+          stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
+          exitCode: 1,
+        });
+      },
+
+      async executeCommandAsync(input: string): Promise<WasmShellResult> {
+        if (!wasm.executeCommandAsync) return shell.executeCommand(input);
+        const json = await wasm.executeCommandAsync(input);
         return safeJsonParse<WasmShellResult>(json, {
           stdout: '',
           stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,

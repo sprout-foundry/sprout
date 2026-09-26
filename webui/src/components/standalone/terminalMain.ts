@@ -52,7 +52,9 @@ function post(type: string, payload: Record<string, unknown> = {}) {
   window.parent?.postMessage({ source: 'sprout-terminal', type, ...payload }, '*');
 }
 
-function execute(line: string) {
+let busy = false;
+
+async function execute(line: string) {
   const command = line.trim();
   if (!command) {
     prompt();
@@ -65,7 +67,13 @@ function execute(line: string) {
     prompt();
     return;
   }
-  const result = wasm.executeCommand(command);
+  busy = true;
+  let result;
+  try {
+    result = wasm.executeCommandAsync ? await wasm.executeCommandAsync(command) : wasm.executeCommand(command);
+  } finally {
+    busy = false;
+  }
   if (result.stdout) term.write(`\r\n${result.stdout.replace(/\n/g, '\r\n')}`);
   if (result.stderr) term.write(`\r\n\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
   post('command', { command, exitCode: result.exitCode });
@@ -73,11 +81,11 @@ function execute(line: string) {
 }
 
 term.onData((data) => {
-  if (!wasm) return;
+  if (!wasm || busy) return;
   switch (data) {
     case '\r': // Enter
       term.write('\r\n');
-      execute(inputBuffer);
+      void execute(inputBuffer);
       inputBuffer = '';
       break;
     case '\u007f': // Backspace

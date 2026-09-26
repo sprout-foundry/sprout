@@ -2,19 +2,24 @@
 
 package localmodel
 
+// LocalProvider implements api.ClientInterface by calling the MLX model
+// engine directly — no HTTP, no separate process, no serialization. This
+// file holds the provider type, lifecycle (load / set / get model), the TPS
+// stats, and the surface methods (CheckConnection, ListModels, the vision
+// stubs, Close). The chat engine lives in local_provider_chat.go; prompt
+// building in local_provider_prompt.go; tool-call parsing + tool-prompt
+// formatting in local_provider_toolcalls.go.
+
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/sprout-foundry/sinter/llm"
 	"github.com/sprout-foundry/sinter/llm/catalog"
@@ -284,221 +289,6 @@ func logMLXMemory(tag string) {
 		float64(stats.Limit)/1048576, float64(stats.CacheLimit)/1048576)
 }
 
-func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	model, err := p.ensureLoaded()
-	if err != nil {
-		return nil, fmt.Errorf("local provider: %w", err)
-	}
-	TouchActivity()
-	warmSystemPrefix(model, messages, tools)
-
-	prompt := buildPrompt(model, messages, tools, !disableThinking)
-	cfg := llm.DefaultGenerateConfig()
-	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
-	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
-	// novel prose from wasted candidate search.
-	cfg.PromptLookupMaxDrafts = 6
-	// Real output budget against the context window — see
-	// localMaxOutputTokens. The 512 default truncated real turns
-	// mid-thought while reporting a clean "stop".
-	cfg.MaxTokens = localMaxOutputTokens(model, prompt)
-	// MaxMTPDrafts is deliberately left disabled (0). It was enabled once
-	// tonight after TestMTPParityLiveModel passed cleanly against a correct
-	// (non-pipelined) baseline on 4 short synthetic prompts — but a real
-	// `sprout commit` run on a real diff produced a commit message with
-	// literal chat-template tokens ("assistant", "<|im_start|>user") and
-	// duplicated text leaking into it. Root-caused one real bug in the MTP
-	// decode loop (a stop token landing mid-batch only broke the inner
-	// accumulation loop, not the outer one — fixed, see generateLocked's
-	// mtpOuter label) but the corruption persisted after that fix on the
-	// same real commit, and confirmed the model's EOSTokenID resolves
-	// correctly (248046, matching tokenizer.json's <|im_end|>) so it isn't
-	// simple EOS misconfiguration either. Short synthetic prompts (capped at
-	// 24-40 tokens) apparently never exercise whatever the remaining failure
-	// mode is — real, longer, natural-stopping generations do. Needs a live
-	// reproduction with full SPROUT_LOCAL_DEBUG output before re-enabling.
-	//
-	// Greedy decoding: DefaultGenerateConfig's Temperature=0.6/RepetitionPenalty=1.1
-	// disable the on-device GPU argmax path (see Model.generateLocked's
-	// useGPUArgmax gate), forcing every decode step to transfer the full
-	// vocab logits vector (250K+ floats) to the CPU for sampling — a fixed
-	// per-token tax that made local decode 10-30x slower than mlx-lm's
-	// greedy-by-default CLI on the same model. It also silently disabled
-	// PromptLookupMaxDrafts above, which requires useGPUArgmax. Zeroing both
-	// here restores the fast path; deterministic output is also simply
-	// correct for tool-calling and commit-message generation.
-	cfg.Temperature = 0
-	cfg.RepetitionPenalty = 0
-
-	logMLXMemory("chat-start")
-	start := time.Now()
-	// Capture the model's thinking trace (preserve-thinking families emit
-	// one when thinking is enabled; the closed-cue families normally don't).
-	// It lands on the response Message as ReasoningContent — the agent loop
-	// persists it in history and buildPrompt replays it on later turns.
-	var trace strings.Builder
-	cfg.ReasoningFn = func(chunk string) { trace.WriteString(chunk) }
-	text, err := model.GenerateText(ctx, prompt, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("generation failed: %w", err)
-	}
-	elapsed := time.Since(start).Seconds()
-
-	content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, text)
-	promptTokens := len(model.TokenizerEncode(prompt))
-	logLocalExchange("chat", prompt, text, promptTokens, len(toolCalls))
-	completionTokens := len(model.TokenizerEncode(text))
-	p.recordTPS(completionTokens, elapsed)
-	logLocalTiming("chat", promptTokens, completionTokens, elapsed)
-
-	finishReason := localFinishReason(completionTokens, cfg.MaxTokens, toolCalls)
-
-	resp := &api.ChatResponse{
-		ID:     "chatcmpl-local",
-		Object: "chat.completion",
-		Model:  p.modelID,
-	}
-	resp.Choices = []api.Choice{{
-		Index:        0,
-		FinishReason: finishReason,
-	}}
-	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.Content = content
-	resp.Choices[0].Message.ReasoningContent = strings.TrimSpace(trace.String())
-	resp.Choices[0].Message.ToolCalls = toolCalls
-	if len(toolCalls) > 0 {
-		resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: text}
-	}
-	resp.Usage = api.ChatUsage{
-		PromptTokens:     promptTokens,
-		CompletionTokens: completionTokens,
-		TotalTokens:      promptTokens + completionTokens,
-	}
-	return resp, nil
-}
-
-func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
-	model, err := p.ensureLoaded()
-	if err != nil {
-		return nil, fmt.Errorf("local provider: %w", err)
-	}
-	TouchActivity()
-	warmSystemPrefix(model, messages, tools)
-
-	prompt := buildPrompt(model, messages, tools, !disableThinking)
-	cfg := llm.DefaultGenerateConfig()
-	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
-	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
-	// novel prose from wasted candidate search.
-	cfg.PromptLookupMaxDrafts = 6
-	// Real output budget against the context window — see
-	// localMaxOutputTokens. The 512 default truncated real turns
-	// mid-thought while reporting a clean "stop".
-	cfg.MaxTokens = localMaxOutputTokens(model, prompt)
-	// MaxMTPDrafts is deliberately left disabled — see the matching comment
-	// in SendChatRequest (real commit-message output corrupted with leaked
-	// chat-template tokens even after fixing a real bug in the MTP decode
-	// loop's stop handling).
-	cfg.Temperature = 0
-	cfg.RepetitionPenalty = 0
-
-	// Thinking-trace capture: preserve-thinking families emit a
-	// <think>...</think> block before the answer when thinking is enabled.
-	// Trace chunks stream to the caller under the "reasoning" content type
-	// (the agent loop routes them to the reasoning buffer/UI) and land on
-	// the response Message as ReasoningContent for history persistence.
-	hasTools := len(tools) > 0
-	var trace strings.Builder
-	cfg.ReasoningFn = func(chunk string) {
-		trace.WriteString(chunk)
-		if !hasTools && callback != nil {
-			callback(chunk, "reasoning")
-		}
-	}
-
-	var outputBuf strings.Builder
-	// generatedTokens counts every decoded token (including filtered
-	// thinking/EOS markers) so cap exhaustion can be distinguished from a
-	// natural stop: hitting cfg.MaxTokens without EOS is a truncation and
-	// must be reported as finish_reason "length", not "stop".
-	generatedTokens := 0
-	logMLXMemory("stream-start")
-	start := time.Now()
-
-	err = model.Generate(ctx, prompt, cfg, func(tokenID int) {
-		generatedTokens++
-		tok := model.DecodeToken(tokenID)
-		if hasTools {
-			outputBuf.WriteString(tok)
-			return
-		}
-		if callback != nil {
-			callback(tok, "content")
-		}
-	})
-	if err != nil {
-		return nil, fmt.Errorf("generation failed: %w", err)
-	}
-	elapsed := time.Since(start).Seconds()
-
-	if hasTools {
-		content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, outputBuf.String())
-		promptTokens := len(model.TokenizerEncode(prompt))
-		logLocalExchange("stream", prompt, outputBuf.String(), promptTokens, len(toolCalls))
-		if content != "" && callback != nil {
-			callback(content, "content")
-		}
-		completionTokens := len(model.TokenizerEncode(outputBuf.String()))
-		p.recordTPS(completionTokens, elapsed)
-		logLocalTiming("stream", promptTokens, completionTokens, elapsed)
-		finishReason := localFinishReason(generatedTokens, cfg.MaxTokens, toolCalls)
-		resp := &api.ChatResponse{
-			ID:     "chatcmpl-local",
-			Object: "chat.completion",
-			Model:  p.modelID,
-		}
-		resp.Choices = []api.Choice{{Index: 0, FinishReason: finishReason}}
-		resp.Choices[0].Message.Role = "assistant"
-		resp.Choices[0].Message.Content = content
-		resp.Choices[0].Message.ReasoningContent = strings.TrimSpace(trace.String())
-		resp.Choices[0].Message.ToolCalls = toolCalls
-		if len(toolCalls) > 0 {
-			resp.Choices[0].Message.Meta = map[string]string{localRawContentMetaKey: outputBuf.String()}
-		}
-		return resp, nil
-	}
-
-	return &api.ChatResponse{
-		ID:     "chatcmpl-local",
-		Object: "chat.completion",
-		Model:  p.modelID,
-		Choices: []api.Choice{{
-			Index:        0,
-			FinishReason: localFinishReason(generatedTokens, cfg.MaxTokens, nil),
-			Message: api.Message{
-				Role:             "assistant",
-				Content:          outputBuf.String(),
-				ReasoningContent: strings.TrimSpace(trace.String()),
-			},
-		}},
-	}, nil
-}
-
-// localFinishReason reports why generation ended. "tool_calls" when the
-// model emitted tool calls; "length" when the output hit the MaxTokens
-// budget without a natural stop (truncation — the agent loop and the user
-// deserve to know the model ran out of room, not that it "finished");
-// "stop" only for a genuine EOS termination.
-func localFinishReason(generated, maxTokens int, toolCalls []api.ToolCall) string {
-	if len(toolCalls) > 0 {
-		return "tool_calls"
-	}
-	if maxTokens > 0 && generated >= maxTokens {
-		return "length"
-	}
-	return "stop"
-}
-
 func (p *LocalProvider) CheckConnection() error {
 	_, err := p.ensureLoaded()
 	return err
@@ -559,11 +349,13 @@ func (p *LocalProvider) isModelLoaded() bool {
 	defer p.mu.Unlock()
 	return p.model != nil
 }
+
 func (p *LocalProvider) loadedModelDir() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.modelDir
 }
+
 func (p *LocalProvider) loadedModelID() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -593,16 +385,21 @@ func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error)
 }
 
 func (p *LocalProvider) SupportsVision() bool { return false }
+
 func (p *LocalProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
+
 func (p *LocalProvider) GetVisionModel() string { return "" }
+
 func (p *LocalProvider) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("local provider does not support vision")
 }
 
-func (p *LocalProvider) GetLastTPS() float64    { return float64(p.lastTPS.Load()) / 1000.0 }
+func (p *LocalProvider) GetLastTPS() float64 { return float64(p.lastTPS.Load()) / 1000.0 }
+
 func (p *LocalProvider) GetAverageTPS() float64 { return float64(p.avgTPS.Load()) / 1000.0 }
+
 func (p *LocalProvider) GetTPSStats() map[string]float64 {
 	return map[string]float64{
 		"last":         p.GetLastTPS(),
@@ -610,6 +407,7 @@ func (p *LocalProvider) GetTPSStats() map[string]float64 {
 		"total_tokens": float64(p.totalTokens.Load()),
 	}
 }
+
 func (p *LocalProvider) ResetTPSStats() {
 	p.lastTPS.Store(0)
 	p.avgTPS.Store(0)
@@ -644,454 +442,3 @@ func (p *LocalProvider) Close() error {
 }
 
 // --- prompt building and tool-call parsing ---
-
-// localRawContentMetaKey stashes the model's verbatim generated text on the
-// response Message (via the provider-private Meta field). buildPrompt
-// replays it byte-for-byte on the next turn instead of re-synthesizing the
-// tool-call text from parsed ToolCalls — the reconstructed form doesn't
-// match the model's own (variable) formatting, which broke the KV prefix
-// cache on every multi-turn exchange. Falls back to reconstruction when
-// Meta wasn't carried through (e.g. a session resumed from persisted disk
-// state, where Meta — tagged json:"-" — doesn't survive).
-const localRawContentMetaKey = "sprout_local_raw"
-
-// buildPrompt constructs the full prompt from messages and tools, using
-// the model's native chat template (via FormatChat) and architecture-
-// specific tool prompt formatting. enableThinking selects the generation
-// cue on preserve-thinking template families (Qwen3.8: open <think>\n cue
-// vs the closed empty block); other families render identically either way.
-func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool, enableThinking bool) string {
-	cfg := model.Config()
-	arch := cfg.Arch
-	isGemma := arch == gemmaArch
-
-	// Gemma native format: tool responses are named — resolve each tool
-	// message's ToolCallID to the function name from the preceding
-	// assistant message's ToolCalls.
-	var callNames map[string]string
-	if isGemma {
-		callNames = map[string]string{}
-		for _, m := range messages {
-			for _, tc := range m.ToolCalls {
-				callNames[tc.ID] = tc.Function.Name
-			}
-		}
-	}
-
-	msgs := make([]llm.ChatMessage, len(messages))
-	for i, m := range messages {
-		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent}
-		if m.Role == "tool" {
-			if isGemma {
-				msgs[i] = llm.ChatMessage{Role: "tool", Content: gemmaFormatToolResponse(callNames[m.ToolCallID], m.Content)}
-				continue
-			}
-			msgs[i] = convertToolResponse(arch, m.Content)
-		}
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			if raw, ok := m.Meta[localRawContentMetaKey]; ok {
-				msgs[i].Content = raw
-			} else {
-				msgs[i].Content = formatAssistantToolCalls(arch, m.ToolCalls)
-			}
-		}
-	}
-	if isGemma {
-		// Gemma native: tool declarations live inside the system turn
-		// (FormatChat renders it), not in a prepended Qwen block. The
-		// canonical template opens a system turn whenever tools exist —
-		// synthesize one if the conversation lacks it.
-		if len(tools) > 0 {
-			hasSystem := false
-			for i := range msgs {
-				if msgs[i].Role == "system" {
-					msgs[i].Content += gemmaToolDeclarations(tools)
-					hasSystem = true
-					break
-				}
-			}
-			if !hasSystem {
-				msgs = append([]llm.ChatMessage{{Role: "system", Content: gemmaToolDeclarations(tools)}}, msgs...)
-			}
-		}
-		return model.FormatChat(msgs)
-	}
-	prompt := model.FormatChatThinking(msgs, enableThinking)
-	if len(tools) > 0 {
-		// Some architectures (e.g. LFM2) embed tools into the system
-		// prompt via the chat template; for those, FormatChat already
-		// handles it if we pass tools in the message content. Qwen-based
-		// models need explicit tool-prompt injection before the conversation.
-		if toolPrompt := formatToolsPrompt(arch, tools); toolPrompt != "" {
-			prompt = toolPrompt + prompt
-		}
-	}
-	return prompt
-}
-
-// leadingSystemMessages returns the leading run of system-role messages —
-// the part of a conversation that's identical across otherwise-unrelated
-// conversations sharing the same system prompt (main agent + subagents; see
-// warmSystemPrefix).
-func leadingSystemMessages(messages []api.Message) []api.Message {
-	i := 0
-	for i < len(messages) && messages[i].Role == "system" {
-		i++
-	}
-	return messages[:i]
-}
-
-// staticPromptPrefix mirrors buildPrompt's construction for a leading run
-// of messages, producing a string guaranteed to be an exact prefix of
-// buildPrompt's output for any messages/tools sharing this same leading
-// sequence and tool list (system messages never go through buildPrompt's
-// tool/assistant content rewrites, so no divergence there).
-func staticPromptPrefix(model *llm.Model, sysMsgs []api.Message, tools []api.Tool) string {
-	arch := model.Config().Arch
-	msgs := make([]llm.ChatMessage, len(sysMsgs))
-	for i, m := range sysMsgs {
-		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
-	}
-	if arch == gemmaArch {
-		// Mirror buildPrompt's gemma branch: declarations append to the
-		// system message inside the template (no prepended Qwen block).
-		// No system message + tools can't happen here (leadingSystemMessages
-		// returns empty and warmSystemPrefix bails), so no synthesis.
-		if len(tools) > 0 {
-			for i := range msgs {
-				if msgs[i].Role == "system" {
-					msgs[i].Content += gemmaToolDeclarations(tools)
-					break
-				}
-			}
-		}
-		return model.FormatChatPrefix(msgs)
-	}
-	prefix := model.FormatChatPrefix(msgs)
-	if len(tools) > 0 {
-		if toolPrompt := formatToolsPrompt(arch, tools); toolPrompt != "" {
-			prefix = toolPrompt + prefix
-		}
-	}
-	return prefix
-}
-
-// warmSystemPrefix pre-caches the system prompt + tool definitions shared
-// by many otherwise-unrelated conversations (main agent + subagents), so
-// each one's first turn can delta-prefill instead of paying a full prefill
-// for identical boilerplate. Cheap no-op once warmed — safe to call on
-// every request. Errors are logged, not propagated: this is an optimization,
-// not required for correctness (Generate's own per-conversation caching
-// works fine without it).
-func warmSystemPrefix(model *llm.Model, messages []api.Message, tools []api.Tool) {
-	sysMsgs := leadingSystemMessages(messages)
-	if len(sysMsgs) == 0 {
-		return
-	}
-	if err := model.WarmSystemPrefix(staticPromptPrefix(model, sysMsgs, tools)); err != nil && localDebug() {
-		log.Printf("local: warm system prefix: %v", err)
-	}
-}
-
-// convertToolResponse formats a tool result message for the given architecture.
-func convertToolResponse(arch, content string) llm.ChatMessage {
-	switch arch {
-	case "lfm2":
-		return llm.ChatMessage{Role: "user", Content: content}
-	default:
-		return llm.ChatMessage{Role: "user", Content: "<tool_response>\n" + content + "\n</tool_response>"}
-	}
-}
-
-// formatAssistantToolCalls converts prior assistant tool_calls into the
-// model's native text format for conversation history.
-func formatAssistantToolCalls(arch string, toolCalls []api.ToolCall) string {
-	switch arch {
-	case "lfm2":
-		return formatLFM2AssistantToolCalls(toolCalls)
-	case gemmaArch:
-		return gemmaFormatAssistantToolCalls(toolCalls)
-	default:
-		return formatQwenAssistantToolCalls(toolCalls)
-	}
-}
-
-func formatQwenAssistantToolCalls(toolCalls []api.ToolCall) string {
-	var sb strings.Builder
-	for _, tc := range toolCalls {
-		sb.WriteString("<tool_call>\n<function=")
-		sb.WriteString(tc.Function.Name)
-		sb.WriteString(">\n")
-		var args map[string]interface{}
-		if json.Unmarshal([]byte(tc.Function.Arguments), &args) == nil {
-			keys := make([]string, 0, len(args))
-			for k := range args {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				sb.WriteString("<parameter=")
-				sb.WriteString(k)
-				sb.WriteString(">\n")
-				sb.WriteString(fmt.Sprintf("%v", args[k]))
-				sb.WriteString("\n</parameter>\n")
-			}
-		}
-		sb.WriteString("</function>\n</tool_call>\n")
-	}
-	return sb.String()
-}
-
-func formatLFM2AssistantToolCalls(toolCalls []api.ToolCall) string {
-	var calls []string
-	for _, tc := range toolCalls {
-		var args map[string]interface{}
-		if json.Unmarshal([]byte(tc.Function.Arguments), &args) == nil {
-			keys := make([]string, 0, len(args))
-			for k := range args {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			var pairs []string
-			for _, k := range keys {
-				pairs = append(pairs, fmt.Sprintf("%s=%s", k, lfm2FormatValue(args[k])))
-			}
-			calls = append(calls, fmt.Sprintf("%s(%s)", tc.Function.Name, strings.Join(pairs, ", ")))
-		} else {
-			calls = append(calls, tc.Function.Name+"()")
-		}
-	}
-	return "<|tool_call_start|>[" + strings.Join(calls, ", ") + "]<|tool_call_end|>"
-}
-
-func lfm2FormatValue(v interface{}) string {
-	switch val := v.(type) {
-	case string:
-		return "'" + strings.ReplaceAll(val, "'", "\\'") + "'"
-	default:
-		return fmt.Sprintf("%v", val)
-	}
-}
-
-// parseLocalToolCalls parses tool calls from model output using the
-// architecture-appropriate parser. Returns content with tool calls
-// stripped, and the parsed tool calls in OpenAI format.
-func parseLocalToolCalls(arch, text string) (string, []api.ToolCall) {
-	switch arch {
-	case "lfm2":
-		calls, remaining, ok := api.RecoverLFM2ToolCalls(text)
-		if !ok {
-			return text, nil
-		}
-		return remaining, calls
-	case gemmaArch:
-		return parseGemmaToolCalls(text)
-	default:
-		return parseQwenToolCalls(text)
-	}
-}
-
-// parseQwenToolCalls extracts Qwen-style tool calls from model output.
-//
-// The format is XML-ish and models are inconsistent about whitespace: a call
-// may be spread over several lines or emitted entirely on one line, and the
-// closing </parameter>/</function>/</tool_call> tags may share a line with a
-// parameter value. So this scans the raw text rather than going line by line —
-// a line-oriented parser drops parameters whenever a value shares a line with
-// a closing tag, and misses one-line calls entirely.
-func parseQwenToolCalls(text string) (string, []api.ToolCall) {
-	if !strings.Contains(text, "<tool_call>") && !strings.Contains(text, "<function=") {
-		return text, nil
-	}
-
-	var calls []api.ToolCall
-	var content strings.Builder
-	rest := text
-
-	for {
-		start := strings.Index(rest, "<tool_call>")
-		if start < 0 {
-			break
-		}
-		content.WriteString(rest[:start])
-		rest = rest[start+len("<tool_call>"):]
-
-		body := rest
-		if end := strings.Index(rest, "</tool_call>"); end >= 0 {
-			body = rest[:end]
-			rest = rest[end+len("</tool_call>"):]
-		} else {
-			rest = "" // unterminated: treat the remainder as the call body
-		}
-		if call, ok := parseToolCallBody(body, len(calls)); ok {
-			calls = append(calls, call)
-		}
-	}
-
-	// Some models emit <function=...> without the surrounding <tool_call>.
-	if len(calls) == 0 && strings.Contains(rest, "<function=") {
-		if call, ok := parseToolCallBody(rest, 0); ok {
-			calls = append(calls, call)
-			rest = ""
-		}
-	}
-	content.WriteString(rest)
-
-	return strings.TrimSpace(content.String()), calls
-}
-
-// parseToolCallBody parses a single "<function=name>...<parameter=k>v..." body.
-func parseToolCallBody(body string, idx int) (api.ToolCall, bool) {
-	fnStart := strings.Index(body, "<function=")
-	if fnStart < 0 {
-		return api.ToolCall{}, false
-	}
-	r := body[fnStart+len("<function="):]
-	gt := strings.Index(r, ">")
-	if gt < 0 {
-		return api.ToolCall{}, false
-	}
-	name := strings.TrimSpace(r[:gt])
-	if name == "" {
-		return api.ToolCall{}, false
-	}
-
-	args := make(map[string]interface{})
-	p := r[gt+1:]
-	for {
-		ps := strings.Index(p, "<parameter=")
-		if ps < 0 {
-			break
-		}
-		p = p[ps+len("<parameter="):]
-		pe := strings.Index(p, ">")
-		if pe < 0 {
-			break
-		}
-		key := strings.TrimSpace(p[:pe])
-		p = p[pe+1:]
-
-		// The value runs to </parameter>, or to the next <parameter= when the
-		// model forgets to close, or to </function>, or to the end.
-		valEnd := len(p)
-		for _, marker := range []string{"</parameter>", "<parameter=", "</function>"} {
-			if i := strings.Index(p, marker); i >= 0 && i < valEnd {
-				valEnd = i
-			}
-		}
-		val := strings.TrimSpace(p[:valEnd])
-		if key != "" {
-			var parsed interface{}
-			if json.Unmarshal([]byte(val), &parsed) == nil {
-				args[key] = parsed
-			} else {
-				args[key] = val
-			}
-		}
-		p = p[valEnd:]
-	}
-
-	// Gemma-family models frequently emit parameters as <key=value> instead of
-	// the Qwen <parameter=key>value</parameter> form. Fall back to that shape
-	// only when no standard parameters were found, so this can't misparse a
-	// well-formed call.
-	if len(args) == 0 {
-		parseInlineParams(body[fnStart:], args)
-	}
-
-	argsJSON, _ := json.Marshal(args)
-	return api.ToolCall{
-		ID:   fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), idx),
-		Type: "function",
-		Function: api.ToolCallFunction{
-			Name:      name,
-			Arguments: string(argsJSON),
-		},
-	}, true
-}
-
-// parseInlineParams extracts <key=value> parameters, where the value ends at
-// </key> when present and at the closing > otherwise. The leading
-// <function=...> tag is skipped by the caller's slicing.
-func parseInlineParams(body string, args map[string]interface{}) {
-	p := body
-	if i := strings.Index(p, ">"); i >= 0 {
-		p = p[i+1:] // skip past <function=name>
-	}
-	for {
-		lt := strings.Index(p, "<")
-		if lt < 0 {
-			return
-		}
-		p = p[lt+1:]
-		eq := strings.Index(p, "=")
-		gt := strings.Index(p, ">")
-		if eq < 0 || (gt >= 0 && gt < eq) {
-			continue // not a key=value tag
-		}
-		key := strings.TrimSpace(p[:eq])
-		if key == "" || !isSimpleIdent(key) {
-			continue
-		}
-		rest := p[eq+1:]
-
-		end := len(rest)
-		if close := strings.Index(rest, "</"+key+">"); close >= 0 {
-			end = close
-		} else if g := strings.Index(rest, ">"); g >= 0 {
-			end = g
-		}
-		val := strings.TrimSpace(rest[:end])
-		if _, seen := args[key]; !seen && val != "" {
-			args[key] = val
-		}
-		p = rest[end:]
-	}
-}
-
-// isSimpleIdent reports whether s looks like a parameter name rather than
-// arbitrary markup, so stray angle brackets in prose aren't treated as params.
-func isSimpleIdent(s string) bool {
-	for _, r := range s {
-		if !(r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
-			return false
-		}
-	}
-	return len(s) > 0
-}
-
-// formatToolsPrompt builds the tool-calling system prompt for the given
-// architecture. Returns empty string for architectures that handle tools
-// via the chat template itself (e.g. LFM2 embeds tools in the system prompt).
-func formatToolsPrompt(arch string, tools []api.Tool) string {
-	switch arch {
-	case "lfm2":
-		// LFM2 tools are injected into the system prompt as JSON.
-		// The chat template's {% if tools %} block handles formatting.
-		// We prepend the tool list as part of the system message.
-		var toolJSONs []string
-		for _, tool := range tools {
-			j, _ := json.Marshal(tool)
-			toolJSONs = append(toolJSONs, string(j))
-		}
-		return "<|im_start|>system\nList of tools: [" + strings.Join(toolJSONs, ", ") + "]<|im_end|>\n"
-	default:
-		return formatQwenToolsPrompt(tools)
-	}
-}
-
-func formatQwenToolsPrompt(tools []api.Tool) string {
-	var sb strings.Builder
-	sb.WriteString("<|im_start|>system\n# Tools\n\nYou have access to the following functions:\n\n<tools>")
-	for _, tool := range tools {
-		j, _ := json.Marshal(tool)
-		sb.WriteString("\n")
-		sb.Write(j)
-	}
-	sb.WriteString("\n</tools>")
-	sb.WriteString("\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n")
-	sb.WriteString("<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n")
-	sb.WriteString("<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT>")
-	sb.WriteString("<|im_end|>\n")
-	return sb.String()
-}

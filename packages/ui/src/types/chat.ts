@@ -204,6 +204,18 @@ export interface ChatProps {
   onInputChange: (value: string) => void;
   isProcessing?: boolean;
   lastError?: string | null;
+  /**
+   * SP-142 §3: another chat in this workspace has a query running — the
+   * server rejected this chat's send with 409 workspace_busy. The composer
+   * footer renders an inline notice naming the running chat, with a
+   * send-anyway affordance that queues locally (drains on completion).
+   * null = gate open.
+   */
+  workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
+  /** SP-142 §3: the send-anyway action — queue locally behind the runner. */
+  onSendAnyway?: (message: string) => void;
+  /** SP-142 §3: dismiss the busy notice without queueing. */
+  onDismissBusy?: () => void;
   toolExecutions?: ToolExecution[];
   queryProgress?: unknown;
   currentTodos?: TodoItem[];

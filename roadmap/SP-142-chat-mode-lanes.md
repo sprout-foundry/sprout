@@ -112,6 +112,13 @@
   > completion, same-chat unaffected.
 - **142.4** Client: busy notice + send-anyway queueing. Vitest: notice on
   409, queue drains after completion, cancel path clears.
+  > **Progress (2026-09-26):** Shipped. chatApi surfaces code + running
+  > chat identity on 409; the send path catches workspace_busy, rolls back
+  > the optimistic processing bump, and sets state.workspaceBusy;
+  > ChatFooter renders the inline notice (name + Send-anyway + dismiss);
+  > Send-anyway queues via the existing chatId-tagged queue (the drain
+  > effect fires it when the workspace goes idle); query_completed clears
+  > the notice. Pinned by ChatFooter.busy.test.tsx (5 tests).
 - **142.5** Design agent panel header (name + scoped New Chat). Vitest +
   testids.
 

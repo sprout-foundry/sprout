@@ -2,18 +2,13 @@ package commands
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/factory"
 	gitops "github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -49,48 +44,6 @@ func (c *CommitCommand) parseFlags(args []string) []string {
 		}
 	}
 	return cleanArgs
-}
-
-// --- Editor ---
-
-// editInEditor opens $VISUAL or $EDITOR to edit content, returns the edited text
-func editInEditor(initial string) (string, error) {
-	// Create temp file
-	f, err := os.CreateTemp("", "sprout_commit_*.txt")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-	path := f.Name()
-	_, _ = f.WriteString(initial)
-	f.Close()
-
-	// Choose editor
-	editor := os.Getenv("VISUAL")
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
-	}
-
-	cmd := exec.Command(editor, path)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	// Release stdin to cooked mode so the editor reads keystrokes
-	// normally. No-op when no turn / steer reader is active (the
-	// common slash-command path).
-	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
-		return "", fmt.Errorf("editor failed: %w", err)
-	}
-
-	// Read back
-	data, err := os.ReadFile(path)
-	_ = os.Remove(path)
-	if err != nil {
-		return "", fmt.Errorf("failed to read edited file: %w", err)
-	}
-	return strings.TrimSpace(string(data)), nil
 }
 
 // --- Command interface ---
@@ -390,33 +343,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Prepare LLM client using configured commit provider/model
-	var client api.ClientInterface
-	var clientType api.ClientType
-	var model string
-
-	// Use configured commit provider/model from config if available
-	if cfg != nil && cfg.GetCommitProvider() != "" {
-		clientType = api.ClientType(cfg.GetCommitProvider())
-		model = cfg.GetCommitModel()
-		if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
-			client = cl
-		}
-	}
-
-	// Fall back to chatAgent's config if client not created
-	if client == nil && chatAgent != nil {
-		configManager := chatAgent.GetConfigManager()
-		if configManager != nil {
-			if ct, e := configManager.GetProvider(); e == nil {
-				clientType = ct
-				model = configManager.GetModelForProvider(clientType)
-				if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
-					client = cl
-				}
-			}
-		}
-	}
+	client, clientType, model := c.prepareCommitClient(cfg, chatAgent)
 
 	// Get current branch name
 	branchOutput, err := gitCommand("rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
@@ -454,39 +381,13 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	var commitMessage string
 
 	// Retry loop for commit message generation (LLM if available, otherwise manual input)
-retryLoop:
 	for {
 		if client == nil {
-			// Manual fallback when LLM client isn't available
-			c.println("")
-			c.println(console.GlyphInfo.Prefix() + "Staged diff (truncated):")
-			preview := string(diffOutput)
-			if len(preview) > 2000 {
-				preview = preview[:2000] + "\n... (truncated)"
-			}
-			c.println(preview)
-			c.println("")
-			c.println(console.GlyphAction.Prefix() + "Enter commit message (end with a blank line):")
-			var b strings.Builder
-			empty := 0
-			for {
-				line, _ := reader.ReadString('\n')
-				if strings.TrimSpace(line) == "" {
-					empty++
-					if empty >= 1 {
-						break
-					}
-				} else {
-					empty = 0
-				}
-				b.WriteString(line)
-			}
-			commitMessage = strings.TrimSpace(b.String())
-			if commitMessage == "" {
-				c.println(console.GlyphError.Prefix() + "Empty commit message; aborting")
+			msg, aborted := c.readManualCommitMessage(reader, diffOutput)
+			if aborted {
 				return nil
 			}
-
+			commitMessage = msg
 			break
 		}
 		result, err := gitops.GenerateCommitMessageFromStagedDiff(client, gitops.CommitMessageOptions{
@@ -504,23 +405,7 @@ retryLoop:
 			c.printf("%s%s\n", console.GlyphWarning.Prefix(), warning)
 		}
 
-		// Show staged files summary and commit message (minimal, no emoji)
-		c.println("")
-		if len(stagedFilenames) > 0 {
-			c.printf("Committing %d staged file(s):\n", len(stagedFilenames))
-			const maxList = 10
-			for i, name := range stagedFilenames {
-				if i >= maxList {
-					remaining := len(stagedFilenames) - maxList
-					if remaining > 0 {
-						c.printf("... (+%d more)\n", remaining)
-					}
-					break
-				}
-				c.printf("- %s\n", name)
-			}
-		}
-		c.println("")
+		c.printStagedFileSummary(stagedFilenames, commitMessage)
 		c.println("With message:")
 		c.println("")
 		c.println(commitMessage)
@@ -533,48 +418,20 @@ retryLoop:
 			break // Exit retry loop
 		}
 
-		// Unified picker for the commit-confirm choice. Replaces the
-		// prior dual-path (PromptChoice when AGENT_CONSOLE=1 / stdin
-		// y/n/e/r loop otherwise) with a single SelectList that
-		// degrades to numbered-list+stdin on non-TTY. The retry loop
-		// stays — Retry re-enters the LLM call, Edit opens $EDITOR
-		// and exits the retry loop.
-		picker := console.NewSelectList(console.SelectListOptions{
-			Title: "Proceed with commit?",
-			Items: []console.SelectItem{
-				{Label: "Approve", Detail: "create the commit now", Value: "y"},
-				{Label: "Retry", Detail: "regenerate message", Value: "r"},
-				{Label: "Edit", Detail: "open $EDITOR", Value: "e"},
-				{Label: "Cancel", Detail: "abort", Value: "n"},
-			},
-			PageSize: 4,
-		})
-		choice, ok, perr := picker.Run(context.Background())
+		edited, choice, aborted, perr := c.promptCommitChoice(commitMessage)
 		if perr != nil {
-			return fmt.Errorf("confirmation failed: %w", perr)
+			return perr
 		}
-		if !ok || choice == "n" {
-			c.println("Commit cancelled")
+		if aborted {
 			return nil
 		}
-		switch choice {
-		case "r":
-			c.println("Regenerating commit message...")
+		if choice == "r" {
 			continue
-		case "e":
-			edited, err := editInEditor(commitMessage)
-			if err != nil {
-				return fmt.Errorf("editor failed: %w", err)
-			}
-			if strings.TrimSpace(edited) == "" {
-				c.println("Empty commit message; aborting")
-				return nil
-			}
-			commitMessage = edited
-			break retryLoop
-		case "y":
-			break retryLoop
 		}
+		if choice == "e" {
+			commitMessage = edited
+		}
+		break
 
 	} // End of retry loop
 
@@ -607,28 +464,7 @@ retryLoop:
 		}
 	}
 
-	// Create the commit
-	c.println("")
-	c.println(console.GlyphAction.Prefix() + "Creating commit...")
-
-	// Write commit message to temporary file
-	tempFile := "commit_msg.txt"
-	err = os.WriteFile(tempFile, []byte(commitMessage), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create temporary commit message file: %w", err)
-	}
-	defer os.Remove(tempFile)
-
-	cmd := gitCommand("commit", "-F", tempFile)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to create commit: %w\nOutput: %s", err, string(output))
-	}
-
-	c.println(console.GlyphSuccess.Prefix() + "Commit created successfully!")
-	c.printf("Output: %s\n", string(output))
-
-	return nil
+	return c.runCommitCreation(commitMessage)
 }
 
 // Complete returns flag completions for the /commit command. The primary

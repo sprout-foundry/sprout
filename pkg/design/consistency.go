@@ -102,7 +102,11 @@ func ValidateConsistency(root string) []Finding {
 				continue
 			}
 			rel := relAsset(root, match)
-			findings = append(findings, validateFlowWireframeBidirectionality(rel, data, stemSet)...)
+			stepIDs := map[string]struct{}{}
+			for _, sid := range derivedFlowStepIDs(root, rel) {
+				stepIDs[sid] = struct{}{}
+			}
+			findings = append(findings, validateFlowWireframeBidirectionality(rel, data, stemSet, stepIDs)...)
 		}
 	}
 
@@ -138,12 +142,16 @@ func ValidateConsistency(root string) []Finding {
 // flow/wireframe bidirectionality rule (SP-140-4 §4b), used by ValidateFile's
 // flow dispatch so a one-file flow validation surfaces the same consistency
 // findings a whole-tree run does. The result is never nil and is sorted.
-func flowBidirectionalityFindings(relPath string, content []byte, wireframeStems []string) []Finding {
+func flowBidirectionalityFindings(root, relPath string, content []byte, wireframeStems []string) []Finding {
 	stemSet := make(map[string]struct{}, len(wireframeStems))
 	for _, s := range wireframeStems {
 		stemSet[s] = struct{}{}
 	}
-	findings := validateFlowWireframeBidirectionality(relPath, content, stemSet)
+	stepIDs := map[string]struct{}{}
+	for _, sid := range derivedFlowStepIDs(root, relPath) {
+		stepIDs[sid] = struct{}{}
+	}
+	findings := validateFlowWireframeBidirectionality(relPath, content, stemSet, stepIDs)
 	if findings == nil {
 		findings = []Finding{}
 	}
@@ -163,7 +171,7 @@ func flowBidirectionalityFindings(relPath string, content []byte, wireframeStems
 // leaves a screen that does not exist, which is the same broken
 // bidirectionality from the other side. Findings are deduplicated per node id
 // and carry the 1-based line of the node's first mention.
-func validateFlowWireframeBidirectionality(relPath string, content []byte, wireframeStems map[string]struct{}) []Finding {
+func validateFlowWireframeBidirectionality(relPath string, content []byte, wireframeStems, stepIDs map[string]struct{}) []Finding {
 	fc := ParseFlowchart(string(content))
 	findings := []Finding{}
 
@@ -196,6 +204,11 @@ func validateFlowWireframeBidirectionality(relPath string, content []byte, wiref
 			continue
 		}
 		if _, ok := wireframeStems[id]; ok {
+			continue
+		}
+		if _, ok := stepIDs[id]; ok {
+			// §9b: a derived flow's step node stands for a screen the source
+			// names; the wireframe-counterpart question does not apply.
 			continue
 		}
 		if hasTarget[id] && !hasSource[id] {

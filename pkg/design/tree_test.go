@@ -313,7 +313,8 @@ func TestValidateFileFlow(t *testing.T) {
 
 	findings, err := ValidateFile(root, "design/flows/sign-up.mmd")
 	require.NoError(t, err)
-	requireNoWireframeFindings(t, findings)
+	assert.Empty(t, dropDeprecationFindings(findings),
+		"the valid flow carries no per-file findings beyond the §9b legacy notice")
 
 	// A screen flow (a node id matches a wireframe stem) carrying an
 	// unrelated node id trips the node-id == stem rule.

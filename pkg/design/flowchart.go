@@ -40,8 +40,13 @@ type FlowNode struct {
 
 // FlowEdge is a single directed/undirected edge extracted from a flowchart.
 type FlowEdge struct {
-	Source   string
-	Target   string
+	Source string
+	Target string
+	// Label is the |trigger| text on a labeled edge (A -->|trigger| B);
+	// "" on a label-free edge. SP-140-9 §9b renders the derived .mmd's
+	// triggers as edge labels, so the parser surfaces them instead of
+	// dropping them.
+	Label    string
 	HasArrow bool
 }
 
@@ -95,9 +100,16 @@ func ParseFlowchart(content string) Flowchart {
 
 // parseStatement reads one node/edge statement, splitting it into
 // source/target segments on connect operators so chained edges (A --> B --> C)
-// resolve to a full node and edge set.
+// resolve to a full node and edge set. A |label| on an operator ("A
+// -->|submit| B") becomes that edge's Label (SP-140-9 §9b: the derived .mmd
+// carries triggers as edge labels); label-free parsing is unchanged.
 func parseStatement(line string, lineNo int, fc *Flowchart) {
 	segs, ops := splitByOperator(line)
+	labels := make(map[int]string, len(ops))
+	for i, op := range ops {
+		labels[i] = edgeLabel(op)
+		ops[i] = trimEdgeLabel(op)
+	}
 	ids := make([]string, 0, len(segs))
 	for _, seg := range segs {
 		id, label := parseNodeRef(seg)
@@ -108,7 +120,12 @@ func parseStatement(line string, lineNo int, fc *Flowchart) {
 	}
 	for i, op := range ops {
 		if i+1 < len(ids) && ids[i] != "" && ids[i+1] != "" {
-			fc.Edges = append(fc.Edges, FlowEdge{Source: ids[i], Target: ids[i+1], HasArrow: strings.Contains(op, ">")})
+			fc.Edges = append(fc.Edges, FlowEdge{
+				Source:   ids[i],
+				Target:   ids[i+1],
+				Label:    labels[i],
+				HasArrow: strings.Contains(op, ">"),
+			})
 		}
 	}
 	// A statement with an operator needs both a source and a target; a bare
@@ -124,11 +141,40 @@ func parseStatement(line string, lineNo int, fc *Flowchart) {
 	}
 }
 
+// edgeLabel returns the trigger text between the pipes of a labeled operator
+// ("-->|submit|" -> "submit"); "" when the operator carries no label.
+func edgeLabel(op string) string {
+	open := strings.IndexByte(op, '|')
+	if open < 0 {
+		return ""
+	}
+	rest := op[open+1:]
+	if close := strings.IndexByte(rest, '|'); close >= 0 {
+		return strings.TrimSpace(rest[:close])
+	}
+	// Unclosed label: take what is present (the line reports as an
+	// incomplete statement anyway, since the target segment is swallowed).
+	return strings.TrimSpace(rest)
+}
+
+// trimEdgeLabel strips a trailing |label| group off a connect operator
+// ("-->|submit|" --> "-->"), so the labeled form does not leak pipe
+// characters into HasArrow or the next segment. A label-free operator is
+// returned unchanged.
+func trimEdgeLabel(op string) string {
+	if open := strings.IndexByte(op, '|'); open >= 0 {
+		return op[:open]
+	}
+	return op
+}
+
 // splitByOperator splits a statement into node segments and the operators
 // between them. For "A --> B --> C" it yields segs [A, B, C] and ops [-->, -->].
 // Operators inside a node label's bracket group ([...], (...), {...}) are NOT
 // separators, so "A[Step --> Process] --> B" yields segs [A[...], B] and a
-// single operator.
+// single operator. A |label| group attached to an operator ("-->|submit|") is
+// part of that operator: the whole span "-->|submit|" is returned as the op,
+// so the label never spawns a phantom segment or swallows the target node.
 func splitByOperator(line string) (segs, ops []string) {
 	depth := 0
 	last := 0
@@ -141,6 +187,25 @@ func splitByOperator(line string) (segs, ops []string) {
 		case ']', ')', '}':
 			if depth > 0 {
 				depth--
+			}
+			i++
+		case '|':
+			// A label only rides an operator at bracket depth 0 (mermaid's
+			// A -->|x| B); a pipe inside a node label's brackets is label
+			// text, and a lone pipe with no operator before it is not label
+			// syntax. A closed |...| span is consumed as part of the current
+			// op (chained labels A -->|x| B -->|y| C each ride their op); an
+			// unclosed one leaks into the next segment, which then parses as
+			// a missing target id and reports via BadLines.
+			if depth == 0 && len(ops) > 0 {
+				if close := strings.IndexByte(line[i+1:], '|'); close >= 0 {
+					// The span rides the current op ("-->|x|"), so the label
+					// reaches the edge rather than the next segment.
+					ops[len(ops)-1] += line[i : i+close+2]
+					i += close + 2
+					last = i // the label belongs to the op, not the next segment
+					continue
+				}
 			}
 			i++
 		default:
@@ -224,6 +289,29 @@ func addNode(fc *Flowchart, id, label string) {
 	fc.NodeOrder = append(fc.NodeOrder, id)
 }
 
+// derivedFlowStepIDs lists the step ids a sibling flow source (.json beside
+// the .mmd, SP-140-9 §9b) declares. The derived export renders steps with
+// their step id as the node id, so those ids are legitimate screen-flow nodes
+// for the node-stem rule. Absent/unparsable source yields nil.
+func derivedFlowStepIDs(root, relPath string) []string {
+	name := strings.TrimSuffix(path.Base(filepath.ToSlash(relPath)), ".mmd")
+	dir := path.Dir(filepath.ToSlash(relPath))
+	srcPath := filepath.Join(root, filepath.FromSlash(path.Join(dir, name+".json")))
+	raw, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil
+	}
+	src, err := ParseFlowSource(srcPath, raw)
+	if err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(src.Steps))
+	for _, s := range src.Steps {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
 // isScreenFlow reports whether the flow looks like a screen flow: at least one
 // node id is a known wireframe stem. Pure process/user flows (no node matches
 // a stem) are left un-checked, per SP-140-1 §1c ("nothing cross-checks them").
@@ -242,7 +330,7 @@ func isScreenFlow(fc Flowchart, stemSet map[string]struct{}) bool {
 // the tier; post-migration only screens remain). Hard checks (SeverityError):
 // exactly one flowchart declaration, unparseable statement lines, and
 // screen-flow node ids matching neither tier. The result is never nil.
-func ValidateFlows(relPath string, content []byte, wireframeStems []string, screenStems ...string) []Finding {
+func ValidateFlows(root, relPath string, content []byte, wireframeStems []string, screenStems ...string) []Finding {
 	fc := ParseFlowchart(string(content))
 	stemSet := make(map[string]struct{}, len(wireframeStems)+len(screenStems))
 	for _, s := range wireframeStems {
@@ -250,6 +338,11 @@ func ValidateFlows(relPath string, content []byte, wireframeStems []string, scre
 	}
 	for _, s := range screenStems {
 		stemSet[s] = struct{}{}
+	}
+	// SP-140-9 §9b: a derived flow's step nodes carry the step id, not a
+	// screen stem — a sibling flow-source .json names the legitimate ids.
+	for _, id := range derivedFlowStepIDs(root, relPath) {
+		stemSet[id] = struct{}{}
 	}
 
 	var findings []Finding
@@ -330,7 +423,7 @@ func ValidateFlowsDir(root string) ([]Finding, error) {
 			return nil, fmt.Errorf("resolving %s relative to %s: %w", match, root, err)
 		}
 		screenStems := assetStems(root, "screens", ".html")
-		findings = append(findings, ValidateFlows(filepath.ToSlash(rel), data, stems, screenStems...)...)
+		findings = append(findings, ValidateFlows(root, filepath.ToSlash(rel), data, stems, screenStems...)...)
 	}
 	sortFindings(findings)
 	return findings, nil

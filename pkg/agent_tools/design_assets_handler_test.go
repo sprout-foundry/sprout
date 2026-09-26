@@ -89,6 +89,29 @@ func daScreensIndex(root string) string {
 	return string(art.Content)
 }
 
+// daWriteDerivedFlows seeds the flow tier's derived form (§9b): the .json
+// source plus the generator-emitted .mmd with its provenance header.
+func daWriteDerivedFlows(t *testing.T, root string) {
+	t.Helper()
+	daWrite(t, root, "design/flows/sign-up.json", daTestFlowSourceJSON)
+	arts, err := design.RenderAllFlowMDMArtifacts(root)
+	if err != nil {
+		t.Fatalf("render derived flows: %v", err)
+	}
+	for _, a := range arts {
+		daWrite(t, root, a.RelPath, string(a.Content))
+	}
+}
+
+const daTestFlowSourceJSON = `{
+  "name": "sign-up",
+  "steps": [
+    {"id": "s1", "label": "Start", "screen": "login"},
+    {"id": "s2", "label": "Signed in", "screen": "home", "trigger": "submit", "next": "s3"},
+    {"id": "s3", "label": "Done", "screen": "home"}
+  ]
+}`
+
 // daScaffoldRuntime copies the embedded runtime kit into the fixture tree.
 func daScaffoldRuntime(t *testing.T, root string) {
 	t.Helper()
@@ -156,7 +179,7 @@ func daWriteValidTree(t *testing.T, root string) {
 	daWrite(t, root, "design/screens/home.html", daTestHomeScreen)
 	daWrite(t, root, "design/generated/screens.json", daScreensIndex(root))
 	daScaffoldRuntime(t, root)
-	daWrite(t, root, "design/flows/sign-up.mmd", daTestFlowMMD)
+	daWriteDerivedFlows(t, root)
 	daWrite(t, root, design.GitContractFile, "* text=auto eol=lf\n"+design.GitAttributesDiffHTMLLine+"\n")
 	daWrite(t, root, design.GitIgnoreFile, "node_modules/\n"+design.GitIgnoreCacheLine+"\n")
 }
@@ -308,8 +331,9 @@ func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {
 	assert.Equal(t, 2, out.TokenGroups[0].Tokens)
 
 	require.Len(t, out.Flows, 1)
-	assert.Equal(t, 2, out.Flows[0].Nodes)
-	assert.Equal(t, 1, out.Flows[0].Edges)
+	// The §9b-derived flow: 3 step nodes + 2 off-path screen nodes.
+	assert.Equal(t, 5, out.Flows[0].Nodes)
+	assert.Equal(t, 2, out.Flows[0].Edges)
 
 	// Findings empty, bySeverity carries every key at zero.
 	assert.Empty(t, out.Findings)

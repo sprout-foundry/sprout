@@ -2516,6 +2516,19 @@ button.primary.success {
   cursor: not-allowed;
 }
 
+.workspace-add-repo-btn--labeled {
+  width: auto;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: 12px;
+}
+
+.workspace-add-repo-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 /* Touch: raise BOTH controls to a comfortable target — the select gets a
  * taller hit area too, not just the button. */
 @media (hover: none) {
@@ -2527,6 +2540,10 @@ button.primary.success {
   .workspace-add-repo-btn {
     width: 32px;
     height: 32px;
+  }
+
+  .workspace-add-repo-btn--labeled {
+    width: auto;
   }
 }
 

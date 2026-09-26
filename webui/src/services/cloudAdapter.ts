@@ -42,6 +42,27 @@ export interface CloudAdapterConfig {
   navItems?: PlatformNavItem[];
 }
 
+/**
+ * Write imported files into the VFS, skipping any path that already exists.
+ * The VFS persists across reloads, so a file that's already there may hold
+ * the user's edits — the import (or its cache) only fills in what's missing.
+ */
+function seedFilesIfAbsent(shell: WasmShell, files: Array<{ path: string; content: string }>, verb: string): void {
+  for (const file of files) {
+    try {
+      if (!shell.readFile(file.path).error) {
+        trackFileWrite(file.path);
+        continue;
+      }
+      shell.writeFile(file.path, file.content);
+      // Track in the manifest so the file browser can list it.
+      trackFileWrite(file.path);
+    } catch (err) {
+      console.warn(`[CloudAdapter] failed to ${verb} file ${file.path}:`, err);
+    }
+  }
+}
+
 export class CloudAdapter implements APIAdapter {
   readonly name = 'foundry-cloud';
   readonly requiresBackendHealthCheck = true;
@@ -165,16 +186,7 @@ export class CloudAdapter implements APIAdapter {
       // /api/create and /api/file back to this adapter's handleWasmLocal(),
       // creating a circular dependency. Going through the shell avoids that.
       const shell = await this.ensureWasmShell();
-      for (const file of files) {
-        try {
-          shell.writeFile(file.path, file.content);
-          // Track in the manifest so the file browser can list it
-          // (the old WASM binary has a broken listDir).
-          trackFileWrite(file.path);
-        } catch (writeErr) {
-          console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
-        }
-      }
+      seedFilesIfAbsent(shell, files, 'write');
 
       // Persist the manifest so a page reload can re-seed the in-memory VFS
       // from the cache instead of re-cloning. Fire-and-forget: a
@@ -212,14 +224,7 @@ export class CloudAdapter implements APIAdapter {
     }
     try {
       const shell = await this.ensureWasmShell();
-      for (const file of cached.files) {
-        try {
-          shell.writeFile(file.path, file.content);
-          trackFileWrite(file.path);
-        } catch (writeErr) {
-          console.warn(`[CloudAdapter] failed to restore file ${file.path}:`, writeErr);
-        }
-      }
+      seedFilesIfAbsent(shell, cached.files, 'restore');
       return { success: true, repo: cached.repo, fromCache: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };

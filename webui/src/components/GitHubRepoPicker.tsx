@@ -17,9 +17,10 @@ import { AlertTriangle, Download, GitBranch, Loader2, Lock, Search, X } from 'lu
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { cloneRepo, type CloneResult } from '../services/workspaceFs/backendsExport';
 import { clearGitHubAccount, getStoredToken, getStoredUser, listRepos } from '../services/githubService';
 import type { GitHubRepo, GitHubUser } from '../services/githubService';
+import { cloneIntoWorkspace } from '../services/workspaceClone';
+import { type CloneResult } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
 import GitHubAccountPanel from './GitHubAccountPanel';
@@ -123,7 +124,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       // Clone through the workspaceFs seam into repos/<owner>/<name>/ — the
       // same layout the agent's git tools use, so UI and agent share one
       // checkout. Old lightning-fs sidecar path removed.
-      const result = await cloneRepo(repo.clone_url, { token: activeToken });
+      const result = await cloneIntoWorkspace(repo.clone_url, { token: activeToken });
       debugLog(
         `[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`,
       );

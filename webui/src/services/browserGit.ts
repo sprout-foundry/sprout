@@ -12,6 +12,7 @@ import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
+import { gitCorsProxy } from './gitCorsProxy';
 
 const FS_NAME = 'sprout-git';
 const REPO_DIR = '/repo';
@@ -189,6 +190,7 @@ async function syncGitFsToVfs() {
     }
   }
   await config.writeVfsFiles(files);
+  return files.length;
 }
 
 function getAuth() {
@@ -450,6 +452,7 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   await git.clone({
     fs,
     http,
+    corsProxy: gitCorsProxy(),
     dir: REPO_DIR,
     url,
     depth: 1,
@@ -457,8 +460,14 @@ export async function gitClone(url: string, opts?: { token?: string }) {
     headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
   repoInitialized = true;
-  await syncGitFsToVfs();
-  return { message: 'ok', url };
+  const files = await syncGitFsToVfs();
+  let branch: string | null = null;
+  try {
+    branch = (await git.currentBranch({ fs, dir: REPO_DIR })) ?? null;
+  } catch {
+    // best-effort: detached HEAD reports no branch.
+  }
+  return { message: 'ok', url, branch, files };
 }
 
 export async function gitPush(remote = 'origin', branch = 'main') {
@@ -466,6 +475,7 @@ export async function gitPush(remote = 'origin', branch = 'main') {
   await git.push({
     fs: getFs().promises,
     http,
+    corsProxy: gitCorsProxy(),
     dir: REPO_DIR,
     remote,
     ref: branch,

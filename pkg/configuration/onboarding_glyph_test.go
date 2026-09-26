@@ -24,6 +24,7 @@ import (
 
 var onboardingSourceFiles = []string{
 	"init.go",
+	"init_providers.go",
 	"api_keys.go",
 }
 

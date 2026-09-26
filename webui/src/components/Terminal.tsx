@@ -27,8 +27,8 @@ import { createPortal } from 'react-dom';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
 import {
-  TERMINAL_HEIGHT_DEFAULT,
   TERMINAL_HEIGHT_STORAGE_KEY,
+  defaultTerminalHeight,
   parseTerminalHeight,
   clampTerminalHeight,
   FONT_SIZE_MIN,
@@ -64,7 +64,7 @@ function Terminal({
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
   const [terminalHeight, setTerminalHeight] = usePersistedNumber(
     TERMINAL_HEIGHT_STORAGE_KEY,
-    TERMINAL_HEIGHT_DEFAULT,
+    defaultTerminalHeight(),
     parseTerminalHeight,
     clampTerminalHeight,
   );

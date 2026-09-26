@@ -1761,6 +1761,33 @@ describe('CloudAdapter', () => {
   describe('restoreRepo (?repo= reload persistence)', () => {
     const repoUrl = 'https://github.com/octocat/Hello-World';
 
+    // A fresh VFS: nothing exists yet, so every imported file is written.
+    beforeEach(() => {
+      mockWasmShell.readFile.mockImplementation(() => ({ content: '', error: 'file does not exist' }));
+    });
+    afterEach(() => {
+      mockWasmShell.readFile.mockImplementation((path: string) => ({ content: '// file at ' + path, error: '' }));
+    });
+
+    it("doesn't overwrite a file the VFS already has (the user's edits)", async () => {
+      mockWasmShell.readFile.mockImplementation((path: string) =>
+        path === 'README' ? { content: 'edited by the user', error: '' } : { content: '', error: 'file does not exist' },
+      );
+      mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
+        repo: 'octocat/Hello-World',
+        files: [
+          { path: 'README', content: 'hi' },
+          { path: 'LICENSE', content: 'MIT' },
+        ],
+        importedAt: '2026-09-23T00:00:00Z',
+      });
+
+      await adapter.restoreRepo(repoUrl);
+
+      expect(mockWasmShell.writeFile).not.toHaveBeenCalledWith('README', 'hi');
+      expect(mockWasmShell.writeFile).toHaveBeenCalledWith('LICENSE', 'MIT');
+    });
+
     it('re-seeds the VFS from the cache on a hit (no network call)', async () => {
       mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
         repo: 'octocat/Hello-World',

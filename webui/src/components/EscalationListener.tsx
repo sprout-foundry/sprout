@@ -20,8 +20,9 @@ import { Cloud, Container, Loader2, Rocket, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
-import { pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
+import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
 import { runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
+import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { platformHref } from '../utils/platformUrl';
 import './EscalationToast.css';
 
@@ -77,6 +78,9 @@ export function EscalationListener() {
   const [cloudTask, setCloudTask] = useState<CloudTaskProgress | null>(null);
   const [txn, setTxn] = useState<TxnProgress | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [startingWorkspace, setStartingWorkspace] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const workspacesAvailable = useFullWorkspacesAvailable();
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -95,6 +99,7 @@ export function EscalationListener() {
         setCloudTask(null);
         setTxn(null);
         setSubmitting(false);
+        setWorkspaceError(null);
         setEscalation({ trigger: detail, visible: true });
       }
     };
@@ -109,6 +114,7 @@ export function EscalationListener() {
     setCloudTask(null);
     setTxn(null);
     setSubmitting(false);
+    setWorkspaceError(null);
   }, []);
 
   /**
@@ -198,42 +204,33 @@ export function EscalationListener() {
   }, [escalation, submitting, cloudTask]);
 
   const handleStartWorkspace = useCallback(() => {
-    const trigger = escalation?.trigger;
-    setEscalation(null);
-    if (trigger?.repoURL) {
-      // Route through the platform workspace creation API
-      fetch('/workspace/fly', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          repo_url: trigger.repoURL,
-          mode: 'build',
-        }),
-      })
-        .then((res) => {
-          if (res.ok) {
-            return res.json().then((data) => {
-              if (data?.workspace_url) {
-                window.location.href = data.workspace_url;
-              }
-            });
-          }
-        })
-        .catch(() => {
-          // Network failure only — an HTTP error status resolves (not
-          // rejects) and leaves the user here (pre-existing behavior).
-          // `?from=editor` tells the platform SPA not to bounce us back.
-          // SP-016 P0.3: build the absolute URL when the host knows the
-          // platform base (Mode B Fly workspaces must not self-loop into
-          // this daemon's SPA); falls back to the relative path otherwise.
-          window.location.href = platformHref('/?from=editor');
-        });
-    } else {
-      // No repo context — go to dashboard (not back into the editor loop).
-      // SP-016 P0.3: absolute platform URL when known, relative fallback.
+    const repoURL = escalation?.trigger?.repoURL;
+    if (!repoURL) {
+      // No repo context: the dashboard is where a workspace gets picked.
+      // `?from=editor` keeps the platform SPA from bouncing back here.
       window.location.href = platformHref('/?from=editor');
+      return;
     }
+    setWorkspaceError(null);
+    setStartingWorkspace(true);
+    startFullWorkspace(repoURL)
+      .then((result) => {
+        if (!mountedRef.current) return;
+        if (result.kind === 'unavailable') {
+          setWorkspaceError("This deployment doesn't offer full workspaces.");
+        } else if (result.kind === 'error') {
+          setWorkspaceError(`Couldn't start the workspace: ${result.message}`);
+        } else if (result.kind === 'status') {
+          setWorkspaceError(`Workspace is ${result.status}; try again shortly.`);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!mountedRef.current) return;
+        setWorkspaceError(`Couldn't start the workspace: ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        if (mountedRef.current) setStartingWorkspace(false);
+      });
   }, [escalation]);
 
   if (!escalation?.visible) return null;
@@ -317,20 +314,28 @@ export function EscalationListener() {
                   </p>
                 ) : (
                   <p className="escalation-toast-task-status" data-testid="escalation-toast-cloud-task-status">
-                    <Loader2 size={13} className="spinner" aria-hidden="true" />
+                    {isTerminalCloudTaskStatus(cloudTask.status) ? null : (
+                      <Loader2 size={13} className="spinner" aria-hidden="true" />
+                    )}
                     Cloud task {cloudTask.status || 'pending'}
                   </p>
                 )}
                 {cloudTask.taskId ? (
                   <a
                     className="escalation-toast-task-link"
-                    href={platformHref('/tasks/' + cloudTask.taskId)}
+                    href={platformHref('/#/tasks/' + cloudTask.taskId)}
                     data-testid="escalation-toast-cloud-task-link"
                   >
                     View task on platform
                   </a>
                 ) : null}
               </div>
+            ) : null}
+
+            {workspaceError ? (
+              <p className="escalation-toast-task-error" data-testid="escalation-toast-workspace-error">
+                {workspaceError}
+              </p>
             ) : null}
 
             <div className="escalation-toast-actions">
@@ -351,15 +356,27 @@ export function EscalationListener() {
                   onClick={handleRunCloudTask}
                   disabled={submitting}
                   data-testid="escalation-toast-cloud-task"
+                  title="Runs an agent on the repository as last pushed; edits made in the browser aren't included. Uses platform credits."
                 >
                   {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Cloud size={14} />}
                   Run as cloud task
                 </button>
               ) : null}
-              <button className="escalation-toast-action" onClick={handleStartWorkspace}>
-                <Rocket size={14} />
-                Start Full Workspace
-              </button>
+              {workspacesAvailable ? (
+                <button
+                  className="escalation-toast-action"
+                  onClick={handleStartWorkspace}
+                  disabled={startingWorkspace}
+                  data-testid="escalation-toast-start-workspace"
+                >
+                  {startingWorkspace ? (
+                    <Loader2 size={14} className="spinner" aria-hidden="true" />
+                  ) : (
+                    <Rocket size={14} />
+                  )}
+                  Start Full Workspace
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

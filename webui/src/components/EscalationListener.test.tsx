@@ -23,6 +23,7 @@ import {
   type TxnManifest,
   type TxnRunResult,
 } from '../services/cloudTxn';
+import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import { EscalationListener } from './EscalationListener';
 
 vi.mock('../services/cloudTxn', async () => {
@@ -148,6 +149,7 @@ const hrefSetter = vi.fn();
 let hrefValue = 'https://app.test.sprout.dev/';
 
 beforeEach(() => {
+  __resetFullWorkspaceForTests();
   writtenVfs.length = 0;
   deletedVfs.length = 0;
   mockHappyTxn();
@@ -409,30 +411,27 @@ describe('EscalationListener — Mode A/B regressions', () => {
   });
 
   it('keeps the Mode B CTA wired to workspace creation', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ workspace_url: 'https://fly.sprout.dev/w/1' }, { status: 200 }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? jsonResponse({ url: 'https://ws-1.fly.dev', session_token: 'tok' }, { status: 201 })
+        : jsonResponse({ workspaces: [] }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     render(createElement(EscalationListener));
     fireTrigger({ command: undefined });
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/workspace/fly', expect.anything()));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/workspace/fly');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({
-      repo_url: 'https://github.com/acme/app',
-      mode: 'build',
-    });
-    await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://fly.sprout.dev/w/1'));
+    await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://ws-1.fly.dev/auth/exchange?token=tok'));
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit];
+    expect(post[0]).toMatch(/\/workspace\/fly$/);
+    expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app' });
   });
 
-  // DASH-3: the dashboard fallbacks must carry ?from=editor so the platform
-  // SPA skips its authed `/` → `/webui/` redirect (otherwise the user loops
-  // straight back into the editor).
-  it('falls back to /?from=editor when workspace creation fails', async () => {
-    const fetchMock = vi.fn(async () => {
-      throw new TypeError('network down');
+  it('explains a failed workspace start inline instead of leaving the editor', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') throw new TypeError('network down');
+      return jsonResponse({ workspaces: [] });
     });
     vi.stubGlobal('fetch', fetchMock);
     render(createElement(EscalationListener));
@@ -440,7 +439,21 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
 
-    await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('/?from=editor'));
+    await waitFor(() =>
+      expect(screen.getByTestId('escalation-toast-workspace-error').textContent).toContain('network down'),
+    );
+    expect(hrefSetter).not.toHaveBeenCalled();
+  });
+
+  it('hides Start Full Workspace when the deployment has no workspace compute', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ error: 'workspaces are not available on this deployment' }, { status: 503 })),
+    );
+    render(createElement(EscalationListener));
+    fireTrigger({ command: undefined });
+    await flush();
+    expect(screen.queryByText('Start Full Workspace')).toBeNull();
   });
 
   it('goes to /?from=editor when the trigger has no repo context', async () => {
@@ -451,7 +464,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
     expect(hrefSetter).toHaveBeenCalledWith('/?from=editor');
   });
 
@@ -471,14 +484,16 @@ describe('EscalationListener — Mode A/B regressions', () => {
     fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
     await flush();
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/tasks');
+    const [, init] = fetchMock.mock.calls.find(([input]) => String(input) === '/api/tasks') as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual({
       repo_url: 'https://github.com/acme/app',
       prompt:
         'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
     });
-    expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toHaveTextContent('Cloud task completed');
+    const status = await screen.findByTestId('escalation-toast-cloud-task-status');
+    expect(status).toHaveTextContent('Cloud task completed');
+    // A finished task must not keep spinning.
+    expect(status.querySelector('.spinner')).toBeNull();
   });
 
   it('hides the cloud-task CTA once a txn is in flight for the same toast', async () => {

@@ -1,7 +1,8 @@
 import { PanelRightClose } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { isCloud } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
+import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
 import { platformHref } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
@@ -28,33 +29,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 }) => {
   const [busy, setBusy] = useState(false);
   const repoURL = useActiveRepoURL() ?? null;
-  // Deployments without workspace compute answer 503; hide the button there
-  // rather than offer an action that can only fail.
-  const [workspacesAvailable, setWorkspacesAvailable] = useState(true);
+  // Hidden on deployments without workspace compute rather than offering an
+  // action that can only fail.
+  const workspacesAvailable = useFullWorkspacesAvailable(isCloud);
 
-  useEffect(() => {
-    if (!isCloud) return;
-    let cancelled = false;
-    fetch(`${window.location.origin}/workspace/fly`, { credentials: 'include' })
-      .then(async (res) => {
-        if (res.status !== 503) return;
-        // Only the "not configured" 503 is permanent; a transient outage
-        // keeps the button so the user can retry.
-        const body = await res.text().catch(() => '');
-        if (!cancelled && /not available on this deployment/i.test(body)) setWorkspacesAvailable(false);
-      })
-      .catch(() => {
-        // Network failure says nothing about the deployment; keep the button.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const retry = () => {
+    // Defer so the toast's dismiss finishes before the next request starts.
+    queueMicrotask(() => {
+      void handleStartBuilding();
+    });
+  };
 
   const handleStartBuilding = async () => {
     if (busy) return;
-    const url = repoURL;
-    if (!url) {
+    if (!repoURL) {
       notificationBus.notify(
         'info',
         'Add a repository first',
@@ -65,48 +53,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
     setBusy(true);
     try {
-      const response = await fetch(`${window.location.origin}/workspace/fly`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: url }),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        const msg = errData.error || `HTTP ${response.status}`;
-        if (response.status === 503 && /not available on this deployment/i.test(msg)) {
-          setWorkspacesAvailable(false);
-          notificationBus.notify(
-            'warning',
-            'Full workspaces unavailable',
-            "This deployment doesn't offer full workspaces. You can keep working in the browser workspace.",
-          );
-        } else {
-          notificationBus.notify('error', 'Failed to start workspace', msg, undefined, {
-            label: 'Retry',
-            onClick: () => {
-              // Defer to a microtask so the dismiss animation can
-              // finish before the next fetch kicks off; otherwise the
-              // busy state would flicker as the second request races.
-              queueMicrotask(() => {
-                void handleStartBuilding();
-              });
-            },
-          });
-        }
-        return;
-      }
-
-      const data = await response.json();
-      if (data.url && data.session_token) {
-        // Follow the same auth exchange pattern as the platform webui.
-        const wsUrl = new URL(data.url);
-        wsUrl.pathname = '/auth/exchange';
-        wsUrl.searchParams.set('token', data.session_token);
-        window.location.href = wsUrl.toString();
-      } else {
-        notificationBus.notify('info', 'Workspace status', data.status || 'Unknown');
+      const result = await startFullWorkspace(repoURL);
+      if (result.kind === 'unavailable') {
+        notificationBus.notify(
+          'warning',
+          'Full workspaces unavailable',
+          "This deployment doesn't offer full workspaces. You can keep working in the browser workspace.",
+        );
+      } else if (result.kind === 'error') {
+        notificationBus.notify('error', 'Failed to start workspace', result.message, undefined, {
+          label: 'Retry',
+          onClick: retry,
+        });
+      } else if (result.kind === 'status') {
+        notificationBus.notify('info', 'Workspace status', result.status);
       }
     } catch (e) {
       notificationBus.notify(
@@ -114,14 +74,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         'Error starting workspace',
         e instanceof Error ? e.message : String(e),
         undefined,
-        {
-          label: 'Retry',
-          onClick: () => {
-            queueMicrotask(() => {
-              void handleStartBuilding();
-            });
-          },
-        },
+        { label: 'Retry', onClick: retry },
       );
     } finally {
       setBusy(false);

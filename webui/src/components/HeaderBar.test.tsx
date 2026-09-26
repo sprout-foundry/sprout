@@ -9,6 +9,7 @@ vi.mock('./UsageChip', () => ({ UsageChip: () => null }));
 vi.mock('./WorkspaceBar', () => ({ default: () => null }));
 vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => undefined }));
 
+import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import HeaderBar from './HeaderBar';
 
 let container: HTMLDivElement;
@@ -19,6 +20,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  __resetFullWorkspaceForTests();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);

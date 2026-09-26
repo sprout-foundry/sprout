@@ -139,7 +139,7 @@
 /* ── Input (prompt variant) ──────────────────────────────────── */
 
 .themed-dialog-input-row {
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-10) var(--space-8);
 }
 
 .themed-dialog-input {

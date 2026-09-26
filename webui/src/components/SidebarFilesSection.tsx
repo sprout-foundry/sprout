@@ -12,9 +12,10 @@ import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
-import { repoDir } from '../services/workspaceFs/workspaceGit';
+import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
 import { debugLog } from '../utils/log';
 import GitHubRepoPicker from './GitHubRepoPicker';
+import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
 
 export interface FileTreeHandle {
@@ -222,16 +223,20 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         return;
       }
 
-      const url = window.prompt(
-        'Clone Repository\n\nEnter a public GitHub repository URL to clone:\nhttps://github.com/owner/repo.git',
-        '',
-      );
+      const input = await showThemedPrompt('Public GitHub repository to import (URL or owner/name):', {
+        title: 'Add repository',
+        placeholder: 'https://github.com/owner/repo',
+      });
+      if (!input || !input.trim()) return;
 
-      if (!url) return; // User cancelled
-
-      // Validate URL
-      if (!url.startsWith('https://') || !url.endsWith('.git')) {
-        window.alert('URL must be an HTTPS Git URL ending in .git');
+      let url: string;
+      try {
+        url = parseRepoRef(input).url.replace(/\.git$/, '');
+      } catch (err) {
+        await showThemedAlert(err instanceof Error ? err.message : String(err), {
+          title: 'Invalid repository',
+          type: 'warning',
+        });
         return;
       }
 
@@ -292,8 +297,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         refreshRepos();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Show error via browser alert as a fallback
-        window.alert(`Failed to clone repository: ${message}`);
+        await showThemedAlert(message, { title: "Couldn't import repository", type: 'error' });
       }
     };
 

@@ -1,19 +1,15 @@
-%% design-mode — the SP-140-8 item 8.6 dogfood: the Design workspace's own
-%% IA as a screen. Node ids are wireframe stems. Triggers live in the %%
-%% comments (the design/flows contract keeps edges label-free): the
-%% triggers the screen's data-nav anchors author. The screen depicts one
-%% workspace; its rail self-edges are the rail's own section switches.
+%% design-mode — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
+%% flow-source-hash: fnv1a64:1a0895f7b6654d39
+%% Source: design/flows/design-mode.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
-  design-mode["design-mode — the Design workspace IA"]
-  design-screens["design-screens — screens browser"]
-  design-flows["design-flows — flows canvas"]
-  %% open the Design mode (the rail's mode entry)
-  design-mode --> design-mode
-  %% the Screens group's workbench targets the screens browser's domain
-  design-mode --> design-screens
-  %% the Library group's Flows entry targets the flows canvas
-  design-mode --> design-flows
-  %% the workbench's flows facet links into the flow graph
-  design-flows --> design-mode
-  %% a screen picked in the browser opens the same workbench
-  design-screens --> design-mode
+  s1["design-mode — the Design workspace IA"]
+  s2["design-mode — the Design workspace IA"]
+  s3["design-screens — screens browser"]
+  s4["design-mode — the Design workspace IA"]
+  s5["design-flows — flows canvas"]
+  s6["design-mode — the Design workspace IA"]
+  s1 -->|open the Design mode (the rail's mode entry)| s2
+  s2 -->|the Screens group's workbench targets the screens browser's domain| s3
+  s3 -->|a screen picked in the browser opens the same workbench| s4
+  s4 -->|the Library group's Flows entry targets the flows canvas| s5
+  s5 -->|the workbench's flows facet links into the flow graph| s6

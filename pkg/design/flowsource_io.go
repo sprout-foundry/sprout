@@ -331,6 +331,12 @@ func flowOffPathFindings(root string) []Finding {
 
 	for _, entry := range indexDoc.Screens {
 		for _, nav := range entry.Nav {
+			if nav.To == entry.Stem {
+				// Self-navigation is in-screen state (a section switch), not
+				// a graph edge — the same suppression DeriveFlowMMD applies,
+				// so the cross-check never demands a flow step for it.
+				continue
+			}
 			if accounted[flowEdgeKey(entry.Stem, nav.Trigger, nav.To)] {
 				continue
 			}

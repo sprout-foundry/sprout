@@ -1,0 +1,19 @@
+{
+  "name": "navigation",
+  "steps": [
+    {"id": "s1", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "open a file (sidebar tree, palette, or a link in chat)", "next": "s2"},
+    {"id": "s2", "label": "editor — code + diff", "screen": "editor", "trigger": "back affordances (back arrow / close / Esc)", "next": "s3"},
+    {"id": "s3", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "select the chat workspace / send a message", "next": "s4"},
+    {"id": "s4", "label": "chat — chat surface", "screen": "chat", "trigger": "open the file a message is diffing", "next": "s5"},
+    {"id": "s5", "label": "editor — code + diff", "screen": "editor", "trigger": "back affordances (back arrow / close / Esc)", "next": "s6"},
+    {"id": "s6", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "open the git section from the icon rail", "next": "s7"},
+    {"id": "s7", "label": "git-panel — sidebar git section", "screen": "git-panel", "trigger": "back affordances (back arrow / close / Esc)", "next": "s8"},
+    {"id": "s8", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "open settings from the menu bar", "next": "s9"},
+    {"id": "s9", "label": "settings — providers / models / theme / scale", "screen": "settings", "trigger": "back affordances (back arrow / close / Esc)", "next": "s10"},
+    {"id": "s10", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "⌘K", "next": "s11"},
+    {"id": "s11", "label": "command-palette — ⌘K overlay", "screen": "command-palette", "trigger": "back affordances (back arrow / close / Esc)", "next": "s12"},
+    {"id": "s12", "label": "app-shell — Code mode default", "screen": "app-shell", "trigger": "switch workspace mode", "next": "s13"},
+    {"id": "s13", "label": "design-flows — Design mode", "screen": "design-flows", "trigger": "back affordances (back arrow / close / Esc)", "next": "s14"},
+    {"id": "s14", "label": "app-shell — Code mode default", "screen": "app-shell"}
+  ]
+}

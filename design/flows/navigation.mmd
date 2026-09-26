@@ -1,31 +1,31 @@
-%% navigation — Code-mode navigation map between the main surfaces.
-%% Node ids are wireframe stems. Triggers live in the %% comments:
-%% the design/flows contract for this pass keeps edges label-free.
+%% navigation — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
+%% flow-source-hash: fnv1a64:8ba67fc0bd8e8a71
+%% Source: design/flows/navigation.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
-  app-shell["app-shell — Code mode default"]
-  chat["chat — chat surface"]
-  editor["editor — code + diff"]
-  git-panel["git-panel — sidebar git section"]
-  settings["settings — providers / models / theme / scale"]
-  command-palette["command-palette — ⌘K overlay"]
-  design-flows["design-flows — Design mode"]
-  %% open a file (sidebar tree, palette, or a link in chat)
-  app-shell --> editor
-  %% select the chat workspace / send a message
-  app-shell --> chat
-  %% open the git section from the icon rail
-  app-shell --> git-panel
-  %% open settings from the menu bar
-  app-shell --> settings
-  %% ⌘K
-  app-shell --> command-palette
-  %% switch workspace mode
-  app-shell --> design-flows
-  %% back affordances (back arrow / close / Esc)
-  editor --> app-shell
-  git-panel --> app-shell
-  settings --> app-shell
-  command-palette --> app-shell
-  design-flows --> app-shell
-  %% open the file a message is diffing
-  chat --> editor
+  s1["app-shell — Code mode default"]
+  s2["editor — code + diff"]
+  s3["app-shell — Code mode default"]
+  s4["chat — chat surface"]
+  s5["editor — code + diff"]
+  s6["app-shell — Code mode default"]
+  s7["git-panel — sidebar git section"]
+  s8["app-shell — Code mode default"]
+  s9["settings — providers / models / theme / scale"]
+  s10["app-shell — Code mode default"]
+  s11["command-palette — ⌘K overlay"]
+  s12["app-shell — Code mode default"]
+  s13["design-flows — Design mode"]
+  s14["app-shell — Code mode default"]
+  s1 -->|open a file (sidebar tree, palette, or a link in chat)| s2
+  s2 -->|back affordances (back arrow / close / Esc)| s3
+  s3 -->|select the chat workspace / send a message| s4
+  s4 -->|open the file a message is diffing| s5
+  s5 -->|back affordances (back arrow / close / Esc)| s6
+  s6 -->|open the git section from the icon rail| s7
+  s7 -->|back affordances (back arrow / close / Esc)| s8
+  s8 -->|open settings from the menu bar| s9
+  s9 -->|back affordances (back arrow / close / Esc)| s10
+  s10 -->|⌘K| s11
+  s11 -->|back affordances (back arrow / close / Esc)| s12
+  s12 -->|switch workspace mode| s13
+  s13 -->|back affordances (back arrow / close / Esc)| s14

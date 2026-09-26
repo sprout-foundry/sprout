@@ -1,5 +1,5 @@
 %% navigation — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
-%% flow-source-hash: fnv1a64:8ba67fc0bd8e8a71
+%% flow-source-hash: fnv1a64:a1f03e7d3131ff6f
 %% Source: design/flows/navigation.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
   s1["app-shell — Code mode default"]
@@ -16,6 +16,8 @@ flowchart TD
   s12["app-shell — Code mode default"]
   s13["design-flows — Design mode"]
   s14["app-shell — Code mode default"]
+  design-mode["design-mode"]
+  design-screens["design-screens"]
   s1 -->|open a file (sidebar tree, palette, or a link in chat)| s2
   s2 -->|back affordances (back arrow / close / Esc)| s3
   s3 -->|select the chat workspace / send a message| s4
@@ -29,3 +31,17 @@ flowchart TD
   s11 -->|back affordances (back arrow / close / Esc)| s12
   s12 -->|switch workspace mode| s13
   s13 -->|back affordances (back arrow / close / Esc)| s14
+  app-shell -->|&#8984| command-palette
+  app-shell -->|open a file (sidebar tree, palette, or a link in chat)| editor
+  app-shell -->|open the git section from the icon rail| git-panel
+  app-shell -->|select the chat workspace / send a message| chat
+  app-shell -->|switch workspace mode| design-flows
+  design-screens -->|a screen picked in the browser opens the same workbench| design-mode
+  design-screens -->|the Library group's Flows entry targets the flows canvas| design-flows
+  editor -->|back affordances (back arrow / close / Esc)| app-shell
+  git-panel -->|back affordances (back arrow / close / Esc)| app-shell
+  git-panel -->|open a file (sidebar tree, palette, or a link in chat)| editor
+  settings -->|back affordances (back arrow / close / Esc)| app-shell
+  command-palette -->|back affordances (back arrow / close / Esc)| app-shell
+  design-flows -->|the Screens group's workbench targets the screens browser's domain| design-screens
+  design-flows -->|the workbench's flows facet links into the flow graph| design-mode

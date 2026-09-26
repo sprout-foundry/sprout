@@ -6,6 +6,7 @@ import { formatCodeWithConfigDiscovery, isFormattable } from '../services/format
 import { resolveEditorFilePath } from '../services/lspClientService';
 import { notificationBus } from '../services/notificationBus';
 import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
+import { fileEntryAtPath, isWithinPath, movedBufferPath } from './bufferPathSync';
 import { debugLog } from '../utils/log';
 import { writeFileWithFetch } from './fileWriteHelpers';
 import { useSproutFetch } from './SproutAdapterContext';
@@ -78,6 +79,10 @@ interface BufferManagerContextValue {
   setBufferPinned: (bufferId: string, isPinned: boolean) => void;
   setBufferClosable: (bufferId: string, isClosable: boolean) => void;
   reloadBufferFromDisk: (bufferId: string, diskContent: string, mtime?: number) => void;
+  /** Point file tabs at their new location after a file or folder moves. */
+  retargetBufferPaths: (oldPath: string, newPath: string) => void;
+  /** Close clean tabs under a deleted path; edited tabs stay open so work isn't lost. */
+  closeBuffersForDeletedPath: (path: string) => void;
 }
 
 const BufferManagerContext = createContext<BufferManagerContextValue | null>(null);
@@ -89,6 +94,17 @@ export const useBufferManager = () => {
   }
   return context;
 };
+
+// Timestamps alone collide when several buffers open in the same millisecond
+// (an agent opening files in a burst), silently replacing the earlier buffer.
+let bufferSeq = 0;
+function nextBufferId(prefix: string): string {
+  bufferSeq += 1;
+  return `${prefix}-${Date.now()}-${bufferSeq}`;
+}
+
+/** Like useBufferManager, for components that can render outside the editor. */
+export const useOptionalBufferManager = () => useContext(BufferManagerContext);
 
 interface BufferManagerProviderProps {
   children: ReactNode;
@@ -267,7 +283,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return bufferId;
       }
 
-      const bufferId = `buffer-${Date.now()}`;
+      const bufferId = nextBufferId('buffer');
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: 'file',
@@ -363,7 +379,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
           : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId);
       const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;
 
-      const bufferId = `buffer-${options.kind}-${Date.now()}`;
+      const bufferId = nextBufferId(`buffer-${options.kind}`);
       const shouldActivate = options.activate ?? true;
       const newBuffer: EditorBuffer = {
         id: bufferId,
@@ -958,6 +974,33 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   // listener). This layer was silently dropped in the hook-consolidation
   // refactor — without it the editor never learns that the agent or a
   // build changed an open file, and a later save clobbers those edits.
+  const retargetBufferPaths = useCallback((oldPath: string, newPath: string) => {
+    const from = resolveEditorFilePath(oldPath);
+    const to = resolveEditorFilePath(newPath);
+    setBuffers((prev) => {
+      let next: Map<string, EditorBuffer> | null = null;
+      prev.forEach((buffer, id) => {
+        if (buffer.kind !== 'file') return;
+        const moved = movedBufferPath(resolveEditorFilePath(buffer.file.path), from, to);
+        if (!moved) return;
+        next ??= new Map(prev);
+        next.set(id, { ...buffer, file: fileEntryAtPath(buffer.file, moved) });
+      });
+      return next ?? prev;
+    });
+  }, []);
+
+  const closeBuffersForDeletedPath = useCallback(
+    (path: string) => {
+      const target = resolveEditorFilePath(path);
+      for (const [id, buffer] of buffersRef.current) {
+        if (buffer.kind !== 'file' || buffer.isModified) continue;
+        if (isWithinPath(resolveEditorFilePath(buffer.file.path), target)) void closeBuffer(id);
+      }
+    },
+    [closeBuffer],
+  );
+
   useExternalFileWatcher({ buffers });
 
   useAutoReloadCleanBuffers({
@@ -993,6 +1036,8 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       setBufferPinned,
       setBufferClosable,
       reloadBufferFromDisk,
+      retargetBufferPaths,
+      closeBuffersForDeletedPath,
     }),
     [
       buffers,
@@ -1020,6 +1065,8 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       setBufferPinned,
       setBufferClosable,
       reloadBufferFromDisk,
+      retargetBufferPaths,
+      closeBuffersForDeletedPath,
     ],
   );
 

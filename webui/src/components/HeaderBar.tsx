@@ -1,11 +1,12 @@
 import { PanelRightClose } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { isCloud } from '../config/mode';
+import { useActiveRepoURL } from '../services/activeRepo';
 import { notificationBus } from '../services/notificationBus';
 import { platformHref } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
-import { UserMenu } from './UserMenu';
 import { UsageChip } from './UsageChip';
+import { UserMenu } from './UserMenu';
 import WorkspaceBar from './WorkspaceBar';
 
 export interface HeaderBarProps {
@@ -26,13 +27,28 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   onToggleContextPanel,
 }) => {
   const [busy, setBusy] = useState(false);
-  const [repoURL, setRepoURL] = useState<string | null>(null);
+  const repoURL = useActiveRepoURL() ?? null;
+  // Deployments without workspace compute answer 503; hide the button there
+  // rather than offer an action that can only fail.
+  const [workspacesAvailable, setWorkspacesAvailable] = useState(true);
 
   useEffect(() => {
     if (!isCloud) return;
-    const params = new URLSearchParams(window.location.search);
-    const repo = params.get('repo');
-    if (repo) setRepoURL(repo);
+    let cancelled = false;
+    fetch(`${window.location.origin}/workspace/fly`, { credentials: 'include' })
+      .then(async (res) => {
+        if (res.status !== 503) return;
+        // Only the "not configured" 503 is permanent; a transient outage
+        // keeps the button so the user can retry.
+        const body = await res.text().catch(() => '');
+        if (!cancelled && /not available on this deployment/i.test(body)) setWorkspacesAvailable(false);
+      })
+      .catch(() => {
+        // Network failure says nothing about the deployment; keep the button.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleStartBuilding = async () => {
@@ -41,16 +57,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
     if (!url) {
       notificationBus.notify(
         'info',
-        'Open a repo first',
-        'Import a repository into the browser workspace, then start a full workspace.',
-        undefined,
-        {
-          label: 'Show how',
-          onClick: () => {
-            // Nothing else to wire — user is already in the workspace
-            // picker flow; the toast itself surfaces the next step.
-          },
-        },
+        'Add a repository first',
+        'A full workspace is created for a repository. Use "Add repository" in the Files panel, then start one.',
       );
       return;
     }
@@ -67,19 +75,12 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       if (!response.ok) {
         const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
         const msg = errData.error || `HTTP ${response.status}`;
-        if (response.status === 503) {
+        if (response.status === 503 && /not available on this deployment/i.test(msg)) {
+          setWorkspacesAvailable(false);
           notificationBus.notify(
             'warning',
-            'Workspaces coming soon',
-            'Full workspaces are not yet configured. Explore in the browser for now.',
-            undefined,
-            {
-              label: 'Open browser workspace',
-              onClick: () => {
-                // User opted into the browser-only flow — keep them on
-                // the current page rather than navigating away.
-              },
-            },
+            'Full workspaces unavailable',
+            "This deployment doesn't offer full workspaces. You can keep working in the browser workspace.",
           );
         } else {
           notificationBus.notify('error', 'Failed to start workspace', msg, undefined, {
@@ -139,7 +140,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         <UserMenu />
-        {isCloud && (
+        {isCloud && workspacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
             onClick={handleStartBuilding}

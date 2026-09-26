@@ -12,6 +12,7 @@
  *   cloudWasmHandlers.ts — WASM-local file operation handlers
  */
 
+import { setActiveRepoURL } from './activeRepo';
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
@@ -30,8 +31,8 @@ import {
   trackFileWrite,
 } from './cloudWasmHandlers';
 import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
+import { loadRepoImport, saveRepoImport } from './repoImportCache';
 import { initWasmShell, type WasmShell } from './wasmShell';
-import { loadRepoImport, saveRepoImport, setLastRepo } from './repoImportCache';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -211,10 +212,10 @@ export class CloudAdapter implements APIAdapter {
       // from the cache instead of re-cloning. Fire-and-forget: a
       // persistence failure must never fail the import itself.
       const repo = data.repo ?? repoURL;
+      setActiveRepoURL(repoURL);
       void (async () => {
         try {
           await saveRepoImport(repoURL, { repo, files, importedAt: new Date().toISOString() });
-          await setLastRepo(repoURL);
         } catch (err) {
           console.warn('[CloudAdapter] repo import cache persist failed:', err);
         }

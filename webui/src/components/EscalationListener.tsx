@@ -21,24 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
 import { pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
-import {
-  applyPullManifest,
-  buildPushManifest,
-  createTxn,
-  resolveTxnWorkspace,
-  txnFinish,
-  txnPull,
-  txnPush,
-  txnRun,
-  TXN_RUN_TIMEOUT_SECONDS,
-} from '../services/cloudTxn';
-import {
-  collectTxnPushFiles,
-  describeTxnError,
-  txnPhaseLabel,
-  txnPullIO,
-  type TxnProgress,
-} from '../services/cloudTxnEscalate';
+import { runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
 import { platformHref } from '../utils/platformUrl';
 import './EscalationToast.css';
 
@@ -64,9 +47,22 @@ export const ESCALATION_CLOUD_TASK_PROMPT = 'Continue building this repository.'
  */
 export function deriveEscalationPrompt(trigger: EscalationTriggerEvent): string {
   const reason = typeof trigger.reason === 'string' ? trigger.reason.trim() : '';
-  if (!reason) return ESCALATION_CLOUD_TASK_PROMPT;
-  return `${ESCALATION_CLOUD_TASK_PROMPT} Escalation reason: ${reason}.`;
+  const command = typeof trigger.command === 'string' ? trigger.command.trim() : '';
+  const context = ESCALATION_REASON_CONTEXT[reason];
+  const parts = [ESCALATION_CLOUD_TASK_PROMPT];
+  if (context) parts.push(context);
+  if (command) parts.push(`Run \`${command}\` and fix any problems it reports.`);
+  return parts.join(' ');
 }
+
+/** Plain-language context for each escalation trigger, for the platform agent. */
+const ESCALATION_REASON_CONTEXT: Record<string, string> = {
+  git_push_failed: 'Pushing from the browser failed; commit and push the current changes.',
+  vfs_quota_exceeded: 'The browser workspace ran out of storage.',
+  command_timeout: 'A command timed out in the browser shell.',
+  command_unavailable_in_browser: "The browser shell couldn't run a command this work needs.",
+  build_command_detected: 'The next step needs a full build environment.',
+};
 
 /** Inline progress view state while a cloud task runs. */
 interface CloudTaskProgress {
@@ -133,59 +129,22 @@ export function EscalationListener() {
     setTxn({ phase: 'opening' });
 
     const run = async (): Promise<void> => {
-      let workspaceId = '';
-      let txnId = '';
-      let finished = false;
-      let phase = 'opening';
       try {
-        const resolved = await resolveTxnWorkspace(repoURL);
-        workspaceId = resolved.workspaceId;
-        const opened = await createTxn(workspaceId);
-        txnId = opened.txn_id;
-
-        phase = 'pushing';
-        if (mountedRef.current) setTxn({ phase });
-        const { inputs, deletes } = await collectTxnPushFiles();
-        const manifest = await buildPushManifest(() => inputs, { deletes });
-        await txnPush(workspaceId, txnId, manifest);
-
-        phase = 'running';
-        if (mountedRef.current) setTxn({ phase });
-        const result = await txnRun(workspaceId, txnId, command, TXN_RUN_TIMEOUT_SECONDS);
-
-        phase = 'pulling';
-        if (mountedRef.current) setTxn({ phase });
-        const pulled = await txnPull(workspaceId, txnId);
-        const applied = await applyPullManifest(pulled, await txnPullIO());
-        const skippedFiles = applied.skipped.length + pulled.skipped.length;
-
-        let warning: string | undefined;
-        try {
-          await txnFinish(workspaceId, txnId);
-          finished = true;
-        } catch (err) {
-          warning = `Cloud container stop failed — it will idle out on its own. ${
-            err instanceof Error ? err.message : String(err)
-          }`;
-        }
-
-        phase = 'done';
+        const outcome = await runTxnCommand(repoURL, command, (phase) => {
+          if (mountedRef.current) setTxn({ phase });
+        });
         if (mountedRef.current) {
-          setTxn({ phase, result, pulledFiles: applied.applied, skippedFiles, warning });
+          setTxn({
+            phase: 'done',
+            result: outcome.result,
+            pulledFiles: outcome.pulledFiles,
+            skippedFiles: outcome.skippedFiles,
+            warning: outcome.warning,
+          });
         }
       } catch (err) {
-        if (mountedRef.current) setTxn({ phase: 'error', error: describeTxnError(err, phase) });
+        if (mountedRef.current) setTxn({ phase: 'error', error: err instanceof Error ? err.message : String(err) });
       } finally {
-        // The machine-stop guarantee: finish even when a phase failed, unless
-        // the in-flow finish already ran (or no txn was ever opened).
-        if (txnId !== '' && !finished) {
-          try {
-            await txnFinish(workspaceId, txnId);
-          } catch {
-            // A failure here can only add noise — the error/warning above
-            // already names the side that failed.
-          }
-        }
         if (mountedRef.current) setSubmitting(false);
       }
     };

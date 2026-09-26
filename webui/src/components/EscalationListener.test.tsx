@@ -461,7 +461,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(url).toBe('/api/tasks');
     expect(JSON.parse(init.body as string)).toEqual({
       repo_url: 'https://github.com/acme/app',
-      prompt: 'Continue building this repository. Escalation reason: git_push_failed.',
+      prompt: 'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
     });
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toHaveTextContent('Cloud task completed');
   });

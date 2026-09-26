@@ -368,3 +368,31 @@ describe('handleWasmFileList — /api/files returns single-level listings', () =
     expect(mflb?.path).toBe('/mfl-b');
   });
 });
+
+describe('handleWasmFile — POST /api/file (save)', () => {
+  // BufferManagerContext clears a tab's unsaved flag only when the save
+  // response is {message: 'File saved successfully'} or {success: true} —
+  // the daemon's contract. Anything else leaves the tab dirty and the 30s
+  // autosave rewrites it forever.
+  it('answers with the save contract the buffer manager checks for', async () => {
+    const writes: Array<[string, string]> = [];
+    const shell = createMockShell({
+      writeFile: (p: string, c: string) => {
+        writes.push([p, c]);
+        return '';
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/src/main.go', JSON.stringify({ content: 'package main\n' }));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('File saved successfully');
+    expect(writes).toEqual([['/src/main.go', 'package main\n']]);
+  });
+
+  it('reports a failed write as an error', async () => {
+    const shell = createMockShell({ writeFile: () => 'disk full' });
+    const res = handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/a.txt', JSON.stringify({ content: 'x' }));
+    expect(res.status).toBe(500);
+  });
+});

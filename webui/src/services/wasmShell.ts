@@ -430,8 +430,13 @@ export async function initWasmShell(config?: {
 
       listDir(path: string): WasmListDirResult {
         const json = wasm.listDir(path);
-        const parsed = safeJsonParse<WasmListDirResult | null>(json, null);
-        return parsed ?? { entries: [], error: json };
+        // The WASM export returns a bare array of entries (JSON null for an
+        // empty directory) on success and {"error": "..."} on failure.
+        const parsed = safeJsonParse<WasmDirEntry[] | WasmListDirResult | null | undefined>(json, undefined);
+        if (parsed === undefined) return { entries: [], error: json };
+        if (parsed === null) return { entries: [] };
+        if (Array.isArray(parsed)) return { entries: parsed };
+        return { entries: parsed.entries ?? [], error: parsed.error };
       },
 
       deleteFile(path: string): string {

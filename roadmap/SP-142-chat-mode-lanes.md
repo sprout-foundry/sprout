@@ -1,6 +1,6 @@
 # SP-142 — Chat Mode Lanes: Per-Mode Chat Ownership on the Server
 
-> **Status (2026-09-24):** Draft. Not started.
+> **Status (2026-09-26):** Shipped (142.1–142.5).
 > Motivation: the multi-chat surface (New Chat, chat tabs) shipped with
 > per-chat agents server-side, but chats carry no mode identity — the chat
 > list is one flat list shared by the Code and Design modes, and the

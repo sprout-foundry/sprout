@@ -281,6 +281,20 @@ describe('EscalationListener — ETH-2 txn action', () => {
     expect(writtenVfs).toEqual([]);
   });
 
+  it('passes through the outdated-workspace explanation', async () => {
+    vi.mocked(createTxn).mockRejectedValue(
+      new CloudTxnError("this workspace runs an older version of sprout that can't run commands from the browser", 409),
+    );
+    render(createElement(EscalationListener));
+    fireTrigger();
+    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await flush();
+
+    expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
+      /^This workspace runs an older version/,
+    );
+  });
+
   it('maps a 409 to the friendly busy message', async () => {
     vi.mocked(createTxn).mockRejectedValue(new CloudTxnError('a transaction is already open', 409));
     render(createElement(EscalationListener));
@@ -289,7 +303,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
-      'another transaction is running, try again shortly',
+      'Another command is already running in the cloud workspace — try again shortly.',
     );
   });
 
@@ -461,7 +475,8 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(url).toBe('/api/tasks');
     expect(JSON.parse(init.body as string)).toEqual({
       repo_url: 'https://github.com/acme/app',
-      prompt: 'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
+      prompt:
+        'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
     });
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toHaveTextContent('Cloud task completed');
   });

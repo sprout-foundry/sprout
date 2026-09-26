@@ -60,13 +60,24 @@ export function describeTxnError(err: unknown, phase: string): string {
   const detail = err instanceof Error && err.message ? err.message : err ? String(err) : 'unknown error';
   const action = phase === 'error' ? 'Cloud container run' : `${txnPhaseLabel(phase)} failed`;
   if (err instanceof CloudTxnError) {
-    if (err.status === 409) return 'another transaction is running, try again shortly';
+    // The platform says so when the workspace runs an outdated sprout
+    // (409 workspace_outdated) or the deployment has no workspace compute
+    // (503) — both need action, not a retry, so pass its wording through.
+    if (err.status === 409 && /older version/i.test(detail)) return capitalize(detail);
+    if (err.status === 409) return 'Another command is already running in the cloud workspace — try again shortly.';
     if (err.status === 402) return `Not enough credits: ${detail}`;
+    if (err.status === 503 && /not available on this deployment/i.test(detail)) {
+      return "Cloud workspaces aren't enabled on this deployment.";
+    }
     if (err.status === 502 || err.status === 503) {
       return 'Cloud workspace is unavailable right now — try again shortly.';
     }
   }
   return `${action}: ${detail}`;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**

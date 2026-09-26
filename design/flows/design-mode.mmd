@@ -1,5 +1,5 @@
 %% design-mode — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
-%% flow-source-hash: fnv1a64:1a0895f7b6654d39
+%% flow-source-hash: fnv1a64:077238698783079e
 %% Source: design/flows/design-mode.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
   s1["design-mode — the Design workspace IA"]
@@ -13,3 +13,7 @@ flowchart TD
   s3 -->|a screen picked in the browser opens the same workbench| s4
   s4 -->|the Library group's Flows entry targets the flows canvas| s5
   s5 -->|the workbench's flows facet links into the flow graph| s6
+  design-screens -->|a screen picked in the browser opens the same workbench| design-mode
+  design-screens -->|the Library group's Flows entry targets the flows canvas| design-flows
+  design-flows -->|the Screens group's workbench targets the screens browser's domain| design-screens
+  design-flows -->|the workbench's flows facet links into the flow graph| design-mode

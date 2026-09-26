@@ -1,15 +1,71 @@
 {
   "provenance": "Generated from design/screens/*.html data-attributes (SP-143 §4). Do not edit by hand; regenerate with design_export_tokens targets:screens.",
-  "source-hash": "fnv1a64:67566592fe2915d0",
+  "source-hash": "fnv1a64:b5e9f9157fb6f038",
   "source": "design/screens/*.html. Recompute the hash from those bytes (concat in stem order, fnv1a64) to verify.",
   "format-version": 1,
   "screens": [
+    {
+      "stem": "app-shell",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "command-palette",
+          "trigger": "\u0026#8984"
+        },
+        {
+          "to": "editor",
+          "trigger": "open a file (sidebar tree, palette, or a link in chat)"
+        },
+        {
+          "to": "git-panel",
+          "trigger": "open the git section from the icon rail"
+        },
+        {
+          "to": "chat",
+          "trigger": "select the chat workspace / send a message"
+        },
+        {
+          "to": "design-flows",
+          "trigger": "switch workspace mode"
+        }
+      ]
+    },
     {
       "stem": "chat",
       "device": "",
       "frame": 1440,
       "states": [],
       "nav": []
+    },
+    {
+      "stem": "command-palette",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "app-shell",
+          "trigger": "back affordances (back arrow / close / Esc)"
+        }
+      ]
+    },
+    {
+      "stem": "design-flows",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "design-screens",
+          "trigger": "the Screens group's workbench targets the screens browser's domain"
+        },
+        {
+          "to": "design-mode",
+          "trigger": "the workbench's flows facet links into the flow graph"
+        }
+      ]
     },
     {
       "stem": "design-mode",
@@ -48,6 +104,50 @@
       ]
     },
     {
+      "stem": "design-screens",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "design-mode",
+          "trigger": "a screen picked in the browser opens the same workbench"
+        },
+        {
+          "to": "design-flows",
+          "trigger": "the Library group's Flows entry targets the flows canvas"
+        }
+      ]
+    },
+    {
+      "stem": "editor",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "app-shell",
+          "trigger": "back affordances (back arrow / close / Esc)"
+        }
+      ]
+    },
+    {
+      "stem": "git-panel",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "app-shell",
+          "trigger": "back affordances (back arrow / close / Esc)"
+        },
+        {
+          "to": "editor",
+          "trigger": "open a file (sidebar tree, palette, or a link in chat)"
+        }
+      ]
+    },
+    {
       "stem": "mobile-session",
       "device": "phone",
       "frame": 390,
@@ -72,6 +172,18 @@
         {
           "to": "mobile-session",
           "trigger": "tap session row"
+        }
+      ]
+    },
+    {
+      "stem": "settings",
+      "device": "",
+      "frame": 1440,
+      "states": [],
+      "nav": [
+        {
+          "to": "app-shell",
+          "trigger": "back affordances (back arrow / close / Esc)"
         }
       ]
     }

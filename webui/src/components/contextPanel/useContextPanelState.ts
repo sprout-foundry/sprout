@@ -7,7 +7,7 @@ import {
   PANEL_MIN,
   PANEL_MAX,
   PANEL_DEFAULT_WIDTH,
-  MOBILE_LAYOUT_MAX_WIDTH,
+  OVERLAY_LAYOUT_MAX_WIDTH,
 } from './types';
 
 interface UseContextPanelStateReturn {
@@ -52,10 +52,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
   const base = props as ContextPanelBaseProps;
 
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
-    if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH) {
-      return true;
-    }
-    return false;
+    return typeof window !== 'undefined' && window.innerWidth <= OVERLAY_LAYOUT_MAX_WIDTH;
   });
   // Width is owned here: loaded from localStorage once, persisted on every
   // change. (Previously lifted through ContextSidebar as prop plumbing —

@@ -154,6 +154,8 @@ export const PANEL_DEFAULT_WIDTH = 360;
 /** Width of the side-rail-only collapsed context panel (px). Must match .context-panel.collapsed width in ContextPanel.css. */
 export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;
+/** Up to this width the panel is an overlay drawer, so it starts closed. */
+export const OVERLAY_LAYOUT_MAX_WIDTH = 1024;
 
 export type ChatTabId = 'activity' | 'changes';
 

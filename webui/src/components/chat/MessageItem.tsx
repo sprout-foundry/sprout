@@ -1,7 +1,9 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { BrainCircuit, Bot, GitFork } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Bot, GitFork } from 'lucide-react';
 import { memo } from 'react';
+import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
+import './MessageItem.css';
 import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {
@@ -190,19 +192,26 @@ export const MessageItem = memo(function MessageItem({
               </div>
             </Collapsible>
           )}
-          <MessageSegments
-            content={message.content}
-            toolRefs={message.toolRefs}
-            onToolRefClick={onToolDetailToggle}
-            activeToolDetailId={activeToolDetail?.id}
-            onToolClick={(toolName) => {
-              const matchingTool = findMatchingToolExecution(toolName);
-              if (matchingTool) {
-                onToolDetailToggle?.(matchingTool.id);
-              }
-            }}
-            getToolStatus={getToolStatus}
-          />
+          {chatErrorText(message.content) !== null ? (
+            <div className="chat-error-message" role="alert">
+              <AlertTriangle size={14} aria-hidden="true" />
+              <span>{chatErrorText(message.content)}</span>
+            </div>
+          ) : (
+            <MessageSegments
+              content={message.content}
+              toolRefs={message.toolRefs}
+              onToolRefClick={onToolDetailToggle}
+              activeToolDetailId={activeToolDetail?.id}
+              onToolClick={(toolName) => {
+                const matchingTool = findMatchingToolExecution(toolName);
+                if (matchingTool) {
+                  onToolDetailToggle?.(matchingTool.id);
+                }
+              }}
+              getToolStatus={getToolStatus}
+            />
+          )}
           {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
             <ToolDetailInline tool={activeToolDetail} onToggle={onToolDetailToggle ?? (() => undefined)} />
           )}

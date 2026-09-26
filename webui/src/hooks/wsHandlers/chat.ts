@@ -214,6 +214,19 @@ export const handleAgentChangesReverted = (ctx: EventHandlerContext): void => {
 };
 
 // Handle error event
+/**
+ * A turn that fails before producing text can leave an empty assistant
+ * placeholder behind; drop it so the error card isn't preceded by a blank
+ * bubble.
+ */
+function withoutTrailingEmptyAssistant<T extends { type: string; content?: unknown }>(messages: T[]): T[] {
+  const last = messages[messages.length - 1];
+  if (last && last.type === 'assistant' && typeof last.content === 'string' && last.content.trim() === '') {
+    return messages.slice(0, -1);
+  }
+  return messages;
+}
+
 export const handleError = (ctx: EventHandlerContext): void => {
   const {
     event,
@@ -256,7 +269,7 @@ export const handleError = (ctx: EventHandlerContext): void => {
       queryProgress: null,
       lastError: displayMessage,
       messages: trimMessages([
-        ...prev.messages,
+        ...withoutTrailingEmptyAssistant(prev.messages),
         {
           id: generateMessageId(),
           type: 'assistant',
@@ -291,7 +304,7 @@ export const handleError = (ctx: EventHandlerContext): void => {
       queryProgress: null,
       lastError: displayMessage,
       messages: trimMessages([
-        ...prev.messages,
+        ...withoutTrailingEmptyAssistant(prev.messages),
         {
           id: generateMessageId(),
           type: 'assistant',

@@ -217,3 +217,23 @@ describe('MessageItem verbosity filter (SP-076)', () => {
     expect(details?.hasAttribute('open')).toBe(false);
   });
 });
+
+describe('MessageItem failed turn', () => {
+  it('shows the error text instead of an empty bubble', () => {
+    const message = makeNarration("[FAIL] Error: You're out of platform credits.");
+    act(() => {
+      root.render(
+        createElement(MessageItem, {
+          ...baseProps,
+          message,
+          messageIndex: 0,
+          outputVerbosity: 'normal',
+          hasNextAssistantMessage: false,
+        }),
+      );
+    });
+    const error = container.querySelector('.chat-error-message');
+    expect(error?.textContent).toBe("You're out of platform credits.");
+    expect(error?.getAttribute('role')).toBe('alert');
+  });
+});

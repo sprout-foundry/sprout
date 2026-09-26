@@ -25,6 +25,7 @@ import ChatMetricsStrip from './chat/ChatMetricsStrip';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
+import { chatErrorText } from './chat/chatError';
 
 function Chat(props: ChatProps): JSX.Element {
   const {
@@ -173,6 +174,11 @@ function Chat(props: ChatProps): JSX.Element {
   // recreate the callback on every streaming chunk and defeat
   // MessageItem's memo, re-running markdown + MessageSegments for
   // every visible row).
+  // A failed turn is already shown inline as the transcript's last entry;
+  // repeating it in the footer card would show the same error twice.
+  const lastMessage = messages[messages.length - 1];
+  const footerError = lastError && lastMessage && chatErrorText(lastMessage.content) === lastError ? null : lastError;
+
   const messagesRef = useRef<Message[]>(messages);
   messagesRef.current = messages;
 
@@ -273,7 +279,7 @@ function Chat(props: ChatProps): JSX.Element {
           queryProgress={queryProgress as QueryProgress | null}
           isProcessing={isProcessing}
           filteredToolExecutions={filteredToolExecutions}
-          lastError={lastError}
+          lastError={footerError}
           showExpiredSessionRecovery={showExpiredSessionRecovery}
           handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
           currentTodos={currentTodos}
@@ -287,7 +293,7 @@ function Chat(props: ChatProps): JSX.Element {
       latestTurnEdits,
       queryProgress,
       filteredToolExecutions,
-      lastError,
+      footerError,
       showExpiredSessionRecovery,
       handleReloadWithoutSSHPath,
       currentTodos,

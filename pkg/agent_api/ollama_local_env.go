@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -148,7 +149,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 		}
 
 		if len(listResp.Models) > 0 {
-			bracketWarn(os.Stderr, fmt.Sprintf("Model '%s' not found locally. Available models: %v", model, availableModels))
+			console.GlyphWarning.Fprintln(os.Stderr, fmt.Sprintf("Model '%s' not found locally. Available models: %v", model, availableModels))
 			fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 			model = listResp.Models[0].Name
 		} else {

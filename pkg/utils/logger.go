@@ -129,16 +129,21 @@ func (w *Logger) LogError(err error) {
 }
 
 // AskForConfirmation prompts the user with a message and waits for a 'yes' or 'no' response.
-// It returns true for 'yes' and false for 'no'.
+// It returns true for 'yes' and false for 'no'. When user interaction is
+// disabled and the confirmation is *required*, it fails closed (returns
+// false) rather than terminating the process.
 func (w *Logger) AskForConfirmation(prompt string, default_response bool, required bool) bool {
 	loggerMu.RLock()
 	interactive := w.userInteractionEnabled
 	loggerMu.RUnlock()
 	if !interactive && required {
-		w.Log("User interaction is disabled, but confirmation is required.")
+		// Fail closed: a *required* confirmation that cannot be presented to a
+		// human is a denial, not a reason to kill the process. Killing the
+		// process from a logging/confirmation helper (os.Exit) is an
+		// anti-pattern — callers decide how to handle a hard-stop.
+		w.Log("User interaction is disabled, but confirmation is required; denying for safety.")
 		w.Log(fmt.Sprintf("We were going to ask the user: '%s'", prompt))
-		w.Log("Exiting due to lack of confirmation in prompt-skipping mode.")
-		os.Exit(1) // Exit if confirmation is required but user interaction is disabled
+		return false
 	}
 	if !interactive {
 		w.Log("Skipping user confirmation in non-interactive mode.")

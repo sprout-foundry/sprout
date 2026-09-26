@@ -382,7 +382,13 @@ describe('handleWasmFile — POST /api/file (save)', () => {
         return '';
       },
     });
-    const res = handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/src/main.go', JSON.stringify({ content: 'package main\n' }));
+    const res = handleWasmLocal(
+      shell,
+      '/api/file',
+      'POST',
+      '/api/file?path=/src/main.go',
+      JSON.stringify({ content: 'package main\n' }),
+    );
     expect(res.status).toBe(200);
     const body = JSON.parse(await res.text());
     expect(body.success).toBe(true);

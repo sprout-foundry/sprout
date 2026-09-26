@@ -122,8 +122,10 @@ func TestDesignValidateHandler_Acceptance4bCleanTreeIsEmpty(t *testing.T) {
 
 	out, ok := res.StructuredOut.(findingsOutput)
 	require.True(t, ok)
-	require.Equal(t, 0, out.Count, "the clean fixture tree must yield no findings, got %#v", out.Findings)
-	for _, sev := range []string{"error", "warn", "info", "fix"} {
+	// The fixture's flows are §9b-derived, so the clean tree yields no
+	// findings at all — no legacy notices, no §4b rows.
+	require.Equal(t, 0, out.Count, "the clean fixture tree must be empty, got %#v", out.Findings)
+	for _, sev := range []string{"error", "warn", "fix", "info"} {
 		require.Equal(t, 0, out.BySeverity[sev], "severity %s on the clean tree", sev)
 	}
 	require.Contains(t, res.Output, "0 findings")

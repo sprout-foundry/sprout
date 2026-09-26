@@ -79,10 +79,11 @@ func TestScanValidTree(t *testing.T) {
 	assert.Equal(t, 2, inv.Flows[0].Nodes)
 	assert.Equal(t, 2, inv.Flows[0].Edges)
 
-	// Findings: the valid tree validates clean beyond the legacy
-	// wireframes' §9a deprecation notices.
+	// Findings: the valid tree validates clean beyond the transitional
+	// queue — the two wireframes' §9a deprecation notices plus the flow's
+	// §9b legacy notice (all one 9.4 migration).
 	assert.Empty(t, dropDeprecationFindings(inv.Findings))
-	assert.Equal(t, 2, inv.BySeverity["info"], "the two legacy wireframes carry their deprecation notices")
+	assert.Equal(t, 3, inv.BySeverity["info"], "two wireframe deprecations + one legacy-flow notice")
 	for _, sev := range []string{"error", "warn", "fix"} {
 		assert.Equal(t, 0, inv.BySeverity[sev], "severity %s", sev)
 	}

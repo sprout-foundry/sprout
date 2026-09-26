@@ -55,6 +55,13 @@ func ValidateTree(root string) ([]Finding, error) {
 		findings = append(findings, flows...)
 	}
 
+	// SP-140-9 §9b: the flow-tier tree checks — the .json source schema,
+	// derived-.mmd drift (recompute vs header) / legacy notices, and the
+	// off-path data-nav cross-check (warn, .json-bearing trees only). Runs
+	// beside the per-file flow pass above; both surfaces are sorted, and the
+	// combined sort at the end keeps the output deterministic.
+	findings = append(findings, ValidateFlowsTree(root)...)
+
 	screens, err := ValidateScreensDir(root)
 	if err != nil {
 		errs = append(errs, err)
@@ -200,9 +207,18 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		// single-file flow run surfaces its non-terminal edge findings too.
 		stems := assetStems(root, "wireframes", ".svg")
 		screenStems := assetStems(root, "screens", ".html")
-		findings := ValidateFlows(rel, data, stems, screenStems...)
-		findings = append(findings, flowBidirectionalityFindings(rel, data, stems)...)
+		findings := ValidateFlows(root, rel, data, stems, screenStems...)
+		findings = append(findings, flowBidirectionalityFindings(root, rel, data, stems)...)
+		// SP-140-9 §9b: the derived-export checks — drift against the .json
+		// source when one exists, the legacy notice when it does not.
+		findings = append(findings, flowMMDChecks(root, rel, data)...)
 		return findings, nil
+
+	case strings.HasPrefix(rel, DirName+"/flows/") && strings.HasSuffix(rel, ".json") && !strings.HasSuffix(rel, layoutSidecarSuffix):
+		// SP-140-9 §9b: the flow source document. The §7d <name>.layout.json
+		// sidecars stay unrecognized single-file paths — they are canvas
+		// state, not design assets.
+		return ValidateFlowSource(rel, data, flowSourceStemUnion(root)), nil
 
 	case strings.HasPrefix(rel, DirName+"/screens/") && strings.HasSuffix(rel, ".html"):
 		// SP-143 §143.5 graph rules run with the per-file rules so a
@@ -235,6 +251,13 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		return nil, fmt.Errorf("%s is not a recognized design asset (expected a tokens/*.tokens.json, wireframes/*.svg, components/*.svg, icons/*.svg, flows/*.mmd, screens/*.html, runtime/* (SP-143), %s, or brand/brand.md under %s/)",
 			rel, ManifestName, DirName)
 	}
+}
+
+// flowSourceStemUnion is the transitional stem union the §9b flow-source
+// rules resolve screens against: wireframe stems OR screen stems (SP-140-9
+// §9a accepts either tier until 9.4 collapses it).
+func flowSourceStemUnion(root string) []string {
+	return append(assetStems(root, "wireframes", ".svg"), assetStems(root, "screens", ".html")...)
 }
 
 // screenStemSet is the map form of assetStems(root, "screens", ".html") for

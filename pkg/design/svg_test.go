@@ -31,12 +31,14 @@ func requireNoWireframeFindings(t *testing.T, findings []Finding) {
 }
 
 // dropDeprecationFindings filters out the §9a wireframe deprecation notices
-// so tests that assert the pre-9.4 per-file rules stay readable; the notices
-// themselves are pinned by TestWireframeDeprecation.
+// and the §9b legacy-flow notices — both are the transitional queue toward
+// the 9.4 migration (the same migration, one per legacy artifact class) — so
+// tests that assert the pre-9.4 per-file rules stay readable; the notices
+// themselves are pinned by TestWireframeDeprecation and the flowsource tests.
 func dropDeprecationFindings(findings []Finding) []Finding {
 	out := make([]Finding, 0, len(findings))
 	for _, f := range findings {
-		if f.Rule == ruleWireframeDeprecated {
+		if f.Rule == ruleWireframeDeprecated || f.Rule == ruleFlowMMDLegacy {
 			continue
 		}
 		out = append(out, f)

@@ -178,6 +178,19 @@ SP-140 "no split source/registration" rule)
   schema; screens primary; wireframe tier → `deprecated` warn).
 - **9.2** Flow source `.json` schema + deterministic `.mmd` generator
   (provenance hash, stable node ids) + validator drift check.
+  > **Progress (2026-09-25):** Shipped. v1 schema per §9b's example (linear
+  > steps with triggers; `condition`/parallel branches deferred). Generator
+  > (pkg/design/flowsource*.go): steps render with their step id as the node
+  > id, off-path data-nav-reachable screens join keyed by stem (§9c id
+  > stability); the derived .mmd carries a `flow-source-hash: fnv1a64` header
+  > over the .json + touched screens (token-export fold, documented input
+  > order). Validator: drift = error, header-less .mmd = transitional info
+  > (`flow_mmd_legacy`), off-path data-nav cross-check = warn scoped to
+  > .json-bearing trees; the node-stem and §4b bidirectionality rules accept
+  > §9b step ids as legitimate node ids. ParseFlowchart grew |label| edge
+  > parsing (design_brief/DesignView can read derived flows). Export target
+  > `flows` is explicit-only, never in `all`. The dogfood tree's 4 legacy
+  > flows carry the transitional notice (9.4 converts them).
 - **9.3** Canvas renders the derived graph (mermaid reuse; sidecar
   contract pinned by test).
 - **9.4** Migration: convert the branch's SVG wireframes → HTML screens

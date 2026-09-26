@@ -64,7 +64,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "settings" is both source and target (non-terminal) with no
 		// wireframe, so it trips the rule.
 		content := "flowchart LR\n  login --> home\n  home --> settings\n  settings --> home\n  home --> checkout\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -82,13 +82,13 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "welcome" is only ever an edge target (no outgoing edge) — a terminal
 		// state, exempt from the wireframe requirement per §4b.
 		content := "flowchart LR\n  login --> home\n  home --> welcome\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		assert.Equal(t, 0, findingRules(findings)[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 	})
 
 	t.Run("all-wireframes-clean", func(t *testing.T) {
 		content := "flowchart LR\n  login --> home\n  home --> checkout\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home", "checkout"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home", "checkout"})
 		requireNoWireframeFindings(t, findings)
 	})
 
@@ -96,7 +96,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "ghost" is the source of an edge and the target of none: the edge
 		// leaves a screen that does not exist, so it is non-terminal-broken.
 		content := "flowchart LR\n  login --> home\n  ghost --> home\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -111,7 +111,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// also chain through a non-stem non-terminal node: the non-stem node
 		// is flagged, the stems are not.
 		content := "flowchart LR\n  login --> home\n  home --> wizard\n  wizard --> home\n  home --> done\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -126,14 +126,14 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// No edge endpoint is a wireframe stem, so this is a process/user flow:
 		// nothing cross-checks it (matching the §1c node-stem scoping).
 		content := "flowchart TD\n  start --> process --> done\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login"})
 		requireNoWireframeFindings(t, findings)
 	})
 
 	t.Run("deduplicated-per-node", func(t *testing.T) {
 		// One node referenced by three edges yields one finding.
 		content := "flowchart LR\n  login --> ghost\n  ghost --> ghost2\n  ghost --> home\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		assert.Equal(t, 1, findingRules(findings)[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 	})
 }

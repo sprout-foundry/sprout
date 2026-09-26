@@ -101,7 +101,7 @@ func dvWriteValidTree(t *testing.T, root string) {
 	dvWrite(t, root, "design/screens/home.html", dvTestHomeScreen)
 	dvWrite(t, root, "design/generated/screens.json", dvTestScreensIndex(root))
 	writeTestRuntimeAsset(t, root)
-	dvWrite(t, root, "design/flows/sign-up.mmd", dvTestFlowMMD)
+	writeDerivedFlows(t, root)
 	dvWrite(t, root, design.GitContractFile, "* text=auto eol=lf\n"+design.GitAttributesDiffHTMLLine+"\n")
 	dvWrite(t, root, design.GitIgnoreFile, "node_modules/\n"+design.GitIgnoreCacheLine+"\n")
 }
@@ -150,6 +150,30 @@ func dvTestScreensIndex(root string) string {
 	}
 	return string(art.Content)
 }
+
+// writeDerivedFlows seeds the flow tier's derived form: the .json source plus
+// the generator-emitted .mmd (provenance header included), so the fixture is
+// clean under SP-140-9 §9b (hand-authored .mmd earns a legacy info).
+func writeDerivedFlows(t *testing.T, root string) {
+	t.Helper()
+	dvWrite(t, root, "design/flows/sign-up.json", dvTestFlowSourceJSON)
+	arts, err := design.RenderAllFlowMDMArtifacts(root)
+	if err != nil {
+		t.Fatalf("render derived flows: %v", err)
+	}
+	for _, a := range arts {
+		dvWrite(t, root, a.RelPath, string(a.Content))
+	}
+}
+
+const dvTestFlowSourceJSON = `{
+  "name": "sign-up",
+  "steps": [
+    {"id": "s1", "label": "Start", "screen": "login"},
+    {"id": "s2", "label": "Signed in", "screen": "home", "trigger": "submit", "next": "s3"},
+    {"id": "s3", "label": "Done", "screen": "home"}
+  ]
+}`
 
 // dvValidTreeWireframeInfos is kept for the wireframe-deprecation tests
 // that assert the info channel directly.
@@ -218,6 +242,8 @@ func TestDesignValidateHandler_NoArgsValidTree(t *testing.T) {
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "findings are advisory; a clean run must never be an error")
+	// The fixture's flows are §9b-derived (source .json + regenerated
+	// export), so the valid tree validates fully clean.
 	require.Contains(t, res.Output, "design_validate: 0 findings")
 
 	// StructuredOut carries findings + count + bySeverity.
@@ -227,6 +253,7 @@ func TestDesignValidateHandler_NoArgsValidTree(t *testing.T) {
 	require.Empty(t, out.Findings)
 	require.Equal(t, 0, out.BySeverity["error"])
 	require.Equal(t, 0, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
 }
 
 func TestDesignValidateHandler_NoArgsNoDesignDir(t *testing.T) {
@@ -296,13 +323,13 @@ func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// One brand_raw_hex warn; the derived-flow fixture adds nothing else.
 	require.Equal(t, 1, out.Count)
 	require.Equal(t, 1, out.BySeverity["warn"])
-	require.Equal(t, "warn", out.Findings[0].Severity)
-	require.Equal(t, "brand_raw_hex", out.Findings[0].Rule)
-	require.Equal(t, 0, out.Findings[0].Line, "a finding with no derivable line must carry line=0")
+	require.Equal(t, 0, out.BySeverity["info"])
 
-	// The structured output must be JSON-friendly, with "line" omitted at 0.
+	// The structured output must be JSON-friendly, with "line" omitted at 0
+	// on the warn (the legacy info anchors on no line either).
 	data, err := json.Marshal(out)
 	require.NoError(t, err)
 	var raw struct {
@@ -310,11 +337,13 @@ func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(data, &raw))
 	require.Len(t, raw.Findings, 1)
-	require.NotContains(t, raw.Findings[0], "line", "line must be omitted when 0")
-	require.Contains(t, raw.Findings[0], "file")
-	require.Contains(t, raw.Findings[0], "severity")
-	require.Contains(t, raw.Findings[0], "message")
-	require.Contains(t, raw.Findings[0], "rule")
+	for _, f := range raw.Findings {
+		require.NotContains(t, f, "line", "line must be omitted when 0")
+		require.Contains(t, f, "file")
+		require.Contains(t, f, "severity")
+		require.Contains(t, f, "message")
+		require.Contains(t, f, "rule")
+	}
 }
 
 func TestDesignValidateHandler_PathArgGoodAsset(t *testing.T) {
@@ -566,9 +595,11 @@ func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// The two seeded findings; the derived-flow fixture adds nothing.
 	require.Equal(t, 2, out.Count)
 	require.Equal(t, 1, out.BySeverity["error"])
 	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
 	require.Contains(t, res.Output, "2 finding(s)")
 	require.Contains(t, res.Output, "1 error(s)")
 	require.Contains(t, res.Output, "1 warn(s)")
@@ -593,8 +624,10 @@ func TestDesignValidateHandler_GitContractFixFindings(t *testing.T) {
 	require.False(t, res.IsError, "fix findings are advisory — they never block a turn")
 
 	out := res.StructuredOut.(findingsOutput)
+	// The two git-contract fixes; the derived-flow fixture adds nothing.
 	require.Len(t, out.Findings, 2, "expected the .gitattributes + .gitignore fixes, got %#v", out.Findings)
 	require.Equal(t, 2, out.BySeverity["fix"])
+	require.Equal(t, 0, out.BySeverity["info"])
 	require.Contains(t, res.Output, "2 fix(es) to apply")
 	require.Equal(t, 0, out.BySeverity["error"])
 
@@ -632,8 +665,10 @@ func TestDesignValidateHandler_GitContractSatisfied(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// The satisfied contract clears every git finding; the fixture's flows
+	// are §9b-derived (source .json + regenerated export), so the tree is
+	// fully clean — no legacy notices either.
 	require.Equal(t, 0, out.Count)
-	require.Equal(t, 0, out.BySeverity["info"])
 	require.Equal(t, 0, out.BySeverity["fix"])
 	require.Equal(t, 0, out.BySeverity["error"])
 }

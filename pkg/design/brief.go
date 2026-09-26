@@ -485,6 +485,15 @@ func briefFlowEdgesInFile(rel, flowName, content string, fc Flowchart) []BriefFl
 	scanned := []BriefFlowEdge{}
 	seen := map[string]bool{}
 
+	// The parser's own edge labels (the `-->|trigger|` form, SP-140-9 §9b)
+	// backfill any scanned edge the line-level split cannot label.
+	parsed := map[string]string{}
+	for _, e := range fc.Edges {
+		if e.Label != "" {
+			parsed[e.Source+"\x00"+e.Target] = e.Label
+		}
+	}
+
 	record := func(dst *[]BriefFlowEdge, src, tgt, trigger string) {
 		if src == "" || tgt == "" {
 			return
@@ -532,6 +541,14 @@ func briefFlowEdgesInFile(rel, flowName, content string, fc Flowchart) []BriefFl
 		briefAddStatementEdges(&scanned, seen, rel, flowName, segs)
 	}
 
+	// The parser's edge labels (the `-->|trigger|` form, SP-140-9 §9b)
+	// backfill a scanned edge whose line-level split carried no label; an
+	// empty trigger from the scan is upgraded before the edge is returned.
+	for i := range scanned {
+		if scanned[i].Trigger == "" {
+			scanned[i].Trigger = parsed[scanned[i].Source+"\x00"+scanned[i].Target]
+		}
+	}
 	// Merge the subset parser's edges for any pair the scan did not produce
 	// (defensive: an operator shape the scan could not split).
 	for _, e := range fc.Edges {

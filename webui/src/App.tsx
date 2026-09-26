@@ -6,6 +6,7 @@ import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
 import SyncStatusBanner from './components/SyncStatusBanner';
@@ -507,6 +508,7 @@ function AppInner() {
                       <UpdateNotification />
                       <UpdateAvailableBanner />
                       <EscalationListener />
+                      <AgentEscalationBridge repoURL={repoURL} />
                       <InstallPromptBanner />
                       <SyncStatusBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />

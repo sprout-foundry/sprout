@@ -69,6 +69,11 @@ func (e *Env) All() map[string]string {
 	return result
 }
 
+// ExitCommandNotFound is the exit code for a command (or subcommand/flag)
+// the browser shell can't run. Callers treat it as "needs a real
+// environment" — the signal the escalation path acts on.
+const ExitCommandNotFound = 127
+
 // CmdResult holds the result of a command execution.
 type CmdResult struct {
 	Stdout   string `json:"stdout"`

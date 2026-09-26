@@ -124,9 +124,21 @@ func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
 	}
 
 	blocks := map[string][]string{
-		"directory contract": {"design/readme.md", "design/tokens/", "design/wireframes/", "design/flows/"},
-		"format charter":     {"dtcg", "$value", "viewbox", "data-nav", "mermaid", "flowchart"},
-		"validate workflow":  {"design_validate", "validate, then declare done"},
+		"directory contract": {"design/readme.md", "design/tokens/", "design/screens/", "design/flows/"},
+		"format charter":     {"dtcg", "$value", "data-nav", "mermaid", "flowchart"},
+		// SP-140-9 §9a/§9b: screens are the primary tier (wireframes
+		// removed — the prompt must say so, matching the validator) and
+		// flows are .json sources with derived .mmd exports.
+		"post-9.4 formats": {
+			"primary tier",
+			"hard error",
+			"data-screen=",
+			`<flow-name>.json`,
+			"design_export_tokens targets:flows",
+			"never hand-edit",
+			"flow-source-hash",
+		},
+		"validate workflow": {"design_validate", "validate, then declare done"},
 		"critique vocabulary": {
 			"hierarchy", "affordance", "consistency", "spacing rhythm", "contrast",
 		},

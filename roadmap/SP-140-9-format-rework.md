@@ -1,6 +1,8 @@
 # SP-140-9 — Format Rework: HTML-First Screens, Derived Flows, Structured Steps
 
-> **Status (2026-09-22):** Draft. Parent:
+> **Status (2026-09-26):** Shipped (9.1–9.8; 9.7's HTML render path shipped
+> with SP-143, flow-critique on the derived graph pinned in 9.3's notes; 9.8's
+> determinism/sidecar/drift/migrated-fixture pins landed per item). Parent:
 > [SP-140](./SP-140-design-workspace.md). Amends SP-140-1 §1b/§1c (format
 > charter); ripples into SP-140-4 (critique), SP-140-5 (sync/brief), and the
 > `design-system` skill / `designer` persona (SP-140-2). Coordinates with
@@ -211,6 +213,12 @@ SP-140 "no split source/registration" rule)
   proposals, no `.mmd` writes), `design_brief`, `design_assets`.
 - **9.6** Prompt updates: `design-system` skill + `designer` persona +
   tool docs (screens-first loop; flows derived).
+  > **Progress (2026-09-26):** Shipped. Skill workflow is
+  > brief → tokens → screens → flow sources → regenerate exports, with the
+  > wireframe charter replaced by the removal statement (convert, never
+  > restore) and the flows step teaching the .json schema + targets:flows;
+  > designer persona's charter rebuilt the same way; pin tests on both
+  > (TestDesignSystemSkillFormatRework, TestReadEmbeddedPromptFile_DesignerPrompt).
 - **9.7** `design_critique`: HTML-screen render path; flow critique on
   the derived graph.
 - **9.8** Test suite: generator determinism pins, sidecar-stability
@@ -218,20 +226,31 @@ SP-140 "no split source/registration" rule)
 
 ## Acceptance criteria
 
-- [ ] Every screen in a produced tree is `design/screens/<stem>.html`;
+- [x] Every screen in a produced tree is `design/screens/<stem>.html`;
       no `design/wireframes/` remains (icons/brand SVGs unaffected).
-- [ ] No `.mmd` in the tree is hand-authored: each carries a
+      (Dogfood tree migrated 2026-09-26: 11/11 screens, wireframes/ gone;
+      presence of a wireframe is a hard error.)
+- [x] No `.mmd` in the tree is hand-authored: each carries a
       `source-hash` provenance header, and `design_validate` recomputes
       it (drift = error). Editing a `.mmd` by hand is detectable and
-      rejected the same way a dirty token alias graph is.
-- [ ] A dev turn that adds a route produces, via `design_sync`, a
-      proposal for a new screen + step — never a `.mmd` edit.
-- [ ] The canvas renders the derived graph; a drag still writes only the
+      rejected the same way a dirty token alias graph is. (flow-source-hash
+      + flow_mmd_drift; external trees' header-less .mmd carry the
+      transitional flow_mmd_legacy info.)
+- [x] A dev turn that adds a route produces, via `design_sync`, a
+      proposal for a new screen + step — never a `.mmd` edit. (design_sync's
+      structural deltas propose screens/flow sources; the derived .mmd is
+      never a sync write target — regenerating it is the export's job.)
+- [x] The canvas renders the derived graph; a drag still writes only the
       layout sidecar; an existing sidecar survives a regeneration
-      (node-id stability pinned by test).
-- [ ] The `design-system` skill, the `designer` persona, and the
+      (node-id stability pinned by test). (flowsource_render_test.go:
+      derived .mmd parses as ordinary mermaid; node ids stable across a
+      regenerating edit; bytes deterministic.)
+- [x] The `design-system` skill, the `designer` persona, and the
       validator agree on the formats (one spec as the single source; a
-      prompt/validator contradiction is a review blocker).
-- [ ] The umbrella end-to-end ACs still hold: a fresh workspace goes
+      prompt/validator contradiction is a review blocker). (Pinned:
+      TestDesignSystemSkillFormatRework + the designer prompt's
+      post-9.4-formats block in TestReadEmbeddedPromptFile_DesignerPrompt.)
+- [x] The umbrella end-to-end ACs still hold: a fresh workspace goes
       prompt → validated tree (tokens, screens, flow sources) with the
       DesignView showing the graph and screens, using only open formats.
+      (umbrella_e2e_test.go green over the wireframe-free fixtures.)

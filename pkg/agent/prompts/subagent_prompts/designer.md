@@ -20,9 +20,9 @@ design/
   tokens/                   # W3C DTCG design tokens (*.tokens.json)
   brand/                    # brand.md + logo SVGs
   icons/                    # icon SVGs + optional sprite.svg
-  wireframes/               # one SVG per screen, stem == screen name
+  screens/                  # HTML screens — the PRIMARY and only screen tier
   screens/                  # hi-fi HTML/CSS screens, self-contained
-  flows/                    # mermaid flow sources, one .mmd per flow
+  flows/                    # .json flow SOURCES + derived .mmd exports
   feedback/                 # human annotations, JSON per target
 ```
 
@@ -40,7 +40,7 @@ paths; dangling and cyclic references are errors. One file per tier
 (`color`, `typography`, `spacing`, `sizing`, `motion`) plus project tiers;
 no `index.json` aggregation — consumers glob. `$extensions` is passed
 through untouched. Tokens are authoritative: literal colors and font
-strings in screens and wireframes are drift. **Each tier file self-nests
+strings in screens are drift. **Each tier file self-nests
 under its own group** — `color.tokens.json` holds `{"color": {...}}` —
 because every `{group.token}` reference walks from that group
 (`{color.dark.bg.primary}` resolves against the top-level `color`). A tier
@@ -48,21 +48,23 @@ file with bare sub-groups parses and exports cleanly while dangling every
 reference against it; the `consistency_token_ref_dangling` finding names
 this — fix it by self-nesting the file, never by rewriting the refs.
 
-**Wireframes (`design/wireframes/<screen-name>.svg`)** — root
-`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">` with integer
-`W H` matching a device frame declared in `design/README.md`. Self-contained:
-no `<script>`, no external `href`/`src` (embedded rasters are data URIs
-only). Text stays real `<text>`, never outlined paths. Interactive elements
-carry stable `id` attributes; navigation targets carry
-`data-nav="<screen-name>"` pointing at another wireframe's file stem. One
-screen per file; the file stem is the canonical screen name and matches
-`^[a-z0-9]+(-[a-z0-9]+)*$`.
+**Screens (`design/screens/<screen-name>.html`)** — the primary tier; the
+SVG wireframe tier is REMOVED (SP-140-9): a `design/wireframes/*.svg` is a
+hard error — convert it to a screen. `<html>` carries
+`data-screen="<stem>"`; navigation uses §9a anchors
+`data-nav="to:<stem>;trigger:<label>"`; kits start from
+`design/runtime/base/` copies, utilities-first from the generated theme.
+(The SVG wireframe tier is gone; the screens charter below is the whole
+contract.)
 
-**Flows (`design/flows/<flow-name>.mmd`)** — one `flowchart` per file.
-Screen flows use wireframe file stems as node ids; that id == stem rule is
-what ties the flow graph to the screens and what the validator checks.
-Edge labels carry trigger semantics (`-- "tap Submit" -->`). Mermaid is the
-source of truth — rendered images are derived artifacts, never edited.
+**Flows (`design/flows/<flow-name>.json` + derived `.mmd`)** — the `.json`
+is the authored source (SP-140-9 §9b): a linear step list
+(`{"name","steps":[{"id","label","screen","trigger","next"}]}`); `screen`
+names a real screen stem (optional for non-screen processes); `trigger` is
+the gesture advancing to `next`. The `.mmd` beside it is DERIVED — a
+mermaid `flowchart` rendered from the source; regenerate with
+`design_export_tokens targets:flows`, never hand-edit it (the
+flow-source-hash recomputes; drift is a hard error).
 
 **Screens (`design/screens/*.html`)** — start from a copy of a base template
 (`design/runtime/base/phone.html` or `base/desktop.html`), saved under the
@@ -150,7 +152,7 @@ they read is real. Three steps, in any order (work starts from either side):
   the derived screens.json (the screen graph other tooling reads instead of
   parsing HTML); drift is a validator error.
 - **Brief whenever building a screen.** Assemble the screen's contract from the
-  tree (purpose, wireframe, flows in/out, tokens, open feedback, status) before
+  tree (purpose, screen, flows in/out, tokens, open feedback, status) before
   a dev turn builds it — read `design/README.md` + `design_assets` today; call
   the `design_brief` tool once it ships. The brief is advisory context, never
   generated code.
@@ -159,7 +161,7 @@ they read is real. Three steps, in any order (work starts from either side):
   `design_sync` — the way a turn that edits code ends with tests. It reads the
   touched UI files and the tree and returns the semantic deltas code
   introduced; `apply` writes the safe subset (literal token renames/revalues,
-  structural wireframe/flow additions) into `design/` and leaves inferred
+  structural screen/flow additions) into `design/` and leaves inferred
   deltas as proposals. Sync never rewrites implementation to match `design/`:
   the semantic layer is *invited to adopt*, never enforced onto code. Then
   co-commit the code change with its `design/` adoption.
@@ -185,7 +187,7 @@ then close the loop by writing a `resolution` summary and moving `status` off
 the `design_assets` report.
 
 Render to see your own output before judging it: `design_render` on a
-wireframe SVG, a screen HTML, or a flow `.mmd`, then critique the rendered
+a screen HTML or a flow `.mmd`, then critique the rendered
 image. `design_critique` does the render-and-judge dance in one call; reach
 for `design_render` directly when you want the image without a rubric pass.
 Use `analyze_ui_screenshot` for screenshots and local HTML you did not

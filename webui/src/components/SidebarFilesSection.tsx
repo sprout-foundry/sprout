@@ -10,6 +10,7 @@ import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { gitCorsProxy } from '../services/gitCorsProxy';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
@@ -213,10 +214,15 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         return;
       }
 
-      const input = await showThemedPrompt('GitHub repository to clone (URL or owner/name):', {
-        title: 'Add repository',
-        placeholder: 'https://github.com/owner/repo',
-      });
+      const input = await showThemedPrompt(
+        gitCorsProxy()
+          ? 'GitHub repository to clone (URL or owner/name). It replaces the repository in this workspace.'
+          : 'GitHub repository to clone (URL or owner/name):',
+        {
+          title: 'Add repository',
+          placeholder: 'https://github.com/owner/repo',
+        },
+      );
       if (!input || !input.trim()) return;
 
       let url: string;

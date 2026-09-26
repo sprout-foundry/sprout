@@ -39,15 +39,38 @@ export interface BrowserGitConfig {
 
 let config: BrowserGitConfig | null = null;
 
+// Resolves once the app wires the VFS bridge; boot-time work (the ?repo=
+// deep link) starts before that and waits on it.
+let markConfigured: () => void = () => undefined;
+let configured = new Promise<void>((resolve) => {
+  markConfigured = resolve;
+});
+
 export function configureBrowserGit(cfg: BrowserGitConfig) {
   config = cfg;
   repoInitialized = false;
+  markConfigured();
+}
+
+/** Wait for configureBrowserGit, failing after timeoutMs. */
+export function whenBrowserGitConfigured(timeoutMs = 30000): Promise<void> {
+  if (config) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('browser git was not configured in time')), timeoutMs);
+    void configured.then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 /** Test-only: restore the pre-bootstrap (never-configured) state. */
 export function __resetBrowserGitForTest(): void {
   config = null;
   repoInitialized = false;
+  configured = new Promise<void>((resolve) => {
+    markConfigured = resolve;
+  });
 }
 
 /**
@@ -430,8 +453,46 @@ export async function gitFileDiff(path: string) {
   };
 }
 
+/** The browser repository's origin URL, or null when there is no repository or remote. */
+export async function gitOriginUrl(): Promise<string | null> {
+  try {
+    const remotes = await git.listRemotes({ fs: getFs().promises, dir: REPO_DIR });
+    return remotes.find((r) => r.remote === 'origin')?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Put the repository's files back into the VFS where they are missing,
+ * leaving every file already there (including unsaved-to-git edits) alone.
+ * Returns how many files were written.
+ */
+export async function restoreGitWorkingTree(): Promise<number> {
+  if (!config) throw new Error('browserGit not configured');
+  const present = new Set((await config.readVfsFiles()).map((f) => f.path));
+  const files: Array<{ path: string; content: string }> = [];
+  for (const relPath of await readdirRecursive(REPO_DIR)) {
+    if (relPath.startsWith('.git') || present.has(relPath)) continue;
+    try {
+      const content = await getFs().promises.readFile(`${REPO_DIR}/${relPath}`, 'utf8');
+      files.push({ path: relPath, content: String(content) });
+    } catch {
+      // best-effort: skip binary/unreadable files.
+    }
+  }
+  if (files.length > 0) await config.writeVfsFiles(files);
+  return files.length;
+}
+
 export async function gitClone(url: string, opts?: { token?: string }) {
   const fs = getFs().promises;
+  // The previous repository's files leave the workspace with it, so two
+  // repositories never mix in one tree.
+  const previousFiles = (await readdirRecursive(REPO_DIR).catch(() => [] as string[])).filter(
+    (p) => !p.startsWith('.git'),
+  );
+  if (previousFiles.length > 0) await config?.deleteVfsFiles?.(previousFiles);
   // Clear existing repo contents
   try {
     const existing = await readdirRecursive(REPO_DIR);

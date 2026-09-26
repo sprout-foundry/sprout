@@ -32,7 +32,11 @@ const {
   mockListRemotes,
   mockGitBranch,
   mockFastForward,
+  mockReaddir,
+  mockStat,
 } = vi.hoisted(() => ({
+  mockReaddir: vi.fn(),
+  mockStat: vi.fn(),
   mockFastForward: vi.fn(),
   mockGitBranch: vi.fn(),
   mockCurrentBranch: vi.fn(),
@@ -50,8 +54,8 @@ const {
 vi.mock('@isomorphic-git/lightning-fs', () => {
   const promises = {
     mkdir: vi.fn().mockResolvedValue(undefined),
-    stat: vi.fn().mockRejectedValue(new Error('not found')),
-    readdir: vi.fn().mockResolvedValue([]),
+    stat: (...args: unknown[]) => mockStat(...args),
+    readdir: (...args: unknown[]) => mockReaddir(...args),
     readFile: (...args: unknown[]) => mockFsReadFile(...args),
     writeFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
@@ -86,11 +90,20 @@ vi.mock('isomorphic-git/http/web', () => ({ default: {} }));
 
 // ── Imports ──────────────────────────────────────────────────────────
 
-import { configureBrowserGit, executeGitOp, __resetBrowserGitForTest } from './browserGit';
+import {
+  configureBrowserGit,
+  executeGitOp,
+  gitClone,
+  restoreGitWorkingTree,
+  whenBrowserGitConfigured,
+  __resetBrowserGitForTest,
+} from './browserGit';
 
 describe('executeGitOp dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReaddir.mockResolvedValue([]);
+    mockStat.mockRejectedValue(new Error('not found'));
     mockCurrentBranch.mockResolvedValue(null);
     mockListRemotes.mockResolvedValue([{ remote: 'origin', url: 'https://github.com/o/n.git' }]);
     // Provide a no-op VFS bridge so ensureInitialized/syncVfsToGitFs succeed.
@@ -279,15 +292,9 @@ describe('executeGitOp dispatch', () => {
 // (a throw surfaces as a 500 → the git panel's "Failed to fetch git
 // status" banner).
 
-import LightningFS from '@isomorphic-git/lightning-fs';
-
 describe('git status with no commits (unborn HEAD)', () => {
-  const fs = new LightningFS();
-  const readdirMock = fs.promises.readdir as unknown as { mockResolvedValue(v: unknown[]): void };
-  const statMock = fs.promises.stat as unknown as {
-    mockResolvedValue(v: unknown): void;
-    mockRejectedValue(e: unknown): void;
-  };
+  const readdirMock = mockReaddir;
+  const statMock = mockStat;
 
   afterEach(() => {
     // Restore the factory defaults so other suites are unaffected.
@@ -363,5 +370,41 @@ describe('executeGitOp before configureBrowserGit (boot state)', () => {
     expect(result.message).toBe('success');
     expect(result.current).toBe('');
     expect(result.branches).toEqual([]);
+  });
+});
+
+describe('repository restore and replacement', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetBrowserGitForTest();
+    mockStat.mockResolvedValue({ isDirectory: () => false });
+    mockReaddir.mockImplementation((dir: string) => Promise.resolve(dir === '/repo' ? ['a.txt', 'b.txt'] : []));
+    mockFsReadFile.mockImplementation((path: string) => Promise.resolve(`content of ${path}`));
+  });
+
+  it('waits for configuration before boot-time git work', async () => {
+    let done = false;
+    const waiting = whenBrowserGitConfigured(1000).then(() => {
+      done = true;
+    });
+    await Promise.resolve();
+    expect(done).toBe(false);
+    configureBrowserGit({ readVfsFiles: async () => [], writeVfsFiles: async () => undefined });
+    await waiting;
+    expect(done).toBe(true);
+  });
+
+  it('restores only files missing from the workspace', async () => {
+    const writeVfsFiles = vi.fn();
+    configureBrowserGit({ readVfsFiles: async () => [{ path: 'a.txt', content: 'my edit' }], writeVfsFiles });
+    await expect(restoreGitWorkingTree()).resolves.toBe(1);
+    expect(writeVfsFiles).toHaveBeenCalledWith([{ path: 'b.txt', content: 'content of /repo/b.txt' }]);
+  });
+
+  it('removes the previous repository files from the workspace before cloning another', async () => {
+    const deleteVfsFiles = vi.fn();
+    configureBrowserGit({ readVfsFiles: async () => [], writeVfsFiles: vi.fn(), deleteVfsFiles });
+    await gitClone('https://github.com/acme/other.git');
+    expect(deleteVfsFiles).toHaveBeenCalledWith(['a.txt', 'b.txt']);
   });
 });

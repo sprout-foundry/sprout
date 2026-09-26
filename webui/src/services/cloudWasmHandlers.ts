@@ -472,7 +472,9 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
     return jsonError(err, 500);
   }
   trackFileWrite(safePath);
-  return jsonOk({ message: 'ok' });
+  // Same success contract as the daemon's write endpoint: the buffer manager
+  // clears the unsaved flag only on this shape.
+  return jsonOk({ message: 'File saved successfully', success: true });
 }
 
 /**

@@ -5,6 +5,7 @@ import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
 import * as workspaceApi from '../services/api/workspaceApi';
 import { notificationBus } from '../services/notificationBus';
+import { GIT_REPO_CHANGED_EVENT } from '../services/workspaceClone';
 import { getWorkspaceCwd, subscribeWorkspaceCwd } from '../services/workspaceCwd';
 import type { SproutEvent } from '../types/events';
 import type {
@@ -202,6 +203,14 @@ export const useGitWorkspace = ({
   // picked a different repo in the Files panel) so the panel reflects the
   // newly targeted repo immediately.
   useEffect(() => subscribeWorkspaceCwd(() => loadGitStatus()), [loadGitStatus]);
+
+  // A clone swaps in a repository (branch, history, remote) without any file
+  // event the watchers below would see.
+  useEffect(() => {
+    const reload = () => loadGitStatus();
+    window.addEventListener(GIT_REPO_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(GIT_REPO_CHANGED_EVENT, reload);
+  }, [loadGitStatus]);
 
   // Fetch workspace root once on mount (workspace rarely changes during a session).
   useEffect(() => {

@@ -9,9 +9,10 @@
  * The .git directory is stored alongside the working tree.
  */
 
+import LightningFS from '@isomorphic-git/lightning-fs';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
-import LightningFS from '@isomorphic-git/lightning-fs';
+import { gitCorsProxy } from './gitCorsProxy';
 
 type GitAuthor = { name: string; email: string };
 type GitAuth = { username?: string; password?: string; token?: string };
@@ -130,7 +131,7 @@ class GitClient {
         depth: opts.depth ?? 1,
         singleBranch: opts.singleBranch ?? true,
         ref: opts.branch ?? 'main',
-        corsProxy: undefined,
+        corsProxy: gitCorsProxy(),
         onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
         onProgress: opts.onProgress
           ? ({ phase, loaded, total }) => opts.onProgress!({ phase, loaded, total })
@@ -145,6 +146,7 @@ class GitClient {
       await git.pull({
         fs: this.fs,
         http,
+        corsProxy: gitCorsProxy(),
         dir,
         ref: opts.branch,
         singleBranch: true,
@@ -160,6 +162,7 @@ class GitClient {
       await git.push({
         fs: this.fs,
         http,
+        corsProxy: gitCorsProxy(),
         dir,
         remote: opts.remote ?? 'origin',
         ref: opts.branch,

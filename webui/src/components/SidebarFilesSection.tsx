@@ -10,11 +10,11 @@ import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
-import { debugLog } from '../utils/log';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -47,18 +47,6 @@ async function findClonedReadme(repoDir: string): Promise<string | undefined> {
 interface SidebarFilesSectionProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
   workspaceRoot?: string;
-}
-
-// ── Repo import types ──────────────────────────────────────────────────────
-
-interface RepoImportFile {
-  path: string;
-  content: string;
-}
-
-interface RepoImportResponse {
-  files: RepoImportFile[];
-  repo: string;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -225,7 +213,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         return;
       }
 
-      const input = await showThemedPrompt('Public GitHub repository to import (URL or owner/name):', {
+      const input = await showThemedPrompt('GitHub repository to clone (URL or owner/name):', {
         title: 'Add repository',
         placeholder: 'https://github.com/owner/repo',
       });
@@ -243,63 +231,22 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       }
 
       try {
-        // Call the repo import endpoint.
-        // In cloud mode, the CloudAdapter handles this; in local mode, the
-        // server-side handler does. Both support POST /api/repo/import.
-        const response = await clientFetch('/api/repo/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errData.error || `HTTP ${response.status}`);
-        }
-
-        const data: RepoImportResponse = await response.json();
-
-        if (!data.files || data.files.length === 0) {
-          throw new Error('No files found in repository');
-        }
-
-        // Write each file to the virtual filesystem via the /api/create endpoint.
-        // The CloudAdapter (cloud mode) or clientFetch (local mode) handles this.
-        for (const file of data.files) {
-          // First ensure parent directories exist by creating the file directly.
-          // The WASM shell's writeFile creates intermediate dirs implicitly.
-          const createResponse = await clientFetch('/api/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: file.path, directory: false }),
-          });
-
-          if (!createResponse.ok) {
-            // If file creation fails, try creating via the file write endpoint.
-            // Some backends require a two-step (create then write).
-            debugLog(`[clone-repo] create returned ${createResponse.status} for ${file.path}`, null);
-          }
-
-          // Write the file content
-          const writeResponse = await clientFetch(`/api/file?path=${encodeURIComponent(file.path)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: file.content }),
-          });
-
-          if (!writeResponse.ok) {
-            debugLog(`[clone-repo] write returned ${writeResponse.status} for ${file.path}`, null);
-          }
-        }
-
+        // A real clone (through the platform's git proxy) rather than a file
+        // dump: the workspace gets history, the origin remote and branches, so
+        // git status, commit and push work on it.
+        const result = await cloneIntoWorkspace(url);
         setActiveRepoURL(url);
-        // Refresh the file tree and the workspace selector's repo list to
-        // show imported files.
-        fileTreeRef.current?.refresh();
         refreshRepos();
+        setTimeout(() => {
+          fileTreeRef.current?.refresh();
+          void findClonedReadme(result.dir).then((readme) => {
+            const target = readme ?? result.dir;
+            if (target) fileTreeRef.current?.revealFile(target);
+          });
+        }, 300);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await showThemedAlert(message, { title: "Couldn't import repository", type: 'error' });
+        await showThemedAlert(message, { title: "Couldn't clone repository", type: 'error' });
       }
     };
 
@@ -366,7 +313,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
               // scrolls into view in the tree.
               setTimeout(async () => {
                 const readme = await findClonedReadme(result.dir);
-                fileTreeRef.current?.revealFile(readme ?? result.dir);
+                const target = readme ?? result.dir;
+                if (target) fileTreeRef.current?.revealFile(target);
               }, 700);
             }, 300);
           }}

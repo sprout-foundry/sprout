@@ -283,6 +283,7 @@ const TESTIDS = {
   // Notifications
   "notification-center": "notification-center",
   "notification-center-mark-all-read": "notification-center-mark-all-read",
+  "notification-history": "notification-history",
 
   // Shell approval
   "shell-approval-accept-all": "shell-approval-accept-all",
@@ -299,6 +300,8 @@ const TESTIDS = {
   "escalation-toast-cloud-task-status": "escalation-toast-cloud-task-status",
   "escalation-toast-cloud-task-link": "escalation-toast-cloud-task-link",
   "escalation-toast-cloud-task-error": "escalation-toast-cloud-task-error",
+  "escalation-toast-start-workspace": "escalation-toast-start-workspace",
+  "escalation-toast-workspace-error": "escalation-toast-workspace-error",
 
   // Escalation toast, ETH-2 txn action (run in the cloud container)
   "escalation-toast-txn": "escalation-toast-txn",
@@ -314,6 +317,7 @@ const TESTIDS = {
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
   // select is the single surface showing the cwd (no duplication).
   "workspace-cwd-bar": "workspace-cwd-bar",
+  "managed-model-section": "managed-model-section",
   "workspace-cwd-select": "workspace-cwd-select",
   "workspace-add-repo-btn": "workspace-add-repo-btn",
 

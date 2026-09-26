@@ -514,6 +514,14 @@ function describePushError(err: unknown): string {
   return `Push failed: ${message}`;
 }
 
+export async function gitCreateBranch(name: string) {
+  await ensureInitialized();
+  const branch = (name ?? '').trim();
+  if (!branch) throw new Error('Enter a branch name.');
+  await git.branch({ fs: getFs().promises, dir: REPO_DIR, ref: branch, checkout: true });
+  return { message: 'ok', branch };
+}
+
 export async function gitInit() {
   await ensureDir(REPO_DIR);
   await git.init({ fs: getFs().promises, dir: REPO_DIR });
@@ -652,6 +660,8 @@ export async function executeGitOp(
     }
     case 'checkout':
       return gitCheckout((body?.branch as string) || (body?.name as string));
+    case 'branch/create':
+      return gitCreateBranch(body?.name as string);
     case 'diff':
       // HTTP surface: GitDiffResponse for one file (the panel always asks per
       // path); shell consumers keep using gitDiff() for the change list.

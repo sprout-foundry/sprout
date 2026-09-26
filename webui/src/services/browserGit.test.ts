@@ -30,7 +30,9 @@ const {
   mockFsReadFile,
   mockCurrentBranch,
   mockListRemotes,
+  mockGitBranch,
 } = vi.hoisted(() => ({
+  mockGitBranch: vi.fn(),
   mockCurrentBranch: vi.fn(),
   mockListRemotes: vi.fn(),
   mockReadBlob: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock('isomorphic-git', () => ({
   listBranches: vi.fn().mockResolvedValue([]),
   currentBranch: (...args: unknown[]) => mockCurrentBranch(...args),
   listRemotes: (...args: unknown[]) => mockListRemotes(...args),
+  branch: (...args: unknown[]) => mockGitBranch(...args),
   checkout: vi.fn(),
   clone: vi.fn(),
   resolveRef: vi.fn().mockResolvedValue('head-oid'),
@@ -195,6 +198,14 @@ describe('executeGitOp dispatch', () => {
       mockListRemotes.mockResolvedValue([]);
       await expect(executeGitOp('push', {})).rejects.toThrow(/no "origin" remote/);
       expect(mockGitPush).not.toHaveBeenCalled();
+    });
+
+    it('branch/create creates and checks out the branch', async () => {
+      await expect(executeGitOp('branch/create', { name: ' feature/x ' })).resolves.toEqual({
+        message: 'ok',
+        branch: 'feature/x',
+      });
+      expect(mockGitBranch).toHaveBeenCalledWith(expect.objectContaining({ ref: 'feature/x', checkout: true }));
     });
 
     it('push explains a GitHub auth rejection', async () => {

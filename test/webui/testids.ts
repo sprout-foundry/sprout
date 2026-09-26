@@ -455,6 +455,12 @@ const TESTIDS = {
   "design-side-panel-agent": "design-side-panel-agent",
   "design-agent-panel": "design-agent-panel",
   "design-agent-chat": "design-agent-chat",
+  "workspace-busy-notice": "workspace-busy-notice",
+  "workspace-busy-send-anyway": "workspace-busy-send-anyway",
+  "workspace-busy-dismiss": "workspace-busy-dismiss",
+  "design-agent-head": "design-agent-head",
+  "design-agent-chat-name": "design-agent-chat-name",
+  "design-agent-new-chat": "design-agent-new-chat",
   // Design empty state (no recognized design/ tree onboarding, DesignEmptyState.tsx)
   "design-surface-empty": "design-surface-empty",
   "design-empty-state": "design-empty-state",

@@ -1705,3 +1705,41 @@
 .design-screens-grid > li.dragging {
   opacity: 0.5;
 }
+
+/* SP-142 142.5: the agent panel's header — the design chat's identity and
+   a New Chat affordance scoped to the design lane. */
+.design-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle, #3e4451);
+  min-width: 0;
+}
+
+.design-agent-head-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #abb2bf);
+}
+
+.design-agent-new-chat {
+  flex: none;
+  border: 1px solid var(--border-subtle, #3e4451);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary, #abb2bf);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.design-agent-new-chat:hover {
+  border-color: var(--accent-primary, #61afef);
+  color: var(--accent-primary, #61afef);
+}

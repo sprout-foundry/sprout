@@ -514,6 +514,43 @@ function describePushError(err: unknown): string {
   return `Push failed: ${message}`;
 }
 
+/**
+ * Fast-forward the current branch from its remote. Only a clean working tree
+ * is pulled, so no local edit can be overwritten; a diverged branch is
+ * reported rather than merged.
+ */
+export async function gitPull() {
+  const status = await gitStatus();
+  if (status.staged.length > 0 || status.unstaged.length > 0) {
+    throw new Error('Commit or undo your changes before pulling — pull only updates a clean working tree.');
+  }
+  const fs = getFs().promises;
+  const ref = (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
+  const before = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  try {
+    await git.fastForward({
+      fs,
+      http,
+      corsProxy: gitCorsProxy(),
+      dir: REPO_DIR,
+      ref,
+      singleBranch: true,
+      headers: getAuth()?.headers,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/fast-?forward/i.test(message)) {
+      throw new Error('Your branch and the remote have diverged; merging is not available in the browser.');
+    }
+    throw new Error(`Pull failed: ${message}`);
+  }
+  await syncGitFsToVfs();
+  const after = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  const removed = [...before].filter((p) => !after.has(p));
+  if (removed.length > 0) await config?.deleteVfsFiles?.(removed);
+  return { message: 'ok', pulled: true };
+}
+
 export async function gitCreateBranch(name: string) {
   await ensureInitialized();
   const branch = (name ?? '').trim();
@@ -543,7 +580,6 @@ export const BROWSER_GIT_UNSUPPORTED_OPS: ReadonlySet<string> = new Set([
   'unstage-all',
   'reset',
   'discard',
-  'pull',
   'revert',
   'commit-message',
   'pull-request',
@@ -689,7 +725,7 @@ export async function executeGitOp(
     case 'discard':
       throw new Error('discard is not yet supported in browser mode');
     case 'pull':
-      throw new Error('pull is not yet supported in browser mode');
+      return gitPull();
     case 'revert':
       throw new Error('revert is not yet supported in browser mode');
     case 'commit-message':

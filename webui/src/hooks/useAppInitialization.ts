@@ -11,7 +11,7 @@
 import type { EventsProvider } from '@sprout/events';
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { fetchRuntimeConfig } from '../bootstrapAdapter';
+import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
 import { isCloud, supportsWorkspaceSwitching } from '../config/mode';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
@@ -152,9 +152,12 @@ export function useAppInitialization({
                   import('../services/browserGit').then(({ configureBrowserGit }) => {
                     const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
                     if (shell) {
+                      // Commits are authored as the signed-in account, so
+                      // pushed history is attributed to the user on GitHub.
+                      const user = getBootstrapUser();
                       configureBrowserGit({
-                        name: 'Browser IDE',
-                        email: 'browser-ide@sprout.dev',
+                        name: user?.email ? user.email.split('@')[0] : 'Browser IDE',
+                        email: user?.email || 'browser-ide@sprout.dev',
                         readVfsFiles: async () => {
                           return listAllVfsFiles(shell);
                         },

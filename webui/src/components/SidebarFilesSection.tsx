@@ -3,6 +3,7 @@ import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isCloud } from '../config/mode';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
+import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
@@ -284,6 +285,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           }
         }
 
+        setActiveRepoURL(url);
         // Refresh the file tree and the workspace selector's repo list to
         // show imported files.
         fileTreeRef.current?.refresh();
@@ -345,7 +347,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         <GitHubRepoPicker
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}
-          onCloned={(_repo, result) => {
+          onCloned={(repo, result) => {
+            setActiveRepoURL(repo.clone_url);
             // Re-pull the repo list so the new clone appears in the cwd
             // selector immediately (no remount needed).
             refreshRepos();

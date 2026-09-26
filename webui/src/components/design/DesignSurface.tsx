@@ -57,6 +57,10 @@ export interface DesignSurfaceProps {
   chatProps?: DesignChatProps;
   /** Re-run the design-presence probe (empty state's "Check again"). */
   onRecheck?: () => void;
+  /** SP-142 142.5: the design chat's name (the agent panel header). */
+  agentChatName?: string | null;
+  /** SP-142 142.5: New Chat scoped to the design lane. */
+  onAgentCreateChat?: () => void;
 }
 
 /** No-op when the host hasn't wired a recheck (probe becomes mount-only). */
@@ -72,6 +76,8 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
   onTabChange,
   onOpenFile,
   chatProps,
+  agentChatName,
+  onAgentCreateChat,
   onRecheck,
 }) => {
   const workspace = useDesignWorkspace();
@@ -114,6 +120,8 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
               {chatProps ? (
                 <DesignAgentPanel
                   chatProps={chatProps}
+                  chatName={agentChatName}
+                  onCreateDesignChat={onAgentCreateChat}
                   prefill={emptyPrefill}
                   onPrefillConsumed={() => setEmptyPrefill(null)}
                 />
@@ -144,7 +152,14 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
       </ErrorBoundary>
       <ErrorBoundary panelName="Design">
         <Suspense fallback={<SurfaceFallback />}>
-          <DesignView onOpenFile={onOpenFile} tab={tab} onTabChange={onTabChange} chatProps={chatProps} />
+          <DesignView
+            onOpenFile={onOpenFile}
+            tab={tab}
+            onTabChange={onTabChange}
+            chatProps={chatProps}
+            agentChatName={agentChatName}
+            onAgentCreateChat={onAgentCreateChat}
+          />
         </Suspense>
       </ErrorBoundary>
     </div>

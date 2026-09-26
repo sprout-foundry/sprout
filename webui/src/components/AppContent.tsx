@@ -1081,6 +1081,11 @@ const AppContent: React.FC<AppContentProps> = ({
       tab: designSection,
       onTabChange: setDesignSection,
       onOpenFile: handleDesignFileOpen,
+      // SP-142 142.5: the agent panel header names the design-lane chat and
+      // offers New Chat scoped to the lane (create stamps 'design').
+      agentChatName:
+        workspaceMode.id === 'design' ? ((chatSessions ?? []).find((s) => s.id === activeChatId)?.name ?? null) : null,
+      onAgentCreateChat: onCreateChat ? () => void onCreateChat('design') : undefined,
     },
     git: {
       gitBranches,

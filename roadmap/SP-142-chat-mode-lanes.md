@@ -121,6 +121,12 @@
   > the notice. Pinned by ChatFooter.busy.test.tsx (5 tests).
 - **142.5** Design agent panel header (name + scoped New Chat). Vitest +
   testids.
+  > **Progress (2026-09-26):** Shipped. DesignAgentPanel renders an
+  > optional header (chatName + a design-scoped New Chat that creates via
+  > the existing lane-stamped path); threaded shell → DesignSurface →
+  > DesignView → panel; the AppContent payload names the active design
+  > chat and binds create('design'). Pinned by
+  > DesignAgentPanel.header.test.tsx (4 tests) + testids registered.
 
 ## Acceptance criteria
 

@@ -64,6 +64,10 @@ export interface DesignViewProps {
   onOpenFile?: (path: string, lineNumber?: number) => void;
   /** The shell's chat payload (§6f) — passed through to the Agent tab. */
   chatProps?: DesignChatProps;
+  /** SP-142 142.5: the design chat's name (the agent panel header). */
+  agentChatName?: string | null;
+  /** SP-142 142.5: New Chat scoped to the design lane. */
+  onAgentCreateChat?: () => void;
   /** Write transport override for the detail pane's feedback write (tests/hosts). */
   writeFetch?: typeof fetch;
   /** Consent-aware read override for the detail pane's resolution flow (§3f). */
@@ -77,6 +81,8 @@ export default function DesignView({
   onTabChange,
   onOpenFile,
   chatProps,
+  agentChatName,
+  onAgentCreateChat,
   writeFetch,
   readFn,
   writeFn,
@@ -292,6 +298,8 @@ export default function DesignView({
               <DesignAgentPanel
                 key={agentFlipKey}
                 chatProps={chatProps}
+                chatName={agentChatName}
+                onCreateDesignChat={onAgentCreateChat}
                 prefill={prefill}
                 onPrefillConsumed={() => setPrefill(null)}
               />

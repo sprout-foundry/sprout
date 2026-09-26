@@ -285,6 +285,9 @@ export function saveSession(
   index.sessions = [meta, ...index.sessions.filter((s) => s.session_id !== sessionId)].slice(0, MAX_SESSIONS);
   index.current_session_id = sessionId;
   writeIndex(index);
+  // A freshly generated id must become the active one, or every later save
+  // of the same conversation forks another history entry.
+  activeSessionId = sessionId;
 
   return sessionId;
 }

@@ -42,6 +42,7 @@ vi.mock('../contexts/NotificationContext', () => ({
     addNotification: () => {},
     removeNotification: () => {},
     clearNotifications: () => {},
+    markAllRead: () => {},
   }),
 }));
 
@@ -439,6 +440,26 @@ describe('StatusBar', () => {
       expect(indicator?.getAttribute('role')).toBe('button');
       expect(indicator?.getAttribute('title')).toContain('/home/user/myproject');
       expect(indicator?.getAttribute('aria-label')).toContain('myproject');
+    });
+  });
+  describe('notification bell', () => {
+    test('opens and closes the notification history', async () => {
+      await act(async () => {
+        root.render(<StatusBar />);
+      });
+      const bell = container.querySelector('[data-testid="status-bar-notification"]') as HTMLButtonElement;
+      expect(bell.getAttribute('aria-expanded')).toBe('false');
+
+      await act(async () => {
+        bell.click();
+      });
+      expect(bell.getAttribute('aria-expanded')).toBe('true');
+      expect(document.querySelector('[data-testid="notification-history"]')).toBeTruthy();
+
+      await act(async () => {
+        bell.click();
+      });
+      expect(document.querySelector('[data-testid="notification-history"]')).toBeNull();
     });
   });
 });

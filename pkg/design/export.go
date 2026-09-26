@@ -55,6 +55,13 @@ const (
 	ExportTargetKotlin   = "kotlin"
 )
 
+// ExportTargetFlows is the SP-140-9 §9b derived-flow export target: it
+// regenerates design/flows/<name>.mmd from each flow source .json plus the
+// touched screens. Like the screens index it is explicit-only — never part of
+// `all` — because it derives from the flow sources, not the token sources, so
+// a token re-theme must not rewrite the flow exports.
+const ExportTargetFlows = "flows"
+
 // ExportTargetAll is the `targets` value that runs every exporter.
 const ExportTargetAll = "all"
 
@@ -561,24 +568,26 @@ func ResolveExportTargets(raw string) ([]ExportTarget, error) {
 		if name == ExportTargetAll {
 			return exportTargetList(ExportTargets), nil
 		}
-		// The screens index is a recognized explicit target but never part
-		// of `all`: it derives from design/screens/*.html, not the token
-		// sources, so a token re-theme must not rewrite the screen graph.
-		if name != ExportTargetScreens {
+		// The screens index and the derived flow exports are recognized
+		// explicit targets but never part of `all`: they derive from
+		// design/screens/*.html and design/flows/*.json respectively, not
+		// the token sources, so a token re-theme must not rewrite them.
+		if name != ExportTargetScreens && name != ExportTargetFlows {
 			if _, ok := ExportFilenames[name]; !ok {
-				return nil, fmt.Errorf("unknown export target %q (want one of: %s, %s)", name, strings.Join(ExportTargets, ", "), ExportTargetScreens)
+				return nil, fmt.Errorf("unknown export target %q (want one of: %s, %s, or %s)", name, strings.Join(ExportTargets, ", "), ExportTargetScreens, ExportTargetFlows)
 			}
 		}
 		seen[name] = struct{}{}
 	}
 	if len(seen) == 0 {
-		return nil, fmt.Errorf("no export targets given (want one of: %s, %s)", strings.Join(ExportTargets, ", "), ExportTargetScreens)
+		return nil, fmt.Errorf("no export targets given (want one of: %s, %s, or %s)", strings.Join(ExportTargets, ", "), ExportTargetScreens, ExportTargetFlows)
 	}
 
 	// Emit in canonical order, not argument order: identical target sets must
 	// produce identical artifacts and identical summaries regardless of how
-	// the caller spelled them. The screens target is appended last: it is not
-	// part of the token-export pipeline and its file is resolved separately.
+	// the caller spelled them. The screens and flows targets are appended
+	// last: they are not part of the token-export pipeline and their files
+	// are resolved separately.
 	targets := make([]ExportTarget, 0, len(seen))
 	for _, name := range ExportTargets {
 		if _, ok := seen[name]; ok {
@@ -587,6 +596,9 @@ func ResolveExportTargets(raw string) ([]ExportTarget, error) {
 	}
 	if _, ok := seen[ExportTargetScreens]; ok {
 		targets = append(targets, ExportTarget{Name: ExportTargetScreens, File: ScreensIndexFilename})
+	}
+	if _, ok := seen[ExportTargetFlows]; ok {
+		targets = append(targets, ExportTarget{Name: ExportTargetFlows, File: FlowSubdir})
 	}
 	return targets, nil
 }

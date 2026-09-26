@@ -53,6 +53,11 @@ func (h *designExportHandler) Definition() ToolDefinition {
 			"states, data-nav edges with triggers), provenance-hashed over the screen bytes. It is " +
 			"NOT part of `all` — request it explicitly (targets:screens) after adding/changing " +
 			"screens; the validator flags drift as an error. " +
+			"Additionally `flows` (SP-140-9 §9b): regenerate every derived flow export " +
+			"design/flows/<name>.mmd from its flow source .json plus the touched screens — the " +
+			"same explicit-only rule (targets:flows, never mixed with the token targets, no " +
+			"out_dir); the validator flags a stale or hand-edited .mmd as flow_mmd_drift. Flows " +
+			"are authored as .json sources; the .mmd is never hand-edited. " +
 			"Utilities come only from the known groups (color, space, font/typography, radius, " +
 			"shadow); unknown groups stay variables-only. " +
 			"Output is deterministic and byte-identical for the same tokens, so re-running the " +
@@ -74,7 +79,7 @@ func (h *designExportHandler) Definition() ToolDefinition {
 				Name:        "targets",
 				Type:        "string",
 				Required:    false,
-				Description: "Which exporters to run: `all` (default — the token targets), one target, or a comma-separated list. Targets: css, ts, json, tailwind, swift, kotlin, screens (the SP-143 screens.json index; explicit only, never in `all`).",
+				Description: "Which exporters to run: `all` (default — the token targets), one target, or a comma-separated list. Targets: css, ts, json, tailwind, swift, kotlin, screens (the SP-143 screens.json index), flows (the SP-140-9 derived flow .mmd exports). screens and flows are explicit only, never in `all`, and each must be requested alone.",
 			},
 			{
 				Name:        "out_dir",
@@ -208,14 +213,25 @@ func (h *designExportHandler) Execute(ctx context.Context, env ToolEnv, args map
 	// (a screens-only run must not demand tokens, and a token run must not
 	// silently rewrite the screen graph).
 	screensOnly := false
+	flowsOnly := false
 	for _, t := range targets {
-		if t.Name == design.ExportTargetScreens {
+		switch t.Name {
+		case design.ExportTargetScreens:
 			if len(targets) > 1 {
 				msg := "design_export_tokens: the screens target derives from design/screens/*.html, not the token sources — request it alone (targets:screens), not mixed with the token targets."
 				return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %s target must be requested alone", design.ExportTargetScreens)
 			}
 			screensOnly = true
+		case design.ExportTargetFlows:
+			if len(targets) > 1 {
+				msg := "design_export_tokens: the flows target derives from design/flows/*.json + the touched screens, not the token sources — request it alone (targets:flows), not mixed with the token targets."
+				return ToolResult{Output: msg, IsError: true}, fmt.Errorf("design_export_tokens: %s target must be requested alone", design.ExportTargetFlows)
+			}
+			flowsOnly = true
 		}
+	}
+	if flowsOnly {
+		return exportFlowsTarget(ctx, env, root, outDir)
 	}
 	if screensOnly {
 		artifact, err := design.RenderScreensIndexArtifact(root)

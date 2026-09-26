@@ -1,4 +1,5 @@
 import type { CloudEndpoint } from '../types';
+import { BROWSER_DEFAULT_HOTKEYS } from '../../../config/browserHotkeys';
 
 /**
  * Category (c) — synthetic: Should return pre-defined synthetic responses.
@@ -254,8 +255,10 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/hotkeys',
     methods: ['GET', 'PUT'],
     category: 'synthetic',
-    syntheticResponse: { hotkeys: {} },
-    description: 'Hotkey configuration (not available in browser mode)',
+    // HotkeyConfig shape: the built-in shortcuts (presets and custom
+    // bindings need the daemon).
+    syntheticResponse: { version: 'browser', hotkeys: BROWSER_DEFAULT_HOTKEYS },
+    description: 'Built-in hotkeys (custom bindings need the desktop app)',
   },
   {
     path: '/api/hotkeys/validate',

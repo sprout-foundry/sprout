@@ -383,35 +383,41 @@ export default function SidebarSettingsSection({
             <option value="xlarge">Extra Large</option>
           </select>
         </div>
-        <div className="config-item">
-          <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
-          <select
-            id="hotkey-preset-select"
-            defaultValue=""
-            onChange={handleHotkeyPresetChange}
-            className="styled-select"
-          >
-            <option value="" disabled>
-              Choose a preset…
-            </option>
-            <option value="vscode">VS Code</option>
-            <option value="webstorm">WebStorm</option>
-            <option value="sprout">Sprout (Legacy)</option>
-          </select>
-        </div>
-        <div className="config-item settings-help-spaced-top">
-          <button
-            type="button"
-            className="settings-link-btn settings-link-btn--hotkeys"
-            onClick={() => {
-              // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
-              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
-            }}
-          >
-            <Keyboard size={14} />
-            Edit Keyboard Shortcuts (JSON)
-          </button>
-        </div>
+        {/* Presets and custom bindings are stored by the daemon; browser
+            mode uses the built-in shortcuts only. */}
+        {!isCloud && (
+          <>
+            <div className="config-item">
+              <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
+              <select
+                id="hotkey-preset-select"
+                defaultValue=""
+                onChange={handleHotkeyPresetChange}
+                className="styled-select"
+              >
+                <option value="" disabled>
+                  Choose a preset…
+                </option>
+                <option value="vscode">VS Code</option>
+                <option value="webstorm">WebStorm</option>
+                <option value="sprout">Sprout (Legacy)</option>
+              </select>
+            </div>
+            <div className="config-item settings-help-spaced-top">
+              <button
+                type="button"
+                className="settings-link-btn settings-link-btn--hotkeys"
+                onClick={() => {
+                  // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
+                  window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
+                }}
+              >
+                <Keyboard size={14} />
+                Edit Keyboard Shortcuts (JSON)
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── Cloud mode: simplified settings ──────────────────── */}

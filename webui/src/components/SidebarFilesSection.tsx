@@ -3,6 +3,7 @@ import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isCloud } from '../config/mode';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
+import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
@@ -76,6 +77,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }));
 
     const api = ApiService.getInstance();
+    const bufferManager = useOptionalBufferManager();
 
     // ── Working directory (session-level cwd) ─────────────────────
     // Shared with the terminal / git / agent surfaces via the workspaceCwd
@@ -466,9 +468,11 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           }}
           onDeletePath={async (path, _isDir) => {
             await api.deleteItem(path);
+            bufferManager?.closeBuffersForDeletedPath(path);
           }}
           onRenamePath={async (oldPath, newPath) => {
             await api.renameItem(oldPath, newPath);
+            bufferManager?.retargetBufferPaths(oldPath, newPath);
           }}
           onOpenInFileBrowser={async (path) => {
             await api.openInFileBrowser(path);

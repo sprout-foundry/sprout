@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   TERMINAL_HEIGHT_DEFAULT,
+  defaultTerminalHeight,
   TERMINAL_HEIGHT_MIN,
   TERMINAL_HEIGHT_STORAGE_KEY,
   parseTerminalHeight,
@@ -37,13 +38,13 @@ describe('terminalPref — constants', () => {
 
 describe('parseTerminalHeight', () => {
   it('returns the default for null', () => {
-    expect(parseTerminalHeight(null)).toBe(TERMINAL_HEIGHT_DEFAULT);
+    expect(parseTerminalHeight(null)).toBe(defaultTerminalHeight());
   });
   it('returns the default for empty string', () => {
-    expect(parseTerminalHeight('')).toBe(TERMINAL_HEIGHT_DEFAULT);
+    expect(parseTerminalHeight('')).toBe(defaultTerminalHeight());
   });
   it('returns the default for non-numeric input', () => {
-    expect(parseTerminalHeight('not-a-number')).toBe(TERMINAL_HEIGHT_DEFAULT);
+    expect(parseTerminalHeight('not-a-number')).toBe(defaultTerminalHeight());
   });
   it('parses a valid numeric string', () => {
     expect(parseTerminalHeight('250')).toBe(250);
@@ -138,5 +139,16 @@ describe('window-environment edge cases', () => {
   it('clampTerminalHeight returns the default when window is undefined (SSR)', () => {
     (globalThis as any).window = undefined;
     expect(clampTerminalHeight(999)).toBe(TERMINAL_HEIGHT_DEFAULT);
+  });
+});
+
+describe('defaultTerminalHeight', () => {
+  it('uses at most 30% of the window, capped at the 400px default', () => {
+    const original = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 });
+    expect(defaultTerminalHeight()).toBe(270);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 2000 });
+    expect(defaultTerminalHeight()).toBe(TERMINAL_HEIGHT_DEFAULT);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: original });
   });
 });

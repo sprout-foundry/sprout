@@ -675,12 +675,6 @@
   color: var(--accent-error);
 }
 
-.terminal-status-inline--success {
-  background: color-mix(in srgb, var(--accent-success) 12%, transparent);
-  border-color: var(--accent-success);
-  color: var(--accent-success);
-}
-
 .terminal-status-inline--exited {
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
   border-color: var(--border-default);

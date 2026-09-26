@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,15 +33,18 @@ func main() {
 	apiSurface := map[string]interface{}{
 		"init":           js.FuncOf(initFunc),
 		"executeCommand": js.FuncOf(executeCommandFunc),
-		"autoComplete":   js.FuncOf(autoCompleteFunc),
-		"getCwd":         js.FuncOf(getCwdFunc),
-		"changeDir":      js.FuncOf(changeDirFunc),
-		"writeFile":      js.FuncOf(writeFileFunc),
-		"readFile":       js.FuncOf(readFileFunc),
-		"listDir":        js.FuncOf(listDirFunc),
-		"deleteFile":     js.FuncOf(deleteFileFunc),
-		"getHistory":     js.FuncOf(getHistoryFunc),
-		"getEnv":         js.FuncOf(getEnvFunc),
+		// Async variant for the interactive terminal: commands backed by JS
+		// Promises (git via isomorphic-git) must not block the event loop.
+		"executeCommandAsync": js.FuncOf(executeCommandAsyncFunc),
+		"autoComplete":        js.FuncOf(autoCompleteFunc),
+		"getCwd":              js.FuncOf(getCwdFunc),
+		"changeDir":           js.FuncOf(changeDirFunc),
+		"writeFile":           js.FuncOf(writeFileFunc),
+		"readFile":            js.FuncOf(readFileFunc),
+		"listDir":             js.FuncOf(listDirFunc),
+		"deleteFile":          js.FuncOf(deleteFileFunc),
+		"getHistory":          js.FuncOf(getHistoryFunc),
+		"getEnv":              js.FuncOf(getEnvFunc),
 	}
 	for name, fn := range configJSFuncs() {
 		apiSurface[name] = fn
@@ -130,6 +134,23 @@ func executeCommandFunc(this js.Value, args []js.Value) interface{} {
 	input := args[0].String()
 	result := wasmshell.ParseAndExecute(input)
 	return wasmshell.JSONResult(result)
+}
+
+// executeCommandAsyncFunc runs the command on its own goroutine and
+// resolves with the same JSON as executeCommand. Callers blocked on a JS
+// Promise (browser git) deadlock on the synchronous path because the JS
+// event loop cannot run while a js.FuncOf handler blocks.
+func executeCommandAsyncFunc(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 {
+		return wasmshell.JSONResult(wasmshell.CmdResult{
+			Stderr:   "executeCommandAsync: missing argument\n",
+			ExitCode: 1,
+		})
+	}
+	input := args[0].String()
+	return asPromiseWithTimeout(0, func(_ context.Context) (interface{}, error) {
+		return wasmshell.JSONResult(wasmshell.ParseAndExecute(input)), nil
+	})
 }
 
 // autoCompleteFunc performs tab completion on the input.

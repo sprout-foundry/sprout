@@ -5,8 +5,10 @@ import type { ChangeEvent } from 'react';
 import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
+import { platformHref } from '../utils/platformUrl';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
 import { getStoredUser } from '../services/githubService';
@@ -195,6 +197,28 @@ function CloudProviderModelSection({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Browser workspaces served by the platform run the agent in WASM against
+ * the platform's managed model (cloudWasmHandlers always starts it on the
+ * "platform" provider), so provider, model and key pickers would change
+ * nothing. Studio's native build keeps them: its shell serves BYOK providers.
+ */
+const PLATFORM_MANAGED_MODEL = isCloud && !NATIVE_FS_ENABLED;
+
+function ManagedModelSection(): JSX.Element {
+  return (
+    <div className="config-item" data-testid="managed-model-section">
+      <p className="settings-section-desc">
+        The agent runs on Sprout Foundry&apos;s managed model, which picks a model for each request. Usage is billed in
+        platform credits.
+      </p>
+      <a className="settings-link-btn" href={platformHref('/#/billing')} target="_blank" rel="noopener noreferrer">
+        View usage and billing
+      </a>
+    </div>
   );
 }
 
@@ -423,27 +447,36 @@ export default function SidebarSettingsSection({
       {/* ─── Cloud mode: simplified settings ──────────────────── */}
       {isCloud ? (
         <>
-          <div className="section">
-            <h4>Provider &amp; Model</h4>
-            <CloudProviderModelSection
-              selectedProvider={selectedProvider}
-              selectedModel={selectedModel}
-              providers={providers}
-              availableModels={availableModels}
-              isLoadingProviders={isLoadingProviders}
-              isConnected={isConnected}
-              onProviderChange={onProviderChange}
-              onModelChange={onModelChange}
-            />
-          </div>
-          <div className="section">
-            <h4>API Key</h4>
-            <p className="settings-section-desc">
-              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely
-              on the server.
-            </p>
-            <CredentialsSettingsTab />
-          </div>
+          {PLATFORM_MANAGED_MODEL ? (
+            <div className="section">
+              <h4>Model</h4>
+              <ManagedModelSection />
+            </div>
+          ) : (
+            <>
+              <div className="section">
+                <h4>Provider &amp; Model</h4>
+                <CloudProviderModelSection
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  providers={providers}
+                  availableModels={availableModels}
+                  isLoadingProviders={isLoadingProviders}
+                  isConnected={isConnected}
+                  onProviderChange={onProviderChange}
+                  onModelChange={onModelChange}
+                />
+              </div>
+              <div className="section">
+                <h4>API Key</h4>
+                <p className="settings-section-desc">
+                  Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored
+                  securely on the server.
+                </p>
+                <CredentialsSettingsTab />
+              </div>
+            </>
+          )}
           <div className="section">
             <h4>GitHub</h4>
             <p className="settings-section-desc">

@@ -444,7 +444,7 @@ verify_installation() {
             log_error "  brew install mlx-c"
             log_error ""
             log_error "  (or reinstall the latest sprout, which works without"
-            log_error "   MLX installed — local models need 'brew install mlx-c').")
+            log_error "   MLX installed — local models need 'brew install mlx-c')."
             log_error ""
             log_error "If your Homebrew is not at /opt/homebrew, or you don't"
             log_error "use Homebrew, build sprout from source on this Mac"

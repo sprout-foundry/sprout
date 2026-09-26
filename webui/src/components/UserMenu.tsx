@@ -20,6 +20,7 @@
  * same way.
  */
 
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { isCloud } from '../config/mode';
 import { getBootstrapUser, getPlatformURL } from '../bootstrapAdapter';
@@ -89,6 +90,14 @@ export function UserMenu(): JSX.Element | null {
     window.location.href = platformHref('/login');
   };
 
+  // The header bar clips overflow, so the list is fixed-positioned under the
+  // trigger instead of absolutely inside it.
+  const listPosition = (): CSSProperties | undefined => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return undefined;
+    return { position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) };
+  };
+
   return (
     <div className="user-menu">
       <button
@@ -112,7 +121,7 @@ export function UserMenu(): JSX.Element | null {
       {open && (
         <>
           <div className="user-menu-backdrop" onClick={close} aria-hidden="true" />
-          <div className="user-menu-list" role="menu" aria-label="Account">
+          <div className="user-menu-list" role="menu" aria-label="Account" style={listPosition()}>
             <div className="user-menu-identity">
               <span className="user-menu-identity-email" title={user.email}>
                 {user.email}

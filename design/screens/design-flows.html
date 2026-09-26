@@ -1,0 +1,131 @@
+<!doctype html>
+<!--
+  design-flows — Design mode: flow canvas with flow-source nodes and the
+  design rail (SP-140-9 9.4: migrated from the legacy
+  design/wireframes/design-flows.svg). Base: design/runtime/base/desktop.html;
+  nav triggers mirror design-mode.mmd.
+-->
+<html lang="en" data-screen="design-flows" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>design-flows — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; display: flex; }
+  .sidebar { width: var(--sizing-sidebar-width); background: var(--color-dark-bg-secondary); border-right: 1px solid var(--color-dark-border-subtle); }
+  .pinned { height: var(--sizing-header-height); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); }
+  .brandmark { width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--color-dark-brand-active-cyan); }
+  .mode-switcher { background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: 4px var(--space-4); font-size: var(--typography-size-sm); color: var(--color-dark-brand-active-cyan); }
+  .rail-label { padding: var(--space-4) var(--space-8) 0; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); letter-spacing: 0.08em; }
+  .rail-tabs { display: flex; flex-direction: column; padding: 0 var(--space-8); }
+  .rail-tabs a { display: block; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); color: var(--color-dark-text-secondary); text-decoration: none; font-size: var(--typography-size-sm); }
+  .rail-tabs a.active { background: var(--color-dark-bg-elevated); color: var(--color-dark-text-primary); box-shadow: inset 0 -2px 0 var(--color-dark-brand-active-cyan); }
+  .rail-tabs a:hover { background: var(--color-dark-bg-hover); }
+  .flow-list { padding: var(--space-6) var(--space-8); border-top: 1px solid var(--color-dark-border-subtle); font-size: var(--typography-size-sm); }
+  .flow-list .row { padding: var(--space-1) 0; }
+  .flow-list .row.active { color: var(--color-dark-text-primary); }
+  .flow-list .row .src { color: var(--color-dark-text-muted); }
+  .flow-list .count { padding-top: var(--space-6); color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .header { height: var(--sizing-header-height); background: var(--color-dark-bg-secondary); border-bottom: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; padding: 0 var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .header .fit { margin-left: auto; color: var(--color-dark-text-muted); }
+  .canvas { flex: 1; position: relative; }
+  .node { position: absolute; width: 200px; background: var(--color-dark-bg-elevated); border: 1px solid var(--color-dark-border-subtle); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); font-size: var(--typography-size-sm); }
+  .node .meta { color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); margin-top: var(--space-1); }
+  .node .sub { margin-top: var(--space-2); background: var(--color-dark-bg-tertiary); border-radius: var(--radius-sm); padding: 2px var(--space-4); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .node.self { border-color: var(--color-dark-brand-active-cyan); }
+  .node.self .name { color: var(--color-dark-brand-active-cyan); }
+  .edge { position: absolute; height: 1.5px; background: var(--color-dark-border-strong); transform-origin: 0 0; }
+  .edge-label { position: absolute; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .self-marker { position: absolute; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .zoom { position: absolute; right: var(--space-10); bottom: var(--space-10); background: var(--color-dark-bg-secondary); border: 1px solid var(--color-dark-border-default); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); font-size: var(--typography-size-base); }
+  .zoom .fit { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); align-self: center; }
+</style>
+</head>
+<body data-sprout-screen="design-flows">
+<div class="screen">
+
+  <aside class="sidebar">
+    <div class="pinned">
+      <span class="brandmark"></span>
+      <span>sprout</span>
+      <span class="mode-switcher">Design &#9662;</span>
+    </div>
+    <div class="rail-label">DESIGN RAIL</div>
+    <nav class="rail-tabs">
+      <a class="active" href="#flows">Flows</a>
+      <a href="../screens/design-screens.html" data-nav="to:design-screens;trigger:the Screens group's workbench targets the screens browser's domain">Screens</a>
+      <a href="#tokens">Tokens</a>
+    </nav>
+    <div class="flow-list">
+      <div class="row active">navigation.json</div>
+      <div class="row">design-mode.json</div>
+      <div class="row">agent-turn.json <span class="src">(non-screen)</span></div>
+      <div class="row">mobile-screens.json</div>
+      <div class="count">4 flow sources &middot; derived .mmd</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <span>design/ &middot; flows &middot; navigation</span>
+      <span class="fit">&#8984;Z fit</span>
+    </header>
+
+    <section class="canvas">
+      <!-- flow nodes: the navigation flow's screens (derived graph, laid out) -->
+      <div class="node" style="left: 320px; top: 60px;">
+        <div class="name">app-shell</div>
+        <div class="meta">screen &middot; s1</div>
+        <div class="sub">sidebar + chat + strip</div>
+      </div>
+      <div class="edge" style="left: 420px; top: 150px; width: 260px; transform: rotate(38deg);"></div>
+      <span class="edge-label" style="left: 500px; top: 176px;">open the git section</span>
+      <div class="node" style="left: 180px; top: 300px;">
+        <div class="name">git-panel</div>
+        <div class="meta">screen &middot; s7</div>
+        <div class="sub">status / stage / commit</div>
+      </div>
+      <div class="edge" style="left: 430px; top: 130px; width: 320px; transform: rotate(-42deg);"></div>
+      <span class="edge-label" style="left: 600px; top: 150px;">open a file</span>
+      <div class="node" style="left: 640px; top: 300px;">
+        <div class="name">editor</div>
+        <div class="meta">screen &middot; s2</div>
+        <div class="sub">tabs + code + diff</div>
+      </div>
+      <div class="edge" style="left: 525px; top: 105px; width: 330px;"></div>
+      <span class="edge-label" style="left: 640px; top: 88px;">&#8984;K</span>
+      <div class="node" style="left: 860px; top: 70px;">
+        <div class="name">command-palette</div>
+        <div class="meta">screen &middot; s11</div>
+        <div class="sub">files / symbols / actions</div>
+      </div>
+      <div class="edge" style="left: 420px; top: 100px; width: 150px; transform: rotate(-16deg);"></div>
+      <span class="edge-label" style="left: 300px; top: 110px;">open settings</span>
+      <div class="node" style="left: 100px; top: 80px;">
+        <div class="name">settings</div>
+        <div class="meta">screen &middot; s9</div>
+        <div class="sub">providers / models / theme</div>
+      </div>
+      <div class="edge" style="left: 420px; top: 155px; width: 250px; transform: rotate(75deg);"></div>
+      <span class="edge-label" style="left: 480px; top: 280px;">switch workspace mode</span>
+      <div class="node self" style="left: 420px; top: 420px;">
+        <div class="name">design-flows</div>
+        <div class="meta">screen &middot; s13 &middot; this screen</div>
+        <div class="sub">flow canvas</div>
+      </div>
+      <span class="self-marker" style="left: 640px; top: 460px;">&#9679; flows canvas</span>
+
+      <div class="zoom"><span>+</span><span>&#8722;</span><span class="fit">fit</span></div>
+    </section>
+  </main>
+
+</div>
+<a href="../screens/design-mode.html" data-nav="to:design-mode;trigger:the workbench's flows facet links into the flow graph" style="display:none">workbench</a>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

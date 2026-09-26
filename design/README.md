@@ -3,8 +3,9 @@
 Inventory and contract for the Sprout WebUI design assets. This manifest is
 the first file an agent reads when `design/` exists. The tree was seeded by
 distilling the visual language from the shipped implementation (`webui/src/`
-— App.css design-system root plus component CSS and component structure), so
-components, wireframes, and flows mirror what the app actually renders.
+— App.css design-system root plus component CSS and component structure), and
+item 9.4 (SP-140-9) migrated the legacy SVG wireframes to the screens tier,
+so components, screens, and flows mirror what the app actually renders.
 Components are the primary unit; screens compose them. Keep this file
 current as screens and flows are added.
 
@@ -15,20 +16,19 @@ current as screens and flows are added.
 | `tokens/`    | Design tokens, one `*.tokens.json` file per tier (W3C DTCG format: `$value` / `$type`). Tiers: `color`, `typography`, `spacing`, `sizing`, `radius`, `shadow`, `motion`. No aggregation file; consumers glob. |
 | `brand/`     | `brand.md` (name, voice, palette as `{group.token}` references — never raw hex — usage rules). |
 | `icons/`     | Icon SVGs, one file per icon, plus optional `sprite.svg`. (Not yet populated; the UI uses lucide-react inline.) |
-| `wireframes/` | One SVG per screen. File stem is the screen name. Interactive elements carry stable `id` attributes; navigation targets carry `data-nav="<screen-name>"`. A screen is a *composition* of `components/` — its layout and placement, not the component internals. |
 | `components/` | One SVG per reusable component, in its key variants and states, with `{group.token}` refs. File stem is the component name. The composable layer beneath screens: change a component once and every screen that composes it follows. |
-| `screens/`   | One self-contained HTML + CSS file per screen. (Not yet populated.) |
+| `screens/`   | One self-contained HTML file per screen; the primary screen tier (SP-140-9 §9a — the legacy `wireframes/` tier was migrated by item 9.4 and the directory is gone). File stem is the screen name; the `<html data-screen>` identity must equal it. Interactive elements navigate with `data-nav="to:<screen-name>;trigger:<label>"`, states are declared on `<html data-states>`, layout uses the generated utilities/`var(--token)`, and the root container is sized to a declared device frame. A screen is a *composition* of `components/` — its layout and placement, not the component internals. |
 | `runtime/`   | Fixed screen-kit assets copied in by the scaffold (SP-143): device chrome `chrome.css` + base documents `base/phone.html` / `base/desktop.html`. Referenced by screens, never hand-edited. |
-| `flows/`     | One mermaid `flowchart` per `.mmd` file. For screen flows, node ids are wireframe file stems; edge labels carry trigger semantics (`-- "tap Submit" -->`). |
+| `flows/`     | One flow source per process: `*.json` is the hand-authored truth (`{"name", "steps":[{id, label, screen?, trigger?, next?}]}`); the `*.mmd` beside it is a derived export carrying a provenance hash — regenerate with `design_export_tokens targets:flows`, never hand-edit. |
 | `feedback/`  | Human annotations, one JSON file per target. |
 
 Screen, flow, and icon names follow the slug rule `^[a-z0-9]+(-[a-z0-9]+)*$`.
 
 ## Device frames
 
-Declared frames used by wireframe and screen sizing (machine-parsed — a
+Declared frames used by screen sizing (machine-parsed — a
 `frames:` line followed by indented `name: WxH` entries, plain integers).
-All current wireframes target the desktop frame; the app also ships
+All current screens target the desktop frame; the app also ships
 tablet/mobile layouts (breakpoint at 769px) for future frames.
 
 frames:
@@ -38,8 +38,8 @@ frames:
 
 ## Screens
 
-One line per screen: the screen name (matching a `wireframes/` file stem)
-and its purpose.
+One line per screen: the screen name (matching a `screens/` file stem and
+the screen's `data-screen` identity) and its purpose.
 
 - `app-shell` — draft — Code-mode default: header bar, sidebar (mode switcher, icon rail, section pane), chat workspace, terminal strip
 - `chat` — draft — chat surface: message timeline, tool timeline bar, composer with model selector, queue, and status
@@ -47,7 +47,7 @@ and its purpose.
 - `git-panel` — draft — sidebar git section: status, staging, commit message, history
 - `settings` — draft — settings: providers, models, theme, UI scale
 - `command-palette` — draft — ⌘K overlay: files, symbols, actions
-- `design-flows` — draft — Design mode: flow canvas with wireframe nodes and the design rail
+- `design-flows` — draft — Design mode: flow canvas with flow-source nodes and the design rail
 - `design-screens` — draft — Design mode: screens browser with detail pane
 - `design-mode` — draft — the Design workspace's own IA (SP-140-8 item 8.6): mode rail with the Screens group (status dots, open-annotation badges) + Library group, the workbench facets in §8b order (render, status, feedback, flows, tokens, agent), and the global health strip
 - `mobile-sessions` — draft — the screen kit's phone dogfood (SP-143 143.7): session list with data-nav rows into `mobile-session`
@@ -77,7 +77,7 @@ the vocabulary every screen is built from.
 ## Composition
 
 How each screen composes components. This is the load-bearing map: a screen
-wireframe shows placement, the component spec shows the part. Edit the part.
+shows placement, the component spec shows the part. Edit the part.
 
 | Screen             | Components (in order of placement)                                            |
 | ------------------ | ----------------------------------------------------------------------------- |
@@ -100,7 +100,7 @@ purpose.
 
 - `navigation` — draft — Code-mode navigation map between the main surfaces
 - `design-mode` — draft — mode switching between Code and Design, design rail navigation, file handoff back to Code; now also the 8.6 screen's own rail/workbench edges (`design-mode` self-edges = the rail's section switches)
-- `agent-turn` — draft — one chat turn end to end: send, tool execution, todos, changes, review/commit (non-screen flow; node ids are generic)
+- `agent-turn` — draft — one chat turn end to end: send, tool execution, todos, changes, review/commit (non-screen flow; steps carry no `screen` and node ids are generic)
 - `mobile-screens` — draft — the SP-143 143.7 dogfood pair: phone session list ↔ detail via the runtime's data-nav swap
 
 ## Status markers
@@ -112,7 +112,8 @@ Screens, components, and flows carry one of: `draft`, `review`, `ready`.
 
 This pass seeded the tree from the implementation, so every screen, component,
 and flow is `draft`: it mirrors the app but has not yet been approved as the
-forward-looking source of truth.
+forward-looking source of truth. Status lives only here — screens carry no
+`data-status` attribute (SP-140-9 §9a).
 
 ## Git contract
 
@@ -121,8 +122,8 @@ source file. Two repository-level lines make that work; `design_validate`
 reports a `fix` finding with the exact line to append when either is
 missing, and the scaffold appends them without touching existing rules.
 
-`.gitattributes` — mark wireframe, icon, and logo SVGs as HTML so a
-rendered PR diff is readable markup (`append`, never replace):
+`.gitattributes` — mark icon and logo SVGs as HTML so a rendered PR diff
+is readable markup (`append`, never replace):
 
 ```
 design/**/*.svg diff=html

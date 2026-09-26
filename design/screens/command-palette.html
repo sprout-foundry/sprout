@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  command-palette — ⌘K overlay: files, symbols, actions (SP-140-9 9.4:
+  migrated from the legacy design/wireframes/command-palette.svg). Base:
+  design/runtime/base/desktop.html; nav triggers mirror navigation.mmd.
+-->
+<html lang="en" data-screen="command-palette" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>command-palette — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; position: relative; background: var(--color-dark-bg-primary); }
+  .scrim { position: absolute; inset: 0; background: var(--color-dark-bg-primary); opacity: 0.55; }
+  .sidebar-ghost { position: absolute; top: 0; left: 0; width: var(--sizing-sidebar-width); height: 100%; background: var(--color-dark-bg-secondary); opacity: 0.35; }
+  .palette { position: absolute; top: 180px; left: 360px; width: 720px; background: var(--color-dark-bg-elevated); border: 1px solid var(--color-dark-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-elevation-float); }
+  .input-row { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--color-dark-border-subtle); }
+  .input-row .query { flex: 1; color: var(--color-dark-text-muted); }
+  .input-row .kbd { background: var(--color-dark-bg-secondary); border-radius: var(--radius-sm); padding: 3px var(--space-4); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .group-label { padding: var(--space-4) var(--space-8) 0; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); letter-spacing: 0.08em; }
+  .result { display: flex; align-items: center; padding: var(--space-3) var(--space-8); font-size: var(--typography-size-sm); }
+  .result.active { background: var(--color-dark-bg-hover); box-shadow: inset 2px 0 0 var(--color-dark-accent-primary); }
+  .result .path { margin-left: auto; color: var(--color-dark-text-muted); font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); }
+  .result .shortcut { margin-left: auto; color: var(--color-dark-text-muted); font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); }
+  .secondary { color: var(--color-dark-text-secondary); }
+  .footer { border-top: 1px solid var(--color-dark-border-subtle); padding: var(--space-4) var(--space-8); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+</style>
+</head>
+<body data-sprout-screen="command-palette">
+<div class="screen">
+  <div class="scrim"></div>
+  <div class="sidebar-ghost"></div>
+
+  <div class="palette">
+    <div class="input-row">
+      <span>&#8984;K</span>
+      <span class="query">Search files, symbols, actions&#8230;</span>
+      <span class="kbd">type to filter</span>
+    </div>
+
+    <div class="group-label">FILES</div>
+    <div class="result active">ModeSwitcher.tsx<span class="path">webui/src/workspaces/</span></div>
+    <div class="result secondary">ModeSwitcher.test.tsx<span class="path">webui/src/workspaces/</span></div>
+    <div class="result secondary">App.css<span class="path">webui/src/</span></div>
+    <div class="result secondary">design_validate_handler.go<span class="path">pkg/agent_tools/</span></div>
+
+    <div class="group-label">SYMBOLS</div>
+    <div class="result secondary">&#9672; validateDesignWorkspace()<span class="path">pkg/design/</span></div>
+    <div class="result secondary">&#9672; ModeSwitcher() &#8230; component<span class="path">webui/src/workspaces/</span></div>
+
+    <div class="group-label">ACTIONS</div>
+    <div class="result secondary">Switch to Design mode<span class="shortcut">&#8984;D</span></div>
+    <div class="result secondary">Open terminal<span class="shortcut">&#8984;J</span></div>
+
+    <div class="footer">&#8593;&#8595; navigate &middot; &#8629; open &middot; esc close</div>
+  </div>
+
+</div>
+<a href="../screens/app-shell.html" data-nav="to:app-shell;trigger:back affordances (back arrow / close / Esc)" style="display:none">close</a>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

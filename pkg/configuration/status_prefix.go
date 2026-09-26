@@ -4,14 +4,18 @@ package configuration
 // bracketed status lines.
 //
 // Why not console.Glyph*? pkg/console imports pkg/configuration
-// (via console/ci_output_handler.go for IsCI detection), so this
-// package cannot import pkg/console. The bracketed literals here
-// are kept verbatim to preserve the existing user-facing surface.
+// (console/keymap_registration.go needs the Manager API for the footer
+// tooltip + verbosity toggle), so importing pkg/console from here is a
+// direct two-package import cycle. The bracketed literals here are kept
+// verbatim to preserve the existing user-facing surface;
+// onboarding_glyph_test.go pins that output until the helpers are ported
+// to the console.Glyph* surface.
 // New code that doesn't hit this cycle should prefer console.Glyph*.
 //
-// If the cycle is ever broken (e.g., by inverting the CI check to a
-// pure function), these helpers can be deleted and replaced with
-// console.GlyphSuccess.Fprintln(os.Stdout, msg) at the call sites.
+// If the console -> configuration edge in keymap_registration.go is ever
+// broken (e.g. by giving the footer a narrower toggle interface), these
+// helpers can be deleted and replaced with console.Glyph* at the call
+// sites.
 
 import (
 	"fmt"

@@ -63,6 +63,24 @@ function seedFilesIfAbsent(shell: WasmShell, files: Array<{ path: string; conten
   }
 }
 
+/**
+ * Limit the WASM agent's outbound HTTP to this page and the platform API.
+ * Everything the agent needs goes through the platform; direct calls to
+ * provider APIs (model catalogs, backend probes) would expose the user's
+ * activity to third parties and fail on CORS regardless.
+ */
+function restrictAgentNetwork(apiBase: string): void {
+  const wasm = (globalThis as { SproutWasm?: { setAllowedOrigins?: (origins: string[]) => unknown } }).SproutWasm;
+  if (typeof wasm?.setAllowedOrigins !== 'function' || typeof window === 'undefined') return;
+  const origins = new Set([window.location.origin]);
+  try {
+    origins.add(new URL(apiBase, window.location.href).origin);
+  } catch {
+    // apiBase is relative or empty: same-origin only.
+  }
+  wasm.setAllowedOrigins([...origins]);
+}
+
 export class CloudAdapter implements APIAdapter {
   readonly name = 'foundry-cloud';
   readonly requiresBackendHealthCheck = true;
@@ -135,6 +153,7 @@ export class CloudAdapter implements APIAdapter {
     if (!this.wasmInitPromise) {
       this.wasmInitPromise = initWasmShell()
         .then((shell) => {
+          restrictAgentNetwork(this.config.apiBase);
           this.wasmShell = shell;
           return shell;
         })

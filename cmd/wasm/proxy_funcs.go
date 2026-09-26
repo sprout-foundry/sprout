@@ -36,6 +36,7 @@ func proxyJSFuncs() map[string]interface{} {
 		"setCorsProxy":        js.FuncOf(setCorsProxyFunc),
 		"getCorsProxy":        js.FuncOf(getCorsProxyFunc),
 		"getProxyDiagnostics": js.FuncOf(getProxyDiagnosticsFunc),
+		"setAllowedOrigins":   js.FuncOf(setAllowedOriginsFunc),
 	}
 }
 
@@ -86,4 +87,22 @@ func getProxyDiagnosticsFunc(_ js.Value, _ []js.Value) interface{} {
 		"corsProxy":        llmproxy.GetCorsProxy(),
 		"isActive":         llmproxy.GetPlatformEndpoint() != "" || llmproxy.GetCorsProxy() != "",
 	}
+}
+
+// setAllowedOriginsFunc restricts the agent's outbound HTTP to the given
+// origins (see llmproxy.SetAllowedOrigins). The cloud-mode host page passes
+// its own origin and the platform API's; an empty array lifts the limit.
+//
+// Signature: setAllowedOrigins(origins: string[]): {ok: true, count: number}
+func setAllowedOriginsFunc(_ js.Value, args []js.Value) interface{} {
+	var origins []string
+	if len(args) > 0 && args[0].Type() == js.TypeObject {
+		for i := 0; i < args[0].Length(); i++ {
+			if v := args[0].Index(i); v.Type() == js.TypeString {
+				origins = append(origins, v.String())
+			}
+		}
+	}
+	llmproxy.SetAllowedOrigins(origins)
+	return map[string]interface{}{"ok": true, "count": len(origins)}
 }

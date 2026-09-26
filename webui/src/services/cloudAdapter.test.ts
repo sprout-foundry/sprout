@@ -1771,7 +1771,9 @@ describe('CloudAdapter', () => {
 
     it("doesn't overwrite a file the VFS already has (the user's edits)", async () => {
       mockWasmShell.readFile.mockImplementation((path: string) =>
-        path === 'README' ? { content: 'edited by the user', error: '' } : { content: '', error: 'file does not exist' },
+        path === 'README'
+          ? { content: 'edited by the user', error: '' }
+          : { content: '', error: 'file does not exist' },
       );
       mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
         repo: 'octocat/Hello-World',
@@ -1820,5 +1822,26 @@ describe('CloudAdapter', () => {
         expect.objectContaining({ repo: 'octocat/Hello-World' }),
       );
     });
+  });
+});
+
+describe('CloudAdapter — agent network restriction', () => {
+  it('limits the WASM agent to this page and the platform API once the shell starts', async () => {
+    const setAllowedOrigins = vi.fn();
+    (globalThis as { SproutWasm?: unknown }).SproutWasm = { setAllowedOrigins };
+    try {
+      const fresh = new CloudAdapter({
+        apiBase: 'https://api.sprout.dev',
+        wsBase: '',
+        getAuthToken: () => null,
+      } as never);
+      // Any wasm-local request boots the shell.
+      await fresh.fetch('/api/files');
+      expect(setAllowedOrigins).toHaveBeenCalledWith(
+        expect.arrayContaining([window.location.origin, 'https://api.sprout.dev']),
+      );
+    } finally {
+      delete (globalThis as { SproutWasm?: unknown }).SproutWasm;
+    }
   });
 });

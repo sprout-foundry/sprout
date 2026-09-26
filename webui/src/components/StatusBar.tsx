@@ -6,7 +6,7 @@ import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
-import NotificationCenter from './NotificationCenter';
+import NotificationHistoryPanel from './NotificationHistoryPanel';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -74,7 +74,7 @@ function StatusBar({
 
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
-  const bellIconRef = useRef<HTMLDivElement>(null);
+  const bellIconRef = useRef<HTMLButtonElement>(null);
 
   const toggleNotificationCenter = useCallback(() => {
     setIsNotificationCenterOpen((prev) => !prev);
@@ -164,31 +164,24 @@ function StatusBar({
         indentation={indentation}
         showRightSection={buffer != null}
       />
-      <div
+      <button
+        type="button"
         ref={bellIconRef}
         className="statusbar-item statusbar-item-notification"
         onClick={toggleNotificationCenter}
-        role="button"
-        tabIndex={0}
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        aria-haspopup="dialog"
+        aria-expanded={isNotificationCenterOpen}
         data-testid="status-bar-notification"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            toggleNotificationCenter();
-          }
-        }}
       >
         <BellIcon />
         {unreadCount > 0 && (
           <span className="statusbar-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
-      </div>
-      <NotificationCenter
-        isOpen={isNotificationCenterOpen}
-        onClose={closeNotificationCenter}
-        positionRef={bellIconRef}
-      />
+      </button>
+      {isNotificationCenterOpen && (
+        <NotificationHistoryPanel anchorRef={bellIconRef} onClose={closeNotificationCenter} />
+      )}
     </div>
   );
 }

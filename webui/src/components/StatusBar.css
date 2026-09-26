@@ -120,6 +120,10 @@
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-subtle);
   border-left: 1px solid var(--border-subtle);
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+  font: inherit;
   flex-shrink: 0;
 }
 

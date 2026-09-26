@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"golang.org/x/term"
 )
 
@@ -76,7 +76,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 	content := h.buffer.String()
 
 	// Debug all writes
-	if configuration.GetEnvSimple("DEBUG_OUTPUT") == "1" {
+	if envutil.GetEnvSimple("DEBUG_OUTPUT") == "1" {
 		fmt.Fprintf(os.Stderr, "[DEBUG CIOutputHandler.Write] Buffer now: %q\n", content)
 	}
 
@@ -115,7 +115,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 
 		// Strip ANSI escape codes only if colors should be disabled
 		// Allow preserve of markdown colors via environment variable
-		shouldPreserveColors := configuration.GetEnvSimple("CI_COLORS") == "1" || configuration.GetEnvSimple("COLOR") == "always"
+		shouldPreserveColors := envutil.GetEnvSimple("CI_COLORS") == "1" || envutil.GetEnvSimple("COLOR") == "always"
 
 		if !shouldPreserveColors {
 			content = h.stripANSIEscapeCodes(content)

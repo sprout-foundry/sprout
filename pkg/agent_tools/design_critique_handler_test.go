@@ -1567,10 +1567,12 @@ func TestDesignCritique_NotInSharedAllToolsList(t *testing.T) {
 
 // TestDesignCritiqueHandler_UsesSharedRenderHelper pins the §4a "renders the
 // target(s) via the existing design_render machinery" requirement: the tool
-// must not re-implement renderInputToPNG/BrowseURL itself.
+// must not re-implement renderInputToPNG/BrowseURL itself. The render/attach/
+// analyze path lives in design_critique_render.go (the render portion of the
+// critique tool, split out from the handler).
 func TestDesignCritiqueHandler_UsesSharedRenderHelper(t *testing.T) {
 	t.Parallel()
-	src := readToolSource(t, designCritiqueHandlerFile)
+	src := readToolSource(t, designCritiqueRenderFile)
 	assert.Contains(t, src, "renderInputToString(",
 		"design_critique must render through the shared render helper")
 	assert.Contains(t, src, "buildRenderAttachment(",
@@ -1582,12 +1584,25 @@ func TestDesignCritiqueHandler_UsesSharedRenderHelper(t *testing.T) {
 }
 
 // TestDesignCritiqueHandler_NoProviderNames pins the SP-137 standing rule for
-// the design tier: no provider is named in the critique handler.
+// the design tier: no provider is named anywhere in the critique tool's
+// sources (the tool was split across design_critique_*.go files).
 func TestDesignCritiqueHandler_NoProviderNames(t *testing.T) {
 	t.Parallel()
-	lower := strings.ToLower(readToolSource(t, designCritiqueHandlerFile))
+	files := []string{
+		designCritiqueHandlerFile,
+		designCritiqueRenderFile,
+		"design_critique_discovery.go",
+		"design_critique_cache.go",
+		"design_critique_findings.go",
+		"design_critique_static.go",
+		"design_critique_findings_sidecar.go",
+		designCritiqueWasmStubFile,
+	}
 	for _, provider := range []string{"openai", "anthropic", "deepinfra", "openrouter", "ollama", "gemini", "claude"} {
-		assert.NotContains(t, lower, provider, "design_critique must not name a provider (SP-137)")
+		for _, name := range files {
+			lower := strings.ToLower(readToolSource(t, name))
+			assert.NotContains(t, lower, provider, "design_critique must not name a provider (SP-137)")
+		}
 	}
 }
 

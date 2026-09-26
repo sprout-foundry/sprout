@@ -251,7 +251,9 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       const currentBuffers = buffersRef.current;
       const currentActivePane = activePaneIdRef.current;
-      const existingBuffer = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === filePath);
+      const existingBuffer = Array.from(currentBuffers.entries()).find(
+        ([_, buffer]) => buffer.kind === 'file' && resolveEditorFilePath(buffer.file.path) === filePath,
+      );
       if (existingBuffer) {
         const [bufferId, buffer] = existingBuffer;
         if (buffer.paneId) {
@@ -269,7 +271,9 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: 'file',
-        file: file,
+        // Store the normalized path so later opens via another path form
+        // (tree vs search vs terminal link) find this buffer.
+        file: { ...file, path: filePath },
         content: '',
         originalContent: '',
         contentLoaded: false, // fresh buffer — content not yet read from disk

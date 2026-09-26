@@ -19,7 +19,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // are created via vi.hoisted (also hoisted) and referenced from the
 // factories by the same variable name.
 
-const { mockGitAdd, mockGitCommit, mockGitStatusMatrix, mockGitInit, mockGitLog, mockGitPush } = vi.hoisted(() => ({
+const {
+  mockGitAdd,
+  mockGitCommit,
+  mockGitStatusMatrix,
+  mockGitInit,
+  mockGitLog,
+  mockGitPush,
+  mockReadBlob,
+  mockFsReadFile,
+} = vi.hoisted(() => ({
+  mockReadBlob: vi.fn(),
+  mockFsReadFile: vi.fn(),
   mockGitAdd: vi.fn(),
   mockGitCommit: vi.fn(),
   mockGitStatusMatrix: vi.fn(),
@@ -33,7 +44,7 @@ vi.mock('@isomorphic-git/lightning-fs', () => {
     mkdir: vi.fn().mockResolvedValue(undefined),
     stat: vi.fn().mockRejectedValue(new Error('not found')),
     readdir: vi.fn().mockResolvedValue([]),
-    readFile: vi.fn().mockResolvedValue(''),
+    readFile: (...args: unknown[]) => mockFsReadFile(...args),
     writeFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
   };
@@ -56,6 +67,8 @@ vi.mock('isomorphic-git', () => ({
   currentBranch: vi.fn().mockResolvedValue(null),
   checkout: vi.fn(),
   clone: vi.fn(),
+  resolveRef: vi.fn().mockResolvedValue('head-oid'),
+  readBlob: mockReadBlob,
 }));
 
 vi.mock('isomorphic-git/http/web', () => ({ default: {} }));
@@ -123,10 +136,41 @@ describe('executeGitOp dispatch', () => {
       expect(result).toEqual(expect.objectContaining({ sha: 'deadbeef' }));
     });
 
-    it('log delegates to gitLog', async () => {
-      const result = await executeGitOp('log', { count: 5 });
-      expect(mockGitLog).toHaveBeenCalled();
-      expect(Array.isArray(result)).toBe(true);
+    it('log answers the GitLogResponse page the history panel reads', async () => {
+      mockGitLog.mockResolvedValueOnce(
+        ['c3', 'c2', 'c1'].map((oid, i) => ({
+          oid: `${oid}0000000000`,
+          commit: { message: `m${i}`, author: { name: 'A', timestamp: 1_790_000_000 + i } },
+        })),
+      );
+      const result = (await executeGitOp('log', undefined, { limit: '2', offset: '0' })) as {
+        commits: Array<{ hash: string; short_hash: string }>;
+        limit: number;
+        offset: number;
+        total: number;
+      };
+      expect(result.commits.map((c) => c.short_hash)).toEqual(['c300000', 'c200000']);
+      expect(result).toMatchObject({ limit: 2, offset: 0, total: 3 });
+    });
+
+    it('diff for a path answers a GitDiffResponse with both versions', async () => {
+      mockGitStatusMatrix.mockResolvedValue([]);
+      mockReadBlob.mockResolvedValueOnce({ blob: new TextEncoder().encode('Hello World!\n') });
+      mockFsReadFile.mockResolvedValue('Hello World!\nmore\n');
+      const result = (await executeGitOp('diff', undefined, { path: '/README' })) as {
+        path: string;
+        diff: string;
+        has_unstaged: boolean;
+        original_content: string;
+        modified_content: string;
+      };
+      expect(result.path).toBe('README');
+      expect(result.has_unstaged).toBe(true);
+      expect(result.original_content).toBe('Hello World!\n');
+      expect(result.modified_content).toBe('Hello World!\nmore\n');
+      expect(result.diff).toContain('diff --git a/README b/README');
+      expect(result.diff).toContain('@@ ');
+      expect(result.diff).toContain('+more');
     });
 
     it('push delegates to gitPush', async () => {

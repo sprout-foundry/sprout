@@ -11,6 +11,7 @@
 import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
+import { generateUnifiedDiff } from '../utils/simpleDiff';
 
 const FS_NAME = 'sprout-git';
 const REPO_DIR = '/repo';
@@ -368,6 +369,60 @@ export async function gitDiff(opts?: { path?: string; cached?: boolean }) {
   return changes;
 }
 
+/**
+ * Working-tree diff for one file against HEAD, in the GitDiffResponse shape
+ * the diff view renders (text diff plus both full versions for the merge
+ * view). Browser git has no index distinct from the working tree, so every
+ * change is reported as unstaged.
+ */
+export async function gitFileDiff(path: string) {
+  await ensureInitialized();
+  await syncVfsToGitFs();
+  const fs = getFs().promises;
+  const rel = path.replace(/^\/+/, '').replace(/^repo\//, '');
+
+  let original = '';
+  try {
+    const head = await git.resolveRef({ fs, dir: REPO_DIR, ref: 'HEAD' });
+    const { blob } = await git.readBlob({ fs, dir: REPO_DIR, oid: head, filepath: rel });
+    original = new TextDecoder().decode(blob);
+  } catch {
+    // New file, or no commits yet: the HEAD side is empty.
+  }
+  let modified = '';
+  try {
+    modified = String(await fs.readFile(`${REPO_DIR}/${rel}`, 'utf8'));
+  } catch {
+    // Deleted in the working tree: the new side is empty.
+  }
+
+  const body = generateUnifiedDiff(original, modified, `a/${rel}`, `b/${rel}`);
+  let diff = '';
+  if (body) {
+    // generateUnifiedDiff lists the whole file after its ---/+++ headers;
+    // present that as one hunk so the diff parser gets line numbers.
+    const lines = body.split('\n');
+    const fileHeaders = lines.slice(0, 2).join('\n');
+    const hunkBody = lines.slice(2).join('\n');
+    const oldLen = original === '' ? 0 : original.split('\n').length;
+    const newLen = modified === '' ? 0 : modified.split('\n').length;
+    diff =
+      `diff --git a/${rel} b/${rel}\n${fileHeaders}\n` +
+      `@@ -${oldLen ? 1 : 0},${oldLen} +${newLen ? 1 : 0},${newLen} @@\n${hunkBody}`;
+  }
+  return {
+    message: 'success',
+    path: rel,
+    has_staged: false,
+    has_unstaged: diff !== '',
+    staged_diff: '',
+    unstaged_diff: diff,
+    diff,
+    original_content: original,
+    modified_content: modified,
+  };
+}
+
 export async function gitClone(url: string, opts?: { token?: string }) {
   const fs = getFs().promises;
   // Clear existing repo contents
@@ -524,8 +579,22 @@ export async function executeGitOp(
       return gitStageAll();
     case 'commit':
       return gitCommit((body?.message as string) || 'commit');
-    case 'log':
-      return gitLog(Number(body?.count ?? 50));
+    case 'log': {
+      // HTTP surface: GitLogResponse. The UI pages with ?limit=&offset=;
+      // shell consumers keep calling gitLog() for the bare list.
+      const limit = Math.max(1, Number(query?.limit ?? body?.count ?? 50));
+      const offset = Math.max(0, Number(query?.offset ?? 0));
+      const all = await gitLog(offset + limit + 1);
+      const page = all.slice(offset, offset + limit);
+      return {
+        message: 'success',
+        commits: page.map((c) => ({ ...c, short_hash: c.hash.slice(0, 7) })),
+        offset,
+        limit,
+        // One extra commit was fetched to tell whether another page exists.
+        total: all.length > offset + limit ? offset + limit + 1 : all.length,
+      };
+    }
     case 'branch':
     case 'branches': {
       // Boot-time guard (matches the 'status' case above): before browser git
@@ -544,7 +613,10 @@ export async function executeGitOp(
     case 'checkout':
       return gitCheckout((body?.branch as string) || (body?.name as string));
     case 'diff':
-      return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
+      // HTTP surface: GitDiffResponse for one file (the panel always asks per
+      // path); shell consumers keep using gitDiff() for the change list.
+      if (query?.path) return gitFileDiff(query.path);
+      return gitDiff({ cached: query?.cached === 'true' });
     case 'push':
       return gitPush(body?.remote as string, body?.branch as string);
     case 'clone':

@@ -41,6 +41,9 @@ function Chat(props: ChatProps): JSX.Element {
     onInputChange,
     isProcessing = false,
     lastError = null,
+    workspaceBusy = null,
+    onSendAnyway,
+    onDismissBusy,
     toolExecutions = [],
     queryProgress = null,
     currentTodos = [],
@@ -274,6 +277,9 @@ function Chat(props: ChatProps): JSX.Element {
           isProcessing={isProcessing}
           filteredToolExecutions={filteredToolExecutions}
           lastError={lastError}
+          workspaceBusy={workspaceBusy}
+          onSendAnyway={onSendAnyway}
+          onDismissBusy={onDismissBusy}
           showExpiredSessionRecovery={showExpiredSessionRecovery}
           handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
           currentTodos={currentTodos}
@@ -282,6 +288,9 @@ function Chat(props: ChatProps): JSX.Element {
     ),
     [
       isProcessing,
+      workspaceBusy,
+      onSendAnyway,
+      onDismissBusy,
       onReviewChange,
       currentQueryCount,
       latestTurnEdits,

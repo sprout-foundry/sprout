@@ -1,5 +1,5 @@
 import { SkeletonText, type TodoItem } from '@sprout/ui';
-import { Zap, AlertTriangle, ListTodo } from 'lucide-react';
+import { Zap, AlertTriangle, ListTodo, Clock } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
 import type { ToolExecution } from './types';
 
@@ -8,6 +8,12 @@ interface ChatFooterProps {
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
   lastError: string | null;
+  /** SP-142 §3 busy notice — see ChatProps.workspaceBusy. */
+  workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
+  onSendAnyway?: (message: string) => void;
+  onDismissBusy?: () => void;
+  /** The composer's current draft — the send-anyway action queues it. */
+  pendingDraft?: string;
   showExpiredSessionRecovery: boolean;
   handleReloadWithoutSSHPath: () => void;
   currentTodos?: TodoItem[];
@@ -18,6 +24,10 @@ export function ChatFooter({
   isProcessing,
   filteredToolExecutions,
   lastError,
+  workspaceBusy,
+  onSendAnyway,
+  onDismissBusy,
+  pendingDraft,
   showExpiredSessionRecovery,
   handleReloadWithoutSSHPath,
   currentTodos,
@@ -71,6 +81,40 @@ export function ChatFooter({
             {activeTodoLabel ? `Processing: ${activeTodoLabel}` : 'Processing your request...'}
           </span>
         </div>
+      </div>,
+    );
+  }
+
+  if (workspaceBusy) {
+    elements.push(
+      <div key="workspace-busy" className="workspace-busy-indicator" data-testid="workspace-busy-notice">
+        <span className="workspace-busy-icon">
+          <Clock size={14} />
+        </span>
+        <span className="workspace-busy-text">
+          Another chat ({workspaceBusy.runningChatName}) is working in this workspace — send anyway queues after it.
+        </span>
+        {onSendAnyway && pendingDraft?.trim() ? (
+          <button
+            type="button"
+            className="workspace-busy-send-anyway"
+            data-testid="workspace-busy-send-anyway"
+            onClick={() => onSendAnyway(pendingDraft)}
+          >
+            Send anyway
+          </button>
+        ) : null}
+        {onDismissBusy ? (
+          <button
+            type="button"
+            className="workspace-busy-dismiss"
+            data-testid="workspace-busy-dismiss"
+            aria-label="Dismiss busy notice"
+            onClick={onDismissBusy}
+          >
+            ×
+          </button>
+        ) : null}
       </div>,
     );
   }

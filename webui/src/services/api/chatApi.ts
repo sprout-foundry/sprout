@@ -14,10 +14,18 @@ export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: s
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Query failed' }));
-    const error = new Error(data.message || data.error || 'Failed to send query') as Error & { code?: string };
+    const error = new Error(data.message || data.error || 'Failed to send query') as Error & {
+      code?: string;
+      runningChatId?: string;
+      runningChatName?: string;
+    };
     // Surface the machine-readable code (e.g. "query_in_progress") so callers
     // can recover instead of treating every failure as terminal.
     error.code = typeof data.code === 'string' ? data.code : undefined;
+    // workspace_busy (SP-142 §3): the running chat's identity, so the
+    // composer can name it in the busy notice.
+    error.runningChatId = typeof data.running_chat_id === 'string' ? data.running_chat_id : undefined;
+    error.runningChatName = typeof data.running_chat_name === 'string' ? data.running_chat_name : undefined;
     throw error;
   }
 }

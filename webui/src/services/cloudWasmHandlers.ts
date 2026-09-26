@@ -5,6 +5,7 @@
  * by the WASM shell rather than being proxied to a backend.
  */
 
+import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { workspaceCwdContextLine } from './workspaceCwd';
@@ -1082,8 +1083,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       });
     })
     .catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      dispatch('error', { message: `Agent error: ${message}` });
+      const { message, creditsBlocked } = describeAgentError(err instanceof Error ? err.message : String(err));
+      dispatch('error', { message });
+      if (creditsBlocked) notifyCreditsBlocked(message);
     });
 
   // Return immediately — the webui picks up events via the dispatcher

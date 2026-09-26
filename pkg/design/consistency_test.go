@@ -146,11 +146,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 		// "profile" is wired as a flow node but has no wireframe file, and it is
 		// non-terminal (home -> profile -> home), so the §4b edge rule fires.
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg":   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"home.svg":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Home</text></svg>`,
-			"profile.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Profile</text></svg>`,
-		}, "frames:\n  mobile: 390x844\n")
+		writeScreenTree(t, root, []string{"login", "home", "profile"}, "frames:\n  mobile: 390x844\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
 		// "settings" is a real stem; "ghost" is not, and it both leaves home
 		// and returns to it — non-terminal.
@@ -170,10 +166,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 
 	t.Run("valid-screen-flow-clean", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"home.svg":  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Home</text></svg>`,
-		}, "frames:\n  mobile: 390x844\n")
+		writeScreenTree(t, root, []string{"login", "home"}, "frames:\n  mobile: 390x844\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "flows", "main.mmd"),
 			[]byte("flowchart LR\n  login --> home\n"), 0o644))
@@ -200,9 +193,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 func TestConsistencyReadmeScreenRefs(t *testing.T) {
 	t.Run("missing-wireframe-flagged", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft — sign in\n- `checkout` — draft — pay\n\n## Status markers\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"login"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft — sign in\n- `checkout` — draft — pay\n\n## Status markers\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		rules := findingRules(findings)
@@ -253,9 +244,7 @@ func TestConsistencyReadmeScreenRefs(t *testing.T) {
 		// A screen flow and its wireframe share a stem, so a Flows entry whose
 		// wireframe exists is clean even without the flow file.
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"sign-up.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Sign up</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Flows\n\n- `sign-up` — draft\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"sign-up"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Flows\n\n- `sign-up` — draft\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		assert.Equal(t, 0, findingRules(findings)[ruleManifestLinkDangling], "got %#v", findings)
@@ -263,10 +252,7 @@ func TestConsistencyReadmeScreenRefs(t *testing.T) {
 
 	t.Run("wireframe-present-clean", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"checkout.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Checkout</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"login", "checkout"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		assert.Equal(t, 0, findingRules(findings)[ruleManifestLinkDangling], "got %#v", findings)

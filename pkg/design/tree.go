@@ -205,10 +205,10 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 	case strings.HasPrefix(rel, DirName+"/flows/") && strings.HasSuffix(rel, ".mmd"):
 		// §1c per-file rules, then the §4b bidirectionality pack so a
 		// single-file flow run surfaces its non-terminal edge findings too.
-		stems := assetStems(root, "wireframes", ".svg")
+		wireframeStems := assetStems(root, "wireframes", ".svg")
 		screenStems := assetStems(root, "screens", ".html")
-		findings := ValidateFlows(root, rel, data, stems, screenStems...)
-		findings = append(findings, flowBidirectionalityFindings(root, rel, data, stems)...)
+		findings := ValidateFlows(root, rel, data, wireframeStems, screenStems...)
+		findings = append(findings, flowBidirectionalityFindings(root, rel, data, screenStems)...)
 		// SP-140-9 §9b: the derived-export checks — drift against the .json
 		// source when one exists, the legacy notice when it does not.
 		findings = append(findings, flowMMDChecks(root, rel, data)...)

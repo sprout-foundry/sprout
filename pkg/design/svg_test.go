@@ -1,6 +1,7 @@
 package design
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,11 +31,12 @@ func requireNoWireframeFindings(t *testing.T, findings []Finding) {
 	assert.Empty(t, findings)
 }
 
-// dropDeprecationFindings filters out the §9a wireframe deprecation notices
-// and the §9b legacy-flow notices — both are the transitional queue toward
-// the 9.4 migration (the same migration, one per legacy artifact class) — so
-// tests that assert the pre-9.4 per-file rules stay readable; the notices
-// themselves are pinned by TestWireframeDeprecation and the flowsource tests.
+// dropDeprecationFindings filters out the §9a wireframe deprecation findings
+// and the §9b legacy-flow notices — the legacy-tier classes this tree's own
+// fixtures seed (the dogfood tree is migrated; flow_mmd_legacy stays info for
+// external trees) — so tests that assert the per-file rules stay readable;
+// the tier findings themselves are pinned by TestWireframeDeprecation and the
+// flowsource tests.
 func dropDeprecationFindings(findings []Finding) []Finding {
 	out := make([]Finding, 0, len(findings))
 	for _, f := range findings {
@@ -270,6 +272,22 @@ func TestValidateWireframesDir(t *testing.T) {
 
 // writeWireframeTree writes the given wireframe files under root/design/
 // wireframes/ and an optional design/README.md, for dir-level tests.
+
+// writeScreenTree writes design/screens/<stem>.html fixtures — the post-9.4
+// universe for the tree-level consistency tests (the wireframe tier is gone).
+func writeScreenTree(t *testing.T, root string, stems []string, readme string) {
+	t.Helper()
+	dir := filepath.Join(root, "design", "screens")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	for _, stem := range stems {
+		body := fmt.Sprintf("<!doctype html>\n<html data-screen=\"%s\">\n<body><p>%s</p></body>\n</html>\n", stem, stem)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, stem+".html"), []byte(body), 0o644))
+	}
+	if readme != "" {
+		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"), []byte(readme), 0o644))
+	}
+}
+
 func writeWireframeTree(t *testing.T, root string, files map[string]string, readme string) {
 	t.Helper()
 	dir := filepath.Join(root, "design", "wireframes")

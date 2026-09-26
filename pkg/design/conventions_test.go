@@ -259,10 +259,10 @@ func TestDesignAssetConventions_FixtureTreeShape(t *testing.T) {
 	required := []string{
 		"design/README.md",
 		"design/tokens/color.tokens.json",
-		"design/wireframes/login.svg",
-		"design/wireframes/home.svg",
 		"design/flows/sign-up.mmd",
+		"design/flows/sign-up.json",
 		"design/screens/login.html",
+		"design/screens/home.html",
 		"design/icons/home.svg",
 		"design/brand/brand.md",
 		GitContractFile,

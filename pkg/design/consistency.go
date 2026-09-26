@@ -84,12 +84,14 @@ var manifestBulletNameRe = regexp.MustCompile("^[-*]\\s+`([^`]+)`")
 func ValidateConsistency(root string) []Finding {
 	findings := []Finding{}
 
-	wireframeStems := assetStems(root, "wireframes", ".svg")
-	stemSet := make(map[string]struct{}, len(wireframeStems))
-	for _, s := range wireframeStems {
+	// SP-140-9 §9a/9.4: the wireframe tier is gone; the bidirectionality
+	// universe is the SCREEN stems (the primary tier). During the 9.1-9.3
+	// window this unioned wireframes in; post-migration only screens remain.
+	screenStems := assetStems(root, "screens", ".html")
+	stemSet := make(map[string]struct{}, len(screenStems))
+	for _, s := range screenStems {
 		stemSet[s] = struct{}{}
 	}
-	screenStems := assetStems(root, "screens", ".html")
 	flowStems := assetStems(root, "flows", ".mmd")
 
 	if matches, err := filepath.Glob(filepath.Join(root, DirName, "flows", "*.mmd")); err == nil {
@@ -111,7 +113,7 @@ func ValidateConsistency(root string) []Finding {
 	}
 
 	readmeAssets := readmeScreenAssets{
-		wireframeStems: wireframeStems,
+		wireframeStems: nil, // the tier is gone post-9.4; kept for schema shape
 		screenStems:    screenStems,
 		flowStems:      flowStems,
 		componentStems: assetStems(root, "components", ".svg"),
@@ -265,7 +267,6 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 		}
 		return m
 	}
-	wireframes := stems(assets.wireframeStems)
 	screens := stems(assets.screenStems)
 	flows := stems(assets.flowStems)
 	components := stems(assets.componentStems)
@@ -279,9 +280,10 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 			if _, ok := flows[ref.name]; ok {
 				continue
 			}
-			// A screen flow and its wireframe share a stem; a listing that
-			// names a screen flow is satisfied by the wireframe too.
-			if _, ok := wireframes[ref.name]; ok {
+			// A flow and its screens share stems (§9b: the flow's steps name
+			// screens); a listing that names a flow is satisfied by an
+			// existing screen of the same stem.
+			if _, ok := screens[ref.name]; ok {
 				continue
 			}
 		case "Components":
@@ -290,10 +292,7 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 				continue
 			}
 		default: // Screens
-			expected = fmt.Sprintf("design/wireframes/%s.svg (or design/screens/%s.html)", ref.name, ref.name)
-			if _, ok := wireframes[ref.name]; ok {
-				continue
-			}
+			expected = fmt.Sprintf("design/screens/%s.html", ref.name)
 			if _, ok := screens[ref.name]; ok {
 				continue
 			}

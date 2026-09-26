@@ -7,16 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestWireframeDeprecation pins the SP-140-9 §9a wireframe-tier deprecation:
-// every legacy design/wireframes/*.svg earns exactly one informational notice
-// naming the SP-140-9 spec section and the primary screen the file should
-// become (item 9.4 migrates the tier). The channel is info — not the spec's
-// warn — because every finding severity suppresses the webui health strip's
-// "validated clean" state, and 9.4's migration window must not hold the
-// whole surface in a perpetual advisory state (SP-140-9 §9e steps the
-// severity up when the tier is gone).
+// TestWireframeDeprecation pins the SP-140-9 §9a wireframe-tier deprecation
+// at its post-9.4 severity: every legacy design/wireframes/*.svg earns
+// exactly one ERROR naming the §9a section and the primary screen the file
+// must become. Item 9.4 migrated the tier, so the transitional info window
+// is closed — presence is the error (the spec's "warn window = one release,
+// then reject" cutover), while flow_mmd_legacy stays info for external
+// trees' still-unmigrated flows.
 func TestWireframeDeprecation(t *testing.T) {
-	t.Run("one-notice-per-file", func(t *testing.T) {
+	t.Run("one-error-per-file", func(t *testing.T) {
 		root := t.TempDir()
 		writeWireframeTree(t, root, map[string]string{
 			"login.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
@@ -24,17 +23,17 @@ func TestWireframeDeprecation(t *testing.T) {
 		}, "# draft review ready\n")
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
-		notices := 0
+		deprecations := 0
 		for _, f := range findings {
 			if f.Rule != ruleWireframeDeprecated {
 				continue
 			}
-			notices++
-			assert.Equal(t, SeverityInfo, f.Severity)
+			deprecations++
+			assert.Equal(t, SeverityError, f.Severity)
 			assert.Contains(t, f.Message, "SP-140-9 §9a")
 			assert.Contains(t, f.Message, "item 9.4")
 		}
-		assert.Equal(t, 2, notices, "one notice per legacy wireframe, got %#v", findings)
+		assert.Equal(t, 2, deprecations, "one error per legacy wireframe, got %#v", findings)
 	})
 
 	t.Run("names-the-primary-screen", func(t *testing.T) {
@@ -43,7 +42,7 @@ func TestWireframeDeprecation(t *testing.T) {
 		assert.Equal(t, "design/wireframes/login.svg", f.File)
 	})
 
-	t.Run("no-wireframes-no-notices", func(t *testing.T) {
+	t.Run("no-wireframes-no-findings", func(t *testing.T) {
 		root := t.TempDir()
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
@@ -52,7 +51,7 @@ func TestWireframeDeprecation(t *testing.T) {
 }
 
 // TestScreenRelPath pins the canonical primary-screen path helper the
-// deprecation notices and the flow tooling share.
+// deprecation findings and the flow tooling share.
 func TestScreenRelPath(t *testing.T) {
 	assert.Equal(t, "design/screens/sign-up.html", ScreenRelPath("sign-up"))
 }

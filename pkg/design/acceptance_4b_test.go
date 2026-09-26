@@ -57,16 +57,11 @@ import (
 var ac4bRuleSeverity = []struct {
 	rule string
 	want Severity
-	why  string
+	file string
 }{
-	{ruleConsistencyScreenOrphan, SeverityInfo,
-		"an unreferenced screen is advisory: wireframes are drafts, an orphan is drift not breakage"},
-	{ruleSVGDataNavDangling, SeverityError,
-		"a data-nav target with no wireframe is a hard violation (a dead navigation link)"},
-	{ruleManifestLinkDangling, SeverityWarn,
-		"a README Screens/Flows listing bullet naming a screen/flow with no file is an advisory consistency warn (§4b); the distinct markdown-link path stays hard, see TestAcceptance4bManifestMarkdownLinkStaysHard"},
-	{ruleSVGTokenUsage, SeverityInfo,
-		"a literal color without a {token.path} comment is tracked, not rejected (wireframes are drafts)"},
+	{"consistency_screen_orphan", SeverityInfo, "design/screens/billing.html"},
+	{"screen_nav_target", SeverityError, "design/screens/checkout.html"},
+	{"manifest_link_dangling", SeverityWarn, "design/README.md"},
 }
 
 // TestAcceptance4bSeededFixturesSeverityMatrix is the item-4.9 AC test: one
@@ -87,19 +82,24 @@ func TestAcceptance4bSeededFixturesSeverityMatrix(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
 
-	// (1)+(2): a seeded wireframe with a literal fill (#ff0000, no token
-	// comment) that is referenced by neither the flow nor the README.
-	seedFixture(t, root, "design/wireframes/billing.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text fill="#ff0000">Billing</text></svg>`)
+	// (1)+(2): a seeded orphan screen referenced by neither the flow nor
+	// the README (the orphan rule's post-9.4 universe is screens; token
+	// usage is an SVG-tier rule that retired with the wireframes).
+	seedFixture(t, root, "design/screens/billing.html",
+		`<!DOCTYPE html><html data-screen="billing"><body>Billing</body></html>`)
 
-	// (3): a dangling data-nav on the login wireframe. "checkout" has no
-	// wireframe, so the hard rule fires on the seeded source line.
-	seedFixture(t, root, "design/wireframes/login.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text><rect id="go" data-nav="checkout"/></svg>`)
-
-	// (4): a README Screens bullet promising a screen that does not exist.
-	readme := validTreeManifest + "\n## Screens\n\n- `receipt` — draft — pay\n"
+	// (3): a dangling data-nav on a seeded screen — "checkout" has no
+	// screen, so the hard §9a rule fires.
+	seedFixture(t, root, "design/screens/checkout.html",
+		`<!DOCTYPE html><html data-screen="checkout"><body><a data-nav="to:nowhere;trigger:x">go</a></body></html>`)
+	// checkout is listed in the README (the other valid reference for the
+	// orphan rule), so billing is the tree's one orphan.
+	readme := validTreeManifest + "\n## Screens\n\n- `receipt` — draft — pay\n- `checkout` — draft — seeded\n"
 	seedFixture(t, root, "design/README.md", readme)
+	writeScreensKitArtifacts(t, root) // refresh the derived index over the seeds
+
+	// (4): the receipt bullet in the seeded README above promises a screen
+	// that does not exist.
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
@@ -116,10 +116,9 @@ func TestAcceptance4bSeededFixturesSeverityMatrix(t *testing.T) {
 	// Severity matrix: every finding of every §4b AC rule carries the
 	// spec-assigned severity, and its file/anchor points at the seeded defect.
 	wantFile := map[string]string{
-		ruleConsistencyScreenOrphan: "design/wireframes/billing.svg",
-		ruleSVGDataNavDangling:      "design/wireframes/login.svg",
+		ruleConsistencyScreenOrphan: "design/screens/billing.html",
+		ruleScreenNavTarget:         "design/screens/checkout.html",
 		ruleManifestLinkDangling:    filepath.Join(DirName, ManifestName),
-		ruleSVGTokenUsage:           "design/wireframes/billing.svg",
 	}
 	seen := map[string]bool{}
 	for _, f := range findings {
@@ -129,14 +128,14 @@ func TestAcceptance4bSeededFixturesSeverityMatrix(t *testing.T) {
 			}
 			seen[tc.rule] = true
 			assert.Equal(t, tc.want, f.Severity,
-				"rule %s: %s", tc.rule, tc.why)
+				"rule %s severity", tc.rule)
 			assert.Equal(t, wantFile[tc.rule], f.File,
 				"rule %s must anchor at the seeded file", tc.rule)
 		}
 	}
 	for _, tc := range ac4bRuleSeverity {
 		assert.True(t, seen[tc.rule],
-			"the seeded tree must trip rule %s (%s); got %#v", tc.rule, tc.why, findings)
+			"the seeded tree must trip rule %s; got %#v", tc.rule, findings)
 	}
 
 	// The whole-tree run's findings are deterministically ordered, so the
@@ -160,9 +159,9 @@ func TestAcceptance4bSeededFixturesAreCleanWithoutSeed(t *testing.T) {
 		assert.Equal(t, 0, findingRules(findings)[tc.rule],
 			"the clean fixture tree must not trip %s; got %#v", tc.rule, findings)
 	}
-	assert.Empty(t, dropDeprecationFindings(findings), "the clean fixture tree must stay finding-free, got %#v", findings)
-	assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated],
-		"the fixture's legacy wireframes carry their §9a deprecation notices")
+	assert.Empty(t, findings, "the clean fixture tree must stay finding-free, got %#v", findings)
+	assert.Equal(t, 0, findingRules(findings)[ruleWireframeDeprecated],
+		"post-9.4 the fixture is wireframe-free; no deprecation rows")
 }
 
 // TestAcceptance4bSeverityIsStableAcrossSeededTrees pins that the severity of
@@ -175,21 +174,17 @@ func TestAcceptance4bSeverityIsStableAcrossSeededTrees(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
 
-	// Orphan: an extra *wireframe* referenced by neither the flow nor the
-	// README (the orphan rule is scoped to wireframes — the pre-code draft
-	// inventory — so the seed must be a wireframe, not a delivered screen).
-	seedFixture(t, root, "design/wireframes/receipt.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Receipt</text></svg>`)
-	// Token usage: a literal stroke with no token comment, on a wireframe that
-	// *is* referenced by the flow, so the orphan rule stays silent for it.
-	seedFixture(t, root, "design/wireframes/home.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text stroke="rgb(1,2,3)">Home</text></svg>`)
-	// README reference: a Flows bullet naming a flow with no file.
+	// Post-9.4 the seeds are screens (the orphan universe) with the §9a
+	// data-nav contract: receipt is the unreferenced orphan; checkout's
+	// dangling data-nav is the hard rule; the README Flows bullet is the
+	// manifest warn. The derived index refreshes last.
+	seedFixture(t, root, "design/screens/receipt.html",
+		`<!DOCTYPE html><html data-screen="receipt"><body>Receipt</body></html>`)
+	seedFixture(t, root, "design/screens/checkout.html",
+		`<!DOCTYPE html><html data-screen="checkout"><body><a data-nav="to:nowhere;trigger:x">go</a></body></html>`)
 	seedFixture(t, root, "design/README.md",
 		validTreeManifest+"\n## Flows\n\n- `checkout-flow` — draft — pay\n")
-	// data-nav: a dangling target on the login wireframe.
-	seedFixture(t, root, "design/wireframes/login.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text><rect id="go" data-nav="nowhere"/></svg>`)
+	writeScreensKitArtifacts(t, root)
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
@@ -214,18 +209,18 @@ func TestAcceptance4bSeverityIsStableAcrossSeededTrees(t *testing.T) {
 func TestAcceptance4bSeededFixtureDataNavHardRulePerFile(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
-	seedFixture(t, root, "design/wireframes/login.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text><rect id="go" data-nav="checkout"/></svg>`)
+	seedFixture(t, root, "design/screens/checkout.html",
+		`<!DOCTYPE html><html data-screen="checkout"><body><a data-nav="to:nowhere;trigger:x">go</a></body></html>`)
 
-	findings, err := ValidateFile(root, "design/wireframes/login.svg")
+	findings, err := ValidateFile(root, "design/screens/checkout.html")
 	require.NoError(t, err)
 
 	var checked bool
 	for _, f := range findings {
-		if f.Rule == ruleSVGDataNavDangling {
+		if f.Rule == ruleScreenNavTarget {
 			checked = true
 			assert.Equal(t, SeverityError, f.Severity)
-			assert.Contains(t, f.Message, "checkout")
+			assert.Contains(t, f.Message, "nowhere")
 		}
 	}
 	require.True(t, checked, "per-file validation must surface the hard data-nav rule, got %#v", findings)

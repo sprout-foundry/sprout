@@ -197,11 +197,8 @@ func TestValidateWireframeTokenUsage(t *testing.T) {
 func TestValidateInventoryOrphanScreens(t *testing.T) {
 	t.Run("orphan-wireframe-info", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg":     inventoryRuleSVG,
-			"checkout.svg":  inventoryRuleSVG,
-			"forgotten.svg": inventoryRuleSVG,
-		}, "# Design\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n")
+		writeScreenTree(t, root, []string{"login", "checkout", "forgotten"},
+			"# Design\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "flows", "main.mmd"),
 			[]byte("flowchart LR\n  login --> checkout\n"), 0o644))
@@ -211,7 +208,7 @@ func TestValidateInventoryOrphanScreens(t *testing.T) {
 		assert.Equal(t, 1, rules[ruleConsistencyScreenOrphan], "got %#v", findings)
 		f := findings[0]
 		assert.Equal(t, SeverityInfo, f.Severity, "an unreferenced screen is advisory info")
-		assert.Equal(t, "design/wireframes/forgotten.svg", f.File)
+		assert.Equal(t, "design/screens/forgotten.html", f.File)
 		assert.Contains(t, f.Message, "forgotten")
 	})
 
@@ -261,10 +258,7 @@ func TestValidateInventoryOrphanScreens(t *testing.T) {
 // critique).
 func TestValidateConsistencyInventoryFindings(t *testing.T) {
 	root := t.TempDir()
-	writeWireframeTree(t, root, map[string]string{
-		"login.svg":    inventoryRuleSVG,
-		"orphaned.svg": inventoryRuleSVG,
-	}, "# Design\n\n## Screens\n\n- `login` — draft\n")
+	writeScreenTree(t, root, []string{"login", "orphaned"}, "# Design\n\n## Screens\n\n- `login` — draft\n")
 
 	findings := ValidateConsistency(root)
 	rules := findingRules(findings)
@@ -272,7 +266,7 @@ func TestValidateConsistencyInventoryFindings(t *testing.T) {
 	for _, f := range findings {
 		if f.Rule == ruleConsistencyScreenOrphan {
 			assert.Equal(t, SeverityInfo, f.Severity)
-			assert.Equal(t, "design/wireframes/orphaned.svg", f.File)
+			assert.Equal(t, "design/screens/orphaned.html", f.File)
 		}
 	}
 	assertSortedFindings(t, findings)
@@ -468,40 +462,32 @@ func TestValidateTreeInventoryNamingTokenFindings(t *testing.T) {
 	root := t.TempDir()
 	writeValidDesignTree(t, root)
 
-	// Token usage: a wireframe with a literal fill and no token comments at all.
-	seedFixture(t, root, "design/wireframes/billing.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text fill="#ff0000">Billing</text></svg>`)
-	// Orphan: an extra wireframe in neither the flow nor the README.
-	seedFixture(t, root, "design/wireframes/forgotten.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Forgotten</text></svg>`)
-	// Naming mismatch: a screen with no wireframe counterpart.
-	seedFixture(t, root, "design/screens/receipt.html",
-		`<!DOCTYPE html><html><head><style>body{width:390px}</style></head><body>x</body></html>`)
+	// Post-9.4 the seeds are screens: an orphan screen declared by neither
+	// the flow nor the README, plus a receipt screen for the counterpart
+	// transition rule (info while wireframes exist in the tree — none do
+	// now, so the rule stays quiet; the orphan rule carries the pin).
+	seedFixture(t, root, "design/screens/billing.html",
+		`<!DOCTYPE html><html data-screen="billing"><body>Billing</body></html>`)
+	seedFixture(t, root, "design/screens/forgotten.html",
+		`<!DOCTYPE html><html data-screen="forgotten"><body>Forgotten</body></html>`)
+	// Refresh the derived index over the seeded screens so the drift rule
+	// stays quiet and the orphan rule is the loud one.
+	writeScreensKitArtifacts(t, root)
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
 	rules := findingRules(findings)
 
-	assert.Equal(t, 1, rules[ruleSVGTokenUsage], "token usage info must surface, got %#v", findings)
-	// Both seeded extras (billing, forgotten) are declared by neither the flow
-	// nor the README, so each is an orphan.
+	// Both seeded extras (billing, forgotten) are declared by neither the
+	// flow nor the README, so each is an orphan screen.
 	assert.Equal(t, 2, rules[ruleConsistencyScreenOrphan], "orphan screen info must surface, got %#v", findings)
-	assert.Equal(t, 1, rules[ruleConsistencyScreenNameMismatch], "naming mismatch warn must surface, got %#v", findings)
 
 	for _, f := range findings {
 		switch f.Rule {
-		case ruleSVGTokenUsage:
-			assert.Equal(t, SeverityInfo, f.Severity)
-			assert.Equal(t, "design/wireframes/billing.svg", f.File)
 		case ruleConsistencyScreenOrphan:
 			assert.Equal(t, SeverityInfo, f.Severity)
-			assert.Contains(t, []string{"design/wireframes/billing.svg", "design/wireframes/forgotten.svg"}, f.File,
-				"an orphan finding names one of the undeclared wireframes")
-		case ruleConsistencyScreenNameMismatch:
-			// SP-140-9 §9a demoted the counterpart-missing direction to info
-			// (the wireframe tier is deprecated; 9.4 migrates it).
-			assert.Equal(t, SeverityInfo, f.Severity)
-			assert.Equal(t, "design/screens/receipt.html", f.File)
+			assert.Contains(t, []string{"design/screens/billing.html", "design/screens/forgotten.html"}, f.File,
+				"an orphan finding names one of the undeclared screens")
 		}
 	}
 	assertSortedFindings(t, findings)
@@ -542,10 +528,10 @@ func TestInventoryNamingRulesValidTree(t *testing.T) {
 	assert.Empty(t, ValidateInventory(root))
 	assert.Empty(t, screenSlugViolations(root))
 	assert.Empty(t, screenNameMismatches(root))
-	for _, match := range []string{"design/wireframes/login.svg", "design/wireframes/home.svg"} {
+	for _, match := range []string{"design/screens/login.html", "design/screens/home.html"} {
 		data, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(match)))
 		require.NoError(t, readErr)
-		assert.Empty(t, validateTokenUsage(match, data), "token usage on %s", match)
+		_ = data // screens carry token usage in CSS vars, not SVG comments
 	}
 }
 

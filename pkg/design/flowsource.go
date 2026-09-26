@@ -8,9 +8,12 @@ package design
 // bytes, never hand-edited.
 //
 // v1 schema is exactly the spec's example — {"name", "steps":[{id, label,
-// screen, trigger?, next?}]} — parsed strictly (unknown fields are errors, so
-// a schema extension cannot silently pass). Condition and parallel branches
-// are deferred: they are documented in the roadmap note, not invented here.
+// screen?, trigger?, next?}]} — parsed strictly (unknown fields are errors, so
+// a schema extension cannot silently pass). `screen` is optional: a
+// non-screen flow's steps (agent-turn's plan → tools → review) name no screen
+// at all; a present screen is resolved against the tree's stems. Condition
+// and parallel branches are deferred: they are documented in the roadmap
+// note, not invented here.
 //
 // This file is the pure half (schema, parse, validate, hash inputs); the
 // filesystem-facing generator and the drift validator live in
@@ -56,7 +59,9 @@ type FlowStep struct {
 	Label string `json:"label"`
 	// Screen is the stem of the screen the step happens on. It resolves to
 	// a screen stem or — during the §9a migration — a wireframe stem.
-	Screen string `json:"screen"`
+	// Optional: a non-screen flow's steps carry no screen (SP-140-9 §9b's
+	// agent-turn example walks plan → tools → review with no surface).
+	Screen string `json:"screen,omitempty"`
 	// Trigger is the label on the edge to the next step; "" on a terminal
 	// step (and rendered as a plain unlabeled edge when Next is set without
 	// a trigger).
@@ -94,8 +99,6 @@ func ParseFlowSource(relPath string, content []byte) (*FlowSource, error) {
 			return nil, fault("%s: \"id\" is required", where)
 		case step.Label == "":
 			return nil, fault("%s (id %q): \"label\" is required", where, step.ID)
-		case step.Screen == "":
-			return nil, fault("%s (id %q): \"screen\" is required", where, step.ID)
 		}
 	}
 	return &src, nil
@@ -149,10 +152,14 @@ func ValidateFlowSource(relPath string, content []byte, stems []string) []Findin
 	}
 	// Second pass: forward references are legal (a step may name its target
 	// before it appears), so `next` is checked once every id is known. A
-	// self-loop is allowed.
+	// self-loop is allowed. An empty screen is legal — a non-screen flow's
+	// steps walk no surface — but a present one must resolve.
 	for _, step := range src.Steps {
 		if step.Next != "" && !seen[step.Next] {
 			fail(1, "step %q next %q does not target a step in this flow", step.ID, step.Next)
+		}
+		if step.Screen == "" {
+			continue
 		}
 		if _, ok := stemSet[step.Screen]; !ok {
 			fail(1, "step %q screen %q resolves to neither a screen stem (design/screens/%s.html) nor a wireframe stem (design/wireframes/%s.svg)", step.ID, step.Screen, step.Screen, step.Screen)

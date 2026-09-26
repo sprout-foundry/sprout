@@ -67,10 +67,9 @@ type FlowExportNode struct {
 	ID string
 	// Label is the rendered label: the step's label text, or the screen stem.
 	Label string
-	// Screen is the stem of the screen the node stands for; "" for pure walk
-	// nodes whose screen is only implied by the step (kept: every v1 step
-	// names a screen, so this stays empty only for hypothetical future
-	// step-less nodes).
+	// Screen is the stem of the screen the node stands for; "" for a
+	// non-screen flow's step (agent-turn walks no surface) and for pure
+	// walk nodes whose screen is only implied by the step.
 	Screen string
 	// OffPath marks a data-nav-reachable screen that is not a step.
 	OffPath bool

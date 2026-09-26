@@ -1,0 +1,8 @@
+{
+  "name": "mobile-screens",
+  "steps": [
+    {"id": "s1", "label": "mobile-sessions — session list", "screen": "mobile-sessions", "trigger": "tap session row", "next": "s2"},
+    {"id": "s2", "label": "mobile-session — session detail", "screen": "mobile-session", "trigger": "tap back", "next": "s3"},
+    {"id": "s3", "label": "mobile-sessions — session list", "screen": "mobile-sessions"}
+  ]
+}

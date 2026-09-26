@@ -1,5 +1,6 @@
-%% agent-turn — one chat turn end to end.
-%% Non-screen flow: node ids are generic (deliberately not wireframe stems).
+%% agent-turn — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
+%% flow-source-hash: fnv1a64:e06ea8eed284725a
+%% Source: design/flows/agent-turn.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
   send["user sends message (⌘↵)"]
   plan["agent plans — todos appear"]
@@ -7,6 +8,10 @@ flowchart TD
   todos["todos update — checked off as done"]
   changes["files change — diff pane + git status"]
   review["human reviews — build / test / e2e"]
+  tools-ok["tool execution — parallel pills on the timeline"]
+  todos-ok["todos update — checked off as done"]
+  changes-ok["files change — diff pane + git status"]
+  review-ok["human reviews — build / test / e2e"]
   commit["commit + push (on explicit request only)"]
   reply["final message — completion summary"]
   send --> plan
@@ -14,7 +19,8 @@ flowchart TD
   tools --> todos
   todos --> changes
   changes --> review
-  review --> commit
-  review --> reply
-  %% failing gate: loop back with the error as context
-  review --> tools
+  review -->|failing gate: loop back with the error as context| tools
+  tools-ok --> todos-ok
+  todos-ok --> changes-ok
+  changes-ok --> review-ok
+  review-ok --> commit

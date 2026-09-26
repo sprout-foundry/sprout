@@ -1,0 +1,17 @@
+{
+  "name": "agent-turn",
+  "steps": [
+    {"id": "send", "label": "user sends message (⌘↵)", "next": "plan"},
+    {"id": "plan", "label": "agent plans — todos appear", "next": "tools"},
+    {"id": "tools", "label": "tool execution — parallel pills on the timeline", "next": "todos"},
+    {"id": "todos", "label": "todos update — checked off as done", "next": "changes"},
+    {"id": "changes", "label": "files change — diff pane + git status", "next": "review"},
+    {"id": "review", "label": "human reviews — build / test / e2e", "trigger": "failing gate: loop back with the error as context", "next": "tools"},
+    {"id": "tools-ok", "label": "tool execution — parallel pills on the timeline", "next": "todos-ok"},
+    {"id": "todos-ok", "label": "todos update — checked off as done", "next": "changes-ok"},
+    {"id": "changes-ok", "label": "files change — diff pane + git status", "next": "review-ok"},
+    {"id": "review-ok", "label": "human reviews — build / test / e2e", "next": "commit"},
+    {"id": "commit", "label": "commit + push (on explicit request only)"},
+    {"id": "reply", "label": "final message — completion summary"}
+  ]
+}

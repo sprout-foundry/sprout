@@ -1,0 +1,11 @@
+{
+  "name": "design-mode",
+  "steps": [
+    {"id": "s1", "label": "design-mode — the Design workspace IA", "screen": "design-mode", "trigger": "open the Design mode (the rail's mode entry)", "next": "s2"},
+    {"id": "s2", "label": "design-mode — the Design workspace IA", "screen": "design-mode", "trigger": "the Screens group's workbench targets the screens browser's domain", "next": "s3"},
+    {"id": "s3", "label": "design-screens — screens browser", "screen": "design-screens", "trigger": "a screen picked in the browser opens the same workbench", "next": "s4"},
+    {"id": "s4", "label": "design-mode — the Design workspace IA", "screen": "design-mode", "trigger": "the Library group's Flows entry targets the flows canvas", "next": "s5"},
+    {"id": "s5", "label": "design-flows — flows canvas", "screen": "design-flows", "trigger": "the workbench's flows facet links into the flow graph", "next": "s6"},
+    {"id": "s6", "label": "design-mode — the Design workspace IA", "screen": "design-mode"}
+  ]
+}

@@ -190,7 +190,7 @@ describe('clone()', () => {
     const callArgs = mockFns.gitClone.mock.calls[0][0];
     expect(typeof callArgs.onAuth).toBe('function');
     const authResult = await callArgs.onAuth();
-    expect(authResult).toEqual({ token: 'ghp_123456' });
+    expect(authResult).toEqual({ username: 'x-access-token', password: 'ghp_123456' });
   });
 
   it('forwards onProgress callback', async () => {
@@ -234,7 +234,7 @@ describe('pull()', () => {
     const callArgs = mockFns.gitPull.mock.calls[0][0];
     expect(typeof callArgs.onAuth).toBe('function');
     const authResult = await callArgs.onAuth();
-    expect(authResult).toEqual({ token: 'tok' });
+    expect(authResult).toEqual({ username: 'x-access-token', password: 'tok' });
   });
 
   it('propagates pull error', async () => {
@@ -254,7 +254,7 @@ describe('push()', () => {
     expect(callArgs.remote).toBe('origin');
     expect(callArgs.force).toBe(false);
     const authResult = await callArgs.onAuth();
-    expect(authResult).toEqual({ token: 'tok' });
+    expect(authResult).toEqual({ username: 'x-access-token', password: 'tok' });
   });
 
   it('passes remote, branch, and force from opts', async () => {

@@ -76,7 +76,12 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
         </div>
       )}
       {current && (
-        <div className="security-approval-overlay" role="dialog" aria-modal="true" aria-labelledby="agent-escalation-title">
+        <div
+          className="security-approval-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="agent-escalation-title"
+        >
           <div className="security-approval-card">
             <div className="security-approval-header">
               <span className="security-approval-shield security-approval-shield--caution">
@@ -100,10 +105,18 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
               </div>
             </div>
             <div className="security-approval-footer">
-              <button type="button" className="security-approval-btn security-approval-btn--block" onClick={() => answer('deny')}>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--block"
+                onClick={() => answer('deny')}
+              >
                 Don&apos;t run
               </button>
-              <button type="button" className="security-approval-btn security-approval-btn--allow" onClick={() => answer('always')}>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={() => answer('always')}
+              >
                 Always allow
               </button>
               <button

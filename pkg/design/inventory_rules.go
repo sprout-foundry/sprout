@@ -446,27 +446,31 @@ func isSVGSpace(b byte) bool {
 // reads the stems and the cross-artifact references. A workspace with no
 // design/ tree yields no findings; the result is sorted and never nil.
 func ValidateInventory(root string) []Finding {
-	wireframeStems := assetStems(root, "wireframes", ".svg")
-	if len(wireframeStems) == 0 {
+	// SP-140-9 §9a/9.4: the wireframe tier is gone; the inventory universe is
+	// the SCREEN stems (the primary tier). During the 9.1-9.3 window this
+	// walked wireframes; post-migration only screens remain.
+	screenStems := assetStems(root, "screens", ".html")
+	if len(screenStems) == 0 {
 		return []Finding{}
 	}
 
-	// A flow references a stem when a node id equals it; a README references a
-	// stem when a Screens listing names it. Both reuse the §4b parsers.
+	// A flow references a stem when a node id equals it (a screen node or a
+	// step whose screen field names it); a README references a stem when a
+	// Screens listing names it. Both reuse the §4b parsers.
 	flowRefs := flowNodeStems(root)
 	readmeRefs := readmeScreenEntries(root)
 
 	var findings []Finding
-	for _, stem := range wireframeStems {
+	for _, stem := range screenStems {
 		if flowRefs[stem] || readmeRefs[stem] {
 			continue
 		}
 		findings = append(findings, Finding{
-			File:     path.Join(DirName, "wireframes", stem+".svg"),
+			File:     path.Join(DirName, "screens", stem+".html"),
 			Rule:     ruleConsistencyScreenOrphan,
 			Severity: SeverityInfo,
 			Message: fmt.Sprintf(
-				"orphan screen: wireframe %q appears in no flow (as a node) and in no README Screens listing; add it to a flow or list it in the README",
+				"orphan screen: %q appears in no flow (as a node) and in no README Screens listing; add it to a flow or list it in the README",
 				stem),
 		})
 	}

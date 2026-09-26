@@ -37,8 +37,6 @@ func TestScanValidTree(t *testing.T) {
 	wantKinds := map[string]string{
 		"design/README.md":                KindManifest,
 		"design/tokens/color.tokens.json": KindToken,
-		"design/wireframes/login.svg":     KindWireframe,
-		"design/wireframes/home.svg":      KindWireframe,
 		"design/components/button.svg":    KindComponent,
 		"design/flows/sign-up.mmd":        KindFlow,
 		"design/screens/login.html":       KindScreen,
@@ -53,7 +51,7 @@ func TestScanValidTree(t *testing.T) {
 	}
 
 	// Names are stems, stripped of known design extensions.
-	assert.Equal(t, "login", byPath["design/wireframes/login.svg"].Name)
+	assert.Equal(t, "login", byPath["design/screens/login.html"].Name)
 	assert.Equal(t, "color", byPath["design/tokens/color.tokens.json"].Name)
 	assert.Equal(t, "sign-up", byPath["design/flows/sign-up.mmd"].Name)
 
@@ -76,15 +74,16 @@ func TestScanValidTree(t *testing.T) {
 	require.Len(t, inv.Flows, 1)
 	assert.Equal(t, "design/flows/sign-up.mmd", inv.Flows[0].Path)
 	assert.Equal(t, "sign-up", inv.Flows[0].Name)
-	assert.Equal(t, 2, inv.Flows[0].Nodes)
-	assert.Equal(t, 2, inv.Flows[0].Edges)
+	// The §9b-derived flow: three step nodes (s1/s2/s3) and one labeled
+	// step edge; the fixture screens carry no data-nav, so nothing joins
+	// off-path.
+	assert.Equal(t, 3, inv.Flows[0].Nodes)
+	assert.Equal(t, 1, inv.Flows[0].Edges)
 
-	// Findings: the valid tree validates clean beyond the transitional
-	// queue — the two wireframes' §9a deprecation notices plus the flow's
-	// §9b legacy notice (all one 9.4 migration).
-	assert.Empty(t, dropDeprecationFindings(inv.Findings))
-	assert.Equal(t, 3, inv.BySeverity["info"], "two wireframe deprecations + one legacy-flow notice")
-	for _, sev := range []string{"error", "warn", "fix"} {
+	// Post-9.4: the fixture is wireframe-free with a derived flow, so the
+	// valid tree is fully clean — zero findings of any severity.
+	assert.Empty(t, inv.Findings)
+	for _, sev := range []string{"error", "warn", "info", "fix"} {
 		assert.Equal(t, 0, inv.BySeverity[sev], "severity %s", sev)
 	}
 }

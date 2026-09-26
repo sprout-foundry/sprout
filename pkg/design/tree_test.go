@@ -78,6 +78,15 @@ const validScreenHTML = `<!DOCTYPE html>
 </html>
 `
 
+const validHomeScreenHTML = `<!DOCTYPE html>
+<html data-screen="home">
+<head>
+  <style>body { width: 390px; margin: 0; }</style>
+</head>
+<body><p>Home screen — ready</p></body>
+</html>
+`
+
 const validTreeIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z" /></svg>`
 
 const validBrandMD = "Logo usage: render in {color.brand.primary} on light backgrounds.\n"
@@ -86,6 +95,36 @@ const validBrandMD = "Logo usage: render in {color.brand.primary} on light backg
 // satisfies every validator — including the SP-140-1 §1h git contract
 // (.gitattributes diff rule, .gitignore cache-only policy) — so a whole-tree
 // run yields zero findings.
+
+// writeDerivedFlowFixture converts the fixture's flow to the §9b derived
+// form: the .json source beside the .mmd, with the export regenerated so
+// the pair validates clean (no flow_mmd_legacy notice).
+func writeDerivedFlowFixture(t *testing.T, root string) {
+	t.Helper()
+	w := func(rel, content string) {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+	w("design/flows/sign-up.json", validFlowSourceJSON)
+	arts, err := RenderAllFlowMDMArtifacts(root)
+	if err != nil {
+		t.Fatalf("derive flows: %v", err)
+	}
+	for _, a := range arts {
+		w(a.RelPath, string(a.Content))
+	}
+}
+
+const validFlowSourceJSON = `{
+  "name": "sign-up",
+  "steps": [
+    {"id": "s1", "label": "Start", "screen": "login"},
+    {"id": "s2", "label": "Done", "screen": "home", "trigger": "submit", "next": "s3"},
+    {"id": "s3", "label": "End", "screen": "home"}
+  ]
+}`
+
 func writeValidDesignTree(t *testing.T, root string) {
 	t.Helper()
 	write := func(rel, content string) {
@@ -102,11 +141,10 @@ func writeValidDesignTree(t *testing.T, root string) {
     }
   }
 }`)
-	write("design/wireframes/login.svg", validWireframeBody)
-	write("design/wireframes/home.svg", validHomeWireframeBody)
 	write("design/components/button.svg", validComponentBody)
 	write("design/flows/sign-up.mmd", validFlowBody)
 	write("design/screens/login.html", validScreenHTML)
+	write("design/screens/home.html", validHomeScreenHTML)
 	write("design/icons/home.svg", validTreeIconSVG)
 	write("design/brand/brand.md", validBrandMD)
 	// SP-143 §143.5: the screen contract artifacts — derived index + runtime.
@@ -115,6 +153,9 @@ func writeValidDesignTree(t *testing.T, root string) {
 	// stay untouched, plus the required design lines.
 	write(GitContractFile, "* text=auto eol=lf\n*.png binary\n"+GitAttributesDiffHTMLLine+"\n")
 	write(GitIgnoreFile, "node_modules/\n"+GitIgnoreCacheLine+"\n")
+	// LAST: the derived flow export hashes the screens' bytes, so it
+	// regenerates after every other write settles.
+	writeDerivedFlowFixture(t, root)
 }
 
 func TestValidateTreeValid(t *testing.T) {
@@ -124,11 +165,10 @@ func TestValidateTreeValid(t *testing.T) {
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
 	require.NotNil(t, findings, "a completed whole-tree run must return a non-nil slice")
-	// The legacy wireframes carry their §9a deprecation notices (9.4
-	// migrates the tier); every other rule must be clean.
-	assert.Empty(t, dropDeprecationFindings(findings),
-		"a valid design tree must yield no findings beyond the wireframe deprecation notices, got %#v", findings)
-	assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated])
+	// Post-9.4: the fixture is wireframe-free, so the tree validates fully
+	// clean — no deprecation notices, no transitional infos.
+	assert.Empty(t, findings,
+		"a valid design tree must yield no findings, got %#v", findings)
 }
 
 func TestValidateTreeFeedbackFinding(t *testing.T) {
@@ -185,17 +225,19 @@ func TestValidateTreeSeededBad(t *testing.T) {
 	require.NoError(t, os.WriteFile(badToken,
 		[]byte(`{"spacing": {"md": {"$value": "{spacing.missing}", "$type": "dimension"}}}`), 0o644))
 
-	// Seed a bad wireframe: a data-nav target with no matching stem.
-	badWireframe := filepath.Join(root, DirName, "wireframes", "signup.svg")
-	require.NoError(t, os.WriteFile(badWireframe,
-		[]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Sign up</text><rect id="go" data-nav="nowhere" /></svg>`), 0o644))
+	// Seed a bad screen: a data-nav target with no matching stem (the §9a
+	// form on a screen, post-wireframe).
+	badScreen := filepath.Join(root, DirName, "screens", "signup.html")
+	require.NoError(t, os.WriteFile(badScreen,
+		[]byte(`<!doctype html><html data-screen="signup"><body><a data-nav="to:nowhere;trigger:x">go</a></body></html>`), 0o644))
+	writeScreensKitArtifacts(t, root) // refresh the derived index over the new screen
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
 
 	rules := findingRules(findings)
 	assert.Equal(t, 1, rules[ruleTokenAliasDangling], "expected the dangling token alias finding, got %#v", findings)
-	assert.Equal(t, 1, rules[ruleSVGDataNavDangling], "expected the dangling data-nav finding, got %#v", findings)
+	assert.Equal(t, 1, rules[ruleScreenNavTarget], "expected the dangling screen data-nav finding, got %#v", findings)
 
 	// The findings carry the structured shape with file/severity filled in.
 	for _, f := range findings {
@@ -235,15 +277,26 @@ func TestValidateTreeEverySeverityClassReported(t *testing.T) {
 	}
 }
 
+// seedWireframeFixture writes one legacy wireframe — post-9.4 the per-file
+// wireframe rules are tested against a file the tier rejects anyway; the
+// dropDeprecationFindings helper separates the two concerns.
+func seedWireframeFixture(t *testing.T, root, stem string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "wireframes"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "wireframes", stem+".svg"),
+		[]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>`+stem+`</text></svg>`), 0o644))
+}
+
 func TestValidateFileWireframe(t *testing.T) {
 	t.Run("good", func(t *testing.T) {
 		root := t.TempDir()
 		writeValidDesignTree(t, root)
+		seedWireframeFixture(t, root, "login")
 
 		findings, err := ValidateFile(root, "design/wireframes/login.svg")
 		require.NoError(t, err)
-		// The §9a deprecation notice rides the single-file walk; the
-		// per-file rules must be clean.
+		// Post-9.4 the wireframe tier is an error; the per-file wireframe
+		// rules themselves must still be clean on a good file.
 		requireNoWireframeFindings(t, dropDeprecationFindings(findings))
 		assert.Equal(t, 1, findingRules(findings)[ruleWireframeDeprecated])
 	})
@@ -251,6 +304,7 @@ func TestValidateFileWireframe(t *testing.T) {
 	t.Run("design-prefix-optional", func(t *testing.T) {
 		root := t.TempDir()
 		writeValidDesignTree(t, root)
+		seedWireframeFixture(t, root, "login")
 
 		findings, err := ValidateFile(root, "wireframes/login.svg")
 		require.NoError(t, err)
@@ -261,6 +315,7 @@ func TestValidateFileWireframe(t *testing.T) {
 	t.Run("missing-viewbox", func(t *testing.T) {
 		root := t.TempDir()
 		writeValidDesignTree(t, root)
+		seedWireframeFixture(t, root, "checkout")
 		bad := filepath.Join(root, DirName, "wireframes", "checkout.svg")
 		require.NoError(t, os.WriteFile(bad,
 			[]byte(`<svg xmlns="http://www.w3.org/2000/svg"><text x="0" y="0">Checkout</text></svg>`), 0o644))
@@ -280,6 +335,7 @@ func TestValidateFileWireframe(t *testing.T) {
 	t.Run("dangling-data-nav", func(t *testing.T) {
 		root := t.TempDir()
 		writeValidDesignTree(t, root)
+		seedWireframeFixture(t, root, "checkout")
 		bad := filepath.Join(root, DirName, "wireframes", "checkout.svg")
 		require.NoError(t, os.WriteFile(bad,
 			[]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Checkout</text><rect id="go" data-nav="nowhere" /></svg>`), 0o644))

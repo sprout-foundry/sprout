@@ -1630,9 +1630,12 @@ func TestDesignCritiqueHandler_ContextCancelled(t *testing.T) {
 // the critique handler itself.
 func TestDesignCritiqueHandler_NoVisionStaticFlowConsistency(t *testing.T) {
 	root := t.TempDir()
-	// home -> profile -> home makes "profile" non-terminal with no wireframe,
-	// so the §4b flow-edge rule fires as a consistency warn.
+	// home -> profile -> home makes "profile" non-terminal with no screen
+	// (the post-9.4 bidirectionality universe), so the §4b flow-edge rule
+	// fires as a consistency warn; login and home are wired screens.
 	dcWriteTree(t, root)
+	dcWrite(t, root, "design/screens/home.html",
+		`<!DOCTYPE html><html data-screen="home"><body>Home</body></html>`)
 	dcWrite(t, root, "design/flows/sign-up.mmd",
 		"flowchart TD\n  login --> home\n  home --> profile\n  profile --> home\n")
 	env, _ := dcCritiqueEnvNoVision(t, root)

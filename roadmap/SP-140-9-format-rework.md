@@ -196,6 +196,17 @@ SP-140 "no split source/registration" rule)
 - **9.4** Migration: convert the branch's SVG wireframes → HTML screens
   and `.mmd` flows → `.json` steps (agent-authored, content-preserving);
   wireframe tier warn → error.
+  > **Progress (2026-09-26):** Shipped. All 11 dogfood wireframes are gone
+  > (4 stems kept their existing kit screens; 7 converted as desktop kit
+  > copies carrying the wireframes' content and §9a data-nav contracts);
+  > all 4 flows carry .json sources with derived .mmd exports (agent-turn
+  > as a non-screen flow: screen optional in the v1 schema); the README
+  > manifest and generated index regenerated. The wireframe-tier severity
+  > flipped info → error (the tier is removed; presence is the error) and
+  > every rule that walked the wireframe universe now walks screens —
+  > bidirectionality, orphan inventory, README refs (screens only, no
+  > "(or wireframes)" hedging). The dogfood tree validates 0 findings.
+  > flow_mmd_legacy stays info for external trees' transitional state.
 - **9.5** Ripples: `design_sync` structural deltas (screen+step
   proposals, no `.mmd` writes), `design_brief`, `design_assets`.
 - **9.6** Prompt updates: `design-system` skill + `designer` persona +

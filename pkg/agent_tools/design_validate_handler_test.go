@@ -290,15 +290,16 @@ func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
 	require.NoError(t, err)
 	// Advisory semantics: findings never block a turn.
 	require.False(t, res.IsError, "error-severity findings must not set IsError — findings are advisory (SP-140-1 §1g)")
-	require.Contains(t, res.Output, "4 finding(s)")
-	require.Contains(t, res.Output, "1 error(s)")
-	require.Contains(t, res.Output, "3 info(s)")
+	require.Contains(t, res.Output, "5 finding(s)")
+	require.Contains(t, res.Output, "4 error(s)")
+	require.Contains(t, res.Output, "1 warn(s)")
 
 	out, ok := res.StructuredOut.(findingsOutput)
 	require.True(t, ok)
-	require.Equal(t, 4, out.Count)
-	require.Equal(t, 1, out.BySeverity["error"])
-	require.Equal(t, 3, out.BySeverity["info"])
+	require.Equal(t, 5, out.Count)
+	require.Equal(t, 4, out.BySeverity["error"])
+	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
 	byRule := map[string]findingOut{}
 	for _, f := range out.Findings {
 		byRule[f.Rule] = f
@@ -306,7 +307,7 @@ func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
 	bad := byRule["svg_data_nav_dangling"]
 	require.Equal(t, "design/wireframes/signup.svg", bad.File)
 	require.Equal(t, "error", bad.Severity)
-	require.Equal(t, "info", byRule["wireframe_deprecated"].Severity)
+	require.Equal(t, "error", byRule["wireframe_deprecated"].Severity)
 	require.NotEmpty(t, bad.Message)
 }
 
@@ -714,7 +715,7 @@ func TestDesignValidateHandler_DataURISizeWarn(t *testing.T) {
 	}
 	require.Equal(t, "svg_data_uri_size", byRule["svg_data_uri_size"].Rule)
 	require.Equal(t, "warn", byRule["svg_data_uri_size"].Severity)
-	require.Equal(t, "info", byRule["wireframe_deprecated"].Severity)
+	require.Equal(t, "error", byRule["wireframe_deprecated"].Severity)
 	require.Contains(t, out.Findings[0].Message, "brand/")
 }
 

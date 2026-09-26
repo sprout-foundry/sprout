@@ -54,7 +54,6 @@ package design
 import (
 	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,7 +97,7 @@ Screens and flows carry one of: draft, review, ready.
 
 - [Color tokens](tokens/color.tokens.json)
 - [Spacing tokens](tokens/spacing.tokens.json)
-- [Login wireframe](wireframes/login.svg)
+- [Login screen](screens/login.html)
 - [Deposit flow](flows/check-deposit.mmd)
 - [Deposit screen](screens/deposit.html)
 `
@@ -139,43 +138,73 @@ The palette references the token tier: the primary is ` + "`{color.brand.primary
 and surfaces use ` + "`{color.semantic.surface}`" + `.
 `
 
-// umbLoginSVG / umbDepositSVG / umbConfirmSVG are the wireframes. Each keeps
-// its text as <text> (greppable), sizes its root to a declared device frame
-// (mobile 390x844), and backs every literal colour with a {token.path}
-// comment — so the whole-tree run has nothing to report but the honest
-// advisory info rows the previous items deliberately emit for a draft tree.
-const umbLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28">Check Deposit</text>
-  <text x="24" y="120" font-size="16">Sign in</text>
-  <rect id="submit-go-deposit" fill="#0055ff" x="24" y="200" width="342" height="52" data-nav="deposit"><!-- {color.brand.primary} --></rect>
-</svg>`
-
-const umbDepositSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28">Deposit a check</text>
-  <rect id="amount" fill="#ffffff" x="24" y="200" width="342" height="72"><!-- {color.semantic.surface} --></rect>
-  <rect id="submit-go-confirm" fill="#0055ff" x="24" y="600" width="342" height="52" data-nav="confirm"><!-- {color.brand.primary} --></rect>
-</svg>`
-
-const umbConfirmSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28">Confirm deposit</text>
-  <rect id="submit-go-deposit" fill="#0055ff" x="24" y="600" width="342" height="52" data-nav="deposit"><!-- {color.brand.primary} --></rect>
-</svg>`
-
-// umbFlowMMD is the mobile check-deposit flow: the supported mermaid subset
-// (one flowchart declaration, node ids equal to wireframe stems, arrows).
-// login -> deposit -> confirm and the confirm -> deposit back edge exercise
-// non-terminal node resolution and a cycle-free walk.
-const umbFlowMMD = `flowchart TD
-  login --> deposit
-  deposit --> confirm
-  confirm --> deposit
+// umbLoginHTML / umbDepositHTML / umbConfirmHTML are the three screens —
+// the primary tier post-9.4. Each is self-contained (no external/network
+// reference), sized to a declared device frame (mobile 390x844), carries the
+// §9a identity attribute, and styles from plain values a browser renders
+// directly (the fixtures exercise the open-format charter, not token usage).
+const umbLoginHTML = `<!DOCTYPE html>
+<html lang="en" data-screen="login" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<title>Check Deposit — Sign in</title>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  .frame { width: 390px; min-height: 844px; background: #ffffff; }
+  .cta { background: #0055ff; color: #ffffff; }
+</style>
+</head>
+<body data-sprout-screen="login">
+<div class="frame">
+  <h1>Check Deposit</h1>
+  <p>Sign in</p>
+  <button class="cta" type="button">Continue</button>
+</div>
+</body>
+</html>
 `
 
+const umbConfirmHTML = `<!DOCTYPE html>
+<html lang="en" data-screen="confirm" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<title>Confirm deposit</title>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  .frame { width: 390px; min-height: 844px; background: #ffffff; }
+  .cta { background: #0055ff; color: #ffffff; }
+</style>
+</head>
+<body data-sprout-screen="confirm">
+<div class="frame">
+  <h1>Confirm deposit</h1>
+  <button class="cta" type="button">Deposit</button>
+</div>
+</body>
+</html>
+`
+
+// umbFlowSourceJSON is the flow source: the hand-authored truth (§9b), a
+// linear walk login -> deposit -> confirm with the back step to deposit.
+const umbFlowSourceJSON = `{
+  "name": "check-deposit",
+  "steps": [
+    {"id": "s1", "label": "Sign in", "screen": "login", "trigger": "tap continue", "next": "s2"},
+    {"id": "s2", "label": "Enter amount", "screen": "deposit", "trigger": "tap continue", "next": "s3"},
+    {"id": "s3", "label": "Confirm", "screen": "confirm", "trigger": "tap edit", "next": "s4"},
+    {"id": "s4", "label": "Enter amount", "screen": "deposit"}
+  ]
+}
+`
+
+// umbFlowMMD is the DERIVED export of umbFlowSourceJSON, regenerated inside
+// umbProducedTree via the real generator — never hand-authored.
+
 // umbDepositHTML is a hi-fi screen: self-contained (no external/network
-// reference), sized to the mobile frame, styled from the generated theme's
-// vocabulary (the CSS var the export emits) plus an inline <style> block.
+// reference), sized to the mobile frame, carrying the §9a identity and the
+// data-nav edge the flow source names.
 const umbDepositHTML = `<!DOCTYPE html>
-<html lang="en" data-screen="deposit">
+<html lang="en" data-screen="deposit" data-sprout-screens="1" data-states="">
 <head>
 <meta charset="utf-8">
 <title>Deposit a check</title>
@@ -185,10 +214,10 @@ const umbDepositHTML = `<!DOCTYPE html>
   .cta { background: #0055ff; color: #ffffff; }
 </style>
 </head>
-<body>
+<body data-sprout-screen="deposit">
 <div class="frame">
   <h1>Deposit a check</h1>
-  <button class="cta" type="button">Continue</button>
+  <a href="../screens/confirm.html" data-nav="to:confirm;trigger:tap continue">Continue</a>
 </div>
 </body>
 </html>
@@ -222,11 +251,19 @@ func umbProducedTree(t *testing.T, root string) {
 	umbWrite(t, root, "design/tokens/color.tokens.json", umbColorTokens)
 	umbWrite(t, root, "design/tokens/spacing.tokens.json", umbSpacingTokens)
 	umbWrite(t, root, "design/brand/brand.md", umbBrandMD)
-	umbWrite(t, root, "design/wireframes/login.svg", umbLoginSVG)
-	umbWrite(t, root, "design/wireframes/deposit.svg", umbDepositSVG)
-	umbWrite(t, root, "design/wireframes/confirm.svg", umbConfirmSVG)
-	umbWrite(t, root, "design/flows/check-deposit.mmd", umbFlowMMD)
+	umbWrite(t, root, "design/screens/login.html", umbLoginHTML)
 	umbWrite(t, root, "design/screens/deposit.html", umbDepositHTML)
+	umbWrite(t, root, "design/screens/confirm.html", umbConfirmHTML)
+	// The flow source is the hand-authored truth; its .mmd is derived by the
+	// real generator (render + write through the export pipeline), so the
+	// produced tree is exactly what a post-9.4 prompt run emits.
+	umbWrite(t, root, "design/flows/check-deposit.json", umbFlowSourceJSON)
+	arts, err := RenderAllFlowMDMArtifacts(root)
+	require.NoError(t, err, "derive the flow export")
+	require.Len(t, arts, 1)
+	for _, a := range arts {
+		umbWrite(t, root, a.RelPath, string(a.Content))
+	}
 	// SP-143 §143.5: the screen contract artifacts — derived index + runtime.
 	writeScreensKitArtifacts(t, root)
 }
@@ -386,9 +423,8 @@ func TestUmbrella_FreshWorkspaceToValidatedTree(t *testing.T) {
 	for _, a := range inv.Assets {
 		kinds[a.Kind]++
 	}
-	require.Equal(t, 3, kinds[KindWireframe], "three wireframes, got kinds=%v", kinds)
-	require.Equal(t, 1, kinds[KindScreen], "one hi-fi screen, got kinds=%v", kinds)
-	require.Equal(t, 1, kinds[KindFlow], "one flow, got kinds=%v", kinds)
+	require.Equal(t, 3, kinds[KindScreen], "three screens, got kinds=%v", kinds)
+	require.Equal(t, 1, kinds[KindFlow], "one flow (the derived .mmd), got kinds=%v", kinds)
 	require.Equal(t, 2, kinds[KindToken], "two DTCG tiers, got kinds=%v", kinds)
 	require.Equal(t, 1, kinds[KindManifest], "the README manifest, got kinds=%v", kinds)
 
@@ -399,10 +435,12 @@ func TestUmbrella_FreshWorkspaceToValidatedTree(t *testing.T) {
 	}
 	require.Equal(t, 7, tokenTotal, "token group counts must total the 7 declared leaves: %#v", inv.TokenGroups)
 
-	// The flow's node/edge counts are the canvas's numbers.
+	// The flow's node/edge counts are the canvas's numbers: the derived graph
+	// carries the four walk nodes and edges plus the off-path rendering of
+	// deposit's data-nav edge (stem node ids, the cross-check's accounted form).
 	require.Len(t, inv.Flows, 1)
-	require.Equal(t, 3, inv.Flows[0].Nodes, "login/deposit/confirm")
-	require.Equal(t, 3, inv.Flows[0].Edges, "three edges")
+	require.Equal(t, 6, inv.Flows[0].Nodes, "four walk nodes + the two stems the off-path edge names")
+	require.Equal(t, 4, inv.Flows[0].Edges, "three walk edges + one off-path edge")
 
 	// The manifest summary carries the declared frames + status markers.
 	require.True(t, inv.Manifest.Exists)
@@ -539,33 +577,33 @@ func TestUmbrella_DesignViewInputStructure(t *testing.T) {
 			"design_assets row %q (kind %s) must classify to the webui kind %q", a.Path, a.Kind, want)
 		assetKinds[a.Kind] = true
 	}
-	for _, kind := range []string{KindManifest, KindWireframe, KindScreen, KindFlow, KindToken} {
+	for _, kind := range []string{KindManifest, KindScreen, KindFlow, KindToken} {
 		require.Truef(t, assetKinds[kind], "the produced tree must contain a %s asset", kind)
 	}
 
-	// The Flows tab's node imagery: every flow node id resolves to a wireframe
-	// whose SVG the canvas can turn into an object URL (the pairing rule the
-	// canvas applies by name).
+	// The Flows tab's node imagery: the derived graph's nodes key on §9c ids —
+	// step ids for the walk, screen stems off-path — and the pairing rule the
+	// canvas applies by name resolves every STEM node to its screen HTML.
 	flow := ParseFlowchart(umbRead(t, root, "design/flows/check-deposit.mmd"))
 	require.Equal(t, 1, flow.Declarations, "the flow declares exactly one flowchart")
-	require.Len(t, flow.NodeOrder, 3)
+	require.Len(t, flow.NodeOrder, 6)
 	require.Empty(t, flow.BadLines, "the flow has no unparseable lines")
-	for _, id := range flow.NodeOrder {
-		require.FileExistsf(t, filepath.Join(root, DirName, "wireframes", id+".svg"),
-			"flow node %q must have matching wireframe imagery for the canvas", id)
+	for _, stem := range []string{"deposit", "confirm"} {
+		require.FileExistsf(t, filepath.Join(root, DirName, "screens", stem+".html"),
+			"flow stem node %q must have matching screen imagery for the canvas", stem)
 	}
 	// The graph the canvas renders (nodes + directed edges) is non-empty and
 	// complete — the flow graph genuinely exists to be shown.
-	require.Len(t, flow.Edges, 3)
+	require.Len(t, flow.Edges, 4)
 	for _, e := range flow.Edges {
 		require.Truef(t, e.HasArrow, "canvas edges are directed: %+v", e)
 	}
 
-	// The Screens tab's grid: one delivered screen plus the wireframe set, all
-	// slug-named so the tabs' filters match.
+	// The Screens tab's grid: the screen set, all slug-named so the tabs'
+	// filters match.
 	for _, stem := range []string{"login", "deposit", "confirm"} {
-		svg := umbRead(t, root, DirName+"/wireframes/"+stem+".svg")
-		require.Contains(t, svg, "viewBox", "canvas node imagery needs a viewBox: %s", stem)
+		html := umbRead(t, root, DirName+"/screens/"+stem+".html")
+		require.Contains(t, html, `data-screen="`+stem+`"`, "canvas node imagery carries the §9a identity: %s", stem)
 	}
 	html := umbRead(t, root, DirName+"/screens/deposit.html")
 	require.Contains(t, html, "Deposit a check", "the delivered screen must be the deposit screen")
@@ -622,37 +660,20 @@ func TestUmbrella_EveryArtifactOpensInNonSproutTool(t *testing.T) {
 	umbProducedTree(t, root)
 	umbExport(t, root)
 
-	// --- SVG wireframes (and, for free, the brand tier's absence). --------
-	svgs, err := filepath.Glob(filepath.Join(root, DirName, "wireframes", "*.svg"))
-	require.NoError(t, err)
-	require.Len(t, svgs, 3)
-	for _, p := range svgs {
-		data := []byte(umbRead(t, root, filepath.ToSlash(strings.TrimPrefix(p, root+string(filepath.Separator)))))
-		var rootEl struct {
-			XMLName xml.Name `xml:"svg"`
-			ViewBox string   `xml:"viewBox,attr"`
-		}
-		require.NoErrorf(t, xml.Unmarshal(data, &rootEl), "SVG must parse as XML (browser-openable): %s", p)
-		require.NotEmptyf(t, rootEl.ViewBox, "SVG must declare a viewBox: %s", p)
-		// The viewBox is four integers (the wireframe convention), so an
-		// external tool scales it without a raster hint.
-		for _, part := range strings.Fields(rootEl.ViewBox) {
-			require.Regexpf(t, `^-?\d+$`, part, "viewBox components must be integers in %s", p)
-		}
-	}
-
 	// --- Screens: well-formed, self-contained HTML. ----------------------
-	screenBytes := []byte(umbRead(t, root, "design/screens/deposit.html"))
-	// The declared charset is UTF-8 and the document parses as HTML-ish XML
-	// after wrapping the void tags an external browser tolerates. The
-	// load-bearing assertion is self-containment: no network reference.
-	require.Contains(t, string(screenBytes), `charset="utf-8"`)
-	require.NotContains(t, string(screenBytes), "http://")
-	require.NotContains(t, string(screenBytes), "https://")
-	require.NotContains(t, string(screenBytes), `src="//`)
-	require.NotContains(t, string(screenBytes), `@import`)
-	require.Contains(t, string(screenBytes), "<style>", "the screen styles itself inline")
-	require.Contains(t, string(screenBytes), "390px", "the screen root is sized to the mobile frame")
+	for _, stem := range []string{"login", "deposit", "confirm"} {
+		screenBytes := []byte(umbRead(t, root, "design/screens/"+stem+".html"))
+		// The declared charset is UTF-8 and the document parses as HTML-ish
+		// XML after wrapping the void tags an external browser tolerates. The
+		// load-bearing assertion is self-containment: no network reference.
+		require.Contains(t, string(screenBytes), `charset="utf-8"`)
+		require.NotContains(t, string(screenBytes), "http://")
+		require.NotContains(t, string(screenBytes), "https://")
+		require.NotContains(t, string(screenBytes), `src="//`)
+		require.NotContains(t, string(screenBytes), `@import`)
+		require.Contains(t, string(screenBytes), "<style>", "the screen styles itself inline")
+		require.Contains(t, string(screenBytes), "390px", "the screen root is sized to the mobile frame")
+	}
 
 	// --- Flows: the supported mermaid subset. ----------------------------
 	flowText := umbRead(t, root, "design/flows/check-deposit.mmd")
@@ -673,7 +694,7 @@ func TestUmbrella_EveryArtifactOpensInNonSproutTool(t *testing.T) {
 		flowLines++
 	}
 	require.Equal(t, 1, declarations, "exactly one flowchart declaration")
-	require.Equal(t, 4, flowLines, "one declaration + three edge statements")
+	require.Equal(t, 9, flowLines, "one declaration + four node + four edge statements")
 
 	// --- Tokens: valid W3C DTCG. -----------------------------------------
 	for _, tier := range []string{"color.tokens.json", "spacing.tokens.json"} {
@@ -811,7 +832,7 @@ func TestUmbrella_ArtifactsAreByteIdenticalAcrossRuns(t *testing.T) {
 	// The produced source tree is byte-identical too.
 	for _, rel := range []string{
 		"design/README.md", "design/tokens/color.tokens.json", "design/tokens/spacing.tokens.json",
-		"design/wireframes/login.svg", "design/flows/check-deposit.mmd", "design/screens/deposit.html",
+		"design/flows/check-deposit.json", "design/flows/check-deposit.mmd", "design/screens/deposit.html",
 	} {
 		require.Equalf(t, umbRead(t, rootA, rel), umbRead(t, rootB, rel), "%s must be stable", rel)
 	}
@@ -1153,7 +1174,7 @@ func TestUmbrella_ToolEntryPointsSucceedOnProducedTree(t *testing.T) {
 	for _, rel := range []string{
 		"design/README.md",
 		"design/tokens/color.tokens.json",
-		"design/wireframes/login.svg",
+		"design/flows/check-deposit.json",
 		"design/flows/check-deposit.mmd",
 		"design/screens/deposit.html",
 		"design/brand/brand.md",

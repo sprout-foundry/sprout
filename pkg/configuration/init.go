@@ -9,11 +9,13 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/term"
+
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
-	"golang.org/x/term"
 )
 
 // specialProviderDescriptions covers the few non-config providers
@@ -127,7 +129,7 @@ func Initialize() (*Config, *APIKeys, error) {
 			needsSetup = true
 			if !isCI {
 				fmt.Println()
-				bracketWarn(os.Stdout, fmt.Sprintf("Current provider '%s' requires an API key but none is configured.", GetProviderDisplayName(currentProvider)))
+				console.GlyphWarning.Fprintln(os.Stdout, fmt.Sprintf("Current provider '%s' requires an API key but none is configured.", GetProviderDisplayName(currentProvider)))
 			}
 		}
 	}
@@ -153,12 +155,12 @@ func Initialize() (*Config, *APIKeys, error) {
 		}
 		if chosen != "" {
 			config.LastUsedProvider = chosen
-			bracketOK(os.Stdout, fmt.Sprintf("Using %s provider from environment", GetProviderDisplayName(chosen)))
+			console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("Using %s provider from environment", GetProviderDisplayName(chosen)))
 		} else {
 			// Don't save test provider as default - it's for testing only
 			// Leave LastUsedProvider empty and let callers handle the test provider
-			bracketOK(os.Stdout, "No real provider available; using test provider for CI")
-			bracketWarn(os.Stdout, "Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)")
+			console.GlyphSuccess.Fprintln(os.Stdout, "No real provider available; using test provider for CI")
+			console.GlyphWarning.Fprintln(os.Stdout, "Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)")
 		}
 
 		if err := config.Save(); err != nil {
@@ -273,7 +275,7 @@ func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 		if choice > 0 && choice <= len(envProviders) {
 			selected = envProviders[choice-1]
 		}
-		bracketOK(os.Stdout, fmt.Sprintf("Using %s (environment variable detected)", GetProviderDisplayName(selected)))
+		console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("Using %s (environment variable detected)", GetProviderDisplayName(selected)))
 		return selected, nil
 	}
 
@@ -301,7 +303,7 @@ func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 
 	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
-		bracketOK(os.Stdout, "Ready to use (configured or no API key needed):")
+		console.GlyphSuccess.Fprintln(os.Stdout, "Ready to use (configured or no API key needed):")
 		for i, providerName := range providersWithKeys {
 			fmt.Printf("  %d. %s", i+1, GetProviderDisplayName(providerName))
 			if !RequiresAPIKey(providerName) {
@@ -389,11 +391,11 @@ func selectInitialProvider(apiKeys *APIKeys, cfg *Config) (string, error) {
 			return "", fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(selectedProvider), modelCount))
+		console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(selectedProvider), modelCount))
 	} else if metadata.RequiresAPIKey {
-		bracketOK(os.Stdout, fmt.Sprintf("Using existing API key for %s", GetProviderDisplayName(selectedProvider)))
+		console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("Using existing API key for %s", GetProviderDisplayName(selectedProvider)))
 	} else {
-		bracketOK(os.Stdout, fmt.Sprintf("Selected %s (no API key required)", GetProviderDisplayName(selectedProvider)))
+		console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("Selected %s (no API key required)", GetProviderDisplayName(selectedProvider)))
 	}
 
 	return selectedProvider, nil
@@ -415,7 +417,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	fmt.Println()
-	bracketWarn(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
+	console.GlyphWarning.Fprintln(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
@@ -439,7 +441,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(provider), modelCount))
+		console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 		return nil
 	}
 
@@ -605,7 +607,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to validate and save API key: %w", err)
 	}
 
-	bracketOK(os.Stdout, fmt.Sprintf("Added %s (%d models available)", GetProviderDisplayName(provider), modelCount))
+	console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("Added %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 	return provider, nil
 }
 

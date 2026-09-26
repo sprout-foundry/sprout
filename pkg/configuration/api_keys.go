@@ -13,10 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/agent_providers"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"golang.org/x/term"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // staticProviderNames is the compile-time canonical list of built-in
@@ -564,15 +566,15 @@ func PromptForAPIKey(provider string) (string, error) {
 	switch provider {
 	case "openai":
 		if !strings.HasPrefix(apiKey, "sk-") {
-			bracketWarn(os.Stdout, "Warning: OpenAI API keys typically start with 'sk-'")
+			console.GlyphWarning.Fprintln(os.Stdout, "Warning: OpenAI API keys typically start with 'sk-'")
 		}
 	case "openrouter":
 		if !strings.HasPrefix(apiKey, "sk-or-") {
-			bracketWarn(os.Stdout, "Warning: OpenRouter API keys typically start with 'sk-or-'")
+			console.GlyphWarning.Fprintln(os.Stdout, "Warning: OpenRouter API keys typically start with 'sk-or-'")
 		}
 	}
 
-	bracketOK(os.Stdout, fmt.Sprintf("API key accepted (%d characters)", len(apiKey)))
+	console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("API key accepted (%d characters)", len(apiKey)))
 	return apiKey, nil
 }
 

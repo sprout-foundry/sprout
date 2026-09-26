@@ -297,6 +297,19 @@ func ValidateWireframesDir(root string) ([]Finding, error) {
 		}
 		findings = append(findings, ValidateWireframe(filepath.ToSlash(rel), data, stems, frames)...)
 	}
+
+	// SP-140-9 §9a: the wireframe tier is retired — one deprecation notice
+	// per file rides the same walk (informational; item 9.4 migrates).
+	rels := make([]string, 0, len(matches))
+	for _, match := range matches {
+		rel, err := filepath.Rel(root, match)
+		if err != nil {
+			rels = append(rels, filepath.ToSlash(match))
+			continue
+		}
+		rels = append(rels, filepath.ToSlash(rel))
+	}
+	findings = appendWireframeDeprecations(findings, rels)
 	sortFindings(findings)
 	return findings, nil
 }

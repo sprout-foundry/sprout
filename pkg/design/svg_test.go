@@ -30,6 +30,20 @@ func requireNoWireframeFindings(t *testing.T, findings []Finding) {
 	assert.Empty(t, findings)
 }
 
+// dropDeprecationFindings filters out the §9a wireframe deprecation notices
+// so tests that assert the pre-9.4 per-file rules stay readable; the notices
+// themselves are pinned by TestWireframeDeprecation.
+func dropDeprecationFindings(findings []Finding) []Finding {
+	out := make([]Finding, 0, len(findings))
+	for _, f := range findings {
+		if f.Rule == ruleWireframeDeprecated {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
 // findingRules returns the set of rule ids present in findings.
 func findingRules(findings []Finding) map[string]int {
 	out := make(map[string]int)
@@ -212,7 +226,10 @@ func TestValidateWireframesDir(t *testing.T) {
 		}, "frames:\n  mobile: 390x844\n")
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
-		requireNoWireframeFindings(t, findings)
+		// The §9a deprecation notice rides every wireframe walk; only the
+		// per-file rules must be clean here.
+		assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated])
+		assert.Empty(t, dropDeprecationFindings(findings))
 	})
 
 	t.Run("dangling-across-files", func(t *testing.T) {

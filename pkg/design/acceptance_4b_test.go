@@ -160,7 +160,9 @@ func TestAcceptance4bSeededFixturesAreCleanWithoutSeed(t *testing.T) {
 		assert.Equal(t, 0, findingRules(findings)[tc.rule],
 			"the clean fixture tree must not trip %s; got %#v", tc.rule, findings)
 	}
-	assert.Empty(t, findings, "the clean fixture tree must stay finding-free, got %#v", findings)
+	assert.Empty(t, dropDeprecationFindings(findings), "the clean fixture tree must stay finding-free, got %#v", findings)
+	assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated],
+		"the fixture's legacy wireframes carry their §9a deprecation notices")
 }
 
 // TestAcceptance4bSeverityIsStableAcrossSeededTrees pins that the severity of

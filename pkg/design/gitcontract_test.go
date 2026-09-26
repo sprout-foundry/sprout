@@ -432,6 +432,9 @@ func TestValidateTreeGitContractFindings(t *testing.T) {
 		GitContractFile: FixGitAttributesRule,
 		GitIgnoreFile:   FixGitIgnoreCacheRule,
 	}
+	// The legacy wireframes ride their §9a deprecation notices; the
+	// contract findings are what this test pins.
+	findings = dropDeprecationFindings(findings)
 	assert.Len(t, findings, len(ruleMap), "expected the .gitattributes + .gitignore fix findings, got %#v", findings)
 	for _, f := range findings {
 		rule, ok := ruleMap[f.File]
@@ -441,12 +444,13 @@ func TestValidateTreeGitContractFindings(t *testing.T) {
 		assert.Equal(t, 1, f.Line)
 	}
 
-	// Appending both lines clears the tree entirely.
+	// Appending both lines clears the contract findings (the legacy
+	// wireframes keep their §9a deprecation notices).
 	gcWrite(t, root, GitContractFile, "* text=auto eol=lf\n"+GitAttributesDiffHTMLLine+"\n")
 	gcWrite(t, root, GitIgnoreFile, "node_modules/\n"+GitIgnoreCacheLine+"\n")
 	findings, err = ValidateTree(root)
 	require.NoError(t, err)
-	assert.Empty(t, findings, "a satisfied git contract must clear the whole-tree run, got %#v", findings)
+	assert.Empty(t, dropDeprecationFindings(findings), "a satisfied git contract must clear the whole-tree run, got %#v", findings)
 }
 
 func TestValidateFileGitContractPaths(t *testing.T) {

@@ -38,6 +38,23 @@ const (
 	// hide it (or leave it) forever.
 	ruleScreenStateDeclared = "screen_state_declared"
 
+	// SP-140-9 §9a screen identity rules.
+	//
+	// ruleScreenIdentityMissing (hard): a screen whose <html> carries no
+	// data-screen attribute — the screen's identity is what the README
+	// manifest entry, the flows' step screens, and every tool consumer agree
+	// on, and §9a makes it machine-checked rather than inferred from the
+	// file name.
+	ruleScreenIdentityMissing = "screen_identity_missing"
+	// ruleScreenIdentityMismatch (hard): a data-screen value that disagrees
+	// with the file stem — the manifest, the briefs, and the index all key on
+	// the stem, so a divergent identity silently strands the screen.
+	ruleScreenIdentityMismatch = "screen_identity_mismatch"
+	// ruleScreenStatusAttr (hard): a data-status attribute on the screen.
+	// §9a: status stays in the README manifest — one status truth (SP-140-1e)
+	// — and a screen-carried copy is a second one that drifts.
+	ruleScreenStatusAttr = "screen_status_attr"
+
 	// SP-143 §143.5 index/runtime rules (the generated-contract checks).
 	//
 	// ruleScreenIndexDrift (hard): design/generated/screens.json is missing
@@ -224,6 +241,46 @@ func screensIndexGraphEqual(derived, parsed []ScreenIndexEntry) bool {
 	return true
 }
 
+// validateScreenIdentity runs the SP-140-9 §9a identity rules against one
+// screen: data-screen present (hard), agreeing with the file stem (hard),
+// and no data-status attribute anywhere in the document (hard — §9a keeps
+// status in the README manifest, one status truth per SP-140-1 §1e). The
+// result is never nil.
+func validateScreenIdentity(relPath string, content []byte) []Finding {
+	findings := []Finding{}
+	stem := strings.TrimSuffix(path.Base(filepath.ToSlash(relPath)), ".html")
+
+	attrs := htmlElementAttrs(content)
+	identity := attrs["data-screen"]
+	switch {
+	case identity == "":
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleScreenIdentityMissing,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("screen <html> carries no data-screen attribute; add data-screen=%q so the manifest, flows, and the screens index agree on this screen's identity", stem),
+		})
+	case identity != stem:
+		findings = append(findings, Finding{
+			File:     relPath,
+			Rule:     ruleScreenIdentityMismatch,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("data-screen %q disagrees with the file stem %q; rename the file or fix the attribute (the stem is the identity every consumer keys on)", identity, stem),
+		})
+	}
+
+	for _, occ := range screenAttrOccurrences(string(content), "data-status") {
+		findings = append(findings, Finding{
+			File:     relPath,
+			Line:     occ.line,
+			Rule:     ruleScreenStatusAttr,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("data-status %q on a screen; status lives in the README manifest's Screens listing (one status truth, SP-140-1 §1e) — drop the attribute", occ.value),
+		})
+	}
+	return findings
+}
+
 // validateScreenIndexGraph runs the SP-143 §143.5 per-screen graph rules
 // against one screen: (a) every data-nav `to:<stem>` resolves to a screen
 // stem in the tree, and (b) every data-state section is declared in the
@@ -348,6 +405,7 @@ func ValidateScreensDir(root string) ([]Finding, error) {
 			return nil, fmt.Errorf("resolving %s relative to %s: %w", match, root, err)
 		}
 		findings = append(findings, validateScreen(filepath.ToSlash(rel), data, frames)...)
+		findings = append(findings, validateScreenIdentity(filepath.ToSlash(rel), data)...)
 		findings = append(findings, validateScreenIndexGraph(filepath.ToSlash(rel), data, stems)...)
 	}
 	sortFindings(findings)

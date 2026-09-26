@@ -234,7 +234,9 @@ func TestManifestFramesDriveWireframeFrameMatch(t *testing.T) {
 		writeWireframeTree(t, root, map[string]string{"login.svg": matched}, manifest)
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
-		requireNoFindings(t, findings)
+		// The §9a deprecation notice rides the walk; the per-file rules are clean.
+		requireNoFindings(t, dropDeprecationFindings(findings))
+		require.Equal(t, 1, findingRules(findings)[ruleWireframeDeprecated])
 		// The manifest itself is clean against the same tree.
 		requireNoFindings(t, ValidateManifest(root))
 	})
@@ -243,7 +245,7 @@ func TestManifestFramesDriveWireframeFrameMatch(t *testing.T) {
 		writeWireframeTree(t, root, map[string]string{"login.svg": mismatched}, manifest)
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
-		require.Len(t, findings, 1)
+		require.Len(t, dropDeprecationFindings(findings), 1)
 		assert.Equal(t, ruleSVGFrameMatch, findings[0].Rule)
 		assert.Equal(t, SeverityInfo, findings[0].Severity, "frame match is advisory")
 		assert.Contains(t, findings[0].Message, "800x600")

@@ -1,6 +1,6 @@
 {
   "provenance": "Generated from design/screens/*.html data-attributes (SP-143 §4). Do not edit by hand; regenerate with design_export_tokens targets:screens.",
-  "source-hash": "fnv1a64:4e540072b784aef3",
+  "source-hash": "fnv1a64:67566592fe2915d0",
   "source": "design/screens/*.html. Recompute the hash from those bytes (concat in stem order, fnv1a64) to verify.",
   "format-version": 1,
   "screens": [

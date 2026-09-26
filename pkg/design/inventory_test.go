@@ -79,9 +79,11 @@ func TestScanValidTree(t *testing.T) {
 	assert.Equal(t, 2, inv.Flows[0].Nodes)
 	assert.Equal(t, 2, inv.Flows[0].Edges)
 
-	// Findings: the valid tree validates clean.
-	assert.Empty(t, inv.Findings)
-	for _, sev := range []string{"error", "warn", "info", "fix"} {
+	// Findings: the valid tree validates clean beyond the legacy
+	// wireframes' §9a deprecation notices.
+	assert.Empty(t, dropDeprecationFindings(inv.Findings))
+	assert.Equal(t, 2, inv.BySeverity["info"], "the two legacy wireframes carry their deprecation notices")
+	for _, sev := range []string{"error", "warn", "fix"} {
 		assert.Equal(t, 0, inv.BySeverity[sev], "severity %s", sev)
 	}
 }
@@ -112,7 +114,7 @@ func TestScanCountsFindingsBySeverity(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, inv.BySeverity["error"])
 	assert.Equal(t, 1, inv.BySeverity["warn"])
-	assert.Len(t, inv.Findings, 2)
+	assert.Len(t, dropDeprecationFindings(inv.Findings), 2)
 }
 
 func TestScanTokenGroupCountsAcrossFiles(t *testing.T) {

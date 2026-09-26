@@ -346,14 +346,15 @@ func TestValidateComponentInventoryOrphans(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SP-140-4 §4b — naming (slug rule + screens/ ↔ wireframes/ mismatch -> warn)
+// SP-140-4 §4b — naming (slug rule + screens/ ↔ wireframes/ mismatch)
 // ---------------------------------------------------------------------------
 
 // TestScreenNamingMismatch covers the §4b "Naming" bullet: a delivered screen
-// whose stem has no wireframe counterpart is a warn, and a stem shared by two
-// screen files is a duplicate-name warn.
+// whose stem has no wireframe counterpart is an info (SP-140-9 §9a demoted
+// it — the wireframe tier is deprecated and 9.4 migrates it), and a stem
+// shared by two screen files is a duplicate-name warn.
 func TestScreenNamingMismatch(t *testing.T) {
-	t.Run("screen-without-wireframe-warn", func(t *testing.T) {
+	t.Run("screen-without-wireframe-info", func(t *testing.T) {
 		root := t.TempDir()
 		writeWireframeTree(t, root, map[string]string{"login.svg": inventoryRuleSVG}, "# Design\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "screens"), 0o755))
@@ -364,7 +365,7 @@ func TestScreenNamingMismatch(t *testing.T) {
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyScreenNameMismatch], "got %#v", findings)
 		f := findings[0]
-		assert.Equal(t, SeverityWarn, f.Severity, "an inventory mismatch is an advisory warn")
+		assert.Equal(t, SeverityInfo, f.Severity, "a counterpart-missing screen is an info under §9a (9.4 migrates the tier)")
 		assert.Equal(t, "design/screens/checkout.html", f.File)
 		assert.Contains(t, f.Message, "checkout")
 	})
@@ -497,7 +498,9 @@ func TestValidateTreeInventoryNamingTokenFindings(t *testing.T) {
 			assert.Contains(t, []string{"design/wireframes/billing.svg", "design/wireframes/forgotten.svg"}, f.File,
 				"an orphan finding names one of the undeclared wireframes")
 		case ruleConsistencyScreenNameMismatch:
-			assert.Equal(t, SeverityWarn, f.Severity)
+			// SP-140-9 §9a demoted the counterpart-missing direction to info
+			// (the wireframe tier is deprecated; 9.4 migrates it).
+			assert.Equal(t, SeverityInfo, f.Severity)
 			assert.Equal(t, "design/screens/receipt.html", f.File)
 		}
 	}
@@ -533,7 +536,7 @@ func TestInventoryNamingRulesValidTree(t *testing.T) {
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
 	require.NotNil(t, findings)
-	assert.Empty(t, findings, "the valid fixture tree must stay finding-free, got %#v", findings)
+	assert.Empty(t, dropDeprecationFindings(findings), "the valid fixture tree must stay finding-free, got %#v", findings)
 
 	// The individual packs are clean on that tree too.
 	assert.Empty(t, ValidateInventory(root))

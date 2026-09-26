@@ -48,15 +48,27 @@ const dcTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 
   <text x="24" y="64" font-size="28">Home</text>
 </svg>`
 
-const dcTestHTML = `<!DOCTYPE html><html><body><h1>Login</h1></body></html>`
+// dcTestHTML carries the §9a identity attribute so the screen validates
+// clean under the SP-140-9 identity rules.
+const dcTestHTML = `<!DOCTYPE html><html data-screen="login"><body><h1>Login</h1></body></html>`
 
 const dcTestMMD = "flowchart TD\n  login --> home\n"
 
-// dcWriteTree seeds a minimal design/ tree: two wireframes, one screen, one flow.
+// dcWriteTree seeds a minimal design/ tree: two wireframes, one screen, one
+// flow. Under SP-140-9 §9a the wireframes earn deprecation infos, so tests
+// wanting a CLEAN tree use dcWriteCleanTree (screens-only).
 func dcWriteTree(t *testing.T, root string) {
 	t.Helper()
 	dcWrite(t, root, "design/wireframes/login.svg", dcTestSVG)
 	dcWrite(t, root, "design/wireframes/home.svg", dcTestHomeSVG)
+	dcWrite(t, root, "design/screens/login.html", dcTestHTML)
+	dcWrite(t, root, "design/flows/sign-up.mmd", dcTestMMD)
+}
+
+// dcWriteCleanTree seeds a screens-only tree: no wireframes, so no §9a
+// deprecation notices — the tree validates with zero findings.
+func dcWriteCleanTree(t *testing.T, root string) {
+	t.Helper()
 	dcWrite(t, root, "design/screens/login.html", dcTestHTML)
 	dcWrite(t, root, "design/flows/sign-up.mmd", dcTestMMD)
 }
@@ -425,13 +437,13 @@ func TestDesignCritiqueHandler_VisionScriptedClientReturnsStructuredFindings(t *
 func TestDesignCritiqueHandler_VisionTierFailureStillReturnsArtifact(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	dcWriteTree(t, root)
+	dcWriteCleanTree(t, root)
 
 	env, _ := dcCritiqueEnv(t, root)
 	env.VisionProcessor = &VisionProcessor{visionClient: &dcScriptedVisionClient{err: assert.AnError}}
 
 	h := &designCritiqueHandler{}
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 	require.NoError(t, err, "a vision-tier failure must not fail the critique")
 	require.False(t, res.IsError)
 
@@ -685,11 +697,11 @@ func TestDesignCritiqueHandler_EmptyFindingsShape(t *testing.T) {
 	// Not parallel: it asserts the no-tier verdict, which reads process-wide
 	// vision-capability state pinned by dcCritiqueEnvNoVision.
 	root := t.TempDir()
-	dcWriteTree(t, root)
+	dcWriteCleanTree(t, root)
 	env, _ := dcCritiqueEnvNoVision(t, root)
 
 	h := &designCritiqueHandler{}
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 	require.NoError(t, err)
 
 	out, ok := res.StructuredOut.(critiqueOutput)
@@ -914,11 +926,11 @@ func TestDesignCritiqueHandler_NoVisionStaticFindingsRubricFiltered(t *testing.T
 // empty list is not mistaken for "no critique was attempted".
 func TestDesignCritiqueHandler_NoVisionCleanTreeNotesDegradation(t *testing.T) {
 	root := t.TempDir()
-	dcWriteTree(t, root)
+	dcWriteCleanTree(t, root)
 	env, _ := dcCritiqueEnvNoVision(t, root)
 
 	h := &designCritiqueHandler{}
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
@@ -1016,11 +1028,11 @@ func TestDesignCritiqueHandler_NoVisionTierIsHermetic(t *testing.T) {
 	t.Cleanup(restoreCapability)
 
 	root := t.TempDir()
-	dcWriteTree(t, root)
+	dcWriteCleanTree(t, root)
 	env, _ := dcCritiqueEnvNoVision(t, root)
 
 	h := &designCritiqueHandler{}
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
@@ -1076,10 +1088,10 @@ func TestDesignCritiqueHandler_VisualFalseWhenNoVisionTier(t *testing.T) {
 			// §4e render cache (its own render-count behavior is covered by the
 			// dedicated cache tests).
 			root := t.TempDir()
-			dcWriteTree(t, root)
+			dcWriteCleanTree(t, root)
 			env, mock := tc.env(root)
 			h := &designCritiqueHandler{}
-			res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+			res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 			require.NoError(t, err, "a missing vision tier must never fail the critique")
 			require.False(t, res.IsError)
 
@@ -1103,7 +1115,7 @@ func TestDesignCritiqueHandler_VisualFalseWhenNoVisionTier(t *testing.T) {
 func TestDesignCritiqueHandler_VisualTrueOnlyWithRealAnalysis(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	dcWriteTree(t, root)
+	dcWriteCleanTree(t, root)
 
 	env, _ := dcCritiqueEnv(t, root)
 	env.VisionProcessor = &VisionProcessor{visionClient: &dcScriptedVisionClient{
@@ -1111,7 +1123,7 @@ func TestDesignCritiqueHandler_VisualTrueOnlyWithRealAnalysis(t *testing.T) {
 	}}
 
 	h := &designCritiqueHandler{}
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"target": "design/screens/login.html"})
 	require.NoError(t, err)
 
 	out, ok := res.StructuredOut.(critiqueOutput)

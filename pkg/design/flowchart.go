@@ -236,15 +236,19 @@ func isScreenFlow(fc Flowchart, stemSet map[string]struct{}) bool {
 	return false
 }
 
-// ValidateFlows validates one mermaid flow file per SP-140-1 §1c/§1g.
-// wireframeStems is the set of wireframe file stems (without .svg) used for
-// the node-id == stem rule on screen flows. Hard checks (SeverityError):
+// ValidateFlows validates one mermaid flow file per SP-140-1 §1c/§1g,
+// adjusted by SP-140-9 §9a: screen-flow node ids may equal either a wireframe
+// stem or a delivered-screen stem during the format migration (9.4 collapses
+// the tier; post-migration only screens remain). Hard checks (SeverityError):
 // exactly one flowchart declaration, unparseable statement lines, and
-// screen-flow node ids that are not wireframe stems. The result is never nil.
-func ValidateFlows(relPath string, content []byte, wireframeStems []string) []Finding {
+// screen-flow node ids matching neither tier. The result is never nil.
+func ValidateFlows(relPath string, content []byte, wireframeStems []string, screenStems ...string) []Finding {
 	fc := ParseFlowchart(string(content))
-	stemSet := make(map[string]struct{}, len(wireframeStems))
+	stemSet := make(map[string]struct{}, len(wireframeStems)+len(screenStems))
 	for _, s := range wireframeStems {
+		stemSet[s] = struct{}{}
+	}
+	for _, s := range screenStems {
 		stemSet[s] = struct{}{}
 	}
 
@@ -284,7 +288,7 @@ func ValidateFlows(relPath string, content []byte, wireframeStems []string) []Fi
 					File:     relPath,
 					Rule:     ruleFlowchartNodeStem,
 					Severity: SeverityError,
-					Message:  fmt.Sprintf("node id %q is not a wireframe stem (design/wireframes/%s.svg); screen-flow node ids must equal a wireframe stem", id, id),
+					Message:  fmt.Sprintf("node id %q is neither a wireframe stem (design/wireframes/%s.svg) nor a screen stem (design/screens/%s.html); screen-flow node ids must equal a known screen (SP-140-9 §9a accepts either tier during migration)", id, id, id),
 				})
 			}
 		}
@@ -325,7 +329,8 @@ func ValidateFlowsDir(root string) ([]Finding, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolving %s relative to %s: %w", match, root, err)
 		}
-		findings = append(findings, ValidateFlows(filepath.ToSlash(rel), data, stems)...)
+		screenStems := assetStems(root, "screens", ".html")
+		findings = append(findings, ValidateFlows(filepath.ToSlash(rel), data, stems, screenStems...)...)
 	}
 	sortFindings(findings)
 	return findings, nil

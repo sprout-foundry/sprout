@@ -1,12 +1,29 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, memo } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  memo,
+} from "react";
 import type {
   ChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
-import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info } from 'lucide-react';
-import { useLog, debugLog } from '../utils/log';
+} from "react";
+import {
+  ScrollText,
+  X,
+  Send,
+  SquarePen,
+  ListPlus,
+  Plus,
+  Square,
+  Info,
+} from "lucide-react";
+import { useLog, debugLog } from "../utils/log";
 import {
   ARGUMENT_COMPLETION_DEBOUNCE_MS,
   argumentCandidatesFromResponse,
@@ -15,20 +32,20 @@ import {
   type CommandCompletionApi,
   type CommandCompletionResponse,
   type Debouncer,
-} from '../utils/command_completion';
-import { getMatchingSlashCommands } from '../utils/slashCommands';
-import type { SlashCommand } from '../utils/slashCommands';
-import SlashCommandAutocomplete from './SlashCommandAutocomplete';
-import './CommandInput.css';
-import type { CommandHistoryApi } from './command_input_history';
-import { createEmptyState } from './command_input_history';
+} from "../utils/command_completion";
+import { getMatchingSlashCommands } from "../utils/slashCommands";
+import type { SlashCommand } from "../utils/slashCommands";
+import SlashCommandAutocomplete from "./SlashCommandAutocomplete";
+import "./CommandInput.css";
+import type { CommandHistoryApi } from "./command_input_history";
+import { createEmptyState } from "./command_input_history";
 import {
   type CommandHistoryState,
   dedupeCommands,
   loadCommandHistory,
   persistCommandHistory,
-} from './command_input_history';
-import QueuedMessagesPanel from './QueuedMessagesPanel';
+} from "./command_input_history";
+import QueuedMessagesPanel from "./QueuedMessagesPanel";
 
 export interface CommandInputProps {
   value?: string;
@@ -64,12 +81,12 @@ export interface CommandInputProps {
 }
 
 function CommandInput({
-  value = '',
+  value = "",
   onChange,
   onSend,
   onSendCommand,
   onQueue,
-  placeholder = 'Ask me anything about your code...',
+  placeholder = "Ask me anything about your code...",
   disabled = false,
   isConnected = true,
   multiline = true,
@@ -103,7 +120,7 @@ function CommandInput({
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
-    tempInput: '',
+    tempInput: "",
   });
   const [isHistoryMode, setIsHistoryMode] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -120,19 +137,34 @@ function CommandInput({
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [showHints, setShowHints] = useState(false);
   const [slashAutocompleteOpen, setSlashAutocompleteOpen] = useState(false);
-  const [slashAutocompletePrefix, setSlashAutocompletePrefix] = useState('');
+  const [slashAutocompletePrefix, setSlashAutocompletePrefix] = useState("");
   const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(0);
-  const [slashAutocompletePosition, setSlashAutocompletePosition] = useState({ top: 0, left: 0 });
+  const [slashAutocompletePosition, setSlashAutocompletePosition] = useState({
+    top: 0,
+    left: 0,
+  });
   // Server-driven ARGUMENT completion state (set only once the user is past
   // the command name — a space separates the name from the typed argument).
-  const [argumentCompletions, setArgumentCompletions] = useState<SlashCommand[]>([]);
+  const [argumentCompletions, setArgumentCompletions] = useState<
+    SlashCommand[]
+  >([]);
   const [isArgumentPhase, setIsArgumentPhase] = useState(false);
   // Memoize slash autocomplete matches. In the name phase the rows come
   // from getMatchingSlashCommands (which has its own Map cache); in the
   // argument phase they come from the server-driven argumentCompletions.
   const slashAutocompleteMatches = useMemo(
-    () => (slashAutocompleteOpen ? (isArgumentPhase ? argumentCompletions : getMatchingSlashCommands(slashAutocompletePrefix)) : []),
-    [slashAutocompleteOpen, isArgumentPhase, argumentCompletions, slashAutocompletePrefix],
+    () =>
+      slashAutocompleteOpen
+        ? isArgumentPhase
+          ? argumentCompletions
+          : getMatchingSlashCommands(slashAutocompletePrefix)
+        : [],
+    [
+      slashAutocompleteOpen,
+      isArgumentPhase,
+      argumentCompletions,
+      slashAutocompletePrefix,
+    ],
   );
   const queuePanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -198,10 +230,10 @@ function CommandInput({
     // holds the new char. Without this guard the value==='' branch then
     // clobbers the just-typed character. handleSend resets lastSent
     // alongside the draft, so legitimate post-send clears still pass.
-    if (value === '' && lastSentValueRef.current !== '') {
+    if (value === "" && lastSentValueRef.current !== "") {
       return;
     }
-    if (value === '') {
+    if (value === "") {
       setDraftValue(value);
     }
   }, [value, draftValue]);
@@ -209,11 +241,14 @@ function CommandInput({
   // Detect the slash command prefix and cursor position from current input state.
   // Uses draftValue (React state) rather than reading the live DOM, which can
   // diverge when React hasn't flushed yet.
-  const detectSlashCommandAtCursor = useCallback((): { slashIndex: number; prefix: string } | null => {
+  const detectSlashCommandAtCursor = useCallback((): {
+    slashIndex: number;
+    prefix: string;
+  } | null => {
     const sel = selectionRef.current;
     const cursorPos = sel?.start ?? 0;
     const beforeCursor = draftValue.slice(0, cursorPos);
-    const slashIndex = beforeCursor.lastIndexOf('/');
+    const slashIndex = beforeCursor.lastIndexOf("/");
     if (slashIndex < 0) return null;
     const beforeSlash = beforeCursor.slice(0, slashIndex);
     const isCommandStart = slashIndex === 0 || /[\s\n]$/.test(beforeSlash);
@@ -266,13 +301,21 @@ function CommandInput({
       // Recalculate position in case textarea resized
       setSlashAutocompletePosition(getSlashAutocompletePosition());
     }
-  }, [draftValue, slashAutocompleteOpen, slashAutocompletePrefix, detectSlashCommandAtCursor, getSlashAutocompletePosition]);
+  }, [
+    draftValue,
+    slashAutocompleteOpen,
+    slashAutocompletePrefix,
+    detectSlashCommandAtCursor,
+    getSlashAutocompletePosition,
+  ]);
 
   // Lazily create the shared trailing debouncer for argument-completion
   // requests. Kept in a ref so the timer survives re-renders.
   const getCompletionDebouncer = useCallback((): Debouncer => {
     if (!completionDebouncerRef.current) {
-      completionDebouncerRef.current = createDebouncer(ARGUMENT_COMPLETION_DEBOUNCE_MS);
+      completionDebouncerRef.current = createDebouncer(
+        ARGUMENT_COMPLETION_DEBOUNCE_MS,
+      );
     }
     return completionDebouncerRef.current;
   }, []);
@@ -301,7 +344,8 @@ function CommandInput({
     const info = detectSlashCommandAtCursor();
     const cursorPos = selectionRef.current?.start ?? 0;
     const beforeCursor = draftValue.slice(0, cursorPos);
-    const hasSpaceAfterSlash = info !== null && /[\s\t]/.test(beforeCursor.slice(info.slashIndex + 1));
+    const hasSpaceAfterSlash =
+      info !== null && /[\s\t]/.test(beforeCursor.slice(info.slashIndex + 1));
 
     if (!info || !hasSpaceAfterSlash || !completionApi) {
       getCompletionDebouncer().cancel();
@@ -323,7 +367,7 @@ function CommandInput({
         try {
           resp = await completionApi.completeCommand(commandText);
         } catch {
-          resp = { command: '', completions: [] };
+          resp = { command: "", completions: [] };
         }
         // Stale response (a newer keystroke/phase change superseded this one).
         if (requestId !== completionRequestIdRef.current) {
@@ -347,7 +391,13 @@ function CommandInput({
         }
       })();
     });
-  }, [draftValue, completionApi, detectSlashCommandAtCursor, getCompletionDebouncer, getSlashAutocompletePosition]);
+  }, [
+    draftValue,
+    completionApi,
+    detectSlashCommandAtCursor,
+    getCompletionDebouncer,
+    getSlashAutocompletePosition,
+  ]);
 
   // Cancel any pending argument-completion request on unmount.
   useEffect(() => {
@@ -362,19 +412,25 @@ function CommandInput({
     if (document.activeElement !== inputRef.current) return;
 
     const { start, end } = selectionRef.current;
-    inputRef.current.setSelectionRange(Math.min(start, draftValue.length), Math.min(end, draftValue.length));
+    inputRef.current.setSelectionRange(
+      Math.min(start, draftValue.length),
+      Math.min(end, draftValue.length),
+    );
   }, [draftValue]);
 
   useLayoutEffect(() => {
     const textarea = inputRef.current;
     if (!textarea) return;
 
-    textarea.style.height = '0px';
+    textarea.style.height = "0px";
     const computed = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computed.lineHeight) || 24;
     const minHeight = lineHeight * 2 + 20;
     const maxHeight = lineHeight * 10 + 20;
-    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight));
+    const nextHeight = Math.min(
+      maxHeight,
+      Math.max(minHeight, textarea.scrollHeight),
+    );
     textarea.style.height = `${nextHeight}px`;
   }, [draftValue, attachedImages.length]);
 
@@ -389,12 +445,15 @@ function CommandInput({
   useEffect(() => {
     if (!showQueuePanel) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (queuePanelRef.current && !queuePanelRef.current.contains(e.target as Node)) {
+      if (
+        queuePanelRef.current &&
+        !queuePanelRef.current.contains(e.target as Node)
+      ) {
         setShowQueuePanel(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showQueuePanel]);
 
   // Click-outside handler for the hints popover
@@ -402,12 +461,15 @@ function CommandInput({
     if (!showHints) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.hints-popover') && !target.closest('.hints-button')) {
+      if (
+        !target.closest(".hints-popover") &&
+        !target.closest(".hints-button")
+      ) {
         setShowHints(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showHints]);
 
   // Click-outside handler for slash autocomplete
@@ -415,12 +477,16 @@ function CommandInput({
     if (!slashAutocompleteOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (slashAutocompleteRef.current && slashAutocompleteRef.current.contains(target)) return;
+      if (
+        slashAutocompleteRef.current &&
+        slashAutocompleteRef.current.contains(target)
+      )
+        return;
       if (inputRef.current && inputRef.current.contains(target)) return;
       setSlashAutocompleteOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [slashAutocompleteOpen]);
 
   useEffect(() => {
@@ -429,13 +495,13 @@ function CommandInput({
     }
 
     const handlePreviewEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setPreviewImageId(null);
       }
     };
 
-    window.addEventListener('keydown', handlePreviewEscape);
-    return () => window.removeEventListener('keydown', handlePreviewEscape);
+    window.addEventListener("keydown", handlePreviewEscape);
+    return () => window.removeEventListener("keydown", handlePreviewEscape);
   }, [previewImageId]);
 
   const loadHistory = useCallback(async () => {
@@ -444,7 +510,7 @@ function CommandInput({
       const loadedState = await loadCommandHistory(historyApi.current);
       setHistory(loadedState);
     } catch (error) {
-      log.warn('Failed to load command history', { title: 'Command History' });
+      log.warn("Failed to load command history", { title: "Command History" });
     } finally {
       setIsLoadingHistory(false);
     }
@@ -462,7 +528,7 @@ function CommandInput({
     setHistory((prev) => {
       const next = dedupeCommands([...prev.commands, trimmedCommand]);
       persistCommandHistory(next);
-      return { commands: next, index: -1, tempInput: '' };
+      return { commands: next, index: -1, tempInput: "" };
     });
   }, []);
 
@@ -498,13 +564,15 @@ function CommandInput({
       const cursorPos = sel?.start ?? 0;
       const beforeCursor = draftValue.slice(0, cursorPos);
       const afterCursor = draftValue.slice(cursorPos);
-      const slashIndex = beforeCursor.lastIndexOf('/');
+      const slashIndex = beforeCursor.lastIndexOf("/");
       if (slashIndex < 0) return null;
 
       const beforeSlash = beforeCursor.slice(0, slashIndex);
-      const afterFirstWord = beforeCursor.slice(slashIndex + 1).split(/\s/)[1] ?? '';
+      const afterFirstWord =
+        beforeCursor.slice(slashIndex + 1).split(/\s/)[1] ?? "";
 
-      const newValue = beforeSlash + '/' + cmd.name + ' ' + afterFirstWord + afterCursor;
+      const newValue =
+        beforeSlash + "/" + cmd.name + " " + afterFirstWord + afterCursor;
       const newCursor = slashIndex + 1 + cmd.name.length + 1; // +1 for space
       updateValue(newValue, { start: newCursor, end: newCursor });
       setSlashAutocompleteOpen(false);
@@ -526,9 +594,15 @@ function CommandInput({
       const cursorPos = sel?.start ?? 0;
       const beforeCursor = draftValue.slice(0, cursorPos);
       const afterCursor = draftValue.slice(cursorPos);
-      const { value: newBefore, cursor: newCursor } = replaceLastWord(beforeCursor, cmd.name);
+      const { value: newBefore, cursor: newCursor } = replaceLastWord(
+        beforeCursor,
+        cmd.name,
+      );
       completionSuppressedRef.current = true;
-      updateValue(newBefore + afterCursor, { start: newCursor, end: newCursor });
+      updateValue(newBefore + afterCursor, {
+        start: newCursor,
+        end: newCursor,
+      });
       setSlashAutocompleteOpen(false);
       setArgumentCompletions([]);
       setIsArgumentPhase(false);
@@ -537,7 +611,9 @@ function CommandInput({
   );
 
   const currentHistoryValue =
-    isHistoryMode && history.index >= 0 ? (history.commands[history.commands.length - 1 - history.index] ?? '') : null;
+    isHistoryMode && history.index >= 0
+      ? (history.commands[history.commands.length - 1 - history.index] ?? "")
+      : null;
 
   useEffect(() => {
     if (!isHistoryMode || currentHistoryValue === null) {
@@ -568,28 +644,29 @@ function CommandInput({
       }
 
       switch (e.key) {
-        case 'Backspace': {
+        case "Backspace": {
           const next = start === end ? Math.max(0, start - 1) : start;
           selectionRef.current = { start: next, end: next };
           return;
         }
-        case 'Delete':
+        case "Delete":
           selectionRef.current = { start, end: start };
           return;
-        case 'ArrowLeft': {
+        case "ArrowLeft": {
           const next = start === end ? Math.max(0, start - 1) : start;
           selectionRef.current = { start: next, end: next };
           return;
         }
-        case 'ArrowRight': {
-          const next = start === end ? Math.min(draftValue.length, end + 1) : end;
+        case "ArrowRight": {
+          const next =
+            start === end ? Math.min(draftValue.length, end + 1) : end;
           selectionRef.current = { start: next, end: next };
           return;
         }
-        case 'Home':
+        case "Home":
           selectionRef.current = { start: 0, end: 0 };
           return;
-        case 'End': {
+        case "End": {
           const next = draftValue.length;
           selectionRef.current = { start: next, end: next };
           return;
@@ -603,7 +680,7 @@ function CommandInput({
   const handlePaste = useCallback((e: ReactClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
+      if (items[i].type.startsWith("image/")) {
         e.preventDefault();
         const blob = items[i].getAsFile();
         if (blob) {
@@ -638,7 +715,7 @@ function CommandInput({
         },
       ]);
       // Reset input so same file can be selected again
-      e.target.value = '';
+      e.target.value = "";
       // Focus back to textarea
       inputRef.current?.focus();
     }
@@ -664,27 +741,42 @@ function CommandInput({
   }, []);
 
   // Attach image: copy it into the workspace so the model can read it
-  const uploadImageAsync = useCallback(async (imageId: string, imageFile: File) => {
-    if (uploadInProgressRef.current.has(imageId)) return;
-    uploadInProgressRef.current.add(imageId);
+  const uploadImageAsync = useCallback(
+    async (imageId: string, imageFile: File) => {
+      if (uploadInProgressRef.current.has(imageId)) return;
+      uploadInProgressRef.current.add(imageId);
 
-    try {
-      if (!onUploadImage) {
-        throw new Error('Image attachment not available');
+      try {
+        if (!onUploadImage) {
+          throw new Error("Image attachment not available");
+        }
+        const result = await onUploadImage(imageFile);
+        setAttachedImages((prev) =>
+          prev.map((img) =>
+            img.id === imageId
+              ? { ...img, uploadedPath: result.path, error: undefined }
+              : img,
+          ),
+        );
+      } catch (error) {
+        debugLog("Failed to attach image:", error);
+        setAttachedImages((prev) =>
+          prev.map((img) =>
+            img.id === imageId
+              ? {
+                  ...img,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to attach image",
+                }
+              : img,
+          ),
+        );
       }
-      const result = await onUploadImage(imageFile);
-      setAttachedImages((prev) =>
-        prev.map((img) => (img.id === imageId ? { ...img, uploadedPath: result.path, error: undefined } : img)),
-      );
-    } catch (error) {
-      debugLog('Failed to attach image:', error);
-      setAttachedImages((prev) =>
-        prev.map((img) =>
-          img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Failed to attach image' } : img,
-        ),
-      );
-    }
-  }, [onUploadImage]);
+    },
+    [onUploadImage],
+  );
 
   // Auto-upload images when they are added
   useEffect(() => {
@@ -709,7 +801,7 @@ function CommandInput({
       newIndex = history.commands.length - 1;
     }
 
-    let newInputValue = '';
+    let newInputValue = "";
 
     if (newIndex === -1) {
       // Return to temp input
@@ -723,7 +815,10 @@ function CommandInput({
 
     setHistory((prev) => ({ ...prev, index: newIndex }));
 
-    updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
+    updateValue(newInputValue, {
+      start: newInputValue.length,
+      end: newInputValue.length,
+    });
   };
 
   const handleTabCompletion = () => {
@@ -740,13 +835,15 @@ function CommandInput({
 
   const handleSend = async () => {
     const textareaValue = draftValue;
-    if (textareaValue.trim() === '') return;
+    if (textareaValue.trim() === "") return;
 
     // Build query with image paths
     let commandToSend = textareaValue.trim();
     const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages
+        .map((img) => `Pasted image saved to disk: ${img.uploadedPath}`)
+        .join("\n");
       commandToSend = `${imagePaths}\n\n${commandToSend}`;
     }
 
@@ -763,7 +860,7 @@ function CommandInput({
     void saveToHistory(commandToSend);
 
     // Clear textarea using onChange for controlled component
-    updateValue('', { start: 0, end: 0 });
+    updateValue("", { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
     setAttachedImages((prev) => {
@@ -789,13 +886,14 @@ function CommandInput({
     trackUpcomingSelection(e as ReactKeyboardEvent<HTMLTextAreaElement>);
 
     switch (e.key) {
-      case 'ArrowUp': {
+      case "ArrowUp": {
         // When slash autocomplete is open, navigate the list instead of history
         if (slashAutocompleteOpen) {
           e.preventDefault();
           const matches = slashAutocompleteMatches;
           if (matches.length > 0) {
-            const prevIndex = (slashAutocompleteIndex - 1 + matches.length) % matches.length;
+            const prevIndex =
+              (slashAutocompleteIndex - 1 + matches.length) % matches.length;
             setSlashAutocompleteIndex(prevIndex);
           }
           return;
@@ -829,7 +927,8 @@ function CommandInput({
           !e.metaKey &&
           !e.shiftKey &&
           (isHistoryMode || draftValue.length === 0) &&
-          (isHistoryMode || (textarea.selectionStart === 0 && textarea.selectionEnd === 0));
+          (isHistoryMode ||
+            (textarea.selectionStart === 0 && textarea.selectionEnd === 0));
 
         if (!shouldNavigateHistory) {
           break;
@@ -838,7 +937,7 @@ function CommandInput({
         navigateHistory(1);
         break;
       }
-      case 'ArrowDown': {
+      case "ArrowDown": {
         // When slash autocomplete is open, navigate the list instead of history
         if (slashAutocompleteOpen) {
           e.preventDefault();
@@ -865,7 +964,13 @@ function CommandInput({
         navigateHistory(-1);
         break;
       }
-      case 'Tab':
+      case "Tab":
+        // Tab completes inside the input, but the field must not trap
+        // keyboard users: Shift+Tab always moves focus back, and Tab in an
+        // empty input (nothing to complete) moves focus on.
+        if (e.shiftKey || draftValue === "") {
+          break;
+        }
         e.preventDefault();
         {
           const info = detectSlashCommandAtCursor();
@@ -876,7 +981,9 @@ function CommandInput({
             // Argument phase: the user is past the command name (a space
             // separates it from the argument being typed). Tab cycles the
             // server-provided argument candidates; Enter accepts.
-            const hasSpaceAfterSlash = /[\s\t]/.test(draftValue.slice(0, cursorPos).slice(info.slashIndex + 1));
+            const hasSpaceAfterSlash = /[\s\t]/.test(
+              draftValue.slice(0, cursorPos).slice(info.slashIndex + 1),
+            );
             if (hasSpaceAfterSlash) {
               if (argumentCompletions.length > 0) {
                 if (!slashAutocompleteOpen) {
@@ -884,7 +991,8 @@ function CommandInput({
                   setSlashAutocompleteIndex(0);
                   setSlashAutocompletePosition(getSlashAutocompletePosition());
                 } else {
-                  const nextIndex = (slashAutocompleteIndex + 1) % argumentCompletions.length;
+                  const nextIndex =
+                    (slashAutocompleteIndex + 1) % argumentCompletions.length;
                   setSlashAutocompleteIndex(nextIndex);
                 }
               }
@@ -910,13 +1018,19 @@ function CommandInput({
                     ? slashAutocompleteMatches
                     : getMatchingSlashCommands(firstWord);
                 if (matches.length > 0) {
-                  const nextIndex = (slashAutocompleteIndex + 1) % matches.length;
+                  const nextIndex =
+                    (slashAutocompleteIndex + 1) % matches.length;
                   setSlashAutocompleteIndex(nextIndex);
                   const cmd = matches[nextIndex];
                   // Replace the typed prefix with the completion
                   const newPrefix = cmd.name;
-                  const beforeSlashPart = draftValue.slice(0, info.slashIndex + 1);
-                  const afterFirstWord = draftValue.slice(info.slashIndex + 1 + firstWord.length);
+                  const beforeSlashPart = draftValue.slice(
+                    0,
+                    info.slashIndex + 1,
+                  );
+                  const afterFirstWord = draftValue.slice(
+                    info.slashIndex + 1 + firstWord.length,
+                  );
                   const newValue = beforeSlashPart + newPrefix + afterFirstWord;
                   const newCursor = info.slashIndex + 1 + newPrefix.length;
                   updateValue(newValue, { start: newCursor, end: newCursor });
@@ -932,7 +1046,7 @@ function CommandInput({
         // Not a slash command, insert tab
         handleTabCompletion();
         break;
-      case 'Enter':
+      case "Enter":
         if (slashAutocompleteOpen) {
           if (isArgumentPhase && argumentCompletions.length === 0) {
             // Request still in flight or no candidates — don't swallow
@@ -946,7 +1060,10 @@ function CommandInput({
             return;
           } else {
             e.preventDefault();
-            acceptSlashCompletion(slashAutocompletePrefix, slashAutocompleteIndex);
+            acceptSlashCompletion(
+              slashAutocompletePrefix,
+              slashAutocompleteIndex,
+            );
             return;
           }
         }
@@ -980,7 +1097,7 @@ function CommandInput({
           handleSend();
         }
         break;
-      case 'Escape':
+      case "Escape":
         e.preventDefault();
         if (slashAutocompleteOpen) {
           setSlashAutocompleteOpen(false);
@@ -996,33 +1113,38 @@ function CommandInput({
         } else {
           // Clear input if not in history mode
           resetHistoryNavigation();
-          updateValue('', { start: 0, end: 0 });
+          updateValue("", { start: 0, end: 0 });
         }
         break;
     }
 
     // Reset history navigation when user starts typing or deleting content
-    if ((e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') && isHistoryMode) {
+    if (
+      (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete") &&
+      isHistoryMode
+    ) {
       resetHistoryNavigation();
     }
   };
 
   const handleQueue = async () => {
     const textareaValue = draftValue;
-    if (textareaValue.trim() === '') return;
+    if (textareaValue.trim() === "") return;
 
     // Build query with image paths
     let commandToQueue = textareaValue.trim();
     const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages
+        .map((img) => `Pasted image saved to disk: ${img.uploadedPath}`)
+        .join("\n");
       commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
     }
 
     resetHistoryNavigation();
     onQueue?.(commandToQueue);
     void saveToHistory(commandToQueue);
-    updateValue('', { start: 0, end: 0 });
+    updateValue("", { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
     setAttachedImages((prev) => {
@@ -1054,7 +1176,7 @@ function CommandInput({
         onSend(command);
       }
 
-      updateValue('', { start: 0, end: 0 });
+      updateValue("", { start: 0, end: 0 });
 
       setTimeout(() => {
         if (inputRef.current) {
@@ -1067,13 +1189,17 @@ function CommandInput({
 
   const handleNewSession = useCallback(() => {
     if (isProcessing) {
-      if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
+      if (
+        !window.confirm(
+          "A request is currently processing. Stop it and start a new session?",
+        )
+      ) {
         return;
       }
-      commandRef('/clear');
+      commandRef("/clear");
       return;
     }
-    commandRef('/clear');
+    commandRef("/clear");
   }, [isProcessing, commandRef]);
 
   const handleCompositionStart = () => {
@@ -1084,7 +1210,9 @@ function CommandInput({
     isComposingRef.current = false;
   };
 
-  const hasUploadingImage = attachedImages.some((img) => !img.uploadedPath && !img.error);
+  const hasUploadingImage = attachedImages.some(
+    (img) => !img.uploadedPath && !img.error,
+  );
   const hasFailedImage = attachedImages.some((img) => !!img.error);
   const uploadingCount = attachedImages.filter(
     (img) => !img.uploadedPath && !img.error,
@@ -1101,7 +1229,9 @@ function CommandInput({
     handleSend();
   };
 
-  const previewImage = previewImageId ? attachedImages.find((img) => img.id === previewImageId) || null : null;
+  const previewImage = previewImageId
+    ? attachedImages.find((img) => img.id === previewImageId) || null
+    : null;
 
   return (
     <form className="command-input" onSubmit={handleSubmit}>
@@ -1109,11 +1239,16 @@ function CommandInput({
         <div className="input-info">
           {isHistoryMode && (
             <span className="history-indicator">
-              <ScrollText size={14} /> History ({history.index + 1}/{history.commands.length})
+              <ScrollText size={14} /> History ({history.index + 1}/
+              {history.commands.length})
             </span>
           )}
-          {isLoadingHistory && <span className="loading-indicator">Loading history...</span>}
-          {draftValue.length > 100 && <span className="length-indicator">{draftValue.length}</span>}
+          {isLoadingHistory && (
+            <span className="loading-indicator">Loading history...</span>
+          )}
+          {draftValue.length > 100 && (
+            <span className="length-indicator">{draftValue.length}</span>
+          )}
         </div>
         {isHistoryMode && (
           <button
@@ -1208,11 +1343,17 @@ function CommandInput({
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
         disabled={disabled}
-        className={`input-field autoscaling ${isHistoryMode ? 'history-mode' : ''}`}
+        className={`input-field autoscaling ${isHistoryMode ? "history-mode" : ""}`}
         aria-label={placeholder}
         aria-haspopup="listbox"
-        aria-controls={slashAutocompleteOpen ? 'slash-autocomplete-listbox' : undefined}
-        aria-activedescendant={slashAutocompleteOpen ? `slash-option-${slashAutocompleteIndex}` : undefined}
+        aria-controls={
+          slashAutocompleteOpen ? "slash-autocomplete-listbox" : undefined
+        }
+        aria-activedescendant={
+          slashAutocompleteOpen
+            ? `slash-option-${slashAutocompleteIndex}`
+            : undefined
+        }
         rows={2}
         spellCheck={false}
         data-testid="chat-input"
@@ -1226,11 +1367,18 @@ function CommandInput({
             onSelect={(cmd: SlashCommand) => {
               // cmd is already from the memoized matches array — find its
               // index directly rather than re-running getMatchingSlashCommands.
-              const idx = slashAutocompleteMatches.findIndex(m => m.name === cmd.name);
+              const idx = slashAutocompleteMatches.findIndex(
+                (m) => m.name === cmd.name,
+              );
               if (isArgumentPhase) {
-                acceptArgumentCompletion(idx >= 0 ? idx : slashAutocompleteIndex);
+                acceptArgumentCompletion(
+                  idx >= 0 ? idx : slashAutocompleteIndex,
+                );
               } else {
-                acceptSlashCompletion(slashAutocompletePrefix, idx >= 0 ? idx : slashAutocompleteIndex);
+                acceptSlashCompletion(
+                  slashAutocompletePrefix,
+                  idx >= 0 ? idx : slashAutocompleteIndex,
+                );
               }
             }}
             onDismiss={() => setSlashAutocompleteOpen(false)}
@@ -1245,7 +1393,7 @@ function CommandInput({
           {attachedImages.map((img) => (
             <div
               key={img.id}
-              className={`image-preview-chip ${img.error ? 'error' : ''} ${!img.uploadedPath && !img.error ? 'uploading' : ''}`}
+              className={`image-preview-chip ${img.error ? "error" : ""} ${!img.uploadedPath && !img.error ? "uploading" : ""}`}
             >
               <button
                 type="button"
@@ -1256,7 +1404,9 @@ function CommandInput({
                 <img src={img.preview} alt={img.file.name} />
               </button>
               <span className="image-name">{img.file.name}</span>
-              {!img.uploadedPath && !img.error && <span className="upload-spinner" />}
+              {!img.uploadedPath && !img.error && (
+                <span className="upload-spinner" />
+              )}
               {img.error && <span className="upload-error">{img.error}</span>}
               <button
                 type="button"
@@ -1276,7 +1426,7 @@ function CommandInput({
 
       {hasUploadingImage && (
         <div className="uploading-status" role="status" aria-live="polite">
-          Attaching {uploadingCount} image{uploadingCount !== 1 ? 's' : ''}…
+          Attaching {uploadingCount} image{uploadingCount !== 1 ? "s" : ""}…
         </div>
       )}
 
@@ -1288,7 +1438,10 @@ function CommandInput({
           aria-label={`Preview image ${previewImage.file.name}`}
           onClick={() => setPreviewImageId(null)}
         >
-          <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="image-preview-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="image-preview-modal-header">
               <span>{previewImage.file.name}</span>
               <button
@@ -1322,7 +1475,7 @@ function CommandInput({
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          style={{ display: 'none' }}
+          style={{ display: "none" }}
           onChange={handleFileSelect}
         />
         <button
@@ -1343,17 +1496,17 @@ function CommandInput({
           data-testid="chat-send"
           data-tooltip={
             hasUploadingImage
-              ? 'Attaching image…'
+              ? "Attaching image…"
               : !isConnected
-                ? 'Reconnecting...'
+                ? "Reconnecting..."
                 : isProcessing
-                  ? 'Steer running request'
-                  : 'Send message'
+                  ? "Steer running request"
+                  : "Send message"
           }
           aria-label={
             hasFailedImage
-              ? `Send message (${failedCount} image${failedCount !== 1 ? 's' : ''} failed to attach)`
-              : 'Send message'
+              ? `Send message (${failedCount} image${failedCount !== 1 ? "s" : ""} failed to attach)`
+              : "Send message"
           }
         >
           <Send size={16} />
@@ -1391,11 +1544,13 @@ function CommandInput({
               }}
               disabled={queuedCount === 0}
               className="queue-button"
-              data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
-              aria-label={`View ${queuedCount} queued message${queuedCount !== 1 ? 's' : ''}`}
+              data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? "s" : ""} — click to manage`}
+              aria-label={`View ${queuedCount} queued message${queuedCount !== 1 ? "s" : ""}`}
             >
               <ListPlus size={16} />
-              {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
+              {queuedCount > 0 && (
+                <span className="queue-count">{queuedCount}</span>
+              )}
             </button>
             {showQueuePanel && (
               <div className="queue-popover-overlay">
@@ -1438,6 +1593,6 @@ function CommandInput({
 
 // Memoize to prevent unnecessary re-renders that cause cursor jumping
 const MemoizedCommandInput = memo(CommandInput);
-MemoizedCommandInput.displayName = 'CommandInput';
+MemoizedCommandInput.displayName = "CommandInput";
 
 export default MemoizedCommandInput;

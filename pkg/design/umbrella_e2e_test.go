@@ -175,7 +175,7 @@ const umbFlowMMD = `flowchart TD
 // reference), sized to the mobile frame, styled from the generated theme's
 // vocabulary (the CSS var the export emits) plus an inline <style> block.
 const umbDepositHTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-screen="deposit">
 <head>
 <meta charset="utf-8">
 <title>Deposit a check</title>

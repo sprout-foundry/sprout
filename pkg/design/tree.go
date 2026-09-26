@@ -185,7 +185,8 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		return ValidateTokens(rel, data), nil
 
 	case strings.HasPrefix(rel, DirName+"/wireframes/") && strings.HasSuffix(rel, ".svg"):
-		return ValidateWireframe(rel, data, assetStems(root, "wireframes", ".svg"), manifestFrames(root)), nil
+		findings := ValidateWireframe(rel, data, assetStems(root, "wireframes", ".svg"), manifestFrames(root))
+		return appendWireframeDeprecations(findings, []string{rel}), nil
 
 	case strings.HasPrefix(rel, DirName+"/components/") && strings.HasSuffix(rel, ".svg"):
 		return ValidateComponent(rel, data), nil
@@ -198,14 +199,17 @@ func ValidateFile(root, relPath string) ([]Finding, error) {
 		// §1c per-file rules, then the §4b bidirectionality pack so a
 		// single-file flow run surfaces its non-terminal edge findings too.
 		stems := assetStems(root, "wireframes", ".svg")
-		findings := ValidateFlows(rel, data, stems)
+		screenStems := assetStems(root, "screens", ".html")
+		findings := ValidateFlows(rel, data, stems, screenStems...)
 		findings = append(findings, flowBidirectionalityFindings(rel, data, stems)...)
 		return findings, nil
 
 	case strings.HasPrefix(rel, DirName+"/screens/") && strings.HasSuffix(rel, ".html"):
 		// SP-143 §143.5 graph rules run with the per-file rules so a
-		// single-file run surfaces nav-target/state findings too.
+		// single-file run surfaces nav-target/state findings too, plus the
+		// §9a identity rules.
 		findings := validateScreen(rel, data, manifestFrames(root))
+		findings = append(findings, validateScreenIdentity(rel, data)...)
 		findings = append(findings, validateScreenIndexGraph(rel, data, screenStemSet(root))...)
 		return findings, nil
 

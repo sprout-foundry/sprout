@@ -620,14 +620,19 @@ type screenStemRecord struct {
 }
 
 // screenNameMismatches compares the design/screens/ inventory against the
-// design/wireframes/ inventory by stem, SP-140-4 §4b "Naming". Two mismatches
-// are reported, both `warn`:
+// design/wireframes/ inventory by stem, SP-140-4 §4b "Naming", adjusted by
+// SP-140-9: the wireframe tier is deprecated (9.4 migrates it), so a
+// delivered screen whose stem has no wireframe counterpart is now
+// informational, pointing at the migration instead of demanding the
+// counterpart. Counterpart-present checks stay intact — a wireframe with a
+// different case or a stale counterpart is still the mismatch signal it was
+// (SP-140-4 §4b); only the counterpart-missing direction relaxes. Two
+// findings exist, both advisory:
 //
-//   - a delivered screen whose stem has no wireframe counterpart — the screen
-//     inventories disagree about which screens exist
-//     (ruleConsistencyScreenNameMismatch);
-//   - two delivered screen files sharing a stem — an ambiguous screen name
-//     (ruleConsistencyScreenNameDuplicate).
+//   - a delivered screen whose stem has no wireframe counterpart (info,
+//     ruleConsistencyScreenNameMismatch — remedied by 9.4's migration);
+//   - two delivered screen files sharing a stem (warn,
+//     ruleConsistencyScreenNameDuplicate) — an ambiguous screen name.
 //
 // A wireframe with no delivered screen is the normal pre-code state and is
 // never a mismatch (the orphan rule covers an unreferenced wireframe). Missing
@@ -689,11 +694,17 @@ func nameMismatchesForStems(records []screenStemRecord, wireframeStems map[strin
 		if wireframeStems[stem] {
 			continue
 		}
+		if len(wireframeStems) == 0 {
+			// Post-9.4 trees carry no wireframes at all; the counterpart
+			// question no longer applies (screens are the primary tier,
+			// §9a) and firing here would flag every screen forever.
+			continue
+		}
 		findings = append(findings, Finding{
 			File:     files[0],
 			Rule:     ruleConsistencyScreenNameMismatch,
-			Severity: SeverityWarn,
-			Message:  fmt.Sprintf("screen %q has no wireframe counterpart (expected %s); the screens/ and wireframes/ inventories disagree", stem, path.Join(DirName, "wireframes", stem+".svg")),
+			Severity: SeverityInfo,
+			Message:  fmt.Sprintf("screen %q has no wireframe counterpart (expected %s); the wireframe tier is deprecated (SP-140-9 §9a), item 9.4 migrates it", stem, path.Join(DirName, "wireframes", stem+".svg")),
 		})
 	}
 	return findings

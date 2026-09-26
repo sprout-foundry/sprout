@@ -46,7 +46,7 @@ Screens and flows carry one of: draft, review, ready.
 ## Links
 
 - [Color tokens](tokens/color.tokens.json)
-- [Login wireframe](wireframes/login.svg)
+- [Login screen](screens/login.html)
 `
 
 const daTestTokenJSON = `{
@@ -57,6 +57,45 @@ const daTestTokenJSON = `{
     }
   }
 }`
+
+// daTestLoginScreen/daTestHomeScreen are §9a primary-tier screens with the
+// kit attributes (identity, runtime, states) so the valid tree stays clean
+// under SP-140-9 — wireframes would earn deprecation infos.
+const daTestLoginScreen = `<!doctype html>
+<html lang="en" data-screen="login" data-sprout-screens="1" data-states="">
+<head><meta charset="utf-8"><title>login</title></head>
+<body data-sprout-screen="login">
+  <h1>Login</h1>
+  <a href="../screens/home.html" data-nav="to:home;trigger:submit">Sign in</a>
+  <script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>`
+
+const daTestHomeScreen = `<!doctype html>
+<html lang="en" data-screen="home" data-sprout-screens="1" data-states="">
+<head><meta charset="utf-8"><title>home</title></head>
+<body data-sprout-screen="home">
+  <h1>Home</h1>
+  <script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>`
+
+// daScreensIndex derives the generated index over the fixture screens.
+func daScreensIndex(root string) string {
+	art, err := design.RenderScreensIndexArtifact(root)
+	if err != nil {
+		panic(err)
+	}
+	return string(art.Content)
+}
+
+// daScaffoldRuntime copies the embedded runtime kit into the fixture tree.
+func daScaffoldRuntime(t *testing.T, root string) {
+	t.Helper()
+	if err := design.ScaffoldRuntimeAssets(filepath.Join(root, design.DirName)); err != nil {
+		t.Fatalf("runtime scaffold: %v", err)
+	}
+}
 
 const daTestLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
   <text x="24" y="64" font-size="28">Login</text>
@@ -113,8 +152,10 @@ func daWriteValidTree(t *testing.T, root string) {
 	t.Helper()
 	daWrite(t, root, "design/README.md", daTestManifest)
 	daWrite(t, root, "design/tokens/color.tokens.json", daTestTokenJSON)
-	daWrite(t, root, "design/wireframes/login.svg", daTestLoginSVG)
-	daWrite(t, root, "design/wireframes/home.svg", daTestHomeSVG)
+	daWrite(t, root, "design/screens/login.html", daTestLoginScreen)
+	daWrite(t, root, "design/screens/home.html", daTestHomeScreen)
+	daWrite(t, root, "design/generated/screens.json", daScreensIndex(root))
+	daScaffoldRuntime(t, root)
 	daWrite(t, root, "design/flows/sign-up.mmd", daTestFlowMMD)
 	daWrite(t, root, design.GitContractFile, "* text=auto eol=lf\n"+design.GitAttributesDiffHTMLLine+"\n")
 	daWrite(t, root, design.GitIgnoreFile, "node_modules/\n"+design.GitIgnoreCacheLine+"\n")
@@ -250,11 +291,12 @@ func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {
 		byPath[r.Path] = r
 	}
 	require.Contains(t, byPath, "design/README.md")
-	require.Contains(t, byPath, "design/wireframes/login.svg")
+	require.Contains(t, byPath, "design/screens/login.html")
 	require.Contains(t, byPath, "design/tokens/color.tokens.json")
 	require.Contains(t, byPath, "design/flows/sign-up.mmd")
-	assert.Equal(t, design.KindWireframe, byPath["design/wireframes/login.svg"].Kind)
-	assert.Equal(t, "login", byPath["design/wireframes/login.svg"].Name)
+	require.Contains(t, byPath, "design/runtime/sprout-screens.js", "the runtime tier inventories")
+	assert.Equal(t, design.KindScreen, byPath["design/screens/login.html"].Kind)
+	assert.Equal(t, "login", byPath["design/screens/login.html"].Name)
 
 	// Manifest summary.
 	assert.True(t, out.Manifest.Exists)
@@ -311,14 +353,14 @@ func TestDesignAssetsHandler_SubtreeFilter(t *testing.T) {
 	daWriteValidTree(t, root)
 	h := &designAssetsHandler{}
 
-	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "design/wireframes"})
+	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"path": "design/screens"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(designAssetsOutput)
 	require.NotEmpty(t, out.Assets)
 	for _, r := range out.Assets {
-		assert.True(t, strings.HasPrefix(r.Path, "design/wireframes/"),
+		assert.True(t, strings.HasPrefix(r.Path, "design/screens/"),
 			"subtree filter must restrict rows to the subtree, got %s", r.Path)
 	}
 	// Token groups and flows are irrelevant to the wireframes subtree.
@@ -410,7 +452,7 @@ func TestDesignAssetsHandler_Gate1Deny(t *testing.T) {
 	env := newTestEnv(t, root)
 	env.FileAccessClassifier = denyClassifier{}
 
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/wireframes"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/screens"})
 	require.Error(t, err)
 	require.True(t, res.IsError, "a Gate-1 deny is a tool failure")
 	require.Contains(t, res.Output, "design_assets blocked")
@@ -560,14 +602,14 @@ func TestDesignAssetsHandler_Gate1AllowResolvesPath(t *testing.T) {
 
 	// The allow verdict's resolved absolute path must map back to the
 	// workspace-relative subtree the filter expects.
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/wireframes"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/screens"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(designAssetsOutput)
 	require.NotEmpty(t, out.Assets)
 	for _, r := range out.Assets {
-		assert.True(t, strings.HasPrefix(r.Path, "design/wireframes/"))
+		assert.True(t, strings.HasPrefix(r.Path, "design/screens/"))
 	}
 }
 

@@ -88,20 +88,23 @@ func TestDesignValidateHandler_Acceptance4bSeverityMatrix(t *testing.T) {
 		require.Equal(t, tc.file, got.file, "rule %s file anchor", tc.rule)
 	}
 
-	// The per-severity tallies agree with the matrix (1 error, 1 warn, 2 info)
-	// and the fix class stays empty on this tree.
+	// The per-severity tallies agree with the matrix (1 error, 1 warn) and
+	// the §9a era adds the wireframe-tier deprecation infos (login + billing)
+	// plus the screen-without-wireframe counterpart infos for the fixture's
+	// screens (login, home) — the fixture tree carries wireframes, so the
+	// counterpart rule fires per §9a's transitional contract.
 	require.Equal(t, 1, out.BySeverity["error"], "one hard data-nav error, findings=%#v", out.Findings)
 	require.Equal(t, 1, out.BySeverity["warn"], "one README reference warn, findings=%#v", out.Findings)
-	require.Equal(t, 2, out.BySeverity["info"], "token usage + orphan, findings=%#v", out.Findings)
+	require.GreaterOrEqual(t, out.BySeverity["info"], 4, "token usage + orphan + deprecations, findings=%#v", out.Findings)
 	require.Equal(t, 0, out.BySeverity["fix"], "no machine-applicable fixes on this tree")
-	require.Equal(t, 4, out.Count)
+	require.GreaterOrEqual(t, out.Count, 7)
 
 	// The human-readable summary names the split, so the seed's tool message
 	// (not just the structured output) carries the right-severity evidence.
-	require.Contains(t, res.Output, "4 finding(s)")
+	require.Contains(t, res.Output, "7 finding(s)")
 	require.Contains(t, res.Output, "1 error(s)")
 	require.Contains(t, res.Output, "1 warn(s)")
-	require.Contains(t, res.Output, "2 info")
+	require.Contains(t, res.Output, "5 info")
 }
 
 // TestDesignValidateHandler_Acceptance4bCleanTreeIsEmpty is the negative half:

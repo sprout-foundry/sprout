@@ -70,7 +70,7 @@ const validHomeWireframeBody = `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 const validFlowBody = "flowchart TD\n  login --> home\n  home --> home\n"
 
 const validScreenHTML = `<!DOCTYPE html>
-<html>
+<html data-screen="login">
 <head>
   <style>body { width: 390px; margin: 0; }</style>
 </head>
@@ -124,7 +124,11 @@ func TestValidateTreeValid(t *testing.T) {
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
 	require.NotNil(t, findings, "a completed whole-tree run must return a non-nil slice")
-	assert.Empty(t, findings, "a valid design tree must yield zero findings, got %#v", findings)
+	// The legacy wireframes carry their §9a deprecation notices (9.4
+	// migrates the tier); every other rule must be clean.
+	assert.Empty(t, dropDeprecationFindings(findings),
+		"a valid design tree must yield no findings beyond the wireframe deprecation notices, got %#v", findings)
+	assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated])
 }
 
 func TestValidateTreeFeedbackFinding(t *testing.T) {
@@ -238,7 +242,10 @@ func TestValidateFileWireframe(t *testing.T) {
 
 		findings, err := ValidateFile(root, "design/wireframes/login.svg")
 		require.NoError(t, err)
-		requireNoWireframeFindings(t, findings)
+		// The §9a deprecation notice rides the single-file walk; the
+		// per-file rules must be clean.
+		requireNoWireframeFindings(t, dropDeprecationFindings(findings))
+		assert.Equal(t, 1, findingRules(findings)[ruleWireframeDeprecated])
 	})
 
 	t.Run("design-prefix-optional", func(t *testing.T) {
@@ -247,7 +254,8 @@ func TestValidateFileWireframe(t *testing.T) {
 
 		findings, err := ValidateFile(root, "wireframes/login.svg")
 		require.NoError(t, err)
-		requireNoWireframeFindings(t, findings)
+		requireNoWireframeFindings(t, dropDeprecationFindings(findings))
+		assert.Equal(t, 1, findingRules(findings)[ruleWireframeDeprecated])
 	})
 
 	t.Run("missing-viewbox", func(t *testing.T) {

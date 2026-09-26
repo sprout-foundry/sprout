@@ -10,8 +10,9 @@ import (
 )
 
 // selfContainedScreenHTML is a screen that uses only inline CSS and a
-// workspace-relative script, so it yields zero findings.
-const selfContainedScreenHTML = `<html>
+// workspace-relative script, and carries the §9a identity attribute, so it
+// yields zero findings.
+const selfContainedScreenHTML = `<html data-screen="login">
 <head>
   <style>.root { width: 390px; }</style>
   <link rel="stylesheet" href="./styles.css">
@@ -90,6 +91,47 @@ func TestValidateScreen(t *testing.T) {
 		content := `<style>.root{width:390px;}</style><div class="root"></div>`
 		findings := validateScreen("design/screens/login.html", []byte(content), []Frame{validFrameMobile})
 		assert.Equal(t, 0, findingRules(findings)[ruleScreenDeviceFrame])
+	})
+}
+
+// TestValidateScreenIdentity pins the SP-140-9 §9a identity rules: data-screen
+// present on <html> (hard), agreeing with the file stem (hard), and no
+// data-status anywhere in the document (hard — status lives in the README
+// manifest, one status truth).
+func TestValidateScreenIdentity(t *testing.T) {
+	t.Run("identity-missing", func(t *testing.T) {
+		content := `<!DOCTYPE html><html lang="en"><body>x</body></html>`
+		findings := validateScreenIdentity("design/screens/login.html", []byte(content))
+		require.Len(t, findings, 1)
+		assert.Equal(t, ruleScreenIdentityMissing, findings[0].Rule)
+		assert.Equal(t, SeverityError, findings[0].Severity)
+		assert.Contains(t, findings[0].Message, `data-screen="login"`)
+	})
+
+	t.Run("identity-agrees-clean", func(t *testing.T) {
+		content := `<!DOCTYPE html><html lang="en" data-screen="login"><body>x</body></html>`
+		findings := validateScreenIdentity("design/screens/login.html", []byte(content))
+		assert.Empty(t, findings)
+	})
+
+	t.Run("identity-mismatch", func(t *testing.T) {
+		content := `<!DOCTYPE html><html lang="en" data-screen="signup"><body>x</body></html>`
+		findings := validateScreenIdentity("design/screens/login.html", []byte(content))
+		require.Len(t, findings, 1)
+		assert.Equal(t, ruleScreenIdentityMismatch, findings[0].Rule)
+		assert.Equal(t, SeverityError, findings[0].Severity)
+		assert.Contains(t, findings[0].Message, "signup")
+		assert.Contains(t, findings[0].Message, "login")
+	})
+
+	t.Run("status-attribute-flagged", func(t *testing.T) {
+		content := "<!DOCTYPE html>\n<html lang=\"en\" data-screen=\"login\">\n" +
+			"<body>\n<div data-screen=\"login\" data-status=\"draft\">x</div>\n</body></html>\n"
+		findings := validateScreenIdentity("design/screens/login.html", []byte(content))
+		require.Len(t, findings, 1)
+		assert.Equal(t, ruleScreenStatusAttr, findings[0].Rule)
+		assert.Equal(t, SeverityError, findings[0].Severity)
+		assert.Equal(t, 4, findings[0].Line, "the finding anchors to the offending attribute's line")
 	})
 }
 

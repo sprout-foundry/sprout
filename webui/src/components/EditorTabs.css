@@ -117,6 +117,15 @@
   font-weight: bold;
 }
 
+.tab-modified-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+
 .tab-externally-modified {
   display: inline-flex;
   align-items: center;

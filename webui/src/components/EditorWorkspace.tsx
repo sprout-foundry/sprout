@@ -517,6 +517,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             {renderPaneById(firstPane.id, toPaneFlex(firstPaneSize))}
             <ResizeHandle
               direction={splitAxis}
+              ariaLabel="Resize editor split"
               onResize={handlePaneResize(firstPane.id, splitAxis)}
               onResizeEnd={handlePaneResizeEnd(firstPane.id)}
             />
@@ -543,6 +544,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                       {showResizeHandles && !isLast && (
                         <ResizeHandle
                           direction={splitAxis}
+                          ariaLabel="Resize editor split"
                           onResize={handlePaneResize(pane.id, splitAxis)}
                           onResizeEnd={handlePaneResizeEnd(pane.id)}
                         />
@@ -583,6 +585,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
         <ResizeHandle
           direction={nestedHandleDirection}
+          ariaLabel="Resize editor split"
           onResize={handlePaneResize(nestedSizeKey, nestedHandleDirection)}
           onResizeEnd={handlePaneResizeEnd(nestedSizeKey)}
         />
@@ -595,6 +598,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize))}
         <ResizeHandle
           direction={rootHandleDirection}
+          ariaLabel="Resize editor split"
           onResize={handlePaneResize(rootSizeKey, rootHandleDirection, !hostIsFirst)}
           onResizeEnd={handlePaneResizeEnd(rootSizeKey)}
         />

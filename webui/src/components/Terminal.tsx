@@ -312,6 +312,18 @@ function Terminal({
           <div
             className="terminal-resize-handle"
             onPointerDown={handleVerticalResizeStart}
+            onKeyDown={(e) => {
+              // The terminal is docked at the bottom: ArrowUp makes it taller.
+              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+              e.preventDefault();
+              const step = e.shiftKey ? 50 : 10;
+              setTerminalHeight((h) => h + (e.key === 'ArrowUp' ? step : -step));
+            }}
+            tabIndex={0}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize terminal"
+            aria-valuenow={Math.round(terminalHeight)}
             title="Drag to resize terminal"
           />
         )}

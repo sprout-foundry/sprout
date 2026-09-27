@@ -158,7 +158,12 @@
     width 0.15s;
 }
 
+.terminal-resize-handle:focus {
+  outline: none;
+}
+
 .terminal-resize-handle:hover::after,
+.terminal-resize-handle:focus-visible::after,
 .terminal-resize-handle:active::after {
   background: var(--accent-secondary);
   width: 72px;

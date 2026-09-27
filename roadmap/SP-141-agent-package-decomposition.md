@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–2 landed 2026-09-27); phases 4–5 pending
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–3 landed 2026-09-27); phases 4–5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -110,14 +110,15 @@ the repo. This spec plans the split; it does not schedule it.
     `build-all` step OOMs on this machine (JavaScript heap limit),
     unrelated to this Go-only change.
   - **Remaining approvals work (future increments):** the
-    approval-broker/allowlist/risk-orchestrator files
-    (`approval_broker.go`, `approval_allowlist.go`, `risk_assessment.go`,
+    approval-broker/risk-orchestrator files
+    (`approval_broker.go`, `risk_assessment.go`,
     `agent_security.go`, `agent_risk.go`, `risk_prompt.go`,
     `shell_approval*.go`, `tool_security*.go`, `edit_approval.go`,
     `security_circuit_breaker.go`, `seed_tool_security.go`,
     `submanager_*_security.go`) still carry `*Agent` methods and reach into
     `Agent` fields — they follow the `ChangeAgent`-seam pattern (define a
     narrow `ApprovalAgent` interface, move, forward) in a later increment.
+    (`approval_allowlist.go` landed in increment 3 below.)
     (The `path_tier.go`/`access_mode.go` "risk input" foundation landed in
     increment 2 above; `path_tier_integration_test.go`/
     `path_tier_gate_test.go` stayed as `applyFilesystemDecision` integration
@@ -150,6 +151,40 @@ the repo. This spec plans the split; it does not schedule it.
     content-identity on both moved production files (every line maps 1:1
     except the `package` line + the 4 intentional lowercase→exported
     renames); `pkg/agent/approvals` suite green.
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 3 — the
+  shell-command allowlist + persistence landed.** The four pure allowlist
+  functions from `pkg/agent/approval_allowlist.go` moved to
+  `pkg/agent/approvals/allowlist.go`, parameterized on
+  `*configuration.Config` (lookup) / `*configuration.Manager` (persistence)
+  instead of `*Agent`: `IsShellCommandAllowlisted`,
+  `PersistShellCommandAllowlist`, `PersistShellCommandPattern`,
+  `PersistShellCommandAskPolicy`. `pkg/agent/approval_allowlist.go` is now
+  a thin forwarder file: the four `*Agent` methods keep their exact
+  signatures (the broker, the tool-security gates, and the seed-time
+  security checks call them) and resolve the config/manager via
+  `a.GetConfig()`/`a.GetConfigManager()`, preserving the pre-move
+  `agent == nil` guard (the persist forwarders return
+  `approvals.ErrNilAgent`, the pre-move "nil agent" Permission error).
+  `ElevateSessionToPermissive` did NOT move — it mutates agent-local
+  risk-profile state (`a.SetRiskProfileOverride`), which is out of scope
+  for the config/manager seam.
+  - **Import-safety note:** `pkg/agent/approvals` now imports
+    `pkg/configuration` (for the `Config`/`Manager`/`CommandPolicies`
+    types). This is cycle-free: `pkg/configuration` does not import the
+    `pkg/agent` parent (the `pkg/agent → approvals` edge stays one-way).
+  - **Tests:** new `approvals/allowlist_test.go` covers the moved logic on
+    bare configs + a real isolated `configuration.NewTestManager`
+    (persist→lookup round trips, idempotency, ask-policy rule shape,
+    validation ordering: empty-input check precedes the nil-manager check).
+    The existing `pkg/agent/approval_allowlist_test.go` now exercises the
+    forwarders unchanged.
+  - **Still `*Agent`-coupled (next increments, interface-seam work):**
+    `approval_broker.go` (RequestApproval — 15+ surface items: config,
+    event bus, security-approval mgr, unsafe flags, debug logger,
+    interrupt ctx, webui-client check, workflow-approval marking),
+    `risk_assessment.go` + `agent_risk.go` + `risk_prompt.go` (persona
+    resolution, active risk profile, request-approval side effects).
+    These follow the `changes.AgentView`-style narrow-interface seam.
 - Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem

@@ -125,7 +125,14 @@ describe('UserMenu (SP-016 P0.5)', () => {
     expect(list!.querySelector('.user-menu-tier')!.textContent).toBe('pro');
 
     const items = list!.querySelectorAll('a[role="menuitem"]');
-    expect(Array.from(items).map((a) => a.textContent)).toEqual(['Dashboard', 'Tasks', 'Billing', 'Manage Team']);
+    expect(Array.from(items).map((a) => a.textContent)).toEqual([
+      'Dashboard',
+      'Tasks',
+      'Usage & billing',
+      'Team',
+      'Runners',
+      'Settings',
+    ]);
     expect(list!.querySelector('.user-menu-signout')!.textContent).toBe('Sign out');
   });
 
@@ -141,9 +148,9 @@ describe('UserMenu (SP-016 P0.5)', () => {
 
     const links = container.querySelector('.user-menu-list')!.querySelectorAll('a[role="menuitem"]');
     expect(links[0].getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor');
-    expect(links[1].getAttribute('href')).toBe('https://platform.sprout.dev/tasks?from=editor');
-    expect(links[2].getAttribute('href')).toBe('https://platform.sprout.dev/account/billing?from=editor');
-    expect(links[3].getAttribute('href')).toBe('https://platform.sprout.dev/#/team?from=editor');
+    expect(links[1].getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor#/tasks');
+    expect(links[2].getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor#/account/billing');
+    expect(links[3].getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor#/team');
   });
 
   it('falls back to relative exit URLs when the platform base is absent', () => {
@@ -158,7 +165,7 @@ describe('UserMenu (SP-016 P0.5)', () => {
 
     const links = container.querySelector('.user-menu-list')!.querySelectorAll('a[role="menuitem"]');
     expect(links[0].getAttribute('href')).toBe('/?from=editor');
-    expect(links[1].getAttribute('href')).toBe('/tasks?from=editor');
+    expect(links[1].getAttribute('href')).toBe('/?from=editor#/tasks');
   });
 
   it('closes the menu on Escape and returns focus to the trigger', () => {

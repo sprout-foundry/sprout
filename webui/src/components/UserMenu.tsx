@@ -28,15 +28,18 @@ import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { notificationBus } from '../services/notificationBus';
 import { platformHref } from '../utils/platformUrl';
 
-/** Account-surface exit items. Paths carry ?from=editor (SP-016 P0.7).
- *  Team/Runners are flat API routes on the platform (GET /team, GET /runners),
- *  so their SPA views live at hash deep links — a plain /team would return
- *  the API's JSON, not the page. */
+/** Account-surface exit items, the same account area the platform header's
+ *  menu offers. Paths carry ?from=editor (SP-016 P0.7) and put the SPA route
+ *  in the hash: Team/Runners are also flat API routes on the platform
+ *  (GET /team, GET /runners), so a plain /team would return the API's JSON,
+ *  not the page. */
 const MENU_ITEMS: readonly { label: string; path: string }[] = [
   { label: 'Dashboard', path: '/?from=editor' },
-  { label: 'Tasks', path: '/tasks?from=editor' },
-  { label: 'Billing', path: '/account/billing?from=editor' },
-  { label: 'Manage Team', path: '/#/team?from=editor' },
+  { label: 'Tasks', path: '/?from=editor#/tasks' },
+  { label: 'Usage & billing', path: '/?from=editor#/account/billing' },
+  { label: 'Team', path: '/?from=editor#/team' },
+  { label: 'Runners', path: '/?from=editor#/runners' },
+  { label: 'Settings', path: '/?from=editor#/settings' },
 ];
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;

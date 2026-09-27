@@ -452,6 +452,38 @@ body {
  * Account-surface identity + exits, right side of the header bar.
  * Matches the header aesthetic: 24px control height, 12px type,
  * token-driven colors. */
+/* Remaining platform credits (cloud mode), matching the platform header's
+ * credits pill. */
+.header-credits-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.header-credits-chip:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.header-credits-chip.is-empty {
+  color: var(--accent-warning);
+  border-color: var(--accent-warning);
+}
+
+.header-credits-chip:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
 .user-menu {
   position: relative;
   display: inline-flex;

@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** Proposed
+**Status:** In progress (phases 1–2 shipped 2026-09-26; 3–5 pending)
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in

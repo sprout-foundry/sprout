@@ -315,9 +315,11 @@ func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange
 	}
 	ct.appendChange(entry)
 	// Publish the rollup over the bus too so the UI can refresh.
-	if ct.agent != nil && ct.agent.eventBus != nil {
+	// PublishRawEvent keeps the undecorated payload the pre-seam code
+	// published (PublishFileChange would attach event-metadata decoration).
+	if ct.agent != nil {
 		absDir := filepath.Join(workspaceRoot, dir)
-		ct.agent.eventBus.Publish(
+		ct.agent.PublishRawEvent(
 			events.EventTypeFileChanged,
 			events.FileChangedEvent(absDir, "shell_bulk", toolCall),
 		)
@@ -377,8 +379,10 @@ func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChang
 	// Publish a file-changed event so the UI refreshes. The "path" here
 	// is the command label, not a real file path; the changes-panel
 	// renderer is the source of truth for resolving bulk entries.
-	if ct.agent != nil && ct.agent.eventBus != nil {
-		ct.agent.eventBus.Publish(
+	// PublishRawEvent keeps the undecorated payload the pre-seam code
+	// published (PublishFileChange would attach event-metadata decoration).
+	if ct.agent != nil {
+		ct.agent.PublishRawEvent(
 			events.EventTypeFileChanged,
 			events.FileChangedEvent(toolCall, "shell_bulk", toolCall),
 		)

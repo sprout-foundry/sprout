@@ -143,19 +143,6 @@ func systemPathPrefixes() []string {
 	}
 }
 
-func isSystemPath(absPath string) bool {
-	if absPath == "" {
-		return false
-	}
-	// Check the resolved path first (handles symlinks like macOS /var → /private/var).
-	for _, prefix := range systemPathPrefixes() {
-		if isUnderPrefix(absPath, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 // isSystemPathWithOriginal checks if a path is a system path, considering
 // both the resolved path and the original path (before symlink resolution).
 // This handles cases like Linux where /etc → /system/etc - we want both

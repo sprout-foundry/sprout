@@ -18,6 +18,16 @@ the repo. This spec plans the split; it does not schedule it.
   fields) and now forwards to `workflow.RunLoop`; `WorkflowResult` is a type
   alias to `workflow.Result`; `handleRunAutomate` calls
   `workflow.ParseFile`/`NewSessionID`. Pure move, no behavior change.
+- **Dead-code warm-up (2026-09-27):** removed zero-reference `pkg/agent`
+  code: the `tool_call_format.go` island (`formatToolCall` +
+  `formatTruncateString` + `summarizeTodoWriteArgs` +
+  `maxToolArgDisplayLength` — entry `formatToolCall` had no callers, its
+  helpers were reachable only through it) and the single-arg
+  `isSystemPath` (zero refs; the live variant is
+  `isSystemPathWithOriginal`). Verified zero references repo-wide before
+  deletion; the `find_dead_code` graph's high-confidence list was
+  over-flagging (several entries had live test-only or cross-package
+  callers), so deletion used repo-wide grep as ground truth.
 - Phases 2–5 pending (`changes`, `approvals`, `subagents`, `tools`).
 
 ## Problem

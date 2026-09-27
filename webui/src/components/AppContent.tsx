@@ -45,6 +45,7 @@ import Sidebar from './Sidebar';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
+import { OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 
 interface AppContentProps {
   state: AppState;
@@ -199,6 +200,15 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
+  // The layered layout's header search opens the palette from outside this tree.
+  useEffect(() => {
+    const open = () => {
+      setCommandPaletteMode('all');
+      setIsCommandPaletteOpen(true);
+    };
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, open);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, open);
+  }, []);
   const [isForking, setIsForking] = useState(false);
   // The tool id whose inline detail is currently open in the chat.
   // Toggled by a tool pill; reset when the active chat session changes.
@@ -1133,6 +1143,17 @@ const AppContent: React.FC<AppContentProps> = ({
             isMobile={isMobile}
             sidebarCollapsed={sidebarCollapsed}
             onSidebarToggle={onSidebarToggle}
+            conversations={{
+              sessions: chatSessions ?? [],
+              activeId: activeChatId,
+              onSelect: (id) => void onActiveChatChange?.(id, 'code'),
+              onCreate: onCreateChat
+                ? () => {
+                    void onCreateChat('code');
+                    onViewChange('chat');
+                  }
+                : undefined,
+            }}
             modes={workspaceModes}
             activeModeId={workspaceMode.id}
             onSelectMode={handleSelectMode}

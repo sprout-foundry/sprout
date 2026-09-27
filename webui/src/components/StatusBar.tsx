@@ -1,7 +1,7 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen, Zap } from 'lucide-react';
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
@@ -9,6 +9,7 @@ import { githubRepoSlug } from '../utils/platformUrl';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';
+import { OPEN_NOTIFICATIONS_EVENT } from '../config/layout';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -76,6 +77,12 @@ function StatusBar({
 
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  // The layered layout's rail opens the same notification history.
+  useEffect(() => {
+    const open = () => setIsNotificationCenterOpen(true);
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+  }, []);
   const bellIconRef = useRef<HTMLButtonElement>(null);
 
   const toggleNotificationCenter = useCallback(() => {

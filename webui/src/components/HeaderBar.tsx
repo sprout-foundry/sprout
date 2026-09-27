@@ -1,6 +1,7 @@
 import { PanelRightClose } from 'lucide-react';
 import React, { useState } from 'react';
 import { isCloud } from '../config/mode';
+import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
@@ -86,7 +87,18 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <div className="header-bar">
-      {isCloud && (
+      {isLayeredLayout && (
+        <button
+          type="button"
+          className="header-search-btn"
+          onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))}
+          data-testid="header-search"
+        >
+          <span>Search files, symbols, commands…</span>
+          <kbd>⌘K</kbd>
+        </button>
+      )}
+      {isCloud && !isLayeredLayout && (
         <a
           href={platformHref(repoHubPath(repoURL))}
           className="header-back-to-dashboard"
@@ -110,7 +122,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         <CreditsChip />
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
-        <UserMenu />
+        {!isLayeredLayout && <UserMenu />}
         {!isMobile && (
           <button
             className="header-context-toggle-btn"

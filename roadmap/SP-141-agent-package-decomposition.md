@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In Progress — Phase 1 (`pkg/agent/workflow`) landed 2026-09-27
+**Status:** In Progress — Phases 1–2 landed 2026-09-27
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -28,7 +28,41 @@ the repo. This spec plans the split; it does not schedule it.
   deletion; the `find_dead_code` graph's high-confidence list was
   over-flagging (several entries had live test-only or cross-package
   callers), so deletion used repo-wide grep as ground truth.
-- Phases 2–5 pending (`changes`, `approvals`, `subagents`, `tools`).
+- **Phase 2 (2026-09-27): `pkg/agent/changes` landed.** The change-tracking
+  cluster (the 12 `change_tracking*.go` production files) moved to a new
+  `pkg/agent/changes` subpackage. Unlike the workflow phase, this cluster was
+  **not** self-contained: `ChangeTracker` holds an `agent *Agent` field and
+  reaches into three unexported spots (`ct.agent.workspaceRoot`,
+  `ct.agent.eventBus.Publish` ×2, `ct.agent.Logger()`), and its white-box test
+  suite constructs `&Agent{...}`. So the phase landed in two verifiable
+  increments, per the spec's "narrow interface seam" prerequisite:
+  - **Step A (in-package, zero moves):** introduced a `ChangeAgent` interface
+    + `DebugLogger` sub-interface the tracker now depends on instead of the
+    concrete `*Agent`. `*Agent` satisfies it structurally, so the 3.9K-line
+    white-box suite compiled unchanged. `ct.agent.workspaceRoot` →
+    `GetWorkspaceRoot()` (equivalent: the field is only written via the
+    trimming setter); the two `eventBus.Publish` sites now route through a new
+    nil-guarded, undecorated `Agent.PublishRawEvent` (preserves the exact
+    pre-seam publish semantics); `ct.agent.Logger()` → a `DebugLogger()` seam
+    (the concrete `*AgentLogger` return type can't cross a package boundary).
+  - **Step B (the physical move):** relocated the 12 files into
+    `pkg/agent/changes/` behind type aliases in `pkg/agent`
+    (`ChangeTracker`, `TrackedFileChange`, `TrackedBulkItem`,
+    `CheckpointFileChange`) + a `NewChangeTracker` forwarder, so
+    `webui`/`agent_tools`/`cmd` and all in-package callers are untouched.
+    `CheckpointFileChange` traveled with the cluster (its only in-cluster user
+    is `CollectFileChangesForCheckpoint`; `turn_checkpoints`/`rollup` resolve
+    it via the alias). The white-box test files moved to `changes` with a
+    minimal `fakeAgent` double in place of the unreferenceable `*Agent`
+    (import cycle); the genuinely agent-integration tests (agent handler +
+    `NewTestAgent` + `agent.changeTracker`) stayed in `pkg/agent` behind
+    exported testutil seams. Pure move, no behavior change.
+  - **Scope:** the `transcript_snapshot*.go` trio and `atomic_write.go`
+    stayed in `pkg/agent` this phase — the snapshot trio carries `*Agent`
+    methods (`BuildTranscriptSnapshot`/`CaptureTranscriptSnapshot`) and
+    `writeFileAtomic` serves `persistence_message.go`; both can follow in a
+    later increment if the cluster's remaining entanglement warrants it.
+- Phases 3–5 pending (`approvals`, `subagents`, `tools`).
 
 ## Problem
 
@@ -106,7 +140,9 @@ Rules of engagement:
 ## Suggested phase order (highest cohesion first)
 
 1. `pkg/agent/workflow` — smallest blast radius, own entry point (`RunWorkflowLoopInProcess`).
-2. `pkg/agent/changes` — self-contained change-tracking cluster with its own test suite.
+2. `pkg/agent/changes` — change-tracking cluster with its own test suite
+   (less self-contained than the table implies: the tracker held an
+   `agent *Agent` field; landed 2026-09-27 behind the `ChangeAgent` seam).
 3. `pkg/agent/approvals` — approval broker + allowlists + risk inputs.
 4. `pkg/agent/subagents` — submanagers/runner/task cluster.
 5. `pkg/agent/tools` — the five big tool_handlers files (largest; do last, possibly split by handler family).

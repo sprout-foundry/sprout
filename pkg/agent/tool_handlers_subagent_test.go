@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
@@ -608,10 +611,10 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 
 	// 1. Construct a tracker mimicking what the subagent runner sets
 	//    up: shell walk enabled, primed against the workspace.
-	tracker := &ChangeTracker{
-		enabled:          true,
-		shellWalkEnabled: true,
-	}
+	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
+		Enabled:          true,
+		ShellWalkEnabled: true,
+	})
 	tracker.PrimeShellTracking(dir)
 
 	// 2. Simulate a shell_command modifying the file (sed-i style).
@@ -621,9 +624,9 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 	bumpMtime(t, original)
 	tracker.TrackShellTurn(dir, "shell_command", false)
 
-	if len(tracker.changes) != 1 {
-		t.Fatalf("tracker should have captured the shell mutation; got %d changes: %+v",
-			len(tracker.changes), tracker.changes)
+	captured := tracker.GetChanges()
+	if len(captured) != 1 {
+		t.Fatalf("tracker should have captured the shell mutation; got %d changes: %+v", len(captured), captured)
 	}
 
 	// 3. Mimic the runner's payload assembly: result.FileChanges =
@@ -695,5 +698,20 @@ func TestCollectParallelResults_AggregatesStructuredCost(t *testing.T) {
 	}
 	if got := a.GetChargedCostTotal(); !floatEq(got, wantCost, 1e-9) {
 		t.Errorf("expected parent charged cost to include subagents ($%.4f), got %.6f", wantCost, got)
+	}
+}
+
+// bumpMtime forces a path's mtime to a monotonically-increasing fake
+// (year-2033 + N hours) so shell-snapshot tests observe the file as
+// "modified since last prime" regardless of real-clock granularity.
+// Local copy of the pkg/agent/changes test helper (unexported there).
+var bumpMtimeCounter int64
+
+func bumpMtime(t *testing.T, path string) {
+	t.Helper()
+	n := atomic.AddInt64(&bumpMtimeCounter, 1)
+	next := time.Unix(2000000000, 0).Add(time.Duration(n) * time.Hour)
+	if err := os.Chtimes(path, next, next); err != nil {
+		t.Fatalf("chtimes %s: %v", path, err)
 	}
 }

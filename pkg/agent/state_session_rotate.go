@@ -75,7 +75,7 @@ func (a *Agent) RotateSession() (string, error) {
 	// no in-flight Commit is still reading the old value.
 	if a.changeTracker != nil {
 		a.changeTracker.Reset("session rotated")
-		a.changeTracker.sessionID = newID
+		a.changeTracker.SetSessionID(newID)
 	}
 
 	return newID, nil

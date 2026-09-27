@@ -74,13 +74,8 @@ type TurnCheckpoint struct {
 	SourceCheckpointIDs []string `json:"source_checkpoint_ids,omitempty"`
 }
 
-// CheckpointFileChange is a single file-change entry in a TurnCheckpoint's
-// manifest. Op is one of "A" (added), "M" (modified), "D" (deleted), "R"
-// (renamed) to mirror git's status codes; anything else is "?" (other).
-type CheckpointFileChange struct {
-	Path string `json:"path"`
-	Op   string `json:"op"`
-}
+// CheckpointFileChange (git-style file-change manifest entry) moved to
+// pkg/agent/changes (SP-141 phase 2); see change_tracking_forwarders.go.
 
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {

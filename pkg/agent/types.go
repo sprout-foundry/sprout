@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -77,10 +78,9 @@ type TurnCheckpoint struct {
 // CheckpointFileChange is a single file-change entry in a TurnCheckpoint's
 // manifest. Op is one of "A" (added), "M" (modified), "D" (deleted), "R"
 // (renamed) to mirror git's status codes; anything else is "?" (other).
-type CheckpointFileChange struct {
-	Path string `json:"path"`
-	Op   string `json:"op"`
-}
+// SP-141 phase 2: alias to pkg/agent/changes, where the tracker that
+// produces these entries now lives.
+type CheckpointFileChange = changes.CheckpointFileChange
 
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {

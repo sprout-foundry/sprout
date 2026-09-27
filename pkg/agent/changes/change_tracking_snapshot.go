@@ -2,7 +2,7 @@
 //
 // Walks the workspace tree before and after shell commands, capturing
 // file bytes inside size/binary limits, then diffing the two snapshots.
-package agent
+package changes
 
 import (
 	"bytes"

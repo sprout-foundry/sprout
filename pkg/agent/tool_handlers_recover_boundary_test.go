@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,22 +28,22 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				// The tracker LIES: it claims to hold the original
-				// content for the external path. Without the boundary
-				// check, recover_file would overwrite victim.txt.
-				FilePath:     externalTarget,
-				OriginalCode: "PWNED",
-				Operation:    "delete",
-				ToolCall:     "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			// The tracker LIES: it claims to hold the original
+			// content for the external path. Without the boundary
+			// check, recover_file would overwrite victim.txt.
+			FilePath:     externalTarget,
+			OriginalCode: "PWNED",
+			Operation:    "delete",
+			ToolCall:     "shell_command",
 		},
-	}
+	}, "test")
+
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
 	if err != nil {
@@ -79,20 +80,20 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				// Claims this external file was "created" this session,
-				// so recovery would try to os.Remove it.
-				FilePath:  externalTarget,
-				Operation: "create",
-				ToolCall:  "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			// Claims this external file was "created" this session,
+			// so recovery would try to os.Remove it.
+			FilePath:  externalTarget,
+			Operation: "create",
+			ToolCall:  "shell_command",
 		},
-	}
+	}, "test")
+
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
 	if err != nil {
@@ -119,19 +120,19 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 	ws := t.TempDir()
 	inFile := filepath.Join(ws, "config.toml")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				FilePath:     inFile,
-				OriginalCode: "port = 8080\n",
-				Operation:    "delete",
-				ToolCall:     "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			FilePath:     inFile,
+			OriginalCode: "port = 8080\n",
+			Operation:    "delete",
+			ToolCall:     "shell_command",
 		},
-	}
+	}, "test")
+
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
 	if err != nil {
@@ -162,23 +163,23 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 	ws := t.TempDir()
 	inFile := filepath.Join(ws, "redacted.txt")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				// Malformed entry: the marker should never be stored as
-				// recoverable content, but if it ever is, recovery must
-				// refuse rather than writing "[REDACTED - external file]"
-				// into the user's file.
-				FilePath:     inFile,
-				OriginalCode: RedactedContentMarker,
-				Operation:    "delete",
-				ToolCall:     "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			// Malformed entry: the marker should never be stored as
+			// recoverable content, but if it ever is, recovery must
+			// refuse rather than writing "[REDACTED - external file]"
+			// into the user's file.
+			FilePath:     inFile,
+			OriginalCode: RedactedContentMarker,
+			Operation:    "delete",
+			ToolCall:     "shell_command",
 		},
-	}
+	}, "test")
+
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
 	if err != nil {
@@ -226,18 +227,15 @@ func TestHandleRevertMyChanges_SkipsOutOfWorkspace(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	a := &Agent{
-		changeTracker: &ChangeTracker{
-			enabled: true,
-			changes: []TrackedFileChange{
-				{FilePath: inFile, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE"},
-				// A stray tracker entry for an external path.
-				{FilePath: externalFile, Operation: "edit", ToolCall: "shell_command", OriginalCode: "SHOULD-NOT-WRITE"},
-			},
-		},
-		workspaceRoot: ws,
-	}
-	a.changeTracker.agent = a
+	a := &Agent{workspaceRoot: ws}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: inFile, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE"},
+		// A stray tracker entry for an external path.
+		{FilePath: externalFile, Operation: "edit", ToolCall: "shell_command", OriginalCode: "SHOULD-NOT-WRITE"},
+	}, "test")
+	a.changeTracker.SetView(a.changesView())
 
 	out, err := handleRevertMyChanges(context.Background(), a, map[string]interface{}{"scope": "all"})
 	if err != nil {

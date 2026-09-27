@@ -645,7 +645,7 @@ func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
 		ws = resolved
 	}
 	agent.SetWorkspaceRoot(ws)
-	agent.changeTracker = NewChangeTracker(agent, "test")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "test")
 	agent.changeTracker.Enable()
 
 	filePath := filepath.Join(ws, "main.go")

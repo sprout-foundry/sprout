@@ -29,7 +29,7 @@ type ChangeTracker struct {
 	// enabled is the on/off flag for change tracking. Every concurrent read
 	// in production code MUST go through IsEnabled() to avoid races.
 	enabled              bool
-	agent                *Agent
+	agent                ChangeAgent
 	baseRevisionRecorded bool
 	committedChangeCount int
 	// checkpointedChangeCount is len(changes) at the most recent turn-checkpoint capture.
@@ -85,8 +85,12 @@ type TrackedBulkItem struct {
 	Operation    string `json:"operation"` // "create" | "edit" | "delete"
 }
 
-// NewChangeTracker creates a new change tracker for an agent session
-func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
+// NewChangeTracker creates a new change tracker for an agent session.
+// The agent-dependent paths (session ID, model stamping, workspace
+// redaction, LLM summary) dereference agent, so pass a live agent in
+// production; a nil ChangeAgent panics at the first GetSessionID call
+// (same as a nil *Agent before the seam).
+func NewChangeTracker(agent ChangeAgent, instructions string) *ChangeTracker {
 	history.InitializeHistoryPaths(nil)
 
 	sessionID := agent.GetSessionID()
@@ -309,7 +313,7 @@ func (ct *ChangeTracker) sweepCommittedSnapshots(changes []TrackedFileChange) {
 	if ct.agent == nil {
 		return
 	}
-	workDir := ct.agent.workspaceRoot
+	workDir := ct.agent.GetWorkspaceRoot()
 	if workDir == "" {
 		return
 	}

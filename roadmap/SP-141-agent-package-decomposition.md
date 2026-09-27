@@ -110,13 +110,46 @@ the repo. This spec plans the split; it does not schedule it.
     `build-all` step OOMs on this machine (JavaScript heap limit),
     unrelated to this Go-only change.
   - **Remaining approvals work (future increments):** the
-    approval-broker/allowlist/risk-input files
+    approval-broker/allowlist/risk-orchestrator files
     (`approval_broker.go`, `approval_allowlist.go`, `risk_assessment.go`,
-    `agent_security.go`, `shell_approval*.go`, `tool_security*.go`,
-    `edit_approval.go`, `security_circuit_breaker.go`, `seed_tool_security.go`,
+    `agent_security.go`, `agent_risk.go`, `risk_prompt.go`,
+    `shell_approval*.go`, `tool_security*.go`, `edit_approval.go`,
+    `security_circuit_breaker.go`, `seed_tool_security.go`,
     `submanager_*_security.go`) still carry `*Agent` methods and reach into
     `Agent` fields — they follow the `ChangeAgent`-seam pattern (define a
     narrow `ApprovalAgent` interface, move, forward) in a later increment.
+    (The `path_tier.go`/`access_mode.go` "risk input" foundation landed in
+    increment 2 above; `path_tier_integration_test.go`/
+    `path_tier_gate_test.go` stayed as `applyFilesystemDecision` integration
+    tests.)
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 2 — the path-tier
+  + access-mode foundation landed.** `path_tier.go` (the `PathTier`
+  classifier: `ClassifyPathAccess`, the four `PathTier*` tiers,
+  `NormalizePath`, `IsUnderPrefix`, `DetectHomeDir`) and `access_mode.go`
+  (`AccessModeForTool`) moved into `pkg/agent/approvals`. Pure, agent-free:
+  the two files had zero `*Agent` coupling (the classifier takes explicit
+  `workspaceRoot`/`homeDir`/`cwd` args; `DetectHomeDir` is a test-override
+  hook). They are the "risk inputs" named in the spec's `approvals`
+  target. The forwarder `pkg/agent/path_tier_forwarders.go` keeps every
+  in-package call site working via aliases + one-line forwarders:
+  `PathTier` (type alias), `PathTierUnknown`/`Workspace`/`External`/
+  `Sensitive` (const aliases), `ClassifyPathAccess`, lowercase
+  `normalizePath`/`isUnderPrefix`/`accessModeForTool` (forwarded to the
+  exported `approvals.NormalizePath`/`IsUnderPrefix`/`AccessModeForTool`),
+  and `detectHomeDir` (a delegating `var` so the test-override hook keeps
+  working for `risk_assessment.go`/`tool_security_paths.go`).
+  - **Test split:** `path_tier_test.go` interleaved pure classifier tests
+    (5, lines 1–143 ∪ 205–236) with two `AgentSecurityManager` tests
+    (144–204, `NewAgentSecurityManager` — an `*Agent`-adjacent type that
+    stays in `pkg/agent`). The 5 pure tests moved to
+    `approvals/path_tier_test.go`; the 2 manager tests stay in
+    `pkg/agent/path_tier_test.go`. (`path_tier_gate_test.go` +
+    `path_tier_integration_test.go` are `applyFilesystemDecision`
+    integration tests — they stayed.)
+  - **Verification:** `go build ./...` + `go vet` + `gofmt` clean;
+    content-identity on both moved production files (every line maps 1:1
+    except the `package` line + the 4 intentional lowercase→exported
+    renames); `pkg/agent/approvals` suite green.
 - Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem

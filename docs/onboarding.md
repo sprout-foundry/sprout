@@ -131,8 +131,7 @@ Want to run everything offline with no API costs? Use [Ollama](https://ollama.co
 ollama pull qwen2.5-coder:7b
 
 # Point sprout at it
-export OLLAMA_MODEL=qwen2.5-coder:7b
-sprout
+sprout agent --provider ollama --model qwen2.5-coder:7b "Summarize this repo"
 ```
 
 Ollama providers don't require an API key — just the model name.

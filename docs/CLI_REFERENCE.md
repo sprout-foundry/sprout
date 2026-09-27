@@ -358,7 +358,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 ## Agent Personas
 
-`sprout` supports 11 specialized personas, each optimized for different types of tasks. See [`docs/PERSONAS.md`](PERSONAS.md) for detailed descriptions.
+`sprout` supports nine specialized personas, each optimized for different types of tasks. See [`docs/PERSONAS.md`](PERSONAS.md) for detailed descriptions.
 
 | Persona | Description |
 |---------|-------------|

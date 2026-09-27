@@ -136,6 +136,19 @@ describe('UserMenu (SP-016 P0.5)', () => {
     expect(list!.querySelector('.user-menu-signout')!.textContent).toBe('Sign out');
   });
 
+  it('offers Admin to platform administrators', () => {
+    userState.user = { id: 'user-1', email: 'a@b.com', tier: 'pro', admin: true };
+    act(() => {
+      root.render(createElement(UserMenu));
+    });
+    act(() => {
+      container.querySelector('.user-menu-trigger')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const items = container.querySelectorAll('.user-menu-list a[role="menuitem"]');
+    const admin = Array.from(items).find((a) => a.textContent === 'Admin');
+    expect(admin?.getAttribute('href')).toBe('/?from=editor#/admin');
+  });
+
   it('builds absolute exit URLs when the platform base is known (tagged ?from=editor)', () => {
     platformURLState.value = 'https://platform.sprout.dev';
 

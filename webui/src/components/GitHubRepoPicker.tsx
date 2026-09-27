@@ -24,6 +24,8 @@ import { type CloneResult } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
 import GitHubAccountPanel from './GitHubAccountPanel';
+import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
+import { fetchPlatformGitHubConnected, listPlatformRepos, usesPlatformGitHub } from '../services/platformGitHub';
 import { showThemedConfirm } from './ThemedDialog';
 
 export interface GitHubRepoPickerProps {
@@ -56,15 +58,18 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
   const [cloningRepo, setCloningRepo] = useState<string | null>(null);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Hosted editor: GitHub comes from the Foundry account, not a local token.
+  const platformMode = usesPlatformGitHub();
+  const [platformConnected, setPlatformConnected] = useState<boolean | null>(null);
 
   /* ── Reset + load repos whenever the modal opens ─────────────── */
 
-  const loadRepos = useCallback(async (activeToken: string) => {
+  const loadRepos = useCallback(async (activeToken: string | null) => {
     setLoading(true);
     setListError(null);
     setRepos(null);
     try {
-      const list = await listRepos(activeToken);
+      const list = activeToken ? await listRepos(activeToken) : await listPlatformRepos();
       setRepos(list);
     } catch (err) {
       setListError(err instanceof Error ? err.message : String(err));
@@ -83,14 +88,25 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
     setQuery('');
     setCloningRepo(null);
     setCloneError(null);
-    if (currentToken) {
+    if (platformMode) {
+      setPlatformConnected(null);
+      fetchPlatformGitHubConnected()
+        .then((connected) => {
+          setPlatformConnected(connected);
+          if (connected) void loadRepos(null);
+        })
+        .catch((err) => {
+          setPlatformConnected(false);
+          setListError(err instanceof Error ? err.message : String(err));
+        });
+    } else if (currentToken) {
       void loadRepos(currentToken);
     } else {
       setRepos(null);
       setLoading(false);
       setListError(null);
     }
-  }, [isOpen, loadRepos]);
+  }, [isOpen, loadRepos, platformMode]);
 
   /* ── Keyboard: Escape closes (not while cloning) ─────────────── */
 
@@ -106,17 +122,17 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
   /* ── Focus the search box once the list view mounts ──────────── */
 
   useEffect(() => {
-    if (isOpen && token) {
+    if (isOpen && (token || platformConnected)) {
       const timer = setTimeout(() => searchInputRef.current?.focus(), 60);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, token]);
+  }, [isOpen, token, platformConnected]);
 
   /* ── Clone ───────────────────────────────────────────────────── */
 
   const handleClone = async (repo: GitHubRepo) => {
     const activeToken = token ?? getStoredToken();
-    if (!activeToken || cloningRepo) return;
+    if ((!activeToken && !platformMode) || cloningRepo) return;
 
     setCloningRepo(repo.full_name);
     setCloneError(null);
@@ -124,7 +140,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       // Clone through the workspaceFs seam into repos/<owner>/<name>/ — the
       // same layout the agent's git tools use, so UI and agent share one
       // checkout. Old lightning-fs sidecar path removed.
-      const result = await cloneIntoWorkspace(repo.clone_url, { token: activeToken });
+      const result = await cloneIntoWorkspace(repo.clone_url, { token: activeToken ?? undefined });
       debugLog(
         `[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`,
       );
@@ -201,7 +217,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
     if (e.target === e.currentTarget && !cloningRepo) onClose();
   };
 
-  const showRepoList = Boolean(token);
+  const showRepoList = platformMode ? platformConnected === true : Boolean(token);
 
   // Portal to document.body so the fixed overlay isn't clipped or
   // repositioned by transformed/overflow-hidden sidebar ancestors.
@@ -219,7 +235,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
         <div className="gh-picker-header">
           <div className="gh-picker-title">
             <GitBranch size={16} />
-            <h2>{showRepoList ? 'Clone from GitHub' : 'Sign in to GitHub'}</h2>
+            <h2>{showRepoList ? 'Clone from GitHub' : platformMode ? 'Connect GitHub' : 'Sign in to GitHub'}</h2>
           </div>
           <button
             type="button"
@@ -235,9 +251,12 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
 
         {/* Body */}
         <div className="gh-picker-body">
-          {!showRepoList && (
-            <GitHubAccountPanel user={null} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} />
-          )}
+          {!showRepoList &&
+            (platformMode ? (
+              <PlatformGitHubAccountCard connected={listError ? false : platformConnected} />
+            ) : (
+              <GitHubAccountPanel user={null} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} />
+            ))}
 
           {showRepoList && (
             <>
@@ -261,7 +280,8 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                     className="gh-picker-retry"
                     onClick={() => {
                       const activeToken = token ?? getStoredToken();
-                      if (activeToken) void loadRepos(activeToken);
+                      if (platformMode) void loadRepos(null);
+                      else if (activeToken) void loadRepos(activeToken);
                     }}
                     disabled={loading}
                     data-testid="gh-picker-retry"
@@ -271,7 +291,9 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                 </div>
               )}
 
-              {user ? (
+              {platformMode ? (
+                <PlatformGitHubAccountCard connected compact />
+              ) : user ? (
                 <GitHubAccountPanel user={user} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} compact />
               ) : (
                 // Token present but no cached profile (e.g. written by an older
@@ -314,7 +336,11 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
               {!loading && !listError && repos !== null && filteredRepos.length === 0 && (
                 <div className="gh-picker-state" data-testid="gh-picker-empty">
                   {repos.length === 0 ? (
-                    <span>No repositories visible to this token.</span>
+                    <span>
+                      {platformMode
+                        ? 'No repositories on your connected GitHub account.'
+                        : 'No repositories visible to this token.'}
+                    </span>
                   ) : (
                     <span>No repositories match “{query}”.</span>
                   )}

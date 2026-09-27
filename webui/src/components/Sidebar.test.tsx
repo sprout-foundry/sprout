@@ -75,6 +75,7 @@ vi.mock('../config/mode', () => ({
   supportsLocalTerminal: false,
   supportsGit: true,
   supportsWorkspaceSwitching: false,
+  supportsAutomations: true,
 }));
 
 // Mock ApiService — never load the real ../services/api index (it re-exports

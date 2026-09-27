@@ -68,7 +68,8 @@ export interface CommitOptions {
 }
 
 export interface PushOptions {
-  token: string;
+  /** Omitted when the git proxy supplies the account's credentials. */
+  token?: string;
   branch?: string;
   remote?: string;
   force?: boolean;
@@ -162,7 +163,7 @@ class GitClient {
     });
   }
 
-  /** Push to remote. Requires token. */
+  /** Push to remote. */
   async push(dir: string, opts: PushOptions): Promise<void> {
     return this.withLock(dir, async () => {
       await git.push({
@@ -173,7 +174,7 @@ class GitClient {
         remote: opts.remote ?? 'origin',
         ref: opts.branch,
         force: opts.force ?? false,
-        onAuth: () => Promise.resolve(tokenAuth(opts.token)),
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
   }

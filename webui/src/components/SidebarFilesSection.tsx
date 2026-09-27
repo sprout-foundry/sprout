@@ -11,6 +11,7 @@ import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { gitCorsProxy } from '../services/gitCorsProxy';
+import { fetchPlatformGitHubConnected, usesPlatformGitHub } from '../services/platformGitHub';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
@@ -203,13 +204,14 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }, []);
 
     // ── Clone repository handler ────────────────────────────────
-    // Signed in to GitHub → open the repo picker (authenticated clone,
-    // private repos work). Signed out → the original anonymous prompt
-    // flow, unchanged.
+    // Signed in to GitHub (a stored token, or the Foundry account's
+    // connection in the hosted editor) → open the repo picker (authenticated
+    // clone, private repos work). Otherwise → the anonymous prompt flow.
     const [isRepoPickerOpen, setIsRepoPickerOpen] = useState(false);
 
     const handleCloneRepo = async () => {
-      if (getStoredToken()) {
+      const accountConnected = usesPlatformGitHub() && (await fetchPlatformGitHubConnected().catch(() => false));
+      if (getStoredToken() || accountConnected) {
         setIsRepoPickerOpen(true);
         return;
       }
@@ -301,8 +303,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             )}
           </div>
         )}
-        {/* GitHub repo picker — authenticated clone (opened when a PAT is
-            stored; see handleCloneRepo). */}
+        {/* GitHub repo picker — authenticated clone (opened when GitHub is
+            connected; see handleCloneRepo). */}
         <GitHubRepoPicker
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}

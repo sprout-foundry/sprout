@@ -123,6 +123,12 @@ export let supportsLocalTerminal: boolean = capability('supportsLocalTerminal', 
  */
 export let supportsSettings: boolean = capability('supportsSettings', true, true);
 
+/**
+ * Automation workflows - local mode only (the platform serves no
+ * /api/automate; hosted scheduling lives in the platform's Tasks).
+ */
+export const supportsAutomations: boolean = !isCloud;
+
 // Adapter-installed refresh: re-read every capability against the newly
 // installed adapter. The defaults table mirrors the initializers above — a
 // per-key map of [localDefault, cloudDefault] and the matching binding, so a

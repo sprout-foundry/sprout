@@ -233,3 +233,15 @@
     transform: rotate(360deg);
   }
 }
+
+/* Account-connection card: a sentence plus a link, so it wraps instead of
+ * truncating in the narrow settings sidebar. */
+.gh-account-card--platform {
+  flex-wrap: wrap;
+}
+
+.gh-account-card--platform .gh-account-name {
+  flex: 1 1 100%;
+  font-weight: 500;
+  white-space: normal;
+}

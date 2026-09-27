@@ -1,4 +1,4 @@
-import { Bot, History, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Bot, History, MessageSquare, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
@@ -17,7 +17,7 @@ import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
 import { supportsAgentChanges } from '../config/mode';
 
-const TAB_IDS = ['activity', 'changes'] as const;
+const TAB_IDS: readonly ChatTabId[] = ['thread', 'activity', 'changes'];
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
   const isChat = props.context === 'chat';
@@ -129,8 +129,10 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Tab definitions ───────────────────────────────────────────────
 
+  const hasThread = !!chatProps?.threadContent;
   const chatPanelTabs: PanelTab[] = useMemo(
     () => [
+      ...(hasThread ? [{ id: 'thread' as const, label: 'Conversation', icon: <MessageSquare size={14} /> }] : []),
       {
         id: 'activity',
         label: 'Activity',
@@ -152,8 +154,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           ]
         : []),
     ],
-    [activeSubagentCount, activeToolCount, toolExecutions.length],
+    [activeSubagentCount, activeToolCount, toolExecutions.length, hasThread],
   );
+
+  // The conversation takes the panel whenever it leaves the main view.
+  const { setChatTab } = state;
+  useEffect(() => {
+    setChatTab(hasThread ? 'thread' : 'activity');
+  }, [hasThread, setChatTab]);
 
   const activeTab = chatPanelTabs.find((t) => t.id === state.chatTab) || chatPanelTabs[0];
 
@@ -161,6 +169,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const renderTabContent = () => {
     switch (activeTab.id) {
+      case 'thread':
+        return <div className="context-thread">{chatProps?.threadContent}</div>;
       case 'activity':
         return (
           <ActivityTab

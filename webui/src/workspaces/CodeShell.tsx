@@ -17,6 +17,8 @@ import HeaderBar from '../components/HeaderBar';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
+import Chat from '../components/ChatView';
+import { isLayeredLayout } from '../config/layout';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -58,6 +60,10 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     reviewProps,
     diffState,
   } = chat;
+
+  // Layered layout: while the main view holds other work, the active
+  // conversation moves into the contextual sidebar.
+  const threadContent = isLayeredLayout && !showContextSidebar ? <Chat {...chatProps} /> : undefined;
 
   return (
     <main
@@ -139,7 +145,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           <ContextSidebar
             isMobile={isMobile}
             isTablet={isTablet}
-            showContextSidebar={showContextSidebar}
+            showContextSidebar={showContextSidebar || !!threadContent}
+            threadContent={threadContent}
             contextPanelRef={contextPanelRef}
             toolExecutions={toolExecutions}
             logs={logs}

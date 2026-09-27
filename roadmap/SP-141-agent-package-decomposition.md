@@ -82,6 +82,22 @@ Rules of engagement:
 ## Suggested phase order (highest cohesion first)
 
 1. `pkg/agent/workflow` — smallest blast radius, own entry point (`RunWorkflowLoopInProcess`).
+   > **Progress (2026-09-26):** Shipped (phase 1). The loop logic, config
+   > types, gate parsing, heartbeat, and TODO-file helpers moved to
+   > `pkg/agent/workflow/loop.go`; construction stays in
+   > `pkg/agent/workflow_wiring.go` behind the `workflow.LoopAgent` seam
+   > (an interface over the exported-method surface the loop uses;
+   > `*Agent` satisfies it via the `workflowLoopAgent` adapter — the
+   > unexported-field construction cannot leave the package). Import
+   > arrow is one-way: `pkg/agent` → `pkg/agent/workflow`. Exported
+   > surface added: `workflow.RunTodoLoop`, `ParseWorkflowFile`,
+   > `GenerateWorkflowSessionID`, `StartWorkflowHeartbeat`, config/result
+   > types, `LoopAgent`. The automate tool handler now calls
+   > `workflow.ParseWorkflowFile`/`GenerateWorkflowSessionID` and the
+   > package-local `RunWorkflowLoopInProcess` wrapper. Tests green
+   > (Automate/Workflow/Loop set; pkg/agent_tools full suite); the 26
+   > pkg/agent failures are the known encrypted-age-keys environment
+   > issue, none workflow-related.
 2. `pkg/agent/changes` — self-contained change-tracking cluster with its own test suite.
 3. `pkg/agent/approvals` — approval broker + allowlists + risk inputs.
 4. `pkg/agent/subagents` — submanagers/runner/task cluster.

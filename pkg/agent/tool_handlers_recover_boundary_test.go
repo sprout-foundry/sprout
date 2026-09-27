@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 )
 
 // TestHandleRecoverFile_RefusesOutOfWorkspaceWrite verifies the C1 fix:
@@ -27,9 +29,9 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
+	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
+		Enabled: true,
+		Changes: []TrackedFileChange{
 			{
 				// The tracker LIES: it claims to hold the original
 				// content for the external path. Without the boundary
@@ -40,9 +42,9 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
 				ToolCall:     "shell_command",
 			},
 		},
-	}
+	})
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	changes.SetTestTrackerAgent(tracker, a)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
 	if err != nil {
@@ -79,9 +81,9 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
+	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
+		Enabled: true,
+		Changes: []TrackedFileChange{
 			{
 				// Claims this external file was "created" this session,
 				// so recovery would try to os.Remove it.
@@ -90,9 +92,9 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
 				ToolCall:  "shell_command",
 			},
 		},
-	}
+	})
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	changes.SetTestTrackerAgent(tracker, a)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
 	if err != nil {
@@ -119,9 +121,9 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 	ws := t.TempDir()
 	inFile := filepath.Join(ws, "config.toml")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
+	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
+		Enabled: true,
+		Changes: []TrackedFileChange{
 			{
 				FilePath:     inFile,
 				OriginalCode: "port = 8080\n",
@@ -129,9 +131,9 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 				ToolCall:     "shell_command",
 			},
 		},
-	}
+	})
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	changes.SetTestTrackerAgent(tracker, a)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
 	if err != nil {
@@ -162,9 +164,9 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 	ws := t.TempDir()
 	inFile := filepath.Join(ws, "redacted.txt")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
+	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
+		Enabled: true,
+		Changes: []TrackedFileChange{
 			{
 				// Malformed entry: the marker should never be stored as
 				// recoverable content, but if it ever is, recovery must
@@ -176,9 +178,9 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 				ToolCall:     "shell_command",
 			},
 		},
-	}
+	})
 	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
-	tracker.agent = a
+	changes.SetTestTrackerAgent(tracker, a)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
 	if err != nil {
@@ -227,17 +229,17 @@ func TestHandleRevertMyChanges_SkipsOutOfWorkspace(t *testing.T) {
 	}
 
 	a := &Agent{
-		changeTracker: &ChangeTracker{
-			enabled: true,
-			changes: []TrackedFileChange{
+		changeTracker: changes.NewTestTracker(changes.TestTrackerSpec{
+			Enabled: true,
+			Changes: []TrackedFileChange{
 				{FilePath: inFile, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE"},
 				// A stray tracker entry for an external path.
 				{FilePath: externalFile, Operation: "edit", ToolCall: "shell_command", OriginalCode: "SHOULD-NOT-WRITE"},
 			},
-		},
+		}),
 		workspaceRoot: ws,
 	}
-	a.changeTracker.agent = a
+	changes.SetTestTrackerAgent(a.changeTracker, a)
 
 	out, err := handleRevertMyChanges(context.Background(), a, map[string]interface{}{"scope": "all"})
 	if err != nil {

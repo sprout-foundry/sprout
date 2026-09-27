@@ -3,7 +3,7 @@
 // or stat fast-path), computes create/edit/delete changes against the old
 // snapshot, applies the adaptive auto-skip learning, and surfaces deletions.
 // The config knobs, types, and small helpers live in change_tracking_snapshot.go.
-package agent
+package changes
 
 import (
 	"io/fs"

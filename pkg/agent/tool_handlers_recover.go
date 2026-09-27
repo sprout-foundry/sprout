@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
@@ -39,19 +40,19 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return "", agenterrors.Wrapf(err, "recover_file: resolve %q", rawPath)
 	}
 
-	changes := tracker.GetChanges()
+	changesList := tracker.GetChanges()
 	var match *TrackedFileChange
 	switch scope {
 	case "latest":
 		// Walk reverse so the most recent entry for the path wins; also
 		// peer inside bulk entries so paths packed into a destructive
 		// rollup are recoverable individually.
-		match = resolveRecoveryTarget(changes, abs)
+		match = changes.ResolveRecoveryTarget(changesList, abs)
 	case "session_start":
 		// Earliest entry's OriginalCode is the pre-session state.
 		// Bulk entries are still scanned (an earliest single-file entry
 		// always beats a later bulk for the same path).
-		match = resolveEarliestRecoveryTarget(changes, abs)
+		match = changes.ResolveEarliestRecoveryTarget(changesList, abs)
 	default:
 		return "", agenterrors.NewValidation(fmt.Sprintf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope), nil)
 	}
@@ -82,7 +83,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// NewCode=v1) even though nobody external touched it.
 	stalenessNewCode := match.NewCode
 	if scope == "session_start" {
-		for _, ch := range changes {
+		for _, ch := range changesList {
 			chAbs, chErr := filepath.Abs(ch.FilePath)
 			if chErr == nil && chAbs == abs && ch.NewCode != "" {
 				stalenessNewCode = ch.NewCode
@@ -195,10 +196,11 @@ func recoverBulk(a *Agent, bulkPath string) (string, error) {
 	if tracker == nil || !tracker.IsEnabled() {
 		return jsonRecoverBulkResult(false, bulkPath, 0, 0, "change tracking is disabled — nothing to recover from", nil), nil
 	}
-	changes := tracker.GetChanges()
+
+	all := tracker.GetChanges()
 	var bulk *TrackedFileChange
-	for i := len(changes) - 1; i >= 0; i-- {
-		ch := &changes[i]
+	for i := len(all) - 1; i >= 0; i-- {
+		ch := &all[i]
 		if ch.Operation != "bulk" {
 			continue
 		}
@@ -245,73 +247,10 @@ func recoverBulk(a *Agent, bulkPath string) (string, error) {
 	return jsonRecoverBulkResult(true, bulkPath, restored, failed, summary, results), nil
 }
 
-// resolveRecoveryTarget finds the most recent TrackedFileChange that
-// covers `abs` — either as a top-level entry or as a per-file item
-// packed inside a bulk entry. For bulk items the returned pointer is to
-// a synthesized TrackedFileChange that carries the bulk row's Timestamp
-// and ToolCall so the recovery reply still has useful provenance.
-func resolveRecoveryTarget(changes []TrackedFileChange, abs string) *TrackedFileChange {
-	for i := len(changes) - 1; i >= 0; i-- {
-		ch := &changes[i]
-		candidatePath, err := filepath.Abs(ch.FilePath)
-		if err == nil && candidatePath == abs && ch.Operation != "bulk" {
-			return ch
-		}
-		if ch.Operation != "bulk" || len(ch.BulkItems) == 0 {
-			continue
-		}
-		for j := len(ch.BulkItems) - 1; j >= 0; j-- {
-			item := ch.BulkItems[j]
-			itemPath, ierr := filepath.Abs(item.FilePath)
-			if ierr != nil || itemPath != abs {
-				continue
-			}
-			synthesized := TrackedFileChange{
-				FilePath:     item.FilePath,
-				OriginalCode: item.OriginalCode,
-				NewCode:      item.NewCode,
-				Operation:    item.Operation,
-				Timestamp:    ch.Timestamp,
-				ToolCall:     ch.ToolCall,
-			}
-			return &synthesized
-		}
-	}
-	return nil
-}
-
-// resolveEarliestRecoveryTarget is the scope="session_start" sibling of
-// resolveRecoveryTarget — it walks changes in append order so the FIRST
-// matching entry wins (the truest pre-session state). Bulk items count
-// as candidates too; the earliest individual entry — bulk-packed or
-// otherwise — for the path is the answer.
-func resolveEarliestRecoveryTarget(changes []TrackedFileChange, abs string) *TrackedFileChange {
-	for i, ch := range changes {
-		candidatePath, err := filepath.Abs(ch.FilePath)
-		if err == nil && candidatePath == abs && ch.Operation != "bulk" {
-			return &changes[i]
-		}
-		if ch.Operation != "bulk" || len(ch.BulkItems) == 0 {
-			continue
-		}
-		for _, item := range ch.BulkItems {
-			itemPath, ierr := filepath.Abs(item.FilePath)
-			if ierr != nil || itemPath != abs {
-				continue
-			}
-			synthesized := TrackedFileChange{
-				FilePath:     item.FilePath,
-				OriginalCode: item.OriginalCode,
-				NewCode:      item.NewCode,
-				Operation:    item.Operation,
-				Timestamp:    ch.Timestamp,
-				ToolCall:     ch.ToolCall,
-			}
-			return &synthesized
-		}
-	}
-	return nil
-}
+// resolveRecoveryTarget / resolveEarliestRecoveryTarget moved to
+// pkg/agent/changes (ResolveRecoveryTarget / ResolveEarliestRecoveryTarget,
+// SP-141 phase 2) so the change-tracking tests reach them; the handler
+// calls the exported forms.
 
 // jsonRecoverResult formats the tool's structured result so the LLM
 // can reason about success/failure and present a coherent reply.

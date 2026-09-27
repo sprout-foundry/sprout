@@ -119,17 +119,7 @@ func (a *Agent) applyChangeTrackingConfig() {
 			raw = cfg.ChangeTracking
 		}
 	}
-	resolved := raw.Resolve()
-
-	enabled := true
-	if resolved.ShellWalkEnabled != nil {
-		enabled = *resolved.ShellWalkEnabled
-	}
-	a.changeTracker.shellWalkEnabled = enabled
-	a.changeTracker.shellMaxFiles = resolved.MaxFiles
-	a.changeTracker.shellMaxTotalBytes = resolved.MaxTotalBytes
-	a.changeTracker.shellMaxDuration = time.Duration(resolved.MaxDurationMs) * time.Millisecond
-	a.changeTracker.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
+	a.changeTracker.ApplyShellConfig(raw)
 }
 
 // isChangeTrackingEnabledByConfig reads the change_tracking.enabled setting. Defaults to true.
@@ -180,7 +170,7 @@ func (a *Agent) IsPathOutsideWorkspace(path string) bool {
 	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
 		return false
 	}
-	return a.changeTracker.isOutsideWorkspace(path)
+	return a.changeTracker.IsOutsideWorkspace(path)
 }
 
 // GetRevisionID returns the current revision ID (if change tracking is enabled)

@@ -3,7 +3,7 @@
 // Takes the diff from before/after snapshots and records TrackedFileChange
 // entries, collapsing high-churn directories into bulk rollups when
 // appropriate.
-package agent
+package changes
 
 import (
 	"log"

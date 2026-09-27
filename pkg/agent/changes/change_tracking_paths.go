@@ -13,8 +13,8 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 		return filepath.Clean(filePath)
 	}
 	root := ""
-	if ct.agent != nil {
-		root = ct.agent.GetWorkspaceRoot()
+	if ct.view != nil {
+		root = ct.view.GetWorkspaceRoot()
 	}
 	if root == "" {
 		var err error
@@ -30,12 +30,14 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	return abs
 }
 
-// isOutsideWorkspace returns true if filePath is outside the agent's workspace root.
-func (ct *ChangeTracker) isOutsideWorkspace(filePath string) bool {
-	if ct.agent == nil {
+// IsOutsideWorkspace returns true if filePath is outside the agent's
+// workspace root. Exported for pkg/agent's IsPathOutsideWorkspace
+// facade (SP-141 phase 2).
+func (ct *ChangeTracker) IsOutsideWorkspace(filePath string) bool {
+	if ct.view == nil {
 		return false
 	}
-	workspaceRoot := ct.agent.GetWorkspaceRoot()
+	workspaceRoot := ct.view.GetWorkspaceRoot()
 	if workspaceRoot == "" {
 		return false
 	}

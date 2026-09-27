@@ -13,14 +13,18 @@
     - the token reference (../generated/tokens.css) — generated, never
       hand-edited; regenerate with design_export_tokens;
     - the home-indicator element (chrome.css styles it).
+    - <html data-screen> — the screen's identity (SP-140-9 §9a); it must
+      equal the file stem.
 
-  Everything inside <body data-sprout-screen="STEM"> is yours: lay out with
+  Set both stems to YOUR screen's stem when copying (html data-screen and
+  body data-sprout-screen). Everything inside <body> is yours: lay out with
   the generated utilities (.bg-*, .p-*, .text-*-size, .rounded-*, …) and
   var(--token) references; navigate with <a data-nav="to:<stem>;trigger:<label>">;
   declare the screen's states on <html data-states="empty,error,ready"> and
-  mark sections with data-state="empty".
+  mark sections with data-state="empty". Never carry a data-status
+  attribute — screen status lives in the README manifest (SP-140-1 §1e).
 -->
-<html lang="en" data-device="phone" data-sprout-screens="1" data-states="">
+<html lang="en" data-device="phone" data-screen="REPLACE_WITH_STEM" data-sprout-screens="1" data-states="">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

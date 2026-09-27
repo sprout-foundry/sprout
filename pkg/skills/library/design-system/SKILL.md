@@ -1,6 +1,6 @@
 ---
 name: Design System
-description: The design workflow for sprout's design/ tree — brief, tokens, wireframes, flows, screens — with validation between every step. Use for any design work (new designs, extending an existing tree, or reconciling design with code). Persona-agnostic.
+description: The design workflow for sprout's design/ tree — brief, tokens, screens, flow sources — with validation between every step. Use for any design work (new designs, extending an existing tree, or reconciling design with code). Persona-agnostic.
 ---
 
 # Design System — Workflow Knowledge
@@ -28,7 +28,7 @@ apply whenever the tree is touched.
    Do not reorganize someone else's naming, tiers, or layout on your own
    initiative — propose, then ask.
 5. **Tokens are authoritative.** Literal colors and font strings in
-   wireframes/screens are drift. Refer to tokens; keep the token files the
+   screens are drift. Refer to tokens; keep the token files the
    single source of truth so export and sync stay clean — export before UI
    work, `design_sync` after it, and keep the tree truthful (see **Sync**).
 
@@ -40,15 +40,14 @@ design/
   tokens/                   # W3C DTCG design tokens (*.tokens.json)
   brand/                    # brand.md + logo SVGs
   icons/                    # icon SVGs + optional sprite.svg
-  wireframes/               # one SVG per screen, stem == screen name
-  screens/                  # hi-fi HTML/CSS screens, self-contained
+  screens/                  # HTML/CSS screens, self-contained — THE primary screen tier
   runtime/                  # FIXED screen-kit assets (scaffold-copied; never hand-edited)
-  flows/                    # mermaid flow sources, one .mmd per flow
+  flows/                    # flow SOURCES (*.json, authored) + derived .mmd exports
   feedback/                 # human annotations, JSON per target
   .cache/                   # render PNGs + critique scratch (gitignored)
 ```
 
-Screen names (wireframe/screen/icon file stems) match `^[a-z0-9]+(-[a-z0-9]+)*$`.
+Screen names (screen/icon file stems) match `^[a-z0-9]+(-[a-z0-9]+)*$`.
 The stem **is** the canonical screen name — flows reference it, README lists
 it, feedback keys on it.
 
@@ -75,22 +74,22 @@ The full charter is SP-140-1; the rules you must not get wrong:
   prefix. The validator's `consistency_token_ref_dangling` finding names this
   exact failure; if you see it, self-nest the tier file, do not rewrite the
   references.
-- **Wireframes** (`design/wireframes/<screen-name>.svg`) — root
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">` with integer
-  `W H` matching a device frame declared in `design/README.md`. Self-contained:
-  no `<script>`, no external `href`/`src` (embedded rasters are data URIs
-  only). Text stays real `<text>` — never outlined paths (it must stay
-  greppable and diffable). Interactive elements carry stable `id` attributes;
-  navigation targets carry `data-nav="<screen-name>"` pointing at another
-  wireframe's file stem. One screen per file.
-- **Flows** (`design/flows/<flow-name>.mmd`) — one `flowchart` per file.
-  Screen flows use **wireframe file stems as node ids** — that id == stem rule
-  is what ties the graph to the screens, and the validator enforces it. Edge
-  labels carry trigger semantics (`-- "tap Submit" -->`). Mermaid is the
-  source of truth; rendered images are derived artifacts and are never edited.
-- **Screens** (`design/screens/<screen-name>.html`) — self-contained HTML +
-  inline or workspace-relative CSS. No network `<script>`, no CDN/font
-  references. Same slug rule as wireframes.
+- **Screens** (`design/screens/<screen-name>.html`) — the PRIMARY tier and
+  the only screen format (SP-140-9: the SVG wireframe tier is REMOVED; a
+  `design/wireframes/*.svg` is a hard error — convert it to a screen).
+  Self-contained HTML + inline or workspace-relative CSS; no network
+  `<script>`, no CDN/font references. `<html>` carries
+  `data-screen="<stem>"` matching the filename (the identity rule — the
+  manifest, flows, and the screens index agree through it).
+- **Flows** (`design/flows/<flow-name>.json` + the derived
+  `<flow-name>.mmd`) — the `.json` is the authored source (SP-140-9 §9b):
+  `{"name", "steps":[{"id","label","screen","trigger","next"}]}` — a linear
+  step list; `screen` names a screen stem (optional for non-screen flows);
+  `trigger` is the gesture/move that advances to `next`. The `.mmd` beside it
+  is DERIVED: regenerate with `design_export_tokens targets:flows` and NEVER
+  hand-edit it (it carries a flow-source-hash the validator recomputes —
+  drift is a hard error). Off-path `data-nav` edges not covered by a step
+  are warns, not errors.
 - **Brand** (`design/brand/brand.md`) — palette references **into tokens**
   (`{color.brand.primary}`), never raw hex. That rule is what keeps the token
   file authoritative.
@@ -109,11 +108,11 @@ The full charter is SP-140-1; the rules you must not get wrong:
 ## The design workflow
 
 ```
-brief → tokens → wireframes → flows → screens
+brief → tokens → screens → flows (sources) → regenerate exports
 ```
 
 Each arrow has a **validate** step. Do not skip ahead: screens built on
-unvalidated tokens/wireframes inherit the errors, and drift compounds.
+unvalidated tokens inherit the errors, and drift compounds.
 
 ### Step 0 — Brief
 
@@ -122,7 +121,8 @@ is intent, not output:
 
 - The goal of this design iteration (new flow? extend a screen? fix drift?).
 - Which screens/flows are in scope, and their names (stems).
-- The device frames in play (drives every wireframe's `viewBox`).
+- The device frames in play (drives each screen's declared
+  `--sprout-frame-*` and the README `frames:` entries).
 - The primary action per screen (hierarchy needs one primary per view).
 
 When `design/README.md` already exists, the brief is usually "extend the tree
@@ -138,7 +138,7 @@ Write `design/tokens/*.tokens.json` — one file per tier, **self-nested under
 the tier's own group** (`color.tokens.json` → top-level `"color"`; see the
 format charter above). Every value that later artifacts reference (palette,
 type scale, spacing steps, radii, motion) belongs here first, because tokens
-are what screens and wireframes consume.
+are what screens consume.
 
 Write token files with a **structured-file tool** (`write_structured_file` /
 `patch_structured_file`), never freehand text edits — token JSON is
@@ -152,38 +152,11 @@ Then **validate**: `design_validate` (or the token path).
   written yet is an error today.
 - Fix any `consistency_token_ref_dangling` finding by self-nesting the tier
   file (add the missing top-level group), never by rewriting the references
-  in wireframes/components.
+  in screens/components.
 - If the validator emits the `.gitattributes` `diff=html` fix finding, apply
   it (append, never clobber an existing `.gitattributes`).
 
-### Step 2 — Wireframes
-
-Write `design/wireframes/<screen-name>.svg`, one file per screen, at the
-briefed frame size. Structure first, styling later: wireframes are sketches,
-so literal colors are allowed but tracked — prefer token references where a
-value is already a token.
-
-Then **validate**: `design_validate design/wireframes`.
-
-- Every `data-nav` target must exist as a wireframe stem. If you point at a
-  screen you have not drawn yet, draw it before moving on (or remove the nav).
-- Keep text as `<text>`; keep interactive `id`s stable across edits — flows
-  and feedback reference them.
-
-### Step 3 — Flows
-
-Write `design/flows/<flow-name>.mmd`. For screen flows, node ids are the
-wireframe stems from Step 2 — this is the machine-checkable tie between the
-graph and the screens.
-
-Then **validate**: `design_validate design/flows`.
-
-- Every screen-flow node id must have a matching wireframe. A node with no
-  wireframe is an error; a wireframe with no flow node is an `info` (orphan —
-  decide whether it belongs to a flow).
-- Label edges with trigger semantics.
-
-### Step 4 — Screens
+### Step 2 — Screens (the primary tier)
 
 Write `design/screens/<screen-name>.html` — **start from a copy of a base
 template** (`design/runtime/base/phone.html` for `data-device="phone"`,
@@ -191,35 +164,61 @@ template** (`design/runtime/base/phone.html` for `data-device="phone"`,
 carries the fixed reference lines — `../generated/tokens.css`,
 `../runtime/sprout-screens.js`, `../runtime/chrome.css` (phone) — plus the
 device and declared-states attributes; keep everything its header marks
-fixed, author only what is yours. Style **utilities-first** from the
-generated theme, not hand-rolled CSS: `color.*` → `.bg-*`/`.text-*`/
-`.border-*`, `space.*` → `.p-*`/`.m-*`/`.gap-*`, `font.*` (+ a project's
-`typography.*`) → `.font-*`/`.text-*-size`/`.text-*-weight`, `radius.*` →
-`.rounded-*`, `shadow.*` → `.shadow-*`, with `var(--token)` for anything the
-utilities do not cover. Navigate with **real anchors**:
-`<a data-nav="to:<stem>;trigger:<label>">` — the runtime swaps screens in
-place, and every `to:` must name an existing screen stem (hard error).
-Declare the screen's states on `<html data-states="a,b,c">` and mark
-sections `data-state="a"` — a used state that is not declared is a hard
-error. The runtime, chrome, and tokens files are **referenced, never
-authored**; the derived `design/generated/screens.json` index is
-**regenerated (`design_export_tokens targets:screens`), never hand-edited**
-— drift is a validator error.
+fixed, author only what is yours. `<html>` carries `data-screen="<stem>"` —
+the identity rule (hard error when missing or mismatched). Style
+**utilities-first** from the generated theme, not hand-rolled CSS:
+`color.*` → `.bg-*`/`.text-*`/`.border-*`, `space.*` → `.p-*`/`.m-*`/
+`.gap-*`, `font.*` (+ a project's `typography.*`) → `.font-*`/
+`.text-*-size`/`.text-*-weight`, `radius.*` → `.rounded-*`, `shadow.*` →
+`.shadow-*`, with `var(--token)` for anything the utilities do not cover.
+Navigate with **real anchors**: `<a data-nav="to:<stem>;trigger:<label>">`
+— the runtime swaps screens in place, and every `to:` must name an existing
+screen stem (hard error). Declare the screen's states on
+`<html data-states="a,b,c">` and mark sections `data-state="a"` — a used
+state that is not declared is a hard error. The runtime, chrome, and tokens
+files are **referenced, never authored**; the derived
+`design/generated/screens.json` index is **regenerated
+(`design_export_tokens targets:screens`), never hand-edited** — drift is a
+validator error.
 
 Then **validate**: `design_validate`.
 
 - No network `<script>`, no CDN references, no external fonts.
 - Literal colors where a token exists are drift — replace with the token
   (a utility class or `var(--token)`).
-- Fix every `screen_*` finding: nav targets resolve, states are declared,
-  the runtime copy is untouched, and screens.json is current.
+- Fix every `screen_*` finding: identity, nav targets resolve, states are
+  declared, the runtime copy is untouched, and screens.json is current.
+- A `design/wireframes/*.svg` in the tree is a hard error (the tier is
+  removed) — convert it to a screen, do not restore the tier.
 
-### Step 5 — Close the loop
+### Step 3 — Flow sources
+
+Write `design/flows/<flow-name>.json` — the authored source (§9b):
+`{"name": "<flow-name>", "steps": [{"id": "s1", "label": "Start",
+"screen": "<stem>"}, {"id": "s2", "label": "Verify", "screen": "<stem>",
+"trigger": "submit code", "next": "s3"}]}` — a linear step list, one file
+per process; `screen` names a real screen stem (omit it only for non-screen
+processes like agent-turn), `trigger` is the gesture that advances to
+`next`. Then **regenerate the derived export**:
+`design_export_tokens targets:flows` writes the `.mmd` beside the source
+(steps as nodes with their step ids, off-path data-nav-reachable screens
+included) — never hand-edit the `.mmd` (its flow-source-hash recomputes on
+validate; drift is a hard error).
+
+Then **validate**: `design_validate design/flows`.
+
+- Every step's `screen` must exist; every `next` must name a step id.
+- A data-nav edge no step accounts for is a warn (off-path navigation —
+  often intentional); add a step or leave it deliberate.
+
+### Step 4 — Close the loop
 
 - **Export, then sync**: after the artifacts are settled, run
-  `design_export_tokens` so the theme matches the tokens (design-ahead), and
-  `design_export_tokens targets:screens` when screens were added or changed,
-  so `design/generated/screens.json` matches the screen graph; if this turn
+  `design_export_tokens` so the theme matches the tokens (design-ahead),
+  `design_export_tokens targets:screens` when screens were added or changed
+  (so `design/generated/screens.json` matches the screen graph), and
+  `design_export_tokens targets:flows` when flow sources changed (so the
+  derived `.mmd` exports match); if this turn
   also changed implementation code that consumes the design, end it with
   `design_sync` (code-ahead) so the tree adopts what the code learned. See
   **Sync — keep the tree truthful** below.
@@ -243,21 +242,20 @@ is referenced by the next, so validate as you go. The canonical order:
    file the agent reads first when `design/` exists. Nothing else can be
    validated against frames until frames are declared.
 2. **`design/tokens/`** — one `*.tokens.json` per tier. Validate.
-3. **`design/wireframes/`** — one SVG per screen at a declared frame. Validate
-   (`data-nav` targets must resolve).
-4. **`design/flows/`** — mermaid `.mmd`, node ids == the wireframe stems.
-   Validate.
-5. **`design/screens/`** — hi-fi HTML consuming tokens. Validate.
-6. **`design/brand/brand.md`** + icons (`design/icons/`), as the brand is
+3. **`design/screens/`** — kit screens (base-template copies) consuming
+   tokens, with `data-screen` identity and §9a `data-nav`. Validate.
+4. **`design/flows/`** — `.json` sources; regenerate the derived `.mmd`
+   (`design_export_tokens targets:flows`). Validate.
+5. **`design/brand/brand.md`** + icons (`design/icons/`), as the brand is
    pinned down — palette entries reference tokens, never raw hex. Validate.
-7. **`.gitattributes`** — append `design/**/*.svg diff=html` for readable
+6. **`.gitattributes`** — append `design/**/*.svg diff=html` for readable
    markup diffs. The scaffold **appends**; user workspaces already carry rules
    that must not be clobbered. Add `design/.cache/` to `.gitignore` (render
    PNGs and critique scratch are not committed); do **not** auto-ignore
    `design/generated/` — committing generated artifacts is the project's
    choice.
 
-The scaffold directories: `mkdir -p design/{tokens,brand,icons,wireframes,screens,flows,feedback}`.
+The scaffold directories: `mkdir -p design/{tokens,brand,icons,screens,flows,feedback}`.
 
 **`design/runtime/` — the fixed screen-kit assets.** The scaffold copies these
 into the tree (the screen runtime `sprout-screens.js`, device chrome
@@ -290,7 +288,7 @@ When `design/` may already exist, **inventory before writing anything**:
    is a finding to fix.
 2. **Run `design_assets`.** It returns the real inventory as structured JSON:
    per-asset rows `{path, kind, name, status?, summary?}` (kinds: `manifest`,
-   `token`, `brand`, `icon`, `wireframe`, `screen`, `flow`, `feedback`), token
+   `token`, `brand`, `icon`, `screen`, `flow`, `feedback`, `runtime`), token
    group counts, flow node/edge counts, the manifest summary, and current
    `design_validate` findings. This is the ground truth — never fabricate a
    tree.
@@ -301,7 +299,7 @@ When `design/` may already exist, **inventory before writing anything**:
      target starts a feedback round (see **Human feedback** below).
 3. **Reconcile the inventory against the brief.** Note what exists, what is
    missing, and what is inconsistent (README listing a screen that is not on
-   disk, a flow node with no wireframe, literal colors where tokens exist).
+   disk, a flow step with no screen, literal colors where tokens exist).
 4. **Extend in the tree's own idiom.** Follow the existing tiers, naming, and
    structure. New screens/flows get added to the README. If the tree's
    conventions conflict with this skill, ask before restructuring — respect
@@ -383,7 +381,7 @@ name what to change.
 **Closing a feedback round.** After addressing each annotation on the
 annotated screen:
 
-1. **Edit the screen/wireframe** the target names, then run the critique-and-
+1. **Edit the screen** the target names, then run the critique-and-
    revise loop above on it (the annotations are findings, not a licence to skip
    validation).
 2. **Write the `resolution` note** (a summary of what changed) into the
@@ -409,7 +407,7 @@ Three steps keep them in step, in **any order**:
    theme reads the current tokens (`design/generated/` is generated — never
    hand-edit it). This is the design→code half of the loop.
 2. **Brief whenever building a screen.** Before a dev turn builds a screen,
-   assemble its contract from the tree — purpose, wireframe path, flows in/out
+   assemble its contract from the tree — purpose, screen path, flows in/out
    with triggers, tokens to consume, open feedback, status. Read
    `design/README.md` + `design_assets` for it today; SP-140-5 §5g adds a
    `design_brief` tool that assembles the same contract, so once that tool
@@ -418,7 +416,7 @@ Three steps keep them in step, in **any order**:
    `design_sync` the way a turn that edits code ends with tests: it reads the
    touched UI files and the tree and returns the semantic deltas code
    introduced, so `design/` can adopt them. Analyze first; `apply` writes the
-   safe subset (literal token renames/revalues, structural wireframe/flow
+   safe subset (literal token renames/revalues, structural screen/flow
    additions) under `design/` and leaves inferred deltas as proposals. Sync
    never rewrites the implementation — the semantic layer is *invited to
    adopt*, never enforced onto code.
@@ -476,7 +474,7 @@ adopt reality; implementation is never rewritten to match `design/`.
 | `design_export_tokens` | Regenerate `design/generated/` from the tokens — the design→code half of the loop; remedy for **design-ahead** |
 | `design_sync` | End a UI-affecting turn here: analyze (default) returns the semantic deltas code introduced; `apply` writes the safe subset into `design/` — the remedy for **code-ahead** |
 | `design_critique` | Visual pass: renders the target(s), attaches images, returns rubric findings `{target, area, severity, note, suggestion}` with severity `blocker`/`major`/`minor`/`info`; `rubric` (`consistency`/`accessibility`/`hierarchy`/`all`) and `compare_to` scope it. Degrades to `visual: false` static findings without vision |
-| `design_render` | Render a wireframe SVG / screen HTML / flow `.mmd` to an image for critique |
+| `design_render` | Render a screen HTML / flow `.mmd` to an image for critique |
 | `design_import_sketch` | Turn a whiteboard/paper/photo/reference image into a `design/` starting point |
 | `analyze_ui_screenshot` | Vision analysis of screenshots / local HTML you did not author |
 

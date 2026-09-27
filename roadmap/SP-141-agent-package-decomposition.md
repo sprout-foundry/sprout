@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In Progress — Phases 1–2 landed 2026-09-27
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–2 landed 2026-09-27); phases 4–5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -228,9 +228,38 @@ Rules of engagement:
 ## Suggested phase order (highest cohesion first)
 
 1. `pkg/agent/workflow` — smallest blast radius, own entry point (`RunWorkflowLoopInProcess`).
-2. `pkg/agent/changes` — change-tracking cluster with its own test suite
-   (less self-contained than the table implies: the tracker held an
-   `agent *Agent` field; landed 2026-09-27 behind the `ChangeAgent` seam).
+   > **Progress (2026-09-26):** Shipped (phase 1). The loop logic, config
+   > types, gate parsing, heartbeat, and TODO-file helpers moved to
+   > `pkg/agent/workflow/loop.go`; construction stays in
+   > `pkg/agent/workflow_wiring.go` behind the `workflow.LoopAgent` seam
+   > (an interface over the exported-method surface the loop uses;
+   > `*Agent` satisfies it via the `workflowLoopAgent` adapter — the
+   > unexported-field construction cannot leave the package). Import
+   > arrow is one-way: `pkg/agent` → `pkg/agent/workflow`. Exported
+   > surface added: `workflow.RunTodoLoop`, `ParseWorkflowFile`,
+   > `GenerateWorkflowSessionID`, `StartWorkflowHeartbeat`, config/result
+   > types, `LoopAgent`. The automate tool handler now calls
+   > `workflow.ParseWorkflowFile`/`GenerateWorkflowSessionID` and the
+   > package-local `RunWorkflowLoopInProcess` wrapper. Tests green
+   > (Automate/Workflow/Loop set; pkg/agent_tools full suite); the 26
+   > pkg/agent failures are the known encrypted-age-keys environment
+   > issue, none workflow-related.
+2. `pkg/agent/changes` — self-contained change-tracking cluster with its own test suite.
+   > **Progress (2026-09-26):** Shipped (phase 2). The change-tracking
+   > cluster (change_tracking*.go, transcript manifest, atomic_write —
+   > 13 non-test files) moved to pkg/agent/changes with its tests;
+   > pkg/agent keeps changes_seam.go: type aliases (ChangeTracker,
+   > TrackedFileChange, …), the changesAgentView adapter (an AgentView
+   > interface over the exported-method surface; *Agent adapts through
+   > a.changesView()), and construction forwarders. Import arrow is
+   > one-way: pkg/agent → changes. Test-visible accessors added on the
+   > tracker (SetView, SetRevisionIDForTest, TrackerSessionID,
+   > ShellCachePrimed, ApplyShellWalkConfig passthrough already
+   > exported); helper-level tests (determineWriteOperation,
+   > resolveAbsPath) moved next to the code they test. Gates: build,
+   > vet, fmt, lint, lint-go-new 0 issues; pkg/agent/changes + agent_tools
+   > suites green; pkg/agent's 26 failures are the known encrypted-keys
+   > env issue (identical list to the phase-1 baseline).
 3. `pkg/agent/approvals` — approval broker + allowlists + risk inputs.
 4. `pkg/agent/subagents` — submanagers/runner/task cluster.
 5. `pkg/agent/tools` — the five big tool_handlers files (largest; do last, possibly split by handler family).

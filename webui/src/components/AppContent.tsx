@@ -261,7 +261,7 @@ const AppContent: React.FC<AppContentProps> = ({
       queryProgress: null,
       lastError: null,
     }));
-  }, [setAppState]);
+  }, []);
 
   // SP-139 Phase 2: the turn change strip fetched an agent-session diff;
   // open it as a review buffer. Shaped as a GitDiffResponse so the
@@ -298,6 +298,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // Read inputValue from the store (not via props) so typing doesn't
   // re-render AppInner and cascade prop-references to children.
   const inputValue = useAppStateField('inputValue');
+
   const setInputValue = useCallback(
     (updater: React.SetStateAction<string>) => {
       setAppState((prev) => {
@@ -307,6 +308,24 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [setAppState],
   );
+
+  // SP-142 §3: send-anyway on a workspace_busy rejection — queue locally
+  // behind the running chat (the drain effect fires it on completion) and
+  // retire the notice + draft.
+  const handleSendAnyway = useCallback(
+    (message: string) => {
+      const trimmed = message.trim();
+      if (!trimmed) return;
+      onQueueMessage(trimmed);
+      setInputValue('');
+      setAppState((prev) => ({ ...prev, workspaceBusy: null }));
+    },
+    [onQueueMessage, setAppState, setInputValue],
+  );
+
+  const handleDismissBusy = useCallback(() => {
+    setAppState((prev) => ({ ...prev, workspaceBusy: null }));
+  }, [setAppState]);
 
   // Opens the ModelSelectionModal for the currently active provider when
   // the user clicks the model name in the status bar. The modal handles
@@ -910,6 +929,10 @@ const AppContent: React.FC<AppContentProps> = ({
       onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
+      workspaceBusy: state.workspaceBusy,
+      onSendAnyway: handleSendAnyway,
+      onDismissBusy: handleDismissBusy,
+      pendingDraft: inputValue,
       toolExecutions: state.toolExecutions,
       queryProgress: state.queryProgress,
       currentTodos,
@@ -946,6 +969,10 @@ const AppContent: React.FC<AppContentProps> = ({
       setInputValue,
       state.isProcessing,
       state.lastError,
+      state.workspaceBusy,
+      handleSendAnyway,
+      handleDismissBusy,
+      inputValue,
       state.toolExecutions,
       state.queryProgress,
       currentTodos,
@@ -1054,6 +1081,11 @@ const AppContent: React.FC<AppContentProps> = ({
       tab: designSection,
       onTabChange: setDesignSection,
       onOpenFile: handleDesignFileOpen,
+      // SP-142 142.5: the agent panel header names the design-lane chat and
+      // offers New Chat scoped to the lane (create stamps 'design').
+      agentChatName:
+        workspaceMode.id === 'design' ? ((chatSessions ?? []).find((s) => s.id === activeChatId)?.name ?? null) : null,
+      onAgentCreateChat: onCreateChat ? () => void onCreateChat('design') : undefined,
     },
     git: {
       gitBranches,

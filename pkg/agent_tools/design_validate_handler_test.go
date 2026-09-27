@@ -41,7 +41,7 @@ Screens and flows carry one of: draft, review, ready.
 ## Links
 
 - [Color tokens](tokens/color.tokens.json)
-- [Login wireframe](wireframes/login.svg)
+- [Login screen](screens/login.html)
 `
 
 const dvTestTokenJSON = `{
@@ -58,14 +58,28 @@ const dvTestTokenJSON = `{
 // The literal fill is backed by a {token.path} comment (SP-140-4 §4b "Token
 // usage"), so the clean fixture also satisfies the token-usage rule: literal
 // values are allowed when the intended token is recorded alongside.
-const dvTestLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28">Login</text>
-  <rect id="submit" fill="#fff" x="24" y="200" width="342" height="52" data-nav="home"><!-- {color.semantic.surface} --></rect>
-</svg>`
+// dvTestLoginScreen/dvTestHomeScreen are the §9a primary-tier screens the
+// valid fixture ships: HTML with the kit's data attributes (identity,
+// runtime, states) so the tree validates clean under SP-140-9 — wireframes
+// are the deprecated tier and would earn deprecation infos instead.
+const dvTestLoginScreen = `<!doctype html>
+<html lang="en" data-screen="login" data-sprout-screens="1" data-states="">
+<head><meta charset="utf-8"><title>login</title></head>
+<body data-sprout-screen="login">
+  <h1>Login</h1>
+  <a href="../screens/home.html" data-nav="to:home;trigger:submit">Sign in</a>
+  <script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>`
 
-const dvTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <text x="24" y="64" font-size="28">Home</text>
-</svg>`
+const dvTestHomeScreen = `<!doctype html>
+<html lang="en" data-screen="home" data-sprout-screens="1" data-states="">
+<head><meta charset="utf-8"><title>home</title></head>
+<body data-sprout-screen="home">
+  <h1>Home</h1>
+  <script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>`
 
 const dvTestFlowMMD = "flowchart TD\n  login --> home\n"
 
@@ -83,12 +97,87 @@ func dvWriteValidTree(t *testing.T, root string) {
 	t.Helper()
 	dvWrite(t, root, "design/README.md", dvTestManifest)
 	dvWrite(t, root, "design/tokens/color.tokens.json", dvTestTokenJSON)
-	dvWrite(t, root, "design/wireframes/login.svg", dvTestLoginSVG)
-	dvWrite(t, root, "design/wireframes/home.svg", dvTestHomeSVG)
-	dvWrite(t, root, "design/flows/sign-up.mmd", dvTestFlowMMD)
+	dvWrite(t, root, "design/screens/login.html", dvTestLoginScreen)
+	dvWrite(t, root, "design/screens/home.html", dvTestHomeScreen)
+	dvWrite(t, root, "design/generated/screens.json", dvTestScreensIndex(root))
+	writeTestRuntimeAsset(t, root)
+	writeDerivedFlows(t, root)
 	dvWrite(t, root, design.GitContractFile, "* text=auto eol=lf\n"+design.GitAttributesDiffHTMLLine+"\n")
 	dvWrite(t, root, design.GitIgnoreFile, "node_modules/\n"+design.GitIgnoreCacheLine+"\n")
 }
+
+// dvValidTreeWireframeInfos is the count of wireframe deprecation infos
+// the valid fixture earns under SP-140-9 §9a (info severity: the tier is
+// deprecated pending 9.4's migration; a warn would hold every pre-migration
+// tree in a perpetual advisory state).
+
+const dvTestLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <text x="24" y="64" font-size="28">Login</text>
+  <rect id="submit" fill="#fff" x="24" y="200" width="342" height="52" data-nav="home"><!-- {color.semantic.surface} --></rect>
+</svg>`
+
+const dvTestHomeSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
+  <text x="24" y="64" font-size="28">Home</text>
+</svg>`
+
+// dvAddLegacyWireframes adds the two legacy wireframes to a valid tree —
+// for tests that pin wireframe-rule behavior itself (data-nav, data-URI
+// size). Under §9a each earns a deprecation info; those tests assert on
+// specific rules, not clean trees, so the extra infos are fine.
+func dvAddLegacyWireframes(t *testing.T, root string) {
+	t.Helper()
+	dvWrite(t, root, "design/wireframes/login.svg", dvTestLoginSVG)
+	dvWrite(t, root, "design/wireframes/home.svg", dvTestHomeSVG)
+}
+
+// dvTestScreensIndex derives the generated screens index over the fixture's
+// two screens (the 143.5 export pipeline) so the valid tree carries a
+// non-drifted index.
+
+// writeTestRuntimeAsset scaffolds the embedded runtime kit into the fixture
+// tree so kit-member screens satisfy the runtime-hash rule.
+func writeTestRuntimeAsset(t *testing.T, root string) {
+	t.Helper()
+	if err := design.ScaffoldRuntimeAssets(filepath.Join(root, design.DirName)); err != nil {
+		t.Fatalf("runtime asset: %v", err)
+	}
+}
+
+func dvTestScreensIndex(root string) string {
+	art, err := design.RenderScreensIndexArtifact(root)
+	if err != nil {
+		panic(err)
+	}
+	return string(art.Content)
+}
+
+// writeDerivedFlows seeds the flow tier's derived form: the .json source plus
+// the generator-emitted .mmd (provenance header included), so the fixture is
+// clean under SP-140-9 §9b (hand-authored .mmd earns a legacy info).
+func writeDerivedFlows(t *testing.T, root string) {
+	t.Helper()
+	dvWrite(t, root, "design/flows/sign-up.json", dvTestFlowSourceJSON)
+	arts, err := design.RenderAllFlowMDMArtifacts(root)
+	if err != nil {
+		t.Fatalf("render derived flows: %v", err)
+	}
+	for _, a := range arts {
+		dvWrite(t, root, a.RelPath, string(a.Content))
+	}
+}
+
+const dvTestFlowSourceJSON = `{
+  "name": "sign-up",
+  "steps": [
+    {"id": "s1", "label": "Start", "screen": "login"},
+    {"id": "s2", "label": "Signed in", "screen": "home", "trigger": "submit", "next": "s3"},
+    {"id": "s3", "label": "Done", "screen": "home"}
+  ]
+}`
+
+// dvValidTreeWireframeInfos is kept for the wireframe-deprecation tests
+// that assert the info channel directly.
+const dvValidTreeWireframeInfos = 2
 
 // ---------------------------------------------------------------------------
 // design_validate tests
@@ -153,6 +242,8 @@ func TestDesignValidateHandler_NoArgsValidTree(t *testing.T) {
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "findings are advisory; a clean run must never be an error")
+	// The fixture's flows are §9b-derived (source .json + regenerated
+	// export), so the valid tree validates fully clean.
 	require.Contains(t, res.Output, "design_validate: 0 findings")
 
 	// StructuredOut carries findings + count + bySeverity.
@@ -162,6 +253,7 @@ func TestDesignValidateHandler_NoArgsValidTree(t *testing.T) {
 	require.Empty(t, out.Findings)
 	require.Equal(t, 0, out.BySeverity["error"])
 	require.Equal(t, 0, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
 }
 
 func TestDesignValidateHandler_NoArgsNoDesignDir(t *testing.T) {
@@ -184,6 +276,7 @@ func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	dvWriteValidTree(t, root)
+	dvAddLegacyWireframes(t, root)
 	// Seed a bad wireframe: a dangling data-nav target. The stem is new, so
 	// declare it in the README's Screens listing to keep it out of the §4b
 	// orphan rule and let this fixture pin the dangling data-nav class alone.
@@ -197,18 +290,25 @@ func TestDesignValidateHandler_NoArgsSeededBadTree(t *testing.T) {
 	require.NoError(t, err)
 	// Advisory semantics: findings never block a turn.
 	require.False(t, res.IsError, "error-severity findings must not set IsError — findings are advisory (SP-140-1 §1g)")
-	require.Contains(t, res.Output, "1 finding(s)")
-	require.Contains(t, res.Output, "1 error(s)")
+	require.Contains(t, res.Output, "5 finding(s)")
+	require.Contains(t, res.Output, "4 error(s)")
+	require.Contains(t, res.Output, "1 warn(s)")
 
 	out, ok := res.StructuredOut.(findingsOutput)
 	require.True(t, ok)
-	require.Equal(t, 1, out.Count)
-	require.Equal(t, 1, out.BySeverity["error"])
-	require.Len(t, out.Findings, 1)
-	require.Equal(t, "design/wireframes/signup.svg", out.Findings[0].File)
-	require.Equal(t, "svg_data_nav_dangling", out.Findings[0].Rule)
-	require.Equal(t, "error", out.Findings[0].Severity)
-	require.NotEmpty(t, out.Findings[0].Message)
+	require.Equal(t, 5, out.Count)
+	require.Equal(t, 4, out.BySeverity["error"])
+	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
+	byRule := map[string]findingOut{}
+	for _, f := range out.Findings {
+		byRule[f.Rule] = f
+	}
+	bad := byRule["svg_data_nav_dangling"]
+	require.Equal(t, "design/wireframes/signup.svg", bad.File)
+	require.Equal(t, "error", bad.Severity)
+	require.Equal(t, "error", byRule["wireframe_deprecated"].Severity)
+	require.NotEmpty(t, bad.Message)
 }
 
 func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
@@ -224,13 +324,13 @@ func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// One brand_raw_hex warn; the derived-flow fixture adds nothing else.
 	require.Equal(t, 1, out.Count)
 	require.Equal(t, 1, out.BySeverity["warn"])
-	require.Equal(t, "warn", out.Findings[0].Severity)
-	require.Equal(t, "brand_raw_hex", out.Findings[0].Rule)
-	require.Equal(t, 0, out.Findings[0].Line, "a finding with no derivable line must carry line=0")
+	require.Equal(t, 0, out.BySeverity["info"])
 
-	// The structured output must be JSON-friendly, with "line" omitted at 0.
+	// The structured output must be JSON-friendly, with "line" omitted at 0
+	// on the warn (the legacy info anchors on no line either).
 	data, err := json.Marshal(out)
 	require.NoError(t, err)
 	var raw struct {
@@ -238,11 +338,13 @@ func TestDesignValidateHandler_StructuredOutJSONShape(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(data, &raw))
 	require.Len(t, raw.Findings, 1)
-	require.NotContains(t, raw.Findings[0], "line", "line must be omitted when 0")
-	require.Contains(t, raw.Findings[0], "file")
-	require.Contains(t, raw.Findings[0], "severity")
-	require.Contains(t, raw.Findings[0], "message")
-	require.Contains(t, raw.Findings[0], "rule")
+	for _, f := range raw.Findings {
+		require.NotContains(t, f, "line", "line must be omitted when 0")
+		require.Contains(t, f, "file")
+		require.Contains(t, f, "severity")
+		require.Contains(t, f, "message")
+		require.Contains(t, f, "rule")
+	}
 }
 
 func TestDesignValidateHandler_PathArgGoodAsset(t *testing.T) {
@@ -252,7 +354,7 @@ func TestDesignValidateHandler_PathArgGoodAsset(t *testing.T) {
 	h := &designValidateHandler{}
 
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
-		map[string]any{"path": "design/wireframes/login.svg"})
+		map[string]any{"path": "design/screens/login.html"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	require.Contains(t, res.Output, "0 findings")
@@ -268,7 +370,7 @@ func TestDesignValidateHandler_PathArgDesignPrefixOptional(t *testing.T) {
 	h := &designValidateHandler{}
 
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root),
-		map[string]any{"path": "wireframes/login.svg"})
+		map[string]any{"path": "screens/login.html"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
@@ -370,7 +472,7 @@ func TestDesignValidateHandler_Gate1AllowResolvesPath(t *testing.T) {
 	env := newTestEnv(t, root)
 	env.FileAccessClassifier = allowClassifier{}
 
-	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/wireframes/login.svg"})
+	res, err := h.Execute(newTestCtx(root), env, map[string]any{"path": "design/screens/login.html"})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 	// The allow verdict's absolute resolved path must be converted back to
@@ -452,9 +554,13 @@ func TestDesignValidateHandler_ConsistencyPackFindings(t *testing.T) {
 	// comment, declared nowhere.
 	dvWrite(t, root, "design/wireframes/billing.svg",
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text fill="#ff0000">Billing</text></svg>`)
-	// Naming mismatch: a delivered screen with no wireframe counterpart.
+	// Naming mismatch (§9a transitional, info): a delivered screen with no
+	// wireframe counterpart. Identity attribute keeps the identity rule
+	// quiet so this fixture pins the counterpart rule alone.
 	dvWrite(t, root, "design/screens/receipt.html",
-		`<!DOCTYPE html><html><head><style>body{width:390px}</style></head><body>x</body></html>`)
+		`<!DOCTYPE html><html data-screen="receipt"><head><style>body{width:390px}</style></head><body>x</body></html>`)
+	// The index must cover the new screen or drift becomes the loud error.
+	dvWrite(t, root, "design/generated/screens.json", dvTestScreensIndex(root))
 	h := &designValidateHandler{}
 
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
@@ -462,7 +568,7 @@ func TestDesignValidateHandler_ConsistencyPackFindings(t *testing.T) {
 	require.False(t, res.IsError, "consistency findings are advisory — they never block a turn")
 
 	out := res.StructuredOut.(findingsOutput)
-	require.Equal(t, 1, out.BySeverity["warn"], "the naming mismatch is the one warn, got %#v", out.Findings)
+	require.Equal(t, 0, out.BySeverity["warn"], "no warn on this tree under §9a", out.Findings)
 	require.GreaterOrEqual(t, out.BySeverity["info"], 2, "token usage + orphan are infos, got %#v", out.Findings)
 
 	byRule := map[string]string{}
@@ -471,7 +577,7 @@ func TestDesignValidateHandler_ConsistencyPackFindings(t *testing.T) {
 	}
 	require.Equal(t, "info", byRule["svg_token_usage"], "got %#v", out.Findings)
 	require.Equal(t, "info", byRule["consistency_screen_orphan"], "got %#v", out.Findings)
-	require.Equal(t, "warn", byRule["consistency_screen_name_mismatch"], "got %#v", out.Findings)
+	require.Equal(t, "info", byRule["consistency_screen_name_mismatch"], "the §9a transitional severity, got %#v", out.Findings)
 }
 
 func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {
@@ -490,9 +596,11 @@ func TestDesignValidateHandler_MultipleFindingsTallies(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// The two seeded findings; the derived-flow fixture adds nothing.
 	require.Equal(t, 2, out.Count)
 	require.Equal(t, 1, out.BySeverity["error"])
 	require.Equal(t, 1, out.BySeverity["warn"])
+	require.Equal(t, 0, out.BySeverity["info"])
 	require.Contains(t, res.Output, "2 finding(s)")
 	require.Contains(t, res.Output, "1 error(s)")
 	require.Contains(t, res.Output, "1 warn(s)")
@@ -517,8 +625,10 @@ func TestDesignValidateHandler_GitContractFixFindings(t *testing.T) {
 	require.False(t, res.IsError, "fix findings are advisory — they never block a turn")
 
 	out := res.StructuredOut.(findingsOutput)
+	// The two git-contract fixes; the derived-flow fixture adds nothing.
 	require.Len(t, out.Findings, 2, "expected the .gitattributes + .gitignore fixes, got %#v", out.Findings)
 	require.Equal(t, 2, out.BySeverity["fix"])
+	require.Equal(t, 0, out.BySeverity["info"])
 	require.Contains(t, res.Output, "2 fix(es) to apply")
 	require.Equal(t, 0, out.BySeverity["error"])
 
@@ -556,8 +666,12 @@ func TestDesignValidateHandler_GitContractSatisfied(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
+	// The satisfied contract clears every git finding; the fixture's flows
+	// are §9b-derived (source .json + regenerated export), so the tree is
+	// fully clean — no legacy notices either.
 	require.Equal(t, 0, out.Count)
 	require.Equal(t, 0, out.BySeverity["fix"])
+	require.Equal(t, 0, out.BySeverity["error"])
 }
 
 func TestDesignValidateHandler_PathArgGitContractFile(t *testing.T) {
@@ -582,6 +696,7 @@ func TestDesignValidateHandler_DataURISizeWarn(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	dvWriteValidTree(t, root)
+	dvAddLegacyWireframes(t, root)
 	// An oversized embedded raster keeps the SVG self-contained but is a warn.
 	dvWrite(t, root, "design/wireframes/photo.svg",
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text x="0" y="0">Photo</text><image href="data:image/png;base64,`+
@@ -593,9 +708,14 @@ func TestDesignValidateHandler_DataURISizeWarn(t *testing.T) {
 	require.False(t, res.IsError)
 
 	out := res.StructuredOut.(findingsOutput)
-	require.Equal(t, 1, out.Count)
-	require.Equal(t, "svg_data_uri_size", out.Findings[0].Rule)
-	require.Equal(t, "warn", out.Findings[0].Severity)
+	require.Equal(t, 2, out.Count)
+	byRule := map[string]findingOut{}
+	for _, f := range out.Findings {
+		byRule[f.Rule] = f
+	}
+	require.Equal(t, "svg_data_uri_size", byRule["svg_data_uri_size"].Rule)
+	require.Equal(t, "warn", byRule["svg_data_uri_size"].Severity)
+	require.Equal(t, "error", byRule["wireframe_deprecated"].Severity)
 	require.Contains(t, out.Findings[0].Message, "brand/")
 }
 

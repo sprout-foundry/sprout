@@ -1,0 +1,113 @@
+<!doctype html>
+<!--
+  app-shell — Code mode default (SP-140-9 9.4: migrated from the legacy
+  design/wireframes/app-shell.svg). Base: design/runtime/base/desktop.html;
+  fixed parts per its header. Nav triggers mirror design/flows/navigation.mmd.
+-->
+<html lang="en" data-screen="app-shell" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>app-shell — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; display: flex; }
+  .sidebar { width: var(--sizing-sidebar-width); background: var(--color-dark-bg-secondary); border-right: 1px solid var(--color-dark-border-subtle); display: flex; flex-direction: column; }
+  .pinned { height: var(--sizing-header-height); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); }
+  .brandmark { width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--color-dark-brand-active-cyan); }
+  .mode-switcher { background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: 4px var(--space-4); font-size: var(--typography-size-sm); }
+  .mode-switcher span { color: var(--color-dark-text-muted); }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); padding: var(--space-6) 0; }
+  .rail a { width: var(--sizing-control-icon-button); height: var(--sizing-control-icon-button); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); color: var(--color-dark-text-muted); text-decoration: none; font-size: var(--typography-size-sm); }
+  .rail a.active { background: var(--color-dark-bg-elevated); color: var(--color-dark-brand-active-cyan); }
+  .rail a:hover { background: var(--color-dark-bg-hover); }
+  .files { padding: var(--space-4) var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .files .count { float: right; color: var(--color-dark-text-muted); }
+  .files .row { padding: var(--space-1) 0; }
+  .files .row.active { color: var(--color-dark-accent-primary); }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .header { height: var(--sizing-header-height); background: var(--color-dark-bg-secondary); border-bottom: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .header .spacer { flex: 1; }
+  .chip { background: var(--color-dark-bg-elevated); border-radius: var(--radius-sm); padding: 3px var(--space-4); font-size: var(--typography-size-xs); color: var(--color-dark-text-secondary); }
+  .chip.ok { color: var(--color-dark-accent-success); }
+  .chat { flex: 1; padding: var(--space-8) var(--space-10); display: flex; flex-direction: column; gap: var(--space-6); overflow: hidden; }
+  .msg { max-width: 700px; border-radius: var(--radius-xl); padding: var(--space-6) var(--space-8); background: var(--color-dark-bg-elevated); }
+  .msg.user { align-self: flex-end; }
+  .msg .meta { color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); margin-top: var(--space-4); }
+  .tool-pill { align-self: flex-start; display: inline-flex; background: var(--color-dark-bg-elevated); border-radius: var(--radius-pill); padding: 5px var(--space-8); color: var(--color-dark-text-secondary); font-size: var(--typography-size-sm); font-family: var(--typography-font-mono); }
+  .tool-bar { margin: 0 var(--space-10); background: var(--color-dark-bg-secondary); border: 1px solid var(--color-dark-border-default); border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0; padding: var(--space-3) var(--space-6); color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); font-family: var(--typography-font-mono); }
+  .composer { margin: var(--space-4) var(--space-10); background: var(--color-dark-bg-secondary); border: 1px solid var(--color-dark-border-default); border-radius: var(--radius-xl); padding: var(--space-6) var(--space-8); display: flex; align-items: center; gap: var(--space-6); }
+  .composer .placeholder { flex: 1; color: var(--color-dark-text-muted); font-size: var(--typography-size-sm); }
+  .send { width: 44px; height: 28px; border-radius: var(--radius-md); background: var(--color-dark-accent-primary); color: var(--color-dark-accent-on-primary); display: flex; align-items: center; justify-content: center; }
+  .terminal { height: var(--sizing-terminal-reserved-height); background: var(--color-dark-bg-surface); border-top: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .terminal .exit { margin-left: auto; color: var(--color-dark-text-muted); }
+</style>
+</head>
+<body data-sprout-screen="app-shell">
+<div class="screen">
+
+  <aside class="sidebar">
+    <div class="pinned">
+      <span class="brandmark"></span>
+      <span>sprout</span>
+      <span class="mode-switcher">Code <span>&#9662;</span></span>
+    </div>
+    <nav class="rail">
+      <a href="../screens/git-panel.html" data-nav="to:git-panel;trigger:open the git section from the icon rail">G</a>
+      <a class="active" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">F</a>
+      <a href="../screens/command-palette.html" data-nav="to:command-palette;trigger:&#8984;K">&#8964;</a>
+      <a href="#automations">A</a>
+      <a href="#logs">L</a>
+    </nav>
+    <div class="files">
+      Files <span class="count">128</span>
+      <div class="row">&#9656; src</div>
+      <div class="row">&#9656; webui</div>
+      <div class="row active">App.tsx</div>
+      <div class="row">App.css</div>
+      <div class="row">&#9654; components</div>
+      <div class="row">&#9654; pkg</div>
+      <div class="row">Makefile</div>
+      <div class="row">go.mod</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <span>Files</span><span>Search</span><span>Git</span><span>Automations</span><span>Logs</span>
+      <span class="spacer"></span>
+      <span class="chip ok">&#10003; main</span>
+      <span class="chip">qwen3.8-27b</span>
+      <span class="chip">A</span>
+    </header>
+
+    <section class="chat">
+      <a class="chat-surface" href="../screens/chat.html" data-nav="to:chat;trigger:select the chat workspace / send a message" style="display:contents"></a>
+      <div class="msg user">Add a token export for Swift.<div class="meta">08:41 &middot; user</div></div>
+      <div class="msg">On it — reading the DTCG parser first, then adding swift to the export targets.<div class="meta">agent &middot; 6s</div></div>
+      <span class="tool-pill">&#9881; read_file &middot; pkg/design/export.go &middot; 1.2s</span>
+      <div class="msg">Done. Tokens exported to design/generated/.<div class="meta">2 files changed &middot; build green</div></div>
+    </section>
+
+    <div class="tool-bar">tools: 4 this turn &middot; 2 parallel &middot; &#9654; read_file &#9654; edit_file &#9654; shell_command &#10003; design_validate</div>
+
+    <div class="composer">
+      <span class="placeholder">Message sprout&#8230; (&#8984;&#8679; to send)</span>
+      <span>&#128206;</span>
+      <span class="send">&#9654;</span>
+    </div>
+
+    <footer class="terminal">
+      <span>Terminal</span><span>/bin/zsh</span><span>&#8984;J to focus</span>
+      <span class="exit">exit 0</span>
+    </footer>
+  </main>
+
+</div>
+<a href="../screens/design-flows.html" data-nav="to:design-flows;trigger:switch workspace mode" style="display:none">Design</a>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

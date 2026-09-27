@@ -22,7 +22,7 @@ import { DESIGN_SECTION_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY } from '../constan
 /** The Design mode's sections — DesignTab's union, restated to keep this
  * module import-free of the component tree (the hook sits beside the
  * workspace-mode state, not inside the design components). */
-export type DesignSectionId = 'flows' | 'screens' | 'tokens';
+export type DesignSectionId = 'flows' | 'screens' | 'tokens' | 'feedback';
 
 /** The section a Design-mode workspace opens on when nothing is persisted. */
 export const DEFAULT_DESIGN_SECTION: DesignSectionId = 'flows';

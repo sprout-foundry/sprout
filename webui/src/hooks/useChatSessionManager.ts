@@ -530,6 +530,29 @@ export function useChatSessionManager({
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
+        // workspace_busy (SP-142 §3): another chat in this client context has
+        // a query running — the server refuses to start a second concurrent
+        // runner on one workspace. Surface an inline composer notice with a
+        // send-anyway affordance instead of dead-ending as an error; the
+        // queued entry drains on the running chat's completion (the drain
+        // effect below). The optimistic user bubble stays: the message WILL
+        // be sent, just after the running chat finishes.
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
+          const busy = error as Error & { code?: string; runningChatId?: string; runningChatName?: string };
+          // Roll back the optimistic active-request bump — nothing is running
+          // for THIS chat; the runner lives in the other chat.
+          if (activeRequestsRef.current > 0) {
+            activeRequestsRef.current -= 1;
+          }
+          setState((prev) => ({
+            isProcessing: false,
+            workspaceBusy: {
+              runningChatId: busy.runningChatId ?? '',
+              runningChatName: busy.runningChatName ?? 'another chat',
+            },
+          }));
+          return;
+        }
         // query_in_progress: the backend still has a query running for this
         // chat but our local counter says otherwise (counter desync — e.g. the
         // WebSocket flapped mid-query, or a completion event was missed).

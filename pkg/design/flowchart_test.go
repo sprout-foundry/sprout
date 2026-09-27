@@ -69,26 +69,26 @@ func TestParseFlowchartLabelContainingArrow(t *testing.T) {
 func TestValidateFlows(t *testing.T) {
 	t.Run("valid-screen-flow", func(t *testing.T) {
 		content := "flowchart LR\n  login --> home\n  home --> dashboard\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login", "home", "dashboard"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login", "home", "dashboard"})
 		requireNoWireframeFindings(t, findings)
 	})
 
 	t.Run("missing-declaration", func(t *testing.T) {
 		content := "login --> home\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login", "home"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login", "home"})
 		assert.Equal(t, 1, findingRules(findings)[ruleFlowchartDeclaration])
 	})
 
 	t.Run("multiple-declarations", func(t *testing.T) {
 		content := "flowchart LR\n  login --> home\ngraph TD\n  home --> back\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login", "home", "back"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login", "home", "back"})
 		assert.Equal(t, 1, findingRules(findings)[ruleFlowchartDeclaration])
 	})
 
 	t.Run("dangling-node-stem", func(t *testing.T) {
 		// login is a known stem (so this is a screen flow); "missing" is not.
 		content := "flowchart LR\n  login --> missing\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login"})
 		assert.Equal(t, 1, findingRules(findings)[ruleFlowchartNodeStem])
 		for _, f := range findings {
 			if f.Rule == ruleFlowchartNodeStem {
@@ -102,20 +102,20 @@ func TestValidateFlows(t *testing.T) {
 		// No node id matches a wireframe stem, so the flow is a process/user
 		// flow and the node-stem rule does not cross-check it.
 		content := "flowchart TD\n  start --> process --> done\n"
-		findings := ValidateFlows("design/flows/pipeline.mmd", []byte(content), []string{"login"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/pipeline.mmd", []byte(content), []string{"login"})
 		assert.Equal(t, 0, findingRules(findings)[ruleFlowchartNodeStem])
 		requireNoWireframeFindings(t, findings)
 	})
 
 	t.Run("unparseable-line", func(t *testing.T) {
 		content := "flowchart LR\n  login -->\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login"})
 		assert.Equal(t, 1, findingRules(findings)[ruleFlowchartSyntax])
 	})
 
 	t.Run("bare-junk-line", func(t *testing.T) {
 		content := "flowchart LR\n  login --> home\n  ???\n"
-		findings := ValidateFlows("design/flows/main.mmd", []byte(content), []string{"login", "home"})
+		findings := ValidateFlows(t.TempDir(), "design/flows/main.mmd", []byte(content), []string{"login", "home"})
 		assert.Equal(t, 1, findingRules(findings)[ruleFlowchartSyntax])
 	})
 }

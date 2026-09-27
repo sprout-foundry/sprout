@@ -145,8 +145,8 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 // read under that lock).
 func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, toolCall string) {
 	workspaceRoot := ""
-	if ct.agent != nil {
-		workspaceRoot = ct.agent.GetWorkspaceRoot()
+	if ct.view != nil {
+		workspaceRoot = ct.view.GetWorkspaceRoot()
 	}
 	absWorkspace := workspaceRoot
 	if workspaceRoot != "" {
@@ -315,11 +315,12 @@ func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange
 	}
 	ct.appendChange(entry)
 	// Publish the rollup over the bus too so the UI can refresh.
-	// PublishRawEvent keeps the undecorated payload the pre-seam code
-	// published (PublishFileChange would attach event-metadata decoration).
-	if ct.agent != nil {
+	// Raw publish: the payload's "path" is a directory label, not a
+	// real file, so it never went through the agent's event-metadata
+	// decoration.
+	if ct.view != nil {
 		absDir := filepath.Join(workspaceRoot, dir)
-		ct.agent.PublishRawEvent(
+		ct.view.PublishRawFileChanged(
 			events.EventTypeFileChanged,
 			events.FileChangedEvent(absDir, "shell_bulk", toolCall),
 		)
@@ -379,10 +380,9 @@ func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChang
 	// Publish a file-changed event so the UI refreshes. The "path" here
 	// is the command label, not a real file path; the changes-panel
 	// renderer is the source of truth for resolving bulk entries.
-	// PublishRawEvent keeps the undecorated payload the pre-seam code
-	// published (PublishFileChange would attach event-metadata decoration).
-	if ct.agent != nil {
-		ct.agent.PublishRawEvent(
+	// Raw publish — same rationale as the build rollup above.
+	if ct.view != nil {
+		ct.view.PublishRawFileChanged(
 			events.EventTypeFileChanged,
 			events.FileChangedEvent(toolCall, "shell_bulk", toolCall),
 		)
@@ -415,7 +415,7 @@ func (ct *ChangeTracker) packBulkItems(pending []pendingShellChange) ([]TrackedB
 				newer = "[CONTENT NOT CAPTURED: " + p.After.Skipped + "]"
 			}
 		}
-		if ct.isOutsideWorkspace(p.Path) {
+		if ct.IsOutsideWorkspace(p.Path) {
 			original = RedactedContentMarker
 			newer = RedactedContentMarker
 		}
@@ -458,7 +458,7 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 		}
 	}
 
-	if ct.isOutsideWorkspace(path) {
+	if ct.IsOutsideWorkspace(path) {
 		originalCode = RedactedContentMarker
 		newCode = RedactedContentMarker
 	}
@@ -479,7 +479,7 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 	// Content is deliberately NOT sent: consumers only use path and
 	// action, and shipping whole file bodies over the event bus wastes
 	// bandwidth and leaks file contents to any event listener.
-	if ct.agent != nil {
+	if ct.view != nil {
 		action := "modified"
 		switch op {
 		case "create", "write":
@@ -487,6 +487,31 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 		case "delete":
 			action = "deleted"
 		}
-		ct.agent.PublishFileChange(path, action, "")
+		ct.view.PublishFileChange(path, action, "")
 	}
+}
+
+// ShellWalkConfig carries the per-tracker shell-walk budgets and
+// thresholds stamped from the change_tracking config section.
+// ApplyShellWalkConfig is the single write path (formerly pkg/agent's
+// applyChangeTrackingConfig reaching directly into unexported fields).
+type ShellWalkConfig struct {
+	ShellWalkEnabled           bool
+	MaxFiles                   int
+	MaxTotalBytes              int64
+	MaxDuration                time.Duration
+	AutoSkipFileCountThreshold int
+}
+
+// ApplyShellWalkConfig stamps resolved ChangeTrackingConfig values onto
+// the tracker. Exported for pkg/agent's applyChangeTrackingConfig
+// facade (SP-141 phase 2); zero-value MaxFiles/MaxTotalBytes/
+// MaxDuration/AutoSkipFileCountThreshold mean "no override — use the
+// package default", exactly as before.
+func (ct *ChangeTracker) ApplyShellWalkConfig(cfg ShellWalkConfig) {
+	ct.shellWalkEnabled = cfg.ShellWalkEnabled
+	ct.shellMaxFiles = cfg.MaxFiles
+	ct.shellMaxTotalBytes = cfg.MaxTotalBytes
+	ct.shellMaxDuration = cfg.MaxDuration
+	ct.shellAutoSkipFileCountThreshold = cfg.AutoSkipFileCountThreshold
 }

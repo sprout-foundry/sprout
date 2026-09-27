@@ -38,10 +38,9 @@ var dvAC4bRuleSeverity = []struct {
 	want string
 	file string
 }{
-	{"consistency_screen_orphan", "info", "design/wireframes/billing.svg"},
-	{"svg_data_nav_dangling", "error", "design/wireframes/login.svg"},
+	{"consistency_screen_orphan", "info", "design/screens/billing.html"},
+	{"screen_nav_target", "error", "design/screens/checkout.html"},
 	{"manifest_link_dangling", "warn", "design/README.md"},
-	{"svg_token_usage", "info", "design/wireframes/billing.svg"},
 }
 
 // TestDesignValidateHandler_Acceptance4bSeverityMatrix is the item-4.9 AC at
@@ -53,19 +52,21 @@ func TestDesignValidateHandler_Acceptance4bSeverityMatrix(t *testing.T) {
 	root := t.TempDir()
 	dvWriteValidTree(t, root)
 
-	// Token usage (info) + orphan screen (info): a wireframe with a literal
-	// fill and no token comment, declared by neither the flow nor the README.
-	dvWrite(t, root, "design/wireframes/billing.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text fill="#ff0000">Billing</text></svg>`)
+	// Orphan screen (info): a screen declared by neither the flow nor the
+	// README. Token usage was an SVG-tier rule that retired with the
+	// wireframes (9.4).
+	dvWrite(t, root, "design/screens/billing.html",
+		`<!DOCTYPE html><html data-screen="billing"><body>Billing</body></html>`)
 
-	// Dangling data-nav (hard error): "checkout" has no wireframe.
-	dvWrite(t, root, "design/wireframes/login.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text><rect id="go" data-nav="checkout"/></svg>`)
-
-	// README screen reference to a missing file (warn): a Screens bullet
-	// naming a screen with no wireframe or delivered screen.
+	// Dangling data-nav (hard error): "nowhere" has no screen.
+	dvWrite(t, root, "design/screens/checkout.html",
+		`<!DOCTYPE html><html data-screen="checkout"><body><a data-nav="to:nowhere;trigger:x">go</a></body></html>`)
+	// checkout is README-listed so billing stays the lone orphan.
 	dvWrite(t, root, "design/README.md",
-		dvTestManifest+"\n## Screens\n\n- `receipt` — draft — pay\n")
+		dvTestManifest+"\n## Screens\n\n- `receipt` — draft — pay\n- `checkout` — draft — seeded\n")
+	dvWrite(t, root, "design/generated/screens.json", dvTestScreensIndex(root))
+
+	// (The receipt bullet rides the README seed above.)
 
 	h := &designValidateHandler{}
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{})
@@ -88,11 +89,12 @@ func TestDesignValidateHandler_Acceptance4bSeverityMatrix(t *testing.T) {
 		require.Equal(t, tc.file, got.file, "rule %s file anchor", tc.rule)
 	}
 
-	// The per-severity tallies agree with the matrix (1 error, 1 warn, 2 info)
-	// and the fix class stays empty on this tree.
+	// Post-9.4 tallies: one hard data-nav error; two warns (the README
+	// reference + the off-path nav the seeded dangle also trips); one orphan
+	// info. The fixture is wireframe-free — no deprecation rows.
 	require.Equal(t, 1, out.BySeverity["error"], "one hard data-nav error, findings=%#v", out.Findings)
-	require.Equal(t, 1, out.BySeverity["warn"], "one README reference warn, findings=%#v", out.Findings)
-	require.Equal(t, 2, out.BySeverity["info"], "token usage + orphan, findings=%#v", out.Findings)
+	require.Equal(t, 2, out.BySeverity["warn"], "README reference + off-path nav warns, findings=%#v", out.Findings)
+	require.Equal(t, 1, out.BySeverity["info"], "the orphan info, findings=%#v", out.Findings)
 	require.Equal(t, 0, out.BySeverity["fix"], "no machine-applicable fixes on this tree")
 	require.Equal(t, 4, out.Count)
 
@@ -100,8 +102,8 @@ func TestDesignValidateHandler_Acceptance4bSeverityMatrix(t *testing.T) {
 	// (not just the structured output) carries the right-severity evidence.
 	require.Contains(t, res.Output, "4 finding(s)")
 	require.Contains(t, res.Output, "1 error(s)")
-	require.Contains(t, res.Output, "1 warn(s)")
-	require.Contains(t, res.Output, "2 info")
+	require.Contains(t, res.Output, "2 warn(s)")
+	require.Contains(t, res.Output, "1 info")
 }
 
 // TestDesignValidateHandler_Acceptance4bCleanTreeIsEmpty is the negative half:
@@ -119,8 +121,10 @@ func TestDesignValidateHandler_Acceptance4bCleanTreeIsEmpty(t *testing.T) {
 
 	out, ok := res.StructuredOut.(findingsOutput)
 	require.True(t, ok)
-	require.Equal(t, 0, out.Count, "the clean fixture tree must yield no findings, got %#v", out.Findings)
-	for _, sev := range []string{"error", "warn", "info", "fix"} {
+	// The fixture's flows are §9b-derived, so the clean tree yields no
+	// findings at all — no legacy notices, no §4b rows.
+	require.Equal(t, 0, out.Count, "the clean fixture tree must be empty, got %#v", out.Findings)
+	for _, sev := range []string{"error", "warn", "fix", "info"} {
 		require.Equal(t, 0, out.BySeverity[sev], "severity %s on the clean tree", sev)
 	}
 	require.Contains(t, res.Output, "0 findings")

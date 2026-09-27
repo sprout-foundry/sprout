@@ -217,12 +217,12 @@ func TestValidateTree_IndexAndRuntimeWired(t *testing.T) {
 
 	findings, err := ValidateTree(root)
 	require.NoError(t, err)
-	assert.Empty(t, findings, "a contract-complete screen kit must validate clean: %+v", findings)
+	assert.Empty(t, dropDeprecationFindings(findings), "a contract-complete screen kit must validate clean: %+v", findings)
 
 	require.NoError(t, os.Remove(filepath.Join(root, DirName, RuntimeSubdir, RuntimeFilename)))
 	findings, err = ValidateTree(root)
 	require.NoError(t, err)
-	hit := findFinding(t, findings, ruleScreenRuntimeMissing)
+	hit := findFinding(t, dropDeprecationFindings(findings), ruleScreenRuntimeMissing)
 	require.NotNil(t, hit)
 	assert.Equal(t, SeverityInfo, hit.Severity)
 

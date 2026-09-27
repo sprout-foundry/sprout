@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -2088,7 +2087,7 @@ func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	if !tracker.IsEnabled() {
 		t.Fatal("subagent tracking should be enabled")
 	}
-	if changes.ShellCachePrimed(tracker) {
+	if tracker.ShellCachePrimed() {
 		t.Error("subagent tracker eagerly primed the shell cache; expected lazy (nil) until first tracked shell command")
 	}
 
@@ -2099,7 +2098,7 @@ func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	}
 	b.EnableChangeTracking("primary run")
 	bt := b.GetChangeTracker()
-	if bt == nil || !changes.ShellCachePrimed(bt) {
+	if bt == nil || !bt.ShellCachePrimed() {
 		t.Error("primary agent tracker should have an eagerly primed shell cache")
 	}
 }

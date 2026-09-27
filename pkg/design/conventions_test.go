@@ -71,7 +71,7 @@ func TestDesignAssetConventions_ValidTreeZeroFindings(t *testing.T) {
 	findings, err := ValidateTree(root)
 	require.NoError(t, err, "a valid tree must not raise an I/O error")
 	require.NotNil(t, findings, "a completed whole-tree run must return a non-nil slice")
-	assert.Empty(t, findings, "a valid design tree must yield zero findings, got %#v", findings)
+	assert.Empty(t, dropDeprecationFindings(findings), "a valid design tree must yield zero findings, got %#v", findings)
 }
 
 // TestDesignAssetConventions_SeededBadFixtures asserts the second Acceptance
@@ -259,10 +259,10 @@ func TestDesignAssetConventions_FixtureTreeShape(t *testing.T) {
 	required := []string{
 		"design/README.md",
 		"design/tokens/color.tokens.json",
-		"design/wireframes/login.svg",
-		"design/wireframes/home.svg",
 		"design/flows/sign-up.mmd",
+		"design/flows/sign-up.json",
 		"design/screens/login.html",
+		"design/screens/home.html",
 		"design/icons/home.svg",
 		"design/brand/brand.md",
 		GitContractFile,

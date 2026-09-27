@@ -54,6 +54,11 @@ export interface WorkspaceShellDesign {
   tab: DesignTab;
   onTabChange: (tab: DesignTab) => void;
   onOpenFile?: (path: string, lineNumber?: number) => void;
+
+  /** SP-142 142.5: the design chat's display name (the agent header). */
+  agentChatName?: string | null;
+  /** SP-142 142.5: New Chat scoped to the design lane. */
+  onAgentCreateChat?: () => void;
 }
 /** Git state the Code shell's status bar shows. */
 export interface WorkspaceShellGit {

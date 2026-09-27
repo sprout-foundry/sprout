@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/agent/workflow"
 	"strings"
 )
 
@@ -42,7 +43,7 @@ func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, ex
 // buildInProcessCompletionMessage builds the completion message for the
 // in-process workflow runner. It includes the item counts from the result
 // and any error information.
-func buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status string, result *WorkflowResult) string {
+func buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status string, result *workflow.WorkflowResult) string {
 	if result == nil {
 		return fmt.Sprintf(
 			"[automate] In-process workflow completed:\n"+

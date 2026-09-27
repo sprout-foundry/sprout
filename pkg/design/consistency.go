@@ -84,12 +84,14 @@ var manifestBulletNameRe = regexp.MustCompile("^[-*]\\s+`([^`]+)`")
 func ValidateConsistency(root string) []Finding {
 	findings := []Finding{}
 
-	wireframeStems := assetStems(root, "wireframes", ".svg")
-	stemSet := make(map[string]struct{}, len(wireframeStems))
-	for _, s := range wireframeStems {
+	// SP-140-9 §9a/9.4: the wireframe tier is gone; the bidirectionality
+	// universe is the SCREEN stems (the primary tier). During the 9.1-9.3
+	// window this unioned wireframes in; post-migration only screens remain.
+	screenStems := assetStems(root, "screens", ".html")
+	stemSet := make(map[string]struct{}, len(screenStems))
+	for _, s := range screenStems {
 		stemSet[s] = struct{}{}
 	}
-	screenStems := assetStems(root, "screens", ".html")
 	flowStems := assetStems(root, "flows", ".mmd")
 
 	if matches, err := filepath.Glob(filepath.Join(root, DirName, "flows", "*.mmd")); err == nil {
@@ -102,12 +104,16 @@ func ValidateConsistency(root string) []Finding {
 				continue
 			}
 			rel := relAsset(root, match)
-			findings = append(findings, validateFlowWireframeBidirectionality(rel, data, stemSet)...)
+			stepIDs := map[string]struct{}{}
+			for _, sid := range derivedFlowStepIDs(root, rel) {
+				stepIDs[sid] = struct{}{}
+			}
+			findings = append(findings, validateFlowWireframeBidirectionality(rel, data, stemSet, stepIDs)...)
 		}
 	}
 
 	readmeAssets := readmeScreenAssets{
-		wireframeStems: wireframeStems,
+		wireframeStems: nil, // the tier is gone post-9.4; kept for schema shape
 		screenStems:    screenStems,
 		flowStems:      flowStems,
 		componentStems: assetStems(root, "components", ".svg"),
@@ -138,12 +144,16 @@ func ValidateConsistency(root string) []Finding {
 // flow/wireframe bidirectionality rule (SP-140-4 §4b), used by ValidateFile's
 // flow dispatch so a one-file flow validation surfaces the same consistency
 // findings a whole-tree run does. The result is never nil and is sorted.
-func flowBidirectionalityFindings(relPath string, content []byte, wireframeStems []string) []Finding {
+func flowBidirectionalityFindings(root, relPath string, content []byte, wireframeStems []string) []Finding {
 	stemSet := make(map[string]struct{}, len(wireframeStems))
 	for _, s := range wireframeStems {
 		stemSet[s] = struct{}{}
 	}
-	findings := validateFlowWireframeBidirectionality(relPath, content, stemSet)
+	stepIDs := map[string]struct{}{}
+	for _, sid := range derivedFlowStepIDs(root, relPath) {
+		stepIDs[sid] = struct{}{}
+	}
+	findings := validateFlowWireframeBidirectionality(relPath, content, stemSet, stepIDs)
 	if findings == nil {
 		findings = []Finding{}
 	}
@@ -163,7 +173,7 @@ func flowBidirectionalityFindings(relPath string, content []byte, wireframeStems
 // leaves a screen that does not exist, which is the same broken
 // bidirectionality from the other side. Findings are deduplicated per node id
 // and carry the 1-based line of the node's first mention.
-func validateFlowWireframeBidirectionality(relPath string, content []byte, wireframeStems map[string]struct{}) []Finding {
+func validateFlowWireframeBidirectionality(relPath string, content []byte, wireframeStems, stepIDs map[string]struct{}) []Finding {
 	fc := ParseFlowchart(string(content))
 	findings := []Finding{}
 
@@ -196,6 +206,11 @@ func validateFlowWireframeBidirectionality(relPath string, content []byte, wiref
 			continue
 		}
 		if _, ok := wireframeStems[id]; ok {
+			continue
+		}
+		if _, ok := stepIDs[id]; ok {
+			// §9b: a derived flow's step node stands for a screen the source
+			// names; the wireframe-counterpart question does not apply.
 			continue
 		}
 		if hasTarget[id] && !hasSource[id] {
@@ -252,7 +267,6 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 		}
 		return m
 	}
-	wireframes := stems(assets.wireframeStems)
 	screens := stems(assets.screenStems)
 	flows := stems(assets.flowStems)
 	components := stems(assets.componentStems)
@@ -266,9 +280,10 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 			if _, ok := flows[ref.name]; ok {
 				continue
 			}
-			// A screen flow and its wireframe share a stem; a listing that
-			// names a screen flow is satisfied by the wireframe too.
-			if _, ok := wireframes[ref.name]; ok {
+			// A flow and its screens share stems (§9b: the flow's steps name
+			// screens); a listing that names a flow is satisfied by an
+			// existing screen of the same stem.
+			if _, ok := screens[ref.name]; ok {
 				continue
 			}
 		case "Components":
@@ -277,10 +292,7 @@ func validateReadmeScreenRefs(root string, assets readmeScreenAssets) []Finding 
 				continue
 			}
 		default: // Screens
-			expected = fmt.Sprintf("design/wireframes/%s.svg (or design/screens/%s.html)", ref.name, ref.name)
-			if _, ok := wireframes[ref.name]; ok {
-				continue
-			}
+			expected = fmt.Sprintf("design/screens/%s.html", ref.name)
 			if _, ok := screens[ref.name]; ok {
 				continue
 			}

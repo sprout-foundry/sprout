@@ -391,6 +391,8 @@ func TestResolveExportTargets(t *testing.T) {
 		{name: "duplicates collapse", raw: "css,css,ts", want: []string{"css", "ts"}},
 		{name: "whitespace tolerated", raw: "  kotlin , tailwind  ", want: []string{"tailwind", "kotlin"}},
 		{name: "all mixed in means all", raw: "css,all", want: ExportTargets},
+		{name: "flows is an explicit target", raw: "flows", want: []string{"flows"}},
+		{name: "flows is never in all", raw: "all", want: ExportTargets},
 		{name: "unknown target errors", raw: "sass", wantErr: true},
 		{name: "empty after commas errors", raw: ",,", wantErr: true},
 	}

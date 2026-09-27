@@ -64,7 +64,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "settings" is both source and target (non-terminal) with no
 		// wireframe, so it trips the rule.
 		content := "flowchart LR\n  login --> home\n  home --> settings\n  settings --> home\n  home --> checkout\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -82,13 +82,13 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "welcome" is only ever an edge target (no outgoing edge) — a terminal
 		// state, exempt from the wireframe requirement per §4b.
 		content := "flowchart LR\n  login --> home\n  home --> welcome\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		assert.Equal(t, 0, findingRules(findings)[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 	})
 
 	t.Run("all-wireframes-clean", func(t *testing.T) {
 		content := "flowchart LR\n  login --> home\n  home --> checkout\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home", "checkout"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home", "checkout"})
 		requireNoWireframeFindings(t, findings)
 	})
 
@@ -96,7 +96,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// "ghost" is the source of an edge and the target of none: the edge
 		// leaves a screen that does not exist, so it is non-terminal-broken.
 		content := "flowchart LR\n  login --> home\n  ghost --> home\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -111,7 +111,7 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// also chain through a non-stem non-terminal node: the non-stem node
 		// is flagged, the stems are not.
 		content := "flowchart LR\n  login --> home\n  home --> wizard\n  wizard --> home\n  home --> done\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		rules := findingRules(findings)
 		assert.Equal(t, 1, rules[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 		for _, f := range findings {
@@ -126,14 +126,14 @@ func TestValidateFlowsBidirectionality(t *testing.T) {
 		// No edge endpoint is a wireframe stem, so this is a process/user flow:
 		// nothing cross-checks it (matching the §1c node-stem scoping).
 		content := "flowchart TD\n  start --> process --> done\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login"})
 		requireNoWireframeFindings(t, findings)
 	})
 
 	t.Run("deduplicated-per-node", func(t *testing.T) {
 		// One node referenced by three edges yields one finding.
 		content := "flowchart LR\n  login --> ghost\n  ghost --> ghost2\n  ghost --> home\n"
-		findings := flowBidirectionalityFindings(rel, []byte(content), []string{"login", "home"})
+		findings := flowBidirectionalityFindings(t.TempDir(), rel, []byte(content), []string{"login", "home"})
 		assert.Equal(t, 1, findingRules(findings)[ruleConsistencyFlowEdgeWireframe], "got %#v", findings)
 	})
 }
@@ -146,11 +146,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 		// "profile" is wired as a flow node but has no wireframe file, and it is
 		// non-terminal (home -> profile -> home), so the §4b edge rule fires.
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg":   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"home.svg":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Home</text></svg>`,
-			"profile.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Profile</text></svg>`,
-		}, "frames:\n  mobile: 390x844\n")
+		writeScreenTree(t, root, []string{"login", "home", "profile"}, "frames:\n  mobile: 390x844\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
 		// "settings" is a real stem; "ghost" is not, and it both leaves home
 		// and returns to it — non-terminal.
@@ -170,10 +166,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 
 	t.Run("valid-screen-flow-clean", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"home.svg":  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Home</text></svg>`,
-		}, "frames:\n  mobile: 390x844\n")
+		writeScreenTree(t, root, []string{"login", "home"}, "frames:\n  mobile: 390x844\n")
 		require.NoError(t, os.MkdirAll(filepath.Join(root, DirName, "flows"), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(root, DirName, "flows", "main.mmd"),
 			[]byte("flowchart LR\n  login --> home\n"), 0o644))
@@ -200,9 +193,7 @@ func TestValidateFlowsDirBidirectionality(t *testing.T) {
 func TestConsistencyReadmeScreenRefs(t *testing.T) {
 	t.Run("missing-wireframe-flagged", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft — sign in\n- `checkout` — draft — pay\n\n## Status markers\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"login"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft — sign in\n- `checkout` — draft — pay\n\n## Status markers\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		rules := findingRules(findings)
@@ -253,9 +244,7 @@ func TestConsistencyReadmeScreenRefs(t *testing.T) {
 		// A screen flow and its wireframe share a stem, so a Flows entry whose
 		// wireframe exists is clean even without the flow file.
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"sign-up.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Sign up</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Flows\n\n- `sign-up` — draft\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"sign-up"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Flows\n\n- `sign-up` — draft\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		assert.Equal(t, 0, findingRules(findings)[ruleManifestLinkDangling], "got %#v", findings)
@@ -263,10 +252,7 @@ func TestConsistencyReadmeScreenRefs(t *testing.T) {
 
 	t.Run("wireframe-present-clean", func(t *testing.T) {
 		root := t.TempDir()
-		writeWireframeTree(t, root, map[string]string{
-			"login.svg":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Login</text></svg>`,
-			"checkout.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><text>Checkout</text></svg>`,
-		}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n\ndraft, review, ready\n")
+		writeScreenTree(t, root, []string{"login", "checkout"}, "# Design\n\nframes:\n  mobile: 390x844\n\n## Screens\n\n- `login` — draft\n- `checkout` — draft\n\ndraft, review, ready\n")
 
 		findings := ValidateConsistency(root)
 		assert.Equal(t, 0, findingRules(findings)[ruleManifestLinkDangling], "got %#v", findings)

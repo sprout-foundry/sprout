@@ -18,9 +18,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // indexScreenDoc is a minimal runtime-era screen: device, declared states,
-// and two data-nav anchors with triggers.
+// two data-nav anchors with triggers, and the §9a identity attribute.
 const indexScreenDoc = `<!doctype html>
-<html lang="en" data-device="phone" data-states="empty,error,ready">
+<html lang="en" data-device="phone" data-screen="home" data-states="empty,error,ready">
 <head><title>Home</title>
 <style>.screen { width: 393px; }</style>
 </head>
@@ -35,9 +35,10 @@ const indexScreenDoc = `<!doctype html>
 </html>
 `
 
-// indexDetailDoc is the nav target: same device, back edge, one state.
+// indexDetailDoc is the nav target: same device, back edge, one state,
+// and the §9a identity attribute.
 const indexDetailDoc = `<!doctype html>
-<html data-device="phone" data-states="ready">
+<html data-device="phone" data-screen="detail" data-states="ready">
 <head><title>Detail</title></head>
 <body>
   <a data-nav="to:home;trigger:tap back">back</a>

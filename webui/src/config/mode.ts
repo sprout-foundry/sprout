@@ -129,6 +129,13 @@ export let supportsSettings: boolean = capability('supportsSettings', true, true
  */
 export const supportsAutomations: boolean = !isCloud;
 
+/**
+ * Agent change history (the context panel's Agent Changes tab) - local mode
+ * only: the in-browser agent does not record a change manifest, and the
+ * platform serves no /api/changes.
+ */
+export const supportsAgentChanges: boolean = !isCloud;
+
 // Adapter-installed refresh: re-read every capability against the newly
 // installed adapter. The defaults table mirrors the initializers above — a
 // per-key map of [localDefault, cloudDefault] and the matching binding, so a

@@ -62,7 +62,62 @@ the repo. This spec plans the split; it does not schedule it.
     methods (`BuildTranscriptSnapshot`/`CaptureTranscriptSnapshot`) and
     `writeFileAtomic` serves `persistence_message.go`; both can follow in a
     later increment if the cluster's remaining entanglement warrants it.
-- Phases 3–5 pending (`approvals`, `subagents`, `tools`).
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 1 — the LLM
+  security-analyzer cluster landed.** The `security_analyzer*.go` trio
+  (`security_analyzer.go`, `security_analyzer_chain.go`,
+  `security_analyzer_cache.go`) moved into the new `pkg/agent/approvals`
+  subpackage. The cluster was nearly self-contained: the LLM entrypoints
+  (`AnalyzeChain`, `AnalyzeChainFallback`, `AnalyzeShellCommand`) took a
+  concrete `*Agent` and reached in only two places (`agent.getClient()`,
+  `agent.GetModel()`). The seam: the three entrypoints now take
+  `(client api.ClientInterface, model string, …)` — the caller resolves the
+  client + model (including the session-model override). A
+  `pkg/agent/security_analyzer_forwarders.go` keeps the original
+  `*Agent`-based signatures for every in-package call site
+  (`approval_broker.go`, `agent_accessors.go`), so no caller changed.
+  `SecurityAnalysis`, `SecurityAnalysisCache`, `Chain`, `ParseChain`,
+  `ChainCacheKey`, `NormalizeChain`, `NewSecurityAnalysisCache`, and
+  `MaxChainSubcommandsForBatchPrompt` are type aliases/forwarders into
+  `approvals`; the chain/cache files moved as pure moves (only the
+  `package` line + file-reference comment changed).
+  - **Behavior-preservation detail:** the original `AnalyzeChain` ran the
+    long-chain dispatch *before* the client-nil check, so a long chain with
+    no client still returned a synthesized (best-effort) entry. The moved
+    version preserves that ordering exactly (dispatch → then `client==nil`
+    check). The `*Agent`-based nil guard (`agent == nil`) was dropped since
+    the entrypoints are now client-injected; a `nil` client is still
+    handled.
+  - **Test split:** `security_analyzer_test.go` was 1873 lines and mixed the
+    analyzer tests (lines 1–1397: 41 tests + 4 mock clients) with the
+    file-access conformance tests (lines 1399–1873: `NonTmpTempDir`/
+    `externalTempDir` + `TestClassifyFileAccess_Conformance` + the
+    `TestClassifyFileAccess_*` / `TestStaticGateAutoApprove_*` battery). The
+    analyzer half moved to `approvals/security_analyzer_test.go` (the mock
+    clients implement `api.ClientInterface` directly, so the
+    `&Agent{}`/`setClient` setup became `client.GetModel()` — no `*Agent`
+    needed); the conformance half stayed in `pkg/agent/security_analyzer_test.go`.
+    One deliberate, documented nuance (reviewed): the pre-move "nil agent"
+    fast error is gone — a nil `*Agent` degrades to a nil client, so the
+    fallback/long-chain path now synthesizes instead of erroring (unreachable
+    in production; pinned by `TestAnalyzeChainFallback_NilClient_ReturnsSynthesized`).
+  - **Verification:** `go build ./...` + `go vet` + `gofmt` clean;
+    content-identity on all 4 moved production files (only the seam lines
+    differ); `pkg/agent/approvals` suite green (41 tests); `pkg/agent`
+    suite green in isolation (the `[state-leak]` failure is the
+    documented environmental false positive — my own live orchestrator
+    session journals into the real state dir during the run);
+    `agent_tools`/`webui`/`console`/`utils` suites green. The WebUI JS
+    `build-all` step OOMs on this machine (JavaScript heap limit),
+    unrelated to this Go-only change.
+  - **Remaining approvals work (future increments):** the
+    approval-broker/allowlist/risk-input files
+    (`approval_broker.go`, `approval_allowlist.go`, `risk_assessment.go`,
+    `agent_security.go`, `shell_approval*.go`, `tool_security*.go`,
+    `edit_approval.go`, `security_circuit_breaker.go`, `seed_tool_security.go`,
+    `submanager_*_security.go`) still carry `*Agent` methods and reach into
+    `Agent` fields — they follow the `ChangeAgent`-seam pattern (define a
+    narrow `ApprovalAgent` interface, move, forward) in a later increment.
+- Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem
 

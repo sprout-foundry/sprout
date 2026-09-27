@@ -46,6 +46,14 @@
   flex-shrink: 0;
 }
 
+.context-panel-resizer:focus {
+  outline: none;
+}
+
+.context-panel-resizer:focus-visible {
+  background: var(--accent-primary);
+}
+
 .context-panel-resizer:hover {
   background: var(--bg-surface);
   border-color: var(--border-strong);

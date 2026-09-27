@@ -222,9 +222,18 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         <div
           className="context-panel-resizer"
           onMouseDown={state.startResize}
+          onKeyDown={(e) => {
+            // The panel is docked right: ArrowLeft widens it, ArrowRight narrows it.
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            const step = e.shiftKey ? 50 : 10;
+            state.setPanelWidth(state.panelWidth + (e.key === 'ArrowLeft' ? step : -step));
+          }}
+          tabIndex={0}
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize context panel"
+          aria-valuenow={Math.round(state.panelWidth)}
         />
       )}
       {(isMobileLayout && state.panelCollapsed) || (isTabletLayout && state.panelCollapsed) ? null : (

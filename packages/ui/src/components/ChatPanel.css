@@ -1029,12 +1029,6 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 1400px) {
-  .context-panel {
-    width: 320px !important;
-  }
-}
-
 @media (max-width: 900px) {
   .context-panel-resizer {
     display: none;

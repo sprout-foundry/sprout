@@ -674,6 +674,7 @@ function Sidebar({
           onResizeEnd={handleSidebarResizeEnd}
           onDoubleClick={handleSidebarResizeReset}
           className="sidebar-resize-handle"
+          ariaLabel="Resize sidebar"
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 # Sprout
 
-AI-powered coding agent and development environment: a chat-first CLI, a Web UI, and 11 specialized personas that collaborate to understand your workspace, edit code, run tests, open PRs, and drive multi-step tasks against any LLM provider.
+AI-powered coding agent and development environment: a chat-first CLI, a Web UI, and nine specialized personas that collaborate to understand your workspace, edit code, run tests, open PRs, and drive multi-step tasks against any LLM provider.
 
 > **Cost & safety:** Sprout talks to LLM providers and external services, which may incur per-token costs. It ships a 5-profile risk cascade (`readonly` … `unrestricted`), per-hunk diff approval, and configurable tool allowlists — start with `cautious` or `readonly`. See [docs/SECURITY.md](docs/SECURITY.md).
 
@@ -18,15 +18,15 @@ curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/
 irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
 ```
 
-Upgrade, uninstall, version pinning, checksum verification, Homebrew, and Termux: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
+The installer verifies each release's SHA-256 checksum, supports Termux on Android, and installs to `SPROUT_INSTALL_DIR` when set — see [scripts/install.sh](scripts/install.sh). Run it again to upgrade.
 
 ## Getting started
 
 ```bash
-sprout                                                          # interactive mode (Web UI at http://localhost:56000)
+sprout                                                          # interactive mode (prints the Web UI URL)
 sprout agent "Create a python script that prints 'Hello, World!'"
 sprout agent --persona coder "Add JWT auth to the API"
-sprout plan                                                     # planning mode (no code changes)
+sprout plan                                                     # planning mode (proposes a plan; builds after you approve)
 sprout review                                                   # AI review of staged changes
 sprout commit                                                   # generate a conventional commit
 sprout pr                                                       # open a PR for the current branch
@@ -37,8 +37,8 @@ First run walks you through provider selection and API-key validation: [docs/onb
 
 ### What's included
 
-- **Agent + 11 personas** (`orchestrator`, `coder`, `tester`, `reviewer`, …) with parallel subagents, mid-flight steering, and cooperative cancellation; 40+ slash commands for in-session control
-- **Web UI** — chat, editor, file tree, terminal, git UI, settings, cost dashboard; built into the binary, nothing extra to install
+- **Agent + 9 personas** (`orchestrator`, `coder`, `tester`, `reviewer`, …) with parallel subagents, mid-flight steering, and cooperative cancellation; 40+ slash commands for in-session control
+- **Web UI** — chat, editor, file tree, terminal, git UI, settings, session cost meter; built into the binary, nothing extra to install
 - **Providers** — OpenAI, DeepInfra, OpenRouter, Z.AI, GLM Coding Plan, DeepSeek, Mistral, MiniMax, LMStudio, Cerebras, Chutes, Ollama Cloud, plus self-hosted Ollama and any OpenAI-compatible endpoint (`sprout custom add`); the embedded catalog refreshes between releases
 - **Safety** — risk cascade, per-hunk diff approval, security audit log (`sprout audit`)
 - **Skills & MCP** — loadable instruction packs (`sprout skill`) and external tool servers (`sprout mcp`)

@@ -1,6 +1,8 @@
 import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { supportsAutomations, supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { useActiveRepoURL } from '../services/activeRepo';
+import { githubRepoSlug } from '../utils/platformUrl';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlugins } from '../contexts/PluginContext';
@@ -210,6 +212,7 @@ function Sidebar({
   onRequestProviderSetup,
   onViewChange,
 }: SidebarProps): JSX.Element {
+  const staticWorkspaceLabel = githubRepoSlug(useActiveRepoURL()) ?? 'No repository open';
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.
@@ -515,9 +518,9 @@ function Sidebar({
                   sidebarCollapsed={effectiveSidebarCollapsed}
                 />
               ) : (
-                <div className="sidebar-static-workspace" title="Browser Workspace">
+                <div className="sidebar-static-workspace" title={staticWorkspaceLabel}>
                   <FolderOpen size={14} className="sidebar-static-workspace-icon" />
-                  <span className="sidebar-static-workspace-label">Browser Workspace</span>
+                  <span className="sidebar-static-workspace-label">{staticWorkspaceLabel}</span>
                 </div>
               )}
             </>
@@ -564,7 +567,9 @@ function Sidebar({
               </div>
             ) : (
               <div role="tablist" aria-orientation="vertical">
-                {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
+                {ALL_SECTION_TABS.filter(
+                  (tab) => (tab.id !== 'git' || supportsGit) && (tab.id !== 'automations' || supportsAutomations),
+                ).map((tab) => (
                   <button
                     key={tab.id}
                     role="tab"

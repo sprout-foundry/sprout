@@ -4,6 +4,8 @@ import { FolderOpen, Zap } from 'lucide-react';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
+import { useActiveRepoURL } from '../services/activeRepo';
+import { githubRepoSlug } from '../utils/platformUrl';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';
@@ -84,14 +86,20 @@ function StatusBar({
     setIsNotificationCenterOpen(false);
   }, []);
 
+  // The hosted editor's workspace root is a fixed virtual folder, so the
+  // open repository names it instead.
+  const repoSlug = githubRepoSlug(useActiveRepoURL());
+  const workspaceLabel = isCloud ? repoSlug : workspacePath;
+
   // SP-022-W2.3: derive workspace basename from the full path
   const workspaceName = useMemo(() => {
+    if (isCloud) return repoSlug?.split('/')[1] ?? '';
     if (!workspacePath || workspacePath.trim() === '') return '';
     // Handle trailing slashes and extract last non-empty segment
     const trimmed = workspacePath.replace(/\/+$/, '');
     const segments = trimmed.split('/');
     return segments[segments.length - 1] || '';
-  }, [workspacePath]);
+  }, [workspacePath, repoSlug]);
 
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -126,8 +134,8 @@ function StatusBar({
           onClick={onWorkspaceClick}
           role="button"
           tabIndex={0}
-          title={`Workspace: ${workspacePath}`}
-          aria-label={`Workspace: ${workspaceName}`}
+          title={isCloud ? `Repository: ${workspaceLabel}` : `Workspace: ${workspacePath}`}
+          aria-label={isCloud ? `Repository: ${workspaceName}` : `Workspace: ${workspaceName}`}
           data-testid="status-bar-workspace"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -156,7 +164,7 @@ function StatusBar({
           );
         })()}
       <SproutStatusBar
-        branch={supportsGit ? branch : 'Browser IDE'}
+        branch={supportsGit ? branch || (isCloud ? 'No repository' : undefined) : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}
         language={language}
         encoding={encoding}

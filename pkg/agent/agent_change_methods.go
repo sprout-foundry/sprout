@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
@@ -28,7 +29,7 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 
 	if a.changeTracker == nil {
 		// First enable of this session — create the tracker with a stable revisionID + instructions.
-		a.changeTracker = NewChangeTracker(a, instructions)
+		a.changeTracker = NewChangeTracker(a.changesView(), instructions)
 		if a.debug {
 			a.Logger().Debug("DEBUG: Created new change tracker (session start)\n")
 		}
@@ -125,11 +126,13 @@ func (a *Agent) applyChangeTrackingConfig() {
 	if resolved.ShellWalkEnabled != nil {
 		enabled = *resolved.ShellWalkEnabled
 	}
-	a.changeTracker.shellWalkEnabled = enabled
-	a.changeTracker.shellMaxFiles = resolved.MaxFiles
-	a.changeTracker.shellMaxTotalBytes = resolved.MaxTotalBytes
-	a.changeTracker.shellMaxDuration = time.Duration(resolved.MaxDurationMs) * time.Millisecond
-	a.changeTracker.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
+	a.changeTracker.ApplyShellWalkConfig(changes.ShellWalkConfig{
+		ShellWalkEnabled:           enabled,
+		MaxFiles:                   resolved.MaxFiles,
+		MaxTotalBytes:              resolved.MaxTotalBytes,
+		MaxDuration:                time.Duration(resolved.MaxDurationMs) * time.Millisecond,
+		AutoSkipFileCountThreshold: resolved.AutoSkipFileCountThreshold,
+	})
 }
 
 // isChangeTrackingEnabledByConfig reads the change_tracking.enabled setting. Defaults to true.
@@ -180,7 +183,7 @@ func (a *Agent) IsPathOutsideWorkspace(path string) bool {
 	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
 		return false
 	}
-	return a.changeTracker.isOutsideWorkspace(path)
+	return a.changeTracker.IsOutsideWorkspace(path)
 }
 
 // GetRevisionID returns the current revision ID (if change tracking is enabled)

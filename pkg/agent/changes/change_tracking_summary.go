@@ -1,4 +1,4 @@
-package agent
+package changes
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 	instructions := ct.instructions
 	ct.mu.Unlock()
 
-	if ct.agent == nil {
+	if ct.view == nil {
 		return ct.GetSummary(), nil
 	}
 
@@ -48,7 +48,7 @@ func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 
 Focus on WHAT was changed and WHY (based on the instruction). Be specific about files and functionality affected.`, contextBuilder.String())
 
-	response, err := ct.agent.GenerateResponse([]api.Message{
+	response, err := ct.view.GenerateResponse([]api.Message{
 		{Role: "user", Content: prompt},
 	})
 

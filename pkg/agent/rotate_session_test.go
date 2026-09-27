@@ -247,7 +247,7 @@ func TestRotateSessionResetsChangeTracker(t *testing.T) {
 	if got := tracker.GetRevisionID(); got == "" {
 		t.Error("tracker should have a fresh revision ID after rotation")
 	}
-	if tracker.sessionID != newID {
-		t.Errorf("tracker sessionID = %q, want the new session ID %q", tracker.sessionID, newID)
+	if tracker.TrackerSessionID() != newID {
+		t.Errorf("tracker sessionID = %q, want the new session ID %q", tracker.TrackerSessionID(), newID)
 	}
 }

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,22 +43,21 @@ func TestHandleListChanges_NoTracker(t *testing.T) {
 
 func TestHandleListChanges_ReportsRecoverabilityAccurately(t *testing.T) {
 	a := &Agent{}
-	a.changeTracker = &ChangeTracker{
-		revisionID: "rev-abc123",
-		enabled:    true,
-		changes: []TrackedFileChange{
-			// Created — no original by definition → not recoverable.
-			{FilePath: "/work/new.go", Operation: "create", ToolCall: "shell_command", OriginalCode: ""},
-			// Edited — full original captured → recoverable.
-			{FilePath: "/work/edit.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "before"},
-			// Deleted with full content → recoverable.
-			{FilePath: "/work/del.go", Operation: "delete", ToolCall: "shell_command", OriginalCode: "lost work"},
-			// Path-only sentinel (binary / oversized) → not recoverable.
-			{FilePath: "/work/blob.bin", Operation: "delete", ToolCall: "shell_command", OriginalCode: "[CONTENT NOT CAPTURED: binary]"},
-			// Redacted (outside workspace) → not recoverable.
-			{FilePath: "/external/secret", Operation: "edit", ToolCall: "shell_command", OriginalCode: RedactedContentMarker},
-		},
-	}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.SetRevisionIDForTest("rev-abc123")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		// Created — no original by definition → not recoverable.
+		{FilePath: "/work/new.go", Operation: "create", ToolCall: "shell_command", OriginalCode: ""},
+		// Edited — full original captured → recoverable.
+		{FilePath: "/work/edit.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "before"},
+		// Deleted with full content → recoverable.
+		{FilePath: "/work/del.go", Operation: "delete", ToolCall: "shell_command", OriginalCode: "lost work"},
+		// Path-only sentinel (binary / oversized) → not recoverable.
+		{FilePath: "/work/blob.bin", Operation: "delete", ToolCall: "shell_command", OriginalCode: "[CONTENT NOT CAPTURED: binary]"},
+		// Redacted (outside workspace) → not recoverable.
+		{FilePath: "/external/secret", Operation: "edit", ToolCall: "shell_command", OriginalCode: RedactedContentMarker},
+	}, "test")
 
 	out, err := handleListChanges(context.Background(), a, nil)
 	if err != nil {
@@ -136,13 +136,14 @@ func TestIsRecoverableOriginal(t *testing.T) {
 
 func TestHandleListChanges_FiltersBySince(t *testing.T) {
 	t0 := time.Now()
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: "/old.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x", Timestamp: t0.Add(-1 * time.Hour)},
-			{FilePath: "/new.go", Operation: "create", ToolCall: "write_file", Timestamp: t0.Add(-1 * time.Minute)},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: "/old.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x", Timestamp: t0.Add(-1 * time.Hour)},
+		{FilePath: "/new.go", Operation: "create", ToolCall: "write_file", Timestamp: t0.Add(-1 * time.Minute)},
+	}, "test")
+
 	args := map[string]interface{}{"since": t0.Add(-30 * time.Minute).Format(time.RFC3339)}
 	out, err := handleListChanges(context.Background(), a, args)
 	if err != nil {
@@ -157,13 +158,14 @@ func TestHandleListChanges_FiltersBySince(t *testing.T) {
 }
 
 func TestHandleListChanges_FiltersByTool(t *testing.T) {
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: "/a", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x"},
-			{FilePath: "/b", Operation: "create", ToolCall: "shell_command"},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: "/a", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x"},
+		{FilePath: "/b", Operation: "create", ToolCall: "shell_command"},
+	}, "test")
+
 	out, _ := handleListChanges(context.Background(), a, map[string]interface{}{"tool": "shell_command"})
 	if !strings.Contains(out, "/b") || strings.Contains(out, "/a") {
 		t.Errorf("tool filter wrong: %s", out)
@@ -176,14 +178,15 @@ func TestHandleListChanges_IncludeDiff_RendersUnifiedDiff(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "foo.go")
 
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: path, Operation: "edit", ToolCall: "edit_file",
-				OriginalCode: "package main\n\nfunc main() {\n\tprintln(\"hi\")\n}\n",
-				NewCode:      "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: path, Operation: "edit", ToolCall: "edit_file",
+			OriginalCode: "package main\n\nfunc main() {\n\tprintln(\"hi\")\n}\n",
+			NewCode:      "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"},
+	}, "test")
+
 	out, err := handleListChanges(context.Background(), a, map[string]interface{}{
 		"path_pattern": path,
 		"include_diff": true,
@@ -209,7 +212,10 @@ func TestHandleListChanges_IncludeDiff_RendersUnifiedDiff(t *testing.T) {
 }
 
 func TestHandleListChanges_IncludeDiff_NoMatchReturnsEmpty(t *testing.T) {
-	a := &Agent{changeTracker: &ChangeTracker{enabled: true}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+
 	out, _ := handleListChanges(context.Background(), a, map[string]interface{}{
 		"path_pattern": "/never/changed.go",
 		"include_diff": true,
@@ -230,13 +236,14 @@ func TestHandleRevertMyChanges_RevertsAll(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: pathA, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE A"},
-			{FilePath: pathB, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE B"},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: pathA, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE A"},
+		{FilePath: pathB, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE B"},
+	}, "test")
+
 	out, err := handleRevertMyChanges(context.Background(), a, map[string]interface{}{"scope": "all"})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -264,13 +271,14 @@ func TestHandleRecoverFile_SessionStartOnlyTouchesOne(t *testing.T) {
 	_ = os.WriteFile(pathA, []byte("AFTER A"), 0o644)
 	_ = os.WriteFile(pathB, []byte("AFTER B"), 0o644)
 
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: pathA, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE A"},
-			{FilePath: pathB, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE B"},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: pathA, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE A"},
+		{FilePath: pathB, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE B"},
+	}, "test")
+
 	_, err := handleRecoverFile(context.Background(), a, map[string]interface{}{
 		"path":  pathA,
 		"scope": "session_start",
@@ -296,13 +304,14 @@ func TestHandleRevertMyChanges_RevertsToEarliestOriginal(t *testing.T) {
 	path := filepath.Join(dir, "f.txt")
 	_ = os.WriteFile(path, []byte("C"), 0o644)
 
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: path, Operation: "edit", OriginalCode: "A", NewCode: "B"},
-			{FilePath: path, Operation: "edit", OriginalCode: "B", NewCode: "C"},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		{FilePath: path, Operation: "edit", OriginalCode: "A", NewCode: "B"},
+		{FilePath: path, Operation: "edit", OriginalCode: "B", NewCode: "C"},
+	}, "test")
+
 	_, err := handleRevertMyChanges(context.Background(), a, map[string]interface{}{"scope": "all"})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -315,17 +324,18 @@ func TestHandleRevertMyChanges_RevertsToEarliestOriginal(t *testing.T) {
 
 func TestHandleListChanges_GroupBy_Block_GroupsContiguousActivity(t *testing.T) {
 	t0 := time.Now()
-	a := &Agent{changeTracker: &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			// Block 1: three changes within seconds of each other.
-			{FilePath: "/a.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x", Timestamp: t0},
-			{FilePath: "/b.go", Operation: "create", ToolCall: "write_file", Timestamp: t0.Add(5 * time.Second)},
-			{FilePath: "/c.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "y", Timestamp: t0.Add(20 * time.Second)},
-			// Block 2: starts after a 5-minute gap.
-			{FilePath: "/d.go", Operation: "edit", ToolCall: "shell_command", OriginalCode: "z", Timestamp: t0.Add(5 * time.Minute)},
-		},
-	}}
+	a := &Agent{}
+	a.changeTracker = changes.NewChangeTracker(nil, "")
+	a.changeTracker.Enable()
+	a.changeTracker.MergeChild([]TrackedFileChange{
+		// Block 1: three changes within seconds of each other.
+		{FilePath: "/a.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "x", Timestamp: t0},
+		{FilePath: "/b.go", Operation: "create", ToolCall: "write_file", Timestamp: t0.Add(5 * time.Second)},
+		{FilePath: "/c.go", Operation: "edit", ToolCall: "edit_file", OriginalCode: "y", Timestamp: t0.Add(20 * time.Second)},
+		// Block 2: starts after a 5-minute gap.
+		{FilePath: "/d.go", Operation: "edit", ToolCall: "shell_command", OriginalCode: "z", Timestamp: t0.Add(5 * time.Minute)},
+	}, "test")
+
 	out, err := handleListChanges(context.Background(), a, map[string]interface{}{"group_by": "block"})
 	if err != nil {
 		t.Fatalf("err: %v", err)

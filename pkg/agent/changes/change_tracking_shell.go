@@ -2,7 +2,7 @@
 // invocations to detect file changes the structured tools miss (sed, mv, rm, etc.).
 // Supporting code: change_tracking_snapshot.go, change_tracking_mutations.go,
 // change_tracking_autoskip.go, change_tracking_shell_persist.go.
-package agent
+package changes
 
 import (
 	"os"
@@ -293,9 +293,11 @@ func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, wo
 // Keeps the snapshot path silent on success and quietly informative
 // on the rare error.
 func (ct *ChangeTracker) logf(format string, args ...any) {
-	if ct.agent != nil && ct.agent.Logger() != nil {
-		ct.agent.Logger().Debug(format+"\n", args...)
-		return
+	if ct.view != nil {
+		if l := ct.view.DebugLogger(); l != nil {
+			l.Debug(format+"\n", args...)
+			return
+		}
 	}
 	// Avoid pulling in fmt just for a swallowed warning here; if the
 	// agent is nil the tracker is in an unusual state (test path) and

@@ -1,4 +1,4 @@
-package agent
+package changes
 
 import (
 	"crypto/md5"
@@ -31,8 +31,8 @@ func determineWriteOperation(originalContent, newContent string) string {
 
 // getAgentModel returns the model identifier from the agent's runtime config.
 func (ct *ChangeTracker) getAgentModel() string {
-	if ct.agent != nil {
-		return ct.agent.GetModel()
+	if ct.view != nil {
+		return ct.view.GetModel()
 	}
 	return "unknown"
 }

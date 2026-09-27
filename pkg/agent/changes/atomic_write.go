@@ -1,4 +1,4 @@
-package agent
+package changes
 
 import (
 	"os"
@@ -6,6 +6,15 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
+
+// WriteFileAtomic durably replaces path's contents: write to a temp file in
+// the same directory, fsync, then rename over the destination. A crash at
+// any point leaves either the old or the new file — never a torn write.
+// Exported because pkg/agent's session persistence shares it (SP-141
+// phase 2); the package-local writeFileAtomic name continues below.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return writeFileAtomic(path, data, perm)
+}
 
 // writeFileAtomic durably replaces path's contents: write to a temp file in
 // the same directory, fsync, then rename over the destination. A crash at
@@ -47,6 +56,14 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		_ = d.Close()
 	}
 	return nil
+}
+
+// backupFileWithExt copies the current contents of src to src+ext,
+// overwriting any previous backup. Best-effort: errors are returned to the
+// caller, who treats them as non-fatal. Exported for pkg/agent's
+// session-persistence forwarder (SP-141 phase 2).
+func BackupFileWithExt(src, ext string) error {
+	return backupFileWithExt(src, ext)
 }
 
 // backupFileWithExt copies the current contents of src to src+ext,

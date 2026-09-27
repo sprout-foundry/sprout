@@ -1,4 +1,14 @@
-package agent
+package changes
+
+// CheckpointFileChange is a single file-change entry in a turn
+// checkpoint's manifest. Op is one of "A" (added), "M" (modified),
+// "D" (deleted), "R" (renamed) to mirror git's status codes; anything
+// else is "?" (other). pkg/agent aliases this type so the TurnCheckpoint
+// JSON shape is unchanged (SP-141 phase 2).
+type CheckpointFileChange struct {
+	Path string `json:"path"`
+	Op   string `json:"op"`
+}
 
 // CollectFileChangesForCheckpoint returns the (path, op) manifest of
 // changes appended since the most recent checkpoint capture.

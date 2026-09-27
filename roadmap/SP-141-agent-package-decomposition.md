@@ -99,6 +99,21 @@ Rules of engagement:
    > pkg/agent failures are the known encrypted-age-keys environment
    > issue, none workflow-related.
 2. `pkg/agent/changes` — self-contained change-tracking cluster with its own test suite.
+   > **Progress (2026-09-26):** Shipped (phase 2). The change-tracking
+   > cluster (change_tracking*.go, transcript manifest, atomic_write —
+   > 13 non-test files) moved to pkg/agent/changes with its tests;
+   > pkg/agent keeps changes_seam.go: type aliases (ChangeTracker,
+   > TrackedFileChange, …), the changesAgentView adapter (an AgentView
+   > interface over the exported-method surface; *Agent adapts through
+   > a.changesView()), and construction forwarders. Import arrow is
+   > one-way: pkg/agent → changes. Test-visible accessors added on the
+   > tracker (SetView, SetRevisionIDForTest, TrackerSessionID,
+   > ShellCachePrimed, ApplyShellWalkConfig passthrough already
+   > exported); helper-level tests (determineWriteOperation,
+   > resolveAbsPath) moved next to the code they test. Gates: build,
+   > vet, fmt, lint, lint-go-new 0 issues; pkg/agent/changes + agent_tools
+   > suites green; pkg/agent's 26 failures are the known encrypted-keys
+   > env issue (identical list to the phase-1 baseline).
 3. `pkg/agent/approvals` — approval broker + allowlists + risk inputs.
 4. `pkg/agent/subagents` — submanagers/runner/task cluster.
 5. `pkg/agent/tools` — the five big tool_handlers files (largest; do last, possibly split by handler family).

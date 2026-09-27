@@ -22,7 +22,7 @@ func TestTrackFileWrite_InWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Create a file inside the workspace
 	filePath := filepath.Join(ws, "test.go")
@@ -60,7 +60,7 @@ func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Create a file outside the workspace
 	externalDir := t.TempDir()
@@ -94,7 +94,7 @@ func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Write a new file that doesn't exist yet (inside workspace)
 	filePath := filepath.Join(ws, "newfile.go")
@@ -125,7 +125,7 @@ func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Write a new file outside workspace
 	externalDir := t.TempDir()
@@ -154,7 +154,7 @@ func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot("")
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Create a file in /tmp (outside any workspace)
 	externalDir := t.TempDir()
@@ -188,7 +188,7 @@ func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Change to workspace dir so relative path resolves inside workspace
 	origWd, _ := os.Getwd()
@@ -230,7 +230,7 @@ func TestTrackFileWrite_Disabled(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	ct.Disable()
 
 	filePath := filepath.Join(ws, "test.go")
@@ -256,7 +256,7 @@ func TestTrackFileEdit_InWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	originalContent := "func old() {}\n"
 	newContent := "func new() {}\n"
@@ -287,7 +287,7 @@ func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	originalContent := "SECRET=abc123"
 	newContent := "SECRET=xyz789"
@@ -314,7 +314,7 @@ func TestTrackFileEdit_EmptyWorkspaceRoot(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot("")
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	originalContent := "data"
 	newContent := "updated"
@@ -342,7 +342,7 @@ func TestTrackFileEdit_Disabled(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	ct.Disable()
 
 	if err := ct.TrackFileEdit(filepath.Join(ws, "file.go"), "old", "new"); err != nil {
@@ -359,13 +359,12 @@ func TestTrackFileEdit_Disabled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIsOutsideWorkspace_NilAgent(t *testing.T) {
-	ct := &ChangeTracker{
-		enabled: true,
-		agent:   nil,
-	}
+	// The seam made "nil agent" a nil view — a bare tracker must not panic
+	// and must not redact.
+	ct := NewChangeTracker(nil, "")
 
 	// Should not panic and should return false (don't redact)
-	result := ct.isOutsideWorkspace("/tmp/file.txt")
+	result := ct.IsOutsideWorkspace("/tmp/file.txt")
 	if result {
 		t.Errorf("nil agent should not redact, got isOutsideWorkspace = true")
 	}
@@ -376,11 +375,11 @@ func TestIsOutsideWorkspace_NestedPathInWorkspace(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 
 	// Deeply nested path inside workspace should not be redacted
 	nestedPath := filepath.Join(ws, "a", "b", "c", "d", "file.go")
-	result := ct.isOutsideWorkspace(nestedPath)
+	result := ct.IsOutsideWorkspace(nestedPath)
 	if result {
 		t.Errorf("nested path inside workspace should not be redacted")
 	}
@@ -392,11 +391,11 @@ func TestIsOutsideWorkspace_SiblingDirectory(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 
 	// A file in a sibling directory should be redacted
 	filePath := filepath.Join(siblingDir, "file.go")
-	result := ct.isOutsideWorkspace(filePath)
+	result := ct.IsOutsideWorkspace(filePath)
 	if !result {
 		t.Errorf("sibling directory should be redacted")
 	}
@@ -407,38 +406,13 @@ func TestIsOutsideWorkspace_WorkspaceRootIsParentOfFile(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 
 	// File directly in workspace root
 	filePath := filepath.Join(ws, "file.go")
-	result := ct.isOutsideWorkspace(filePath)
+	result := ct.IsOutsideWorkspace(filePath)
 	if result {
 		t.Errorf("file in workspace root should not be redacted")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// determineWriteOperation tests
-// ---------------------------------------------------------------------------
-
-func TestDetermineWriteOperation_Create(t *testing.T) {
-	op := determineWriteOperation("", "new content")
-	if op != "create" {
-		t.Errorf("empty original should be 'create', got %q", op)
-	}
-}
-
-func TestDetermineWriteOperation_Write(t *testing.T) {
-	op := determineWriteOperation("old content", "new content")
-	if op != "write" {
-		t.Errorf("different content should be 'write', got %q", op)
-	}
-}
-
-func TestDetermineWriteOperation_Overwrite(t *testing.T) {
-	op := determineWriteOperation("same content", "same content")
-	if op != "overwrite" {
-		t.Errorf("identical content should be 'overwrite', got %q", op)
 	}
 }
 
@@ -451,7 +425,7 @@ func TestGetTrackedFiles(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 
 	file1 := filepath.Join(ws, "a.go")
 	file2 := filepath.Join(ws, "b.go")
@@ -473,7 +447,7 @@ func TestClear(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
 
 	if ct.GetChangeCount() != 1 {
@@ -492,7 +466,7 @@ func TestReset(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "old instruction")
+	ct := NewChangeTracker(agent.changesView(), "old instruction")
 	oldID := ct.GetRevisionID()
 	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
 
@@ -515,7 +489,7 @@ func TestEnableDisable(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test")
+	ct := NewChangeTracker(agent.changesView(), "test")
 
 	if !ct.IsEnabled() {
 		t.Fatalf("new tracker should be enabled by default")
@@ -545,7 +519,7 @@ func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	// Track a relative path (as the LLM typically provides).
 	relPath := "pkg/agent/foo.go"
@@ -580,7 +554,7 @@ func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
 	relPath := "src/main.go"
 	if err := ct.TrackFileEdit(relPath, "old", "new"); err != nil {
@@ -598,71 +572,6 @@ func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 	}
 }
 
-// TestResolveAbsPath_AlreadyAbsolute returns cleaned absolute paths
-// unchanged.
-func TestResolveAbsPath_AlreadyAbsolute(t *testing.T) {
-	ws := t.TempDir()
-	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
-
-	ct := NewChangeTracker(agent, "test instruction")
-
-	abs := filepath.Join(ws, "a", "b", "c.go")
-	resolved := ct.resolveAbsPath(abs)
-	if resolved != filepath.Clean(abs) {
-		t.Errorf("absolute path should be cleaned but unchanged, got %q want %q", resolved, filepath.Clean(abs))
-	}
-}
-
-// TestResolveAbsPath_UsesWorkspaceRoot resolves relative paths against
-// the workspace root, not the process CWD.
-func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
-	ws := t.TempDir()
-	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
-
-	ct := NewChangeTracker(agent, "test instruction")
-
-	// CWD is NOT the workspace — normalization must still use ws.
-	origWd, _ := os.Getwd()
-	defer os.Chdir(origWd)
-	otherDir := t.TempDir()
-	os.Chdir(otherDir)
-
-	resolved := ct.resolveAbsPath("nested/file.go")
-	expected := filepath.Join(ws, "nested", "file.go")
-	if resolved != expected {
-		t.Errorf("expected resolution against workspace root %q, got %q", expected, resolved)
-	}
-}
-
-// TestResolveAbsPath_FallsBackToCwd uses CWD when workspace root is empty.
-func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
-	agent := NewTestAgent()
-	agent.SetWorkspaceRoot("")
-
-	ct := NewChangeTracker(agent, "test instruction")
-
-	origWd, _ := os.Getwd()
-	defer os.Chdir(origWd)
-	tmp := t.TempDir()
-	os.Chdir(tmp)
-
-	resolved := ct.resolveAbsPath("file.go")
-	// On macOS, t.TempDir() returns /var/folders/... (symlink to /private/var/...)
-	// but os.Getwd() (used by resolveAbsPath) returns the resolved /private/var/...
-	// form. Resolve the expected path to match.
-	expected, err := filepath.EvalSymlinks(filepath.Join(tmp, "file.go"))
-	if err != nil {
-		// File doesn't exist; resolve just the directory.
-		resolvedDir, _ := filepath.EvalSymlinks(tmp)
-		expected = filepath.Join(resolvedDir, "file.go")
-	}
-	if resolved != expected {
-		t.Errorf("expected CWD-based resolution %q, got %q", expected, resolved)
-	}
-}
-
 // TestRecovery_ResolvesCorrectlyAfterChdir (H3 integration) verifies
 // the end-to-end fix: track a relative path, change CWD, then verify
 // recovery resolves to the ORIGINAL location (not the new CWD).
@@ -671,7 +580,7 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	agent := NewTestAgent()
 	agent.SetWorkspaceRoot(ws)
 
-	ct := NewChangeTracker(agent, "test instruction")
+	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	agent.changeTracker = ct
 
 	// Track a relative path while CWD == workspace.
@@ -987,7 +896,7 @@ func TestChangeTrackingE2E(t *testing.T) {
 	}
 
 	if agent.changeTracker == nil {
-		agent.changeTracker = NewChangeTracker(agent, instructions)
+		agent.changeTracker = NewChangeTracker(agent.changesView(), instructions)
 		agent.changeTracker.Enable()
 	}
 
@@ -1146,7 +1055,7 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 	}
 
 	agent := &Agent{}
-	agent.changeTracker = NewChangeTracker(agent, "Make a series of edits")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "Make a series of edits")
 	agent.changeTracker.Enable()
 
 	// Redirect AFTER NewChangeTracker so the redirect survives.
@@ -1232,7 +1141,7 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 	}
 
 	agent := &Agent{}
-	agent.changeTracker = NewChangeTracker(agent, "H1 idempotency test")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "H1 idempotency test")
 	agent.changeTracker.Enable()
 
 	// Redirect AFTER NewChangeTracker so the redirect survives.
@@ -1309,7 +1218,7 @@ func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
 
 func TestMergeChild_BasicMerge(t *testing.T) {
 	agent := NewTestAgent()
-	ct := NewChangeTracker(agent, "primary instruction")
+	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
 		{
@@ -1368,7 +1277,7 @@ func TestMergeChild_BasicMerge(t *testing.T) {
 
 func TestMergeChild_NoOpWhenDisabled(t *testing.T) {
 	agent := NewTestAgent()
-	ct := NewChangeTracker(agent, "primary instruction")
+	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 	ct.Disable()
 
 	changes := []TrackedFileChange{
@@ -1383,7 +1292,7 @@ func TestMergeChild_NoOpWhenDisabled(t *testing.T) {
 
 func TestMergeChild_EmptyAndNilSafe(t *testing.T) {
 	agent := NewTestAgent()
-	ct := NewChangeTracker(agent, "primary instruction")
+	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 
 	// Must not panic on nil.
 	ct.MergeChild(nil, "subagent:coder")
@@ -1400,7 +1309,7 @@ func TestMergeChild_EmptyAndNilSafe(t *testing.T) {
 
 func TestMergeChild_DoesNotMutateInput(t *testing.T) {
 	agent := NewTestAgent()
-	ct := NewChangeTracker(agent, "primary instruction")
+	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
 		{FilePath: "/ws/a.go", NewCode: "a\n", Operation: "create", Timestamp: time.Now()},
@@ -1422,7 +1331,7 @@ func TestMergeChild_TagsSource(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
 	agent.workspaceRoot = ws
-	ct := NewChangeTracker(agent, "primary instruction")
+	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 
 	// Record a pre-existing primary-agent edit (no Source).
 	primaryFile := filepath.Join(ws, "primary.go")
@@ -1459,7 +1368,7 @@ func TestAgent_MergeSubagentChanges(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
 	agent.workspaceRoot = ws
-	agent.changeTracker = NewChangeTracker(agent, "primary instruction")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
 		{
@@ -1507,7 +1416,7 @@ func TestAgent_MergeSubagentChanges_EmptyPersonaUsesBareTag(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
 	agent.workspaceRoot = ws
-	agent.changeTracker = NewChangeTracker(agent, "primary instruction")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
 		{FilePath: filepath.Join(ws, "sub.go"), NewCode: "x\n", Operation: "create", Timestamp: time.Now()},
@@ -1526,7 +1435,7 @@ func TestAgent_MergeSubagentChanges_EmptyPersonaUsesBareTag(t *testing.T) {
 
 func TestAgent_MergeSubagentChanges_NoOpWhenDisabled(t *testing.T) {
 	agent := NewTestAgent()
-	agent.changeTracker = NewChangeTracker(agent, "primary instruction")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "primary instruction")
 	agent.changeTracker.Disable()
 
 	changes := []TrackedFileChange{

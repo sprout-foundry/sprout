@@ -1,0 +1,40 @@
+.open-repo-form {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 420px;
+  margin-top: var(--space-2);
+}
+
+.open-repo-form .provider-setup-btn {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.open-repo-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.open-repo-input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.open-repo-error {
+  color: var(--accent-error);
+  font-size: 12px;
+}
+
+.open-repo-dashboard {
+  margin-top: var(--space-2);
+  color: var(--accent-primary);
+  font-size: 12px;
+}

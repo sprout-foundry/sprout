@@ -169,7 +169,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       />
       {!supportsLocalTerminal && (
         <ErrorBoundary panelName="Terminal">
-          <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          <Terminal isExpanded={!isMobile} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
         </ErrorBoundary>
       )}
     </main>

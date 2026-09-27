@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/agent/workflow"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,8 +89,8 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	// without spawning a subprocess. This eliminates the need for nohup
 	// and avoids process-group/session detachment issues.
 	// -----------------------------------------------------------------------
-	if wfCfg, parseErr := parseWorkflowFile(wfPath); parseErr == nil && wfCfg.Loop != nil {
-		sessionID := generateWorkflowSessionID()
+	if wfCfg, parseErr := workflow.ParseWorkflowFile(wfPath); parseErr == nil && wfCfg.Loop != nil {
+		sessionID := workflow.GenerateWorkflowSessionID()
 
 		// Publish session_started event immediately.
 		a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(

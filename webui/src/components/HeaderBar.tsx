@@ -6,6 +6,7 @@ import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/full
 import { notificationBus } from '../services/notificationBus';
 import { githubRepoSlug, platformHref, repoHubPath } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
+import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
 import { UserMenu } from './UserMenu';
 import WorkspaceBar from './WorkspaceBar';
@@ -96,9 +97,6 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       )}
       {!isCloud && <MenuBar />}
       <div className="header-bar-actions">
-        {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
-         * local mode or without a bootstrap identity. */}
-        <UserMenu />
         {isCloud && workspacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
@@ -109,6 +107,10 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             {busy ? 'Starting…' : 'Start Building'}
           </button>
         )}
+        <CreditsChip />
+        {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
+         * local mode or without a bootstrap identity. */}
+        <UserMenu />
         {!isMobile && (
           <button
             className="header-context-toggle-btn"

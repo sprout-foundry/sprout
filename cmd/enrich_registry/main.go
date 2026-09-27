@@ -237,24 +237,35 @@ func main() {
 		}
 	}
 
+	probed, totalSpend = runEmbeddedFallback(probed, totalSpend, providerCap, *maxProbeCost, *maxProbes, *maxPricePerMTok, *maxRunCost, *dryRun, *registryDir, *baseURL, *fromEmbeddedConfigs)
+
+	fmt.Printf("done: %d model(s) probed, est. cost $%.4f\n", probed, totalSpend)
+}
+
+// runEmbeddedFallback handles the --from-embedded-configs fallback: for each
+// provider in the embedded-configs directory that has no canonical
+// models/<id>.json file, build the canonical models and run the same probe
+// loop as the main path. Returns the updated global probe count and
+// cumulative estimated spend.
+func runEmbeddedFallback(probed int, totalSpend float64, providerCap int, maxProbeCost float64, maxProbes int, maxPricePerMTok, maxRunCost float64, dryRun bool, registryDir, baseURL, fromEmbeddedConfigs string) (int, float64) {
 	// Fix 3: Fall back to embedded configs for providers without a canonical
 	// models/<id>.json file. This ensures providers without API keys in CI
 	// still get probed once keys are available, instead of permanently unprobed.
-	if *fromEmbeddedConfigs != "" {
-		embeddedFiles, _ := filepath.Glob(filepath.Join(*fromEmbeddedConfigs, "*.json"))
+	if fromEmbeddedConfigs != "" {
+		embeddedFiles, _ := filepath.Glob(filepath.Join(fromEmbeddedConfigs, "*.json"))
 		for _, ef := range embeddedFiles {
 			providerID := strings.TrimSuffix(filepath.Base(ef), ".json")
 			if providerID == "index" {
 				continue
 			}
-			canonicalPath := filepath.Join(*registryDir, "models", providerID+".json")
+			canonicalPath := filepath.Join(registryDir, "models", providerID+".json")
 			if _, err := os.Stat(canonicalPath); err == nil {
 				continue // already has canonical file from the main path
 			}
 
 			// Check if there's any remaining budget.
-			if probed >= *maxProbes {
-				fmt.Printf("%s (embedded): skipped — global probe cap reached (%d/%d)\n", providerID, probed, *maxProbes)
+			if probed >= maxProbes {
+				fmt.Printf("%s (embedded): skipped — global probe cap reached (%d/%d)\n", providerID, probed, maxProbes)
 				continue
 			}
 
@@ -275,7 +286,7 @@ func main() {
 			}
 
 			// Run the same probe loop as the main path.
-			baseline := fetchBaseline(*baseURL, providerID)
+			baseline := fetchBaseline(baseURL, providerID)
 			clientType, ctErr := api.ParseProviderName(providerID)
 
 			// Pre-flight: skip if API key not set.
@@ -307,7 +318,7 @@ func main() {
 					fmt.Printf("  [%s (embedded)] reached per-provider cap of %d probes\n", providerID, providerCap)
 					break
 				}
-				if probed >= *maxProbes {
+				if probed >= maxProbes {
 					break
 				}
 
@@ -315,16 +326,16 @@ func main() {
 				if m.Pricing != nil {
 					inCost, outCost, costKnown = m.Pricing.InputPerMTok, m.Pricing.OutputPerMTok, true
 				}
-				if ok, reason := modelprobe.WithinCostBudget(inCost, outCost, costKnown, *maxProbeCost); !ok {
-					if *dryRun {
+				if ok, reason := modelprobe.WithinCostBudget(inCost, outCost, costKnown, maxProbeCost); !ok {
+					if dryRun {
 						fmt.Printf("  [skip] %s/%s (embedded) — %s\n", providerID, m.ID, reason)
 					}
 					continue
 				}
 
-				if *maxPricePerMTok > 0 && costKnown {
-					if inCost > *maxPricePerMTok || outCost > *maxPricePerMTok {
-						if *dryRun {
+				if maxPricePerMTok > 0 && costKnown {
+					if inCost > maxPricePerMTok || outCost > maxPricePerMTok {
+						if dryRun {
 							fmt.Printf("  [skip] %s/%s (embedded) — price exceeds ceiling\n", providerID, m.ID)
 						}
 						continue
@@ -332,12 +343,12 @@ func main() {
 				}
 
 				estCost := modelprobe.EstimatedCostUSD(inCost, outCost)
-				if *maxRunCost > 0 && totalSpend+estCost > *maxRunCost {
+				if maxRunCost > 0 && totalSpend+estCost > maxRunCost {
 					fmt.Printf("  [skip] %s/%s (embedded) — run cost cap reached\n", providerID, m.ID)
 					break
 				}
 
-				if *dryRun {
+				if dryRun {
 					fmt.Printf("  [would probe] %s/%s (embedded, est. probe cost $%.4f)\n",
 						providerID, m.ID, modelprobe.EstimatedCostUSD(inCost, outCost))
 					probed++
@@ -389,7 +400,7 @@ func main() {
 			if providerSkipReason != "" {
 				fmt.Printf("  [%s (embedded)] remaining models skipped — %s\n", providerID, providerSkipReason)
 			}
-			if changed && !*dryRun {
+			if changed && !dryRun {
 				pf := &modelcontract.ProviderFile{
 					SchemaVersion: modelcontract.SchemaVersion,
 					Provider:      providerID,
@@ -402,6 +413,5 @@ func main() {
 			}
 		}
 	}
-
-	fmt.Printf("done: %d model(s) probed, est. cost $%.4f\n", probed, totalSpend)
+	return probed, totalSpend
 }

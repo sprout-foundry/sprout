@@ -1,10 +1,24 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** Proposed
+**Status:** In Progress — Phase 1 (`pkg/agent/workflow`) landed 2026-09-27
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
 the repo. This spec plans the split; it does not schedule it.
+
+## Progress
+
+- **Phase 1 (2026-09-27): `pkg/agent/workflow` landed.** The in-process
+  TODO-loop runner (loop driver, config parsing, gate/triage types +
+  parsers, outcome classification, TODO-file ops, session ID, budget
+  heartbeat) moved to a new `pkg/agent/workflow` subpackage behind a narrow
+  `Agent`/`Budget`/`HeartbeatReporter` interface, so the subpackage does not
+  import `pkg/agent` (no cycle). `RunWorkflowLoopInProcess` stays in
+  `pkg/agent` as the construction entry point (it needs unexported `Agent`
+  fields) and now forwards to `workflow.RunLoop`; `WorkflowResult` is a type
+  alias to `workflow.Result`; `handleRunAutomate` calls
+  `workflow.ParseFile`/`NewSessionID`. Pure move, no behavior change.
+- Phases 2–5 pending (`changes`, `approvals`, `subagents`, `tools`).
 
 ## Problem
 

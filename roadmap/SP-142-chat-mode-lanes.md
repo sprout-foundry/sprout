@@ -1,6 +1,6 @@
 # SP-142 — Chat Mode Lanes: Per-Mode Chat Ownership on the Server
 
-> **Status (2026-09-24):** Draft. Not started.
+> **Status (2026-09-26):** Shipped (142.1–142.5).
 > Motivation: the multi-chat surface (New Chat, chat tabs) shipped with
 > per-chat agents server-side, but chats carry no mode identity — the chat
 > list is one flat list shared by the Code and Design modes, and the
@@ -112,8 +112,21 @@
   > completion, same-chat unaffected.
 - **142.4** Client: busy notice + send-anyway queueing. Vitest: notice on
   409, queue drains after completion, cancel path clears.
+  > **Progress (2026-09-26):** Shipped. chatApi surfaces code + running
+  > chat identity on 409; the send path catches workspace_busy, rolls back
+  > the optimistic processing bump, and sets state.workspaceBusy;
+  > ChatFooter renders the inline notice (name + Send-anyway + dismiss);
+  > Send-anyway queues via the existing chatId-tagged queue (the drain
+  > effect fires it when the workspace goes idle); query_completed clears
+  > the notice. Pinned by ChatFooter.busy.test.tsx (5 tests).
 - **142.5** Design agent panel header (name + scoped New Chat). Vitest +
   testids.
+  > **Progress (2026-09-26):** Shipped. DesignAgentPanel renders an
+  > optional header (chatName + a design-scoped New Chat that creates via
+  > the existing lane-stamped path); threaded shell → DesignSurface →
+  > DesignView → panel; the AppContent payload names the active design
+  > chat and binds create('design'). Pinned by
+  > DesignAgentPanel.header.test.tsx (4 tests) + testids registered.
 
 ## Acceptance criteria
 

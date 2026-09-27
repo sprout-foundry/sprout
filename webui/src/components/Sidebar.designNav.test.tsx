@@ -238,13 +238,15 @@ describe('Sidebar mode rail (SP-140-5)', () => {
     const rail = container.querySelector('[data-testid="sidebar-mode-rail"]');
     expect(rail).not.toBeNull();
     // No workspace context here, so the data-driven Screens group is
-    // omitted and only the Library group (Tokens, Flows) renders.
-    expect(rail.querySelectorAll('[role="tab"]')).toHaveLength(2);
+    // omitted and only the Library group (Tokens, Flows, Feedback) renders.
+    expect(rail.querySelectorAll('[role="tab"]')).toHaveLength(3);
 
     const flows = container.querySelector('[data-testid="design-rail-flows"]');
     const tokens = container.querySelector('[data-testid="design-rail-tokens"]');
+    const feedback = container.querySelector('[data-testid="design-rail-feedback"]');
     expect(flows).not.toBeNull();
     expect(tokens).not.toBeNull();
+    expect(feedback).not.toBeNull();
     expect(flows!.getAttribute('aria-selected')).toBe('true');
     expect(tokens!.getAttribute('aria-selected')).toBe('false');
   });

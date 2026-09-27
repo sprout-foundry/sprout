@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func trackerOnlyAgent(tracker *ChangeTracker) *Agent {
 	a := &Agent{changeTracker: tracker}
 	if tracker != nil {
-		tracker.agent = a
+		tracker.SetView(a.changesView())
 	}
 	return a
 }
@@ -24,17 +25,17 @@ func TestHandleRecoverFile_RestoresDeletedContent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				FilePath:     path,
-				OriginalCode: "port = 8080\n",
-				Operation:    "delete",
-				ToolCall:     "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			FilePath:     path,
+			OriginalCode: "port = 8080\n",
+			Operation:    "delete",
+			ToolCall:     "shell_command",
 		},
-	}
+	}, "test")
+
 	a := trackerOnlyAgent(tracker)
 
 	// File doesn't exist on disk — recovery should write it back.
@@ -69,12 +70,12 @@ func TestHandleRecoverFile_RemovesCreatedFile(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: path, Operation: "create", ToolCall: "shell_command"},
-		},
-	}
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{FilePath: path, Operation: "create", ToolCall: "shell_command"},
+	}, "test")
+
 	a := trackerOnlyAgent(tracker)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": path})
@@ -95,7 +96,9 @@ func TestHandleRecoverFile_RemovesCreatedFile(t *testing.T) {
 }
 
 func TestHandleRecoverFile_NoMatchReturnsStructuredFailure(t *testing.T) {
-	tracker := &ChangeTracker{enabled: true}
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+
 	a := trackerOnlyAgent(tracker)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": "/tmp/never_tracked.txt"})
@@ -119,17 +122,17 @@ func TestHandleRecoverFile_RefusesUncapturedOriginal(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "blob.bin")
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				FilePath:     path,
-				OriginalCode: "[CONTENT NOT CAPTURED: binary]",
-				Operation:    "delete",
-				ToolCall:     "shell_command",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			FilePath:     path,
+			OriginalCode: "[CONTENT NOT CAPTURED: binary]",
+			Operation:    "delete",
+			ToolCall:     "shell_command",
 		},
-	}
+	}, "test")
+
 	a := trackerOnlyAgent(tracker)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": path})
@@ -156,13 +159,13 @@ func TestHandleRecoverFile_PrefersMostRecentChange(t *testing.T) {
 	// First an edit (saw v1, now v2), then a delete (saw v2). The
 	// most-recent recovery should restore v2 — the latest "before"
 	// state captured.
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{FilePath: path, OriginalCode: "v1", NewCode: "v2", Operation: "edit", ToolCall: "edit_file"},
-			{FilePath: path, OriginalCode: "v2", Operation: "delete", ToolCall: "shell_command"},
-		},
-	}
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{FilePath: path, OriginalCode: "v1", NewCode: "v2", Operation: "edit", ToolCall: "edit_file"},
+		{FilePath: path, OriginalCode: "v2", Operation: "delete", ToolCall: "shell_command"},
+	}, "test")
+
 	a := trackerOnlyAgent(tracker)
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": path})

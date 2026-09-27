@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,20 +31,19 @@ func addAssistantMessages(a *Agent, msgs ...string) {
 func makeFileRewindAgent(t *testing.T, dir, path, original, newContent, modifiedOnDisk string) *Agent {
 	t.Helper()
 
-	tracker := &ChangeTracker{
-		enabled: true,
-		changes: []TrackedFileChange{
-			{
-				FilePath:     path,
-				OriginalCode: original,
-				NewCode:      newContent,
-				Operation:    "write",
-				ToolCall:     "WriteFile",
-			},
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{
+		{
+			FilePath:     path,
+			OriginalCode: original,
+			NewCode:      newContent,
+			Operation:    "write",
+			ToolCall:     "WriteFile",
 		},
-	}
+	}, "test")
 	a := &Agent{changeTracker: tracker, state: NewAgentStateManager(false)}
-	tracker.agent = a
+	tracker.SetView(a.changesView())
 	a.SetWorkspaceRoot(dir)
 	return a
 }

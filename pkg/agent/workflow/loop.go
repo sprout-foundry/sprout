@@ -1,8 +1,13 @@
-// Package agent provides the in-process workflow runner for TODO-loop
+// Package workflow provides the in-process workflow runner for TODO-loop
 // workflows. It eliminates subprocess spawning (the BPM/exec.Command path
 // that requires nohup and breaks across OS/process-group boundaries) by
 // running the workflow loop in-process as a goroutine with a fresh Agent.
-package agent
+//
+// SP-141 phase 1: the loop logic lives here; pkg/agent's workflow_wiring.go
+// constructs the fresh Agent (unexported fields make construction
+// agent-internal) and calls RunTodoLoop. The arrow is one-way — this
+// package defines the LoopAgent seam and never imports pkg/agent.
+package workflow
 
 import (
 	"bytes"
@@ -19,20 +24,28 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
-// ---------------------------------------------------------------------------
-// Config types — lightweight subset of cmd/AgentWorkflowConfig, parsed
-// directly from the workflow JSON so the agent package has no import cycle
-// with cmd/.
-// ---------------------------------------------------------------------------
+// LoopAgent is the seam the loop needs from its runner agent — the
+// exported-method surface the TODO loop actually uses. *agent.Agent
+// satisfies it structurally (wired in pkg/agent/workflow_wiring.go).
+type LoopAgent interface {
+	GetProvider() string
+	GetModel() string
+	GetMaxIterations() int
+	SetMaxIterations(max int)
+	GenerateResponse(messages []api.Message) (string, error)
+	ProcessQueryWithContinuity(userQuery string) (string, error)
+	ClearConversationHistory()
+	FleetBudgetExceeded() bool
+	// BudgetSnapshot reports (spent, limit) for the heartbeat; a nil-nil
+	// return means "no fleet budget — use Cost() instead".
+	BudgetSnapshot() (float64, float64, bool)
+	Cost() float64
+	Iteration() int
+}
 
-// WorkflowLoopConfig is parsed from the "loop" section of a workflow JSON
-// file. Only the fields relevant to the in-process runner are included.
 type WorkflowLoopConfig struct {
 	TodoFile       string `json:"todo_file,omitempty"`
 	GatePromptFile string `json:"gate_prompt_file,omitempty"`
@@ -43,7 +56,7 @@ type WorkflowLoopConfig struct {
 
 // applyDefaults fills in zero-value fields with the same defaults used by
 // cmd/agent_workflow_loader.go so the runner behaves identically.
-func (c *WorkflowLoopConfig) applyDefaults() {
+func (c *WorkflowLoopConfig) ApplyDefaults() {
 	if c.TodoFile == "" {
 		c.TodoFile = "TODO.md"
 	}
@@ -71,7 +84,7 @@ type WorkflowProgressConfig struct {
 
 // workflowFileConfig is the top-level structure parsed from the workflow JSON
 // file. It mirrors only the fields the in-process runner cares about.
-type workflowFileConfig struct {
+type WorkflowFileConfig struct {
 	Description string                  `json:"description,omitempty"`
 	Loop        *WorkflowLoopConfig     `json:"loop,omitempty"`
 	Budget      *WorkflowBudgetConfig   `json:"budget,omitempty"`
@@ -122,7 +135,8 @@ const (
 // Helper: generate a session ID
 // ---------------------------------------------------------------------------
 
-func generateWorkflowSessionID() string {
+// GenerateWorkflowSessionID returns a fresh workflow session identifier.
+func GenerateWorkflowSessionID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
 		return fmt.Sprintf("wf-inproc-%d", time.Now().UnixNano())
@@ -130,180 +144,13 @@ func generateWorkflowSessionID() string {
 	return fmt.Sprintf("wf-inproc-%s", hex.EncodeToString(b))
 }
 
-// ---------------------------------------------------------------------------
-// Main entry point
-// ---------------------------------------------------------------------------
-
-// RunWorkflowLoopInProcess creates a fresh agent and runs the TODO loop
-// workflow in the calling goroutine (blocking). For non-blocking use,
-// call it from a goroutine.
-//
-// The fresh agent is created using the same pattern as subagents:
-// new client from factory, new state managers, proper interrupt context,
-// full tool wiring via the seed tool registry, and budget tracking.
-//
-// configPath is the path to the workflow JSON file. The file is parsed for
-// the "loop" section; if no loop section is found, an error is returned.
-func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPath string, eventBus *events.EventBus) (*WorkflowResult, error) {
-	if parentAgent == nil {
-		return nil, agenterrors.NewValidation("parentAgent is required", nil)
-	}
-	if parentAgent.configManager == nil {
-		return nil, agenterrors.NewConfig("parent config manager is required", nil)
-	}
-
-	// Parse the workflow config file.
-	cfg, err := parseWorkflowFile(configPath)
-	if err != nil {
-		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse workflow config %q", configPath), err)
-	}
-
-	if cfg.Loop == nil {
-		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("workflow %q has no 'loop' section", configPath), nil)
-	}
-
-	loop := cfg.Loop
-	loop.applyDefaults()
-
-	// Read the gate prompt file.
-	gatePromptBytes, err := os.ReadFile(filepath.Clean(loop.GatePromptFile))
-	if err != nil {
-		return nil, agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read gate_prompt_file %q", loop.GatePromptFile), err)
-	}
-	gatePromptText := strings.TrimSpace(string(gatePromptBytes))
-	if gatePromptText == "" {
-		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("gate_prompt_file %q is empty", loop.GatePromptFile), nil)
-	}
-
-	// Derive provider/model from the parent agent.
-	provider := parentAgent.GetProvider()
-	model := parentAgent.GetModel()
-
-	// Resolve client type from config.
-	clientType, finalModel, err := parentAgent.configManager.ResolveProviderModel(provider, model)
-	if err != nil {
-		return nil, agenterrors.Wrap(err, "resolve provider/model for workflow agent")
-	}
-
-	// Create client via factory.
-	client, err := factory.CreateProviderClient(clientType, finalModel)
-	if err != nil {
-		return nil, agenterrors.Wrap(err, "create client for workflow agent")
-	}
-
-	// Build system prompt.
-	systemPrompt := appendSubagentPreamble("You are a helpful coding assistant executing a TODO-based workflow.")
-
-	// Determine effective workspace root.
-	effectiveWorkspaceRoot := parentAgent.workspaceRoot
-	if effectiveWorkspaceRoot == "" {
-		effectiveWorkspaceRoot, _ = os.Getwd()
-	}
-
-	// Create interrupt context derived from the caller's context so
-	// cancellation propagates into the workflow agent's LLM calls.
-	interruptCtx, interruptCancel := context.WithCancel(ctx)
-
-	// Create fresh sub-managers for isolation from the parent agent.
-	stateMgr := NewAgentStateManager(false)
-	outputMgr := NewAgentOutputManager()
-	securityMgr := NewAgentSecurityManager()
-	mcpMgr := NewAgentMCPManager()
-
-	// Construct the fresh agent struct — mirrors createSubagent() from
-	// subagent_creation.go.
-	workflowAgent := &Agent{
-		client:              client,
-		clientType:          clientType,
-		systemPrompt:        systemPrompt,
-		baseSystemPrompt:    systemPrompt,
-		maxIterations:       loop.MaxIterations,
-		configManager:       parentAgent.configManager,
-		shellCommandHistory: make(map[string]*ShellCommandResult),
-		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
-		interruptCtx:        interruptCtx,
-		interruptCancel:     interruptCancel,
-		parentInterruptCtx:  ctx,
-		workspaceRoot:       effectiveWorkspaceRoot,
-		state:               stateMgr,
-		output:              outputMgr,
-		security:            securityMgr,
-		mcpSub:              mcpMgr,
-		todoMgr:             tools.NewTodoManager(),
-		eventBus:            eventBus,
-		shellCwd:            &shellCwdTracker{},
-		subagentDepth:       parentAgent.subagentDepth + 1,
-		rootPersonaID:       parentAgent.rootPersonaID,
-	}
-
-	// Propagate risk profile override from the parent so that a
-	// --risk-profile=readonly applies inside the loop agent too.
-	if parentAgent.riskProfileOverride != "" {
-		workflowAgent.riskProfileOverride = parentAgent.riskProfileOverride
-	}
-
-	// Inherit the parent's TerminalManager so shell_command with
-	// background=true / check_background works inside the loop.
-	if tm := parentAgent.GetTerminalManager(); tm != nil {
-		workflowAgent.SetTerminalManager(tm)
-	}
-
-	// Share the parent's clarificationManager so the workflow agent
-	// can call request_clarification through the same instance.
-	if parentAgent.clarificationManager != nil {
-		workflowAgent.clarificationManager = parentAgent.clarificationManager
-	}
-
-	// Re-resolve the context profile from the workflow agent's OWN client and
-	// config instead of leaving it as a zero-value (full mode). A workflow agent
-	// running under a smaller-context model than its parent should get LCM
-	// auto-activated. (SP-125 R4)
-	if err := workflowAgent.resolveAndApplyContextProfile(); err != nil {
-		interruptCancel()
-		return nil, agenterrors.Wrap(err, "resolve context profile for workflow agent")
-	}
-
-	// Enable lightweight change tracking.
-	workflowAgent.EnableChangeTracking("workflow loop")
-
-	// Wire the event bus for publishing events.
-	if eventBus != nil {
-		workflowAgent.SetEventBus(eventBus)
-	}
-
-	// Set event metadata so events carry routing keys for the WebUI.
-	workflowAgent.SetEventMetadata(map[string]interface{}{
-		"subagent_depth": workflowAgent.subagentDepth,
-		"active_persona": "workflow-loop",
-	})
-
-	// -----------------------------------------------------------------------
-	// Budget setup
-	// -----------------------------------------------------------------------
-	stopBudget := func() {}
-	if cfg.Budget != nil && cfg.Budget.USD > 0 {
-		warnAt := cfg.Budget.WarnAt
-		if len(warnAt) == 0 {
-			warnAt = []float64{0.50, 0.80}
-		}
-		budget := NewFleetUsdBudget(cfg.Budget.USD, warnAt)
-		workflowAgent.SetFleetUsdBudget(budget)
-
-		workflowAgent.SetBudgetWarningCallback(func(threshold, spent, limit float64) {
-			fmt.Fprintf(os.Stderr, "\nWARNING — crossed %.0f%% threshold: $%.2f of $%.2f spent\n",
-				threshold*100, spent, limit)
-		})
-		workflowAgent.SetBudgetExceededCallback(func(spent, limit float64) {
-			fmt.Fprintf(os.Stderr, "\nCAP HIT — $%.2f of $%.2f spent; stopping.\n", spent, limit)
-		})
-
-		heartbeatSeconds := 600
-		if cfg.Progress != nil && cfg.Progress.HeartbeatSeconds > 0 {
-			heartbeatSeconds = cfg.Progress.HeartbeatSeconds
-		}
-		stopBudget = startWorkflowHeartbeat(workflowAgent, time.Duration(heartbeatSeconds)*time.Second)
-	}
-
+// RunTodoLoop runs the TODO loop against a prepared loop agent (see
+// pkg/agent/workflow_wiring.go for construction). ctx governs
+// cancellation; configPath resolves the todo file relative to the workflow
+// JSON; loop carries the parsed loop config; gatePromptText is the gate
+// prompt's file contents; stopBudget retires the heartbeat/budget
+// teardown started by the constructor.
+func RunTodoLoop(ctx context.Context, loopAgent LoopAgent, configPath string, loop *WorkflowLoopConfig, gatePromptText string, stopBudget func()) (*WorkflowResult, error) {
 	// TODO file path — resolve relative to the workflow config file's directory.
 	todoDir := filepath.Dir(configPath)
 	todoFile := filepath.Join(todoDir, loop.TodoFile)
@@ -315,7 +162,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "TODO loop: provider=%s model=%s todo=%s\n",
-		workflowAgent.GetProvider(), workflowAgent.GetModel(), todoFile)
+		loopAgent.GetProvider(), loopAgent.GetModel(), todoFile)
 
 	startAfter := 0 // 0-based line index for scan start
 
@@ -328,7 +175,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		}
 
 		// Check budget exceeded.
-		if workflowAgent.FleetBudgetExceeded() {
+		if loopAgent.FleetBudgetExceeded() {
 			fmt.Fprintln(os.Stderr)
 			fmt.Fprintf(os.Stderr, "Budget exceeded — stopping workflow loop\n")
 			stopBudget()
@@ -354,7 +201,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		fmt.Fprintf(os.Stderr, "TODO item at line %d\n", lineNum)
 
 		// --- Gate call ---
-		gateText, gateErr := workflowAgent.GenerateResponse([]api.Message{
+		gateText, gateErr := loopAgent.GenerateResponse([]api.Message{
 			{Role: "system", Content: gatePromptText},
 			{Role: "user", Content: sectionText},
 		})
@@ -397,13 +244,13 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		fmt.Fprintf(os.Stderr, "Processing: %s\n", gateRes.Title)
 
 		// Save original max iterations, override with loop config.
-		prevMaxIter := workflowAgent.GetMaxIterations()
-		workflowAgent.SetMaxIterations(loop.MaxIterations)
+		prevMaxIter := loopAgent.GetMaxIterations()
+		loopAgent.SetMaxIterations(loop.MaxIterations)
 
-		_, processErr := workflowAgent.ProcessQueryWithContinuity(gateRes.Prompt)
+		_, processErr := loopAgent.ProcessQueryWithContinuity(gateRes.Prompt)
 
 		// Restore max iterations.
-		workflowAgent.SetMaxIterations(prevMaxIter)
+		loopAgent.SetMaxIterations(prevMaxIter)
 
 		if processErr != nil {
 			fmt.Fprintf(os.Stderr, "Agent processing failed: %v\n", processErr)
@@ -418,7 +265,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 			if shell == "" {
 				shell = "/bin/sh"
 			}
-			cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
+			cmd := exec.CommandContext(ctx, shell, "-c", buildCmd) // #nosec G204 G702 -- build_command comes from the user's own workflow JSON; running it IS the feature
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if bErr := cmd.Run(); bErr != nil {
@@ -439,7 +286,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 			fmt.Fprintln(os.Stderr)
 			fmt.Fprintf(os.Stderr, "Build failed — triaging (attempt %d/%d)\n", retries, loop.MaxRetries)
 
-			triageText, triageErr := workflowAgent.GenerateResponse([]api.Message{
+			triageText, triageErr := loopAgent.GenerateResponse([]api.Message{
 				{Role: "system", Content: "You are a build error triage agent. Given a task title and context, decide: retry (transient/fixable) or skip (fundamental/blocking). Return ONLY JSON: {\"action\": \"retry\"|\"skip\", \"reason\": \"...\"}"},
 				{Role: "user", Content: fmt.Sprintf("Task: %s\n\nPrevious attempt failed. Decide whether to retry or skip.", gateRes.Title)},
 			})
@@ -464,7 +311,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 			}
 
 			// Retry: clear conversation history and re-run with a fix prompt.
-			workflowAgent.ClearConversationHistory()
+			loopAgent.ClearConversationHistory()
 
 			retryPrompt := fmt.Sprintf(
 				"Previous attempt failed. Fix the issue and ensure the build passes.\n\nOriginal task:\n%s",
@@ -474,10 +321,10 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 			if retryMaxIter < 5 {
 				retryMaxIter = 5
 			}
-			workflowAgent.SetMaxIterations(retryMaxIter)
+			loopAgent.SetMaxIterations(retryMaxIter)
 
-			_, retryErr := workflowAgent.ProcessQueryWithContinuity(retryPrompt)
-			workflowAgent.SetMaxIterations(prevMaxIter)
+			_, retryErr := loopAgent.ProcessQueryWithContinuity(retryPrompt)
+			loopAgent.SetMaxIterations(prevMaxIter)
 
 			if retryErr != nil {
 				fmt.Fprintf(os.Stderr, "Retry agent processing failed: %v\n", retryErr)
@@ -489,7 +336,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 				if shell == "" {
 					shell = "/bin/sh"
 				}
-				cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
+				cmd := exec.CommandContext(ctx, shell, "-c", buildCmd) // #nosec G204 G702 -- retry of the same user-authored build_command
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				if bErr := cmd.Run(); bErr != nil {
@@ -524,7 +371,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		}
 
 		// Clear conversation context for the next item.
-		workflowAgent.ClearConversationHistory()
+		loopAgent.ClearConversationHistory()
 	}
 }
 
@@ -532,7 +379,9 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 // Heartbeat (lightweight version for budget visibility during long runs)
 // ---------------------------------------------------------------------------
 
-func startWorkflowHeartbeat(chatAgent *Agent, interval time.Duration) func() {
+// StartWorkflowHeartbeat runs the budget/iteration heartbeat until the
+// returned stop func is called.
+func StartWorkflowHeartbeat(chatAgent LoopAgent, interval time.Duration) func() {
 	if chatAgent == nil || interval <= 0 {
 		return func() {}
 	}
@@ -546,13 +395,12 @@ func startWorkflowHeartbeat(chatAgent *Agent, interval time.Duration) func() {
 			case <-stop:
 				return
 			case <-ticker.C:
-				spent, limit := 0.0, 0.0
-				if b := chatAgent.GetFleetUsdBudget(); b != nil {
-					spent, limit = b.Snapshot()
-				} else {
-					spent = chatAgent.GetTotalCost()
+				spent, limit, capped := chatAgent.BudgetSnapshot()
+				if !capped {
+					limit = 0
+					spent = chatAgent.Cost()
 				}
-				iter := chatAgent.GetCurrentIteration()
+				iter := chatAgent.Iteration()
 				elapsed := time.Since(started).Round(time.Second)
 				if limit > 0 {
 					fmt.Fprintf(os.Stderr, "\n$%.2f of $%.2f · iter %d · elapsed %s\n",
@@ -644,7 +492,7 @@ func markTodoDoneInFile(todoFile string, lineNum int) error {
 	}
 
 	lines[idx] = modified
-	return os.WriteFile(filepath.Clean(todoFile), bytes.Join(lines, []byte("\n")), 0644)
+	return os.WriteFile(filepath.Clean(todoFile), bytes.Join(lines, []byte("\n")), 0644) // #nosec G703 -- todoFile resolves within the workflow JSON's directory (the user's own file)
 }
 
 // ---------------------------------------------------------------------------
@@ -719,12 +567,13 @@ func classifyWorkflowOutcome(buildFailed bool, processErr error, retrySucceeded 
 
 // parseWorkflowFile reads and parses a workflow JSON file for its loop
 // configuration. Returns only the fields the in-process runner needs.
-func parseWorkflowFile(path string) (*workflowFileConfig, error) {
+// ParseWorkflowFile reads and parses a workflow JSON definition.
+func ParseWorkflowFile(path string) (*WorkflowFileConfig, error) {
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, agenterrors.NewAgent("workflow_runner", fmt.Sprintf("failed to read %q", path), err)
 	}
-	var cfg workflowFileConfig
+	var cfg WorkflowFileConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("failed to parse %q", path), err)
 	}

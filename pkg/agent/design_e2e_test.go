@@ -27,6 +27,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -72,7 +73,7 @@ Screens and flows carry one of: draft, review, ready.
 
 ## Links
 
-- [Login wireframe](wireframes/login.svg)
+- [Login screen](screens/login.html)
 `
 
 // de2eGitAttributes / de2eGitIgnore satisfy the §1h git contract so the only
@@ -91,7 +92,59 @@ const de2eLoginSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 8
 	`<rect id="submit" x="24" y="200" width="342" height="52"/>` +
 	`</svg>`
 
+// de2eLoginScreen is a convention-complete primary screen (SP-140-9 §9a):
+// stem-matched identity attributes on html and body, the scaffolded runtime
+// + generated tokens references (workspace-relative, so the self-containment
+// rule passes), a declared state, and the README-declared phone frame sizing.
+const de2eLoginScreen = `<!doctype html>
+<html lang="en" data-screen="login" data-sprout-screens="1" data-states="error">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>login — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  .frame { width: 390px; min-height: 844px; }
+</style>
+</head>
+<body data-sprout-screen="login">
+<div class="frame">
+  <h1>Login</h1>
+  <form>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="username">
+    <button id="submit" type="submit">Sign in</button>
+  </form>
+  <p data-state="error" hidden>Invalid credentials</p>
+</div>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>`
+
 // de2eWrite writes rel (slash-separated) under root, creating parents.
+
+// de2eCopyAsset copies a fixed asset from this repo's own design/ tree into
+// the fixture workspace (runtime scripts, generated css) so validator hash
+// checks see the canonical bytes.
+func de2eCopyAsset(t *testing.T, root, rel string) {
+	t.Helper()
+	// The workspace helper chdirs into the fixture before seeding; the
+	// canonical assets live in the REPO's design/ tree, resolved from the
+	// test's own source location.
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("cannot locate test source for fixture assets")
+	}
+	repoDesign := filepath.Join(filepath.Dir(thisFile), "..", "..", "design")
+	src := filepath.Join(repoDesign, filepath.FromSlash(rel))
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read fixture asset %s: %v", src, err)
+	}
+	de2eWrite(t, root, "design/"+rel, string(data))
+}
+
 func de2eWrite(t *testing.T, root, rel, content string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(rel))
@@ -112,7 +165,17 @@ func de2eWorkspace(t *testing.T) string {
 	de2eWrite(t, root, design.GitContractFile, de2eGitAttributes)
 	de2eWrite(t, root, design.GitIgnoreFile, de2eGitIgnore)
 	de2eWrite(t, root, "design/README.md", de2eManifest)
-	de2eWrite(t, root, "design/wireframes/login.svg", de2eLoginSVG)
+	de2eWrite(t, root, "design/screens/login.html", de2eLoginScreen)
+	// A legit SVG-tier artifact for the design_render SVG-path tests (icons
+	// survive the SP-140-9 wireframe deprecation).
+	de2eWrite(t, root, "design/icons/login.svg", de2eLoginSVG)
+	// The screen's scaffolded references: the REAL fixed assets from this
+	// repo's own design/ tree (the validator checks the runtime's source-hash
+	// header, so a stub cannot pass). The screens index is NOT seeded — the
+	// scripted turn regenerates it with design_export_tokens targets:screens,
+	// which is the workflow the import brief teaches.
+	de2eCopyAsset(t, root, "runtime/sprout-screens.js")
+	de2eCopyAsset(t, root, "generated/tokens.css")
 	// Process-global cwd: some design handlers resolve against it when the
 	// env workspace root is empty, and the browser render helper resolves
 	// relative sources with filepath.Abs. t.Chdir restores it afterwards.
@@ -253,7 +316,7 @@ func TestDesignRenderE2E_SVGRoundTripCarriesImageThroughSeedToolResult(t *testin
 
 	client := NewScriptedClientWithVision("vision-model",
 		NewScriptedToolCallResponse("render_1", "design_render",
-			`{"source":"design/wireframes/login.svg"}`, "Rendering the login wireframe."),
+			`{"source":"design/icons/login.svg"}`, "Rendering the login icon SVG."),
 		NewScriptedTextResponse("The wireframe renders cleanly."),
 	)
 	if client.GetVisionModel() == "" {
@@ -265,7 +328,7 @@ func TestDesignRenderE2E_SVGRoundTripCarriesImageThroughSeedToolResult(t *testin
 		t.Skip("design_render is not registered in this build (browser-tier tool)")
 	}
 
-	if _, err := ag.ProcessQuery("Render design/wireframes/login.svg so I can review it."); err != nil {
+	if _, err := ag.ProcessQuery("Render design/icons/login.svg so I can review it."); err != nil {
 		t.Fatalf("ProcessQuery: %v%s", err, de2eDumpMessages(ag))
 	}
 
@@ -378,7 +441,7 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 	// NewScriptedClient (no vision) — the primary model is non-visual.
 	client := NewScriptedClient(
 		NewScriptedToolCallResponse("render_nv_1", "design_render",
-			`{"source":"design/wireframes/login.svg"}`, "Rendering."),
+			`{"source":"design/icons/login.svg"}`, "Rendering."),
 		NewScriptedTextResponse("Reported the artifact."),
 	)
 	ag := de2eAgent(t, client, root)
@@ -387,7 +450,7 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 		t.Skip("design_render is not registered in this build")
 	}
 
-	if _, err := ag.ProcessQuery("Render design/wireframes/login.svg."); err != nil {
+	if _, err := ag.ProcessQuery("Render design/icons/login.svg."); err != nil {
 		t.Fatalf("ProcessQuery: %v%s", err, de2eDumpMessages(ag))
 	}
 
@@ -401,7 +464,7 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 	if strings.Contains(output, "design_render blocked") {
 		t.Fatalf("design_render must not block a non-vision primary: %s", output)
 	}
-	if !strings.Contains(output, "design/wireframes/login.svg") {
+	if !strings.Contains(output, "design/icons/login.svg") {
 		t.Errorf("the summary must name the rendered artifact so a non-vision primary can route it onward: %s", output)
 	}
 
@@ -426,10 +489,10 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 // client stands in for the model and drives a full turn —
 //
 //	design_import_sketch (photo of a hand-drawn login screen)
-//	  → write_file   (design/wireframes/login.svg)
+//	  → write_file   (design/screens/login.html — the SP-140-9 primary tier)
 //	  → design_validate
 //
-// — and afterwards the workspace must hold a wireframe that the validator
+// — and afterwards the workspace must hold a screen that the validator
 // accepts with zero error-severity findings.
 //
 // Each step is asserted on what the agent actually observed (the tool message
@@ -441,28 +504,31 @@ func TestDesignImportSketchE2E_ScriptedTurnProducesValidatedWireframe(t *testing
 	// SP-137 attachment path honest (magic-byte detection, not extension).
 	de2eWrite(t, root, "design/feedback/login-sketch.png", string(de2ePNG))
 
-	writeArgs := `{"path":"design/wireframes/login.svg","content":` + jsonString(de2eLoginSVG) + `}`
+	writeArgs := `{"path":"design/screens/login.html","content":` + jsonString(de2eLoginScreen) + `}`
 
 	client := NewScriptedClientWithVision("vision-model",
 		NewScriptedToolCallResponse("import_1", "design_import_sketch",
-			`{"image_path":"design/feedback/login-sketch.png","target":"wireframes","screen_name":"login"}`,
+			`{"image_path":"design/feedback/login-sketch.png","target":"screens","screen_name":"login"}`,
 			"Reading the whiteboard sketch of the login screen."),
 		NewScriptedToolCallResponse("write_1", "write_file", writeArgs,
-			"Writing the extracted wireframe."),
+			"Writing the extracted screen."),
+		NewScriptedToolCallResponse("export_1", "design_export_tokens",
+			`{"targets":"screens"}`,
+			"Regenerating the screens index for the new screen."),
 		NewScriptedToolCallResponse("validate_1", "design_validate", `{}`,
-			"Validating the new wireframe."),
-		NewScriptedTextResponse("Imported the login sketch as design/wireframes/login.svg; design_validate reports no error findings."),
+			"Validating the new screen."),
+		NewScriptedTextResponse("Imported the login sketch as design/screens/login.html; regenerated screens.json; design_validate reports no error findings."),
 	)
 	ag := de2eAgent(t, client, root)
 
-	for _, name := range []string{"design_import_sketch", "write_file", "design_validate"} {
+	for _, name := range []string{"design_import_sketch", "write_file", "design_export_tokens", "design_validate"} {
 		if !de2eHasDesignTool(t, ag, name) {
 			t.Skipf("%s is not registered in this build", name)
 		}
 	}
 
 	if _, err := ag.ProcessQuery(
-		"Import design/feedback/login-sketch.png into the design workspace as a login wireframe."); err != nil {
+		"Import design/feedback/login-sketch.png into the design workspace as a login screen."); err != nil {
 		t.Fatalf("ProcessQuery: %v%s", err, de2eDumpMessages(ag))
 	}
 
@@ -483,7 +549,7 @@ func TestDesignImportSketchE2E_ScriptedTurnProducesValidatedWireframe(t *testing
 	}
 	// The brief must carry the wireframe conventions and the mandatory
 	// validate reminder (§2c: the tool's output directs the agent).
-	for _, want := range []string{"design/wireframes/login.svg", "viewBox", "Next steps:", "design_validate"} {
+	for _, want := range []string{"design/screens/login.html", "data-screen", "Next steps:", "design_validate"} {
 		if !strings.Contains(importOut, want) {
 			t.Errorf("import brief missing %q:\n%s", want, importOut)
 		}
@@ -492,17 +558,17 @@ func TestDesignImportSketchE2E_ScriptedTurnProducesValidatedWireframe(t *testing
 		t.Errorf("the import brief must not claim it wrote files: %s", importOut)
 	}
 
-	// --- Step 2: the model writes the wireframe with the normal tool. ------
+	// --- Step 2: the model writes the screen with the normal tool. ---------
 	_, writeOut := de2eToolMessage(t, ag, "write_1")
-	if !strings.Contains(writeOut, "login.svg") {
-		t.Errorf("write_file did not confirm the wireframe path: %s", writeOut)
+	if !strings.Contains(writeOut, "login.html") {
+		t.Errorf("write_file did not confirm the screen path: %s", writeOut)
 	}
-	written, err := os.ReadFile(filepath.Join(root, "design", "wireframes", "login.svg"))
+	written, err := os.ReadFile(filepath.Join(root, "design", "screens", "login.html"))
 	if err != nil {
-		t.Fatalf("the scripted turn must have created design/wireframes/login.svg: %v", err)
+		t.Fatalf("the scripted turn must have created design/screens/login.html: %v", err)
 	}
-	if string(written) != de2eLoginSVG {
-		t.Errorf("written wireframe differs from the scripted content:\n got %s\nwant %s", written, de2eLoginSVG)
+	if string(written) != de2eLoginScreen {
+		t.Errorf("written screen differs from the scripted content:\n got %s\nwant %s", written, de2eLoginScreen)
 	}
 
 	// --- Step 3: design_validate runs and reports a clean tree. ------------
@@ -571,7 +637,7 @@ func TestDesignImportSketchE2E_BriefRemindsAgentToValidateWhenVisionAbsent(t *te
 	// Non-vision primary: no inline pixels, extraction text unavailable.
 	client := NewScriptedClient(
 		NewScriptedToolCallResponse("import_nv_1", "design_import_sketch",
-			`{"image_path":"design/feedback/board.png","target":"wireframes","screen_name":"signup"}`,
+			`{"image_path":"design/feedback/board.png","target":"screens","screen_name":"signup"}`,
 			"Importing."),
 		NewScriptedTextResponse("Brief received."),
 	)
@@ -589,7 +655,7 @@ func TestDesignImportSketchE2E_BriefRemindsAgentToValidateWhenVisionAbsent(t *te
 	if strings.Contains(output, "blocked") || strings.Contains(output, "not a recognized image file") {
 		t.Fatalf("the import must not fail for a workspace-local sketch: %s", output)
 	}
-	if !strings.Contains(output, "design/wireframes/signup.svg") {
+	if !strings.Contains(output, "design/screens/signup.html") {
 		t.Errorf("brief must name the artifact to produce: %s", output)
 	}
 	if !strings.Contains(output, "design_validate") {
@@ -758,7 +824,7 @@ func validateToolThreadingForE2E(msgs []api.Message) int {
 // unresolved annotation naming the login wireframe. It is the fixture the
 // round-trip test seeds and the scripted agent reads back.
 const de2eFeedbackJSON = `{
-  "target": "design/wireframes/login.svg",
+  "target": "design/screens/login.html",
   "status": "changes-requested",
   "resolution": "",
   "annotations": [
@@ -790,9 +856,9 @@ func TestDesignAssetsFeedbackE2E_ScriptedTurnReadsPendingFeedbackFile(t *testing
 			`{"path":"design/feedback/login.json"}`,
 			"Reading the pending feedback file."),
 		NewScriptedToolCallResponse("write_1", "write_file",
-			`{"path":"design/wireframes/login.svg","content":`+jsonString(de2eLoginSVG)+`}`,
-			"Addressing the annotation on the login wireframe."),
-		NewScriptedTextResponse("Addressed the changes-requested annotation on design/wireframes/login.svg."),
+			`{"path":"design/screens/login.html","content":`+jsonString(de2eLoginScreen)+`}`,
+			"Addressing the annotation on the login screen."),
+		NewScriptedTextResponse("Addressed the changes-requested annotation on design/screens/login.html."),
 	)
 	ag := de2eAgent(t, client, root)
 
@@ -812,7 +878,7 @@ func TestDesignAssetsFeedbackE2E_ScriptedTurnReadsPendingFeedbackFile(t *testing
 	if strings.Contains(assetsOut, "unknown tool") {
 		t.Fatalf("design_assets was not dispatched: %s", assetsOut)
 	}
-	for _, want := range []string{"Pending feedback: 1 target(s)", "design/wireframes/login.svg", "1 unresolved"} {
+	for _, want := range []string{"Pending feedback: 1 target(s)", "design/screens/login.html", "1 unresolved"} {
 		if !strings.Contains(assetsOut, want) {
 			t.Errorf("design_assets summary must report pending feedback %q:\n%s", want, assetsOut)
 		}
@@ -835,12 +901,12 @@ func TestDesignAssetsFeedbackE2E_ScriptedTurnReadsPendingFeedbackFile(t *testing
 	}
 
 	// --- Step 3: the agent edits the annotated screen. ---------------------
-	written, err := os.ReadFile(filepath.Join(root, "design", "wireframes", "login.svg"))
+	written, err := os.ReadFile(filepath.Join(root, "design", "screens", "login.html"))
 	if err != nil {
-		t.Fatalf("the scripted turn must have edited the annotated wireframe: %v", err)
+		t.Fatalf("the scripted turn must have edited the annotated screen: %v", err)
 	}
-	if string(written) != de2eLoginSVG {
-		t.Errorf("annotated screen edit differs from the scripted content:\n got %s\nwant %s", written, de2eLoginSVG)
+	if string(written) != de2eLoginScreen {
+		t.Errorf("annotated screen edit differs from the scripted content:\n got %s\nwant %s", written, de2eLoginScreen)
 	}
 
 	// --- Turn shape: exactly three tool calls, threaded correctly. ---------

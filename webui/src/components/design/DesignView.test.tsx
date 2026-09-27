@@ -146,9 +146,9 @@ describe('DesignView shell', () => {
     expect(screen.getByTestId('design-view')).toBeInTheDocument();
   });
 
-  it('exposes exactly three sections in order: Flows, Screens, Tokens', () => {
-    expect(DESIGN_TABS.map((t) => t.id)).toEqual(['flows', 'screens', 'tokens']);
-    expect(DESIGN_TABS.map((t) => t.label)).toEqual(['Flows', 'Screens', 'Tokens']);
+  it('exposes the four sections in order: Flows, Screens, Tokens, Feedback', () => {
+    expect(DESIGN_TABS.map((t) => t.id)).toEqual(['flows', 'screens', 'tokens', 'feedback']);
+    expect(DESIGN_TABS.map((t) => t.label)).toEqual(['Flows', 'Screens', 'Tokens', 'Feedback']);
 
     const { setTab } = renderControlled('flows');
     for (const spec of DESIGN_TABS) {

@@ -102,6 +102,7 @@ function App() {
       driftNotification: null,
       outputVerbosity: 'default' as const,
       inputValue: '',
+      workspaceBusy: null,
     };
   }, []);
 

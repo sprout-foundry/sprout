@@ -4,7 +4,7 @@
 // autoSkipFileCountThreshold or autoSkipCumulativeThreshold), the dir
 // is added to autoSkipDirs so subsequent walks skip it entirely.
 // Learned sets persist across agent sessions via change_tracking_shell_persist.go.
-package agent
+package changes
 
 import (
 	"log"

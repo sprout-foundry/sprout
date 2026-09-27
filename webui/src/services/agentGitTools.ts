@@ -23,6 +23,7 @@
  */
 
 import { gitClient } from './gitClient';
+import { usesPlatformGitHub } from './platformGitHub';
 
 /**
  * A single git tool definition with its executor.
@@ -278,8 +279,8 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
     },
     execute: async (args) => {
       try {
-        const token = getGithubToken();
-        if (!token) return 'No GitHub token found. The user must authenticate first.';
+        const token = getGithubToken() ?? undefined;
+        if (!token && !usesPlatformGitHub()) return 'No GitHub token found. The user must authenticate first.';
         await gitClient.push(resolveRepoDir(args.repo as string), { token, branch: args.branch as string | undefined });
         return 'Pushed to ' + args.repo;
       } catch (err) {
@@ -303,8 +304,8 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
         if (typeof args.branch !== 'string' && args.branch !== undefined) {
           throw new Error('branch must be a string');
         }
-        const token = getGithubToken();
-        if (!token) return 'No GitHub token found. The user must authenticate first.';
+        const token = getGithubToken() ?? undefined;
+        if (!token && !usesPlatformGitHub()) return 'No GitHub token found. The user must authenticate first.';
         await gitClient.pull(resolveRepoDir(args.repo as string), { token, branch: args.branch as string | undefined });
         return 'Pulled from ' + args.repo;
       } catch (err) {

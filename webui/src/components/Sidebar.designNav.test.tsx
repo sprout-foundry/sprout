@@ -80,6 +80,7 @@ vi.mock('../config/mode', () => ({
   supportsLocalTerminal: false,
   supportsGit: true,
   supportsWorkspaceSwitching: false,
+  supportsAutomations: true,
 }));
 
 // Mock leaf components to keep the render cheap.

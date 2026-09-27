@@ -238,7 +238,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	}
 
 	// Initialize change tracker
-	agent.changeTracker = NewChangeTracker(agent, "")
+	agent.changeTracker = NewChangeTracker(agent.changesView(), "")
 	agent.changeTracker.Enable() // Start enabled by default
 
 	// Wire the package-level logger so package-level functions can use structured logging with session context.

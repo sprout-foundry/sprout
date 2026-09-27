@@ -2087,7 +2087,7 @@ func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	if !tracker.IsEnabled() {
 		t.Fatal("subagent tracking should be enabled")
 	}
-	if tracker.shellCache != nil {
+	if tracker.ShellCachePrimed() {
 		t.Error("subagent tracker eagerly primed the shell cache; expected lazy (nil) until first tracked shell command")
 	}
 
@@ -2098,7 +2098,7 @@ func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	}
 	b.EnableChangeTracking("primary run")
 	bt := b.GetChangeTracker()
-	if bt == nil || bt.shellCache == nil {
+	if bt == nil || !bt.ShellCachePrimed() {
 		t.Error("primary agent tracker should have an eagerly primed shell cache")
 	}
 }

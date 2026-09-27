@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/search"
@@ -27,32 +26,29 @@ func normalizeSessionID(sessionID string) (string, error) {
 	return clean, nil
 }
 
-func normalizeWorkingDirectory(workingDir string) (string, error) {
-	trimmed := strings.TrimSpace(workingDir)
-	if trimmed == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", agenterrors.Wrap(err, "failed to resolve current working directory")
-		}
-		trimmed = cwd
-	}
-	abs, err := filepath.Abs(trimmed)
-	if err != nil {
-		return "", agenterrors.Wrapf(err, "failed to resolve absolute working directory %q", trimmed)
-	}
-	// Resolve symlinks for consistent path comparison. On macOS,
-	// /var → /private/var and os.Getwd() returns the resolved path,
-	// while t.TempDir() returns the unresolved path.
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err == nil {
-		return filepath.Clean(resolved), nil
-	}
-	return filepath.Clean(abs), nil
+// backupFileWithExt delegates to the changes-package implementation
+// (moved in SP-141 phase 2).
+func backupFileWithExt(src, ext string) error {
+	return changes.BackupFileWithExt(src, ext)
 }
 
+// writeFileAtomic delegates to the changes-package implementation
+// (moved in SP-141 phase 2).
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return changes.WriteFileAtomic(path, data, perm)
+}
+
+// normalizeWorkingDirectory delegates to the shared implementation in
+// pkg/agent/changes (SP-141 phase 2 moved it; session persistence keeps
+// calling it through this package-local alias).
+func normalizeWorkingDirectory(workingDir string) (string, error) {
+	return changes.NormalizeWorkingDirectory(workingDir)
+}
+
+// workingDirectoryScopeHash delegates to the shared implementation in
+// pkg/agent/changes (SP-141 phase 2 moved it).
 func workingDirectoryScopeHash(workingDir string) string {
-	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(workingDir))))
-	return hex.EncodeToString(sum[:8])
+	return changes.WorkingDirectoryScopeHash(workingDir)
 }
 
 func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string, error) {

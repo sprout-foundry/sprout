@@ -150,3 +150,18 @@ export interface ConfigConflictData {
     model?: string;
   };
 }
+
+/**
+ * Payload of the `409 workspace_busy` rejection (SP-142 §3): a query was
+ * submitted from a chat while another chat in the same client context
+ * (workspace) had one running. The composer turns this into an inline
+ * busy notice with a send-anyway (local queue) affordance.
+ *
+ * Go: pkg/webui/api_query_shared.go::runChatQuery (workspace gate)
+ */
+export interface WorkspaceBusyData {
+  error: string;
+  code: 'workspace_busy';
+  running_chat_id: string;
+  running_chat_name: string;
+}

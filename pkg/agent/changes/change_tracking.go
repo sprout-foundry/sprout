@@ -1,4 +1,4 @@
-package agent
+package changes
 
 import (
 	"fmt"
@@ -16,6 +16,44 @@ import (
 // sites within this package keep working.
 const RedactedContentMarker = history.RedactedContentMarker
 
+// AgentView is the seam between the change tracker and its host agent
+// (SP-141 phase 2). The tracker lives in pkg/agent/changes; the agent
+// lives in pkg/agent, and the import arrow is one-way (pkg/agent →
+// changes), so the tracker sees only this narrow interface. pkg/agent
+// adapts *Agent to it via the unexported changesAgentView adapter —
+// the same shape phase 1 used for workflow.LoopAgent. Every method is
+// nil-tolerant on the implementation side where the old direct-field
+// access was nil-checked.
+type AgentView interface {
+	// GetSessionID returns the session identifier ("" when unset).
+	GetSessionID() string
+	// GetModel returns the model identifier ("unknown" fallback is the
+	// tracker's, not the agent's).
+	GetModel() string
+	// GetWorkspaceRoot returns the logical workspace root ("" when unset).
+	GetWorkspaceRoot() string
+	// GenerateResponse runs an LLM completion (AI summary path).
+	GenerateResponse(messages []api.Message) (string, error)
+	// DebugLogger returns the agent logger or nil; the tracker logs
+	// debug-level shell-snapshot messages through it when non-nil.
+	DebugLogger() DebugLogger
+	// PublishFileChange emits a file_changed event for tracker-detected
+	// mutations. Implementations drop the event when no bus is wired.
+	PublishFileChange(filePath, action, content string)
+	// PublishRawFileChanged publishes a file_changed event WITHOUT the
+	// agent's event-metadata decoration (bulk rollups and destructive
+	// rollups publish command labels / directory paths, not real files,
+	// and historically bypassed decorateEventPayload via a raw
+	// eventBus.Publish). Implementations must preserve that behavior.
+	PublishRawFileChanged(eventType string, payload interface{})
+}
+
+// DebugLogger is the logger facet the tracker needs from the agent
+// logger (mirrors *agent.AgentLogger.Debug).
+type DebugLogger interface {
+	Debug(format string, args ...interface{})
+}
+
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
 	// mu protects revisionID, instructions, changes, baseRevisionRecorded,
@@ -29,7 +67,7 @@ type ChangeTracker struct {
 	// enabled is the on/off flag for change tracking. Every concurrent read
 	// in production code MUST go through IsEnabled() to avoid races.
 	enabled              bool
-	agent                *Agent
+	view                 AgentView
 	baseRevisionRecorded bool
 	committedChangeCount int
 	// checkpointedChangeCount is len(changes) at the most recent turn-checkpoint capture.
@@ -85,11 +123,16 @@ type TrackedBulkItem struct {
 	Operation    string `json:"operation"` // "create" | "edit" | "delete"
 }
 
-// NewChangeTracker creates a new change tracker for an agent session
-func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
+// NewChangeTracker creates a new change tracker for an agent session.
+// view may be nil (bare trackers in tests); every view access is
+// nil-guarded exactly where the old ct.agent accesses were.
+func NewChangeTracker(view AgentView, instructions string) *ChangeTracker {
 	history.InitializeHistoryPaths(nil)
 
-	sessionID := agent.GetSessionID()
+	sessionID := ""
+	if view != nil {
+		sessionID = view.GetSessionID()
+	}
 	if sessionID == "" {
 		sessionID = generateSessionID()
 	}
@@ -102,7 +145,7 @@ func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
 		instructions: instructions,
 		changes:      make([]TrackedFileChange, 0),
 		enabled:      true,
-		agent:        agent,
+		view:         view,
 	}
 }
 
@@ -147,7 +190,7 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, originalContent string,
 	filePath = ct.resolveAbsPath(filePath)
 
 	// Redact content if file is outside the workspace root
-	if ct.isOutsideWorkspace(filePath) {
+	if ct.IsOutsideWorkspace(filePath) {
 		originalContent = RedactedContentMarker
 		newContent = RedactedContentMarker
 	}
@@ -176,7 +219,7 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 	filePath = ct.resolveAbsPath(filePath)
 
 	// Redact content if file is outside the workspace root
-	if ct.isOutsideWorkspace(filePath) {
+	if ct.IsOutsideWorkspace(filePath) {
 		originalContent = RedactedContentMarker
 		newContent = RedactedContentMarker
 	}
@@ -306,10 +349,10 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 // sweepCommittedSnapshots marks committed snapshots as "superseded"
 // when their NewCode matches git HEAD.
 func (ct *ChangeTracker) sweepCommittedSnapshots(changes []TrackedFileChange) {
-	if ct.agent == nil {
+	if ct.view == nil {
 		return
 	}
-	workDir := ct.agent.workspaceRoot
+	workDir := ct.view.GetWorkspaceRoot()
 	if workDir == "" {
 		return
 	}
@@ -420,6 +463,49 @@ func (ct *ChangeTracker) Reset(instructions string) {
 	ct.revisionID = revID
 	ct.clearLocked()
 	ct.mu.Unlock()
+}
+
+// SetView (re)binds the tracker's host view. Construction wires the view;
+// tests that build a bare tracker (nil view) then attach an Agent rebind
+// here, mirroring the old `tracker.agent = a` in-package assignment.
+func (ct *ChangeTracker) SetView(view AgentView) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	ct.view = view
+}
+
+// SetRevisionIDForTest stamps a fixed revision ID (tests need deterministic
+// revision ids that the generated one can't provide).
+func (ct *ChangeTracker) SetRevisionIDForTest(id string) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	ct.revisionID = id
+}
+
+// TrackerSessionID exposes the tracker's current session identifier
+// (the rotation contract: pkg/agent re-points it on session rotate and
+// its test reads it back; SP-141 phase 2).
+func (ct *ChangeTracker) TrackerSessionID() string {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	return ct.sessionID
+}
+
+func (ct *ChangeTracker) SetSessionID(sessionID string) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	ct.sessionID = sessionID
+}
+
+// ShellCachePrimed reports whether the shell-snapshot baseline cache
+// has been primed. Exported as part of the phase-2 seam: pkg/agent's
+// TestAgent_EnableChangeTracking_SubagentSkipsShellPrime reads the old
+// unexported shellCache field to distinguish eager (primary) from lazy
+// (subagent) priming.
+func (ct *ChangeTracker) ShellCachePrimed() bool {
+	ct.shellCacheMu.Lock()
+	defer ct.shellCacheMu.Unlock()
+	return ct.shellCache != nil
 }
 
 // Helper functions

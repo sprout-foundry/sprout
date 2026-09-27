@@ -5,7 +5,7 @@
 > dot + open-annotation badge, selection routing) has landed; the workbench
 > (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) verified
 > shipped with it (2026-09-25); the §8d empty states landed 2026-09-25.
-> Remaining: 8.5 Feedback-library resolution (recorded in its note); 8.6 shipped 2026-09-25.
+> Remaining: none — 8.1–8.6 all shipped (the Feedback library view closed 8.5's holdout 2026-09-26).
 > The token-display rework that motivated this (tile grid, proportional spacing
 > scale, schema-wall removal) landed in the same review pass on
 > `feat-design-workspace` and is *not* part of this spec.
@@ -202,8 +202,11 @@ editing stays in the existing surfaces (render pin, §7c editors, canvas).
   > this pass. Where feedback lives today is unchanged: per-screen in the
   > workbench (§8b facet 3, from `DesignFeedbackResolution`/
   > `DesignFeedbackAffordance`) and workspace-wide on the health strip's
-  > pending list. Follow-up: build the Feedback library view, or amend §8a
-  > to bless the workbench + health strip as the feedback surfaces.
+  > pending list. Follow-up: RESOLVED 2026-09-26 — the Feedback library
+  > view shipped (FeedbackLibrary.tsx: a pending/resolved queue over
+  > inventory.feedback with status + open counts, click-through to the
+  > target screen's workbench; the Library group carries Tokens / Flows /
+  > Feedback per §8a). SP-140-8 is now fully closed with no deviations.
 - **8.6** Meta: a wireframe of the new layout (an HTML screen in
   `design/screens/` of the dogfood workspace — the tool's own IA dogfoods
   SP-140-9's format once it lands; until then, SVG per the current

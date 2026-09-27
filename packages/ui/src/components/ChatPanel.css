@@ -117,7 +117,7 @@
 }
 
 .side-rail-btn.active::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -7px;
   top: 8px;
@@ -245,7 +245,8 @@
 
 .status-dot-indicator.active {
   background: var(--accent-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--accent-primary) 25%, transparent);
   animation: status-pulse 1.5s ease-in-out infinite;
 }
 
@@ -256,12 +257,18 @@
 
 .status-dot-indicator.idle {
   background: var(--accent-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-success) 15%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 @keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .status-label {
@@ -523,7 +530,11 @@
 }
 
 .history-rollback-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-error) 10%, var(--color-error-bg));
+  background: color-mix(
+    in srgb,
+    var(--accent-error) 10%,
+    var(--color-error-bg)
+  );
 }
 
 .history-rollback-btn:disabled {
@@ -569,12 +580,20 @@
 }
 
 .history-diff-line.hunk {
-  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--accent-primary) 14%,
+    var(--bg-secondary)
+  );
   color: var(--text-primary);
 }
 
 .history-diff-line.add {
-  background: color-mix(in srgb, var(--accent-success) 12%, var(--bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--accent-success) 12%,
+    var(--bg-secondary)
+  );
   color: var(--text-primary);
 }
 
@@ -651,9 +670,10 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  transition: background var(--t-base, 0.15s) var(--ease-out, ease),
-              border-color var(--t-base, 0.15s) var(--ease-out, ease),
-              transform var(--t-fast, 0.12s) var(--ease-out, ease);
+  transition:
+    background var(--t-base, 0.15s) var(--ease-out, ease),
+    border-color var(--t-base, 0.15s) var(--ease-out, ease),
+    transform var(--t-fast, 0.12s) var(--ease-out, ease);
 }
 
 .provider-setup-btn:hover {
@@ -705,7 +725,10 @@
   border-radius: 6px;
   position: relative;
   backdrop-filter: none;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   border: 1px solid transparent;
 }
 
@@ -742,7 +765,8 @@
   /* Accent rail on the RIGHT (negative x-offset) since the bubble is
    * right-aligned — the eye reads the colored stripe as the bubble's
    * anchor toward the input area below. */
-  box-shadow: inset -3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  box-shadow: inset -3px 0 0
+    color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
 .message.assistant .message-bubble {
@@ -769,7 +793,11 @@
   padding: 2px 8px;
   border-radius: var(--radius-sm, 4px);
   margin-bottom: 6px;
-  background: color-mix(in srgb, var(--persona-color, var(--text-tertiary)) 18%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--persona-color, var(--text-tertiary)) 18%,
+    transparent
+  );
   color: var(--persona-color, var(--text-secondary));
 }
 
@@ -785,7 +813,8 @@
  * matching the design system mockup. Order: top-left | top-right |
  * bottom-right | bottom-left. */
 .message.user .message-bubble {
-  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px) var(--radius-lg, 8px);
+  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px)
+    var(--radius-sm, 4px) var(--radius-lg, 8px);
 }
 
 .message-content {
@@ -862,10 +891,18 @@
   color: var(--text-primary);
 }
 
-.message-content h1 { font-size: 20px; }
-.message-content h2 { font-size: 18px; }
-.message-content h3 { font-size: 16px; }
-.message-content h4 { font-size: 15px; }
+.message-content h1 {
+  font-size: 20px;
+}
+.message-content h2 {
+  font-size: 18px;
+}
+.message-content h3 {
+  font-size: 16px;
+}
+.message-content h4 {
+  font-size: 15px;
+}
 
 .message-content ul,
 .message-content ol {
@@ -991,9 +1028,10 @@
   color: var(--text-secondary);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s var(--ease-out, ease),
-              background 0.15s var(--ease-out, ease),
-              color 0.15s var(--ease-out, ease);
+  transition:
+    opacity 0.15s var(--ease-out, ease),
+    background 0.15s var(--ease-out, ease),
+    color 0.15s var(--ease-out, ease);
   pointer-events: auto;
 }
 
@@ -1107,7 +1145,8 @@
 }
 
 .error-recovery-btn {
-  border: 1px solid color-mix(in srgb, var(--accent-error) 35%, var(--border-default));
+  border: 1px solid
+    color-mix(in srgb, var(--accent-error) 35%, var(--border-default));
   background: color-mix(in srgb, var(--bg-tertiary) 88%, transparent);
   color: var(--text-primary);
   border-radius: 8px;
@@ -1115,7 +1154,9 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out);
 }
 
 .error-recovery-btn:hover {
@@ -1139,7 +1180,8 @@
   margin-bottom: 4px;
   overflow: hidden;
   cursor: pointer;
-  transition: background 0.12s var(--ease-out, ease-out),
+  transition:
+    background 0.12s var(--ease-out, ease-out),
     border-color 0.12s var(--ease-out, ease-out),
     box-shadow 0.12s var(--ease-out, ease-out);
 }
@@ -1156,16 +1198,19 @@
 
 /* Status-tinted left border for visual scanning */
 .tool-execution.tool-completed {
-  border-left: 2px solid color-mix(in srgb, var(--accent-success) 50%, transparent);
+  border-left: 2px solid
+    color-mix(in srgb, var(--accent-success) 50%, transparent);
 }
 
 .tool-execution.tool-started,
 .tool-execution.tool-running {
-  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 60%, transparent);
+  border-left: 2px solid
+    color-mix(in srgb, var(--accent-primary) 60%, transparent);
 }
 
 .tool-execution.tool-error {
-  border-left: 2px solid color-mix(in srgb, var(--accent-error) 55%, transparent);
+  border-left: 2px solid
+    color-mix(in srgb, var(--accent-error) 55%, transparent);
 }
 
 .tool-summary {
@@ -1345,7 +1390,8 @@
 .subagent-card.tool-started,
 .subagent-card.tool-running {
   border-color: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.5);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
+  box-shadow: inset 0 0 0 1px
+    rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
 }
 
 .subagent-card-header {
@@ -1700,7 +1746,10 @@
     align-items: center;
     justify-content: center;
     position: fixed;
-    bottom: calc(var(--sprout-terminal-reserved-height) + 84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(
+      var(--sprout-terminal-reserved-height) + 84px +
+        env(safe-area-inset-bottom, 0px)
+    );
     right: 12px;
     width: 40px;
     height: 40px;
@@ -1711,7 +1760,9 @@
     cursor: pointer;
     box-shadow: var(--shadow-elevated);
     z-index: 500;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .context-panel-mobile-toggle:hover {
@@ -1789,7 +1840,10 @@
   font-size: 10.5px;
   line-height: 1.6;
   cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 
 .message-tool-links-compact .message-tool-link {
@@ -1797,7 +1851,11 @@
   min-height: 20px;
   color: var(--accent-primary);
   background: transparent;
-  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
+  border-color: color-mix(
+    in srgb,
+    var(--accent-primary) 22%,
+    var(--border-subtle)
+  );
   font-size: 10.5px;
 }
 
@@ -1826,7 +1884,11 @@
 .message-tool-links-compact .message-tool-link:hover {
   color: var(--accent-primary);
   background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-subtle));
+  border-color: color-mix(
+    in srgb,
+    var(--accent-primary) 40%,
+    var(--border-subtle)
+  );
 }
 
 .message-tool-link:focus-visible {
@@ -1849,7 +1911,10 @@
   cursor: pointer;
   font-size: 11px;
   color: var(--text-secondary);
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
   user-select: none;
   margin: 0 2px;
   vertical-align: middle;
@@ -1922,7 +1987,10 @@
   user-select: none;
   vertical-align: middle;
   margin: 0 2px;
-  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .segment-tool-footnote:hover {
@@ -1938,7 +2006,11 @@
 
 .segment-tool-footnote--error {
   color: var(--accent-error);
-  border-color: color-mix(in srgb, var(--accent-error) 30%, var(--border-subtle));
+  border-color: color-mix(
+    in srgb,
+    var(--accent-error) 30%,
+    var(--border-subtle)
+  );
 }
 
 .tool-footnote-icon {
@@ -2005,21 +2077,36 @@
 }
 
 @keyframes inline-todo-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 /* ── Tool Highlight (when pill is clicked) ───────────────────── */
 .tool-execution.tool-highlighted {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--accent-primary) 25%, transparent);
   animation: tool-highlight-fade 3s var(--ease-out, ease-out) forwards;
 }
 
 @keyframes tool-highlight-fade {
-  0% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 40%, transparent); }
-  70% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; border-color: var(--border-default); }
+  0% {
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--border-default);
+  }
 }
 
 /* ── Side Panel Tasks ────────────────────────────────────────── */
@@ -2091,7 +2178,10 @@
   cursor: pointer;
   z-index: 10;
   box-shadow: var(--shadow-elevated);
-  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out), opacity 0.15s ease;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    opacity 0.15s ease;
 }
 
 .scroll-to-bottom-btn:hover {
@@ -2180,4 +2270,52 @@
 .chat-offline-retry-btn:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+}
+
+/* SP-142 §3: workspace-busy notice — another chat holds the workspace gate. */
+.workspace-busy-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  background: var(--bg-elevated, #303742);
+  color: var(--text-primary, #abb2bf);
+  font-size: 12px;
+}
+
+.workspace-busy-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-warning, #e5c07b);
+}
+
+.workspace-busy-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-busy-send-anyway {
+  border: 1px solid var(--border-subtle, #3e4451);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary, #abb2bf);
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.workspace-busy-send-anyway:hover {
+  border-color: var(--accent-primary, #61afef);
+  color: var(--accent-primary, #61afef);
+}
+
+.workspace-busy-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #5c6370);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
 }

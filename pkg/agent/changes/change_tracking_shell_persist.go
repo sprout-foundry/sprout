@@ -15,7 +15,7 @@
 // To prevent unbounded growth across many workspaces, the file caps
 // at maxPersistedWorkspaces entries — least-recently-used workspaces
 // are evicted first when the cap is exceeded.
-package agent
+package changes
 
 import (
 	"encoding/json"

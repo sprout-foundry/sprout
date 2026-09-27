@@ -27,6 +27,7 @@ const RAIL_LABELS: Record<DesignTab, string> = {
   flows: 'Flows',
   screens: 'Screens',
   tokens: 'Tokens',
+  feedback: 'Feedback',
 };
 
 /** Placeholder stem per tab, used for the shell-stage row's selection path. */
@@ -34,6 +35,7 @@ const RAIL_STUBS: Record<DesignTab, string> = {
   flows: 'flows/',
   screens: 'screens/',
   tokens: 'tokens/',
+  feedback: 'feedback/',
 };
 
 /** The inventory slice the rail lists for a tab. */

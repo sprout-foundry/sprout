@@ -31,12 +31,13 @@ import { FlowsCanvasContainer } from './FlowsCanvasContainer';
 import { ScreensTabContainer } from './ScreensGrid';
 import { ScreenWorkbenchContainer } from './ScreenWorkbenchContainer';
 import TokensTree from './TokensTree';
+import FeedbackLibrary from './FeedbackLibrary';
 import './DesignView.css';
 
 /** The chat payload the Agent tab renders (the shell's own chat props). */
 export type DesignChatProps = ComponentProps<typeof DesignAgentPanel>['chatProps'];
 
-export type DesignTab = 'flows' | 'screens' | 'tokens';
+export type DesignTab = 'flows' | 'screens' | 'tokens' | 'feedback';
 
 interface DesignTabSpec {
   id: DesignTab;
@@ -48,6 +49,7 @@ export const DESIGN_TABS: DesignTabSpec[] = [
   { id: 'flows', label: 'Flows' },
   { id: 'screens', label: 'Screens' },
   { id: 'tokens', label: 'Tokens' },
+  { id: 'feedback', label: 'Feedback' },
 ];
 
 export interface DesignViewProps {
@@ -269,6 +271,13 @@ export default function DesignView({
             ))}
           {activeTab === 'tokens' && (
             <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} onSelectTab={changeTab} />
+          )}
+          {activeTab === 'feedback' && (
+            <FeedbackLibrary
+              feedback={inventory ? inventory.feedback : []}
+              onSelectAsset={handleSelectAsset}
+              onSelectTab={changeTab}
+            />
           )}
         </section>
 

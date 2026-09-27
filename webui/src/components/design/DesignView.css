@@ -1743,3 +1743,118 @@
   border-color: var(--accent-primary, #61afef);
   color: var(--accent-primary, #61afef);
 }
+
+/* FeedbackLibrary — the §8a Library group's feedback queue. */
+.feedback-library {
+  padding: 16px;
+  max-width: 720px;
+}
+
+.feedback-library-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #5c6370);
+  margin: 8px 0;
+}
+
+.feedback-library-count-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-elevated, #303742);
+  color: var(--text-primary, #abb2bf);
+  font-size: 11px;
+  text-align: center;
+}
+
+.feedback-library-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feedback-library-target {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle, #3e4451);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary, #abb2bf);
+  cursor: pointer;
+  text-align: left;
+}
+
+.feedback-library-target:hover {
+  border-color: var(--accent-primary, #61afef);
+}
+
+.feedback-library-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.feedback-library-status {
+  flex: none;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-elevated, #303742);
+  color: var(--text-secondary, #9aa3b2);
+}
+
+.feedback-library-status--changes-requested {
+  color: var(--accent-warning, #e5c07b);
+}
+
+.feedback-library-status--approved {
+  color: var(--accent-success, #98c379);
+}
+
+.feedback-library-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted, #5c6370);
+}
+
+.feedback-library-allclear,
+.feedback-library-empty-title {
+  color: var(--text-primary, #abb2bf);
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+.feedback-library-empty-sub {
+  color: var(--text-muted, #5c6370);
+  font-size: 12px;
+  margin: 0;
+}
+
+.feedback-library-resolved {
+  margin-top: 12px;
+}
+
+.feedback-library-resolved summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.feedback-library-resolved summary::-webkit-details-marker {
+  display: none;
+}

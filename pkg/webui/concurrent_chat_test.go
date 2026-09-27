@@ -278,16 +278,14 @@ func TestConcurrentChatQueryIsolated(t *testing.T) {
 		t.Fatal("expected chat B to not have an active query")
 	}
 
-	// Sending a query to chat B should succeed (202) because chat B has no
-	// active query — isolation means chat A's query doesn't block chat B.
-	//
-	// Note: handleAPIQuery launches a real goroutine but it first checks
-	// for active queries, so if the check passes it will return 202 before
-	// the agent goroutine runs. We verify the pre-check returns the right
-	// status without waiting for the background goroutine.
+	// SP-142 §3 (one workspace, one runner): a query to chat B while chat A
+	// runs is rejected 409 workspace_busy — the gate serializes cross-chat
+	// queries because agents share one file tree. (The pre-142.3 contract
+	// was per-chat isolation with 202 here; the workspace gate replaced it.
+	// The 409's payload semantics are pinned in chat_sessions_mode_test.go.)
 	code := queryChat(t, ws, testConcurrentClientID, chatB, "test query for chat B")
-	if code != http.StatusAccepted {
-		t.Fatalf("expected query to non-active chat to return 202, got %d", code)
+	if code != http.StatusConflict {
+		t.Fatalf("expected cross-chat query while another chat runs to return 409, got %d", code)
 	}
 
 	// Sending a query to chat A should be rejected (409) because chat A

@@ -1,4 +1,8 @@
-package agent
+// Package approvals: filesystem path-tier classification (risk inputs).
+//
+// Pure, agent-free: no *Agent dependency. The LLM/client and the session
+// allowlist live in pkg/agent; this package owns only the path -> tier mapping.
+package approvals
 
 import (
 	"os"
@@ -83,8 +87,8 @@ func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
 	if path == "" {
 		return PathTierUnknown
 	}
-	abs := normalizePath(path)
-	if workspaceRoot != "" && isUnderPrefix(abs, normalizePath(workspaceRoot)) {
+	abs := NormalizePath(path)
+	if workspaceRoot != "" && IsUnderPrefix(abs, NormalizePath(workspaceRoot)) {
 		return PathTierWorkspace
 	}
 	// Use the original path for system path detection to handle symlinks.
@@ -94,9 +98,9 @@ func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
 		return PathTierSensitive
 	}
 	if homeDir != "" {
-		homeAbs := normalizePath(homeDir)
-		pathInHome := isUnderPrefix(abs, homeAbs)
-		cwdInHome := cwd != "" && isUnderPrefix(normalizePath(cwd), homeAbs)
+		homeAbs := NormalizePath(homeDir)
+		pathInHome := IsUnderPrefix(abs, homeAbs)
+		cwdInHome := cwd != "" && IsUnderPrefix(NormalizePath(cwd), homeAbs)
 		if pathInHome && !cwdInHome {
 			return PathTierSensitive
 		}
@@ -153,7 +157,7 @@ func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
 	}
 	// Check the resolved path against system prefixes.
 	for _, prefix := range systemPathPrefixes() {
-		if isUnderPrefix(resolvedPath, prefix) {
+		if IsUnderPrefix(resolvedPath, prefix) {
 			return true
 		}
 	}
@@ -162,7 +166,7 @@ func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
 	// (e.g., /etc → /system/etc on some Linux systems).
 	if originalPath != "" && originalPath != resolvedPath {
 		for _, prefix := range systemPathPrefixes() {
-			if isUnderPrefix(originalPath, prefix) {
+			if IsUnderPrefix(originalPath, prefix) {
 				return true
 			}
 		}
@@ -170,11 +174,11 @@ func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
 	return false
 }
 
-// normalizePath cleans the path so prefix comparisons aren't fooled
+// NormalizePath cleans the path so prefix comparisons aren't fooled
 // by trailing slashes or "./" segments. Symlinks aren't resolved
 // here — that's the filesystem layer's job. On Windows the path
 // becomes case-insensitive for comparison.
-func normalizePath(p string) string {
+func NormalizePath(p string) string {
 	if p == "" {
 		return p
 	}
@@ -190,10 +194,10 @@ func normalizePath(p string) string {
 	return clean
 }
 
-// isUnderPrefix reports whether `path` equals `prefix` or sits in
+// IsUnderPrefix reports whether `path` equals `prefix` or sits in
 // a subdirectory of it. Both args must already be normalized.
 // The check is path-component aware: "/foobar" is NOT under "/foo".
-func isUnderPrefix(path, prefix string) bool {
+func IsUnderPrefix(path, prefix string) bool {
 	if path == "" || prefix == "" {
 		return false
 	}
@@ -207,9 +211,9 @@ func isUnderPrefix(path, prefix string) bool {
 	return strings.HasPrefix(path, prefix) && len(path) > len(prefix)
 }
 
-// detectHomeDir returns the user's home directory or empty if it
+// DetectHomeDir returns the user's home directory or empty if it
 // can't be resolved (very rare). Wrapped so tests can stub it.
-var detectHomeDir = func() string {
+var DetectHomeDir = func() string {
 	h, err := os.UserHomeDir()
 	if err != nil {
 		return ""

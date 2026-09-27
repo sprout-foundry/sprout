@@ -425,9 +425,17 @@ body {
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
+  max-width: 260px;
+  gap: 4px;
   transition:
     background 0.15s var(--ease-out),
     color 0.15s var(--ease-out);
+}
+
+.header-back-to-dashboard-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-back-to-dashboard:hover {

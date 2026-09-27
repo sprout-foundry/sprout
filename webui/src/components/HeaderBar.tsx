@@ -4,7 +4,7 @@ import { isCloud } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
-import { platformHref } from '../utils/platformUrl';
+import { githubRepoSlug, platformHref, repoHubPath } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
 import { UsageChip } from './UsageChip';
 import { UserMenu } from './UserMenu';
@@ -29,6 +29,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 }) => {
   const [busy, setBusy] = useState(false);
   const repoURL = useActiveRepoURL() ?? null;
+  // The back-link returns to the hub page of the repo being edited.
+  const repoSlug = githubRepoSlug(repoURL);
   // Hidden on deployments without workspace compute rather than offering an
   // action that can only fail.
   const workspacesAvailable = useFullWorkspacesAvailable(isCloud);
@@ -84,8 +86,12 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div className="header-bar">
       {isCloud && (
-        <a href={platformHref('/?from=editor')} className="header-back-to-dashboard" title="Back to Dashboard">
-          ← Dashboard
+        <a
+          href={platformHref(repoHubPath(repoURL))}
+          className="header-back-to-dashboard"
+          title={repoSlug ? `Back to ${repoSlug} on the dashboard` : 'Back to Dashboard'}
+        >
+          ← <span className="header-back-to-dashboard-label">{repoSlug ?? 'Dashboard'}</span>
         </a>
       )}
       {!isCloud && <MenuBar />}

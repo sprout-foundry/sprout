@@ -42,6 +42,8 @@ const MENU_ITEMS: readonly { label: string; path: string }[] = [
   { label: 'Settings', path: '/?from=editor#/settings' },
 ];
 
+const ADMIN_ITEM = { label: 'Admin', path: '/?from=editor#/admin' };
+
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;
 
 export function UserMenu(): JSX.Element | null {
@@ -131,7 +133,7 @@ export function UserMenu(): JSX.Element | null {
               </span>
               {user.tier ? <span className="user-menu-tier">{user.tier}</span> : null}
             </div>
-            {MENU_ITEMS.map((item) => (
+            {(user.admin ? [...MENU_ITEMS, ADMIN_ITEM] : MENU_ITEMS).map((item) => (
               <a
                 key={item.label}
                 role="menuitem"

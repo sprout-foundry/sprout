@@ -1,5 +1,5 @@
-// Package agent: session-scoped cache for LLM security analyses.
-package agent
+// Package approvals: session-scoped cache for LLM security analyses.
+package approvals
 
 import "sync"
 

@@ -1,5 +1,9 @@
-// Package agent: LLM-augmented security analysis for shell commands.
-package agent
+// Package approvals: LLM-augmented security analysis for shell commands.
+//
+// The package is deliberately free of any *Agent dependency: the LLM client
+// and the model name are injected by the caller (pkg/agent), which owns the
+// session-model override and client locking.
+package approvals
 
 import (
 	"context"
@@ -58,20 +62,18 @@ func riskToLLMTone(r agenttools.SecurityRisk) string {
 // the single-command prompt; chains up to MaxChainSubcommandsForBatchPrompt use
 // the chain-aware prompt with per-subcommand classifications; longer chains
 // fall back to per-subcommand analyses via AnalyzeChainFallback.
-func AnalyzeChain(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
-	if agent == nil {
-		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
-	}
+func AnalyzeChain(ctx context.Context, client api.ClientInterface, model string, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if len(chain.Subcommands) == 0 {
 		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
 
-	// Long chains fall back to per-subcommand single-command analyses.
+	// Long chains fall back to per-subcommand single-command analyses. This
+	// dispatch intentionally precedes the client check so that a long chain
+	// with no client still returns a synthesized (best-effort) entry.
 	if len(chain.Subcommands) > MaxChainSubcommandsForBatchPrompt {
-		return AnalyzeChainFallback(ctx, agent, chain, classifications, cwd)
+		return AnalyzeChainFallback(ctx, client, model, chain, classifications, cwd)
 	}
 
-	client := agent.getClient()
 	if client == nil {
 		return nil, agenterrors.NewConfig("no client configured", nil)
 	}
@@ -86,7 +88,6 @@ Focus on: data destruction, data exfiltration, privilege escalation, unrecoverab
 		systemPrompt = buildChainPrompt(chain, classifications)
 	}
 
-	model := agent.GetModel()
 	userPrompt := fmt.Sprintf("Chain:\n%s\n\nWorking directory: %s", chain.Original, cwd)
 
 	msgs := []api.Message{
@@ -139,10 +140,7 @@ func classificationToneFor(classifications []agenttools.ChainedClassification, s
 // AnalyzeChainFallback handles chains longer than MaxChainSubcommandsForBatchPrompt.
 // It runs per-subcommand single-command analysis on each subcommand and synthesizes
 // a single SecurityAnalysis: max severity, worst recommendation, deduped modifies.
-func AnalyzeChainFallback(ctx context.Context, agent *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
-	if agent == nil {
-		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
-	}
+func AnalyzeChainFallback(ctx context.Context, client api.ClientInterface, model string, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if len(chain.Subcommands) == 0 {
 		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
@@ -164,7 +162,7 @@ func AnalyzeChainFallback(ctx context.Context, agent *Agent, chain Chain, classi
 			}
 		}
 		// Per-subcommand chain has length 1 → uses the single-command prompt path.
-		sa, err := AnalyzeChain(ctx, agent, Chain{Original: sub, Subcommands: []string{sub}}, subCls, cwd)
+		sa, err := AnalyzeChain(ctx, client, model, Chain{Original: sub, Subcommands: []string{sub}}, subCls, cwd)
 		if err == nil && sa != nil {
 			analyses = append(analyses, sa)
 		}
@@ -318,17 +316,14 @@ Respond with ONLY a JSON object matching:
 }
 
 // AnalyzeShellCommand sends a shell command to the agent's LLM for plain-language analysis.
-func AnalyzeShellCommand(ctx context.Context, agent *Agent, command, cwd string) (*SecurityAnalysis, error) {
-	if agent == nil {
-		return nil, agenterrors.NewInvalidInputError("nil agent", nil)
-	}
+func AnalyzeShellCommand(ctx context.Context, client api.ClientInterface, model string, command, cwd string) (*SecurityAnalysis, error) {
 	if command == "" {
 		return nil, agenterrors.NewInvalidInputError("empty command", nil)
 	}
 
 	chain := ParseChain(command)
 	classifications := agenttools.ClassifyChainedCommand(command)
-	return AnalyzeChain(ctx, agent, chain, classifications, cwd)
+	return AnalyzeChain(ctx, client, model, chain, classifications, cwd)
 }
 
 // extractJSON returns the first balanced {...} substring in s, after

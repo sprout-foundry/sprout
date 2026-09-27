@@ -1,7 +1,7 @@
-package agent
+package approvals
 
 // security_analyzer_chain.go — the chain-decomposition helpers, split out of
-// security_analyzer.go. Chain parses a shell command into subcommands +
+// security_analyzer.go (now in this package). Chain parses a shell command into subcommands +
 // operators; ParseChain / tokenizeChain are the quote-aware tokenizer;
 // ChainCacheKey / NormalizeChain produce normalized cache keys so equivalent
 // chains collide.

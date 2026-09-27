@@ -1,0 +1,108 @@
+<!doctype html>
+<!--
+  editor — code + diff surface (SP-140-9 9.4: migrated from the legacy
+  design/wireframes/editor.svg). Base: design/runtime/base/desktop.html;
+  nav trigger mirrors navigation.mmd's app-shell --> editor edge.
+-->
+<html lang="en" data-screen="editor" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>editor — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; display: flex; flex-direction: column; }
+  .rail { width: var(--sizing-sidebar-collapsed-width); background: var(--color-dark-bg-secondary); border-right: 1px solid var(--color-dark-border-subtle); display: flex; flex-direction: column; align-items: center; padding-top: var(--space-4); }
+  .brandmark { width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--color-dark-brand-active-cyan); }
+  .rail .icon { margin-top: var(--space-10); width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--color-dark-bg-elevated); color: var(--color-dark-brand-active-cyan); display: flex; align-items: center; justify-content: center; font-size: var(--typography-size-sm); }
+  .header { height: var(--sizing-header-height); background: var(--color-dark-bg-secondary); border-bottom: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; padding: 0 var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .header .branch { margin-left: auto; color: var(--color-dark-text-muted); }
+  .header a.back { color: var(--color-dark-text-secondary); text-decoration: none; }
+  .tabs { height: 34px; background: var(--color-dark-bg-secondary); display: flex; border-bottom: 1px solid var(--color-dark-border-subtle); font-size: var(--typography-size-sm); }
+  .tab { display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-6); color: var(--color-dark-text-secondary); }
+  .tab.active { color: var(--color-dark-text-primary); box-shadow: inset 0 -2px 0 var(--color-dark-brand-active-cyan); background: var(--color-dark-bg-primary); }
+  .tab .close { color: var(--color-dark-text-muted); }
+  .breadcrumb { padding: var(--space-2) var(--space-6); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .split { flex: 1; display: flex; min-height: 0; }
+  .code { flex: 1; background: var(--color-dark-bg-code); border-right: 1px solid var(--color-dark-border-default); padding: var(--space-4) 0; font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); overflow: hidden; }
+  .code .line { display: flex; gap: var(--space-6); padding: 0 var(--space-6); line-height: var(--typography-line-height-body); }
+  .code .ln { color: var(--color-dark-text-muted); width: 24px; text-align: right; flex: none; }
+  .code .more { color: var(--color-dark-text-muted); padding: var(--space-4) var(--space-6) 0 var(--space-12); }
+  .diff { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .diff .head { display: flex; align-items: center; padding: var(--space-3) var(--space-6); background: var(--color-dark-bg-secondary); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .diff .head .kbd { margin-left: auto; color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); }
+  .diff .hunk { padding: 2px var(--space-6); background: var(--color-dark-bg-elevated); font-size: var(--typography-size-xs); color: var(--color-dark-text-secondary); font-family: var(--typography-font-mono); }
+  .diff .row { height: var(--sizing-diff-row-height); line-height: var(--sizing-diff-row-height); padding: 0 var(--space-6); font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .diff .add { background: var(--color-dark-bg-success); color: var(--color-dark-accent-success); }
+  .diff .del { background: var(--color-dark-bg-error); color: var(--color-dark-accent-error); }
+  .diff .more { padding: var(--space-4) var(--space-6); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .status-footer { height: 40px; background: var(--color-dark-bg-secondary); border-top: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; padding: 0 var(--space-6); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .status-footer .cursor { margin-left: auto; color: var(--color-dark-accent-primary); }
+</style>
+</head>
+<body data-sprout-screen="editor">
+<div class="screen">
+
+  <aside class="rail">
+    <span class="brandmark"></span>
+    <span class="icon">E</span>
+  </aside>
+
+  <main style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header class="header">
+      <a class="back" href="../screens/app-shell.html" data-nav="to:app-shell;trigger:back affordances (back arrow / close / Esc)">&#9664; Editor</a>
+      <span class="branch">main &#10003;</span>
+    </header>
+
+    <nav class="tabs">
+      <span class="tab active">ModeSwitcher.tsx <span class="close">&#215;</span></span>
+      <span class="tab">ModeSwitcher.css <span class="close">&#215;</span></span>
+      <span class="tab">ModeSwitcher.test.tsx <span class="close">&#215;</span></span>
+    </nav>
+    <div class="breadcrumb">webui/src/workspaces / ModeSwitcher.tsx</div>
+
+    <div class="split">
+      <section class="code">
+        <div class="line"><span class="ln">42</span><span>const menuRef = useRef&lt;HTMLDivElement&gt;(null);</span></div>
+        <div class="line"><span class="ln">43</span><span>const [open, setOpen] = useState(false);</span></div>
+        <div class="line"><span class="ln">45</span><span>const menu = createPortal(</span></div>
+        <div class="line"><span class="ln">46</span><span>&nbsp;&nbsp;&lt;div ref={menuRef} className="mode-menu"&gt;</span></div>
+        <div class="line"><span class="ln">47</span><span>&nbsp;&nbsp;&nbsp;&nbsp;{MODES.map((m) =&gt; (</span></div>
+        <div class="line"><span class="ln">48</span><span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;button onClick={() =&gt; pick(m)}&gt;{m}&lt;/button&gt;</span></div>
+        <div class="line"><span class="ln">49</span><span>&nbsp;&nbsp;&nbsp;&nbsp;))}</span></div>
+        <div class="line"><span class="ln">50</span><span>&nbsp;&nbsp;&lt;/div&gt;,</span></div>
+        <div class="line"><span class="ln">51</span><span>&nbsp;&nbsp;document.body,</span></div>
+        <div class="line"><span class="ln">52</span><span>);</span></div>
+        <div class="more">&#8230; 120 more lines</div>
+      </section>
+
+      <section class="diff">
+        <div class="head">Diff &middot; 3 files changed &middot; +42 / &#8722;17 <span class="kbd">&#8984;D split</span></div>
+        <div class="hunk">@@ -38,7 +38,29 @@ export function ModeSwitcher()</div>
+        <div class="row del">&#8722;&nbsp;&nbsp;const menu = (</div>
+        <div class="row del">&#8722;&nbsp;&nbsp;&nbsp;&nbsp;&lt;div className="mode-menu"&gt;{MODES.map&#8230;(&lt;/div&gt;);</div>
+        <div class="row add">+&nbsp;&nbsp;const menu = createPortal(</div>
+        <div class="row add">+&nbsp;&nbsp;&nbsp;&nbsp;&lt;div ref={menuRef} className="mode-menu"&gt;</div>
+        <div class="row add">+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{MODES.map((m) =&gt; &lt;button onClick={() =&gt; pick(m)}&gt;{m}&lt;/button&gt;)}</div>
+        <div class="row add">+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/div&gt;,</div>
+        <div class="row add">+&nbsp;&nbsp;&nbsp;&nbsp;document.body,</div>
+        <div class="row add">+&nbsp;&nbsp;);</div>
+        <div class="hunk">@@ -96,3 +118,23 @@ css scoping for portal root</div>
+        <div class="row add">+.mode-menu { position: fixed; z-index: 40; }</div>
+        <div class="more">&#8230; remaining hunks (scroll)</div>
+      </section>
+    </div>
+
+    <footer class="status-footer">
+      <span>ModeSwitcher.tsx &middot; UTF-8 &middot; LF &middot; TypeScript React</span>
+      <span class="cursor">Ln 45, Col 24</span>
+    </footer>
+  </main>
+
+</div>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

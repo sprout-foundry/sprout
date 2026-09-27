@@ -1,0 +1,103 @@
+<!doctype html>
+<!--
+  settings — providers, models, theme, UI scale (SP-140-9 9.4: migrated from
+  the legacy design/wireframes/settings.svg). Base:
+  design/runtime/base/desktop.html; nav trigger mirrors navigation.mmd's
+  app-shell --> settings edge.
+-->
+<html lang="en" data-screen="settings" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>settings — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; position: relative; }
+  .scrim { position: absolute; inset: 0; }
+  .sidebar-ghost { position: absolute; top: 0; left: 0; width: var(--sizing-sidebar-width); height: 100%; background: var(--color-dark-bg-secondary); opacity: 0.4; }
+  .panel { position: absolute; top: 60px; left: 240px; width: 960px; height: 780px; background: var(--color-dark-bg-secondary); border: 1px solid var(--color-dark-border-default); border-radius: var(--radius-xl); display: flex; flex-direction: column; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; padding: var(--space-8) var(--space-10); font-size: var(--typography-size-lg); }
+  .panel-head a.close { margin-left: auto; color: var(--color-dark-text-muted); text-decoration: none; }
+  .panel-body { flex: 1; display: flex; min-height: 0; border-top: 1px solid var(--color-dark-border-subtle); }
+  .nav { width: 148px; padding: var(--space-8) var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); font-size: var(--typography-size-sm); }
+  .nav a { color: var(--color-dark-text-secondary); text-decoration: none; }
+  .nav a.active { color: var(--color-dark-accent-primary); }
+  .nav a:hover { color: var(--color-dark-text-primary); }
+  .sections { flex: 1; border-left: 1px solid var(--color-dark-border-subtle); padding: var(--space-8) var(--space-10); overflow: hidden; }
+  .section-label { font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); margin: var(--space-6) 0 var(--space-4); }
+  .provider-row { display: flex; align-items: center; gap: var(--space-4); background: var(--color-dark-bg-tertiary); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .provider-row + .provider-row { margin-top: var(--space-4); }
+  .dot { width: var(--space-2); height: var(--space-2); border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--color-dark-accent-success); }
+  .dot.err { background: var(--color-dark-accent-error); }
+  .provider-row .state { margin-left: auto; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .provider-row .state.ok { color: var(--color-dark-accent-success); }
+  .add-provider { margin-top: var(--space-4); background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: var(--space-2) var(--space-6); display: inline-block; }
+  .model-row { display: inline-flex; flex-direction: column; background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); width: 180px; font-size: var(--typography-size-sm); }
+  .model-row + .model-row { margin-left: var(--space-4); }
+  .model-row.active { box-shadow: inset 0 0 0 1px var(--color-dark-accent-primary); }
+  .model-row .hint { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .theme-row { display: inline-flex; }
+  .theme-opt { background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: var(--space-4) var(--space-10); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .theme-opt + .theme-opt { margin-left: var(--space-4); }
+  .theme-opt.active { color: var(--color-dark-text-primary); box-shadow: inset 0 0 0 1px var(--color-dark-accent-primary); }
+  .scale-row { display: flex; align-items: center; gap: var(--space-8); font-size: var(--typography-size-sm); color: var(--color-dark-text-muted); }
+  .scale-track { flex: 1; max-width: 330px; height: 3px; background: var(--color-dark-border-default); border-radius: var(--radius-pill); position: relative; }
+  .scale-thumb { position: absolute; left: 56%; top: 50%; transform: translate(-50%, -50%); width: var(--space-6); height: var(--space-6); border-radius: 50%; background: var(--color-dark-accent-primary); }
+  .scale-row .current { color: var(--color-dark-text-primary); }
+</style>
+</head>
+<body data-sprout-screen="settings">
+<div class="screen">
+  <div class="scrim"></div>
+  <div class="sidebar-ghost"></div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span>Settings</span>
+      <a class="close" href="../screens/app-shell.html" data-nav="to:app-shell;trigger:back affordances (back arrow / close / Esc)">&#215;</a>
+    </div>
+    <div class="panel-body">
+      <nav class="nav">
+        <a class="active" href="#providers">Providers</a>
+        <a href="#models">Models</a>
+        <a href="#theme">Theme</a>
+        <a href="#scale">UI Scale</a>
+      </nav>
+
+      <div class="sections">
+        <div class="section-label">Providers</div>
+        <div class="provider-row"><span class="dot ok"></span> ai-worker &middot; https://ai-worker.internal &middot; qwen, gemma <span class="state ok">healthy</span></div>
+        <div class="provider-row"><span class="dot err"></span> zai-coding &middot; https://api.z.ai &middot; glm <span class="state">retrying</span></div>
+        <span class="add-provider">+</span>
+
+        <div class="section-label">Models</div>
+        <span class="model-row active">qwen3.8-27b<span class="hint">default</span></span>
+        <span class="model-row">glm-5.3-flash</span>
+        <span class="model-row">gemma4-e2b</span>
+        <span class="model-row">minicpm5-2b</span>
+
+        <div class="section-label">Theme</div>
+        <div class="theme-row">
+          <span class="theme-opt active">Dark</span>
+          <span class="theme-opt">Light</span>
+        </div>
+
+        <div class="section-label">UI Scale</div>
+        <div class="scale-row">
+          <span>compact</span>
+          <div class="scale-track"><span class="scale-thumb"></span></div>
+          <span>large</span>
+          <span class="current">100&#37;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

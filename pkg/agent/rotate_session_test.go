@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/search"
@@ -248,7 +247,7 @@ func TestRotateSessionResetsChangeTracker(t *testing.T) {
 	if got := tracker.GetRevisionID(); got == "" {
 		t.Error("tracker should have a fresh revision ID after rotation")
 	}
-	if changes.TestTrackerSessionID(tracker) != newID {
-		t.Errorf("tracker sessionID = %q, want the new session ID %q", changes.TestTrackerSessionID(tracker), newID)
+	if tracker.TrackerSessionID() != newID {
+		t.Errorf("tracker sessionID = %q, want the new session ID %q", tracker.TrackerSessionID(), newID)
 	}
 }

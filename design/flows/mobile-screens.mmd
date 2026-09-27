@@ -1,12 +1,11 @@
-%% mobile-screens — the SP-143 143.7 dogfood pair: the kit's phone screens
-%% and the runtime's in-place data-nav swap between them. Node ids are
-%% wireframe stems. Triggers live in the %% comments (the design/flows
-%% contract keeps edges label-free): the triggers the screens' data-nav
-%% anchors author.
+%% mobile-screens — derived flow export (SP-140-9 §9b). Derived from the flow source .json + the touched screens' data-nav edges (SP-140-9 §9b). Do not edit by hand; regenerate with design_export_tokens targets:flows.
+%% flow-source-hash: fnv1a64:289eab06b3c4adbf
+%% Source: design/flows/mobile-screens.json, then design/screens/<stem>.html for the touched screens sorted by stem. Recompute the hash from those bytes (fnv1a64) to verify.
 flowchart TD
-  mobile-sessions["mobile-sessions — session list"]
-  mobile-session["mobile-session — session detail"]
-  %% tap a session row (the screen kit's first real navigation)
-  mobile-sessions --> mobile-session
-  %% tap back in the detail top bar
-  mobile-session --> mobile-sessions
+  s1["mobile-sessions — session list"]
+  s2["mobile-session — session detail"]
+  s3["mobile-sessions — session list"]
+  s1 -->|tap session row| s2
+  s2 -->|tap back| s3
+  mobile-sessions -->|tap session row| mobile-session
+  mobile-session -->|tap back| mobile-sessions

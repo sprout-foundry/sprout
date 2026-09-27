@@ -293,8 +293,8 @@ func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, wo
 // Keeps the snapshot path silent on success and quietly informative
 // on the rare error.
 func (ct *ChangeTracker) logf(format string, args ...any) {
-	if ct.agent != nil {
-		if l := ct.agent.DebugLogger(); l != nil {
+	if ct.view != nil {
+		if l := ct.view.DebugLogger(); l != nil {
 			l.Debug(format+"\n", args...)
 			return
 		}

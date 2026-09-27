@@ -1,6 +1,7 @@
 package design
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +29,23 @@ func requireNoWireframeFindings(t *testing.T, findings []Finding) {
 	t.Helper()
 	require.NotNil(t, findings, "a completed validation run must return a non-nil slice")
 	assert.Empty(t, findings)
+}
+
+// dropDeprecationFindings filters out the §9a wireframe deprecation findings
+// and the §9b legacy-flow notices — the legacy-tier classes this tree's own
+// fixtures seed (the dogfood tree is migrated; flow_mmd_legacy stays info for
+// external trees) — so tests that assert the per-file rules stay readable;
+// the tier findings themselves are pinned by TestWireframeDeprecation and the
+// flowsource tests.
+func dropDeprecationFindings(findings []Finding) []Finding {
+	out := make([]Finding, 0, len(findings))
+	for _, f := range findings {
+		if f.Rule == ruleWireframeDeprecated || f.Rule == ruleFlowMMDLegacy {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // findingRules returns the set of rule ids present in findings.
@@ -212,7 +230,10 @@ func TestValidateWireframesDir(t *testing.T) {
 		}, "frames:\n  mobile: 390x844\n")
 		findings, err := ValidateWireframesDir(root)
 		require.NoError(t, err)
-		requireNoWireframeFindings(t, findings)
+		// The §9a deprecation notice rides every wireframe walk; only the
+		// per-file rules must be clean here.
+		assert.Equal(t, 2, findingRules(findings)[ruleWireframeDeprecated])
+		assert.Empty(t, dropDeprecationFindings(findings))
 	})
 
 	t.Run("dangling-across-files", func(t *testing.T) {
@@ -251,6 +272,22 @@ func TestValidateWireframesDir(t *testing.T) {
 
 // writeWireframeTree writes the given wireframe files under root/design/
 // wireframes/ and an optional design/README.md, for dir-level tests.
+
+// writeScreenTree writes design/screens/<stem>.html fixtures — the post-9.4
+// universe for the tree-level consistency tests (the wireframe tier is gone).
+func writeScreenTree(t *testing.T, root string, stems []string, readme string) {
+	t.Helper()
+	dir := filepath.Join(root, "design", "screens")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	for _, stem := range stems {
+		body := fmt.Sprintf("<!doctype html>\n<html data-screen=\"%s\">\n<body><p>%s</p></body>\n</html>\n", stem, stem)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, stem+".html"), []byte(body), 0o644))
+	}
+	if readme != "" {
+		require.NoError(t, os.WriteFile(filepath.Join(root, "design", "README.md"), []byte(readme), 0o644))
+	}
+}
+
 func writeWireframeTree(t *testing.T, root string, files map[string]string, readme string) {
 	t.Helper()
 	dir := filepath.Join(root, "design", "wireframes")

@@ -1,53 +1,13 @@
 package changes
 
-import (
-	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-)
-
-// CheckpointFileChange is one git-style file-change manifest entry
-// recorded on a turn checkpoint. Op mirrors git status codes: "A" added,
-// "M" modified, "D" deleted, "R" renamed, anything else is "?" (other).
-// Defined here (with the cluster, SP-141 phase 2); pkg/agent keeps a
-// type alias so turn-checkpoint / rollup / rewind code resolves it
-// unchanged.
+// CheckpointFileChange is a single file-change entry in a turn
+// checkpoint's manifest. Op is one of "A" (added), "M" (modified),
+// "D" (deleted), "R" (renamed) to mirror git's status codes; anything
+// else is "?" (other). pkg/agent aliases this type so the TurnCheckpoint
+// JSON shape is unchanged (SP-141 phase 2).
 type CheckpointFileChange struct {
 	Path string `json:"path"`
 	Op   string `json:"op"`
-}
-
-// ApplyShellConfig applies a resolved change_tracking config to the
-// tracker's shell-walk budgets (SP-141 phase 2: the agent-side
-// applyChangeTrackingConfig funnels through here). raw may be nil;
-// Resolve() applies the defaults.
-func (ct *ChangeTracker) ApplyShellConfig(raw *configuration.ChangeTrackingConfig) {
-	resolved := raw.Resolve()
-
-	enabled := true
-	if resolved.ShellWalkEnabled != nil {
-		enabled = *resolved.ShellWalkEnabled
-	}
-	ct.shellWalkEnabled = enabled
-	ct.shellMaxFiles = resolved.MaxFiles
-	ct.shellMaxTotalBytes = resolved.MaxTotalBytes
-	ct.shellMaxDuration = time.Duration(resolved.MaxDurationMs) * time.Millisecond
-	ct.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
-}
-
-// IsOutsideWorkspace is the exported form of isOutsideWorkspace for
-// agent-side callers (Agent.IsPathOutsideWorkspace).
-func (ct *ChangeTracker) IsOutsideWorkspace(filePath string) bool {
-	return ct.isOutsideWorkspace(filePath)
-}
-
-// SetSessionID retargets the tracker at a new session (session
-// rotation). Unlocked on purpose, matching the pre-move direct field
-// write: the rotation path commits the prior session first, and the
-// Reset commitMu barrier guarantees no in-flight Commit still reads the
-// old value.
-func (ct *ChangeTracker) SetSessionID(id string) {
-	ct.sessionID = id
 }
 
 // CollectFileChangesForCheckpoint returns the (path, op) manifest of

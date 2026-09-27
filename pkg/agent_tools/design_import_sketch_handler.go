@@ -40,23 +40,31 @@ const (
 	sketchTargetWireframes = "wireframes"
 	sketchTargetTokens     = "tokens"
 	sketchTargetFlows      = "flows"
+	// sketchTargetScreens is the SP-140-9 primary screen tier: importing a
+	// sketch as design/screens/<slug>.html. Post-9.4 this is the preferred
+	// wireframe-target replacement — the SVG tier is deprecated (a hard
+	// validate error), so a wireframes-target import lands as a finding.
+	sketchTargetScreens = "screens"
 )
 
-// sketchTargets is the accepted target set, in contract order.
-var sketchTargets = []string{sketchTargetWireframes, sketchTargetTokens, sketchTargetFlows}
+// sketchTargets is the accepted target set, in contract order (screens
+// first — it is the primary tier).
+var sketchTargets = []string{sketchTargetScreens, sketchTargetWireframes, sketchTargetTokens, sketchTargetFlows}
 
 func (h *designImportSketchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "design_import_sketch",
 		Description: "Import a whiteboard/paper/photo/reference image of a UI as a starting point in " +
-			"the design/ tree. Pass the image, the target (wireframes | tokens | flows) and an " +
+			"the design/ tree. Pass the image, the target (screens | tokens | flows) and an " +
 			"optional screen_name; the image is attached and analyzed (vision tier), and this tool " +
 			"returns the target's format conventions plus an extraction brief. Extraction is yours: " +
-			"write the convention-compliant SVG/token/mermaid files yourself with write_file, using " +
+			"write the convention-compliant screen/token/flow files yourself with write_file, using " +
 			"design_assets first if a design/ tree already exists, then run design_validate and fix " +
 			"the error-severity findings before declaring the import done. This tool never writes " +
 			"into the design/ tree and never fails on a non-vision primary — it returns the image and " +
-			"the brief either way.",
+			"the brief either way. Screens is the primary tier (SP-140-9): import UI sketches there — " +
+			"the legacy wireframes target still resolves its conventions but its artifacts are " +
+			"deprecated (design_validate errors on design/wireframes/*.svg).",
 		Parameters: []ParameterDef{
 			{
 				Name:        "image_path",
@@ -68,7 +76,7 @@ func (h *designImportSketchHandler) Definition() ToolDefinition {
 				Name:        "target",
 				Type:        "string",
 				Required:    true,
-				Description: "Design artifact class to extract: `wireframes` (SVG wireframe), `tokens` (W3C DTCG *.tokens.json), or `flows` (mermaid .mmd). Other targets are rejected — import into one of these three.",
+				Description: "Design artifact class to extract: `screens` (self-contained HTML screen — the primary tier, SP-140-9), `tokens` (W3C DTCG *.tokens.json), or `flows` (structured .json flow). The legacy `wireframes` target still resolves but its SVG output is deprecated (a validate error). Other targets are rejected.",
 			},
 			{
 				Name:        "screen_name",
@@ -141,6 +149,13 @@ type sketchImportOutput struct {
 // skill) is the §2c requirement that target conventions travel with the tool
 // call, so an import cannot silently produce a non-conforming artifact.
 var sketchConventions = map[string][]string{
+	sketchTargetScreens: {
+		"One HTML file per screen: design/screens/<slug>.html with <html data-screen=\"<slug>\" data-sprout-screens=\"1\" data-states=\"…\"> and <body data-sprout-screen=\"<slug>\"> — the stem and both identity attributes must agree.",
+		"Self-contained: reference the scaffolded runtime (<script src=\"../runtime/sprout-screens.js\" defer>) and generated tokens (<link rel=\"stylesheet\" href=\"../generated/tokens.css\">); no other external references.",
+		"Start from design/runtime/base/desktop.html (or phone.html for a mobile screen) copied to design/screens/<slug>.html; lay out with the generated utilities and var(--token) references.",
+		"Size the root to the README's declared frame (e.g. 1440x900 desktop, 390x844 phone) so the frame check passes; declare states on <html data-states> and mark sections with data-state.",
+		"Never carry a data-status attribute — screen status lives in the README manifest's Screens listing; navigate with <a data-nav=\"to:<stem>;trigger:<label>\">.",
+	},
 	sketchTargetWireframes: {
 		"One SVG per screen: design/wireframes/<slug>.svg with a viewBox and no width/height attributes (viewBox-only SVG is the contract).",
 		"Draw structure, not polish: layout rectangles, labels, and placeholder copy — no brand color, no imagery.",
@@ -155,9 +170,9 @@ var sketchConventions = map[string][]string{
 		"Colors read off a sketch are candidates, not truth: name them semantically (color.brand.primary, not color.blue-500).",
 	},
 	sketchTargetFlows: {
-		"One mermaid flowchart per flow: design/flows/<slug>.mmd, starting with `flowchart TD` (or LR for a wide flow).",
-		"Node ids are the screen slugs; every node must have a matching design/wireframes/<slug>.svg wireframe — a node with no wireframe is a validator finding.",
-		"Keep labels short (the screen name); put branching on labelled edges: a -->|success| b.",
+		"One structured flow source per flow: design/flows/<slug>.json — the JSON is the source of truth and the .mmd export is derived (SP-140-9 §9b; regenerate it, never hand-edit).",
+		"Nodes are the screen stems; every node must have a matching design/screens/<stem>.html screen — a node with no screen is a validator finding.",
+		"Put triggers on labelled edges; keep node labels short (the screen name).",
 	},
 }
 
@@ -243,12 +258,14 @@ func sketchArtifactPath(target, slug string) string {
 		return ""
 	}
 	switch target {
+	case sketchTargetScreens:
+		return dir + "/" + slug + ".html"
 	case sketchTargetWireframes:
 		return dir + "/" + slug + ".svg"
 	case sketchTargetTokens:
 		return dir + "/" + slug + ".tokens.json"
 	case sketchTargetFlows:
-		return dir + "/" + slug + ".mmd"
+		return dir + "/" + slug + ".json"
 	default:
 		return ""
 	}
@@ -358,6 +375,127 @@ func (h *designImportSketchHandler) Execute(ctx context.Context, env ToolEnv, ar
 	attachment.Output = buildSketchImportSummary(out, len(attachment.Images) > 0, analysis, analysisErr)
 	attachment.StructuredOut = out
 	return attachment, nil
+}
+
+// sketchVisionMode maps an import target to the analysis mode handed to the
+// vision tier. All three modes resolve to the same analysis pipeline today;
+// naming them keeps the intent explicit and lets the tier specialize later
+// without changing the tool.
+func sketchVisionMode(target string) string {
+	switch target {
+	case sketchTargetTokens:
+		return "design-tokens"
+	case sketchTargetFlows:
+		return "design-flow"
+	default:
+		return "design-wireframe"
+	}
+}
+
+// sketchNextSteps is the ordered workflow the agent follows after the brief.
+// The last steps are always the design_validate reminder required by §2c.
+func sketchNextSteps(target, slug string) []string {
+	steps := []string{
+		"Check for an existing design/ tree with design_assets and extend it rather than overwriting anything it reports.",
+	}
+	switch target {
+	case sketchTargetScreens:
+		steps = append(steps,
+			fmt.Sprintf("Write the screen to design/screens/%s.html with write_file — copy design/runtime/base/desktop.html (or phone.html) as the starting point and set both identity attributes to %q.", slug, slug),
+			"If the sketch shows a multi-screen journey, write one screen per stem and wire them with data-nav anchors.",
+			"Add or update the design/README.md manifest entry for the new screen (name, status marker, one-line summary).",
+		)
+	case sketchTargetWireframes:
+		steps = append(steps,
+			fmt.Sprintf("Write the wireframe to design/wireframes/%s.svg with write_file, viewBox-only, structure not polish.", slug),
+			"If the sketch shows a multi-screen journey, write one SVG per screen and wire them with data-nav slugs.",
+			"Add or update the design/README.md manifest entry for the new screen (name, status marker, one-line summary).",
+			"Prefer converting to the primary screen tier (design/screens/%s.html) — the wireframe tier is deprecated and design_validate errors on it.",
+		)
+	case sketchTargetTokens:
+		steps = append(steps,
+			fmt.Sprintf("Write the extracted tokens to design/tokens/%s.tokens.json with write_file, one file per group, DTCG $value/$type on every leaf.", slug),
+			"Merge new token groups into the existing design/tokens/*.tokens.json rather than dropping groups you did not re-extract.",
+		)
+	case sketchTargetFlows:
+		steps = append(steps,
+			fmt.Sprintf("Write the flow source to design/flows/%s.json with write_file (nodes are screen stems; triggers ride labelled edges), then regenerate the derived .mmd export rather than hand-writing it.", slug),
+			"Add or update the design/README.md manifest entry for the flow (name, status marker, one-line summary).",
+		)
+	}
+	steps = append(steps,
+		"Run design_validate and fix every error-severity finding before declaring the import done.",
+		"Design work is not done until design_validate reports zero error findings.",
+	)
+	return steps
+}
+
+// sketchAnalysisPrompt composes the extraction instruction handed to the
+// vision tier. It names the target's expected structure so the returned text
+// is already in the shape the agent needs to write, then appends any
+// caller-supplied extra instruction.
+func sketchAnalysisPrompt(target string, out sketchImportOutput, extra string) string {
+	var sb strings.Builder
+	switch target {
+	case sketchTargetTokens:
+		sb.WriteString("Extract the design tokens implied by this sketch: color roles, " +
+			"typography sizes/weights, spacing steps, and radii. Report each as a named " +
+			"token (semantic name, value, DTCG type) grouped by category, plus any " +
+			"tokens you inferred rather than read. Do not invent a palette the sketch does not suggest.")
+	case sketchTargetFlows:
+		sb.WriteString("Extract the user flow shown in this sketch: every screen/step as a node, " +
+			"every transition as a labelled edge, in order, with branch conditions named. " +
+			"Report each node as a kebab-case slug suitable for a wireframe file stem.")
+	default:
+		sb.WriteString("Extract the UI structure shown in this sketch as an ordered, region-by-region " +
+			"description: screen name, layout regions, each visible control with its label and " +
+			"state, and where a tap would navigate next. Describe structure and hierarchy, not " +
+			"visual polish, and state what is ambiguous or unreadable rather than guessing.")
+	}
+	fmt.Fprintf(&sb, " The extraction is destined for %s.", out.Artifact)
+	if out.ScreenName == "" {
+		sb.WriteString(" There is no screen name yet: propose a slug from the sketch's title.")
+	}
+	if extra = strings.TrimSpace(extra); extra != "" {
+		sb.WriteString(" Additional instruction: " + extra)
+	}
+	return sb.String()
+}
+
+// buildSketchImportSummary composes the human-readable result: where the image
+// came from, what to produce, the conventions, the next steps, and the vision
+// tier's extraction text when available. It never reports an error for a
+// missing vision tier — the brief plus the attachment is a complete result.
+func buildSketchImportSummary(out sketchImportOutput, attached bool, analysis string, analysisErr error) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "design_import_sketch: %s → %s (target=%s).\n", out.ImagePath, out.Artifact, out.Target)
+	if attached {
+		sb.WriteString("The sketch image is attached for visual extraction.\n")
+	}
+
+	sb.WriteString("\nConventions for " + out.Target + ":")
+	for _, c := range out.Conventions {
+		sb.WriteString("\n- " + c)
+	}
+
+	sb.WriteString("\n\nNext steps:")
+	for i, s := range out.NextSteps {
+		fmt.Fprintf(&sb, "\n%d. %s", i+1, s)
+	}
+
+	analysis = strings.TrimSpace(analysis)
+	switch {
+	case analysis != "":
+		sb.WriteString("\n\nExtracted structure (vision tier):\n" + analysis)
+	case analysisErr != nil:
+		fmt.Fprintf(&sb, "\n\nNo extraction text from the vision tier (%v); "+
+			"read the attached image directly, or re-run with analyze_image_content (OCR/native fallback).", analysisErr)
+	default:
+		sb.WriteString("\n\nNo vision tier was available to extract structure; " +
+			"the image is attached for a vision-capable primary, otherwise read it with " +
+			"analyze_image_content (OCR/native fallback). The brief above is complete either way.")
+	}
+	return sb.String()
 }
 
 // imageExtensionList returns the recognized image extensions, sorted for a

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,7 +27,7 @@ func mustWriteFile(t *testing.T, path string, data []byte) {
 	}
 }
 
-// TestRecoverBulk_RestoresAllPackedFiles confirms handleRecoverBulk
+// TestRecoverBulk_RestoresAllPackedFiles confirms recover_file(scope=bulk)
 // walks BulkItems and restores each per-file payload.
 func TestRecoverBulk_RestoresAllPackedFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -37,43 +38,34 @@ func TestRecoverBulk_RestoresAllPackedFiles(t *testing.T) {
 		mustWriteFile(t, abs[i], []byte("after-"+strconv.Itoa(i)))
 	}
 
-	items := make([]changes.TrackedBulkItem, fileCount)
+	items := make([]TrackedBulkItem, fileCount)
 	for i := range items {
-		items[i] = changes.TrackedBulkItem{
+		items[i] = TrackedBulkItem{
 			FilePath:     abs[i],
 			OriginalCode: "before-" + strconv.Itoa(i),
 			NewCode:      "after-" + strconv.Itoa(i),
 			Operation:    "edit",
 		}
 	}
-	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
-		RevisionID:       "test-rev",
-		SessionID:        "test-session",
-		Enabled:          true,
-		ShellWalkEnabled: true,
-		Changes: []changes.TrackedFileChange{{
-			FilePath:  "git checkout .",
-			Operation: "bulk",
-			BulkCount: fileCount,
-			BulkItems: items,
-		}},
-	})
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.MergeChild([]TrackedFileChange{{
+		FilePath:  "git checkout .",
+		Operation: "bulk",
+		BulkCount: fileCount,
+		BulkItems: items,
+	}}, "test")
 
-	// The on-disk content should be restored after recover_bulk.
+	// Sanity: files are in the "after" state before recovery.
 	for i, p := range abs {
-		want := []byte("before-" + strconv.Itoa(i))
-		// Sanity: file is currently the "after" state.
 		got, _ := os.ReadFile(p)
 		if !bytes.Equal(got, []byte("after-"+strconv.Itoa(i))) {
 			t.Fatalf("pre-recovery state wrong for %s: got %q, want 'after-%d'", p, got, i)
 		}
-		_ = want // keep the assertion below explicit
 	}
 
-	// Build a stand-in agent that returns our tracker.
-	a := &Agent{changeTracker: tracker}
-	// Post-consolidation: recover_bulk folded into recover_file(scope="bulk").
-	out, err := handleRecoverFile(nil, a, map[string]any{"path": "git checkout .", "scope": "bulk"})
+	a := trackerOnlyAgent(tracker)
+	out, err := handleRecoverFile(context.Background(), a, map[string]any{"path": "git checkout .", "scope": "bulk"})
 	if err != nil {
 		t.Fatalf("handleRecoverFile(scope=bulk): %v", err)
 	}

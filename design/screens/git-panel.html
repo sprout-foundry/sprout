@@ -1,0 +1,96 @@
+<!doctype html>
+<!--
+  git-panel — sidebar git section: status, staging, commit message, history
+  (SP-140-9 9.4: migrated from the legacy design/wireframes/git-panel.svg).
+  Base: design/runtime/base/desktop.html; nav triggers mirror navigation.mmd.
+-->
+<html lang="en" data-screen="git-panel" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>git-panel — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; display: flex; }
+  .sidebar { width: var(--sizing-sidebar-width); background: var(--color-dark-bg-secondary); border-right: 1px solid var(--color-dark-border-subtle); display: flex; flex-direction: column; }
+  .pinned { height: var(--sizing-header-height); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); }
+  .brandmark { width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--color-dark-brand-active-cyan); }
+  .mode-switcher { background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: 4px var(--space-4); font-size: var(--typography-size-sm); }
+  .content { padding: var(--space-4) var(--space-8); font-size: var(--typography-size-sm); overflow: hidden; }
+  .content .head { display: flex; align-items: center; }
+  .content .head span:last-child { margin-left: auto; color: var(--color-dark-text-secondary); }
+  .status-card { margin-top: var(--space-2); background: var(--color-dark-bg-tertiary); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); }
+  .status-card .branch { color: var(--color-dark-accent-success); }
+  .status-card .meta { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .section-label { margin-top: var(--space-6); color: var(--color-dark-text-secondary); }
+  .file-row { padding: var(--space-1) 0; font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); }
+  .file-row a { text-decoration: none; }
+  .file-row .staged { color: var(--color-dark-accent-success); }
+  .file-row .modified { color: var(--color-dark-accent-warning); }
+  .file-row .untracked { color: var(--color-dark-accent-error); }
+  .commit-box { margin-top: var(--space-2); background: var(--color-dark-bg-elevated); border: 1px solid var(--color-dark-border-subtle); border-radius: var(--radius-md); padding: var(--space-4) var(--space-6); font-size: var(--typography-size-xs); color: var(--color-dark-text-secondary); }
+  .commit-box .hint { color: var(--color-dark-text-muted); }
+  .commit-btn { margin-top: var(--space-4); background: var(--color-dark-accent-primary); color: var(--color-dark-accent-on-primary); border-radius: var(--radius-md); padding: var(--space-3) var(--space-6); font-size: var(--typography-size-sm); display: inline-block; }
+  .history .row { padding: var(--space-1) 0; font-size: var(--typography-size-xs); }
+  .history .sha { color: var(--color-dark-accent-primary); font-family: var(--typography-font-mono); }
+  .history .meta { color: var(--color-dark-text-muted); }
+  .history .more { margin-top: var(--space-6); color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); }
+  .ghost { flex: 1; position: relative; }
+  .ghost .card { position: absolute; background: var(--color-dark-bg-elevated); border-radius: var(--radius-xl); opacity: 0.25; }
+</style>
+</head>
+<body data-sprout-screen="git-panel">
+<div class="screen">
+
+  <aside class="sidebar">
+    <div class="pinned">
+      <span class="brandmark"></span>
+      <span>sprout</span>
+      <span class="mode-switcher">Code &#9662;</span>
+    </div>
+    <div class="content">
+      <div class="head"><span>Git</span></div>
+
+      <div class="status-card">
+        <span class="branch">&#10003; main</span> up to date
+        <div class="meta">3 changed &middot; 2 staged</div>
+      </div>
+
+      <div class="section-label">Staged</div>
+      <div class="file-row"><a class="staged" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">+ ModeSwitcher.tsx</a></div>
+      <div class="file-row"><a class="staged" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">+ ModeSwitcher.css</a></div>
+      <div class="file-row"><a class="staged" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">+ ModeSwitcher.test.tsx</a></div>
+
+      <div class="section-label">Changes</div>
+      <div class="file-row"><a class="modified" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">M design/README.md</a></div>
+      <div class="file-row"><a class="modified" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">M webui/src/ModeSwitcher.tsx</a></div>
+      <div class="file-row"><a class="untracked" href="../screens/editor.html" data-nav="to:editor;trigger:open a file (sidebar tree, palette, or a link in chat)">U webui/src/ModeSwitcher.css</a></div>
+
+      <div class="section-label">Commit</div>
+      <div class="commit-box">fix(webui): portal mode switcher<br><span class="hint">menu out of the clipping sidebar</span></div>
+      <span class="commit-btn">Commit (3 staged) &middot; &#8984;&#8679;</span>
+
+      <div class="section-label history-label">History</div>
+      <div class="history">
+        <div class="row"><span class="sha">8f2a1c9</span> fix(webui): portal switcher<br><span class="meta">main &middot; 12m ago &middot; 3 files</span></div>
+        <div class="row"><span class="sha">5c480d8</span> SP-140-5: workspace modes<br><span class="meta">main &middot; 2d ago &middot; 14 files</span></div>
+        <div class="row"><span class="sha">91e0b77</span> feat(design): feedback channel<br><span class="meta">main &middot; 3d ago &middot; 6 files</span></div>
+        <div class="more">pull &middot; push &middot; branch &#8943;</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="ghost">
+    <div class="card" style="left: 24px; top: 72px; width: 480px; height: 60px;"></div>
+    <div class="card" style="left: 24px; top: 168px; width: 560px; height: 60px;"></div>
+    <div class="card" style="left: 24px; top: 264px; width: 420px; height: 60px;"></div>
+  </div>
+
+</div>
+<a href="../screens/app-shell.html" data-nav="to:app-shell;trigger:back affordances (back arrow / close / Esc)" style="display:none">back</a>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

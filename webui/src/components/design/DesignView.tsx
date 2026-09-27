@@ -31,12 +31,13 @@ import { FlowsCanvasContainer } from './FlowsCanvasContainer';
 import { ScreensTabContainer } from './ScreensGrid';
 import { ScreenWorkbenchContainer } from './ScreenWorkbenchContainer';
 import TokensTree from './TokensTree';
+import FeedbackLibrary from './FeedbackLibrary';
 import './DesignView.css';
 
 /** The chat payload the Agent tab renders (the shell's own chat props). */
 export type DesignChatProps = ComponentProps<typeof DesignAgentPanel>['chatProps'];
 
-export type DesignTab = 'flows' | 'screens' | 'tokens';
+export type DesignTab = 'flows' | 'screens' | 'tokens' | 'feedback';
 
 interface DesignTabSpec {
   id: DesignTab;
@@ -48,6 +49,7 @@ export const DESIGN_TABS: DesignTabSpec[] = [
   { id: 'flows', label: 'Flows' },
   { id: 'screens', label: 'Screens' },
   { id: 'tokens', label: 'Tokens' },
+  { id: 'feedback', label: 'Feedback' },
 ];
 
 export interface DesignViewProps {
@@ -64,6 +66,10 @@ export interface DesignViewProps {
   onOpenFile?: (path: string, lineNumber?: number) => void;
   /** The shell's chat payload (§6f) — passed through to the Agent tab. */
   chatProps?: DesignChatProps;
+  /** SP-142 142.5: the design chat's name (the agent panel header). */
+  agentChatName?: string | null;
+  /** SP-142 142.5: New Chat scoped to the design lane. */
+  onAgentCreateChat?: () => void;
   /** Write transport override for the detail pane's feedback write (tests/hosts). */
   writeFetch?: typeof fetch;
   /** Consent-aware read override for the detail pane's resolution flow (§3f). */
@@ -77,6 +83,8 @@ export default function DesignView({
   onTabChange,
   onOpenFile,
   chatProps,
+  agentChatName,
+  onAgentCreateChat,
   writeFetch,
   readFn,
   writeFn,
@@ -264,6 +272,13 @@ export default function DesignView({
           {activeTab === 'tokens' && (
             <TokensTree inventory={inventory} onSelectAsset={handleSelectAsset} onSelectTab={changeTab} />
           )}
+          {activeTab === 'feedback' && (
+            <FeedbackLibrary
+              feedback={inventory ? inventory.feedback : []}
+              onSelectAsset={handleSelectAsset}
+              onSelectTab={changeTab}
+            />
+          )}
         </section>
 
         <DesignSideColumn
@@ -292,6 +307,8 @@ export default function DesignView({
               <DesignAgentPanel
                 key={agentFlipKey}
                 chatProps={chatProps}
+                chatName={agentChatName}
+                onCreateDesignChat={onAgentCreateChat}
                 prefill={prefill}
                 onPrefillConsumed={() => setPrefill(null)}
               />

@@ -177,13 +177,13 @@ func TestDesignImportSketchHandler_FlowsTarget(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "flows", out.Target)
 	assert.Equal(t, "design/flows", out.TargetDir)
-	assert.Equal(t, "design/flows/sign-up.mmd", out.Artifact)
-	assert.Contains(t, strings.Join(out.Conventions, "\n"), "flowchart")
+	assert.Equal(t, "design/flows/sign-up.json", out.Artifact)
+	assert.Contains(t, strings.Join(out.Conventions, "\n"), "the .mmd export is derived")
 	require.Contains(t, res.Output, "design_validate")
 }
 
 // ---------------------------------------------------------------------------
-// Target conventions are non-empty and target-specific for all three targets
+// Target conventions are non-empty and target-specific for every target
 // ---------------------------------------------------------------------------
 
 func TestSketchConventions_CoverEveryTarget(t *testing.T) {
@@ -196,9 +196,10 @@ func TestSketchConventions_CoverEveryTarget(t *testing.T) {
 		require.True(t, isSketchTargetName(target))
 	}
 
-	// The target set is exactly §2c's three, and each is a real design/
-	// subdirectory (guards against a typo drifting from the contract).
-	require.Equal(t, []string{"wireframes", "tokens", "flows"}, sketchTargets)
+	// The target set is the §2c contract grown by the SP-140-9 screens tier
+	// (primary, listed first), and each is a real design/ subdirectory
+	// (guards against a typo drifting from the contract).
+	require.Equal(t, []string{"screens", "wireframes", "tokens", "flows"}, sketchTargets)
 	for _, target := range sketchTargets {
 		_, ok := design.SubdirByName(target)
 		assert.True(t, ok, "%q must be a canonical design/ subdirectory", target)
@@ -499,7 +500,7 @@ func TestSketchAnalysisPrompt_CarriesTargetAndExtra(t *testing.T) {
 	require.Contains(t, pt, "propose a slug")
 
 	// Flow extraction prompt asks for slugs.
-	pf := sketchAnalysisPrompt(sketchTargetFlows, sketchImportOutput{Artifact: "design/flows/f.mmd"}, "")
+	pf := sketchAnalysisPrompt(sketchTargetFlows, sketchImportOutput{Artifact: "design/flows/f.json"}, "")
 	require.Contains(t, pf, "slug")
 }
 

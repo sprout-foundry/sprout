@@ -17,9 +17,9 @@ import (
 )
 
 // newTrackerForShellTest builds a minimal ChangeTracker that can be
-// exercised independently of a real Agent. The tracker.agent pointer
-// is nil — isOutsideWorkspace handles that case by treating everything
-// as in-workspace, which is exactly what we want for these tests.
+// exercised independently of a real Agent. The tracker.view (AgentView
+// seam) is nil — IsOutsideWorkspace handles that case by treating
+// everything as in-workspace, which is exactly what we want here.
 // Sets shellWalkEnabled=true so the shell-walk paths run without
 // requiring a configuration.Manager (production sets this via
 // EnableChangeTracking → applyChangeTrackingConfig).
@@ -41,7 +41,7 @@ func newTrackerForShellTest(t *testing.T) *ChangeTracker {
 // the build invocation still emit individually.
 func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -93,7 +93,7 @@ func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
 // how thinly the churn fans out within it.
 func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -140,7 +140,7 @@ func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 // far better than just "env" when that's actually what's underneath.
 func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -175,7 +175,7 @@ func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 // behind a rollup just because the files happened to share a dir.
 func TestRecordShellMutations_BelowThresholdStaysItemised(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -205,7 +205,7 @@ func TestRecordShellMutations_BelowThresholdStaysItemised(t *testing.T) {
 // independently.
 func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -247,7 +247,7 @@ func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
 // "root" label, and those edits are almost always intentional.
 func TestRecordShellMutations_BulkRollupKeepsRootLevelFilesItemised(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	before := map[string]*shellSnapshotEntry{
 		"/work/Makefile":     {Content: []byte("old"), Size: 3},
@@ -617,7 +617,7 @@ func TestTrackShellTurn_NonDestructiveBuildRollup(t *testing.T) {
 	// emitWithBulkRollup buckets by top-level dir relative to the
 	// agent's workspace root; without an agent pointer every path
 	// buckets as "root-level" and emits per-file.
-	tracker.agent = &fakeAgent{workspaceRoot: dir}
+	tracker.view = stubAgentView{workspaceRoot: dir}
 	tracker.PrimeShellTracking(dir)
 
 	// Simulate a build dropping shellBulkThreshold files under one
@@ -1383,38 +1383,6 @@ func TestTrackShellTurn_DestructiveBulkRollupCollapsesAtThreshold(t *testing.T) 
 	}
 }
 
-// TestRecoverFile_FindsBulkPackedFile confirms recover_file resolves a
-// path that lives inside a bulk entry's BulkItems and restores it.
-func TestRecoverFile_FindsBulkPackedFile(t *testing.T) {
-	dir := t.TempDir()
-	abs := filepath.Join(dir, "config.go")
-	mustWriteFile(t, abs, []byte("after-edit"))
-
-	tracker := newTrackerForShellTest(t)
-	tracker.changes = []TrackedFileChange{{
-		FilePath:  "git checkout .",
-		Operation: "bulk",
-		BulkCount: 1,
-		BulkItems: []TrackedBulkItem{{
-			FilePath:     abs,
-			OriginalCode: "the recovered original",
-			NewCode:      "after-edit",
-			Operation:    "edit",
-		}},
-	}}
-
-	got := ResolveRecoveryTarget(tracker.changes, abs)
-	if got == nil {
-		t.Fatalf("resolveRecoveryTarget did not match %q inside the bulk entry", abs)
-	}
-	if got.OriginalCode != "the recovered original" {
-		t.Errorf("synthesized TrackedFileChange.OriginalCode = %q, want 'the recovered original'", got.OriginalCode)
-	}
-	if got.Operation != "edit" {
-		t.Errorf("synthesized Operation = %q, want 'edit'", got.Operation)
-	}
-}
-
 // TestPackBulkItems_OverBudgetDegradesToCountOnly confirms a bulk that
 // exceeds shellDestructiveBulkMaxPayloadBytes returns overBudget=true
 // so the caller emits a count-only entry (recoverable=false in the UI).
@@ -1486,7 +1454,7 @@ func TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning(t *testing.T) {
 // `go test -race` to detect it.
 func TestRecordShellMutations_NoRaceWithConcurrentReads(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.agent = &fakeAgent{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{workspaceRoot: "/work"}
 
 	// Writer goroutine: repeatedly call RecordShellMutations, which
 	// appends via appendShellMutation / appendChange under ct.mu.

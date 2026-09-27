@@ -1,0 +1,139 @@
+<!doctype html>
+<!--
+  design-screens — Design mode: screens browser with detail pane
+  (SP-140-9 9.4: migrated from the legacy
+  design/wireframes/design-screens.svg). Base:
+  design/runtime/base/desktop.html; nav triggers mirror design-mode.mmd.
+-->
+<html lang="en" data-screen="design-screens" data-sprout-screens="1" data-states="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>design-screens — sprout</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  html, body { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: var(--typography-font-sans); font-size: var(--typography-size-base); color: var(--color-dark-text-primary); background: var(--color-dark-bg-primary); }
+  .screen { width: 1440px; height: 900px; display: flex; }
+  .sidebar { width: var(--sizing-sidebar-width); background: var(--color-dark-bg-secondary); border-right: 1px solid var(--color-dark-border-subtle); }
+  .pinned { height: var(--sizing-header-height); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); }
+  .brandmark { width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--color-dark-brand-active-cyan); }
+  .mode-switcher { background: var(--color-dark-bg-elevated); border-radius: var(--radius-md); padding: 4px var(--space-4); font-size: var(--typography-size-sm); color: var(--color-dark-brand-active-cyan); }
+  .rail-label { padding: var(--space-4) var(--space-8) 0; font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); letter-spacing: 0.08em; }
+  .rail-tabs { display: flex; flex-direction: column; padding: 0 var(--space-8); }
+  .rail-tabs a { display: block; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); color: var(--color-dark-text-secondary); text-decoration: none; font-size: var(--typography-size-sm); }
+  .rail-tabs a.active { background: var(--color-dark-bg-elevated); color: var(--color-dark-text-primary); box-shadow: inset 0 -2px 0 var(--color-dark-brand-active-cyan); }
+  .rail-tabs a:hover { background: var(--color-dark-bg-hover); }
+  .screen-list { padding: var(--space-6) var(--space-8); border-top: 1px solid var(--color-dark-border-subtle); font-size: var(--typography-size-sm); }
+  .screen-list .label { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); letter-spacing: 0.08em; padding-bottom: var(--space-2); }
+  .screen-list .row { padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); color: var(--color-dark-text-secondary); }
+  .screen-list .row.active { background: var(--color-dark-bg-elevated); color: var(--color-dark-text-primary); box-shadow: inset 2px 0 0 var(--color-dark-brand-active-cyan); }
+  .screen-list .row .status { float: right; color: var(--color-dark-text-muted); font-size: var(--typography-size-xs); }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .header { height: var(--sizing-header-height); background: var(--color-dark-bg-secondary); border-bottom: 1px solid var(--color-dark-border-subtle); display: flex; align-items: center; padding: 0 var(--space-6); font-size: var(--typography-size-sm); color: var(--color-dark-text-secondary); }
+  .header .status { margin-left: auto; color: var(--color-dark-text-muted); }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .preview { flex: 1; margin: var(--space-6); background: var(--color-dark-bg-elevated); border: 1px solid var(--color-dark-border-subtle); border-radius: var(--radius-lg); padding: var(--space-6); }
+  .preview .label { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .preview .mini { margin-top: var(--space-6); border: 1px solid var(--color-dark-border-default); border-radius: var(--radius-md); background: var(--color-dark-bg-secondary); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); }
+  .preview .bar { height: 14px; border-radius: var(--radius-sm); background: var(--color-dark-bg-tertiary); }
+  .preview .block { height: 22px; border-radius: var(--radius-sm); background: var(--color-dark-bg-elevated); }
+  .preview .strip { height: 12px; border-radius: var(--radius-sm); background: var(--color-dark-bg-tertiary); margin-top: auto; }
+  .detail { width: 312px; margin: var(--space-6) var(--space-6) var(--space-6) 0; background: var(--color-dark-bg-secondary); border: 1px solid var(--color-dark-border-subtle); border-radius: var(--radius-lg); padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); font-size: var(--typography-size-sm); }
+  .detail .title-row { display: flex; align-items: center; }
+  .detail .title-row .chip { margin-left: auto; background: var(--color-dark-bg-tertiary); border-radius: var(--radius-pill); padding: 2px var(--space-4); font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); }
+  .detail .label { font-size: var(--typography-size-xs); color: var(--color-dark-text-muted); letter-spacing: 0.08em; }
+  .detail .text { color: var(--color-dark-text-secondary); }
+  .detail .token { color: var(--color-dark-accent-primary); font-family: var(--typography-font-mono); font-size: var(--typography-size-xs); }
+  .detail hr { border: none; border-top: 1px solid var(--color-dark-border-subtle); }
+  .detail .actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--space-4); }
+  .detail .btn { display: flex; align-items: center; justify-content: center; padding: var(--space-3) 0; border-radius: var(--radius-md); background: var(--color-dark-bg-elevated); }
+  .detail .btn.ghost { background: none; border: 1px solid var(--color-dark-border-default); color: var(--color-dark-accent-success); font-size: var(--typography-size-xs); }
+</style>
+</head>
+<body data-sprout-screen="design-screens">
+<div class="screen">
+
+  <aside class="sidebar">
+    <div class="pinned">
+      <span class="brandmark"></span>
+      <span>sprout</span>
+      <span class="mode-switcher">Design &#9662;</span>
+    </div>
+    <div class="rail-label">DESIGN RAIL</div>
+    <nav class="rail-tabs">
+      <a href="../screens/design-flows.html" data-nav="to:design-flows;trigger:the Library group's Flows entry targets the flows canvas">Flows</a>
+      <a class="active" href="#screens">Screens</a>
+      <a href="#tokens">Tokens</a>
+    </nav>
+    <div class="screen-list">
+      <div class="label">SCREENS &middot; 11</div>
+      <div class="row active">app-shell <span class="status">draft</span></div>
+      <div class="row">chat <span class="status">draft</span></div>
+      <div class="row">editor <span class="status">draft</span></div>
+      <div class="row">git-panel <span class="status">draft</span></div>
+      <div class="row">settings <span class="status">draft</span></div>
+      <div class="row">command-palette <span class="status">draft</span></div>
+      <div class="row">design-flows <span class="status">draft</span></div>
+      <div class="row">design-screens <span class="status">draft</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <span>design/ &middot; screens &middot; app-shell</span>
+      <span class="status">status: draft &#9656;</span>
+    </header>
+
+    <div class="body">
+      <section class="preview">
+        <div class="label">preview &middot; 1440x900 (scaled)</div>
+        <div class="mini">
+          <div class="bar"></div>
+          <div class="block" style="width: 60%;"></div>
+          <div class="block" style="width: 75%;"></div>
+          <div class="strip"></div>
+        </div>
+      </section>
+
+      <aside class="detail">
+        <div class="title-row"><span>app-shell</span><span class="chip">draft</span></div>
+        <div>
+          <div class="label">PURPOSE</div>
+          <div class="text">Code-mode default: header bar, sidebar, chat workspace, terminal strip.</div>
+        </div>
+        <div>
+          <div class="label">FLOWS OUT</div>
+          <div class="text">&#9654; chat &#8230; select the chat workspace</div>
+          <div class="text">&#9654; editor &#8230; open a file</div>
+          <div class="text">&#9654; git-panel &#8230; open the git section</div>
+          <div class="text">&#9654; settings &#8230; open settings</div>
+          <div class="text">&#9654; command-palette &#8230; &#8984;K</div>
+          <div class="text">&#9654; design-flows &#8230; switch workspace mode</div>
+        </div>
+        <div>
+          <div class="label">TOKENS</div>
+          <div class="token">color.dark.bg.primary</div>
+          <div class="token">color.dark.bg.secondary</div>
+          <div class="token">color.dark.bg.elevated</div>
+          <div class="token">color.dark.bg.surface</div>
+          <div class="token">color.dark.brand.active-cyan</div>
+          <div class="token">sizing.sidebar.width</div>
+          <div class="token">sizing.header.height</div>
+        </div>
+        <hr>
+        <div class="text">FEEDBACK: no annotations yet</div>
+        <div class="actions">
+          <div class="btn">Open in editor &middot; &#8629;</div>
+          <div class="btn ghost">&#9679; mark review &#8230; mark ready</div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+</div>
+<a href="../screens/design-mode.html" data-nav="to:design-mode;trigger:a screen picked in the browser opens the same workbench" style="display:none">workbench</a>
+<script src="../runtime/sprout-screens.js" defer></script>
+</body>
+</html>

@@ -103,3 +103,31 @@ func TestDesignSystemSkillScreenKit(t *testing.T) {
 		}
 	}
 }
+
+// TestDesignSystemSkillFormatRework pins the SP-140-9 generator surface: the
+// skill must teach the post-9.4 formats — screens as the only screen tier
+// (wireframes removed, presence an error), flow .json sources with derived
+// .mmd exports — matching what the validator enforces (the review blocker).
+func TestDesignSystemSkillFormatRework(t *testing.T) {
+	content, err := ReadContent("design-system")
+	if err != nil {
+		t.Fatalf("design-system skill must be embedded: %v", err)
+	}
+	body := strings.ToLower(content)
+
+	needles := map[string]string{
+		"screens primary":    "primary tier",
+		"wireframes removed": "removed",
+		"screen identity":    "data-screen=\"<stem>\"",
+		"flow sources":       "<flow-name>.json",
+		"flows export":       "design_export_tokens targets:flows",
+		"mmd derived":        "never hand-edit",
+		"flow hash":          "flow-source-hash",
+		"off-path warn":      "off-path",
+	}
+	for label, needle := range needles {
+		if !strings.Contains(body, strings.ToLower(needle)) {
+			t.Errorf("design-system skill must mention %q (%s)", needle, label)
+		}
+	}
+}

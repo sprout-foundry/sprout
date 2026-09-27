@@ -10,16 +10,19 @@
       hand-edited; regenerate with design_export_tokens.
 
   There is no chrome reference and no data-device attribute: desktop is
-  the default layout and chrome.css does nothing to it. Everything inside
-  <body data-sprout-screen="STEM"> is yours: lay out with the generated
-  utilities (.bg-*, .p-*, .text-*-size, .rounded-*, …) and var(--token)
-  references; navigate with <a data-nav="to:<stem>;trigger:<label>">;
+  the default layout and chrome.css does nothing to it.
+
+  Set both stems to YOUR screen's stem when copying (html data-screen and
+  body data-sprout-screen). Everything inside <body> is yours: lay out with
+  the generated utilities (.bg-*, .p-*, .text-*-size, .rounded-*, …) and
+  var(--token) references; navigate with <a data-nav="to:<stem>;trigger:<label>">;
   declare the screen's states on <html data-states="empty,error,ready">
   and mark sections with data-state="empty". Size the root container to
   the declared README frame (e.g. 1440x900) so the validator's frame
-  check passes.
+  check passes. Never carry a data-status attribute — screen status lives
+  in the README manifest (SP-140-1 §1e).
 -->
-<html lang="en" data-sprout-screens="1" data-states="">
+<html lang="en" data-screen="REPLACE_WITH_STEM" data-sprout-screens="1" data-states="">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

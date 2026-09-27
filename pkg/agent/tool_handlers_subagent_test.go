@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
@@ -611,22 +611,20 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 
 	// 1. Construct a tracker mimicking what the subagent runner sets
 	//    up: shell walk enabled, primed against the workspace.
-	tracker := changes.NewTestTracker(changes.TestTrackerSpec{
-		Enabled:          true,
-		ShellWalkEnabled: true,
-	})
+	tracker := changes.NewChangeTracker(nil, "")
+	tracker.Enable()
+	tracker.ApplyShellWalkConfig(changes.ShellWalkConfig{ShellWalkEnabled: true})
 	tracker.PrimeShellTracking(dir)
 
 	// 2. Simulate a shell_command modifying the file (sed-i style).
 	if err := os.WriteFile(original, []byte("port = 9090"), 0o644); err != nil {
 		t.Fatalf("mutate: %v", err)
 	}
-	bumpMtime(t, original)
+	bumpMtimeTest(t, original)
 	tracker.TrackShellTurn(dir, "shell_command", false)
 
-	captured := tracker.GetChanges()
-	if len(captured) != 1 {
-		t.Fatalf("tracker should have captured the shell mutation; got %d changes: %+v", len(captured), captured)
+	if tracker.GetChangeCount() != 1 {
+		t.Fatalf("tracker should have captured the shell mutation; got %d changes", tracker.GetChangeCount())
 	}
 
 	// 3. Mimic the runner's payload assembly: result.FileChanges =
@@ -701,17 +699,16 @@ func TestCollectParallelResults_AggregatesStructuredCost(t *testing.T) {
 	}
 }
 
-// bumpMtime forces a path's mtime to a monotonically-increasing fake
-// (year-2033 + N hours) so shell-snapshot tests observe the file as
-// "modified since last prime" regardless of real-clock granularity.
-// Local copy of the pkg/agent/changes test helper (unexported there).
-var bumpMtimeCounter int64
+// bumpMtimeTest bumps a file's mtime to a distinct far-future instant
+// (local copy of pkg/agent/changes' bumpMtime — unexported test helpers
+// can't cross packages).
+var bumpMtimeTestCounter int64
 
-func bumpMtime(t *testing.T, path string) {
+func bumpMtimeTest(t *testing.T, path string) {
 	t.Helper()
-	n := atomic.AddInt64(&bumpMtimeCounter, 1)
+	n := atomic.AddInt64(&bumpMtimeTestCounter, 1)
 	next := time.Unix(2000000000, 0).Add(time.Duration(n) * time.Hour)
 	if err := os.Chtimes(path, next, next); err != nil {
-		t.Fatalf("chtimes %s: %v", path, err)
+		t.Fatalf("bump mtime: %v", err)
 	}
 }

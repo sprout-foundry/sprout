@@ -52,6 +52,8 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
           tab={design.tab}
           onTabChange={design.onTabChange}
           onOpenFile={design.onOpenFile}
+          agentChatName={design.agentChatName}
+          onAgentCreateChat={design.onAgentCreateChat}
           chatProps={chat.chatProps}
         />
       </ErrorBoundary>

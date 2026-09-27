@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
@@ -28,7 +29,7 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 
 	if a.changeTracker == nil {
 		// First enable of this session — create the tracker with a stable revisionID + instructions.
-		a.changeTracker = NewChangeTracker(a, instructions)
+		a.changeTracker = NewChangeTracker(a.changesView(), instructions)
 		if a.debug {
 			a.Logger().Debug("DEBUG: Created new change tracker (session start)\n")
 		}
@@ -119,7 +120,19 @@ func (a *Agent) applyChangeTrackingConfig() {
 			raw = cfg.ChangeTracking
 		}
 	}
-	a.changeTracker.ApplyShellConfig(raw)
+	resolved := raw.Resolve()
+
+	enabled := true
+	if resolved.ShellWalkEnabled != nil {
+		enabled = *resolved.ShellWalkEnabled
+	}
+	a.changeTracker.ApplyShellWalkConfig(changes.ShellWalkConfig{
+		ShellWalkEnabled:           enabled,
+		MaxFiles:                   resolved.MaxFiles,
+		MaxTotalBytes:              resolved.MaxTotalBytes,
+		MaxDuration:                time.Duration(resolved.MaxDurationMs) * time.Millisecond,
+		AutoSkipFileCountThreshold: resolved.AutoSkipFileCountThreshold,
+	})
 }
 
 // isChangeTrackingEnabledByConfig reads the change_tracking.enabled setting. Defaults to true.

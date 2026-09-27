@@ -15,6 +15,7 @@ import type {
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
+import { supportsAgentChanges } from '../config/mode';
 
 const TAB_IDS = ['activity', 'changes'] as const;
 
@@ -141,11 +142,15 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               ? `${activeToolCount} active`
               : `${toolExecutions.length} total`,
       },
-      {
-        id: 'changes',
-        label: 'Agent Changes',
-        icon: <History size={14} />,
-      },
+      ...(supportsAgentChanges
+        ? [
+            {
+              id: 'changes' as const,
+              label: 'Agent Changes',
+              icon: <History size={14} />,
+            },
+          ]
+        : []),
     ],
     [activeSubagentCount, activeToolCount, toolExecutions.length],
   );
@@ -155,7 +160,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // ── Render tab content ────────────────────────────────────────────
 
   const renderTabContent = () => {
-    switch (state.chatTab) {
+    switch (activeTab.id) {
       case 'activity':
         return (
           <ActivityTab

@@ -29,7 +29,7 @@
  * mode's rail lists what that mode does.
  */
 
-import { FileText, Layers, MonitorSmartphone, Palette, type LucideIcon } from 'lucide-react';
+import { FileText, Layers, MessageSquare, MonitorSmartphone, Palette, type LucideIcon } from 'lucide-react';
 import React, { useMemo } from 'react';
 import type { ModeRailProps } from '../../workspaces/rail';
 import type { DesignTab } from './DesignView';
@@ -49,6 +49,7 @@ const LIBRARY_ENTRIES: {
 }[] = [
   { id: 'tokens', label: 'Tokens', icon: Palette },
   { id: 'flows', label: 'Flows', icon: Layers },
+  { id: 'feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 /**

@@ -346,6 +346,7 @@ const TESTIDS = {
   "design-rail-tokens": "design-rail-tokens",
   "design-rail-library": "design-rail-library",
   "design-rail-screen-login": "design-rail-screen-login", // pattern design-rail-screen-${stem} (DesignRail.tsx)
+  "feedback-library-row-login": "feedback-library-row-login", // pattern feedback-library-row-${name} (FeedbackLibrary.tsx)
   "design-detail-pane": "design-detail-pane",
   "design-detail-content": "design-detail-content",
   // Flows canvas
@@ -458,6 +459,9 @@ const TESTIDS = {
   "workspace-busy-notice": "workspace-busy-notice",
   "workspace-busy-send-anyway": "workspace-busy-send-anyway",
   "workspace-busy-dismiss": "workspace-busy-dismiss",
+  "feedback-library": "feedback-library",
+  "feedback-library-empty": "feedback-library-empty",
+  "feedback-library-allclear": "feedback-library-allclear",
   "design-agent-head": "design-agent-head",
   "design-agent-chat-name": "design-agent-chat-name",
   "design-agent-new-chat": "design-agent-new-chat",

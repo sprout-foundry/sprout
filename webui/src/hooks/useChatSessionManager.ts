@@ -11,7 +11,7 @@ import {
   renameChatSession,
   switchChatSession,
 } from '../services/chatSessions';
-import type { AppState } from '../types/app';
+import type { AppState, WorkspaceBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
@@ -36,6 +36,8 @@ function extractToolRefsFromContent(content: string): ToolRef[] {
   return refs;
 }
 
+const WORKSPACE_BUSY_RECHECK_MS = 4000;
+
 export interface QueuedMessage {
   message: string;
   chatId: string | null;
@@ -47,6 +49,8 @@ export interface UseChatSessionManagerParams {
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
+  /** The chat held back by workspace_busy, if any; its queued messages wait for the running chat. */
+  workspaceBusy?: WorkspaceBusyInfo | null;
 }
 
 export interface UseChatSessionManagerReturn {
@@ -95,6 +99,7 @@ export function useChatSessionManager({
   activeChatIdRef,
   queuedMessagesRef,
   isProcessing,
+  workspaceBusy = null,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   // Mirror of queuedMessagesRef for rendering. The ref is the source of
@@ -510,13 +515,14 @@ export function useChatSessionManager({
 
       activeRequestsRef.current += 1;
 
+      const userBubbleId = generateMessageId();
       setState((prev) => ({
         isProcessing: true,
         lastError: null,
         messages: trimMessages([
           ...prev.messages,
           {
-            id: generateMessageId(),
+            id: userBubbleId,
             type: 'user',
             content: trimmedMessage,
             timestamp: new Date(),
@@ -532,11 +538,11 @@ export function useChatSessionManager({
       } catch (error) {
         // workspace_busy (SP-142 §3): another chat in this client context has
         // a query running — the server refuses to start a second concurrent
-        // runner on one workspace. Surface an inline composer notice with a
-        // send-anyway affordance instead of dead-ending as an error; the
-        // queued entry drains on the running chat's completion (the drain
-        // effect below). The optimistic user bubble stays: the message WILL
-        // be sent, just after the running chat finishes.
+        // runner on one workspace. Queue the message for this chat and hold
+        // it until the running chat finishes (the drain effect waits while
+        // workspaceBusy names this chat). The optimistic bubble comes back
+        // out: until it is sent it lives in the queue panel, not the
+        // transcript.
         if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
           const busy = error as Error & { code?: string; runningChatId?: string; runningChatName?: string };
           // Roll back the optimistic active-request bump — nothing is running
@@ -544,9 +550,15 @@ export function useChatSessionManager({
           if (activeRequestsRef.current > 0) {
             activeRequestsRef.current -= 1;
           }
+          queuedMessagesRef.current.push({ message: trimmedMessage, chatId: targetChatId ?? null });
+          setQueuedMessages([...queuedMessagesRef.current]);
+          setQueuedMessagesCount(queuedMessagesRef.current.length);
           setState((prev) => ({
             isProcessing: false,
+            inputValue: '',
+            messages: prev.messages.filter((m) => m.id !== userBubbleId),
             workspaceBusy: {
+              chatId: targetChatId ?? '',
               runningChatId: busy.runningChatId ?? '',
               runningChatName: busy.runningChatName ?? 'another chat',
             },
@@ -785,6 +797,10 @@ export function useChatSessionManager({
       return;
     }
     const activeChat = activeChatIdRef.current;
+    // Held back behind another chat's run: wait for it to finish.
+    if (workspaceBusy && workspaceBusy.chatId === (activeChat ?? '')) {
+      return;
+    }
     const headIdx = queuedMessagesRef.current.findIndex(
       (entry) => entry.chatId === null || entry.chatId === activeChat,
     );
@@ -813,7 +829,25 @@ export function useChatSessionManager({
     });
     // activeChatIdRef is a ref; isProcessing/queuedMessagesCount drive re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current]);
+  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, workspaceBusy]);
+
+  // The running chat's completion normally clears workspaceBusy (event
+  // routing), but a missed event would hold the queue forever. While held,
+  // poll the chat list and release once the running chat is idle.
+  const runningChatId = workspaceBusy?.runningChatId ?? '';
+  useEffect(() => {
+    if (!runningChatId) return;
+    const timer = setInterval(() => {
+      void listChatSessions()
+        .then((resp) => {
+          const running = (resp.chat_sessions ?? []).find((c) => c.id === runningChatId);
+          if (running?.active_query) return;
+          setState((prev) => (prev.workspaceBusy?.runningChatId === runningChatId ? { workspaceBusy: null } : {}));
+        })
+        .catch((err) => debugLog('[chat] busy re-check failed:', err));
+    }, WORKSPACE_BUSY_RECHECK_MS);
+    return () => clearInterval(timer);
+  }, [runningChatId, setState]);
 
   // Reload the active chat's authoritative history from the backend. Triggered
   // when a reconnect reports a gap (the server's run buffer had already evicted

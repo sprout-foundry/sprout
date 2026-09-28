@@ -179,9 +179,17 @@ export function useWebSocketEventHandler({
         // signal that the cache is stale. Pending events also prevent the
         // stale-cache heuristic (Fix 3) from preferring shorter local state.
         const eventChatId = String(eventData.chat_id);
+        const bgSubagentDepth = Number(eventData.subagent_depth ?? 0);
+        const endsBackgroundRun =
+          (event.type === 'query_completed' || event.type === 'error') &&
+          !(Number.isFinite(bgSubagentDepth) && bgSubagentDepth > 0);
         setState((prev) => {
+          // The chat holding the workspace finished: release the chat whose
+          // send was held back behind it (its queue drains next).
+          const releaseBusy =
+            endsBackgroundRun && prev.workspaceBusy?.runningChatId === eventChatId ? { workspaceBusy: null } : {};
           const existingCache = prev.perChatCache[eventChatId];
-          if (!existingCache) return {};
+          if (!existingCache) return releaseBusy;
           const pendingEvents = existingCache.pendingEvents ?? [];
           // Mirror the active-chat error lifecycle into the cached entry.
           // The active handlers clear lastError on primary run boundaries
@@ -207,6 +215,7 @@ export function useWebSocketEventHandler({
             }
           }
           return {
+            ...releaseBusy,
             perChatCache: {
               ...prev.perChatCache,
               [eventChatId]: {

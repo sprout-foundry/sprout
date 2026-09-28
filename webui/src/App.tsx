@@ -270,6 +270,7 @@ function AppInner() {
     activeChatIdRef,
     queuedMessagesRef,
     isProcessing: state.isProcessing,
+    workspaceBusy: state.workspaceBusy,
   });
 
   // Background chat panes (chat buffers open in non-active split panes)

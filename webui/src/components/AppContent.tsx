@@ -310,20 +310,6 @@ const AppContent: React.FC<AppContentProps> = ({
     [setAppState],
   );
 
-  // SP-142 §3: send-anyway on a workspace_busy rejection — queue locally
-  // behind the running chat (the drain effect fires it on completion) and
-  // retire the notice + draft.
-  const handleSendAnyway = useCallback(
-    (message: string) => {
-      const trimmed = message.trim();
-      if (!trimmed) return;
-      onQueueMessage(trimmed);
-      setInputValue('');
-      setAppState((prev) => ({ ...prev, workspaceBusy: null }));
-    },
-    [onQueueMessage, setAppState, setInputValue],
-  );
-
   const handleDismissBusy = useCallback(() => {
     setAppState((prev) => ({ ...prev, workspaceBusy: null }));
   }, [setAppState]);
@@ -932,8 +918,9 @@ const AppContent: React.FC<AppContentProps> = ({
       onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
-      workspaceBusy: state.workspaceBusy,
-      onSendAnyway: handleSendAnyway,
+      // The notice belongs to the chat whose send was held back, not
+      // whichever chat is on screen.
+      workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
       onDismissBusy: handleDismissBusy,
       pendingDraft: inputValue,
       toolExecutions: state.toolExecutions,
@@ -973,7 +960,7 @@ const AppContent: React.FC<AppContentProps> = ({
       state.isProcessing,
       state.lastError,
       state.workspaceBusy,
-      handleSendAnyway,
+      activeChatId,
       handleDismissBusy,
       inputValue,
       state.toolExecutions,

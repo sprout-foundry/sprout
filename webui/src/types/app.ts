@@ -51,6 +51,8 @@ export interface QueryProgress {
  * error / session_terminated), or when the user stops processing.
  */
 export interface WorkspaceBusyInfo {
+  /** The chat whose send was held back. */
+  chatId: string;
   runningChatId: string;
   runningChatName: string;
 }

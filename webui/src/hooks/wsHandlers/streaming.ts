@@ -309,11 +309,12 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       currentTodos: wasClearCommand ? [] : prev.currentTodos,
       isProcessing: activeRequestsRef.current > 0,
       lastError: null,
-      // SP-142 §3: the running chat finished — the workspace gate is open;
-      // clear the busy notice so the composer's send-anyway affordance
-      // retires with it (any queued send-anyway entries drain via the
-      // existing queue effect).
-      workspaceBusy: null,
+      // SP-142 §3: if this was the run holding the workspace, release the
+      // chat held back behind it (its queued messages drain next).
+      workspaceBusy:
+        prev.workspaceBusy && (!data.chat_id || prev.workspaceBusy.runningChatId === String(data.chat_id))
+          ? null
+          : prev.workspaceBusy,
       queryProgress: null,
       toolExecutions: wasClearCommand
         ? []

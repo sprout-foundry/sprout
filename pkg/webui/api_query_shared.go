@@ -4,6 +4,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -489,7 +490,18 @@ func (ws *ReactWebServer) runChatQuery(
 			}
 		}, slog.String("handler", logTag), slog.String("chat_id", chatID))
 
-		if err != nil {
+		if errors.Is(err, agent.ErrRunInterrupted) {
+			// Stopped, not failed: close the turn for every viewer without an
+			// error banner.
+			ws.log().Info("query stopped",
+				slog.String("handler", logTag),
+				slog.String("chat_id", chatID),
+				slog.Duration("duration", queryDuration),
+			)
+			stopped := events.QueryCompletedEvent(query, "", 0, 0, queryDuration)
+			stopped["status"] = "interrupted"
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryCompleted, stopped)
+		} else if err != nil {
 			ws.log().Error("query failed",
 				slog.String("handler", logTag),
 				slog.String("chat_id", chatID),

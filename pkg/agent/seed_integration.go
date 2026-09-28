@@ -26,3 +26,7 @@ import "errors"
 // processQueryWithSeed to truncate gracefully rather than surfacing as a
 // generic API error.
 var FleetBudgetExceededError = errors.New("fleet token budget exceeded")
+
+// ErrRunInterrupted reports a query stopped by an interrupt (Stop, stale
+// connection, shutdown) rather than one that failed.
+var ErrRunInterrupted = errors.New("query interrupted")

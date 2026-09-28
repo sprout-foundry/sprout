@@ -166,6 +166,7 @@ const AppContent: React.FC<AppContentProps> = ({
 }) => {
   const {
     buffers,
+    buffersRef,
     activeBufferId,
     activePaneId,
     openFile,
@@ -360,8 +361,6 @@ const AppContent: React.FC<AppContentProps> = ({
     isSwitchingInstance,
     onInstanceChange: handleInstanceChange,
   } = useInstances({ apiService, isConnected });
-  const buffersRef = useRef(buffers);
-  buffersRef.current = buffers;
 
   // Session search restore: call API then dispatch the custom event
   const log = useLog();
@@ -448,7 +447,6 @@ const AppContent: React.FC<AppContentProps> = ({
     mode: workspaceMode.id,
     buffersRef,
     updateBufferTitle,
-    updateBufferMetadata,
     setBufferPinned,
     setBufferClosable,
     closeBuffer,
@@ -462,18 +460,23 @@ const AppContent: React.FC<AppContentProps> = ({
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
       if (view === 'chat') {
+        // Land on the active chat's own tab. Reopening the generic chat path
+        // refocused whichever chat first claimed it, and the tab-driven
+        // switch then moved the conversation back to that chat.
+        const ownTab = Array.from(buffersRef.current?.values() ?? []).find(
+          (b) => b.kind === 'chat' && activeChatId && b.metadata?.chatId === activeChatId,
+        );
         openWorkspaceBuffer({
           kind: 'chat',
-          path: '__workspace/chat',
-          title: 'Chat',
+          path: ownTab?.file.path ?? '__workspace/chat',
+          title: ownTab?.file.name ?? 'Chat',
           ext: '.chat',
-          isPinned: true,
           isClosable: false,
         });
       }
       onViewChange(view);
     },
-    [onViewChange, openWorkspaceBuffer],
+    [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });

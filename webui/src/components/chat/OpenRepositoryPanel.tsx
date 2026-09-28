@@ -1,6 +1,7 @@
 import { FolderGit2 } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { searchForRepo } from '../../services/homeView';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { platformHref } from '../../utils/platformUrl';
 import SproutLogo from '../SproutLogo';
@@ -19,9 +20,7 @@ export function OpenRepositoryPanel(): ReactElement {
     e.preventDefault();
     try {
       const { url } = parseRepoRef(value.trim());
-      const params = new URLSearchParams(window.location.search);
-      params.set('repo', url.replace(/\.git$/, ''));
-      window.location.search = params.toString();
+      window.location.search = searchForRepo(url.replace(/\.git$/, ''));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

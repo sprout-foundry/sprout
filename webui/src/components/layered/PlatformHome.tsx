@@ -6,9 +6,9 @@
  */
 
 import { Menu } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { getActiveRepoURL } from '../../services/activeRepo';
-import { closeHome, syncHomePath, useHomeView } from '../../services/homeView';
+import { closeHome, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
 import { platformHref } from '../../utils/platformUrl';
 
 type EmbedMessage = { type: 'sprout:open-editor'; href: string } | { type: 'sprout:platform-route'; path: string };
@@ -39,6 +39,18 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
     if (open) setMounted(true);
   }, [open]);
 
+  // The editor's top bar (search, credits) stays visible above Home on
+  // wider screens; phones get Home's own bar instead.
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    if (!open || isMobile) {
+      setTop(0);
+      return;
+    }
+    const bar = document.querySelector<HTMLElement>('.app > main .header-bar');
+    setTop(bar?.offsetHeight ?? 0);
+  }, [open, isMobile]);
+
   // Route changes after the first load move the embedded app in place
   // (a hash change) instead of reloading the frame.
   useEffect(() => {
@@ -66,9 +78,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
           return;
         }
         // Another repository: the editor reopens on it (clone or restore).
-        const params = new URLSearchParams(window.location.search);
-        params.set('repo', repo);
-        window.location.search = params.toString();
+        window.location.search = searchForRepo(repo);
       }
     };
     window.addEventListener('message', onMessage);
@@ -82,7 +92,12 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
 
   if (!mounted) return null;
   return (
-    <div className={`platform-home${open ? ' open' : ''}`} aria-hidden={!open} data-testid="platform-home">
+    <div
+      className={`platform-home${open ? ' open' : ''}`}
+      style={{ top }}
+      aria-hidden={!open}
+      data-testid="platform-home"
+    >
       {isMobile && (
         <div className="platform-home-mobile-bar">
           <button type="button" className="project-nav-back" onClick={onOpenMenu} aria-label="Open navigation">

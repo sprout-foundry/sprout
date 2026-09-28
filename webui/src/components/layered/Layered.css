@@ -344,3 +344,8 @@
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* The context panel belongs to the editor; its toggle does nothing in Home. */
+.home-open .header-context-toggle-btn {
+  visibility: hidden;
+}

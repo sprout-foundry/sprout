@@ -359,18 +359,30 @@ export function useChatSessionManager({
   const handleDeleteChat = useCallback(
     async (id: string, options?: { removeWorktree?: boolean }) => {
       try {
-        await deleteChatSession(id, options?.removeWorktree === true);
+        // The server won't delete the active chat, so move to another chat
+        // in the same lane first (most recently active; the list is sorted
+        // that way).
         if (id === activeChatIdRef.current) {
-          const sessionsResp = await listChatSessions();
-          if (sessionsResp.chat_sessions.length > 0) {
-            await handleActiveChatChange(sessionsResp.active_chat_id);
-          } else {
-            setState((prev) => ({ chatSessions: [], activeChatId: null, messages: [] }));
+          const before = await listChatSessions();
+          const doomed = before.chat_sessions.find((c) => c.id === id);
+          const lane = doomed?.mode === 'design' ? 'design' : 'code';
+          const next = before.chat_sessions.find(
+            (c) => c.id !== id && (c.mode === 'design' ? 'design' : 'code') === lane,
+          );
+          if (!next) {
+            notificationBus.notify(
+              'info',
+              'Chat',
+              'This is the only chat here — start another before deleting it.',
+              5000,
+            );
+            return;
           }
-        } else {
-          const sessionsResp = await listChatSessions();
-          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+          if (!(await handleActiveChatChange(next.id))) return;
         }
+        await deleteChatSession(id, options?.removeWorktree === true);
+        const sessionsResp = await listChatSessions();
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
         // The tab the user tried to delete is still there — explain it.
@@ -685,18 +697,26 @@ export function useChatSessionManager({
 
   const handleStopProcessing = useCallback(async () => {
     try {
-      await apiService.stopQuery();
+      await apiService.stopQuery(activeChatIdRef.current ?? undefined);
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessages([]);
       setQueuedMessagesCount(0);
       lastSteerMessageRef.current = '';
       lastSteerBubbleIdRef.current = '';
-      setState((prev) => ({
-        isProcessing: false,
-        queryProgress: null,
-        lastError: null,
-      }));
+      setState((prev) => {
+        // Stopped before any answer streamed: say so, or the question just
+        // sits there as if it were still pending or had been ignored.
+        const last = prev.messages[prev.messages.length - 1];
+        const messages =
+          last?.type === 'user'
+            ? trimMessages([
+                ...prev.messages,
+                { id: generateMessageId(), type: 'assistant' as const, content: '_Stopped._', timestamp: new Date() },
+              ])
+            : prev.messages;
+        return { isProcessing: false, queryProgress: null, lastError: null, messages };
+      });
     } catch (error) {
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];

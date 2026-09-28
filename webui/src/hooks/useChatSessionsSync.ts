@@ -112,7 +112,10 @@ export const useChatSessionsSync = ({
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
 
-    laneSessions.forEach((session) => {
+    // Open in creation order: the list arrives most-recently-active first, so
+    // following it reshuffled the tab strip on every reload.
+    const byCreation = [...laneSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    byCreation.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );

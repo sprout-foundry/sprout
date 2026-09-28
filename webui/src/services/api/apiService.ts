@@ -297,8 +297,8 @@ class ApiService {
     return chatApi.retractSteer(clientFetch, chatId);
   }
 
-  async stopQuery(): Promise<void> {
-    return chatApi.stopQuery(clientFetch);
+  async stopQuery(chatId?: string): Promise<void> {
+    return chatApi.stopQuery(clientFetch, chatId);
   }
 
   // ── Terminal History ─────────────────────────────────────────────

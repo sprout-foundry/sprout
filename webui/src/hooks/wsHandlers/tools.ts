@@ -37,7 +37,11 @@ export const handleToolStart = (ctx: EventHandlerContext): void => {
     // into it).
     const lastMsg = prev.messages[prev.messages.length - 1];
     let messagesWithToolMarker: Message[];
-    if (lastMsg && lastMsg.type === 'assistant' && lastMsg.isSubagentRun) {
+    // A turn that opens with a tool call has no assistant message yet (the
+    // last message is the user's); start one so the tool lands in this turn
+    // rather than on the previous turn's answer.
+    const turnHasNoAnswerYet = !!lastMsg && lastMsg.type === 'user';
+    if (lastMsg && ((lastMsg.type === 'assistant' && lastMsg.isSubagentRun) || turnHasNoAnswerYet)) {
       messagesWithToolMarker = [
         ...prev.messages,
         {
@@ -61,6 +65,8 @@ export const handleToolStart = (ctx: EventHandlerContext): void => {
     const addToolRefToMessage = (messages: Message[], toolId: string) => {
       for (let i = messages.length - 1; i >= 0; i -= 1) {
         const msg = messages[i];
+        // Never reach back past the current turn's question.
+        if (msg.type === 'user') return;
         // Skip subagent-run messages — the badge would render inside the
         // subagent's collapsible block.
         if (msg.type !== 'assistant' || msg.isSubagentRun) continue;

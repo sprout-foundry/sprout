@@ -79,6 +79,13 @@ describe('LayeredSidebar', () => {
     expect(itemByText('Fix CI')?.querySelector('.project-nav-running')).toBeTruthy();
   });
 
+  it('trusts live working state over a stale list flag', () => {
+    const props = renderSidebar();
+    renderSidebar({ conversations: { ...props.conversations!, isWorking: (id) => id === 'c1' } });
+    expect(itemByText('Fix CI')?.querySelector('.project-nav-running')).toBeNull();
+    expect(itemByText('Add checkout')?.querySelector('.project-nav-running')).toBeTruthy();
+  });
+
   it('opens a conversation in the main view', () => {
     const props = renderSidebar();
     click(itemByText('Fix CI'));

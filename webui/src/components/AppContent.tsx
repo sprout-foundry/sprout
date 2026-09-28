@@ -1175,8 +1175,8 @@ const AppContent: React.FC<AppContentProps> = ({
             conversations={{
               sessions: chatSessions ?? [],
               activeId: activeChatId,
-              // The browser-local chat list cannot know which chats are
-              // mid-answer; the per-chat UI state does.
+              // The chat list is only refetched on switch, so its
+              // active_query goes stale; the per-chat UI state is live.
               isWorking: (id) => (id === activeChatId ? state.isProcessing : !!perChatCache?.[id]?.isProcessing),
               inMain: showContextSidebar,
               onSelect: (id) => openConversation(id),

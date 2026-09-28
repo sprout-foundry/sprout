@@ -39,7 +39,10 @@ const (
 )
 
 type webClientContext struct {
-	WorkspaceRoot    string
+	WorkspaceRoot string
+	// ProjectRoot is the workspace the user selected. WorkspaceRoot follows
+	// the active chat into its worktree; chats without one use ProjectRoot.
+	ProjectRoot      string
 	SSHHostAlias     string
 	SSHSessionKey    string
 	SSHLauncherURL   string
@@ -414,6 +417,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	}
 
 	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectRoot = workspaceRoot
 	ctx.SSHHostAlias = ""
 	ctx.SSHSessionKey = ""
 	ctx.SSHLauncherURL = ""

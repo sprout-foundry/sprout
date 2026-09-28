@@ -98,8 +98,12 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	wtPath := cs.WorktreePath
 	cs.mu.Unlock()
 
-	// Switch workspace root to the target chat's worktree if it has one
-	if wtPath != "" {
+	// Switch workspace root to the target chat's worktree if it has one;
+	// leaving a worktree chat returns the root to the project.
+	if wtPath == "" {
+		wtPath = ctx.rootForChatWithoutWorktree(ws.daemonRoot)
+	}
+	if wtPath != "" && wtPath != ctx.WorkspaceRoot {
 		ctx.WorkspaceRoot = wtPath
 		if clientID == defaultWebClientID {
 			ws.workspaceRoot = wtPath

@@ -364,3 +364,45 @@ func TestSetChatSessionStateKeepsTopLevelOnActiveChat(t *testing.T) {
 		t.Errorf("background chat session = %q, want s-background", background.CurrentSessionID)
 	}
 }
+
+func TestChatWithoutWorktreeUsesProjectRoot(t *testing.T) {
+	main := newDefaultChatSession()
+	wtChat := newChatSession("chat-wt", "Worktree chat")
+	wtChat.setWorktreePath("/repo-wt")
+	cc := &webClientContext{
+		WorkspaceRoot: "/repo-wt", // following the active worktree chat
+		ProjectRoot:   "/repo",
+		DefaultChatID: wtChat.ID,
+		ChatSessions:  map[string]*chatSession{main.ID: main, wtChat.ID: wtChat},
+	}
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
+		t.Errorf("root while a worktree chat is active = %q, want the project root /repo", got)
+	}
+
+	cc.WorkspaceRoot = "/repo"
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
+		t.Errorf("root on the project = %q, want /repo", got)
+	}
+
+	cc.WorkspaceRoot, cc.ProjectRoot = "/repo-wt", ""
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/daemon" {
+		t.Errorf("root with no recorded project = %q, want the fallback /daemon", got)
+	}
+}
+
+func TestClientStaysActiveWhileAnyChatRuns(t *testing.T) {
+	a, b := newDefaultChatSession(), newChatSession("chat-b", "Chat B")
+	cc := &webClientContext{DefaultChatID: a.ID, ChatSessions: map[string]*chatSession{a.ID: a, b.ID: b}}
+
+	cc.setChatQueryActive(a.ID, true, "long task")
+	cc.setChatQueryActive(b.ID, true, "short task")
+	cc.setChatQueryActive(b.ID, false, "")
+	if !cc.ActiveQuery || cc.CurrentQuery != "long task" {
+		t.Fatalf("after chat B finished: active=%v query=%q, want chat A's run still reported", cc.ActiveQuery, cc.CurrentQuery)
+	}
+
+	cc.setChatQueryActive(a.ID, false, "")
+	if cc.ActiveQuery {
+		t.Fatal("client still active after every chat finished")
+	}
+}

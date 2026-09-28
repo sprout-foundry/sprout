@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { EditorManagerProvider, useEditorManager } from './EditorManagerContext';
 
 vi.mock('../services/apiFileCheck', () => ({ checkFilesModified: vi.fn().mockResolvedValue({ modified: [] }) }));
@@ -27,12 +27,16 @@ beforeEach(() => {
   latest = undefined;
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   localStorage.removeItem('sprout.editor.layoutState');
-  function Consumer() {
-    latest = useEditorManager();
-    return null;
-  }
-  act(() => root.render(createElement(EditorManagerProvider, null, createElement(Consumer))));
 });
+
+function Consumer() {
+  latest = useEditorManager();
+  return null;
+}
+
+function mount() {
+  act(() => root.render(createElement(EditorManagerProvider, null, createElement(Consumer))));
+}
 
 afterEach(() => {
   act(() => root.unmount());
@@ -43,10 +47,12 @@ const chatTabs = () => Array.from(latest.buffers.values()).filter((b) => b.kind 
 
 describe('chat tab bookkeeping', () => {
   it('starts with an unpinned chat tab', () => {
+    mount();
     expect(chatTabs().map((b) => [b.id, b.isPinned])).toEqual([['buffer-chat', false]]);
   });
 
   it('opens one tab when the same chat is opened twice before React commits', () => {
+    mount();
     let now = 1_000;
     vi.spyOn(Date, 'now').mockImplementation(() => ++now);
     act(() => {
@@ -59,6 +65,7 @@ describe('chat tab bookkeeping', () => {
   });
 
   it('keeps focus on a just-opened tab when a background tab closes in the same tick', async () => {
+    mount();
     let now = 5_000;
     vi.spyOn(Date, 'now').mockImplementation(() => ++now);
     let placeholder;
@@ -85,6 +92,7 @@ describe('chat tab bookkeeping', () => {
   });
 
   it('closes a tab made closable in the same tick', async () => {
+    mount();
     await act(async () => {
       latest.setBufferClosable('buffer-chat', true);
       await latest.closeBuffer('buffer-chat');

@@ -19,4 +19,13 @@ describe('homeView', () => {
     openHome(getHomeView().path);
     expect(getHomeView()).toEqual({ open: true, path: '/tasks/abc' });
   });
+
+  it('mirrors Home into the editor URL', () => {
+    window.history.replaceState(null, '', '/webui/?repo=x');
+    openHome('/tasks');
+    expect(new URL(window.location.href).searchParams.get('home')).toBe('/tasks');
+    expect(new URL(window.location.href).searchParams.get('repo')).toBe('x');
+    closeHome();
+    expect(new URL(window.location.href).searchParams.has('home')).toBe(false);
+  });
 });

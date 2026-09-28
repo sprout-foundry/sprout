@@ -26,6 +26,8 @@ import { isCloud } from '../config/mode';
 import { getBootstrapUser, getPlatformURL } from '../bootstrapAdapter';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { notificationBus } from '../services/notificationBus';
+import { isLayeredLayout } from '../config/layout';
+import { openHome } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 
 /** Account-surface exit items, the same account area the platform header's
@@ -150,7 +152,15 @@ export function UserMenu(): JSX.Element | null {
                 role="menuitem"
                 className="user-menu-item"
                 href={platformHref(item.path)}
-                onClick={() => setOpen(false)}
+                onClick={(e) => {
+                  setOpen(false);
+                  // Layered layout: platform pages open inside the shell
+                  // (Home) instead of leaving the editor.
+                  if (isLayeredLayout && isCloud && !e.metaKey && !e.ctrlKey) {
+                    e.preventDefault();
+                    openHome(item.path);
+                  }
+                }}
               >
                 {item.label}
               </a>

@@ -45,7 +45,8 @@ import Sidebar from './Sidebar';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
-import { OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+import PlatformHome from './layered/PlatformHome';
 
 interface AppContentProps {
   state: AppState;
@@ -1225,6 +1226,7 @@ const AppContent: React.FC<AppContentProps> = ({
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       ) : null}
+      {isLayeredLayout && isCloud && <PlatformHome />}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}

@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from 'react';
 import { isCloud } from '../config/mode';
+import { isLayeredLayout } from '../config/layout';
+import { openHome } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -45,6 +47,12 @@ export function CreditsChip(): JSX.Element | null {
       className={`header-credits-chip${remaining <= 0 ? ' is-empty' : ''}`}
       title={`${remaining.toLocaleString('en-US')} credits remaining — usage and billing`}
       data-testid="header-credits-chip"
+      onClick={(e) => {
+        if (isLayeredLayout && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          openHome('/account/billing');
+        }
+      }}
     >
       {compact.format(Math.max(remaining, 0))} credits
     </a>

@@ -9,7 +9,6 @@ import { Bell, FolderGit2, Home, PanelLeftOpen, Plus, Settings } from 'lucide-re
 import type { ReactElement } from 'react';
 import { isCloud } from '../../config/mode';
 import { OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
-import { platformHref } from '../../utils/platformUrl';
 import { UserMenu } from '../UserMenu';
 
 export interface RailProject {
@@ -25,6 +24,9 @@ interface ProjectRailProps {
   onOpenSettings?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  /** Hosted: Home opens inside the shell. */
+  homeActive?: boolean;
+  onOpenHome?: () => void;
 }
 
 function initial(label: string): string {
@@ -38,6 +40,8 @@ export default function ProjectRail({
   onOpenSettings,
   collapsed,
   onToggleCollapsed,
+  homeActive,
+  onOpenHome,
 }: ProjectRailProps): ReactElement {
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
@@ -53,9 +57,16 @@ export default function ProjectRail({
         </button>
       )}
       {isCloud ? (
-        <a className="project-rail-btn" href={platformHref('/?from=editor')} title="Home — all projects">
+        <button
+          type="button"
+          className={`project-rail-btn${homeActive ? ' active' : ''}`}
+          title="Home — dashboard, tasks, account"
+          aria-label="Home"
+          aria-current={homeActive ? 'page' : undefined}
+          onClick={onOpenHome}
+        >
           <Home size={18} />
-        </a>
+        </button>
       ) : (
         <span className="project-rail-btn project-rail-brand" aria-hidden="true">
           <FolderGit2 size={18} />

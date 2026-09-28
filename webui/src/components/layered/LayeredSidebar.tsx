@@ -9,6 +9,7 @@ import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
+import { closeHome, openHome, useHomeView } from '../../services/homeView';
 import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
@@ -16,6 +17,7 @@ import type { ViewType } from '../../types/app';
 import { githubRepoSlug } from '../../utils/platformUrl';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
+import HomeNav from './HomeNav';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -88,12 +90,14 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const activeRepo = useActiveRepoURL();
   const repoSlug = githubRepoSlug(activeRepo);
   const recentRepos = useRecentRepos();
+  const home = useHomeView();
   const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
   const conversationInMain = inCode && !!props.conversations?.inMain;
 
   const navigate = (target: ProjectNavTarget) => {
+    closeHome();
     if (target.kind === 'conversation') {
       if (!inCode) props.onSelectMode?.('code');
       if (target.id) props.conversations?.onSelect(target.id);
@@ -147,8 +151,8 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     ? recentRepos.map((url) => ({
         id: url,
         label: githubRepoSlug(url) ?? url,
-        active: githubRepoSlug(url) === repoSlug,
-        onSelect: () => openRepo(url),
+        active: !home.open && githubRepoSlug(url) === repoSlug,
+        onSelect: () => (githubRepoSlug(url) === repoSlug ? closeHome() : openRepo(url)),
       }))
     : props.instances.length > 0
       ? props.instances.map((inst) => ({
@@ -167,8 +171,11 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         onToggleCollapsed={props.isMobile ? undefined : props.onToggleCollapsed}
         onAddProject={isCloud ? () => void promptForRepo() : undefined}
         onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })}
+        homeActive={home.open}
+        onOpenHome={() => openHome(home.path)}
       />
-      {!props.collapsed && (
+      {!props.collapsed && home.open && <HomeNav path={home.path} projectLabel={title} onBackToProject={closeHome} />}
+      {!props.collapsed && !home.open && (
         <ProjectNav
           title={title}
           onHide={props.onToggleCollapsed}

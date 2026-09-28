@@ -200,37 +200,24 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 
   // Refs for values read inside memoized render helpers to keep dependency
-  // arrays stable. Writes happen in useEffect (not during render) so
-  // concurrent renders see consistent values.
+  // arrays stable. Assigned during render: the helpers read them in this same
+  // render, and an effect-time write lands after it — the pane then showed the
+  // previous chat state (a just-sent message missing, a finished run still
+  // spinning) until some unrelated re-render.
   const activePaneIdRef = useRef(activePaneId);
+  activePaneIdRef.current = activePaneId;
   const panesRef = useRef(panes);
+  panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
+  perChatCacheRef.current = perChatCache;
   const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
   const chatPropsRef = useRef(chatProps);
+  chatPropsRef.current = chatProps;
   const reviewPropsRef = useRef(reviewProps);
+  reviewPropsRef.current = reviewProps;
   const diffStateRef = useRef(diffState);
-
-  React.useEffect(() => {
-    activePaneIdRef.current = activePaneId;
-  }, [activePaneId]);
-  React.useEffect(() => {
-    panesRef.current = panes;
-  }, [panes]);
-  React.useEffect(() => {
-    perChatCacheRef.current = perChatCache;
-  }, [perChatCache]);
-  React.useEffect(() => {
-    activeChatIdRef.current = activeChatId;
-  }, [activeChatId]);
-  React.useEffect(() => {
-    chatPropsRef.current = chatProps;
-  }, [chatProps]);
-  React.useEffect(() => {
-    reviewPropsRef.current = reviewProps;
-  }, [reviewProps]);
-  React.useEffect(() => {
-    diffStateRef.current = diffState;
-  }, [diffState]);
+  diffStateRef.current = diffState;
 
   // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
   const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);

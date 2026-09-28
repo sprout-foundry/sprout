@@ -23,6 +23,7 @@ import {
   proxySettingsRequest,
   handleFoundryAuthError,
 } from './cloudProxyRoutes';
+import { handleCloudChatSessionsEndpoint } from './cloudChatSessions';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
 import {
   handleWasmLocal,
@@ -400,6 +401,17 @@ export class CloudAdapter implements APIAdapter {
       const handled = handleCloudSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
       if (handled) return handled;
       // Unknown sub-path — fall through to synthetic / standard proxy below.
+    }
+
+    // ── Chat sessions (localStorage-backed) ────────────────────────
+    // The agent runs in the page, so the chat list lives here too: each
+    // chat owns a browser-local transcript and its own in-page agent. The
+    // worktree/compaction sub-paths fall through to the synthetic stubs.
+    if (urlPath === '/api/chat-sessions' || urlPath.startsWith('/api/chat-sessions/')) {
+      // The chat client calls fetch(url, { body }), so the body is on init.
+      const bodyStr = typeof init?.body === 'string' ? init.body : await this.extractRequestBody(input);
+      const handled = handleCloudChatSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
+      if (handled) return handled;
     }
 
     // ── Synthetic response interception ────────────────────────────

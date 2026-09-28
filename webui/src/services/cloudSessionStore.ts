@@ -440,3 +440,27 @@ export function startNewCloudSession(): string {
   writeIndex(index);
   return id;
 }
+
+/**
+ * Make an existing (or not yet saved) transcript the current one: later saves
+ * update it and restore-on-mount returns it. Used when the user switches
+ * between chats, each of which owns one transcript.
+ */
+export function activateCloudSession(id: string): void {
+  activeSessionId = id;
+  const index = readIndex();
+  if (index.current_session_id !== id) {
+    index.current_session_id = id;
+    writeIndex(index);
+  }
+}
+
+/** The persisted current transcript id (survives reloads), or ''. */
+export function getCurrentCloudSessionId(): string {
+  return readIndex().current_session_id;
+}
+
+/** A fresh transcript id that is not yet current (nothing is persisted). */
+export function newCloudSessionId(): string {
+  return generateSessionId();
+}

@@ -100,8 +100,10 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     closeHome();
     if (target.kind === 'conversation') {
       if (!inCode) props.onSelectMode?.('code');
+      // A named chat opens itself; the implicit single chat (no id) opens
+      // whichever conversation is current.
       if (target.id) props.conversations?.onSelect(target.id);
-      props.conversations?.onOpen();
+      else props.conversations?.onOpen();
       setOpen(null);
       props.onCloseDrawer?.();
       return;

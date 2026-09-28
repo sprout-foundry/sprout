@@ -83,7 +83,7 @@ describe('LayeredSidebar', () => {
     const props = renderSidebar();
     click(itemByText('Fix CI'));
     expect(props.conversations!.onSelect).toHaveBeenCalledWith('c2');
-    expect(props.conversations!.onOpen).toHaveBeenCalled();
+    expect(props.conversations!.onOpen).not.toHaveBeenCalled();
   });
 
   it('highlights the conversation only while it is the main view', () => {

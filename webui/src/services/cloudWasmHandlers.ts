@@ -91,7 +91,7 @@ export function handleWasmLocal(
         if (NATIVE_CHAT_ENABLED) {
           return jsonError('Chat provided by the native shell', 501);
         }
-        shell.stopAgent();
+        shell.stopAgent(chatIdFromBody(bodyStr));
         return jsonOk({ status: 'ok', stopped: true });
 
       // ── Agent steer (injects into persistent agent) ─────────
@@ -835,6 +835,17 @@ export function jsonError(message: string, status: number): Response {
  * Events are dispatched in the WsEvent shape: { type, data: {...} }
  * This matches what useEventHandler expects (it reads event.data).
  */
+/** The chat a request targets, when its JSON body names one. */
+function chatIdFromBody(bodyStr?: string): string | undefined {
+  if (!bodyStr) return undefined;
+  try {
+    const parsed = JSON.parse(bodyStr) as { chat_id?: unknown };
+    return typeof parsed.chat_id === 'string' && parsed.chat_id ? parsed.chat_id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Handle POST /api/query/steer — injects a steering message into the
  * persistent WASM agent. If the agent is mid-turn, the message is
@@ -843,7 +854,7 @@ export function jsonError(message: string, status: number): Response {
  */
 function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) return jsonError('Missing request body', 400);
-  let parsed: { query?: string };
+  let parsed: { query?: string; chat_id?: string };
   try {
     parsed = JSON.parse(bodyStr);
   } catch {
@@ -852,11 +863,10 @@ function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
   const query = parsed.query || '';
   if (!query) return jsonError('Query is required', 400);
 
-  // Call the WASM steerAgent function which injects into the
-  // persistent agent's steering channel.
-  const api = shell as unknown as { steerAgent?: (msg: string) => Record<string, unknown> };
-  if (api.steerAgent) {
-    const result = api.steerAgent(query);
+  // Call the WASM steerAgent function which injects into the chat's
+  // agent steering channel.
+  if (shell.steerAgent) {
+    const result = parsed.chat_id ? shell.steerAgent(query, parsed.chat_id) : shell.steerAgent(query);
     return jsonOk(result);
   }
   return jsonOk({ steered: false, error: 'steerAgent not available' });
@@ -1007,7 +1017,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // In local mode the backend handles this; in cloud mode we reset the
   // WASM agent so the next query starts fresh.
   if (query.trim().toLowerCase() === '/clear') {
-    shell.clearConversation();
+    shell.clearConversation(chatId || undefined);
     dispatch('query_completed', { query: '/clear', response: '' });
     return jsonOk({ status: 'ok', message: 'Conversation cleared' });
   }
@@ -1050,31 +1060,37 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   shell
-    .runAgent('platform', '', agentQuery, (eventJson: string) => {
-      try {
-        const event = JSON.parse(eventJson);
-        // Events from Go's wireAgentEventForwarding are already in
-        // { type, data } shape (UIEvent serializes to this format).
-        // Skip query_started — it's already dispatched above (optimistic)
-        // and the agent's own query_started from the streaming callback
-        // would duplicate the user message + isProcessing flip.
-        if (event.type === 'query_started') return;
-        // query_completed is handled by the .then() below which carries
-        // the final response from the resolved promise. Skipping the
-        // streaming version avoids a double decrement of
-        // activeRequestsRef and potential message duplication.
-        if (event.type === 'query_completed') return;
-        // Stamp chat_id if missing.
-        if (event.data && chatId && !event.data.chat_id) {
-          event.data.chat_id = chatId;
+    .runAgent(
+      'platform',
+      '',
+      agentQuery,
+      (eventJson: string) => {
+        try {
+          const event = JSON.parse(eventJson);
+          // Events from Go's wireAgentEventForwarding are already in
+          // { type, data } shape (UIEvent serializes to this format).
+          // Skip query_started — it's already dispatched above (optimistic)
+          // and the agent's own query_started from the streaming callback
+          // would duplicate the user message + isProcessing flip.
+          if (event.type === 'query_started') return;
+          // query_completed is handled by the .then() below which carries
+          // the final response from the resolved promise. Skipping the
+          // streaming version avoids a double decrement of
+          // activeRequestsRef and potential message duplication.
+          if (event.type === 'query_completed') return;
+          // Stamp chat_id if missing.
+          if (event.data && chatId && !event.data.chat_id) {
+            event.data.chat_id = chatId;
+          }
+          if (agentEventDispatcher) {
+            agentEventDispatcher(event);
+          }
+        } catch {
+          // best-effort: unparseable agent events are dropped; the loop continues.
         }
-        if (agentEventDispatcher) {
-          agentEventDispatcher(event);
-        }
-      } catch {
-        // best-effort: unparseable agent events are dropped; the loop continues.
-      }
-    })
+      },
+      chatId || undefined,
+    )
     .then((result) => {
       dispatch('query_completed', {
         response: result.response,

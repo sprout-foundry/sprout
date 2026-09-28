@@ -61,24 +61,33 @@ func seedWasmCredentialPlaceholders() {
 // to route shell-like tools through SproutWasm.executeCommand so the
 // agent can edit files and run a curated set of commands inside MEMFS.
 
-// persistentAgent caches a single Agent instance across runAgent calls so
-// that conversation history accumulates between turns (multi-turn chat).
-// Without this, every call to runAgentFunc creates a fresh Agent and the
-// model has no memory of previous messages in the conversation.
+// chatAgents caches one Agent per chat so that each conversation keeps its
+// own history across turns (multi-turn chat) and separate chats never see
+// each other's messages. Keyed by the chat id the UI stamps on each query;
+// "" is the single implicit chat of callers that send none.
 //
-// The cache key is the provider name — if the caller switches providers,
-// a new agent is created and the old one is replaced.
+// A cached agent is rebuilt when the caller switches providers. The cache is
+// bounded: the least recently used agent is dropped past maxChatAgents (its
+// chat then starts a fresh agent — history shown in the UI is unaffected).
 //
-// Access is guarded by persistentAgentMu to prevent races when multiple
-// runAgent calls arrive concurrently (rapid user messages, steer, etc.).
+// Access is guarded by chatAgentsMu to prevent races when multiple runAgent
+// calls arrive concurrently (rapid user messages, steer, several chats).
+type chatAgent struct {
+	ag       *agent.Agent
+	provider string // provider name the agent was built for
+	errCnt   int    // consecutive ProcessQuery errors; reset on success
+	lastUsed time.Time
+}
+
 var (
-	persistentAgentMu sync.Mutex
-	persistentAgent   *agent.Agent
-	persistentAgentPv string // provider name the cached agent was built for
-	persistentErrCnt  int    // consecutive ProcessQuery errors; reset on success
+	chatAgentsMu sync.Mutex
+	chatAgents   = map[string]*chatAgent{}
+	lastChatID   string // most recently run chat, for callers that name none
 )
 
-// maxConsecutiveErrors is the threshold at which the cached agent is
+const maxChatAgents = 8
+
+// maxConsecutiveErrors is the threshold at which a cached agent is
 // invalidated. Transient errors (network, rate-limit) are fine to retry
 // on the same agent, but repeated failures suggest state corruption.
 const maxConsecutiveErrors = 3
@@ -95,13 +104,52 @@ var agentTimeout = func() time.Duration {
 	return 20 * time.Minute
 }()
 
-// resetPersistentAgent clears the cached agent. Called when the JS side
-// wants to start a fresh conversation (new chat session).
-func resetPersistentAgent() {
-	persistentAgentMu.Lock()
-	defer persistentAgentMu.Unlock()
-	persistentAgent = nil
-	persistentAgentPv = ""
+// lookupChatAgent returns the cached agent for a chat, or nil.
+func lookupChatAgent(chatID string) *agent.Agent {
+	chatAgentsMu.Lock()
+	defer chatAgentsMu.Unlock()
+	if entry := chatAgents[chatID]; entry != nil {
+		return entry.ag
+	}
+	return nil
+}
+
+// storeChatAgent caches a freshly built agent and evicts the least recently
+// used one past the bound. Caller must not hold chatAgentsMu.
+func storeChatAgent(chatID string, ag *agent.Agent, provider string) {
+	chatAgentsMu.Lock()
+	defer chatAgentsMu.Unlock()
+	chatAgents[chatID] = &chatAgent{ag: ag, provider: provider, lastUsed: time.Now()}
+	for len(chatAgents) > maxChatAgents {
+		oldestID, oldest := "", time.Time{}
+		for id, entry := range chatAgents {
+			if id != chatID && (oldest.IsZero() || entry.lastUsed.Before(oldest)) {
+				oldestID, oldest = id, entry.lastUsed
+			}
+		}
+		delete(chatAgents, oldestID)
+	}
+}
+
+// resetChatAgents clears one chat's agent, or every chat's when chatID is
+// nil — the JS side's "start a fresh conversation".
+func resetChatAgents(chatID *string) {
+	chatAgentsMu.Lock()
+	defer chatAgentsMu.Unlock()
+	if chatID == nil {
+		chatAgents = map[string]*chatAgent{}
+		return
+	}
+	delete(chatAgents, *chatID)
+}
+
+// optionalChatID reads an optional chat id argument; nil when absent.
+func optionalChatID(args []js.Value, i int) *string {
+	if len(args) > i && args[i].Type() == js.TypeString {
+		id := args[i].String()
+		return &id
+	}
+	return nil
 }
 
 func agentJSFuncs() map[string]interface{} {
@@ -114,40 +162,52 @@ func agentJSFuncs() map[string]interface{} {
 	}
 }
 
-// clearConversationFunc resets the persistent agent so the next runAgent
-// call starts a fresh conversation with no history. Called from JS when
-// the user starts a new chat session or clears the conversation.
-func clearConversationFunc(_ js.Value, _ []js.Value) interface{} {
-	resetPersistentAgent()
+// clearConversationFunc resets a chat's agent so its next runAgent call
+// starts a fresh conversation. args[0] (string, optional) names the chat;
+// without it every chat is reset.
+func clearConversationFunc(_ js.Value, args []js.Value) interface{} {
+	resetChatAgents(optionalChatID(args, 0))
 	return nil
 }
 
-// stopAgentFunc interrupts the currently running agent loop (if any).
-// This is the cloud-mode equivalent of the stop button — it cancels the
-// agent's interrupt context so any in-flight HTTP requests and tool
-// executions abort promptly.
-func stopAgentFunc(_ js.Value, _ []js.Value) interface{} {
-	persistentAgentMu.Lock()
-	ag := persistentAgent
-	persistentAgentMu.Unlock()
-	if ag != nil {
+// stopAgentFunc interrupts a running agent loop — the cloud-mode stop
+// button. It cancels the agent's interrupt context so in-flight HTTP
+// requests and tool executions abort promptly. args[0] (string, optional)
+// names the chat; without it every chat's agent is interrupted.
+func stopAgentFunc(_ js.Value, args []js.Value) interface{} {
+	chatID := optionalChatID(args, 0)
+	chatAgentsMu.Lock()
+	var targets []*agent.Agent
+	for id, entry := range chatAgents {
+		if chatID == nil || id == *chatID {
+			targets = append(targets, entry.ag)
+		}
+	}
+	chatAgentsMu.Unlock()
+	for _, ag := range targets {
 		ag.TriggerInterrupt()
 	}
 	return nil
 }
 
-// steerAgentFunc injects a steering message into the persistent agent's
-// steering channel. If the agent is mid-turn, the message is queued and
-// delivered as a follow-up prompt after the current turn completes.
-// This is the cloud-mode equivalent of the steer input field.
+// steerAgentFunc injects a steering message into a chat's agent. If the
+// agent is mid-turn, the message is queued and delivered as a follow-up
+// prompt after the current turn completes — the cloud-mode steer input.
+// args[1] (string, optional) names the chat; without it the most recently
+// run chat is steered.
 func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 	message := argString(args, 0, "")
 	if message == "" {
 		return map[string]interface{}{"steered": false, "error": "message is required"}
 	}
-	persistentAgentMu.Lock()
-	ag := persistentAgent
-	persistentAgentMu.Unlock()
+	chatID := optionalChatID(args, 1)
+	if chatID == nil {
+		chatAgentsMu.Lock()
+		last := lastChatID
+		chatAgentsMu.Unlock()
+		chatID = &last
+	}
+	ag := lookupChatAgent(*chatID)
 	if ag == nil {
 		return map[string]interface{}{"steered": false, "error": "no active agent"}
 	}
@@ -155,13 +215,14 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 	return map[string]interface{}{"steered": true}
 }
 
-// runAgentFunc invokes one ProcessQuery turn through a persistent
+// runAgentFunc invokes one ProcessQuery turn through the chat's cached
 // Agent. Inputs:
 //
 //	args[0] (string)  — provider name (matches runChat's argument 0)
 //	args[1] (string)  — model id (pass "" for the provider's default)
 //	args[2] (string)  — user query / prompt
 //	args[3] (func?)   — onEvent(jsonString) callback for streamed UI events
+//	args[4] (string?) — chat id; each chat keeps its own agent and history
 //
 // Returns a Promise resolving to:
 //
@@ -179,16 +240,15 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 // no extra plumbing is needed, but heavy work should be deferred to a
 // microtask on the JS side.
 //
-// The agent is cached across calls (keyed by provider) so conversation
-// history accumulates between turns. Call clearConversation() to reset.
-//
-// Timeout: 10 minutes per call. Long agent loops with many tool calls
-// will hit this — open an issue if it bites and we'll make it
-// configurable.
+// Call clearConversation(chatId) to reset a chat's history.
 func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 	provider := argString(args, 0, "")
 	model := argString(args, 1, "")
 	query := argString(args, 2, "")
+	chatID := ""
+	if id := optionalChatID(args, 4); id != nil {
+		chatID = *id
+	}
 
 	var onEvent js.Value
 	if len(args) > 3 && args[3].Type() == js.TypeFunction {
@@ -203,15 +263,19 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			return nil, fmt.Errorf("query is required (third arg)")
 		}
 
-		// Reuse the cached agent when the provider matches, so the
+		// Reuse the chat's cached agent when the provider matches, so the
 		// conversation history carries over turn-to-turn. A provider
 		// change (or nil cache) forces a rebuild.
-		persistentAgentMu.Lock()
-		ag := persistentAgent
-		needsRebuild := ag == nil || persistentAgentPv != provider
-		persistentAgentMu.Unlock()
+		chatAgentsMu.Lock()
+		lastChatID = chatID
+		var ag *agent.Agent
+		if entry := chatAgents[chatID]; entry != nil && entry.provider == provider {
+			ag = entry.ag
+			entry.lastUsed = time.Now()
+		}
+		chatAgentsMu.Unlock()
 
-		if needsRebuild {
+		if ag == nil {
 			var err error
 			client, err := factory.CreateProviderClient(api.ClientType(provider), model)
 			if err != nil {
@@ -252,10 +316,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			// own package broker with the cloud response route.
 			ag.SetHasActiveWebUIClients(func() bool { return true })
 
-			persistentAgentMu.Lock()
-			persistentAgent = ag
-			persistentAgentPv = provider
-			persistentAgentMu.Unlock()
+			storeChatAgent(chatID, ag, provider)
 		}
 
 		// Wire the event bus only when JS provided a sink — saves the
@@ -284,25 +345,24 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		}
 
 		response, err := ag.ProcessQuery(query)
-		if err != nil {
-			// Track consecutive errors. After maxConsecutiveErrors,
-			// invalidate the cached agent so the next call starts fresh
-			// instead of looping on a potentially corrupted state.
-			persistentAgentMu.Lock()
-			persistentErrCnt++
-			if persistentErrCnt >= maxConsecutiveErrors {
-				persistentAgent = nil
-				persistentAgentPv = ""
-				persistentErrCnt = 0
+		chatAgentsMu.Lock()
+		if entry := chatAgents[chatID]; entry != nil && entry.ag == ag {
+			if err != nil {
+				// After maxConsecutiveErrors, drop the chat's agent so the
+				// next call starts fresh instead of looping on a
+				// potentially corrupted state.
+				entry.errCnt++
+				if entry.errCnt >= maxConsecutiveErrors {
+					delete(chatAgents, chatID)
+				}
+			} else {
+				entry.errCnt = 0
 			}
-			persistentAgentMu.Unlock()
+		}
+		chatAgentsMu.Unlock()
+		if err != nil {
 			return nil, fmt.Errorf("process query: %w", err)
 		}
-
-		// Success — reset error counter.
-		persistentAgentMu.Lock()
-		persistentErrCnt = 0
-		persistentAgentMu.Unlock()
 
 		return map[string]interface{}{
 			"response": response,

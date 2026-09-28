@@ -344,14 +344,25 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
         const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
-        setState((prev) => ({
-          activeChatId: chatId,
-          messages: backendMessages,
-          // A cleared chat has no in-flight work.
-          ...(data.change === 'clear'
-            ? { isProcessing: false, toolExecutions: [], currentTodos: [], queryProgress: null }
-            : {}),
-        }));
+        setState((prev) => {
+          if (data.change === 'clear') {
+            // A cleared chat has no in-flight work.
+            return {
+              activeChatId: chatId,
+              messages: backendMessages,
+              isProcessing: false,
+              toolExecutions: [],
+              currentTodos: [],
+              queryProgress: null,
+            };
+          }
+          // A switch echo — usually of this client's own switch — must not
+          // cut a running chat's streamed text: the server transcript only
+          // has it once the turn is saved. Take the server copy when it has
+          // caught up or nothing is running (the switch path's rule).
+          const useBackend = backendMessages.length >= prev.messages.length || !response.chat_session.active_query;
+          return { activeChatId: chatId, messages: useBackend ? backendMessages : prev.messages };
+        });
       })
       .catch((err) => debugLog('[session_changed] switch reload failed:', err));
     return;

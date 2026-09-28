@@ -18,6 +18,7 @@ import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
 import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
+import { listChatSessions } from '../services/chatSessions';
 import { getTabWorkspacePath } from '../services/clientSession';
 import type { CloudAdapter } from '../services/cloudAdapter';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
@@ -27,6 +28,7 @@ import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
 import { debugLog, useLog } from '../utils/log';
 import { decideBootRestore, writeChatModePin } from '../workspaces/useChatModePinning';
+import { canAutoRestoreLatestSession } from './bootSessionRestore';
 
 interface RecentFile {
   path: string;
@@ -417,7 +419,10 @@ export function useAppInitialization({
               // just-cleared conversation. In local mode the backend supplies
               // the current id, so this only fires when there genuinely is none.
               const hasExplicitCurrent = !!currentSessionId && !!currentSession;
-              const allowFallback = !isCloud || !hasExplicitCurrent;
+              const chats = await listChatSessions()
+                .then((resp) => resp.chat_sessions ?? [])
+                .catch(() => []);
+              const allowFallback = (!isCloud || !hasExplicitCurrent) && canAutoRestoreLatestSession(chats);
               if (allowFallback) {
                 const restorable = sessions.find(
                   (item: SessionEntry) =>

@@ -342,3 +342,25 @@ func TestChatSession_SummaryAndInfoCarryID(t *testing.T) {
 		t.Errorf("chatSessionSummary provider = %q, want %q", got, "ollama-local")
 	}
 }
+
+func TestSetChatSessionStateKeepsTopLevelOnActiveChat(t *testing.T) {
+	active := newDefaultChatSession()
+	background := newChatSession("chat-b", "Chat B")
+	cc := &webClientContext{
+		DefaultChatID: active.ID,
+		ChatSessions:  map[string]*chatSession{active.ID: active, background.ID: background},
+	}
+
+	cc.setChatSessionState(active.ID, []byte(`{"session_id":"s-active","messages":[]}`))
+	cc.setChatSessionState(background.ID, []byte(`{"session_id":"s-background","messages":[]}`))
+
+	if cc.CurrentSessionID != "s-active" {
+		t.Errorf("top-level session = %q, want the active chat's s-active", cc.CurrentSessionID)
+	}
+	if !strings.Contains(string(cc.AgentState), "s-active") {
+		t.Errorf("top-level state = %s, want the active chat's", cc.AgentState)
+	}
+	if background.CurrentSessionID != "s-background" {
+		t.Errorf("background chat session = %q, want s-background", background.CurrentSessionID)
+	}
+}

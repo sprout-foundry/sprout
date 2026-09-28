@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–3 landed 2026-09-27); phases 4–5 pending
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–4 landed 2026-09-27/28); phases 4–5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -181,10 +181,53 @@ the repo. This spec plans the split; it does not schedule it.
   - **Still `*Agent`-coupled (next increments, interface-seam work):**
     `approval_broker.go` (RequestApproval — 15+ surface items: config,
     event bus, security-approval mgr, unsafe flags, debug logger,
-    interrupt ctx, webui-client check, workflow-approval marking),
-    `risk_assessment.go` + `agent_risk.go` + `risk_prompt.go` (persona
-    resolution, active risk profile, request-approval side effects).
+    interrupt ctx, webui-client check, workflow-approval marking).
     These follow the `changes.AgentView`-style narrow-interface seam.
+- **Phase 3 (2026-09-28): `pkg/agent/approvals` increment 4 — the
+  risk-assessment vocabulary + pure decision helpers landed.** The
+  canonical risk vocabulary moved from `pkg/agent/risk_assessment.go` to
+  `pkg/agent/approvals/risk_assessment.go`: `RiskSource` + the 10
+  `RiskSource*` consts, the `RiskAssessment` struct, `AssessmentFromClassifier`,
+  `AssessmentFromPersonaCascade`, `RiskAssessment.Combine` (was
+  unexported `combine`), `MergeRiskSources` (was `mergeRiskSources`),
+  `RiskAssessment.Explain`, `ResolveOldDecision` / `ResolveUnifiedDecision`
+  (shadow-mode comparators), and `IsGitRebaseCommand`. The git-command
+  gate detectors (`IsGitWriteCommand`, `IsGitStashCommand` — pure
+  strings/shelltext classifiers) moved from `pkg/agent/tool_handlers.go`
+  to `pkg/agent/approvals/git_command_gates.go`. `pkg/agent` keeps the
+  `*Agent` orchestrator `ResolveToolRisk` (it reaches into
+  `a.EvaluateOperationRisk`, `a.effectiveCwd`, `a.debug`,
+  `a.isGitWriteAllowed`, `a.GetWorkspaceRoot` — interface-seam work for a
+  later increment) plus `agent_risk.go` / `risk_prompt.go` (persona
+  resolution, active risk profile, request-approval side effects).
+  `pkg/agent/risk_assessment_forwarders.go` aliases the moved types/consts
+  (`type RiskSource = approvals.RiskSource`, etc.) and forwards the
+  unexported helper names, so every call site in `pkg/agent` (the
+  tool-handler gates, the seed/tool-security shadow-mode comparisons) is
+  unchanged.
+  - **Method rename (the one non-pure-move edit):** `combine` → `Combine`
+    (Go methods cannot be re-declared across packages); the 8 call sites
+    in `ResolveToolRisk` and the pure tests update from `.combine(` to
+    `.Combine(`.
+  - **Import-safety note:** `approvals → agent_tools` for
+    `SecurityResult` (the classifier input) is cycle-free —
+    `pkg/agent_tools` does not import the `pkg/agent` parent (it already
+    holds this edge from the security-analyzer files); `configuration`,
+    `security`, `shelltext`, and `utils` likewise don't import the agent
+    parent.
+  - **Tests:** the 15 pure tests moved to
+    `approvals/risk_assessment_test.go` (AssessmentFromClassifier/
+    PersonaCascade mapping, Combine edge cases, Explain, MergeRiskSources,
+    ResolveOldDecision/ResolveUnifiedDecision, the golden Phase-1 mapping
+    block); the 30 `*Agent`-based tests (ResolveToolRisk battery,
+    shadow-mode parity, TestRiskLevelRank, TestAccessModeForTool,
+    TestConfigUnifiedRiskResolver_DefaultFalse) stay in
+    `pkg/agent/risk_assessment_test.go` and exercise the forwarders.
+  - **Still `*Agent`-coupled (next increment, interface-seam work):**
+    `approval_broker.go` (RequestApproval) + the `ResolveToolRisk`
+    orchestrator + `agent_risk.go`/`risk_prompt.go` persona/risk-profile
+    methods. These follow the `changes.AgentView`-style narrow-interface
+    seam (a `RiskAgent` interface over the ~10 exported-method surface).
 - Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem

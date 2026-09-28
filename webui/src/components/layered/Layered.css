@@ -70,14 +70,6 @@
   margin-left: 0;
 }
 
-/* The rail sits at the bottom-left, so the account menu opens up and right. */
-.project-rail-account .user-menu-list {
-  top: auto;
-  bottom: 0;
-  left: calc(100% + 8px);
-  right: auto;
-}
-
 .project-nav {
   flex: 1;
   min-width: 0;
@@ -284,4 +276,10 @@
 
 .layered-top-bar {
   flex-shrink: 0;
+}
+
+/* Rail popovers (the account menu) open beside the rail, outside the
+ * sidebar box; the panels inside keep their own scroll containers. */
+.sidebar.layered {
+  overflow: visible;
 }

@@ -100,6 +100,17 @@ export function UserMenu(): JSX.Element | null {
   const listPosition = (): CSSProperties | undefined => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return undefined;
+    // A trigger in the left half (the layered layout's rail) opens to the
+    // right and upward; the header trigger opens down and right-aligned.
+    if (rect.left < window.innerWidth / 2) {
+      return {
+        position: 'fixed',
+        left: rect.right + 8,
+        right: 'auto',
+        top: 'auto',
+        bottom: Math.max(8, window.innerHeight - rect.bottom),
+      };
+    }
     return { position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) };
   };
 

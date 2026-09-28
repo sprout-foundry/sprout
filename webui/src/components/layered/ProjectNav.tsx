@@ -34,7 +34,11 @@ export type ProjectNavTarget =
 export interface ProjectNavConversations {
   sessions: ChatSession[];
   activeId: string | null;
+  /** True while the conversation is the main view's focused tab. */
+  inMain: boolean;
   onSelect: (id: string) => void;
+  /** Brings the conversation into the main view. */
+  onOpen: () => void;
   onCreate?: () => void;
 }
 

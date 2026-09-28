@@ -66,7 +66,9 @@ export default function ProjectRail({
         className="project-rail-btn"
         title="Activity"
         aria-label="Activity"
-        onClick={() => window.dispatchEvent(new Event(OPEN_NOTIFICATIONS_EVENT))}
+        onClick={(e) =>
+          window.dispatchEvent(new CustomEvent(OPEN_NOTIFICATIONS_EVENT, { detail: { anchor: e.currentTarget } }))
+        }
       >
         <Bell size={18} />
       </button>

@@ -91,13 +91,13 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
-  const conversationInMain = inCode && props.currentView === 'chat';
+  const conversationInMain = inCode && !!props.conversations?.inMain;
 
   const navigate = (target: ProjectNavTarget) => {
     if (target.kind === 'conversation') {
       if (!inCode) props.onSelectMode?.('code');
       if (target.id) props.conversations?.onSelect(target.id);
-      props.onViewChange?.('chat');
+      props.conversations?.onOpen();
       setOpen(null);
       return;
     }

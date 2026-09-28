@@ -131,3 +131,13 @@
     transform: rotate(360deg);
   }
 }
+
+/* Without the sidebar (tablet, phone) the bottom-left corner is the chat
+   composer; sit below the menu bar and the tab row / phone toolbar instead,
+   which are the navigation there. */
+@media (max-width: 1024px) {
+  .sync-status-banner {
+    top: 76px;
+    bottom: auto;
+  }
+}

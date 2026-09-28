@@ -58,7 +58,7 @@ import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
 import DesignAssetsPane from './design/DesignAssetsPane';
-import { isLayeredLayout } from '../config/layout';
+import { isLayeredLayout, LEFT_INSET_VAR } from '../config/layout';
 import LayeredSidebar from './layered/LayeredSidebar';
 import type { ProjectNavConversations } from './layered/ProjectNav';
 interface SidebarProps {
@@ -383,6 +383,26 @@ function Sidebar({
     onSidebarToggle?.();
   }, [finalOnMobileMenuToggle, isMobile, onSidebarToggle]);
 
+  // Layered layout: publish the sidebars' width so the viewport-fixed
+  // terminal can sit beside them instead of under them.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = wrapperRef.current;
+    if (!isLayeredLayout || isMobile || !el || typeof ResizeObserver === 'undefined') {
+      root.style.removeProperty(LEFT_INSET_VAR);
+      return;
+    }
+    const publish = () => root.style.setProperty(LEFT_INSET_VAR, `${el.offsetWidth}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(LEFT_INSET_VAR);
+    };
+  }, [isMobile]);
+
   /** Render the content pane based on selected section */
   /** Search section: find and replace panel */
   const renderSearchSection = () => {
@@ -490,7 +510,7 @@ function Sidebar({
   };
 
   return (
-    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container">
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container" ref={wrapperRef}>
       <div
         className={`sidebar ${isLayeredLayout ? 'layered' : ''} ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={
@@ -514,6 +534,9 @@ function Sidebar({
             instances={instances}
             onInstanceChange={onInstanceChange}
             renderSection={renderContentPane}
+            collapsed={effectiveSidebarCollapsed}
+            onToggleCollapsed={handleLogoToggle}
+            isMobile={isMobile}
           />
         ) : (
           <>

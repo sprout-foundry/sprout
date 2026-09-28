@@ -6,7 +6,7 @@
 }
 
 .project-rail {
-  width: 52px;
+  width: 48px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -262,4 +262,26 @@
 .header-search-btn kbd {
   margin-left: auto;
   font-family: inherit;
+}
+
+/* The sidebars run the full window height; the terminal (fixed to the
+ * viewport, see Terminal.css) sits beside them under the main view. Same
+ * logical/painted math as .terminal-portal: the inset is logical px, the
+ * portal paints at --ui-scale. */
+.layout-layered .app {
+  padding-bottom: 0;
+}
+
+.layout-layered .app > main {
+  padding-bottom: var(--sprout-terminal-reserved-height);
+  box-sizing: border-box;
+}
+
+.layout-layered .terminal-portal {
+  left: calc(var(--sprout-left-inset, 0px) * var(--ui-scale, 1));
+  width: calc(100% / var(--ui-scale, 1) - var(--sprout-left-inset, 0px));
+}
+
+.layered-top-bar {
+  flex-shrink: 0;
 }

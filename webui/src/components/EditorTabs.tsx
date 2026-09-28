@@ -218,18 +218,11 @@ function EditorTabs({
   };
 
   // ── Inline rename handlers ────────────────────────────────────
-  const startRename = useCallback(
-    (buffer: EditorBuffer) => {
-      // Only allow renaming chat tabs that are not default sessions
-      const chatId = getChatId(buffer);
-      if (!chatId) return;
-      const session = chatSessions?.find((s) => s.id === chatId);
-      if (session?.is_default) return;
-      setRenamingBufferId(buffer.id);
-      setRenameValue(buffer.file.name);
-    },
-    [chatSessions],
-  );
+  const startRename = useCallback((buffer: EditorBuffer) => {
+    if (!getChatId(buffer)) return;
+    setRenamingBufferId(buffer.id);
+    setRenameValue(buffer.file.name);
+  }, []);
 
   const commitRename = useCallback(() => {
     if (!renamingBufferId || !renameValue.trim()) {
@@ -711,7 +704,7 @@ function EditorTabs({
             )}
 
             {/* ── Chat-specific context menu items ───────────────── */}
-            {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onRenameChat && (
+            {activeContextBuffer.kind === 'chat' && onRenameChat && (
               <button
                 className="context-menu-item"
                 onClick={() =>

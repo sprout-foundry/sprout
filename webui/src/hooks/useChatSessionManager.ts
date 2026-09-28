@@ -667,7 +667,7 @@ export function useChatSessionManager({
 
   const handleStopProcessing = useCallback(async () => {
     try {
-      await apiService.stopQuery();
+      await apiService.stopQuery(activeChatIdRef.current ?? undefined);
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessages([]);

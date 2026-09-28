@@ -82,6 +82,8 @@ export interface WasmShell {
     query: string,
     onEvent?: (eventJson: string) => void,
     chatId?: string,
+    /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
+    history?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear a chat's agent history (every chat's when no id is given). */
   clearConversation(chatId?: string): void;
@@ -242,6 +244,7 @@ export interface SproutWasmAPI {
     query: string,
     onEvent?: (eventJson: string) => void,
     chatId?: string,
+    history?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(chatId?: string): void;
   stopAgent?(chatId?: string): void;
@@ -468,12 +471,13 @@ export async function initWasmShell(config?: {
         query: string,
         onEvent?: (eventJson: string) => void,
         chatId?: string,
+        history?: string,
       ): Promise<{ response: string; provider: string; model: string }> {
         const api = wasm as SproutWasmAPI;
         if (!api.runAgent) {
           return Promise.reject(new Error('WASM binary does not expose runAgent'));
         }
-        return api.runAgent(provider, model, query, onEvent, chatId);
+        return api.runAgent(provider, model, query, onEvent, chatId, history);
       },
 
       clearConversation(chatId?: string): void {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { __resetCloudChatsForTests, handleCloudChatSessionsEndpoint } from './cloudChatSessions';
+import { __resetCloudChatsForTests, handleCloudChatSessionsEndpoint, historyForChat } from './cloudChatSessions';
 import { getCurrentCloudSessionId, saveSession } from './cloudSessionStore';
 
 async function call(path: string, method = 'GET', body?: unknown) {
@@ -67,5 +67,15 @@ describe('cloud chat sessions', () => {
 
   it('leaves worktree endpoints to the synthetic stubs', () => {
     expect(handleCloudChatSessionsEndpoint('/api/chat-sessions/compact', 'POST', 'http://x')).toBeNull();
+  });
+
+  it('gives a chat its saved turns as agent history, without the pending query', async () => {
+    const id = (await call('/api/chat-sessions')).json.active_chat_id;
+    saveSession([msg('user', 'hello', 1), msg('assistant', 'hi there', 2), msg('user', 'next question', 3)] as never);
+    expect(historyForChat(id, 'next question')).toEqual([
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: 'hi there' },
+    ]);
+    expect(historyForChat('missing-chat')).toEqual([]);
   });
 });

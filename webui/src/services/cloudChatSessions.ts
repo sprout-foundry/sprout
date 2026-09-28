@@ -23,9 +23,19 @@ import {
   restoreSession,
   startNewCloudSession,
 } from './cloudSessionStore';
-import { jsonError, jsonOk } from './cloudWasmHandlers';
 
 const STORAGE_KEY = 'sprout-cloud-chats';
+
+function jsonOk(data: unknown): Response {
+  return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message, message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 interface StoredChat {
   id: string;
@@ -220,4 +230,29 @@ export function rebindChatTranscript(chatId: string | null | undefined, sessionI
   if (!chat) return;
   chat.session_id = sessionId;
   write(index);
+}
+
+/** Most recent turns a fresh agent is seeded with; older ones stay on screen only. */
+const MAX_HISTORY_MESSAGES = 60;
+
+/**
+ * A chat's saved conversation as agent history (user/assistant turns),
+ * for seeding the in-page agent after a reload. `pendingQuery` is dropped
+ * from the end when the transcript already recorded it — it is sent as the
+ * new query, not history.
+ */
+export function historyForChat(
+  chatId: string | null | undefined,
+  pendingQuery?: string,
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const sessionId = transcriptIdForChat(chatId);
+  if (!sessionId) return [];
+  const messages = (restoreSession(sessionId)?.messages ?? [])
+    .filter((m) => m.content.trim() !== '')
+    .map((m) => ({ role: m.type, content: m.content }));
+  const last = messages[messages.length - 1];
+  if (last && last.role === 'user' && pendingQuery !== undefined && last.content.trim() === pendingQuery.trim()) {
+    messages.pop();
+  }
+  return messages.slice(-MAX_HISTORY_MESSAGES);
 }

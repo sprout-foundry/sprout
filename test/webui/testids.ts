@@ -248,6 +248,8 @@ const TESTIDS = {
   // GitHub account / repo picker (authenticated clone)
   "gh-account-card": "gh-account-card",
   "gh-signout-btn": "gh-signout-btn",
+  "home-nav": "home-nav",
+  "platform-home": "platform-home",
   "header-search": "header-search",
   "project-nav": "project-nav",
   "project-rail": "project-rail",

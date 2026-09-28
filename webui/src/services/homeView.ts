@@ -13,12 +13,31 @@ export interface HomeViewState {
   path: string;
 }
 
-let state: HomeViewState = { open: false, path: '/' };
+// Home is part of the editor's URL (?home=/tasks/123): a reload lands back on
+// the same page, and links from elsewhere can open the shell on it.
+const HOME_PARAM = 'home';
+
+function readInitial(): HomeViewState {
+  if (typeof window === 'undefined') return { open: false, path: '/' };
+  const param = new URLSearchParams(window.location.search).get(HOME_PARAM);
+  return param ? { open: true, path: normalizeHomePath(param) } : { open: false, path: '/' };
+}
+
+function writeUrl(next: HomeViewState): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (next.open) url.searchParams.set(HOME_PARAM, next.path);
+  else url.searchParams.delete(HOME_PARAM);
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url);
+}
+
+let state: HomeViewState = readInitial();
 const listeners = new Set<() => void>();
 
 function set(next: HomeViewState): void {
   if (next.open === state.open && next.path === state.path) return;
   state = next;
+  writeUrl(next);
   for (const l of listeners) l();
 }
 

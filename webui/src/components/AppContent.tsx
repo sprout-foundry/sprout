@@ -1226,7 +1226,7 @@ const AppContent: React.FC<AppContentProps> = ({
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       ) : null}
-      {isLayeredLayout && isCloud && <PlatformHome />}
+      {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}

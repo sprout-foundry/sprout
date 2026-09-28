@@ -537,6 +537,7 @@ function Sidebar({
             collapsed={effectiveSidebarCollapsed}
             onToggleCollapsed={handleLogoToggle}
             isMobile={isMobile}
+            onCloseDrawer={isMobile ? () => finalOnMobileMenuToggle?.() : undefined}
           />
         ) : (
           <>

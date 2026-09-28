@@ -58,6 +58,8 @@ export interface LayeredSidebarProps {
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   isMobile?: boolean;
+  /** Phones: close the drawer once the main view changes. */
+  onCloseDrawer?: () => void;
 }
 
 // Opening a repository reloads onto ?repo=, the same clone-or-restore path
@@ -103,6 +105,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       if (target.id) props.conversations?.onSelect(target.id);
       props.conversations?.onOpen();
       setOpen(null);
+      props.onCloseDrawer?.();
       return;
     }
     if (target.kind === 'design') {
@@ -174,7 +177,17 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         homeActive={home.open}
         onOpenHome={() => openHome(home.path)}
       />
-      {!props.collapsed && home.open && <HomeNav path={home.path} projectLabel={title} onBackToProject={closeHome} />}
+      {!props.collapsed && home.open && (
+        <HomeNav
+          path={home.path}
+          projectLabel={title}
+          onBackToProject={() => {
+            closeHome();
+            props.onCloseDrawer?.();
+          }}
+          onNavigated={props.onCloseDrawer}
+        />
+      )}
       {!props.collapsed && !home.open && (
         <ProjectNav
           title={title}

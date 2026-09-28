@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/approvals"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -19,20 +20,11 @@ func (a *Agent) highRiskApprovedForCommand(_ context.Context, command string) bo
 	return err == nil
 }
 
-// approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto the shared ApprovalDecision.
+// approvalDecisionFromCLIChoice maps the CLI prompt's typed choice onto the
+// shared ApprovalDecision (the implementation moved to
+// pkg/agent/approvals — SP-141 phase 3, increment 5).
 func approvalDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDecision {
-	switch c {
-	case utils.ApprovalChoiceApproveOnce:
-		return security.ApprovalApproveOnce
-	case utils.ApprovalChoiceApproveAlways:
-		return security.ApprovalApproveAlways
-	case utils.ApprovalChoiceAlwaysAsk:
-		return security.ApprovalAlwaysAsk
-	case utils.ApprovalChoiceElevate:
-		return security.ApprovalElevate
-	default:
-		return security.ApprovalDeny
-	}
+	return approvals.ApprovalDecisionFromCLIChoice(c)
 }
 
 // applyApprovalDecision performs the side-effects of the user's choice:

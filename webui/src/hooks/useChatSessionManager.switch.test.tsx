@@ -106,4 +106,33 @@ describe('chat switch', () => {
     expect(calls).toEqual(['switch:chat-b', 'delete:chat-a']);
     expect(h.getState().activeChatId).toBe('chat-b');
   });
+
+  it('keeps a message sent while the switch was in flight', async () => {
+    let finishSwitch!: (v: unknown) => void;
+    sessions.switchChatSession.mockImplementationOnce(() => new Promise((resolve) => (finishSwitch = resolve)));
+    const h = setup();
+
+    let switching!: Promise<boolean>;
+    act(() => {
+      switching = h.result.current.handleActiveChatChange('chat-b');
+    });
+    // The user sends in chat B before the switch response lands.
+    h.getState().messages.push({ id: 'sent', type: 'user', content: 'LEFT-THREE?', timestamp: new Date() } as never);
+    await act(async () => {
+      finishSwitch({
+        active_chat_id: 'chat-b',
+        chat_session: {
+          active_query: false,
+          messages: [
+            { role: 'user', content: 'LEFT-ONE?' },
+            { role: 'assistant', content: 'LEFT-ONE' },
+          ],
+        },
+      });
+      await switching;
+    });
+
+    expect(h.getState().messages.map((m) => m.content)).toEqual(['LEFT-ONE?', 'LEFT-ONE', 'LEFT-THREE?']);
+    expect(h.getState().isProcessing).toBe(true);
+  });
 });

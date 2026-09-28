@@ -121,6 +121,44 @@ describe('useChatSessionsSync', () => {
     expect(calls.open.map((c) => c.id)).toEqual(['__workspace/chat/older', '__workspace/chat/newer']);
   });
 
+  it('closes the tab of a chat that was deleted', () => {
+    const closedIds: string[] = [];
+    const tab = (chatId: string) =>
+      makeBuffer({
+        id: `__workspace/chat/${chatId}`,
+        file: { ...makeBuffer({ id: 'x' }).file, path: `__workspace/chat/${chatId}` },
+        metadata: { chatId },
+      });
+    const buffers = new Map<string, EditorBuffer>([
+      ['__workspace/chat/A', tab('A')],
+      ['__workspace/chat/gone', { ...tab('gone'), isClosable: false }],
+    ]);
+    const props = { sessions: [{ id: 'A' }, { id: 'gone' }, { id: 'fresh' }] as { id: string }[] };
+    const { rerender } = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: props.sessions as never,
+        activeChatId: 'A',
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        closeBuffer: (id) => {
+          closedIds.push(id);
+          buffers.delete(id);
+        },
+        openWorkspaceBuffer: ((o: { path: string; metadata?: Record<string, unknown> }) => {
+          buffers.set(o.path, tab(String(o.metadata?.chatId)));
+          return o.path;
+        }) as never,
+      }),
+    );
+    // "gone" is deleted; "late" has a tab but hasn't reached the list yet.
+    buffers.set('__workspace/chat/late', tab('late'));
+    props.sessions = [{ id: 'A' }, { id: 'fresh' }];
+    rerender();
+    expect(closedIds).toEqual(['__workspace/chat/gone']);
+  });
+
   it('keeps the stand-in while the active chat is unknown', () => {
     const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([

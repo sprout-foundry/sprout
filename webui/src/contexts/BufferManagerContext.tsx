@@ -90,6 +90,9 @@ export const useBufferManager = () => {
   return context;
 };
 
+let bufferSeq = 0;
+const nextBufferSeq = () => ++bufferSeq;
+
 interface BufferManagerProviderProps {
   children: ReactNode;
   paneBridge: PaneBridge;
@@ -128,7 +131,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       isModified: false,
       isActive: true,
       paneId: 'pane-1',
-      isPinned: true,
+      isPinned: false,
       isClosable: false,
       metadata: { chatId: null as string | null },
     };
@@ -136,17 +139,44 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     return new Map([[chatBuffer.id, chatBuffer]]);
   });
 
-  // Keep a ref to the latest buffers Map so async closures don't read stale data
+  // Keep a ref to the latest buffers Map so async closures don't read stale
+  // data. Assigned during render, not in an effect: provider effects run after
+  // their children's, so an effect here would overwrite changes the mutators
+  // below mirror into the ref from a child's effect in the same commit.
   const buffersRef = useRef(buffers);
-  useEffect(() => {
-    buffersRef.current = buffers;
-  }, [buffers]);
+  buffersRef.current = buffers;
+  // Buffers opened but not yet in committed state, by path. A render between
+  // two opens can hand buffersRef the committed map without them; the path
+  // lookup in openWorkspaceBuffer checks here too so it never opens a second
+  // tab for the same path.
+  const pendingOpensRef = useRef(new Map<string, EditorBuffer>());
+  for (const [path, pending] of pendingOpensRef.current) {
+    if (buffers.has(pending.id)) pendingOpensRef.current.delete(path);
+  }
 
   // Keep a ref to the latest activePaneId so callbacks don't read stale closure values
   const activePaneIdRef = useRef(paneBridge.activePaneId);
   useEffect(() => {
     activePaneIdRef.current = paneBridge.activePaneId;
   }, [paneBridge.activePaneId]);
+
+  // The buffer this manager last focused, ahead of the commit. Adopts the
+  // prop only when the prop itself changes, so a render cannot undo a focus
+  // change still in flight (closeBuffer right after an open must see the
+  // opened buffer as focused, not the one before it).
+  const focusedBufferIdRef = useRef(paneBridge.activeBufferId);
+  const seenActiveBufferIdRef = useRef(paneBridge.activeBufferId);
+  if (seenActiveBufferIdRef.current !== paneBridge.activeBufferId) {
+    seenActiveBufferIdRef.current = paneBridge.activeBufferId;
+    focusedBufferIdRef.current = paneBridge.activeBufferId;
+  }
+  const setFocusedBuffer = useCallback(
+    (id: string | null) => {
+      focusedBufferIdRef.current = id;
+      paneBridge.setActiveBufferId(id);
+    },
+    [paneBridge],
+  );
 
   // Helper to find the rightmost pane for chat placement
   const getRightmostPane = useCallback((paneList: EditorPane[]) => {
@@ -170,7 +200,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   const activateBuffer = useCallback(
     (bufferId: string) => {
       const currentActivePane = activePaneIdRef.current;
-      paneBridge.setActiveBufferId(bufferId);
+      setFocusedBuffer(bufferId);
 
       setBuffers((prev) => {
         const newBuffers = new Map(prev);
@@ -190,7 +220,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === currentActivePane ? { ...pane, bufferId } : pane)));
     },
-    [paneBridge],
+    [paneBridge, setFocusedBuffer],
   );
 
   // Switch to a different buffer in the active pane
@@ -205,7 +235,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
         paneBridge.setActivePaneId(existingBuffer.paneId);
-        paneBridge.setActiveBufferId(bufferId);
+        setFocusedBuffer(bufferId);
         setBuffers((prev) => {
           const next = new Map(prev);
           Array.from(next.entries()).forEach(([id, buf]) => {
@@ -221,7 +251,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return;
       }
 
-      paneBridge.setActiveBufferId(bufferId);
+      setFocusedBuffer(bufferId);
       setBuffers((prev) => {
         const newBuffers = new Map(prev);
         Array.from(newBuffers.entries()).forEach(([id, buf]) => {
@@ -237,7 +267,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       });
       paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === currentPaneId ? { ...pane, bufferId } : pane)));
     },
-    [paneBridge],
+    [paneBridge, setFocusedBuffer],
   );
 
   // Open a file in an editor pane
@@ -265,7 +295,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return bufferId;
       }
 
-      const bufferId = `buffer-${Date.now()}`;
+      const bufferId = `buffer-${Date.now()}-${nextBufferSeq()}`;
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: 'file',
@@ -293,11 +323,11 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === currentActivePane ? { ...pane, bufferId } : pane)));
 
-      paneBridge.setActiveBufferId(bufferId);
+      setFocusedBuffer(bufferId);
 
       return bufferId;
     },
-    [activateBuffer, switchToBuffer, paneBridge],
+    [activateBuffer, switchToBuffer, paneBridge, setFocusedBuffer],
   );
 
   // Open workspace buffer
@@ -317,32 +347,40 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         options = { ...options, path: resolveEditorFilePath(options.path) };
       }
       const currentBuffers = buffersRef.current;
-      const existingBufferEntry = Array.from(currentBuffers.entries()).find(
-        ([_, buffer]) => buffer.file.path === options.path,
-      );
+      const pendingOpen = pendingOpensRef.current.get(options.path);
+      const existingBufferEntry: [string, EditorBuffer] | undefined =
+        Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === options.path) ??
+        (pendingOpen ? [pendingOpen.id, pendingOpen] : undefined);
 
       if (existingBufferEntry) {
         const [bufferId, buffer] = existingBufferEntry;
+        const applyOptions = (b: EditorBuffer): EditorBuffer => ({
+          ...b,
+          kind: options.kind,
+          file: {
+            ...b.file,
+            name: options.title,
+            path: options.path,
+            ext: options.ext || b.file.ext,
+          },
+          content: options.content ?? b.content,
+          originalContent: options.content ?? b.originalContent,
+          contentLoaded: options.content != null ? true : b.contentLoaded,
+          isPinned: options.isPinned ?? b.isPinned,
+          isClosable: options.isClosable ?? b.isClosable,
+          metadata: options.metadata ?? b.metadata,
+        });
+        const updated = applyOptions(buffer);
         setBuffers((prev) => {
           const next = new Map(prev);
-          next.set(bufferId, {
-            ...buffer,
-            kind: options.kind,
-            file: {
-              ...buffer.file,
-              name: options.title,
-              path: options.path,
-              ext: options.ext || buffer.file.ext,
-            },
-            content: options.content ?? buffer.content,
-            originalContent: options.content ?? buffer.originalContent,
-            contentLoaded: options.content != null ? true : buffer.contentLoaded,
-            isPinned: options.isPinned ?? buffer.isPinned,
-            isClosable: options.isClosable ?? buffer.isClosable,
-            metadata: options.metadata ?? buffer.metadata,
-          });
+          next.set(bufferId, applyOptions(prev.get(bufferId) ?? buffer));
           return next;
         });
+        buffersRef.current = new Map(buffersRef.current).set(bufferId, updated);
+        if (pendingOpensRef.current.has(options.path)) pendingOpensRef.current.set(options.path, updated);
+        // A background open (activate: false) refreshes the tab without
+        // focusing it — focusing a chat tab switches the conversation.
+        if (options.activate === false) return bufferId;
         // Navigate to the buffer's existing pane if it's in a different pane
         if (buffer.paneId && buffer.paneId !== paneBridge.activePaneId) {
           paneBridge.setActivePaneId(buffer.paneId);
@@ -359,7 +397,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
           : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId);
       const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;
 
-      const bufferId = `buffer-${options.kind}-${Date.now()}`;
+      const bufferId = `buffer-${options.kind}-${Date.now()}-${nextBufferSeq()}`;
       const shouldActivate = options.activate ?? true;
       const newBuffer: EditorBuffer = {
         id: bufferId,
@@ -397,16 +435,21 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         next.set(bufferId, newBuffer);
         return next;
       });
+      // Several opens can run before React commits (the session-list sync and
+      // a New-chat handler opening the same chat in one tick); the path
+      // lookup above must see this buffer or it opens a duplicate tab.
+      buffersRef.current = new Map(buffersRef.current).set(bufferId, newBuffer);
+      pendingOpensRef.current.set(options.path, newBuffer);
 
       if (shouldActivate) {
         paneBridge.setPanes((prev) => prev.map((pane) => (pane.id === targetPaneId ? { ...pane, bufferId } : pane)));
         paneBridge.setActivePaneId(targetPaneId);
-        paneBridge.setActiveBufferId(bufferId);
+        setFocusedBuffer(bufferId);
       }
 
       return bufferId;
     },
-    [activateBuffer, getRightmostPane, switchToBuffer, paneBridge],
+    [activateBuffer, getRightmostPane, switchToBuffer, paneBridge, setFocusedBuffer],
   );
 
   // Open compare buffer
@@ -440,25 +483,40 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   );
 
   // Update buffer operations
-  const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, unknown>) => {
-    setBuffers((prev) => {
-      const buf = prev.get(bufferId);
-      if (!buf) return prev;
-      const next = new Map(prev);
-      next.set(bufferId, { ...buf, metadata: { ...buf.metadata, ...updates } });
-      return next;
-    });
+  // Mirror a flag/metadata change into buffersRef right away, so lookups later
+  // in the same tick (e.g. a close right after making the tab closable) see it.
+  const patchBufferRef = useCallback((bufferId: string, patch: (buf: EditorBuffer) => EditorBuffer) => {
+    const buf = buffersRef.current.get(bufferId);
+    if (buf) buffersRef.current = new Map(buffersRef.current).set(bufferId, patch(buf));
   }, []);
 
-  const updateBufferTitle = useCallback((bufferId: string, title: string) => {
-    setBuffers((prev) => {
-      const buf = prev.get(bufferId);
-      if (!buf) return prev;
-      const next = new Map(prev);
-      next.set(bufferId, { ...buf, file: { ...buf.file, name: title } });
-      return next;
-    });
-  }, []);
+  const updateBufferMetadata = useCallback(
+    (bufferId: string, updates: Record<string, unknown>) => {
+      patchBufferRef(bufferId, (buf) => ({ ...buf, metadata: { ...buf.metadata, ...updates } }));
+      setBuffers((prev) => {
+        const buf = prev.get(bufferId);
+        if (!buf) return prev;
+        const next = new Map(prev);
+        next.set(bufferId, { ...buf, metadata: { ...buf.metadata, ...updates } });
+        return next;
+      });
+    },
+    [patchBufferRef],
+  );
+
+  const updateBufferTitle = useCallback(
+    (bufferId: string, title: string) => {
+      patchBufferRef(bufferId, (buf) => ({ ...buf, file: { ...buf.file, name: title } }));
+      setBuffers((prev) => {
+        const buf = prev.get(bufferId);
+        if (!buf) return prev;
+        const next = new Map(prev);
+        next.set(bufferId, { ...buf, file: { ...buf.file, name: title } });
+        return next;
+      });
+    },
+    [patchBufferRef],
+  );
 
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
     setBuffers((prev) => {
@@ -585,27 +643,35 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     });
   }, []);
 
-  const setBufferPinned = useCallback((bufferId: string, isPinned: boolean) => {
-    setBuffers((prev) => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, isPinned });
-      }
-      return next;
-    });
-  }, []);
+  const setBufferPinned = useCallback(
+    (bufferId: string, isPinned: boolean) => {
+      patchBufferRef(bufferId, (buf) => ({ ...buf, isPinned }));
+      setBuffers((prev) => {
+        const next = new Map(prev);
+        const buffer = next.get(bufferId);
+        if (buffer) {
+          next.set(bufferId, { ...buffer, isPinned });
+        }
+        return next;
+      });
+    },
+    [patchBufferRef],
+  );
 
-  const setBufferClosable = useCallback((bufferId: string, isClosable: boolean) => {
-    setBuffers((prev) => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, isClosable });
-      }
-      return next;
-    });
-  }, []);
+  const setBufferClosable = useCallback(
+    (bufferId: string, isClosable: boolean) => {
+      patchBufferRef(bufferId, (buf) => ({ ...buf, isClosable }));
+      setBuffers((prev) => {
+        const next = new Map(prev);
+        const buffer = next.get(bufferId);
+        if (buffer) {
+          next.set(bufferId, { ...buffer, isClosable });
+        }
+        return next;
+      });
+    },
+    [patchBufferRef],
+  );
 
   const reloadBufferFromDisk = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
     setBuffers((prev) => {
@@ -836,10 +902,15 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
       const currentActivePane = activePaneIdRef.current;
 
+      const closedWasFocused = bufferId === focusedBufferIdRef.current;
+
       setBuffers((prev) => {
         const newBuffers = new Map(prev);
+        const closedWasShown = prev.get(bufferId)?.isActive;
         newBuffers.delete(bufferId);
-        if (buffer.paneId && nextPaneBuffer) {
+        // Hand the pane to another buffer only if the closed one was on show
+        // there; closing a background tab must not change what the pane shows.
+        if (buffer.paneId && nextPaneBuffer && closedWasShown) {
           const replacement = newBuffers.get(nextPaneBuffer.id);
           if (replacement) {
             newBuffers.set(nextPaneBuffer.id, {
@@ -851,18 +922,26 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         }
         return newBuffers;
       });
+      const withoutClosed = new Map(buffersRef.current);
+      withoutClosed.delete(bufferId);
+      buffersRef.current = withoutClosed;
+      pendingOpensRef.current.delete(buffer.file.path);
 
       if (buffer.paneId) {
         paneBridge.setPanes((prev) =>
-          prev.map((pane) => (pane.id === buffer.paneId ? { ...pane, bufferId: nextPaneBuffer?.id || null } : pane)),
+          prev.map((pane) =>
+            pane.id === buffer.paneId && pane.bufferId === bufferId
+              ? { ...pane, bufferId: nextPaneBuffer?.id || null }
+              : pane,
+          ),
         );
       }
 
-      if (bufferId === paneBridge.activeBufferId) {
+      if (closedWasFocused) {
         if (nextPaneBuffer) {
-          paneBridge.setActiveBufferId(nextPaneBuffer.id);
+          setFocusedBuffer(nextPaneBuffer.id);
         } else {
-          paneBridge.setActiveBufferId(null);
+          setFocusedBuffer(null);
         }
       }
 
@@ -874,7 +953,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         }),
       );
     },
-    [isAutoSaveEnabled, saveBuffer, paneBridge],
+    [isAutoSaveEnabled, saveBuffer, paneBridge, setFocusedBuffer],
   );
 
   const reorderBuffers = useCallback((sourceBufferId: string, targetBufferId: string) => {
@@ -927,10 +1006,10 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       paneBridge.moveBufferToPane(bufferId, paneId);
 
       if (paneBridge.activePaneId === paneId) {
-        paneBridge.setActiveBufferId(bufferId);
+        setFocusedBuffer(bufferId);
       }
     },
-    [paneBridge],
+    [paneBridge, setFocusedBuffer],
   );
 
   // Auto-save interval

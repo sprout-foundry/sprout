@@ -26,6 +26,8 @@ export { useBufferManager, type PaneBridge, BufferManagerProvider } from './Buff
 
 interface EditorManagerContextValue {
   buffers: Map<string, EditorBuffer>;
+  /** Live buffer map, updated as soon as a buffer is opened/changed/closed (ahead of the React commit). */
+  buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   panes: EditorPane[];
   paneLayout: PaneLayout;
   activePaneId: string | null;
@@ -237,6 +239,7 @@ const CombinedContextProvider: React.FC<{
     () => ({
       // From BufferManager
       buffers: buffer.buffers,
+      buffersRef: buffer.buffersRef,
       openFile: buffer.openFile,
       openWorkspaceBuffer: buffer.openWorkspaceBuffer,
       openCompareBuffer: buffer.openCompareBuffer,

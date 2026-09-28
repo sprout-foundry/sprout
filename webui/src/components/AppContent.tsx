@@ -1,6 +1,6 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { supportsLocalTerminal } from '../config/mode';
+import { isCloud, supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -1146,13 +1146,18 @@ const AppContent: React.FC<AppContentProps> = ({
             conversations={{
               sessions: chatSessions ?? [],
               activeId: activeChatId,
+              inMain: showContextSidebar,
               onSelect: (id) => void onActiveChatChange?.(id, 'code'),
-              onCreate: onCreateChat
-                ? () => {
-                    void onCreateChat('code');
-                    onViewChange('chat');
-                  }
-                : undefined,
+              onOpen: () => handlePrimaryViewChange('chat'),
+              // The hosted platform keeps a single conversation (its session
+              // endpoints are stubs), so it offers no New.
+              onCreate:
+                onCreateChat && !isCloud
+                  ? () => {
+                      void onCreateChat('code');
+                      handlePrimaryViewChange('chat');
+                    }
+                  : undefined,
             }}
             modes={workspaceModes}
             activeModeId={workspaceMode.id}

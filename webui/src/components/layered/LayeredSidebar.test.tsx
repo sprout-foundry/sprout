@@ -41,7 +41,9 @@ function renderSidebar(overrides: Partial<LayeredSidebarProps> = {}) {
         { id: 'c2', name: 'Fix CI', is_active: false, is_default: false, active_query: true } as never,
       ],
       activeId: 'c1',
+      inMain: true,
       onSelect: vi.fn(),
+      onOpen: vi.fn(),
       onCreate: vi.fn(),
     },
     currentView: 'chat',
@@ -78,10 +80,17 @@ describe('LayeredSidebar', () => {
   });
 
   it('opens a conversation in the main view', () => {
-    const props = renderSidebar({ currentView: 'editor' });
+    const props = renderSidebar();
     click(itemByText('Fix CI'));
     expect(props.conversations!.onSelect).toHaveBeenCalledWith('c2');
-    expect(props.onViewChange).toHaveBeenCalledWith('chat');
+    expect(props.conversations!.onOpen).toHaveBeenCalled();
+  });
+
+  it('highlights the conversation only while it is the main view', () => {
+    const base = renderSidebar();
+    expect(itemByText('Add checkout')?.classList.contains('active')).toBe(true);
+    renderSidebar({ conversations: { ...base.conversations!, inMain: false } });
+    expect(itemByText('Add checkout')?.classList.contains('active')).toBe(false);
   });
 
   it('drills into a tool panel and back', () => {

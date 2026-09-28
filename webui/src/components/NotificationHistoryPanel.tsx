@@ -26,7 +26,9 @@ export function formatNotificationAge(createdAt: number, now: number = Date.now(
 function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPanelProps): JSX.Element {
   const { notifications, removeNotification, clearNotifications, markAllRead } = useNotifications();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ right: number; bottom: number } | null>(null);
+  const [position, setPosition] = useState<{ right: number; bottom: number } | { left: number; top: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     markAllRead();
@@ -38,10 +40,16 @@ function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPan
     const place = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPosition({
-        right: Math.max(8, window.innerWidth - rect.right),
-        bottom: window.innerHeight - rect.top + 4,
-      });
+      // Anchors near the top (the layered layout's rail bell) open beside
+      // and below; the status bar bell opens above.
+      if (rect.top < window.innerHeight / 2) {
+        setPosition({ left: rect.right + 8, top: rect.top });
+      } else {
+        setPosition({
+          right: Math.max(8, window.innerWidth - rect.right),
+          bottom: window.innerHeight - rect.top + 4,
+        });
+      }
     };
     place();
     window.addEventListener('resize', place);
@@ -79,7 +87,7 @@ function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPan
       role="dialog"
       aria-label="Notifications"
       tabIndex={-1}
-      style={position ? { right: position.right, bottom: position.bottom } : { visibility: 'hidden' }}
+      style={position ?? { visibility: 'hidden' }}
       data-testid="notification-history"
     >
       <div className="notification-history-header">

@@ -78,14 +78,21 @@ function StatusBar({
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   // The layered layout's rail opens the same notification history.
+  const railAnchorRef = useRef<HTMLElement | null>(null);
+  const [anchoredToRail, setAnchoredToRail] = useState(false);
   useEffect(() => {
-    const open = () => setIsNotificationCenterOpen(true);
+    const open = (e: Event) => {
+      railAnchorRef.current = (e as CustomEvent<{ anchor?: HTMLElement }>).detail?.anchor ?? null;
+      setAnchoredToRail(!!railAnchorRef.current);
+      setIsNotificationCenterOpen(true);
+    };
     window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open);
     return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open);
   }, []);
   const bellIconRef = useRef<HTMLButtonElement>(null);
 
   const toggleNotificationCenter = useCallback(() => {
+    setAnchoredToRail(false);
     setIsNotificationCenterOpen((prev) => !prev);
   }, []);
 
@@ -195,7 +202,10 @@ function StatusBar({
         )}
       </button>
       {isNotificationCenterOpen && (
-        <NotificationHistoryPanel anchorRef={bellIconRef} onClose={closeNotificationCenter} />
+        <NotificationHistoryPanel
+          anchorRef={anchoredToRail ? (railAnchorRef as React.RefObject<HTMLElement>) : bellIconRef}
+          onClose={closeNotificationCenter}
+        />
       )}
     </div>
   );

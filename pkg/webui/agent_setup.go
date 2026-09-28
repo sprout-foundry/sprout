@@ -53,10 +53,20 @@ func rearmWebUIAgent(a *agent.Agent, ws *ReactWebServer, cfg agentSetupConfig) {
 
 // applyWebUIAgentMetadata sets the event routing metadata (client_id, chat_id,
 // user_id) on the agent. Shared between setup and rearm paths.
+//
+// A rearm that names no chat keeps the agent's chat: each agent belongs to
+// one chat, and client-level rearms (getClientAgent, reached from provider,
+// stats and settings requests) don't carry one. Clearing it — even mid-run —
+// made the agent's events arrive without a chat_id, which the UI applies to
+// whichever chat is on screen.
 func applyWebUIAgentMetadata(a *agent.Agent, cfg agentSetupConfig) {
+	chatID := cfg.ChatID
+	if chatID == "" {
+		chatID = a.GetChatID()
+	}
 	meta := map[string]interface{}{
 		"client_id": cfg.ClientID,
-		"chat_id":   cfg.ChatID,
+		"chat_id":   chatID,
 	}
 	if cfg.UserID != "" {
 		meta["user_id"] = cfg.UserID

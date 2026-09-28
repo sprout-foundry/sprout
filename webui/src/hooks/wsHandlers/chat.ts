@@ -22,6 +22,7 @@ import {
   normalizeTodoList,
   shouldSuppressAgentMessageInChat,
 } from '../webSocketEventHelpers';
+import { chatTranscriptToMessages } from '../../utils/chatTranscript';
 
 // Handle connection_status event
 export const handleConnectionStatus = (ctx: EventHandlerContext): void => {
@@ -342,14 +343,7 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
     fetchChatSessionMessages(chatId)
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${chatId}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-          }));
+        const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
         setState((prev) => ({
           activeChatId: chatId,
           messages: backendMessages,

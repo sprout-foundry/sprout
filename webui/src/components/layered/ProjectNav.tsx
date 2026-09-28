@@ -8,6 +8,7 @@
 
 import {
   ChevronLeft,
+  PanelLeftClose,
   FileCode2,
   FolderTree,
   GitBranch,
@@ -45,6 +46,8 @@ interface NavEntry {
 
 interface ProjectNavProps {
   title: string;
+  onHide?: () => void;
+  hideLabel?: string;
   conversations?: ProjectNavConversations;
   /** True while a conversation fills the main view. */
   conversationInMain: boolean;
@@ -77,6 +80,18 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
 export default function ProjectNav(props: ProjectNavProps): ReactElement {
   const { title, conversations, conversationInMain, current, onNavigate, drill } = props;
 
+  const hideButton = props.onHide ? (
+    <button
+      type="button"
+      className="project-nav-back"
+      onClick={props.onHide}
+      title={props.hideLabel}
+      aria-label={props.hideLabel}
+    >
+      <PanelLeftClose size={15} />
+    </button>
+  ) : null;
+
   if (drill) {
     return (
       <div className="project-nav" data-testid="project-nav">
@@ -85,8 +100,9 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
             <ChevronLeft size={16} />
           </button>
           <span className="project-nav-drill-title">{drill.title}</span>
+          {hideButton}
         </div>
-        <div className="project-nav-drill-body">{drill.content}</div>
+        <div className="project-nav-drill-body content-pane-scroll">{drill.content}</div>
       </div>
     );
   }
@@ -111,6 +127,7 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
         <span className="project-nav-title" title={title}>
           {title}
         </span>
+        {hideButton}
         {conversations?.onCreate && (
           <button type="button" className="project-nav-new" onClick={conversations.onCreate} title="New conversation">
             <PenSquare size={14} /> New

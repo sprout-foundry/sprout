@@ -5,7 +5,7 @@
  * the running workspaces.
  */
 
-import { Bell, FolderGit2, Home, Plus, Settings } from 'lucide-react';
+import { Bell, FolderGit2, Home, PanelLeftOpen, Plus, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { isCloud } from '../../config/mode';
 import { OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
@@ -23,6 +23,8 @@ interface ProjectRailProps {
   projects: RailProject[];
   onAddProject?: () => void;
   onOpenSettings?: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 function initial(label: string): string {
@@ -30,9 +32,26 @@ function initial(label: string): string {
   return name.charAt(0).toUpperCase();
 }
 
-export default function ProjectRail({ projects, onAddProject, onOpenSettings }: ProjectRailProps): ReactElement {
+export default function ProjectRail({
+  projects,
+  onAddProject,
+  onOpenSettings,
+  collapsed,
+  onToggleCollapsed,
+}: ProjectRailProps): ReactElement {
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
+      {collapsed && onToggleCollapsed && (
+        <button
+          type="button"
+          className="project-rail-btn"
+          title="Show project sidebar"
+          aria-label="Show project sidebar"
+          onClick={onToggleCollapsed}
+        >
+          <PanelLeftOpen size={18} />
+        </button>
+      )}
       {isCloud ? (
         <a className="project-rail-btn" href={platformHref('/?from=editor')} title="Home — all projects">
           <Home size={18} />

@@ -9,11 +9,13 @@
  */
 
 import { useEffect, useSyncExternalStore } from 'react';
+import { recordRecentRepo } from './recentRepos';
 import { getLastRepo, setLastRepo } from './repoImportCache';
 
 type Listener = () => void;
 
 let activeRepoURL: string | null = readQueryRepo();
+if (activeRepoURL) recordRecentRepo(activeRepoURL);
 let hydration: Promise<void> | null = null;
 const listeners = new Set<Listener>();
 
@@ -37,6 +39,7 @@ export function setActiveRepoURL(url: string): void {
   if (!next || next === activeRepoURL) return;
   activeRepoURL = next;
   void setLastRepo(next);
+  recordRecentRepo(next);
   notify();
 }
 

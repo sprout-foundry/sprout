@@ -9,6 +9,9 @@ import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
+import { useRecentRepos } from '../../services/recentRepos';
+import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
+import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
 import { githubRepoSlug } from '../../utils/platformUrl';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
@@ -49,11 +52,42 @@ export interface LayeredSidebarProps {
   onInstanceChange?: (pid: number) => void;
   /** Renders the classic sidebar panel for the selected section. */
   renderSection: () => ReactNode;
+  /** Collapsed: only the rail shows (narrow windows, tablets). */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  isMobile?: boolean;
+}
+
+// Opening a repository reloads onto ?repo=, the same clone-or-restore path
+// a dashboard "Open in editor" link takes.
+function openRepo(url: string): void {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('repo') === url) return;
+  params.set('repo', url);
+  window.location.search = params.toString();
+}
+
+async function promptForRepo(): Promise<void> {
+  const input = await showThemedPrompt('GitHub repository to open (owner/name or URL):', {
+    title: 'Open a repository',
+    placeholder: 'owner/repo',
+  });
+  if (!input?.trim()) return;
+  try {
+    openRepo(parseRepoRef(input.trim()).url.replace(/\.git$/, ''));
+  } catch (err) {
+    await showThemedAlert(err instanceof Error ? err.message : String(err), {
+      title: 'Invalid repository',
+      type: 'warning',
+    });
+  }
 }
 
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
-  const repoSlug = githubRepoSlug(useActiveRepoURL());
+  const activeRepo = useActiveRepoURL();
+  const repoSlug = githubRepoSlug(activeRepo);
+  const recentRepos = useRecentRepos();
   const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
@@ -110,7 +144,12 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const drillContent = props.renderSection();
 
   const projects: RailProject[] = isCloud
-    ? [{ id: 'repo', label: repoSlug ?? 'No repository', active: true }]
+    ? recentRepos.map((url) => ({
+        id: url,
+        label: githubRepoSlug(url) ?? url,
+        active: githubRepoSlug(url) === repoSlug,
+        onSelect: () => openRepo(url),
+      }))
     : props.instances.length > 0
       ? props.instances.map((inst) => ({
           id: String(inst.pid),
@@ -122,23 +161,33 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
 
   return (
     <>
-      <ProjectRail projects={projects} onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })} />
-      <ProjectNav
-        title={title}
-        conversations={props.conversations}
-        conversationInMain={conversationInMain && !open}
-        current={open}
-        onNavigate={navigate}
-        codeEntries={codeEntries}
-        designEntries={designEntries}
-        automationEntries={automationEntries}
-        footerEntries={footerEntries}
-        drill={
-          open
-            ? { title: SECTION_TITLES[open.id] ?? open.id, content: drillContent, onBack: () => setOpen(null) }
-            : undefined
-        }
+      <ProjectRail
+        projects={projects}
+        collapsed={props.collapsed}
+        onToggleCollapsed={props.isMobile ? undefined : props.onToggleCollapsed}
+        onAddProject={isCloud ? () => void promptForRepo() : undefined}
+        onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })}
       />
+      {!props.collapsed && (
+        <ProjectNav
+          title={title}
+          onHide={props.onToggleCollapsed}
+          hideLabel={props.isMobile ? 'Close sidebar' : 'Collapse sidebar'}
+          conversations={props.conversations}
+          conversationInMain={conversationInMain && !open}
+          current={open}
+          onNavigate={navigate}
+          codeEntries={codeEntries}
+          designEntries={designEntries}
+          automationEntries={automationEntries}
+          footerEntries={footerEntries}
+          drill={
+            open
+              ? { title: SECTION_TITLES[open.id] ?? open.id, content: drillContent, onBack: () => setOpen(null) }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 }

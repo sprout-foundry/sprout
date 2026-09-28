@@ -1,7 +1,8 @@
 import { PanelRightClose } from 'lucide-react';
 import React, { useState } from 'react';
 import { isCloud } from '../config/mode';
-import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+import { isLayeredLayout } from '../config/layout';
+import { LayeredSearchButton } from './layered/LayeredTopBar';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
@@ -87,17 +88,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <div className="header-bar">
-      {isLayeredLayout && (
-        <button
-          type="button"
-          className="header-search-btn"
-          onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))}
-          data-testid="header-search"
-        >
-          <span>Search files, symbols, commands…</span>
-          <kbd>⌘K</kbd>
-        </button>
-      )}
+      {isLayeredLayout && <LayeredSearchButton />}
       {isCloud && !isLayeredLayout && (
         <a
           href={platformHref(repoHubPath(repoURL))}

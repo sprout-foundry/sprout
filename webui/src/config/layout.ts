@@ -30,6 +30,14 @@ function readLayout(): ShellLayout {
 export const shellLayout: ShellLayout = readLayout();
 export const isLayeredLayout = shellLayout === 'layered';
 
+// Layout-specific CSS keys off this class (see components/layered/Layered.css).
+if (isLayeredLayout && typeof document !== 'undefined') {
+  document.documentElement.classList.add('layout-layered');
+}
+
+/** Width (logical px) of the layered layout's left sidebars, for chrome fixed to the viewport. */
+export const LEFT_INSET_VAR = '--sprout-left-inset';
+
 /** Window events the layered chrome uses to reach surfaces owned elsewhere. */
 export const OPEN_COMMAND_PALETTE_EVENT = 'sprout:open-command-palette';
 export const OPEN_NOTIFICATIONS_EVENT = 'sprout:open-notifications';

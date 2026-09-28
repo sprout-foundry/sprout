@@ -16,6 +16,8 @@ import React from 'react';
 import DesignSurface from '../components/design/DesignSurface';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { WorkspaceShellProps } from './shell';
+import LayeredTopBar from '../components/layered/LayeredTopBar';
+import { isLayeredLayout } from '../config/layout';
 
 const DesignShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -41,6 +43,7 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
         </button>
       </div>
     )}
+    {isLayeredLayout && !isMobile && <LayeredTopBar />}
     <div className="design-shell-body">
       <ErrorBoundary panelName="Design">
         <DesignSurface

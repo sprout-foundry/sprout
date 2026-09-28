@@ -93,7 +93,7 @@ export async function executeCommand(
  * Track R: chat is provided natively by the shell, so the webui never POSTs
  * /api/query/stop. Resolves void — a safe no-op matching the real signature.
  */
-export async function stopQuery(_fetchFn: typeof fetch): Promise<void> {
+export async function stopQuery(_fetchFn: typeof fetch, _chatId?: string): Promise<void> {
   // no-op: the native shell owns the query lifecycle; no network here.
 }
 

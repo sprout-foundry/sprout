@@ -9,6 +9,7 @@ import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { workspaceCwdContextLine } from './workspaceCwd';
+import { historyForChat } from './cloudChatSessions';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -91,7 +92,7 @@ export function handleWasmLocal(
         if (NATIVE_CHAT_ENABLED) {
           return jsonError('Chat provided by the native shell', 501);
         }
-        shell.stopAgent(chatIdFromBody(bodyStr));
+        shell.stopAgent(new URL(fullUrl, 'http://local').searchParams.get('chat_id') || chatIdFromBody(bodyStr));
         return jsonOk({ status: 'ok', stopped: true });
 
       // ── Agent steer (injects into persistent agent) ─────────
@@ -1090,6 +1091,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
         }
       },
       chatId || undefined,
+      // Seeds the chat's agent if it has none yet (e.g. after a reload), so
+      // the conversation on screen is also the one the agent remembers.
+      JSON.stringify(historyForChat(chatId, query)),
     )
     .then((result) => {
       dispatch('query_completed', {

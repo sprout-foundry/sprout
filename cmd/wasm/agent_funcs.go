@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall/js"
 	"time"
@@ -223,6 +224,9 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 //	args[2] (string)  — user query / prompt
 //	args[3] (func?)   — onEvent(jsonString) callback for streamed UI events
 //	args[4] (string?) — chat id; each chat keeps its own agent and history
+//	args[5] (string?) — JSON [{role, content}] history, used only when the
+//	                    chat's agent is created fresh (e.g. after a page
+//	                    reload) so the conversation continues where it was
 //
 // Returns a Promise resolving to:
 //
@@ -249,6 +253,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 	if id := optionalChatID(args, 4); id != nil {
 		chatID = *id
 	}
+	historyJSON := argString(args, 5, "")
 
 	var onEvent js.Value
 	if len(args) > 3 && args[3].Type() == js.TypeFunction {
@@ -316,6 +321,10 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			// own package broker with the cloud response route.
 			ag.SetHasActiveWebUIClients(func() bool { return true })
 
+			if history := parseSeedHistory(historyJSON); len(history) > 0 {
+				ag.SetMessages(history)
+			}
+
 			storeChatAgent(chatID, ag, provider)
 		}
 
@@ -370,6 +379,29 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			"model":    ag.GetModel(),
 		}, nil
 	})
+}
+
+// parseSeedHistory decodes the history a fresh chat agent is seeded with.
+// Only user and assistant turns with content are kept; anything malformed
+// yields no history (the chat simply starts without prior context).
+func parseSeedHistory(raw string) []api.Message {
+	if raw == "" {
+		return nil
+	}
+	var turns []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(raw), &turns); err != nil {
+		return nil
+	}
+	history := make([]api.Message, 0, len(turns))
+	for _, t := range turns {
+		if (t.Role == "user" || t.Role == "assistant") && strings.TrimSpace(t.Content) != "" {
+			history = append(history, api.Message{Role: t.Role, Content: t.Content})
+		}
+	}
+	return history
 }
 
 // runPlanFunc is runAgent with the planning-specific system prompt

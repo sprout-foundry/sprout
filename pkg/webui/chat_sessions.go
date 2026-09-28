@@ -565,15 +565,15 @@ func (cc *webClientContext) getChatSessionState(chatID string) []byte {
 	return cc.AgentState
 }
 
-// setChatSessionState sets the agent state snapshot for the given chat.
-// Also updates the top-level AgentState for backward compatibility.
+// setChatSessionState sets the agent state snapshot for the given chat. The
+// top-level AgentState/CurrentSessionID mirror the ACTIVE chat only: a
+// background chat's post-run sync must not overwrite them, or the next agent
+// built from the top-level state (getClientAgent) starts with that other
+// chat's conversation.
 func (cc *webClientContext) setChatSessionState(chatID string, snapshot []byte) {
 	if len(snapshot) == 0 {
 		snapshot = emptyAgentStateSnapshot()
 	}
-
-	// Always update top-level for backward compat
-	cc.AgentState = append([]byte(nil), snapshot...)
 
 	sessionID := ""
 	var state agent.AgentState
@@ -582,6 +582,7 @@ func (cc *webClientContext) setChatSessionState(chatID string, snapshot []byte) 
 	}
 
 	if cc.ChatSessions == nil {
+		cc.AgentState = append([]byte(nil), snapshot...)
 		cc.CurrentSessionID = sessionID
 		return
 	}
@@ -595,8 +596,10 @@ func (cc *webClientContext) setChatSessionState(chatID string, snapshot []byte) 
 		cs.LastActiveAt = time.Now()
 		cs.mu.Unlock()
 	}
-	// Also update top-level from chat session
-	cc.CurrentSessionID = sessionID
+	if chatID == cc.getActiveChatID() {
+		cc.AgentState = append([]byte(nil), snapshot...)
+		cc.CurrentSessionID = sessionID
+	}
 }
 
 // getActiveChatID returns the default chat ID, or "default" if not set.

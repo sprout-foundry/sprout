@@ -170,6 +170,28 @@ export const useChatSessionsSync = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [laneSessions, activeChatId]);
 
+  // A chat that left the list was deleted (here or in another tab): close its
+  // tab, which otherwise stayed open on a conversation that no longer exists.
+  // Only chats seen in the previous list count — a tab opened for a chat
+  // the list hasn't caught up with yet must survive.
+  const knownChatIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!chatSessions || chatSessions.length === 0) return;
+    const now = new Set(chatSessions.map((session) => session.id));
+    const before = knownChatIdsRef.current;
+    knownChatIdsRef.current = now;
+    const close = closeRef.current;
+    const currentBuffers = buffersRef.current;
+    if (!close || !currentBuffers) return;
+    for (const buffer of Array.from(currentBuffers.values())) {
+      const chatId = buffer.kind === 'chat' ? (buffer.metadata?.chatId as string | null | undefined) : undefined;
+      if (!chatId || now.has(chatId) || !before.has(chatId)) continue;
+      setBufferClosable(buffer.id, true);
+      close(buffer.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSessions]);
+
   // Keep tab state canonical: no chat tab is pinned, and only the ACTIVE
   // chat's tab is unclosable. Idempotent: the setters only fire when state is
   // actually wrong, so steady-state is a no-op (no render loop).

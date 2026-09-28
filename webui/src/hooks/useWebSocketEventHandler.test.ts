@@ -538,6 +538,24 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     expect(stateHolder.current.perChatCache['chat-1'].pendingEvents).toHaveLength(1);
   });
 
+  it('releases a chat held back by workspace_busy when the running chat finishes in the background', () => {
+    const { stateHolder } = setupWithCache('chat-1', { isProcessing: true });
+    stateHolder.current = {
+      ...stateHolder.current,
+      workspaceBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
+    };
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-sub', type: 'query_completed', data: { chat_id: 'chat-1', subagent_depth: 1 } });
+    });
+    expect(stateHolder.current.workspaceBusy).not.toBeNull();
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-done', type: 'query_completed', data: { chat_id: 'chat-1', response: 'done' } });
+    });
+    expect(stateHolder.current.workspaceBusy).toBeNull();
+  });
+
   it('clears cached lastError when a background chat starts a new primary query', () => {
     const { stateHolder } = setupWithCache('chat-1', {
       lastError: 'chat failed: connection refused',

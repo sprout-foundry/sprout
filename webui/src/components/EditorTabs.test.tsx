@@ -1000,6 +1000,31 @@ function makeChatBufferWithId(bufferId: string, chatId: string, overrides: Recor
 }
 
 describe('EditorTabs chat session delete context menu', () => {
+  test('offers "Rename" on the active chat, which the server flags is_default', () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-9', { isClosable: false });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({
+      paneId: 'pane-1',
+      onRenameChat: vi.fn(),
+      chatSessions: [{ id: 'chat-9', name: 'Chat 9', is_default: true }],
+      defaultChatIds: new Set(),
+    });
+
+    fireContextMenu(container!.querySelector('.tab') as HTMLElement, 100, 200);
+    const rename = getContextMenuElements()
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.trim() === 'Rename') as HTMLElement | undefined;
+    expect(rename).toBeDefined();
+    act(() => rename!.click());
+    expect(container!.querySelector('input')).not.toBeNull();
+  });
+
   test('offers "Delete Chat" on the chat you are in, whose tab cannot be closed', () => {
     const buf = makeChatBufferWithId('buf-chat', 'chat-9', { isClosable: false });
     mockUseEditorManager.mockReturnValue({

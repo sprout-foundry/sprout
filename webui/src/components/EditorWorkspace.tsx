@@ -10,6 +10,9 @@ import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 
+/** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
+const PERMANENT_DEFAULT_CHAT_ID = 'default';
+
 export interface EditorWorkspaceProps {
   currentView: ViewType;
   perChatCache?: Record<string, PerChatState>;
@@ -162,10 +165,13 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return set;
   }, [chatSessions]);
 
+  // The chats that can't be deleted: the daemon's permanent "default" chat.
+  // Not the wire is_default flag — the list endpoint sets it on whichever
+  // chat is active, which hid Rename and Delete on the chat you were in.
   const defaultChatIds = useMemo(() => {
     const set = new Set<string>();
     for (const session of chatSessions ?? []) {
-      if (session.is_default) set.add(session.id);
+      if (session.id === PERMANENT_DEFAULT_CHAT_ID) set.add(session.id);
     }
     return set;
   }, [chatSessions]);

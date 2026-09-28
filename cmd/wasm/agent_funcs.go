@@ -373,12 +373,34 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			return nil, fmt.Errorf("process query: %w", err)
 		}
 
+		if strings.TrimSpace(response) == "" {
+			response = lastTurnReply(ag.GetMessages())
+		}
+
 		return map[string]interface{}{
 			"response": response,
 			"provider": provider,
 			"model":    ag.GetModel(),
 		}, nil
 	})
+}
+
+// lastTurnReply returns the final assistant text of the latest turn. The
+// streaming path delivers the answer only as stream_chunk events and
+// ProcessQuery returns "", but the host still needs the text to record the
+// turn for a chat that finished off screen.
+func lastTurnReply(messages []api.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		switch messages[i].Role {
+		case "user":
+			return ""
+		case "assistant":
+			if text := strings.TrimSpace(messages[i].Content); text != "" {
+				return messages[i].Content
+			}
+		}
+	}
+	return ""
 }
 
 // parseSeedHistory decodes the history a fresh chat agent is seeded with.

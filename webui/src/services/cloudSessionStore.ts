@@ -233,6 +233,8 @@ export function saveSession(
     name?: string;
     totalTokens?: number;
     workingDirectory?: string;
+    /** Save a chat that is not on screen: leave the current transcript as is. */
+    inBackground?: boolean;
   },
 ): string | null {
   const ls = storage();
@@ -283,6 +285,10 @@ export function saveSession(
     total_tokens: record.total_tokens,
   };
   index.sessions = [meta, ...index.sessions.filter((s) => s.session_id !== sessionId)].slice(0, MAX_SESSIONS);
+  if (options?.inBackground) {
+    writeIndex(index);
+    return sessionId;
+  }
   index.current_session_id = sessionId;
   writeIndex(index);
   // A freshly generated id must become the active one, or every later save

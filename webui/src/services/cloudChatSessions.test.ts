@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { __resetCloudChatsForTests, handleCloudChatSessionsEndpoint, historyForChat } from './cloudChatSessions';
+import {
+  __resetCloudChatsForTests,
+  handleCloudChatSessionsEndpoint,
+  historyForChat,
+  recordTurn,
+  setChatRunning,
+} from './cloudChatSessions';
 import { getCurrentCloudSessionId, saveSession } from './cloudSessionStore';
 
 async function call(path: string, method = 'GET', body?: unknown) {
@@ -77,5 +83,35 @@ describe('cloud chat sessions', () => {
       { role: 'assistant', content: 'hi there' },
     ]);
     expect(historyForChat('missing-chat')).toEqual([]);
+  });
+
+  it('saves an off-screen chat’s answer without taking over the on-screen chat', async () => {
+    const first = (await call('/api/chat-sessions')).json.active_chat_id;
+    saveSession([msg('user', 'long question', 1)] as never);
+    const second = (await call('/api/chat-sessions/create', 'POST', {})).json.chat_session;
+    await call('/api/chat-sessions/switch', 'POST', { id: second.id });
+    const onScreen = getCurrentCloudSessionId();
+
+    setChatRunning(first, true);
+    expect((await call('/api/chat-sessions')).json.chat_sessions[0].active_query).toBe(true);
+    recordTurn(first, 'long question', 'long answer');
+    setChatRunning(first, false);
+
+    expect(getCurrentCloudSessionId()).toBe(onScreen);
+    const back = (await call('/api/chat-sessions/switch', 'POST', { id: first })).json.chat_session;
+    expect(back.active_query).toBe(false);
+    expect(back.messages.map((m: { content: string }) => m.content)).toEqual(['long question', 'long answer']);
+  });
+
+  it('records the question at the start and the answer once', async () => {
+    const id = (await call('/api/chat-sessions')).json.active_chat_id;
+    recordTurn(id, 'q1');
+    expect(historyForChat(id)).toEqual([{ role: 'user', content: 'q1' }]);
+    recordTurn(id, 'q1', 'a1');
+    recordTurn(id, 'q1', 'a1');
+    expect(historyForChat(id)).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+    ]);
   });
 });

@@ -23,10 +23,10 @@
 
 import { useEffect, useRef } from 'react';
 import { isCloud } from '../config/mode';
-import { saveSession, deleteSession, startNewCloudSession } from '../services/cloudSessionStore';
 import { rebindChatTranscript, transcriptIdForChat } from '../services/cloudChatSessions';
-import { debugLog } from '../utils/log';
+import { saveSession, deleteSession, restoreSession, startNewCloudSession } from '../services/cloudSessionStore';
 import type { AppState } from '../types/app';
+import { debugLog } from '../utils/log';
 
 export interface UseCloudSessionPersistenceOptions {
   state: AppState;
@@ -44,8 +44,17 @@ export function persistCurrentCloudSession(state: AppState): string | null {
   if (!state.messages || state.messages.length === 0) return null;
   // Name the chat's own transcript: during a chat switch the store's
   // "current" transcript can still be the previous chat's.
+  const sessionId = transcriptIdForChat(state.activeChatId) ?? undefined;
+  // Never shrink a transcript: on switching back to a chat the UI may hold an
+  // older cached view than what the query handler recorded while the chat
+  // answered off screen.
+  if (sessionId) {
+    const stored = restoreSession(sessionId)?.messages.length ?? 0;
+    const turns = state.messages.filter((m) => m.type === 'user' || m.type === 'assistant').length;
+    if (turns < stored) return sessionId;
+  }
   return saveSession(state.messages, {
-    sessionId: transcriptIdForChat(state.activeChatId) ?? undefined,
+    sessionId,
     totalTokens: state.queryCount,
   });
 }

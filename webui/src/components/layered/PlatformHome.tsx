@@ -5,6 +5,7 @@
  * unloaded either.
  */
 
+import { Menu } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { getActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, syncHomePath, useHomeView } from '../../services/homeView';
@@ -22,7 +23,13 @@ function sameRepo(a: string | null, b: string | null): boolean {
   return norm(a) === norm(b);
 }
 
-export default function PlatformHome(): ReactElement | null {
+interface PlatformHomeProps {
+  /** Phones: Home covers the editor's own menu button, so it brings one. */
+  isMobile?: boolean;
+  onOpenMenu?: () => void;
+}
+
+export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps): ReactElement | null {
   const { open, path } = useHomeView();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [mounted, setMounted] = useState(open);
@@ -76,6 +83,14 @@ export default function PlatformHome(): ReactElement | null {
   if (!mounted) return null;
   return (
     <div className={`platform-home${open ? ' open' : ''}`} aria-hidden={!open} data-testid="platform-home">
+      {isMobile && (
+        <div className="platform-home-mobile-bar">
+          <button type="button" className="project-nav-back" onClick={onOpenMenu} aria-label="Open navigation">
+            <Menu size={18} />
+          </button>
+          <span>Home</span>
+        </div>
+      )}
       <iframe
         ref={frameRef}
         title="Sprout Foundry"

@@ -50,9 +50,11 @@ interface HomeNavProps {
   path: string;
   projectLabel: string;
   onBackToProject: () => void;
+  /** After a page is chosen (phones close the drawer). */
+  onNavigated?: () => void;
 }
 
-export default function HomeNav({ path, projectLabel, onBackToProject }: HomeNavProps): ReactElement {
+export default function HomeNav({ path, projectLabel, onBackToProject, onNavigated }: HomeNavProps): ReactElement {
   // Workspaces only where the deployment offers them, as on the platform.
   const workspacesAvailable = useFullWorkspacesAvailable(true);
   const work = workspacesAvailable ? WORK : WORK.filter((e) => e.path !== '/workspaces');
@@ -62,7 +64,10 @@ export default function HomeNav({ path, projectLabel, onBackToProject }: HomeNav
       key={entry.path}
       type="button"
       className={`project-nav-item${isActive(entry, path) ? ' active' : ''}`}
-      onClick={() => openHome(entry.path)}
+      onClick={() => {
+        openHome(entry.path);
+        onNavigated?.();
+      }}
     >
       <entry.icon size={15} />
       <span>{entry.label}</span>

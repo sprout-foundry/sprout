@@ -779,14 +779,32 @@ describe('CloudAdapter', () => {
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
     });
 
-    it('should proxy chat-sessions endpoint to Foundry', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
+    it('serves chat-sessions from the browser, not the platform', async () => {
+      const response = await adapter.fetch('/api/chat-sessions', { method: 'GET' });
 
-      await adapter.fetch('/api/chat-sessions', { method: 'GET' });
+      expect(mockFetch).not.toHaveBeenCalled();
+      const body = await response.json();
+      expect(body.chat_sessions.length).toBeGreaterThan(0);
+      expect(body.active_chat_id).toBe(body.chat_sessions[0].id);
+    });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/chat-sessions');
+    it('reads chat-session request bodies passed on init (create, then switch)', async () => {
+      const created = await (
+        await adapter.fetch('/api/chat-sessions/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).json();
+      const switched = await adapter.fetch('/api/chat-sessions/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: created.chat_session.id }),
+      });
+
+      expect(switched.status).toBe(200);
+      expect((await switched.json()).active_chat_id).toBe(created.chat_session.id);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should preserve body from Request object for standard backend proxy', async () => {
@@ -1001,7 +1019,7 @@ describe('CloudAdapter', () => {
       mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
       // Use a Foundry-backend endpoint (not WASM-local) to test query param preservation
-      await adapter.fetch('/api/chat-sessions?limit=10', { method: 'GET' });
+      await adapter.fetch('/api/tasks?limit=10', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];

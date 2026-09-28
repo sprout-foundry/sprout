@@ -179,6 +179,7 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferClosable,
     splitPane,
     switchPane,
+    switchToBuffer,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
@@ -488,6 +489,33 @@ const AppContent: React.FC<AppContentProps> = ({
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
+
+  // Open a conversation from outside the tabs (the layered sidebar): focus its
+  // chat tab — or open one bound to it — exactly as clicking the tab would,
+  // then switch chat state. The focused chat tab drives the active chat
+  // (useActiveChatTab), so opening a generic chat tab would switch it back.
+  const openConversation = useCallback(
+    (id: string, title?: string) => {
+      const existing = Array.from(buffersRef.current?.values() ?? []).find(
+        (b) => b.kind === 'chat' && b.metadata?.chatId === id,
+      );
+      if (existing) {
+        switchToBuffer(existing.id);
+      } else {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: `__workspace/chat/${id}`,
+          title: title ?? chatSessions?.find((c) => c.id === id)?.name ?? 'Chat',
+          isPinned: false,
+          isClosable: true,
+          metadata: { chatId: id },
+        });
+      }
+      void onActiveChatChange?.(id, 'code');
+      onViewChange('chat');
+    },
+    [chatSessions, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
+  );
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
   // because the rail (Sidebar) and the surface are siblings and must agree on
@@ -1148,17 +1176,16 @@ const AppContent: React.FC<AppContentProps> = ({
               sessions: chatSessions ?? [],
               activeId: activeChatId,
               inMain: showContextSidebar,
-              onSelect: (id) => void onActiveChatChange?.(id, 'code'),
-              onOpen: () => handlePrimaryViewChange('chat'),
-              // The hosted platform keeps a single conversation (its session
-              // endpoints are stubs), so it offers no New.
-              onCreate:
-                onCreateChat && !isCloud
-                  ? () => {
-                      void onCreateChat('code');
-                      handlePrimaryViewChange('chat');
-                    }
-                  : undefined,
+              onSelect: (id) => openConversation(id),
+              onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
+              onCreate: onCreateChat
+                ? () => {
+                    void (async () => {
+                      const id = await onCreateChat('code');
+                      if (id) openConversation(id, 'New Chat');
+                    })();
+                  }
+                : undefined,
             }}
             modes={workspaceModes}
             activeModeId={workspaceMode.id}

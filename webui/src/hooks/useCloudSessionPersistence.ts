@@ -24,6 +24,7 @@
 import { useEffect, useRef } from 'react';
 import { isCloud } from '../config/mode';
 import { saveSession, deleteSession, startNewCloudSession } from '../services/cloudSessionStore';
+import { rebindChatTranscript, transcriptIdForChat } from '../services/cloudChatSessions';
 import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 
@@ -41,7 +42,10 @@ export function persistCurrentCloudSession(state: AppState): string | null {
   // is intentionally not saved as a session — clearing should rotate the
   // *previous* conversation into history, not persist a blank one.
   if (!state.messages || state.messages.length === 0) return null;
+  // Name the chat's own transcript: during a chat switch the store's
+  // "current" transcript can still be the previous chat's.
   return saveSession(state.messages, {
+    sessionId: transcriptIdForChat(state.activeChatId) ?? undefined,
     totalTokens: state.queryCount,
   });
 }
@@ -60,6 +64,9 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
   // hydrates them), clobbering the persisted current-session pointer of a
   // legitimate active conversation before restore-on-mount can read it.
   const prevMessageCountRef = useRef<number>(state.messages.length);
+  // Switching to an empty chat also empties the messages; only the same
+  // chat going empty is a /clear.
+  const prevChatIdRef = useRef<string | null>(state.activeChatId);
 
   // ── Save on query completion & chat switch ───────────────────────
   useEffect(() => {
@@ -67,11 +74,7 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
     const messages = state.messages;
     if (!messages || messages.length === 0) return;
 
-    // The store tracks the active session id (set on restore). Passing no
-    // explicit id means "reuse the active one, or generate a new one".
-    const id = saveSession(messages, {
-      totalTokens: state.queryCount,
-    });
+    const id = persistCurrentCloudSession(state);
     if (id) lastPersistedSessionIdRef.current = id;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- persist uses a snapshot of state; tracking message-array identity + activeChatId would be more precise but triggers during streaming
   }, [state.isProcessing, state.activeChatId]);
@@ -87,12 +90,14 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
     if (!isCloud) return;
     const wasNonEmpty = prevMessageCountRef.current > 0;
     const isEmpty = state.messages.length === 0;
+    const sameChat = prevChatIdRef.current === state.activeChatId;
     prevMessageCountRef.current = state.messages.length;
-    if (wasNonEmpty && isEmpty) {
-      startNewCloudSession();
+    prevChatIdRef.current = state.activeChatId;
+    if (wasNonEmpty && isEmpty && sameChat) {
+      rebindChatTranscript(state.activeChatId, startNewCloudSession());
       lastPersistedSessionIdRef.current = null;
     }
-  }, [state.messages.length]);
+  }, [state.messages.length, state.activeChatId]);
 
   // ── Save on page unload (reload / close / tab discard) ────────────
   useEffect(() => {

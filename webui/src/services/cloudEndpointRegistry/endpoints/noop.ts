@@ -12,10 +12,8 @@ export const noOpEndpoints: CloudEndpoint[] = [
     syntheticResponse: { success: true },
     description: 'Open in OS file browser (not applicable in cloud mode)',
   },
-  // Pin/unpin/delete-all succeed silently in cloud mode because sessions
-  // are managed client-side (no platform-backed session list exists).
-  // Returning 200/ok here means callers that delete-all then re-list see
-  // a consistent (empty) result without error toasts.
+  // Pin/unpin succeed silently in cloud mode: the chat list is browser-local
+  // (see cloudChatSessions, which also serves delete-all) and has no pins.
   {
     path: '/api/chat-sessions/pin',
     methods: ['POST'],
@@ -29,12 +27,5 @@ export const noOpEndpoints: CloudEndpoint[] = [
     category: 'no-op',
     syntheticResponse: { message: 'ok' },
     description: 'Unpin chat session (no-op in cloud mode)',
-  },
-  {
-    path: '/api/chat-sessions/delete-all',
-    methods: ['POST'],
-    category: 'no-op',
-    syntheticResponse: { message: 'ok', deleted: 0 },
-    description: 'Delete all chat sessions (no-op in cloud mode)',
   },
 ];

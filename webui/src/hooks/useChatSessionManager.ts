@@ -18,6 +18,7 @@ import { notificationBus } from '../services/notificationBus';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
 function extractToolRefsFromContent(content: string): ToolRef[] {
@@ -125,15 +126,7 @@ export function useChatSessionManager({
       if (activeChatId) {
         try {
           const switchResp = await switchChatSession(activeChatId);
-          initialMessages = (switchResp.chat_session.messages ?? [])
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m, i) => ({
-              id: `chat-${activeChatId}-${i}`,
-              type: m.role as 'user' | 'assistant',
-              content: typeof m.content === 'string' ? m.content : '',
-              timestamp: new Date(),
-              ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-            }));
+          initialMessages = chatTranscriptToMessages(activeChatId, switchResp.chat_session.messages);
           if (!activeChatIdRef.current) {
             activeChatIdRef.current = activeChatId;
           }
@@ -226,15 +219,7 @@ export function useChatSessionManager({
         // Report `false` so callers waiting on the switch (boot restore)
         // know it never landed and can fall back.
         if (activeChatIdRef.current !== switchId) return false;
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${id}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
+        const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
         const backendIsActive = response.chat_session.active_query;
 
         setState((prev) => {
@@ -859,15 +844,7 @@ export function useChatSessionManager({
       try {
         const response = await switchChatSession(id);
         if (activeChatIdRef.current !== id) return; // user moved on while loading
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${id}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
+        const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
         const backendIsActive = response.chat_session.active_query;
         activeRequestsRef.current = backendIsActive ? 1 : 0;
         setState(() => ({

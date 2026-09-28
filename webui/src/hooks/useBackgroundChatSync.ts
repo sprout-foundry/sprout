@@ -5,6 +5,7 @@ import type { AppStoreSetState } from '../contexts/AppStore';
 import type { PerChatState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
 
 /** Debounce for background refreshes. Streaming emits many events; one fetch
  * per burst is enough — the response is the whole transcript. */
@@ -57,15 +58,7 @@ export const useBackgroundChatSync = (params: {
         void (async () => {
           try {
             const response = await fetchChatSessionMessages(chatId);
-            const fetched: Message[] = (response.chat_session.messages ?? [])
-              .filter((m) => m.role === 'user' || m.role === 'assistant')
-              .map((m, i) => ({
-                id: `chat-${chatId}-${i}`,
-                type: m.role as 'user' | 'assistant',
-                content: typeof m.content === 'string' ? m.content : '',
-                timestamp: new Date(),
-                ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-              }));
+            const fetched: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
             // Bail if the user switched to this chat while we fetched — the
             // switch path already installed authoritative state.
             if (activeChatIdRef.current === chatId) return;

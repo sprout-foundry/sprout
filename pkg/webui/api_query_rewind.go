@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
@@ -29,8 +30,9 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		ToTurn      *int  `json:"to_turn"`
-		RevertFiles *bool `json:"revert_files"`
+		ToTurn      *int   `json:"to_turn"`
+		RevertFiles *bool  `json:"revert_files"`
+		ChatID      string `json:"chat_id"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -50,7 +52,10 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 	}
 
 	clientID := ws.resolveClientID(r)
-	chatID := ws.resolveChatID(r, clientID)
+	chatID := strings.TrimSpace(req.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
 
 	// Reject if a query is currently running.
 	ws.mutex.RLock()

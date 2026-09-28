@@ -54,6 +54,7 @@ import {
   type PendingStreamChunks,
 } from './wsHandlers/streaming';
 import { handleSubagentActivity, handleToolEnd, handleToolStart } from './wsHandlers/tools';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
 
 // ── Hook Interface ───────────────────────────────────────────────────────
 
@@ -403,15 +404,7 @@ export function useWebSocketEventHandler({
               .then((response) => {
                 // Bail if user switched chats while we were loading.
                 if (activeChatIdRef.current !== chatId) return;
-                const backendMessages: Message[] = (response.chat_session.messages ?? [])
-                  .filter((m) => m.role === 'user' || m.role === 'assistant')
-                  .map((m, i) => ({
-                    id: `chat-${chatId}-${i}`,
-                    type: m.role as 'user' | 'assistant',
-                    content: typeof m.content === 'string' ? m.content : '',
-                    timestamp: new Date(),
-                    ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-                  }));
+                const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
                 setState((prev) => {
                   // Backend is authoritative when it has caught up or the
                   // query is no longer active. The old length-only heuristic

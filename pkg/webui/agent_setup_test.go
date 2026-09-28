@@ -94,3 +94,19 @@ func newBareAgent(t *testing.T) *agent.Agent {
 	}
 	return a
 }
+
+func TestRearmWithoutChatKeepsAgentChat(t *testing.T) {
+	t.Setenv("SPROUT_CONFIG", t.TempDir())
+	a, err := agent.NewAgentWithModel("test:test")
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	defer a.Shutdown()
+
+	rearmWebUIAgent(a, nil, agentSetupConfig{ClientID: "c1", ChatID: "chat-a"})
+	rearmWebUIAgent(a, nil, agentSetupConfig{ClientID: "c1"})
+
+	if got := a.GetEventChatID(); got != "chat-a" {
+		t.Errorf("chat_id after a chat-less rearm = %q, want chat-a", got)
+	}
+}

@@ -1,0 +1,83 @@
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import type { AppStoreSetState } from '../contexts/AppStore';
+import type { AppState } from '../types/app';
+import { useChatSessionManager, type QueuedMessage } from './useChatSessionManager';
+
+const sessions = vi.hoisted(() => ({
+  switchChatSession: vi.fn(),
+  listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [] }),
+}));
+
+vi.mock('../services/api', () => ({ ApiService: { getInstance: () => ({}) } }));
+vi.mock('../services/chatSessions', () => ({
+  ...sessions,
+  createChatSession: vi.fn(),
+  deleteChatSession: vi.fn(),
+  deleteAllChatSessions: vi.fn(),
+  renameChatSession: vi.fn(),
+  createChatSessionInWorktree: vi.fn(),
+  fetchChatSessionMessages: vi.fn(),
+}));
+vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
+vi.mock('../services/notificationBus', () => ({ notificationBus: { notify: vi.fn() } }));
+
+function setup() {
+  let state = {
+    activeChatId: 'chat-a',
+    messages: [{ id: 'a1', type: 'user', content: 'from A', timestamp: new Date() }],
+    isProcessing: false,
+    perChatCache: {},
+    toolExecutions: [],
+    fileEdits: [],
+    subagentActivities: [],
+    currentTodos: [],
+  } as unknown as AppState;
+  const setState: AppStoreSetState = (updater) => {
+    const partial = typeof updater === 'function' ? (updater as (p: AppState) => Partial<AppState>)(state) : updater;
+    state = { ...state, ...partial };
+  };
+  const activeChatIdRef = { current: 'chat-a' as string | null };
+  const { result } = renderHook(() =>
+    useChatSessionManager({
+      setState,
+      activeRequestsRef: { current: 0 },
+      activeChatIdRef,
+      queuedMessagesRef: { current: [] as QueuedMessage[] },
+      isProcessing: false,
+    }),
+  );
+  return { result, activeChatIdRef, getState: () => state };
+}
+
+describe('chat switch', () => {
+  it('moves the screen back to the previous chat when the switch fails', async () => {
+    sessions.switchChatSession.mockRejectedValueOnce(new Error('mode_mismatch'));
+    const h = setup();
+
+    let ok = true;
+    await act(async () => {
+      ok = await h.result.current.handleActiveChatChange('chat-b');
+    });
+
+    expect(ok).toBe(false);
+    expect(h.activeChatIdRef.current).toBe('chat-a');
+    expect(h.getState().activeChatId).toBe('chat-a');
+    expect(h.getState().messages.map((m) => m.content)).toEqual(['from A']);
+  });
+
+  it('lands on the chat the user picked even if the server names another active chat', async () => {
+    sessions.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-c',
+      chat_session: { messages: [{ role: 'user', content: 'from B' }], active_query: false },
+    });
+    const h = setup();
+
+    await act(async () => {
+      await h.result.current.handleActiveChatChange('chat-b');
+    });
+
+    expect(h.getState().activeChatId).toBe('chat-b');
+    expect(h.getState().messages.map((m) => m.content)).toEqual(['from B']);
+  });
+});

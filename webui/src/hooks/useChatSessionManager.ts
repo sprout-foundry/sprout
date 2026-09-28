@@ -241,7 +241,10 @@ export function useChatSessionManager({
           const finalIsProcessing = backendIsActive;
           activeRequestsRef.current = finalIsProcessing ? 1 : 0;
           return {
-            activeChatId: response.active_chat_id,
+            // The chat the user picked. The response's active_chat_id can
+            // already name a chat another tab switched to, which would pair
+            // this chat's transcript with another chat's id.
+            activeChatId: id,
             messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
             isProcessing: finalIsProcessing,
             perChatCache: newPerChatCache,
@@ -264,6 +267,24 @@ export function useChatSessionManager({
       } catch (error) {
         if (activeChatIdRef.current !== switchId) return false;
         activeChatIdRef.current = currentId;
+        // The screen already moved to the target chat; move it back with the
+        // ref, or the previous chat's events keep landing in the target's
+        // transcript.
+        setState((prev) => {
+          const back = currentId ? prev.perChatCache[currentId] : undefined;
+          activeRequestsRef.current = back?.isProcessing ? 1 : 0;
+          return {
+            activeChatId: currentId,
+            messages: back?.messages ?? [],
+            isProcessing: back?.isProcessing ?? false,
+            toolExecutions: back?.toolExecutions ?? [],
+            fileEdits: back?.fileEdits ?? [],
+            subagentActivities: back?.subagentActivities ?? [],
+            currentTodos: back?.currentTodos ?? [],
+            queryProgress: back?.isProcessing ? (back?.queryProgress ?? null) : null,
+            lastError: back?.lastError ?? null,
+          };
+        });
         debugLog('[chat] Failed to switch chat session:', error);
         // User tapped a chat tab and nothing happened — say why.
         notificationBus.notify(

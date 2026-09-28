@@ -9,7 +9,7 @@ import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
-import { closeHome, openHome, useHomeView } from '../../services/homeView';
+import { closeHome, openHome, searchForRepo, useHomeView } from '../../services/homeView';
 import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
@@ -65,10 +65,8 @@ export interface LayeredSidebarProps {
 // Opening a repository reloads onto ?repo=, the same clone-or-restore path
 // a dashboard "Open in editor" link takes.
 function openRepo(url: string): void {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('repo') === url) return;
-  params.set('repo', url);
-  window.location.search = params.toString();
+  if (new URLSearchParams(window.location.search).get('repo') === url) return;
+  window.location.search = searchForRepo(url);
 }
 
 async function promptForRepo(): Promise<void> {

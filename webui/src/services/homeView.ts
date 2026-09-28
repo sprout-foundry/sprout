@@ -23,22 +23,43 @@ function readInitial(): HomeViewState {
   return param ? { open: true, path: normalizeHomePath(param) } : { open: false, path: '/' };
 }
 
-function writeUrl(next: HomeViewState): void {
+// Entering or leaving Home is a browser history entry, so Back and Forward
+// move between the editor and Home. Moving between Home pages is not — the
+// embedded page's own history already records those.
+function writeUrl(next: HomeViewState, entry: 'push' | 'replace'): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
   if (next.open) url.searchParams.set(HOME_PARAM, next.path);
   else url.searchParams.delete(HOME_PARAM);
-  if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url);
+  if (url.href === window.location.href) return;
+  if (entry === 'push') window.history.pushState(window.history.state, '', url);
+  else window.history.replaceState(window.history.state, '', url);
 }
 
 let state: HomeViewState = readInitial();
 const listeners = new Set<() => void>();
 
-function set(next: HomeViewState): void {
+function set(next: HomeViewState, fromHistory = false): void {
   if (next.open === state.open && next.path === state.path) return;
+  const entry = next.open !== state.open ? 'push' : 'replace';
   state = next;
-  writeUrl(next);
+  if (!fromHistory) writeUrl(next, entry);
   for (const l of listeners) l();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => set(readInitial(), true));
+}
+
+/**
+ * The editor's query string for opening another repository: Home is left
+ * behind so the editor comes up on the new project, not back in Home.
+ */
+export function searchForRepo(repo: string): string {
+  const params = new URLSearchParams(window.location.search);
+  params.set('repo', repo);
+  params.delete(HOME_PARAM);
+  return params.toString();
 }
 
 /** Show a platform page ("/" for the dashboard). */

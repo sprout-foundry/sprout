@@ -5,11 +5,13 @@
  * on a platform still on the legacy ledger.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isCloud } from '../config/mode';
 import { isLayeredLayout } from '../config/layout';
-import { openHome } from '../services/homeView';
+import { openHome, useHomeView } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
+
+const REFRESH_MS = 60_000;
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -33,11 +35,29 @@ export function CreditsChip(): JSX.Element | null {
     };
     load();
     window.addEventListener('focus', load);
+    // Usage moves while the agent works; keep the figure current while the
+    // tab is visible.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, REFRESH_MS);
     return () => {
       active = false;
       window.removeEventListener('focus', load);
+      window.clearInterval(timer);
     };
   }, []);
+
+  // Leaving Home (where plans and credit packs are bought) refreshes too.
+  const homeOpen = useHomeView().open;
+  const wasHomeOpen = useRef(homeOpen);
+  useEffect(() => {
+    if (wasHomeOpen.current && !homeOpen) {
+      fetchRemainingCredits()
+        .then(setRemaining)
+        .catch(() => undefined);
+    }
+    wasHomeOpen.current = homeOpen;
+  }, [homeOpen]);
 
   if (!isCloud || remaining == null) return null;
 

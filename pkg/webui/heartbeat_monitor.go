@@ -84,12 +84,13 @@ func (ws *ReactWebServer) cancelQueryForClient(clientID, reason, message string)
 			return
 		}
 	}
-	agent := clientCtx.Agent
+	// Interrupt the chats that are running, not the active chat's agent —
+	// the running chat may be one the user switched away from.
+	running := clientCtx.runningChatAgents()
 	ws.mutex.Unlock()
 
-	// Trigger agent interrupt if agent exists
-	if agent != nil {
-		agent.TriggerInterrupt()
+	for _, a := range running {
+		a.TriggerInterrupt()
 	}
 
 	// Decrement active queries to clean up state

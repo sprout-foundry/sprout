@@ -163,7 +163,7 @@ func (ws *ReactWebServer) resolveWorkspaceRootForChat(clientID, chatID string) s
 	if wtPath != "" {
 		return wtPath
 	}
-	return ctx.WorkspaceRoot
+	return ctx.rootForChatWithoutWorktree(ws.daemonRoot)
 }
 
 // userIDForClient safely retrieves the UserID for a given clientID.

@@ -669,15 +669,12 @@ func (cc *webClientContext) busyChatInWorkspace(excludeChatID string) *chatSessi
 // setChatQueryActive sets the active query state for a specific chat and
 // keeps the top-level ActiveQuery in sync (backward compat).
 func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query string) {
-	// Update top-level for backward compat
-	cc.ActiveQuery = active
-	if active {
-		cc.CurrentQuery = query
-	} else {
-		cc.CurrentQuery = ""
-	}
-
 	if cc.ChatSessions == nil {
+		cc.ActiveQuery = active
+		cc.CurrentQuery = ""
+		if active {
+			cc.CurrentQuery = query
+		}
 		return
 	}
 	if chatID == "" {
@@ -686,6 +683,41 @@ func (cc *webClientContext) setChatQueryActive(chatID string, active bool, query
 	if cs, ok := cc.ChatSessions[chatID]; ok {
 		cs.setQueryActive(active, query)
 	}
+	// The top-level flag means "some chat is running" — it gates the stale
+	// connection check and idle-context eviction. Taking the last writer's
+	// value marked the client idle when one chat finished while another was
+	// still running.
+	cc.ActiveQuery, cc.CurrentQuery = false, ""
+	for _, cs := range cc.ChatSessions {
+		cs.mu.RLock()
+		running, current := cs.ActiveQuery, cs.CurrentQuery
+		cs.mu.RUnlock()
+		if running {
+			cc.ActiveQuery = true
+			if cc.CurrentQuery == "" {
+				cc.CurrentQuery = current
+			}
+		}
+	}
+}
+
+// runningChatAgents returns the agents of chats with a query in flight.
+func (cc *webClientContext) runningChatAgents() []*agent.Agent {
+	if cc.ChatSessions == nil {
+		if cc.ActiveQuery && cc.Agent != nil {
+			return []*agent.Agent{cc.Agent}
+		}
+		return nil
+	}
+	var agents []*agent.Agent
+	for _, cs := range cc.ChatSessions {
+		cs.mu.RLock()
+		if cs.ActiveQuery && cs.Agent != nil {
+			agents = append(agents, cs.Agent)
+		}
+		cs.mu.RUnlock()
+	}
+	return agents
 }
 
 // clearAllChatQueryState resets ActiveQuery and CurrentQuery for every chat
@@ -737,6 +769,24 @@ func (cc *webClientContext) getChatSessionWorktree(chatID string) string {
 		return ""
 	}
 	return cs.getWorktreePath()
+}
+
+// rootForChatWithoutWorktree is the workspace root for a chat that has no
+// worktree of its own. WorkspaceRoot follows the active chat into its
+// worktree; when it currently points at some chat's worktree, a chat without
+// one must use the project root instead, or its agent reads and edits files
+// in the other chat's worktree. fallback is used when no project root was
+// recorded (the daemon's root).
+func (cc *webClientContext) rootForChatWithoutWorktree(fallback string) string {
+	for _, cs := range cc.ChatSessions {
+		if wt := cs.getWorktreePath(); wt != "" && wt == cc.WorkspaceRoot {
+			if cc.ProjectRoot != "" {
+				return cc.ProjectRoot
+			}
+			return fallback
+		}
+	}
+	return cc.WorkspaceRoot
 }
 
 // generateChatID generates a unique chat session ID.

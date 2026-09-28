@@ -108,6 +108,19 @@ describe('useChatSessionsSync', () => {
     expect(closedIds).toEqual(['buffer-chat']);
   });
 
+  it('opens tabs in creation order, not most-recently-active order', () => {
+    const buffers = new Map<string, EditorBuffer>();
+    const { calls } = setup({
+      sessions: [
+        { id: 'newer', created_at: '2026-01-02T00:00:00Z' },
+        { id: 'older', created_at: '2026-01-01T00:00:00Z' },
+      ] as never,
+      activeChatId: 'newer',
+      buffers,
+    });
+    expect(calls.open.map((c) => c.id)).toEqual(['__workspace/chat/older', '__workspace/chat/newer']);
+  });
+
   it('keeps the stand-in while the active chat is unknown', () => {
     const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([

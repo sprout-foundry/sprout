@@ -87,4 +87,17 @@ describe('send held back by another chat (workspace_busy)', () => {
     expect(apiDouble.sendQuery).toHaveBeenLastCalledWith('what codeword?', 'chat-b');
     expect(h.queuedMessagesRef.current).toEqual([]);
   });
+
+  it('stops the chat on screen and notes the stop when nothing had streamed', async () => {
+    apiDouble.stopQuery.mockResolvedValue(undefined);
+    const h = setup();
+    h.getState().messages.push({ id: 'q', type: 'user', content: 'count to 40', timestamp: new Date() } as never);
+
+    await act(async () => {
+      await h.result.current.handleStopProcessing();
+    });
+
+    expect(apiDouble.stopQuery).toHaveBeenCalledWith('chat-b');
+    expect(h.getState().messages.map((m) => m.content)).toEqual(['count to 40', '_Stopped._']);
+  });
 });

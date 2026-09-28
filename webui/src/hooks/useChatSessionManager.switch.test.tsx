@@ -7,13 +7,13 @@ import { useChatSessionManager, type QueuedMessage } from './useChatSessionManag
 const sessions = vi.hoisted(() => ({
   switchChatSession: vi.fn(),
   listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [] }),
+  deleteChatSession: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/api', () => ({ ApiService: { getInstance: () => ({}) } }));
 vi.mock('../services/chatSessions', () => ({
   ...sessions,
   createChatSession: vi.fn(),
-  deleteChatSession: vi.fn(),
   deleteAllChatSessions: vi.fn(),
   renameChatSession: vi.fn(),
   createChatSessionInWorktree: vi.fn(),
@@ -79,5 +79,31 @@ describe('chat switch', () => {
 
     expect(h.getState().activeChatId).toBe('chat-b');
     expect(h.getState().messages.map((m) => m.content)).toEqual(['from B']);
+  });
+
+  it('deleting the chat you are in moves to another chat first, then deletes', async () => {
+    const calls: string[] = [];
+    sessions.listChatSessions.mockResolvedValue({
+      chat_sessions: [
+        { id: 'chat-a', mode: 'code' },
+        { id: 'chat-d', mode: 'design' },
+        { id: 'chat-b', mode: 'code' },
+      ],
+    });
+    sessions.switchChatSession.mockImplementation(async (id: string) => {
+      calls.push(`switch:${id}`);
+      return { active_chat_id: id, chat_session: { messages: [], active_query: false } };
+    });
+    sessions.deleteChatSession.mockImplementation(async (id: string) => {
+      calls.push(`delete:${id}`);
+    });
+    const h = setup();
+
+    await act(async () => {
+      await h.result.current.handleDeleteChat('chat-a');
+    });
+
+    expect(calls).toEqual(['switch:chat-b', 'delete:chat-a']);
+    expect(h.getState().activeChatId).toBe('chat-b');
   });
 });

@@ -1000,6 +1000,30 @@ function makeChatBufferWithId(bufferId: string, chatId: string, overrides: Recor
 }
 
 describe('EditorTabs chat session delete context menu', () => {
+  test('offers "Delete Chat" on the chat you are in, whose tab cannot be closed', () => {
+    const buf = makeChatBufferWithId('buf-chat', 'chat-9', { isClosable: false });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({
+      paneId: 'pane-1',
+      onDeleteChat: vi.fn(),
+      chatSessions: [{ id: 'chat-9', name: 'Chat 9', is_default: false }],
+      defaultChatIds: new Set(['chat-default']),
+    });
+
+    fireContextMenu(container!.querySelector('.tab') as HTMLElement, 100, 200);
+    const labels = getContextMenuElements().flatMap((m) =>
+      Array.from(m.querySelectorAll('.context-menu-item')).map((item) => item.textContent?.trim()),
+    );
+    expect(labels).toContain('Delete Chat');
+    expect(labels).not.toContain('Close');
+  });
+
   test('shows "Delete Chat" for a plain non-default chat and calls onDeleteChat without worktree flag', async () => {
     const buf = makeChatBufferWithId('buf-chat', 'chat-9');
     mockUseEditorManager.mockReturnValue({

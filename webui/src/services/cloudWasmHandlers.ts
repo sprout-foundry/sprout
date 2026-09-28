@@ -6,10 +6,10 @@
  */
 
 import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
-import type { WasmDirEntry, WasmShell } from './wasmShell';
+import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
+import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { workspaceCwdContextLine } from './workspaceCwd';
-import { historyForChat } from './cloudChatSessions';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -1060,6 +1060,10 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   }
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
+  // The chat's transcript records the turn itself, so switching away mid-turn
+  // loses neither the question nor the answer.
+  setChatRunning(chatId, true);
+  recordTurn(chatId, query);
   shell
     .runAgent(
       'platform',
@@ -1096,6 +1100,8 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       JSON.stringify(historyForChat(chatId, query)),
     )
     .then((result) => {
+      setChatRunning(chatId, false);
+      recordTurn(chatId, query, result.response);
       dispatch('query_completed', {
         response: result.response,
         provider: result.provider,
@@ -1103,6 +1109,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       });
     })
     .catch((err) => {
+      setChatRunning(chatId, false);
       const { message, creditsBlocked } = describeAgentError(err instanceof Error ? err.message : String(err));
       dispatch('error', { message });
       if (creditsBlocked) notifyCreditsBlocked(message);

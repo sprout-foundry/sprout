@@ -17,14 +17,58 @@ import type { ChatSession } from './chatSessions';
 import {
   activateCloudSession,
   deleteSession,
+  deserializeMessages,
   getCurrentCloudSessionId,
   listSessions,
   newCloudSessionId,
   restoreSession,
+  saveSession,
   startNewCloudSession,
 } from './cloudSessionStore';
 
 const STORAGE_KEY = 'sprout-cloud-chats';
+
+// Chats whose in-page agent is answering right now (this page only).
+const runningChats = new Set<string>();
+
+/** Mark a chat's agent as answering (or done). */
+export function setChatRunning(chatId: string | null | undefined, running: boolean): void {
+  if (!chatId) return;
+  if (running) runningChats.add(chatId);
+  else runningChats.delete(chatId);
+}
+
+/**
+ * Record a turn in a chat's own transcript, whether or not the chat is on
+ * screen: the question when the query starts, the answer when it finishes.
+ * The query handler owns this so a chat that answers in the background keeps
+ * its answer; the UI's save only ever adds detail (see
+ * useCloudSessionPersistence, which never shrinks a transcript).
+ */
+export function recordTurn(chatId: string | null | undefined, query: string, response?: string): void {
+  if (!chatId || typeof window === 'undefined' || !query.trim()) return;
+  const index = read();
+  const chat = index.chats.find((c) => c.id === chatId);
+  if (!chat) return;
+  const messages = deserializeMessages(restoreSession(chat.session_id)?.messages ?? []);
+  const at = new Date();
+  const same = (a: string, b: string) => a.trim() === b.trim();
+  const last = messages[messages.length - 1];
+  const questionIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].type === 'user') return same(messages[i].content, query) ? i : -1;
+    }
+    return -1;
+  })();
+  if (questionIndex < 0) {
+    messages.push({ id: `cloud-${at.getTime()}-u`, type: 'user', content: query, timestamp: at });
+  }
+  const answered = questionIndex >= 0 && messages.slice(questionIndex + 1).some((m) => m.type === 'assistant');
+  if (response?.trim() && !answered && !(last?.type === 'assistant' && same(last.content, response))) {
+    messages.push({ id: `cloud-${at.getTime()}-a`, type: 'assistant', content: response, timestamp: at });
+  }
+  saveSession(messages, { sessionId: chat.session_id, inBackground: chat.id !== index.active_id });
+}
 
 function jsonOk(data: unknown): Response {
   return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -96,7 +140,7 @@ function toChatSession(chat: StoredChat, index: ChatIndex): ChatSession {
     last_active_at: meta?.last_updated || chat.last_active_at,
     message_count: meta?.message_count ?? 0,
     current_session_id: chat.session_id,
-    active_query: false,
+    active_query: runningChats.has(chat.id),
     is_pinned: false,
     mode: chat.mode,
     is_default: chat.id === index.chats[0]?.id,

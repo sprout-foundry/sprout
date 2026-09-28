@@ -39,7 +39,7 @@ export interface ProjectNavConversations {
   onSelect: (id: string) => void;
   /** Brings the conversation into the main view. */
   onOpen: () => void;
-  /** Whether a chat's agent is currently answering. */
+  /** Whether a chat's agent is currently answering; overrides the list's `active_query`, which can be stale. */
   isWorking?: (id: string) => boolean;
   onCreate?: () => void;
 }
@@ -164,7 +164,7 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
             >
               <MessageSquare size={15} />
               <span>{s.name || 'Untitled'}</span>
-              {(s.active_query || conversations?.isWorking?.(s.id)) && (
+              {(conversations?.isWorking ? conversations.isWorking(s.id) : s.active_query) && (
                 <span className="project-nav-running" title="Working" />
               )}
             </button>

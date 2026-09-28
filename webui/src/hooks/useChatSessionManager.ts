@@ -39,6 +39,20 @@ function extractToolRefsFromContent(content: string): ToolRef[] {
 
 const WORKSPACE_BUSY_RECHECK_MS = 4000;
 
+/**
+ * The server transcript plus local messages it doesn't have yet. A local
+ * message counts as saved when the server copy's tail already holds the same
+ * turn (same role and text).
+ */
+function appendNotYetSaved(saved: Message[], local: Message[]): Message[] {
+  const tail = saved.slice(-Math.max(local.length, 1) * 2);
+  const out = [...saved];
+  for (const m of local) {
+    if (!tail.some((t) => t.type === m.type && t.content.trim() === m.content.trim())) out.push(m);
+  }
+  return out;
+}
+
 export interface QueuedMessage {
   message: string;
   chatId: string | null;
@@ -164,6 +178,7 @@ export function useChatSessionManager({
 
       // Track the expected chat ID to detect stale async responses
       const switchId = id;
+      let shownAtSwitchStart = new Set<string>();
       activeChatIdRef.current = id;
 
       setState((prev) => {
@@ -196,6 +211,7 @@ export function useChatSessionManager({
             }
           : prev.perChatCache;
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
+        shownAtSwitchStart = new Set((cached?.messages ?? []).map((m) => m.id));
         return {
           activeChatId: id,
           messages: cached?.messages ?? [],
@@ -239,14 +255,20 @@ export function useChatSessionManager({
             delete newPerChatCache[id].pendingEvents;
           }
           const finalIsProcessing = backendIsActive;
-          activeRequestsRef.current = finalIsProcessing ? 1 : 0;
+          // A message sent (or an answer streamed) while this switch was in
+          // flight isn't in the server copy yet; dropping it lost the user's
+          // bubble and let the answer run into the previous reply.
+          const addedDuringSwitch = prev.messages.filter((m) => !shownAtSwitchStart.has(m.id));
+          const sentDuringSwitch = addedDuringSwitch.some((m) => m.type === 'user');
+          activeRequestsRef.current = finalIsProcessing || sentDuringSwitch ? 1 : 0;
+          const merged = useBackendMessages ? appendNotYetSaved(backendMessages, addedDuringSwitch) : prev.messages;
           return {
             // The chat the user picked. The response's active_chat_id can
             // already name a chat another tab switched to, which would pair
             // this chat's transcript with another chat's id.
             activeChatId: id,
-            messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
-            isProcessing: finalIsProcessing,
+            messages: useBackendMessages ? trimMessages(merged) : prev.messages,
+            isProcessing: finalIsProcessing || sentDuringSwitch,
             perChatCache: newPerChatCache,
           };
         });

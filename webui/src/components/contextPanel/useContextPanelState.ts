@@ -51,12 +51,18 @@ function loadPersistedWidth(): number {
 export function useContextPanelState(props: ContextPanelProps): UseContextPanelStateReturn {
   const base = props as ContextPanelBaseProps;
 
+  // On tablet the panel is an overlay over the chat; it starts closed there
+  // (opened, it covered half the conversation and the New chat button).
+  const isTabletLayout = !!base.isTabletLayout;
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH) {
       return true;
     }
-    return false;
+    return isTabletLayout;
   });
+  useEffect(() => {
+    if (isTabletLayout) setPanelCollapsed(true);
+  }, [isTabletLayout]);
   // Width is owned here: loaded from localStorage once, persisted on every
   // change. (Previously lifted through ContextSidebar as prop plumbing —
   // two owners for one value.)
@@ -96,8 +102,10 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // The overlay's open/closed state isn't the desktop column preference.
+    if (isTabletLayout) return;
     window.localStorage.setItem(PANEL_COLLAPSED_KEY, panelCollapsed ? '1' : '0');
-  }, [panelCollapsed]);
+  }, [panelCollapsed, isTabletLayout]);
 
   // Persist width on change (single owner — no prop round-trip).
   useEffect(() => {

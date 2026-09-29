@@ -183,6 +183,7 @@ var reattachBufferedEventTypes = map[string]struct{}{
 	events.EventTypeQueryStarted:   {},
 	events.EventTypeQueryProgress:  {},
 	events.EventTypeQueryCompleted: {},
+	events.EventTypeSteerDelivered: {},
 	events.EventTypeStreamChunk:    {},
 	events.EventTypeToolStart:      {},
 	events.EventTypeToolEnd:        {},

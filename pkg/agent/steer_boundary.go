@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	core "github.com/sprout-foundry/seed/core"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // seedInjector is the slice of seed's Agent surface the boundary deliverer
@@ -53,6 +54,7 @@ func (d *steerBoundaryDeliverer) deliverOne() bool {
 	if !ok {
 		return false
 	}
+	sent := content
 	// Stamp the steer message with the active turn's timestamp as it
 	// enters seed's state — same injection-time rule as the turn's query.
 	// The staged copy stays clean so retraction returns the user's text,
@@ -69,6 +71,7 @@ func (d *steerBoundaryDeliverer) deliverOne() bool {
 		return false
 	}
 	agent.commitStagedSteer(id)
+	agent.publishEvent(events.EventTypeSteerDelivered, map[string]interface{}{"content": sent})
 	return true
 }
 

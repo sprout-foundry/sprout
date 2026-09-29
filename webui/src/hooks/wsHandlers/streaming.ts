@@ -6,6 +6,7 @@ import { toQueryProgress } from '../../types/app';
 import { ensureCompletedAssistantMessage } from '../../utils/chatCompletion';
 import { debugLog } from '../../utils/log';
 import { appendCappedLog } from '../../utils/logCap';
+import { abovePendingSteers, deliverOldestSteer } from '../../utils/pendingSteer';
 import { generateMessageId } from '../../utils/messageId';
 import { trimMessages } from '../../utils/messageWindow';
 import { createLogEntry, type EventHandlerContext, lastPrimaryAssistantIndex } from '../webSocketEventHelpers';
@@ -49,24 +50,22 @@ export const handleQueryStarted = (ctx: EventHandlerContext): void => {
     // Avoid duplicating the user message: handleSendMessage may have already
     // added it optimistically (e.g. for concurrent queries). Only add if the
     // last message is not already a user message with the same content.
-    const lastMsg = prev.messages[prev.messages.length - 1];
-    const alreadyPresent =
-      lastMsg != null &&
-      lastMsg.type === 'user' &&
-      (lastMsg.content === startedDisplay || lastMsg.content === startedQuery);
+    const withQuestion = (body: Message[]): Message[] => {
+      const lastMsg = body[body.length - 1];
+      const alreadyPresent =
+        lastMsg != null &&
+        lastMsg.type === 'user' &&
+        (lastMsg.content === startedDisplay || lastMsg.content === startedQuery);
+      return alreadyPresent
+        ? body
+        : [...body, { id: generateMessageId(), type: 'user', content: startedDisplay, timestamp: new Date() }];
+    };
 
     return {
       isProcessing: true,
       lastError: null,
       queryCount: prev.queryCount + 1,
-      messages: isClearCommand
-        ? prev.messages
-        : alreadyPresent
-          ? prev.messages
-          : [
-              ...prev.messages,
-              { id: generateMessageId(), type: 'user', content: startedDisplay, timestamp: new Date() },
-            ],
+      messages: isClearCommand ? prev.messages : abovePendingSteers(prev.messages, withQuestion),
       // Preserve historical tool executions across turns. Wiping the array
       // here (the original behavior) broke two visible features: (a)
       // MessageSegments badges on past turns lost their status lookup and
@@ -123,6 +122,41 @@ export interface StreamFlusher {
   discard: () => void;
 }
 
+/** Append streamed text/reasoning to the run's answer, starting one if needed. */
+function appendStreamed(body: Message[], pending: PendingStreamChunks): Message[] {
+  const newMessages = [...body];
+  const lastMessage = newMessages[newMessages.length - 1];
+  // An inline subagent-run message (isSubagentRun) is never a valid
+  // append target for primary-agent chunks: its content is rendered
+  // inside the subagent's collapsible block. Create a fresh primary
+  // assistant message instead.
+  const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
+  if (canAppendToLast) {
+    if (pending.reasoning) {
+      newMessages[newMessages.length - 1] = {
+        ...lastMessage,
+        reasoning: (lastMessage.reasoning || '') + pending.reasoning,
+      };
+    }
+    if (pending.text) {
+      newMessages[newMessages.length - 1] = {
+        ...newMessages[newMessages.length - 1],
+        content: newMessages[newMessages.length - 1].content + pending.text,
+      };
+    }
+  } else {
+    const newMsg: Message = {
+      id: generateMessageId(),
+      type: 'assistant',
+      content: pending.text,
+      timestamp: new Date(),
+    };
+    if (pending.reasoning) newMsg.reasoning = pending.reasoning;
+    newMessages.push(newMsg);
+  }
+  return newMessages;
+}
+
 /**
  * Build the stream-chunk buffer. Flush appends the buffered text into
  * state using the same append-or-create logic as the old direct path.
@@ -149,39 +183,7 @@ export const makeStreamFlusher = (
     if (pending.chatId !== undefined && activeChatIdRef.current && pending.chatId !== activeChatIdRef.current) {
       return;
     }
-    setState((prev) => {
-      const newMessages = [...prev.messages];
-      const lastMessage = newMessages[newMessages.length - 1];
-      // An inline subagent-run message (isSubagentRun) is never a valid
-      // append target for primary-agent chunks: its content is rendered
-      // inside the subagent's collapsible block. Create a fresh primary
-      // assistant message instead.
-      const canAppendToLast = lastMessage != null && lastMessage.type === 'assistant' && !lastMessage.isSubagentRun;
-      if (canAppendToLast) {
-        if (pending.reasoning) {
-          newMessages[newMessages.length - 1] = {
-            ...lastMessage,
-            reasoning: (lastMessage.reasoning || '') + pending.reasoning,
-          };
-        }
-        if (pending.text) {
-          newMessages[newMessages.length - 1] = {
-            ...newMessages[newMessages.length - 1],
-            content: newMessages[newMessages.length - 1].content + pending.text,
-          };
-        }
-      } else {
-        const newMsg: Message = {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: pending.text,
-          timestamp: new Date(),
-        };
-        if (pending.reasoning) newMsg.reasoning = pending.reasoning;
-        newMessages.push(newMsg);
-      }
-      return { messages: newMessages };
-    });
+    setState((prev) => ({ messages: abovePendingSteers(prev.messages, (body) => appendStreamed(body, pending)) }));
   };
 
   const buffer = (chunkContent: string, chunkType: string, chatId: string | undefined): void => {
@@ -231,6 +233,48 @@ export const handleStreamChunk = (ctx: EventHandlerContext, streamFlusher: Strea
   streamFlusher.buffer(chunkContent, chunkType, eventChatId);
 };
 
+/** The run's closing touches on its answer: the final text, reasoning cleanup and per-turn cost. */
+function finishTurnMessages(
+  body: Message[],
+  completedResponse: QueryCompletedData['response'],
+  tokensUsed: number | undefined,
+  cost: number | undefined,
+): Message[] {
+  let nextMessages = ensureCompletedAssistantMessage(body, completedResponse, (responseText) => ({
+    id: generateMessageId(),
+    type: 'assistant',
+    content: responseText,
+    timestamp: new Date(),
+  }));
+
+  if (nextMessages.length > 0) {
+    const lastMsg = nextMessages[nextMessages.length - 1] as Message;
+    if (
+      lastMsg.type === 'assistant' &&
+      !lastMsg.isSubagentRun &&
+      lastMsg.reasoning?.trim() &&
+      lastMsg.content?.trim() &&
+      lastMsg.content === lastMsg.reasoning
+    ) {
+      nextMessages = [...nextMessages.slice(0, -1), { ...lastMsg, reasoning: undefined }];
+    }
+  }
+
+  // SP-053-perTurnCost: annotate the turn's primary assistant message with
+  // per-turn cost. Never an inline subagent-run message — the cost belongs
+  // to the primary turn, not the delegated run.
+  if (tokensUsed != null || cost != null) {
+    const idx = lastPrimaryAssistantIndex(nextMessages);
+    if (idx >= 0) {
+      const annotated: Message = { ...nextMessages[idx] };
+      if (tokensUsed != null) annotated.tokensUsed = tokensUsed;
+      if (cost != null) annotated.cost = cost;
+      nextMessages = [...nextMessages.slice(0, idx), annotated, ...nextMessages.slice(idx + 1)];
+    }
+  }
+  return nextMessages;
+}
+
 // Handle query_completed event
 export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   const { event, setState, activeRequestsRef } = ctx;
@@ -269,38 +313,7 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   setState((prev) => {
     let nextMessages = wasClearCommand
       ? []
-      : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
-          id: generateMessageId(),
-          type: 'assistant',
-          content: responseText,
-          timestamp: new Date(),
-        }));
-
-    if (!wasClearCommand && nextMessages.length > 0) {
-      const lastMsg = nextMessages[nextMessages.length - 1] as Message;
-      if (
-        lastMsg.type === 'assistant' &&
-        !lastMsg.isSubagentRun &&
-        lastMsg.reasoning?.trim() &&
-        lastMsg.content?.trim() &&
-        lastMsg.content === lastMsg.reasoning
-      ) {
-        nextMessages = [...nextMessages.slice(0, -1), { ...lastMsg, reasoning: undefined }];
-      }
-    }
-
-    // SP-053-perTurnCost: annotate the turn's primary assistant message with
-    // per-turn cost. Never an inline subagent-run message — the cost belongs
-    // to the primary turn, not the delegated run.
-    if (!wasClearCommand && (tokensUsed != null || cost != null)) {
-      const idx = lastPrimaryAssistantIndex(nextMessages);
-      if (idx >= 0) {
-        const annotated: Message = { ...nextMessages[idx] };
-        if (tokensUsed != null) annotated.tokensUsed = tokensUsed;
-        if (cost != null) annotated.cost = cost;
-        nextMessages = [...nextMessages.slice(0, idx), annotated, ...nextMessages.slice(idx + 1)];
-      }
-    }
+      : abovePendingSteers(prev.messages, (body) => finishTurnMessages(body, completedResponse, tokensUsed, cost));
 
     if (!wasClearCommand) nextMessages = trimMessages(nextMessages);
 
@@ -330,4 +343,10 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   debugLog('[OK] Query completed');
   // SP-070-4: desktop notification when tab is backgrounded
   notifyIfHidden('Sprout', 'Task complete');
+};
+
+// Handle steer_delivered: the oldest pending steer reached the model, so the
+// run's output from here on follows it.
+export const handleSteerDelivered = (ctx: EventHandlerContext): void => {
+  ctx.setState((prev) => ({ messages: deliverOldestSteer(prev.messages) }));
 };

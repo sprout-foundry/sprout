@@ -3,6 +3,7 @@ import type { Message, SubagentActivity, ToolExecution } from '@sprout/ui';
 import { debugLog } from '../../utils/log';
 import { appendCappedLog } from '../../utils/logCap';
 import { generateMessageId } from '../../utils/messageId';
+import { abovePendingSteers } from '../../utils/pendingSteer';
 import { createLogEntry, type EventHandlerContext, getToolCallId } from '../webSocketEventHelpers';
 
 // Handle tool_start event
@@ -35,31 +36,39 @@ export const handleToolStart = (ctx: EventHandlerContext): void => {
     // subagent run, attach the marker to a fresh primary assistant message
     // instead (mirrors the start-of-turn case where streaming will append
     // into it).
-    const lastMsg = prev.messages[prev.messages.length - 1];
-    let messagesWithToolMarker: Message[];
-    // A turn that opens with a tool call has no assistant message yet (the
-    // last message is the user's); start one so the tool lands in this turn
-    // rather than on the previous turn's answer.
-    const turnHasNoAnswerYet = !!lastMsg && lastMsg.type === 'user';
-    if (lastMsg && ((lastMsg.type === 'assistant' && lastMsg.isSubagentRun) || turnHasNoAnswerYet)) {
-      messagesWithToolMarker = [
-        ...prev.messages,
-        {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: '\n[executing tool [' + toolName + ']]\n',
-          timestamp: new Date(),
-        },
-      ];
-    } else {
-      messagesWithToolMarker = prev.messages.map((msg, idx) => {
-        if (idx === prev.messages.length - 1 && msg.type === 'assistant') {
-          const trimmed = msg.content.replace(/\n+$/, '');
-          return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
-        }
-        return msg;
-      });
-    }
+    const placeTool = (body: Message[], toolId: string): Message[] => {
+      const messages = [...withToolMarker(body)];
+      addToolRefToMessage(messages, toolId);
+      return messages;
+    };
+    const withToolMarker = (body: Message[]): Message[] => {
+      const lastMsg = body[body.length - 1];
+      let messagesWithToolMarker: Message[];
+      // A turn that opens with a tool call has no assistant message yet (the
+      // last message is the user's); start one so the tool lands in this turn
+      // rather than on the previous turn's answer.
+      const turnHasNoAnswerYet = !!lastMsg && lastMsg.type === 'user';
+      if (lastMsg && ((lastMsg.type === 'assistant' && lastMsg.isSubagentRun) || turnHasNoAnswerYet)) {
+        messagesWithToolMarker = [
+          ...body,
+          {
+            id: generateMessageId(),
+            type: 'assistant',
+            content: '\n[executing tool [' + toolName + ']]\n',
+            timestamp: new Date(),
+          },
+        ];
+      } else {
+        messagesWithToolMarker = body.map((msg, idx) => {
+          if (idx === body.length - 1 && msg.type === 'assistant') {
+            const trimmed = msg.content.replace(/\n+$/, '');
+            return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
+          }
+          return msg;
+        });
+      }
+      return messagesWithToolMarker;
+    };
 
     const existingIdx = prev.toolExecutions.findIndex((t) => (getToolCallId(t.details) || t.id) === toolCallID);
     const addToolRefToMessage = (messages: Message[], toolId: string) => {
@@ -93,8 +102,7 @@ export const handleToolStart = (ctx: EventHandlerContext): void => {
         subagentType: updated[existingIdx].subagentType || subagentType,
         depth: updated[existingIdx].depth ?? (depth > 0 ? depth : undefined),
       };
-      const messages = [...messagesWithToolMarker];
-      addToolRefToMessage(messages, updated[existingIdx].id);
+      const messages = abovePendingSteers(prev.messages, (body) => placeTool(body, updated[existingIdx].id));
       return { messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
     }
 
@@ -111,8 +119,7 @@ export const handleToolStart = (ctx: EventHandlerContext): void => {
       depth: depth > 0 ? depth : undefined,
       queryId: prev.queryCount,
     };
-    const messages = [...messagesWithToolMarker];
-    addToolRefToMessage(messages, newTool.id);
+    const messages = abovePendingSteers(prev.messages, (body) => placeTool(body, newTool.id));
     return { messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });
   debugLog('[tool] Tool start:', data.tool_name);
@@ -168,12 +175,14 @@ export const handleToolEnd = (ctx: EventHandlerContext): void => {
       };
     }
 
-    const messagesAfterTool = prev.messages.map((msg, idx) => {
-      if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
-        return { ...msg, content: msg.content + '\n' };
-      }
-      return msg;
-    });
+    const messagesAfterTool = abovePendingSteers(prev.messages, (body) =>
+      body.map((msg, idx) => {
+        if (idx === body.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
+          return { ...msg, content: msg.content + '\n' };
+        }
+        return msg;
+      }),
+    );
     return {
       messages: messagesAfterTool,
       toolExecutions: updatedExecutions,

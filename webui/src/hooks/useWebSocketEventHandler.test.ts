@@ -62,6 +62,7 @@ vi.mock('../services/lspClientService', () => ({
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { useWebSocketEventHandler, type UseWebSocketEventHandlerRefs } from './useWebSocketEventHandler';
 import type { WsEvent } from '@sprout/events';
+import { requestChatReplay } from '../utils/chatReplay';
 
 // ---------------------------------------------------------------------------
 // Minimal state (mirrors AppStore fields used by the handler)
@@ -480,6 +481,43 @@ describe('chat_run_restored', () => {
     });
     expect(reloads).toHaveLength(0);
     cleanup();
+  });
+});
+
+describe('replaying background events for a chat', () => {
+  function setup(activeChatId: string) {
+    const stateHolder = { current: { ...createDefaultState(), messages: [] as unknown[], activeChatId } };
+    const setStateMock = vi.fn((updater: unknown) => {
+      const prev = stateHolder.current;
+      stateHolder.current = { ...prev, ...((updater as (p: unknown) => object)(prev) as object) };
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: activeChatId };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    return stateHolder;
+  }
+
+  it('applies the events, in order, to the chat now on screen', () => {
+    const state = setup('chat-a');
+    act(() => {
+      requestChatReplay('chat-a', [
+        { type: 'query_started', data: { chat_id: 'chat-a', query: 'Run the build' } },
+        { type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: 'Build ' } },
+        { type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: 'passed.' } },
+        { type: 'query_completed', data: { chat_id: 'chat-a', query: 'Run the build', response: 'Build passed.' } },
+      ] as never);
+    });
+    const messages = state.current.messages as Array<{ type: string; content: string }>;
+    expect(messages.map((m) => `${m.type}:${m.content}`)).toEqual(['user:Run the build', 'assistant:Build passed.']);
+  });
+
+  it('ignores a replay for a chat that is not on screen', () => {
+    const state = setup('chat-a');
+    act(() => {
+      requestChatReplay('chat-b', [{ type: 'query_started', data: { chat_id: 'chat-b', query: 'x' } }] as never);
+    });
+    expect(state.current.messages).toEqual([]);
   });
 });
 

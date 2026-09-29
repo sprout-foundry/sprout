@@ -6,6 +6,7 @@ import { emitAutomate, type AutomateEventType, type AutomateEventPayload } from 
 import { fetchChatSessionMessages } from '../services/chatSessions';
 import { getServerErrorCode } from '../services/errorCodes';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
+import { onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { trimMessages } from '../utils/messageWindow';
@@ -245,7 +246,9 @@ export function useWebSocketEventHandler({
               ...prev.perChatCache,
               [eventChatId]: {
                 ...existingCache,
-                pendingEvents: [...pendingEvents, event].slice(-200),
+                pendingEvents: [...pendingEvents, event].slice(-PENDING_EVENTS_CAP),
+                pendingEventsTruncated:
+                  existingCache.pendingEventsTruncated || pendingEvents.length >= PENDING_EVENTS_CAP || undefined,
                 lastError: cachedLastError,
               },
             },
@@ -454,6 +457,17 @@ export function useWebSocketEventHandler({
         setState((prev) => ({ ...prev, lastError: null }));
       });
   }, [apiService, activeRequestsRef, setState]);
+
+  // Events a chat received in the background, replayed when it comes back on
+  // screen: the cached state plus these is exactly its current state.
+  useEffect(
+    () =>
+      onChatReplay((chatId, events) => {
+        if (activeChatIdRef.current !== chatId) return;
+        for (const event of events) handleEvent(event);
+      }),
+    [handleEvent, activeChatIdRef],
+  );
 
   return { handleEvent, handleReconnect };
 }

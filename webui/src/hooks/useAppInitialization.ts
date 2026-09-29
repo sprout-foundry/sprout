@@ -24,7 +24,9 @@ import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
+import type { WsEvent } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
+import { WebSocketService } from '../services/websocket';
 import { debugLog, useLog } from '../utils/log';
 import { decideBootRestore, writeChatModePin } from '../workspaces/useChatModePinning';
 
@@ -236,8 +238,11 @@ export function useAppInitialization({
       // events use. This makes agent responses render in the chat UI.
       if (isCloud) {
         import('../services/cloudWasmHandlers').then(({ setAgentEventDispatcher }) => {
+          // Through the event bus, not straight to handleEvent: other
+          // listeners (the git panel's refresh after an agent edit) missed
+          // every hosted event.
           setAgentEventDispatcher((event) => {
-            handleEvent(event as SproutEvent);
+            WebSocketService.getInstance().deliverLocal(event as WsEvent);
           });
         });
       }

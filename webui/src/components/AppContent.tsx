@@ -144,7 +144,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onStopProcessing,
   onRetractSteer,
   queuedMessages,
-  queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -903,17 +902,47 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeChatId, isForking, setAppState],
   );
 
+  // The queue holds every chat's held-back messages; the composer shows (and
+  // edits) only this chat's, so its actions translate back to queue positions.
+  const chatQueue = useMemo(() => {
+    const positions: number[] = [];
+    queuedMessages.forEach((entry, i) => {
+      if (!entry.chatId || entry.chatId === activeChatId) positions.push(i);
+    });
+    return {
+      messages: positions.map((i) => queuedMessages[i].message),
+      remove: (index: number) => {
+        if (positions[index] !== undefined) onQueueMessageRemove(positions[index]);
+      },
+      edit: (index: number, text: string) => {
+        if (positions[index] !== undefined) onQueueMessageEdit(positions[index], text);
+      },
+      reorder: (from: number, to: number) => {
+        if (positions[from] !== undefined && positions[to] !== undefined) {
+          onQueueReorder(positions[from], positions[to]);
+        }
+      },
+      clear: () => {
+        if (positions.length === queuedMessages.length) {
+          onClearQueuedMessages();
+          return;
+        }
+        for (const i of [...positions].reverse()) onQueueMessageRemove(i);
+      },
+    };
+  }, [queuedMessages, activeChatId, onQueueMessageRemove, onQueueMessageEdit, onQueueReorder, onClearQueuedMessages]);
+
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
       onSendMessage: sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages: queuedMessages.map((entry) => entry.message),
-      queuedMessagesCount,
+      onQueueMessageRemove: chatQueue.remove,
+      onQueueMessageEdit: chatQueue.edit,
+      onQueueReorder: chatQueue.reorder,
+      onClearQueuedMessages: chatQueue.clear,
+      queuedMessages: chatQueue.messages,
+      queuedMessagesCount: chatQueue.messages.length,
       inputValue,
       onInputChange: setInputValue,
       isProcessing: state.isProcessing,
@@ -952,12 +981,7 @@ const AppContent: React.FC<AppContentProps> = ({
       state.messages,
       sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages,
-      queuedMessagesCount,
+      chatQueue,
       inputValue,
       setInputValue,
       state.isProcessing,

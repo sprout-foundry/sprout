@@ -2,8 +2,11 @@ package console
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // outputMu serializes terminal-chrome writes (InputReader render, status
@@ -148,4 +151,38 @@ func (ir *InputReader) printExternalLocked(msg string) {
 	ir.currentPhysicalLine = 0
 	ir.lastWrapPending = false
 	ir.refreshLocked()
+}
+
+// PrintLine writes a finished line of background output. With a prompt or
+// steer panel on screen it goes through PrintExternal, since a bare write
+// lands on the prompt row and leaves the cursor where the editor no longer
+// expects it; otherwise it is written to stderr as before.
+func PrintLine(line string) {
+	printBackground(line, os.Stderr)
+}
+
+func printBackground(line string, fallback *os.File) {
+	if !strings.HasSuffix(line, "\n") {
+		line += "\n"
+	}
+	if promptOnScreen() {
+		PrintExternal(line)
+		return
+	}
+	fmt.Fprint(fallback, line)
+}
+
+// promptOnScreen reports whether an input or steer reader owns the prompt
+// row. If the output lock is held the caller is mid-redraw; report false so
+// the write goes straight out rather than deadlocking on the lock.
+func promptOnScreen() bool {
+	if !outputMu.TryLock() {
+		return false
+	}
+	defer outputMu.Unlock()
+	return activeSteerReader != nil || activeInputReader != nil
+}
+
+func init() {
+	utils.SetProcessStepSink(func(line string) { printBackground(line, os.Stdout) })
 }

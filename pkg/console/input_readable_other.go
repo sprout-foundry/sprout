@@ -1,4 +1,4 @@
-//go:build !unix || js
+//go:build !unix && !windows
 
 package console
 

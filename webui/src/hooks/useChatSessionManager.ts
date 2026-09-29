@@ -19,6 +19,7 @@ import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
+import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
 function extractToolRefsFromContent(content: string): ToolRef[] {
@@ -538,15 +539,7 @@ export function useChatSessionManager({
         const bubbleId = generateMessageId();
         setState((prev) => ({
           lastError: null,
-          messages: trimMessages([
-            ...prev.messages,
-            {
-              id: bubbleId,
-              type: 'user',
-              content: trimmedMessage,
-              timestamp: new Date(),
-            },
-          ]),
+          messages: trimMessages([...prev.messages, pendingSteerBubble(bubbleId, trimmedMessage)]),
         }));
         await apiService.steerQuery(trimmedMessage, targetChatId);
         // Remember the steer for possible retraction via Up-arrow.
@@ -617,7 +610,14 @@ export function useChatSessionManager({
           debugLog('[chat] backend reports query in progress — steering instead');
           // Counter was already incremented before the send attempt and the
           // backend query is still active — keep it at 1, don't double-count.
-          setState((prev) => ({ isProcessing: true, lastError: null }));
+          setState((prev) => ({
+            isProcessing: true,
+            lastError: null,
+            messages: [
+              ...prev.messages.filter((m) => m.id !== userBubbleId),
+              ...prev.messages.filter((m) => m.id === userBubbleId).map(markSteerPending),
+            ],
+          }));
           try {
             await apiService.steerQuery(trimmedMessage, targetChatId);
             lastSteerMessageRef.current = trimmedMessage;

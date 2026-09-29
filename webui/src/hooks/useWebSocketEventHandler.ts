@@ -47,6 +47,7 @@ import {
 } from './wsHandlers/session';
 import {
   handleQueryCompleted,
+  handleSteerDelivered,
   handleQueryProgress,
   handleQueryStarted,
   handleStreamChunk,
@@ -183,6 +184,7 @@ export function useWebSocketEventHandler({
         'stream_chunk',
         'query_completed',
         'query_progress',
+        'steer_delivered',
         'tool_start',
         'tool_end',
         'todo_update',
@@ -284,6 +286,8 @@ export function useWebSocketEventHandler({
           return handleStreamChunk(ctx, streamFlusher);
         case 'query_completed':
           return handleQueryCompleted(ctx);
+        case 'steer_delivered':
+          return handleSteerDelivered(ctx);
         case 'tool_start':
           return handleToolStart(ctx);
         case 'tool_end':

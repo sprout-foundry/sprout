@@ -392,3 +392,15 @@ export function loadSavedPaneSizes(): PaneSize | null {
 export function loadChatPanePlacement(): Record<string, string> {
   return readJSON<Record<string, string>>(getChatPanesStorageKey()) ?? {};
 }
+
+const TAB_ORDER_BASE_KEY = 'sprout.editor.tabOrder';
+
+/** Tab order (buffer paths, files and chats alike), per workspace. */
+export function getTabOrderStorageKey(): string {
+  return `${TAB_ORDER_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
+
+export function loadTabOrder(): string[] | null {
+  const order = readJSON<string[]>(getTabOrderStorageKey());
+  return Array.isArray(order) ? order : null;
+}

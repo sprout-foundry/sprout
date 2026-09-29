@@ -1,156 +1,26 @@
-// Package agent: unified risk assessment — the *Agent orchestrator
-// (SP-141 phase 3, increment 4). The RiskAssessment vocabulary and the
-// pure decision helpers live in pkg/agent/approvals (risk_assessment.go,
-// git_command_gates.go); this file keeps the ResolveToolRisk *Agent
-// method that folds all security inputs onto the Low/Medium/High/Critical
-// scale. The risk_assessment_forwarders.go file aliases the moved
-// identifiers so call sites elsewhere in pkg/agent are unchanged.
+// Package agent: unified risk assessment — the *Agent forwarder
+// (SP-141 phase 3, increment 6). The resolver implementation
+// (approvals.ResolveToolRisk) and the RiskAgent seam live in
+// pkg/agent/approvals (risk_resolver.go, risk_agent.go); this file keeps
+// the *Agent method used by the tool-security gates, the seed-time
+// security checks, and the shell handler.
+//
+// Behavior preservation: the pre-move body was nil-*Agent-safe (it
+// skipped every agent-coupled input and returned the classifier-only
+// assessment). A nil *Agent boxed into the RiskAgent interface is
+// non-nil, so that guard stays here.
 package agent
 
 import (
-	"fmt"
-
+	"github.com/sprout-foundry/sprout/pkg/agent/approvals"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/shelltext"
 )
 
 // ResolveToolRisk produces the unified risk assessment for a tool call by
 // folding all security inputs onto the Low/Medium/High/Critical scale.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
-	// 1. Static classifier (always), workspace-augmented for shell commands
-	var wsRoot string
-	if a != nil {
-		wsRoot = a.GetWorkspaceRoot()
+	if a == nil {
+		return assessmentFromClassifier(tools.ClassifyToolCallWithWorkspace(toolName, args, ""))
 	}
-	secResult := tools.ClassifyToolCallWithWorkspace(toolName, args, wsRoot)
-	assessment := assessmentFromClassifier(secResult)
-
-	// Downgrade privileged commands when a password prompter is registered.
-	if toolName == "shell_command" && a != nil && a.HasPasswordPrompter() {
-		if secResult.Category == tools.RiskCategoryPrivileged && assessment.Level.Rank() >= configuration.RiskLevelHigh.Rank() {
-			assessment.Level = configuration.RiskLevelMedium
-			assessment.IsHardBlock = false
-			assessment.Sources = append(assessment.Sources, RiskSourcePasswordPrompter)
-			assessment.Reason = "privileged command allowed with password prompter (sudo/passwd will prompt for password)"
-		}
-	}
-
-	// 2. Persona cascade (shell_command only)
-	if toolName == "shell_command" && a != nil {
-		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			level := a.EvaluateOperationRisk(cmd)
-			assessment = assessment.Combine(
-				assessmentFromPersonaCascade(level, fmt.Sprintf("persona/profile risk cascade: %s", level)),
-			)
-
-			// 3. Git history-rewrite gate (promptable, not a hard block).
-			// Rebase is unconditionally banned; --abort is the only permitted form.
-			if shelltext.IsGitHistoryRewriteCommand(cmd) {
-				if isGitRebaseCommand(cmd) {
-					assessment = assessment.Combine(
-						RiskAssessment{
-							Level:       configuration.RiskLevelCritical,
-							IsHardBlock: true,
-							Sources:     []RiskSource{RiskSourceGitRebase},
-							Reason:      "git rebase is banned by AGENTS.md (all forms: interactive, --continue, --skip, `git pull --rebase`); use `git merge` to integrate upstream. The only permitted invocation is `git rebase --abort` for recovery.",
-						},
-					)
-				} else {
-					cfg := a.GetConfig()
-					if cfg == nil || !cfg.AllowGitHistoryRewrite {
-						assessment = assessment.Combine(
-							RiskAssessment{
-								Level:   configuration.RiskLevelHigh,
-								Sources: []RiskSource{RiskSourceGitHistoryRewrite},
-								Reason:  "git history-rewrite operation requires approval",
-							},
-						)
-					}
-				}
-			}
-
-			// 4. Git write gate
-			if isGitWriteCommand(cmd) && !a.isGitWriteAllowed() {
-				assessment = assessment.Combine(
-					RiskAssessment{
-						Level:   configuration.RiskLevelHigh,
-						Sources: []RiskSource{RiskSourceGitWrite},
-						Reason:  "git write operation not allowed for current persona",
-					},
-				)
-			}
-
-			// 6. Workspace security policy
-			if cfg := a.GetConfig(); cfg != nil && cfg.SecurityPolicy != nil {
-				policyAction := cfg.SecurityPolicy.Evaluate(cmd)
-				switch policyAction {
-				case configuration.PolicyDeny:
-					assessment = assessment.Combine(
-						RiskAssessment{
-							Level:       configuration.RiskLevelCritical,
-							IsHardBlock: true,
-							Sources:     []RiskSource{RiskSourceWorkspacePolicy},
-							Reason:      "workspace security policy denies this command",
-						},
-					)
-				case configuration.PolicyPrompt:
-					if assessment.Level.Rank() <= configuration.RiskLevelLow.Rank() {
-						assessment = assessment.Combine(
-							RiskAssessment{
-								Level:   configuration.RiskLevelMedium,
-								Sources: []RiskSource{RiskSourceWorkspacePolicy},
-								Reason:  "workspace security policy requires prompt for this command",
-							},
-						)
-					}
-				}
-			}
-		}
-	}
-
-	// 5. Filesystem path-tier (file tools). Only write tools contribute risk.
-	if (toolName == "write_file" || toolName == "edit_file" ||
-		toolName == "write_structured_file" || toolName == "patch_structured_file" ||
-		toolName == "read_file") && a != nil {
-		if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
-			home := detectHomeDir()
-			tier := ClassifyPathAccess(pathRaw, a.GetWorkspaceRoot(), home, a.effectiveCwd())
-			assessment.PathTier = tier
-			assessment.FileMode = accessModeForTool(toolName)
-
-			isWriteTool := toolName == "write_file" || toolName == "edit_file" ||
-				toolName == "write_structured_file" || toolName == "patch_structured_file"
-
-			if isWriteTool {
-				switch tier {
-				case PathTierSensitive:
-					assessment = assessment.Combine(
-						RiskAssessment{
-							Level:   configuration.RiskLevelHigh,
-							Sources: []RiskSource{RiskSourceFSTier},
-							Reason:  fmt.Sprintf("path %s is in a sensitive filesystem tier", pathRaw),
-						},
-					)
-				case PathTierExternal:
-					// Session-scoped folder allowlist: skip if user already approved this folder.
-					if a.IsFolderSessionAllowed(pathRaw) {
-						if a.debug {
-							a.debugLog("[risk] %s path %s is under a session-allowed folder — skipping external-tier Medium contribution\n", toolName, pathRaw)
-						}
-					} else {
-						assessment = assessment.Combine(
-							RiskAssessment{
-								Level:   configuration.RiskLevelMedium,
-								Sources: []RiskSource{RiskSourceFSTier},
-								Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
-							},
-						)
-					}
-				}
-			}
-		}
-	}
-
-	return assessment
+	return approvals.ResolveToolRisk(a, toolName, args)
 }

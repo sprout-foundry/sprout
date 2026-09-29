@@ -143,7 +143,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 		// Activation notice: emit a one-time stderr line when the user set a cap below the native window.
 		effectiveCap := agent.effectiveCapSnapshot()
-		if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
+		if printsTerminalNotices && cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 &&
 			effectiveCap > 0 &&
 			effectiveCap < nativeWindow {
 			_, _ = fmt.Fprintf(os.Stderr,
@@ -160,11 +160,13 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			// Show a one-time notice only when LCM was auto-detected, not when explicitly configured.
 			explicit := cfg != nil && cfg.ContextMode == configuration.ContextModeLowContext
 			if !explicit {
-				_, _ = fmt.Fprintf(os.Stderr,
-					"⚠ %dK context detected — Low-Context Mode active\n"+
-						"  %d tools, lite prompt, AGENTS.md kept\n"+
-						"  Set context_mode: \"full\" in config to override, or /model to switch.\n",
-					agent.state.GetMaxContextTokens()/1000, len(profile.ToolAllowlist))
+				if printsTerminalNotices {
+					_, _ = fmt.Fprintf(os.Stderr,
+						"⚠ %dK context detected — Low-Context Mode active\n"+
+							"  %d tools, lite prompt, AGENTS.md kept\n"+
+							"  Set context_mode: \"full\" in config to override, or /model to switch.\n",
+						agent.state.GetMaxContextTokens()/1000, len(profile.ToolAllowlist))
+				}
 			} else if params.debug {
 				_, _ = fmt.Fprintf(os.Stderr,
 					"[low-context] explicit config: tools=%d prompt=%s trigger=%.2f\n",

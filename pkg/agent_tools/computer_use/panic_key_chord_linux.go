@@ -3,98 +3,100 @@
 package computer_use
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os/exec"
-	"sync"
-	"time"
+	"os"
+
+	"github.com/jezek/xgb"
+	"github.com/jezek/xgb/xproto"
 )
 
-// xdotoolChordWatcher is a Linux chord watcher that verifies X11 availability
-// via xdotool. Because xdotool does not expose a "is key X currently pressed"
-// query (that requires XKB extension access via CGO), this watcher keeps a
-// background polling loop alive so that Stop() has something to cancel.
-//
-// NOTE: Full keyboard-state polling on X11 requires either CGO with XKB or a
-// separate key-binding daemon (sxhkd, kglobalaccel). The WebUI Stop button
-// remains the primary trigger path; this watcher exists so that the
-// registration contract is satisfied and the panic key still works
-// programmatically via TriggerPanicKey().
-//
-// On headless Linux (no DISPLAY or xdotool missing), Start() returns a
-// recognizable error so callers can log and continue.
-type xdotoolChordWatcher struct {
-	keys []string
-
-	mu      sync.Mutex
-	cancel  context.CancelFunc
-	stopped chan struct{}
-}
-
-// Compile-time check: *xdotoolChordWatcher implements ChordWatcher.
-var _ ChordWatcher = (*xdotoolChordWatcher)(nil)
-
 func newPlatformWatcher(keys []string) ChordWatcher {
-	return &xdotoolChordWatcher{keys: keys}
+	return &pollingChordWatcher{keys: keys, open: openX11KeyReader}
 }
 
-func (w *xdotoolChordWatcher) Start(ctx context.Context) error {
-	w.mu.Lock()
-	w.stopped = make(chan struct{})
-	w.mu.Unlock()
+// x11KeyReader reads the keyboard through the X server, so it sees keys on
+// X11 sessions and on XWayland; a pure Wayland compositor gives no client a
+// global keyboard view.
+type x11KeyReader struct {
+	conn     *xgb.Conn
+	byKeysym map[xproto.Keysym][]int
+}
 
-	if len(w.keys) == 0 {
-		return nil
+func openX11KeyReader() (keyReader, error) {
+	if os.Getenv("DISPLAY") == "" {
+		return nil, errors.New("panic-key chord needs an X11 display (DISPLAY is unset)")
 	}
-	log.Printf("[computer-use] panic-key chord %s is configured, but chord detection is not implemented yet — stop the agent to halt computer use", formatChordForLog(w.keys))
-	if _, err := exec.LookPath("xdotool"); err != nil {
-		return errMissingHelper("xdotool")
+	conn, err := xgb.NewConn()
+	if err != nil {
+		return nil, fmt.Errorf("connecting to the X server: %w", err)
 	}
-
-	// Verify X server is reachable. xdotool getactivewindow exits non-zero
-	// when DISPLAY is unset or no compositor is running.
-	if err := exec.CommandContext(ctx, "xdotool", "getactivewindow").Run(); err != nil {
-		return fmt.Errorf("xdotool cannot reach X server (DISPLAY unset?): %w", err)
+	setup := xproto.Setup(conn)
+	first, last := setup.MinKeycode, setup.MaxKeycode
+	mapping, err := xproto.GetKeyboardMapping(conn, first, byte(last-first+1)).Reply()
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("reading the keyboard mapping: %w", err)
 	}
-
-	watchCtx, cancel := context.WithCancel(ctx)
-	w.mu.Lock()
-	w.cancel = cancel
-	w.mu.Unlock()
-
-	// NOTE: Full chord detection requires XKB access (CGO). The polling loop
-	// keeps the goroutine alive so Stop() can cancel it cleanly. Future work:
-	// integrate with a key-binding daemon (sxhkd, kglobalaccel) that maps the
-	// OS chord to a signal or HTTP callback into this watcher.
-	go func() {
-		defer close(w.stopped)
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-watchCtx.Done():
-				return
-			case <-ticker.C:
-				continue
+	byKeysym := make(map[xproto.Keysym][]int)
+	per := int(mapping.KeysymsPerKeycode)
+	for i := 0; per > 0 && i*per < len(mapping.Keysyms); i++ {
+		code := int(first) + i
+		for _, sym := range mapping.Keysyms[i*per : (i+1)*per] {
+			if sym != 0 {
+				byKeysym[sym] = append(byKeysym[sym], code)
 			}
 		}
-	}()
-	return nil
+	}
+	return &x11KeyReader{conn: conn, byKeysym: byKeysym}, nil
 }
 
-func (w *xdotoolChordWatcher) Stop() {
-	w.mu.Lock()
-	cancel := w.cancel
-	stopped := w.stopped
-	w.mu.Unlock()
-	if cancel != nil {
-		cancel()
+func (r *x11KeyReader) resolve(token string) ([]int, bool) {
+	syms, ok := x11Keysyms[canonicalChordKey(token)]
+	if !ok {
+		return nil, false
 	}
-	if stopped != nil {
-		select {
-		case <-stopped:
-		case <-time.After(2 * time.Second):
-		}
+	var codes []int
+	for _, sym := range syms {
+		codes = append(codes, r.byKeysym[sym]...)
+	}
+	return codes, len(codes) > 0
+}
+
+func (r *x11KeyReader) held() (func(int) bool, error) {
+	keymap, err := xproto.QueryKeymap(r.conn).Reply()
+	if err != nil {
+		return nil, err
+	}
+	return func(code int) bool {
+		return code >= 0 && code < 256 && keymap.Keys[code/8]&(1<<(code%8)) != 0
+	}, nil
+}
+
+func (r *x11KeyReader) close() { r.conn.Close() }
+
+// Keysyms from X11's keysymdef.h.
+var x11Keysyms = map[string][]xproto.Keysym{
+	"ctrl":      {0xffe3, 0xffe4},
+	"shift":     {0xffe1, 0xffe2},
+	"alt":       {0xffe9, 0xffea, 0xffe7, 0xffe8},
+	"cmd":       {0xffeb, 0xffec},
+	"escape":    {0xff1b},
+	"space":     {0x20},
+	"enter":     {0xff0d},
+	"tab":       {0xff09},
+	"backspace": {0xff08},
+	"delete":    {0xffff},
+}
+
+func init() {
+	for c := 'a'; c <= 'z'; c++ {
+		x11Keysyms[string(c)] = []xproto.Keysym{xproto.Keysym(c)}
+	}
+	for c := '0'; c <= '9'; c++ {
+		x11Keysyms[string(c)] = []xproto.Keysym{xproto.Keysym(c)}
+	}
+	for n := 1; n <= 12; n++ {
+		x11Keysyms[fmt.Sprintf("f%d", n)] = []xproto.Keysym{xproto.Keysym(0xffbe + n - 1)}
 	}
 }

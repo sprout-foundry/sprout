@@ -538,6 +538,18 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     expect(stateHolder.current.perChatCache['chat-1'].pendingEvents).toHaveLength(1);
   });
 
+  it("files a background chat's metrics under that chat, not the chat on screen", () => {
+    const { stateHolder } = setupWithCache('chat-1', { stats: { total_tokens: 10 } });
+    stateHolder.current = { ...stateHolder.current, stats: { total_tokens: 999 } };
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-m', type: 'metrics_update', data: { chat_id: 'chat-1', total_tokens: 42 } });
+    });
+
+    expect((stateHolder.current.stats as { total_tokens: number }).total_tokens).toBe(999);
+    expect(stateHolder.current.perChatCache['chat-1'].stats).toMatchObject({ total_tokens: 42 });
+  });
+
   it('releases a chat held back by workspace_busy when the running chat finishes in the background', () => {
     const { stateHolder } = setupWithCache('chat-1', { isProcessing: true });
     stateHolder.current = {

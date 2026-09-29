@@ -156,6 +156,28 @@ export function useWebSocketEventHandler({
         return;
       }
 
+      // Another chat's metrics belong to that chat's cache, not the chat on
+      // screen (its tokens and cost were showing under the active chat).
+      if (
+        event.type === 'metrics_update' &&
+        eventData.chat_id &&
+        activeChatIdRef.current &&
+        String(eventData.chat_id) !== activeChatIdRef.current
+      ) {
+        const metricsChatId = String(eventData.chat_id);
+        setState((prev) => {
+          const cached = prev.perChatCache[metricsChatId];
+          if (!cached) return {};
+          return {
+            perChatCache: {
+              ...prev.perChatCache,
+              [metricsChatId]: { ...cached, stats: { ...(cached.stats ?? {}), ...eventData } },
+            },
+          };
+        });
+        return;
+      }
+
       const perChatEvents = new Set([
         'query_started',
         'stream_chunk',

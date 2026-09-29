@@ -87,6 +87,8 @@ export interface PerChatState {
   model: string;
   worktreePath?: string;
   queryCount: number;
+  /** This chat's metrics (tokens, cost, context) as last reported. */
+  stats?: Record<string, unknown>;
   pendingEvents?: WsEvent[];
 }
 

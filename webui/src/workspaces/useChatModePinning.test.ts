@@ -176,6 +176,39 @@ describe('useChatModePinning — mode-switch restore', () => {
     expect(options.onSwitchSession).toHaveBeenLastCalledWith('pin-c');
   });
 
+  it('returns to a Code chat that was never pinned: leaving a mode pins the chat left', async () => {
+    let activeId: string | null = 'chat-code';
+    const options = baseOptions({
+      onFreshSession: vi.fn().mockResolvedValue('fresh-design'),
+      onSwitchSession: vi.fn((id: string) => {
+        activeId = id;
+      }),
+    });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode, activeChatId: activeId }),
+      { initialProps: { mode: 'code' as const } },
+    );
+
+    rerender({ mode: 'design' });
+    await waitFor(() => expect(readChatModePins().design).toBe('fresh-design'));
+    rerender({ mode: 'code' });
+
+    expect(options.onSwitchSession).toHaveBeenLastCalledWith('chat-code');
+    expect(readChatModePins()).toEqual({ code: 'chat-code', design: 'fresh-design' });
+  });
+
+  it("does not pin the chat left when it is another mode's pin", () => {
+    writeChatModePin('code', 'chat-code');
+    // Design's fresh chat is still being created: Code's chat is active.
+    const options = baseOptions({ mode: 'design', activeChatId: 'chat-code' });
+    const { rerender } = renderHook(
+      ({ mode }: { mode: 'code' | 'design' }) => useChatModePinning({ ...options, mode }),
+      { initialProps: { mode: 'design' as const } },
+    );
+    rerender({ mode: 'code' });
+    expect(readChatModePins().design).toBeUndefined();
+  });
+
   it('skips the switch when the pin is already the active chat', () => {
     writeChatModePin('design', 'pin-d');
     const options = baseOptions({ mode: 'code', activeChatId: 'pin-d' });

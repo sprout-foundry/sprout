@@ -357,4 +357,51 @@ describe('useChatSessionsSync', () => {
     expect(buffers.has('__workspace/chat/code-1')).toBe(false);
     utils.unmount();
   });
+
+  it("mode lanes: a lane switch also closes the previous lane's active (unclosable) chat tab", () => {
+    const sessions = [
+      { id: 'code-1', name: 'Code one' },
+      { id: 'design-1', name: 'Design one', mode: 'design' },
+    ];
+    const buffers = new Map<string, EditorBuffer>();
+    // Like the buffer manager: an unclosable buffer is left alone.
+    const closeBuffer = (id: string) => {
+      if (buffers.get(id)?.isClosable === false) return;
+      buffers.delete(id);
+    };
+    const setBufferClosable = (id: string, isClosable: boolean) => {
+      const b = buffers.get(id);
+      if (b) buffers.set(id, { ...b, isClosable });
+    };
+    const openWorkspaceBuffer = (o: { path: string; isClosable?: boolean; metadata?: Record<string, unknown> }) => {
+      buffers.set(
+        o.path,
+        makeBuffer({ id: o.path, isClosable: o.isClosable, metadata: { chatId: o.metadata?.chatId } }),
+      );
+      return o.path;
+    };
+
+    const props = { mode: 'design' as string, active: 'design-1' };
+    const utils = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: sessions as never,
+        activeChatId: props.active,
+        mode: props.mode,
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable,
+        closeBuffer,
+        openWorkspaceBuffer: openWorkspaceBuffer as never,
+      }),
+    );
+    expect(buffers.get('__workspace/chat/design-1')?.isClosable).toBe(false);
+
+    // Back to Code while the design chat is still the active one.
+    props.mode = 'code';
+    utils.rerender();
+    expect(buffers.has('__workspace/chat/design-1')).toBe(false);
+    expect(buffers.has('__workspace/chat/code-1')).toBe(true);
+    utils.unmount();
+  });
 });

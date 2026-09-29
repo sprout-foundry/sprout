@@ -93,8 +93,11 @@ export const useChatSessionsSync = ({
     if (!currentBuffers) return;
     for (const buffer of Array.from(currentBuffers.values())) {
       if (buffer.kind !== 'chat') continue;
-      if (close) close(buffer.id);
-      else currentBuffers.delete(buffer.id);
+      // The lane's active chat tab is unclosable, and close skips those.
+      if (close) {
+        setBufferClosable(buffer.id, true);
+        close(buffer.id);
+      } else currentBuffers.delete(buffer.id);
     }
     closedChatIdsRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps

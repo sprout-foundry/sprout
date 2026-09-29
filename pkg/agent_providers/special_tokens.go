@@ -18,13 +18,28 @@ import (
 // brackets instead of ASCII) so the model can still recognize and
 // reason about the tokens it is being shown; only the exact byte
 // sequence is changed, which is the thing that mattered.
+//
+// Media tokens are included for a second failure mode: vision-capable
+// serving stacks (Qwen-VL templates) scan rendered prompt text for
+// media placeholders and validate them against the actual image/video
+// inputs. A literal <|vision_start|> in tool output (e.g. source code
+// of a prompt encoder) with zero real images is a hard HTTP 400 —
+// "chat template media placeholders must match input count, type and
+// order" — that kills the turn outright. Other Qwen-VL control tokens
+// (box_*, quad_*, object_ref_*) are deliberately excluded: they are not
+// media placeholders, so they cannot trigger that validation and
+// adding them would only widen the byte rewriting.
 var specialTokenNeutralizations = map[string]string{
-	"<|im_start|>":  "⟨im_start⟩",
-	"<|im_end|>":    "⟨im_end⟩",
-	"<|endoftext|>": "⟨endoftext⟩",
-	"<|tool_call|>": "⟨tool_call⟩",
-	"<|eot_id|>":    "⟨eot_id⟩",
-	"<|channel|>":   "⟨channel⟩",
+	"<|im_start|>":     "⟨im_start⟩",
+	"<|im_end|>":       "⟨im_end⟩",
+	"<|endoftext|>":    "⟨endoftext⟩",
+	"<|tool_call|>":    "⟨tool_call⟩",
+	"<|eot_id|>":       "⟨eot_id⟩",
+	"<|channel|>":      "⟨channel⟩",
+	"<|vision_start|>": "⟨vision_start⟩",
+	"<|vision_end|>":   "⟨vision_end⟩",
+	"<|image_pad|>":    "⟨image_pad⟩",
+	"<|video_pad|>":    "⟨video_pad⟩",
 }
 
 // NeutralizeSpecialTokens replaces provider special-token literals in

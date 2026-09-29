@@ -921,6 +921,9 @@ const AppContent: React.FC<AppContentProps> = ({
       // The notice belongs to the chat whose send was held back, not
       // whichever chat is on screen.
       workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
+      // Names the chat for per-chat actions (Export); inactive panes pass
+      // their own, so without it only background panes offered Export.
+      chatId: activeChatId ?? undefined,
       onDismissBusy: handleDismissBusy,
       pendingDraft: inputValue,
       toolExecutions: state.toolExecutions,

@@ -207,6 +207,7 @@ export function useChatSessionManager({
                 provider: prev.provider,
                 model: prev.model,
                 queryCount: prev.queryCount,
+                stats: prev.stats,
               },
             }
           : prev.perChatCache;
@@ -225,6 +226,8 @@ export function useChatSessionManager({
           // viewing another chat is worse than no indicator.
           queryProgress: restoredIsProcessing ? (cached?.queryProgress ?? null) : null,
           lastError: cached?.lastError ?? null,
+          // This chat's own figures; the server republishes them on switch.
+          stats: cached?.stats ?? {},
           perChatCache: newCache,
         };
       });

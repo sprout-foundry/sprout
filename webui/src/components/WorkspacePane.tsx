@@ -113,6 +113,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           queryProgress: cached?.queryProgress ?? null,
           lastError: cached?.lastError ?? null,
           isProcessing: cached?.isProcessing ?? false,
+          stats: cached?.stats ?? {},
           inputValue: '',
           queuedMessagesCount: 0,
           queuedMessages: [],

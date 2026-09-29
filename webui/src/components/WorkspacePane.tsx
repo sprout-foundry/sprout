@@ -41,6 +41,16 @@ interface GitDiffResponse {
   diff: string;
 }
 
+/**
+ * A chat with no provider of its own runs on the default one, which the
+ * active chat's stats name when that chat has no override either. Only
+ * provider and model carry over — never another chat's token or cost figures.
+ */
+function defaultModel(stats: unknown): Record<string, unknown> {
+  const s = (stats ?? {}) as { provider?: unknown; model?: unknown };
+  return typeof s.provider === 'string' && s.provider ? { provider: s.provider, model: s.model } : {};
+}
+
 interface WorkspacePaneProps {
   paneId: string;
   perChatCache?: Record<string, PerChatState>;
@@ -112,7 +122,9 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           ? { provider: cached.provider, model: cached.model }
           : listed?.provider
             ? { provider: listed.provider, model: listed.model }
-            : {};
+            : chatSessions?.find((c) => c.id === activeChatId)?.provider
+              ? {}
+              : defaultModel(chatProps.stats);
         const inactiveChatProps = {
           ...chatProps,
           messages: cached?.messages ?? [],

@@ -187,6 +187,22 @@ export function getVfsManifestSnapshot(): Set<string> {
 /** HOME inside the WASM shell's virtual filesystem. */
 const AGENT_HOME = '/home/user';
 
+const withinAgentHome = (p: string) => p === AGENT_HOME || p.startsWith(`${AGENT_HOME}/`);
+
+/**
+ * The agent's own home (its settings and sessions) shares the browser's
+ * filesystem with the workspace but isn't workspace content — unless the
+ * workspace itself is inside it. A directory that only holds it (/home)
+ * is hidden with it.
+ */
+function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
+  if (withinAgentHome(root)) return false;
+  if (withinAgentHome(absPath)) return true;
+  if (!AGENT_HOME.startsWith(`${absPath === '/' ? '' : absPath}/`)) return false;
+  const listing = shell.listDir(absPath);
+  return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
+}
+
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
   const cwd = shell.getCwd();
   // Try to get all file paths via the flattenEntries/listFilesTracked logic
@@ -203,11 +219,7 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
   }
 
   for (const absPath of paths) {
-    // The agent's own home (its settings and sessions) lives inside the
-    // workspace root in the browser, but it isn't part of the repository.
-    if (absPath === AGENT_HOME || absPath.startsWith(`${AGENT_HOME}/`)) {
-      if (!(cwd === AGENT_HOME || cwd.startsWith(`${AGENT_HOME}/`))) continue;
-    }
+    if (withinAgentHome(absPath) && !withinAgentHome(cwd)) continue;
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
@@ -306,9 +318,15 @@ function vfsRelative(absPath: string, rootDir: string): string {
  * fetches a directory's children when it is expanded). The daemon
  * excludes .git from listings.
  */
-function singleLevelFileEntries(entries: WasmDirEntry[], dir: string, rootDir: string): Array<Record<string, unknown>> {
+function singleLevelFileEntries(
+  shell: WasmShell,
+  entries: WasmDirEntry[],
+  dir: string,
+  rootDir: string,
+): Array<Record<string, unknown>> {
   return entries
     .filter((e) => !(e.type === 'dir' && e.name === '.git'))
+    .filter((e) => !hiddenFromWorkspace(shell, joinVfsPath(dir, e.name), rootDir))
     .map((e) => {
       const absPath = joinVfsPath(dir, e.name);
       return {
@@ -328,13 +346,16 @@ function singleLevelFileEntries(entries: WasmDirEntry[], dir: string, rootDir: s
  * nothing lives under dir, the CWD may not match where importRepo wrote
  * the files — in that case group the whole manifest under '/' instead.
  */
-function groupManifestChildren(dir: string): Array<{ name: string; path: string; isDir: boolean }> {
+function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: string; path: string; isDir: boolean }> {
   const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
+  const workspacePaths = Array.from(vfsManifest).filter(
+    (p) => rootDir === undefined || withinAgentHome(rootDir) || !withinAgentHome(p),
+  );
   let base = dir;
-  let paths = Array.from(vfsManifest).filter(underDir);
-  if (paths.length === 0 && vfsManifest.size > 0) {
+  let paths = workspacePaths.filter(underDir);
+  if (paths.length === 0 && workspacePaths.length > 0) {
     base = '/';
-    paths = Array.from(vfsManifest);
+    paths = workspacePaths;
   }
   if (paths.length === 0) return [];
 
@@ -373,13 +394,13 @@ function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
   // Try listDir first; fall back to the manifest.
   const dirResult = shell.listDir(dir);
   if (!dirResult.error && dirResult.entries && dirResult.entries.length > 0) {
-    const files = singleLevelFileEntries(dirResult.entries, dir, rootDir);
+    const files = singleLevelFileEntries(shell, dirResult.entries, dir, rootDir);
     return jsonOk({ message: 'success', files });
   }
 
   // listDir failed or the directory is empty in the VFS — derive a
   // single-level listing from the tracked-file manifest.
-  const children = groupManifestChildren(dir);
+  const children = groupManifestChildren(dir, rootDir);
   const files = children.map((c) => ({
     name: c.name,
     path: c.path,

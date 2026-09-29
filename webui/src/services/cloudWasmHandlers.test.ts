@@ -450,3 +450,37 @@ describe('listAllVfsFiles with the workspace at the filesystem root', () => {
     expect(files.map((f) => f.path)).toEqual(['go.mod']);
   });
 });
+
+describe('handleWasmFileList with the workspace at the filesystem root', () => {
+  const tree: Record<string, WasmDirEntry[]> = {
+    '/': [
+      { name: 'go.mod', type: 'file', size: 1 },
+      { name: 'home', type: 'dir', size: 0 },
+    ],
+    '/home': [{ name: 'user', type: 'dir', size: 0 }],
+    '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
+  };
+  const listing = async (cwd: string, path: string) => {
+    const shell = createMockShell({ getCwd: () => cwd, listDir: (dir: string) => ({ entries: tree[dir] ?? [] }) });
+    const res = handleWasmLocal(shell, '/api/files', 'GET', `/api/files?path=${encodeURIComponent(path)}`);
+    return (JSON.parse(await res.text()).files as Array<{ name: string }>).map((f) => f.name);
+  };
+
+  it('leaves the agent home out of the tree', async () => {
+    expect(await listing('/', '/')).toEqual(['go.mod']);
+  });
+
+  it('keeps a folder that holds more than the agent home', async () => {
+    tree['/home'] = [
+      { name: 'user', type: 'dir', size: 0 },
+      { name: 'shared', type: 'dir', size: 0 },
+    ];
+    expect(await listing('/', '/')).toEqual(['go.mod', 'home']);
+    expect(await listing('/', '/home')).toEqual(['shared']);
+    tree['/home'] = [{ name: 'user', type: 'dir', size: 0 }];
+  });
+
+  it('shows it when the workspace is inside it', async () => {
+    expect(await listing('/home/user', '/home/user')).toEqual(['.config']);
+  });
+});

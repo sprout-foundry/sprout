@@ -403,10 +403,20 @@ function Sidebar({
     };
   }, [isMobile]);
 
+  // On phones the sidebar is a drawer over the editor: opening a file from it
+  // must reveal the file, or the tap looks like it did nothing.
+  const handleFileClick = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      onFileClick?.(filePath, lineNumber);
+      if (isMobile && finalIsMobileMenuOpen) finalOnMobileMenuToggle?.();
+    },
+    [onFileClick, isMobile, finalIsMobileMenuOpen, finalOnMobileMenuToggle],
+  );
+
   /** Render the content pane based on selected section */
   /** Search section: find and replace panel */
   const renderSearchSection = () => {
-    return <SearchView onFileClick={onFileClick} />;
+    return <SearchView onFileClick={handleFileClick} />;
   };
 
   const renderContentPane = () => {
@@ -438,7 +448,11 @@ function Sidebar({
         return <SidebarLogsPane logs={normalizedRecentLogs} />;
       case 'files':
         return (
-          <SidebarFilesSection ref={fileTreeRef} onFileClick={onFileClick} workspaceRoot={gitPanel?.workspaceRoot} />
+          <SidebarFilesSection
+            ref={fileTreeRef}
+            onFileClick={handleFileClick}
+            workspaceRoot={gitPanel?.workspaceRoot}
+          />
         );
       case 'search':
         return renderSearchSection();

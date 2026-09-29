@@ -414,6 +414,10 @@ const AppContent: React.FC<AppContentProps> = ({
   // rejects cross-mode switches (mode_mismatch). Only code/design are lane
   // modes today; a future mode id maps to the code lane until it earns one.
   const chatLane: 'code' | 'design' = workspaceMode.id === 'design' ? 'design' : 'code';
+  const laneChatSessions = useMemo(
+    () => (chatSessions ?? []).filter((c) => (c.mode === 'design' ? 'design' : 'code') === chatLane),
+    [chatSessions, chatLane],
+  );
   const chatModePinning = useChatModePinning({
     mode: workspaceMode.id,
     activeChatId,
@@ -1193,7 +1197,8 @@ const AppContent: React.FC<AppContentProps> = ({
             sidebarCollapsed={sidebarCollapsed}
             onSidebarToggle={onSidebarToggle}
             conversations={{
-              sessions: chatSessions ?? [],
+              // The mode's own lane, like its chat tabs (SP-142).
+              sessions: laneChatSessions,
               activeId: activeChatId,
               // The chat list is only refetched on switch, so its
               // active_query goes stale; the per-chat UI state is live.

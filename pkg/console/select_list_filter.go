@@ -2,7 +2,6 @@
 package console
 
 import (
-	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,14 +35,12 @@ func (s *SelectList) consumeUTF8(lead byte, n int, buf []byte) {
 	expected := utf8Width(lead)
 	collected := buf[:n]
 	deadline := time.Now().Add(30 * time.Millisecond)
-	for len(collected) < expected && time.Now().Before(deadline) {
-		var more [4]byte
-		m, _ := os.Stdin.Read(more[:expected-len(collected)])
-		if m > 0 {
-			collected = append(collected, more[:m]...)
-		} else {
-			time.Sleep(1 * time.Millisecond)
+	for len(collected) < expected {
+		b, got := s.readByteBefore(deadline)
+		if !got {
+			break
 		}
+		collected = append(collected, b)
 	}
 	if r, _ := utf8.DecodeRune(collected); r != utf8.RuneError {
 		s.filterAppend(string(r))

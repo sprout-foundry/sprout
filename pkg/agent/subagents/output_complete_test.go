@@ -1,4 +1,4 @@
-package agent
+package subagents
 
 import (
 	"strings"
@@ -83,9 +83,9 @@ func TestSubagentResult_OutputComplete(t *testing.T) {
 				BudgetExceeded: tc.budgetExceeded,
 				Truncated:      tc.truncated,
 			}
-			got := isOutputComplete(r)
+			got := IsOutputComplete(r)
 			if got != tc.wantComplete {
-				t.Errorf("isOutputComplete = %v, want %v (output len=%d, err=%v, cancelled=%v, budget=%v, truncated=%v)",
+				t.Errorf("IsOutputComplete = %v, want %v (output len=%d, err=%v, cancelled=%v, budget=%v, truncated=%v)",
 					got, tc.wantComplete, len(strings.TrimSpace(tc.output)),
 					tc.err != nil, tc.cancelled, tc.budgetExceeded, tc.truncated)
 			}

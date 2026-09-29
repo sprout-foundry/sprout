@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–6 landed 2026-09-27/28/29 — broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phases 4–5 pending
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) complete (increments 1–6 landed 2026-09-27/29 — security-analyzer, path-tier, allowlist, risk vocabulary, broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phase 4 (`subagents`) in progress (increment 1 — data foundation — landed 2026-09-29); phase 5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -302,7 +302,38 @@ the repo. This spec plans the split; it does not schedule it.
     build + vet + gofmt clean; approvals suite ok; the 37-test risk
     battery (ResolveToolRisk incl. nil-agent, git gates, path tiers,
     workspace policy, shadow-mode parity) all green.
-- Phases 4–5 pending (`subagents`, `tools`).
+- **Phase 4 (2026-09-29): `pkg/agent/subagents` increment 1 — the
+  subagent data foundation landed.** The wire/result types
+  (`SubagentStatus` + the six status consts, `FileChange`,
+  `SubagentRunMetrics`, `SubagentReturn`, `ProgressEntry`,
+  `SubagentError`, `SubagentOptions`, `SharedState`, `SubagentResult`,
+  `SubagentProgressEntry`, `SubagentTask`, `SubagentMetrics`), the pure
+  helpers (`IsOutputComplete`, `ProgressLogCap`), the terminal display
+  (`PrintSubagentStart`/`PrintParallelSubagentStart`/
+  `PrintSubagentDone` + `compactCount`/`plural`/the stat suffix), the
+  spawn-time `AppendSubagentPreamble`, and the process-wide
+  active-subagent counter + `BuildSubagentPrefix` moved to
+  `pkg/agent/subagents` (types.go, display.go, preamble.go,
+  lifecycle.go). `pkg/agent/subagent_forwarders.go` re-exports the types
+  as aliases and forwards the six lowercase call-site names so the tool
+  handlers, the task runner, and the workflow wiring are unchanged.
+  `subagent_types.go` keeps only `SubagentRunner`/`runningSubagent`
+  (they hold `*Agent` fields directly — the runner seam is the next
+  increment); `subagent_lifecycle.go` keeps the runner construction,
+  `Metrics()`, and the lifecycle-event publishers. The three pure test
+  files moved with their code.
+  - **Import-safety note:** `subagents` imports `changes` (for
+    `changes.TrackedFileChange` on `SubagentResult.FileChanges`),
+    `console` (display glyphs), `agent_tools`, `configuration`,
+    `embedding`, `events` — none of which import the `pkg/agent` parent,
+    so the `pkg/agent → subagents` edge stays one-way (no cycle through
+    the forwarder).
+  - **Verification:** content-identity confirmed (normalized-diff of
+    every moved block and test file vs. the originals = 0 lines beyond
+    the rename set); build + vet + gofmt clean; the `subagents` suite
+    green; the `pkg/agent` subagent batteries (display/prefix/output-
+    complete) still pass through the forwarders.
+- Phases 4–5 continue (`subagents` runner seam next, then `tools`).
 
 ## Problem
 

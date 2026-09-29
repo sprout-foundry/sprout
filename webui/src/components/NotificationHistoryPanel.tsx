@@ -23,6 +23,9 @@ export function formatNotificationAge(createdAt: number, now: number = Date.now(
  * status-bar bell. Toasts disappear after a few seconds; this is where a
  * missed one can still be read. Opening it marks everything read.
  */
+const PANEL_WIDTH = 360;
+const NARROW_SCREEN_MAX = 600;
+
 function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPanelProps): JSX.Element {
   const { notifications, removeNotification, clearNotifications, markAllRead } = useNotifications();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -40,10 +43,17 @@ function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPan
     const place = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
+      // A phone has no room beside the anchor (the rail's bell sits in a
+      // drawer that closes on open): drop the panel under the top bar.
+      if (window.innerWidth <= NARROW_SCREEN_MAX) {
+        setPosition({ left: 8, top: 56 });
+        return;
+      }
       // Anchors near the top (the layered layout's rail bell) open beside
-      // and below; the status bar bell opens above.
+      // and below, kept on screen; the status bar bell opens above.
       if (rect.top < window.innerHeight / 2) {
-        setPosition({ left: rect.right + 8, top: rect.top });
+        const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
+        setPosition({ left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8)), top: rect.top });
       } else {
         setPosition({
           right: Math.max(8, window.innerWidth - rect.right),

@@ -104,6 +104,19 @@ describe('NotificationHistoryPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it('drops under the top bar on a phone instead of beside its anchor', () => {
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      renderPanel();
+      const panel = document.querySelector('.notification-history') as HTMLElement;
+      expect(panel.style.left).toBe('8px');
+      expect(panel.style.top).toBe('56px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
+  });
+
   it('clears all notifications', () => {
     renderPanel();
     act(() => {

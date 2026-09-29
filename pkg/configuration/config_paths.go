@@ -38,6 +38,13 @@ func getDefaultConfigDir() (string, error) {
 	return filepath.Join(hd, ".config", "sprout"), nil
 }
 
+// DefaultConfigDir returns the user's global config directory ($XDG_CONFIG_HOME
+// or ~/.config), ignoring SPROUT_CONFIG — which isolated-config mode points
+// at the workspace's own directory.
+func DefaultConfigDir() (string, error) {
+	return getDefaultConfigDir()
+}
+
 // CredentialsDir returns the credentials subdirectory under the config
 // root, creating it with mode 0700 if missing.
 func CredentialsDir() (string, error) {

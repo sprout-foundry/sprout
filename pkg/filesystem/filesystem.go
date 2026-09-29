@@ -410,6 +410,9 @@ func joinUnderRoot(root, p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}
+	if tmp, ok := PosixTmpPath(p); ok {
+		return tmp
+	}
 	if filepath.VolumeName(p) == "" && p != "" && os.IsPathSeparator(p[0]) {
 		return filepath.VolumeName(root) + p
 	}

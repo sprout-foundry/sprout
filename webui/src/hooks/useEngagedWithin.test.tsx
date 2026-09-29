@@ -23,8 +23,11 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => root.render(createElement(Probe)));
 });
+
+function mount() {
+  act(() => root.render(createElement(Probe)));
+}
 
 afterEach(() => {
   act(() => root.unmount());
@@ -33,6 +36,7 @@ afterEach(() => {
 
 describe('useEngagedWithin', () => {
   it('follows clicks and focus in and out of the element', () => {
+    mount();
     expect(engaged).toBe(true);
     act(() => {
       document.getElementById('outside')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));

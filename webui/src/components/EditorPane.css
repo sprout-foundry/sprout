@@ -24,6 +24,7 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
+  container: editor-pane / inline-size;
 }
 
 .pane-content .editor {
@@ -279,6 +280,15 @@
    editor width. This class is kept as a styling hook for overrides. */
 .cm-minimap-container {
   height: 100%;
+}
+
+/* A narrow pane (a tablet, or beside the sidebar and conversation) needs the
+ * width for the code more than for an overview. */
+@container editor-pane (max-width: 520px) {
+  /* Scoped past CodeMirror's own two-class gutter rule, which sets display. */
+  .pane-content .cm-editor .cm-minimap-container {
+    display: none;
+  }
 }
 
 /* Click/drag affordance for the minimap.

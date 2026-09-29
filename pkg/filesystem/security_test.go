@@ -2,6 +2,8 @@ package filesystem
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,7 +106,8 @@ func TestSafeResolvePath(t *testing.T) {
 				// Check if error contains any of the acceptable substrings
 				matched := false
 				for _, substr := range tt.anyErrorContains {
-					if strings.Contains(err.Error(), substr) {
+					if strings.Contains(err.Error(), substr) ||
+						(substr == "no such file" && errors.Is(err, fs.ErrNotExist)) {
 						matched = true
 						break
 					}
@@ -152,7 +155,7 @@ func TestSafeResolvePathSymlinks(t *testing.T) {
 	// Create a symlink to a file within the directory
 	symlinkFile := filepath.Join(tempDir, "link.txt")
 	if err := os.Symlink(testFile, symlinkFile); err != nil {
-		t.Fatalf("Failed to create symlink: %v", err)
+		t.Skipf("symlink not supported (Windows needs Developer Mode or admin): %v", err)
 	}
 
 	// Create a symlink to a directory within the directory

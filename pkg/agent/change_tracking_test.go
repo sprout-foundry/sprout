@@ -292,7 +292,8 @@ func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
 	originalContent := "SECRET=abc123"
 	newContent := "SECRET=xyz789"
 
-	if err := ct.TrackFileEdit("/etc/shadow", originalContent, newContent); err != nil {
+	outside := filepath.Join(t.TempDir(), "shadow")
+	if err := ct.TrackFileEdit(outside, originalContent, newContent); err != nil {
 		t.Fatalf("TrackFileEdit: %v", err)
 	}
 
@@ -636,7 +637,8 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 		t.Errorf("expected recovery to succeed, got: %s", result)
 	}
 	// The path in the result should be the ORIGINAL workspace location.
-	if !strings.Contains(result, `"path": "`+filePath) {
+	quotedPath, _ := json.Marshal(filePath)
+	if !strings.Contains(result, `"path": `+string(quotedPath)) {
 		t.Errorf("expected recovery path to be %q, got: %s", filePath, result)
 	}
 

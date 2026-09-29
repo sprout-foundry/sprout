@@ -435,8 +435,7 @@ func TestWriteStructuredFile_JSON_OrderPreservation(t *testing.T) {
 
 	// Raw JSON with a specific key order that is NOT alphabetical.
 	// Alphabetical would be: dependencies, description, name, version
-	rawArgs := `{"path":"` + filepath.Join(dir, "order.json") +
-		`","data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
+	rawArgs := `{"path":` + jsonQuote(filepath.Join(dir, "order.json")) + `,"data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
 
 	path := filepath.Join(dir, "order.json")
 	env := newTestEnv(t, dir)
@@ -486,8 +485,7 @@ func TestWriteStructuredFile_YAML_OrderPreservation(t *testing.T) {
 	h := &writeStructuredFileHandler{}
 	ctx := newTestCtx(dir)
 
-	rawArgs := `{"path":"` + filepath.Join(dir, "order.yaml") +
-		`","data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
+	rawArgs := `{"path":` + jsonQuote(filepath.Join(dir, "order.yaml")) + `,"data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
 
 	path := filepath.Join(dir, "order.yaml")
 	env := newTestEnv(t, dir)
@@ -543,8 +541,7 @@ func TestWriteStructuredFile_YAML_LiteralBlockRoundTrip(t *testing.T) {
 	ctx := newTestCtx(dir)
 
 	// Multi-line script value with embedded newlines.
-	rawArgs := `{"path":"` + filepath.Join(dir, "multiline.yaml") +
-		`","data":{"script":"echo hello\necho world","name":"test"}}`
+	rawArgs := `{"path":` + jsonQuote(filepath.Join(dir, "multiline.yaml")) + `,"data":{"script":"echo hello\necho world","name":"test"}}`
 
 	path := filepath.Join(dir, "multiline.yaml")
 	env := newTestEnv(t, dir)
@@ -585,8 +582,7 @@ func TestWriteStructuredFile_NestedOrderPreservation(t *testing.T) {
 	ctx := newTestCtx(dir)
 
 	// Nested structure with specific key orders at each level.
-	rawArgs := `{"path":"` + filepath.Join(dir, "nested.json") +
-		`","data":{"project":{"name":"x","version":"1.0"},"build":{"target":"linux","arch":"amd64"}}}`
+	rawArgs := `{"path":` + jsonQuote(filepath.Join(dir, "nested.json")) + `,"data":{"project":{"name":"x","version":"1.0"},"build":{"target":"linux","arch":"amd64"}}}`
 
 	path := filepath.Join(dir, "nested.json")
 	env := newTestEnv(t, dir)
@@ -658,7 +654,7 @@ func TestWriteStructuredFile_PackageJSON_Order(t *testing.T) {
 	// Top-level: name → version → description → dependencies → scripts
 	// Inside dependencies: express → lodash
 	// Inside scripts: build → test → start
-	rawArgs := `{"path":"` + path + `","data":{"name":"my-pkg","version":"1.0.0","description":"A sample package","dependencies":{"express":"^4.18.0","lodash":"^4.17.0"},"scripts":{"build":"tsc","test":"jest","start":"node index.js"}}}`
+	rawArgs := `{"path":` + jsonQuote(path) + `,"data":{"name":"my-pkg","version":"1.0.0","description":"A sample package","dependencies":{"express":"^4.18.0","lodash":"^4.17.0"},"scripts":{"build":"tsc","test":"jest","start":"node index.js"}}}`
 
 	env := newTestEnv(t, dir)
 	env.RawArgsJSON = rawArgs
@@ -742,7 +738,7 @@ func TestWriteStructuredFile_DockerCompose_RoundTrip(t *testing.T) {
 
 	// RawArgsJSON with version → services → volumes order.
 	// Inside services: web → db, inside web: image → ports → volumes.
-	rawArgs := `{"path":"` + path + `","data":{"version":"3.8","services":{"web":{"image":"nginx:latest","ports":["80:80"],"volumes":["./html:/usr/share/nginx/html"]},"db":{"image":"postgres:15","environment":{"POSTGRES_DB":"myapp"}}},"volumes":{"data":{"driver":"local"}}}}`
+	rawArgs := `{"path":` + jsonQuote(path) + `,"data":{"version":"3.8","services":{"web":{"image":"nginx:latest","ports":["80:80"],"volumes":["./html:/usr/share/nginx/html"]},"db":{"image":"postgres:15","environment":{"POSTGRES_DB":"myapp"}}},"volumes":{"data":{"driver":"local"}}}}`
 
 	env := newTestEnv(t, dir)
 	env.RawArgsJSON = rawArgs
@@ -853,7 +849,7 @@ func TestWriteStructuredFile_LargeDocument_Order(t *testing.T) {
 		parts = append(parts, fmt.Sprintf(`"k%02d":"v%02d"`, i, i))
 	}
 	dataJSON := "{" + strings.Join(parts, ",") + "}"
-	rawArgs := `{"path":"` + path + `","data":` + dataJSON + "}"
+	rawArgs := `{"path":` + jsonQuote(path) + `,"data":` + dataJSON + "}"
 
 	env := newTestEnv(t, dir)
 	env.RawArgsJSON = rawArgs
@@ -880,4 +876,14 @@ func TestWriteStructuredFile_LargeDocument_Order(t *testing.T) {
 			"key %s (pos %d) should appear before key %s (pos %d) — insertion order must be preserved",
 			keys[i], currIdx, keys[i+1], nextIdx)
 	}
+}
+
+// jsonQuote encodes s as a JSON string literal so Windows paths (whose
+// backslashes are JSON escapes) survive being spliced into raw args JSON.
+func jsonQuote(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }

@@ -54,7 +54,7 @@ func TestLoadDefaultList_Embedded(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadOverrideFile_Missing(t *testing.T) {
-	entries, err := loadOverrideFile("/nonexistent/path/overrides.json")
+	entries, err := loadOverrideFile(filepath.Join(t.TempDir(), "path", "overrides.json"))
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestLoader_ThreadSafe(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoader_Reload(t *testing.T) {
-	l := &Loader{overridePath: "/nonexistent", custom: map[string]bool{}}
+	l := &Loader{overridePath: filepath.Join(t.TempDir(), "absent.json"), custom: map[string]bool{}}
 	if err := l.Reload(); err != nil {
 		t.Fatal(err)
 	}

@@ -21,7 +21,7 @@ import (
 
 func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")

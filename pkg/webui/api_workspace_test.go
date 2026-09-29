@@ -196,7 +196,7 @@ func TestGetSSHSessionForProxyRequest(t *testing.T) {
 func newHomeWorkspaceServer(t *testing.T) (ws *ReactWebServer, resolvedHome string) {
 	t.Helper()
 	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	setTestHome(t, tmpHome)
 	// Override TestMain's global SPROUT_STATE_DIR so consent isolation
 	// is scoped to this test's temp home.
 	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
@@ -302,7 +302,7 @@ func TestHandleAPIWorkspaceGet_HomeWorkspaceWithConsent(t *testing.T) {
 func TestHandleAPIWorkspaceSet_HomeRequiresConsent(t *testing.T) {
 	ws, resolvedHome := newHomeWorkspaceServer(t)
 
-	body := `{"path": "` + resolvedHome + `"}`
+	body := `{"path": ` + jsonQuote(resolvedHome) + `}`
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspaceSet(rec, req)
@@ -330,7 +330,7 @@ func TestHandleAPIWorkspaceSet_HomeRequiresConsent(t *testing.T) {
 func TestHandleAPIWorkspaceSet_HomeWithConsent(t *testing.T) {
 	ws, resolvedHome := newHomeWorkspaceServer(t)
 
-	body := `{"path": "` + resolvedHome + `", "consent_home": true}`
+	body := `{"path": ` + jsonQuote(resolvedHome) + `, "consent_home": true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspaceSet(rec, req)
@@ -372,7 +372,7 @@ func TestHandleAPIWorkspaceSet_ConsentRecordedEvenWhenQueryActive(t *testing.T) 
 	ctx.ActiveQuery = true
 	ws.mutex.Unlock()
 
-	body := `{"path": "` + resolvedHome + `", "consent_home": true}`
+	body := `{"path": ` + jsonQuote(resolvedHome) + `, "consent_home": true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspaceSet(rec, req)

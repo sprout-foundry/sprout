@@ -47,7 +47,7 @@ func (w *osascriptChordWatcher) Start(ctx context.Context) error {
 	if len(w.keys) == 0 {
 		return nil
 	}
-	log.Printf("[computer-use] chord watcher watching for: %s", formatChordForLog(w.keys))
+	log.Printf("[computer-use] panic-key chord %s is configured, but chord detection is not implemented yet — stop the agent to halt computer use", formatChordForLog(w.keys))
 	if _, err := exec.LookPath("osascript"); err != nil {
 		return errMissingHelper("osascript")
 	}

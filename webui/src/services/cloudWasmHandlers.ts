@@ -184,21 +184,30 @@ export function getVfsManifestSnapshot(): Set<string> {
  * Read all files from the WASM VFS, returning {path, content} pairs.
  * Used by browserGit to sync the working tree before git operations.
  */
+/** HOME inside the WASM shell's virtual filesystem. */
+const AGENT_HOME = '/home/user';
+
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
   const cwd = shell.getCwd();
   // Try to get all file paths via the flattenEntries/listFilesTracked logic
   const files: Array<{ path: string; content: string }> = [];
 
-  // Get paths from the manifest + listDir
+  // Every file in the tree: a one-level listing left out everything in
+  // subfolders, and git then reported those files as deleted.
   let paths: string[] = [];
   try {
-    paths = listFilesTracked(shell, cwd);
+    paths = listAllFilesTracked(shell, cwd);
   } catch {
     // Fall back to manifest
     paths = Array.from(vfsManifest);
   }
 
   for (const absPath of paths) {
+    // The agent's own home (its settings and sessions) lives inside the
+    // workspace root in the browser, but it isn't part of the repository.
+    if (absPath === AGENT_HOME || absPath.startsWith(`${AGENT_HOME}/`)) {
+      if (!(cwd === AGENT_HOME || cwd.startsWith(`${AGENT_HOME}/`))) continue;
+    }
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
@@ -394,6 +403,7 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
   for (const entry of listResult.entries) {
     const fullPath = dir === '/' ? `/${entry.name}` : `${dir}/${entry.name}`;
     if (entry.type === 'dir') {
+      if (entry.name === '.git') continue;
       result.push(...flattenEntries(shell, fullPath));
     } else {
       result.push({ path: fullPath, modified: false, name: entry.name });
@@ -1042,6 +1052,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     model_name: 'managed',
     context_size: 131072,
     requires_api_key: false,
+    // Streams then end with a usage chunk (the platform forwards it only when
+    // asked), so the footer's token count isn't stuck at 0.
+    include_usage: true,
     message_conversion: {
       include_tool_call_id: true,
       convert_tool_role_to_user: false,
@@ -1064,6 +1077,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // loses neither the question nor the answer.
   setChatRunning(chatId, true);
   recordTurn(chatId, query);
+  // A chat is named after its first question: have the list pick it up, as
+  // the daemon's session_changed does.
+  if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
   shell
     .runAgent(
       'platform',
@@ -1107,6 +1123,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
         provider: result.provider,
         model: result.model,
       });
+      if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
     })
     .catch((err) => {
       setChatRunning(chatId, false);

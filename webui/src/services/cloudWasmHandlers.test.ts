@@ -402,3 +402,51 @@ describe('handleWasmFile — POST /api/file (save)', () => {
     expect(res.status).toBe(500);
   });
 });
+
+describe('listAllVfsFiles', () => {
+  it('lists files in subfolders and leaves .git out', async () => {
+    const { listAllVfsFiles } = await import('./cloudWasmHandlers');
+    const tree: Record<string, WasmDirEntry[]> = {
+      '/home/user': [
+        { name: 'README.md', type: 'file', size: 1 },
+        { name: 'api', type: 'dir', size: 0 },
+        { name: '.git', type: 'dir', size: 0 },
+      ],
+      '/home/user/api': [{ name: 'form.go', type: 'file', size: 1 }],
+      '/home/user/.git': [{ name: 'HEAD', type: 'file', size: 1 }],
+    };
+    const shell = createMockShell({
+      listDir: (dir: string) => ({ entries: tree[dir] ?? [] }),
+      readFile: (path: string) => ({ content: `content of ${path}` }),
+    });
+
+    const files = await listAllVfsFiles(shell);
+
+    expect(files.map((f) => f.path).sort()).toEqual(['README.md', 'api/form.go']);
+    expect(files.find((f) => f.path === 'api/form.go')?.content).toBe('content of /home/user/api/form.go');
+  });
+});
+
+describe('listAllVfsFiles with the workspace at the filesystem root', () => {
+  it('leaves the agent home (its settings) out of the repository files', async () => {
+    const { listAllVfsFiles } = await import('./cloudWasmHandlers');
+    const tree: Record<string, WasmDirEntry[]> = {
+      '/': [
+        { name: 'go.mod', type: 'file', size: 1 },
+        { name: 'home', type: 'dir', size: 0 },
+      ],
+      '/home': [{ name: 'user', type: 'dir', size: 0 }],
+      '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
+      '/home/user/.config': [{ name: 'platform.json', type: 'file', size: 1 }],
+    };
+    const shell = createMockShell({
+      getCwd: () => '/',
+      listDir: (dir: string) => ({ entries: tree[dir] ?? [] }),
+      readFile: () => ({ content: 'x' }),
+    });
+
+    const files = await listAllVfsFiles(shell);
+
+    expect(files.map((f) => f.path)).toEqual(['go.mod']);
+  });
+});

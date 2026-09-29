@@ -109,10 +109,15 @@ function emptyGitStatus() {
 
 async function ensureDir(path: string) {
   const fs = getFs().promises;
-  try {
-    await fs.mkdir(path);
-  } catch {
-    // best-effort: may already exist.
+  // lightning-fs mkdir creates one level: make each ancestor in turn, or a
+  // file two folders deep under a new folder fails with ENOENT.
+  const parts = path.split('/').filter(Boolean);
+  for (let i = 1; i <= parts.length; i++) {
+    try {
+      await fs.mkdir(`/${parts.slice(0, i).join('/')}`);
+    } catch {
+      // best-effort: may already exist.
+    }
   }
 }
 

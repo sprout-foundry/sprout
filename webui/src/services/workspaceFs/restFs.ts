@@ -69,18 +69,29 @@ export function createRestFs(fetchFn: FetchFn = fetch): WorkspaceFs {
       return r.ok ? { ok: true } : { ok: false, error: r.error };
     },
 
+    // The files endpoint lists one directory per call (GET, workspace-relative
+    // `relative` paths), so deeper levels are walked here. Only the requested
+    // directory's own failure fails the listing.
     async list(path = '', maxDepth = 3) {
-      const resp = await fetchFn('/api/files', { method: 'POST', body: JSON.stringify({ maxDepth }) });
-      const r = await toResult(resp);
-      if (!r.ok) return { ok: false, error: r.error } as ListResult;
-      const files = Array.isArray((r.data as { files?: unknown }).files)
-        ? (r.data as { files: Array<Record<string, unknown>> }).files
-        : [];
       const prefix = normalizeFsPath(path);
-      const mapped: FsEntry[] = files
-        .map((f) => ({ path: String(f.path ?? ''), size: Number(f.size ?? 0), isDir: Boolean(f.isDir) }))
-        .filter((f) => f.path !== '' && (prefix === '' || f.path === prefix || f.path.startsWith(prefix + '/')));
-      return { ok: true, files: mapped };
+      const inside = (p: string) => p !== '' && p !== '.' && (prefix === '' || p.startsWith(prefix + '/'));
+      const files: FsEntry[] = [];
+      const walk = async (dir: string, depth: number): Promise<string | null> => {
+        const resp = await fetchFn(dir === '' ? '/api/files' : `/api/files?path=${encodeURIComponent(dir)}`);
+        const r = await toResult(resp);
+        if (!r.ok) return r.error;
+        const raw = (r.data as { files?: unknown }).files;
+        for (const e of Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : []) {
+          const entryPath = normalizeFsPath(String(e.relative ?? ''));
+          if (!inside(entryPath)) continue;
+          const isDir = Boolean(e.is_dir);
+          files.push({ path: entryPath, size: Number(e.size ?? 0), isDir });
+          if (isDir && depth > 1) await walk(entryPath, depth - 1);
+        }
+        return null;
+      };
+      const error = await walk(prefix, maxDepth);
+      return error ? ({ ok: false, error } as ListResult) : { ok: true, files };
     },
 
     async stat(path) {

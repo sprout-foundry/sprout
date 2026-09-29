@@ -2,10 +2,11 @@ import { showThemedPrompt } from '@sprout/ui';
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useAutoReloadCleanBuffers } from '../hooks/useAutoReloadCleanBuffers';
 import { useExternalFileWatcher } from '../hooks/useExternalFileWatcher';
+import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
 import { resolveEditorFilePath } from '../services/lspClientService';
 import { notificationBus } from '../services/notificationBus';
-import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
+import type { EditorBuffer, EditorPane, EditorFileEntry, PaneLayout, PaneSize } from '../types/editor';
 import { debugLog } from '../utils/log';
 import { writeFileWithFetch } from './fileWriteHelpers';
 import { useSproutFetch } from './SproutAdapterContext';
@@ -18,6 +19,11 @@ export interface PaneBridge {
   activePaneId: string | null;
   activeBufferId: string | null;
   panes: EditorPane[];
+  /** Split type and sizes, persisted with the layout. */
+  paneLayout?: PaneLayout;
+  paneSizes?: PaneSize;
+  setPaneLayout?: (layout: PaneLayout) => void;
+  setPaneSizes?: (sizes: PaneSize) => void;
   setActiveBufferId: (id: string | null) => void;
   setActivePaneId: (id: string | null) => void;
   setPanes: React.Dispatch<React.SetStateAction<EditorPane[]>>;
@@ -45,6 +51,8 @@ interface BufferManagerContextValue {
     isPinned?: boolean;
     isClosable?: boolean;
     activate?: boolean;
+    /** Pane to open a new buffer in, when it exists (restoring a saved layout). */
+    paneId?: string;
     metadata?: Record<string, unknown>;
   }) => string;
   openCompareBuffer: (options: {
@@ -341,6 +349,8 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       isPinned?: boolean;
       isClosable?: boolean;
       activate?: boolean;
+      /** Pane to open a new buffer in, when it exists (restoring a saved layout). */
+      paneId?: string;
       metadata?: Record<string, unknown>;
     }) => {
       if (options.kind === 'file') {
@@ -391,10 +401,12 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return bufferId;
       }
 
+      const requestedPane = options.paneId ? paneBridge.panes.find((p) => p.id === options.paneId) : undefined;
       const targetPane =
-        options.kind === 'chat'
+        requestedPane ??
+        (options.kind === 'chat'
           ? getRightmostPane(paneBridge.panes)
-          : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId);
+          : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId));
       const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;
 
       const bufferId = `buffer-${options.kind}-${Date.now()}-${nextBufferSeq()}`;
@@ -1039,6 +1051,28 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     buffersRef,
     reloadBufferFromDisk,
     setBufferExternallyModified,
+  });
+
+  // Saves and restores open file tabs and the pane layout across reloads,
+  // and drops stale file tabs on a workspace switch. Unmounted by an earlier
+  // hook consolidation, which left every reload with no open files.
+  const panesRef = useRef(paneBridge.panes);
+  panesRef.current = paneBridge.panes;
+  useLayoutPersistence({
+    buffersRef,
+    panesRef,
+    buffers,
+    panes: paneBridge.panes,
+    setBuffers,
+    setPanes: paneBridge.setPanes,
+    activePaneId: paneBridge.activePaneId,
+    activeBufferId: paneBridge.activeBufferId,
+    setActivePaneId: paneBridge.setActivePaneId,
+    setActiveBufferId: paneBridge.setActiveBufferId,
+    paneLayout: paneBridge.paneLayout ?? 'single',
+    paneSizes: paneBridge.paneSizes ?? {},
+    setPaneLayout: paneBridge.setPaneLayout,
+    setPaneSizes: paneBridge.setPaneSizes,
   });
 
   const value = React.useMemo<BufferManagerContextValue>(

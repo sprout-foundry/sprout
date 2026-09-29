@@ -484,3 +484,34 @@ describe('handleWasmFileList with the workspace at the filesystem root', () => {
     expect(await listing('/home/user', '/home/user')).toEqual(['.config']);
   });
 });
+
+describe('file mutations announce file_changed like the daemon', () => {
+  it('reports writes, creates, deletes and renames', async () => {
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    const events: Array<{ type: string; data: { file_path: string; action: string } }> = [];
+    setAgentEventDispatcher((e) => events.push(e as (typeof events)[number]));
+    const shell = createMockShell();
+
+    handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/w/a.ts', JSON.stringify({ content: 'x' }));
+    handleWasmLocal(shell, '/api/create', 'POST', '/api/create', JSON.stringify({ path: '/w/b.ts' }));
+    handleWasmLocal(shell, '/api/delete', 'POST', '/api/delete', JSON.stringify({ path: '/w/c.ts' }));
+    handleWasmLocal(
+      shell,
+      '/api/rename',
+      'POST',
+      '/api/rename',
+      JSON.stringify({ old_path: '/w/d.ts', new_path: '/w/e.ts' }),
+    );
+    handleWasmLocal(shell, '/api/file', 'GET', '/api/file?path=/w/a.ts');
+    await Promise.resolve();
+    setAgentEventDispatcher(null);
+
+    expect(events.map((e) => `${e.type} ${e.data.action} ${e.data.file_path}`)).toEqual([
+      'file_changed write /w/a.ts',
+      'file_changed created /w/b.ts',
+      'file_changed deleted /w/c.ts',
+      'file_changed deleted /w/d.ts',
+      'file_changed created /w/e.ts',
+    ]);
+  });
+});

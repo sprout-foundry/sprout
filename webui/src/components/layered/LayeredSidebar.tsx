@@ -182,6 +182,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         onAddProject={isCloud ? () => void promptForRepo() : undefined}
         onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })}
         homeActive={home.open}
+        onOpenActivity={props.onCloseDrawer}
         onOpenHome={() => {
           // On phones the rail sits inside the drawer: choosing a place
           // there should show it, as choosing a sidebar entry does.

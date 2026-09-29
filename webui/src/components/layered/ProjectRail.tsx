@@ -27,6 +27,8 @@ interface ProjectRailProps {
   /** Hosted: Home opens inside the shell. */
   homeActive?: boolean;
   onOpenHome?: () => void;
+  /** Runs after Activity opens (phones close the drawer the rail sits in). */
+  onOpenActivity?: () => void;
 }
 
 function initial(label: string): string {
@@ -42,6 +44,7 @@ export default function ProjectRail({
   onToggleCollapsed,
   homeActive,
   onOpenHome,
+  onOpenActivity,
 }: ProjectRailProps): ReactElement {
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
@@ -77,9 +80,10 @@ export default function ProjectRail({
         className="project-rail-btn"
         title="Activity"
         aria-label="Activity"
-        onClick={(e) =>
-          window.dispatchEvent(new CustomEvent(OPEN_NOTIFICATIONS_EVENT, { detail: { anchor: e.currentTarget } }))
-        }
+        onClick={(e) => {
+          window.dispatchEvent(new CustomEvent(OPEN_NOTIFICATIONS_EVENT, { detail: { anchor: e.currentTarget } }));
+          onOpenActivity?.();
+        }}
       >
         <Bell size={18} />
       </button>

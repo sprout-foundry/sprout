@@ -84,13 +84,17 @@ type CheckpointFileChange = changes.CheckpointFileChange
 
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {
-	Messages          []api.Message    `json:"messages"`
-	MessageTimestamps []time.Time      `json:"message_timestamps,omitempty"`
-	TurnCheckpoints   []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
-	PreviousSummary   string           `json:"previous_summary"`
-	CompactSummary    string           `json:"compact_summary"` // New: 5K limit summary for continuity
-	TaskActions       []TaskAction     `json:"task_actions"`
-	SessionID         string           `json:"session_id"`
+	Messages          []api.Message `json:"messages"`
+	MessageTimestamps []time.Time   `json:"message_timestamps,omitempty"`
+	// QueryDisplays maps a user message to the chat bubble shown for it when
+	// the two differ — a background-task wakeup the model reads as a status
+	// batch, the user as "Looking into '…'…".
+	QueryDisplays   map[string]string `json:"query_displays,omitempty"`
+	TurnCheckpoints []TurnCheckpoint  `json:"turn_checkpoints,omitempty"`
+	PreviousSummary string            `json:"previous_summary"`
+	CompactSummary  string            `json:"compact_summary"` // New: 5K limit summary for continuity
+	TaskActions     []TaskAction      `json:"task_actions"`
+	SessionID       string            `json:"session_id"`
 	// Token and cost metrics
 	TotalTokens             int     `json:"total_tokens"`
 	TotalCost               float64 `json:"total_cost"`

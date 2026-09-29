@@ -42,8 +42,8 @@ func (c *CustomCommand) Usage() string {
 		"/custom remove [name]",
 		"                     Remove a custom provider (prompts if name omitted).",
 		"",
-		"The wizard prompts for endpoint URL, API key env var, and preferred model.",
-		"It will offer to set the API key via the credential backend when saved.",
+		"The wizard prompts for endpoint URL, how to supply the API key, and preferred model.",
+		"A pasted API key (the default) is kept in the credential store; an env var or no key are also options.",
 	}, "\n")
 }
 

@@ -497,6 +497,15 @@ class WebSocketService {
     this.onReconnectCallback = callback;
   }
 
+  /**
+   * Delivers an event produced in the page to every listener, as if it had
+   * arrived from the server. The hosted editor's agent runs in the browser,
+   * so its events never cross the socket.
+   */
+  deliverLocal(event: WsEvent): void {
+    this.notifyCallbacks(event);
+  }
+
   private notifyCallbacks(event: WsEvent) {
     this.callbacks.forEach((callback) => callback(event));
     // Bridge server events onto the DOM so decoupled components

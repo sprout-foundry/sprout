@@ -99,4 +99,38 @@ describe('chat tab bookkeeping', () => {
     });
     expect(latest.buffers.has('buffer-chat')).toBe(false);
   });
+
+  it('restores a saved split and opens a chat tab in the pane it was in', async () => {
+    localStorage.setItem(
+      'sprout.editor.panes:_default',
+      JSON.stringify([
+        { id: 'pane-1', position: 'primary' },
+        { id: 'pane-9', position: 'secondary' },
+      ]),
+    );
+    localStorage.setItem('sprout.editor.paneLayout:_default', 'split-vertical');
+    mount();
+    // Restored once the workspace lookup settles (it fails in tests; the
+    // restore still runs, against the default workspace keys).
+    for (let i = 0; i < 50 && latest.panes.length < 2; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+    expect(latest.panes.map((p) => p.id)).toEqual(['pane-1', 'pane-9']);
+    expect(latest.paneLayout).toBe('split-vertical');
+
+    act(() => {
+      latest.openWorkspaceBuffer({
+        kind: 'chat',
+        path: '__workspace/chat/c7',
+        title: 'Chat 7',
+        paneId: 'pane-1',
+        metadata: { chatId: 'c7' },
+      });
+    });
+    expect(chatTabs().find((b) => b.metadata?.chatId === 'c7')?.paneId).toBe('pane-1');
+    localStorage.removeItem('sprout.editor.panes:_default');
+    localStorage.removeItem('sprout.editor.paneLayout:_default');
+  });
 });

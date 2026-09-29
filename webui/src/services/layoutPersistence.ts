@@ -10,6 +10,7 @@
  */
 
 import { debugLog } from '../utils/log';
+import type { EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { getTabWorkspacePath } from './clientSession';
 
 // ---------------------------------------------------------------------------
@@ -340,4 +341,54 @@ export function dispose(): void {
     window.removeEventListener('beforeunload', beforeUnloadHandler);
     beforeUnloadHandler = null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pane structure and chat placement
+// ---------------------------------------------------------------------------
+
+const PANES_BASE_KEY = 'sprout.editor.panes';
+const CHAT_PANES_BASE_KEY = 'sprout.editor.chatPanes';
+
+export interface SavedPane {
+  id: string;
+  position: EditorPane['position'];
+}
+
+export function getPanesStorageKey(): string {
+  return `${PANES_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
+
+export function getChatPanesStorageKey(): string {
+  return `${CHAT_PANES_BASE_KEY}:${getWorkspaceSuffix()}`;
+}
+
+function readJSON<T>(key: string): T | null {
+  const raw = readStorageItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** The saved pane list, or null when none (or not a usable split). */
+export function loadSavedPanes(): SavedPane[] | null {
+  const panes = readJSON<SavedPane[]>(getPanesStorageKey());
+  if (!Array.isArray(panes) || panes.length < 2 || !panes.some((p) => p.id === 'pane-1')) return null;
+  return panes.filter((p) => typeof p?.id === 'string');
+}
+
+export function loadSavedPaneLayout(): PaneLayout | null {
+  return (readStorageItem(getPaneLayoutStorageKey()) as PaneLayout | null) || null;
+}
+
+export function loadSavedPaneSizes(): PaneSize | null {
+  return readJSON<PaneSize>(getPaneSizesStorageKey());
+}
+
+/** Which pane each chat's tab was in: chatId → paneId. */
+export function loadChatPanePlacement(): Record<string, string> {
+  return readJSON<Record<string, string>>(getChatPanesStorageKey()) ?? {};
 }

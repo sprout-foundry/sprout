@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ChatSession } from '../services/chatSessions';
+import { loadChatPanePlacement } from '../services/layoutPersistence';
 import type { EditorBuffer } from '../types/editor';
 
 export interface UseChatSessionsSyncParams {
@@ -22,6 +23,8 @@ export interface UseChatSessionsSyncParams {
     isPinned?: boolean;
     isClosable?: boolean;
     activate?: boolean;
+    /** Pane to open a new buffer in, when it exists (restoring a saved layout). */
+    paneId?: string;
     metadata?: Record<string, unknown>;
   }) => string;
 }
@@ -115,6 +118,7 @@ export const useChatSessionsSync = ({
     // Open in creation order: the list arrives most-recently-active first, so
     // following it reshuffled the tab strip on every reload.
     const byCreation = [...laneSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    const savedPlacement = loadChatPanePlacement();
     byCreation.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
@@ -139,6 +143,7 @@ export const useChatSessionsSync = ({
         isPinned: false,
         isClosable: !isActive,
         activate: isActive,
+        paneId: savedPlacement[session.id],
         metadata: { chatId: session.id },
       });
     });
@@ -161,6 +166,7 @@ export const useChatSessionsSync = ({
           isPinned: false,
           isClosable: false,
           activate: true,
+          paneId: savedPlacement[activeChatId!],
           metadata: { chatId: activeChatId },
         });
       }

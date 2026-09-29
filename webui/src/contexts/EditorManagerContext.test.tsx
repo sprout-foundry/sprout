@@ -41,7 +41,7 @@ beforeEach(() => {
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   // Clear any persisted layout snapshot from previous tests so that
   // restoreLayout() doesn't inject stale file buffers on mount.
-  localStorage.removeItem('sprout.editor.layoutState');
+  Object.keys(localStorage).filter((k) => k.startsWith('sprout.editor.')).forEach((k) => localStorage.removeItem(k));
 });
 
 afterEach(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
@@ -12,10 +12,16 @@ import {
   writeStorageItem,
   getPaneLayoutStorageKey,
   getPaneSizesStorageKey,
+  getPanesStorageKey,
+  getChatPanesStorageKey,
+  loadSavedPanes,
+  loadSavedPaneLayout,
+  loadSavedPaneSizes,
+  loadChatPanePlacement,
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
-import type { EditorBuffer, EditorPane } from '../types/editor';
+import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
 
@@ -28,10 +34,12 @@ interface UseLayoutPersistenceParams {
   setPanes: Dispatch<SetStateAction<EditorPane[]>>;
   activePaneId: string | null;
   activeBufferId: string | null;
-  setActivePaneId: Dispatch<SetStateAction<string | null>>;
-  setActiveBufferId: Dispatch<SetStateAction<string | null>>;
+  setActivePaneId: (id: string | null) => void;
+  setActiveBufferId: (id: string | null) => void;
   paneLayout: string;
   paneSizes: Record<string, number>;
+  setPaneLayout?: (layout: PaneLayout) => void;
+  setPaneSizes?: (sizes: PaneSize) => void;
 }
 
 /** Layout persistence: restore open tabs on mount, save snapshot on changes, cleanup. */
@@ -48,15 +56,24 @@ export function useLayoutPersistence({
   setActiveBufferId,
   paneLayout,
   paneSizes,
+  setPaneLayout,
+  setPaneSizes,
 }: UseLayoutPersistenceParams) {
+  const activeBufferIdRef = useRef(activeBufferId);
+  activeBufferIdRef.current = activeBufferId;
+  // Nothing is saved until the saved layout has been restored: the initial
+  // single pane would otherwise overwrite the saved split first.
+  const [layoutRestored, setLayoutRestored] = useState(false);
   // Persist pane layout type to localStorage
   useEffect(() => {
+    if (!layoutRestored) return;
     writeStorageItem(getPaneLayoutStorageKey(), paneLayout);
-  }, [paneLayout]);
+  }, [paneLayout, layoutRestored]);
 
   // Persist pane sizes to localStorage (debounced)
   const paneSizesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!layoutRestored) return;
     if (paneSizesTimeoutRef.current) clearTimeout(paneSizesTimeoutRef.current);
     paneSizesTimeoutRef.current = setTimeout(() => {
       writeStorageItem(getPaneSizesStorageKey(), JSON.stringify(paneSizes));
@@ -67,18 +84,56 @@ export function useLayoutPersistence({
         writeStorageItem(getPaneSizesStorageKey(), JSON.stringify(paneSizes));
       }
     };
-  }, [paneSizes]);
+  }, [paneSizes, layoutRestored]);
 
   /**
    * Restore open-file tabs from the persisted layout snapshot.
    * Buffer content is NOT restored — EditorPane fetches it on mount.
    */
   const restoreLayout = useCallback(() => {
+    // The split first: the panes must exist before tabs go back into them.
+    let validPaneIds = new Set(panesRef.current.map((p) => p.id));
+    const savedPanes = loadSavedPanes();
+    if (savedPanes && panesRef.current.length === 1) {
+      const restoredIds = new Set(savedPanes.map((p) => p.id));
+      const placement = loadChatPanePlacement();
+      const moved = new Map(buffersRef.current);
+      for (const [id, b] of moved) {
+        const chatId = b.kind === 'chat' ? (b.metadata?.chatId as string | null | undefined) : undefined;
+        const target = chatId ? placement[chatId] : undefined;
+        if (target && restoredIds.has(target) && b.paneId !== target) moved.set(id, { ...b, paneId: target });
+      }
+      buffersRef.current = moved;
+      setBuffers(moved);
+      // Keep the focused tab focused (its chat stays the active chat).
+      const focused = activeBufferIdRef.current ? moved.get(activeBufferIdRef.current) : undefined;
+      const activePane = focused?.paneId && restoredIds.has(focused.paneId) ? focused.paneId : 'pane-1';
+      const shownIn = (paneId: string) => {
+        const inPane = Array.from(moved.values()).filter((b) => b.paneId === paneId);
+        if (paneId === activePane && focused) return focused.id;
+        return (inPane.find((b) => b.isActive) ?? inPane[0])?.id ?? null;
+      };
+      const restoredPanes: EditorPane[] = savedPanes.map((p) => ({
+        id: p.id,
+        position: p.position,
+        isActive: p.id === activePane,
+        bufferId: shownIn(p.id),
+      }));
+      panesRef.current = restoredPanes;
+      setPanes(restoredPanes);
+      setActivePaneId(activePane);
+      setPaneLayout?.(loadSavedPaneLayout() ?? 'split-vertical');
+      const sizes = loadSavedPaneSizes();
+      setPaneSizes?.(
+        sizes && savedPanes.every((p) => typeof sizes[p.id] === 'number')
+          ? sizes
+          : Object.fromEntries(savedPanes.map((p) => [p.id, 100 / savedPanes.length])),
+      );
+      validPaneIds = restoredIds;
+    }
+
     const snapshot = loadLayoutSnapshot();
     if (!snapshot || snapshot.buffers.length === 0) return;
-
-    const currentPanes = panesRef.current;
-    const validPaneIds = new Set(currentPanes.map((p) => p.id));
     const existingBuffers = buffersRef.current;
     const newBuffers = new Map(existingBuffers);
     const pathToBufferId = new Map<string, string>();
@@ -142,7 +197,7 @@ export function useLayoutPersistence({
         setActiveBufferId(bufferId);
       }
     }
-  }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId]);
+  }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId, setPaneLayout, setPaneSizes]);
 
   // Auto-restore layout on first mount — wait for workspace path to be set first
   // so that restoreLayout loads the correct workspace-scoped snapshot.
@@ -164,6 +219,7 @@ export function useLayoutPersistence({
       .finally(() => {
         if (!cancelled) {
           restoreLayout();
+          setLayoutRestored(true);
         }
       });
     return () => {
@@ -177,6 +233,33 @@ export function useLayoutPersistence({
     initBeforeUnloadFlush();
   }, []);
 
+  // Save the pane list (so a split survives reload) and which pane each chat
+  // tab is in. Chat tabs reopen from the chat list, not the file snapshot, so
+  // their placement is kept separately.
+  const chatPlacementFingerprintRef = useRef('');
+  const panesFingerprintRef = useRef('');
+  useEffect(() => {
+    if (!layoutRestored) return;
+    const panesJSON = JSON.stringify(_panes.map((p) => ({ id: p.id, position: p.position })));
+    if (panesJSON !== panesFingerprintRef.current) {
+      panesFingerprintRef.current = panesJSON;
+      writeStorageItem(getPanesStorageKey(), panesJSON);
+    }
+    const validPaneIds = new Set(_panes.map((p) => p.id));
+    // Merge: a chat whose tab hasn't reopened yet (the chat list loads after
+    // the layout) keeps its saved pane rather than losing it.
+    const placement: Record<string, string> = { ...loadChatPanePlacement() };
+    for (const b of buffersRef.current.values()) {
+      const chatId = b.kind === 'chat' ? (b.metadata?.chatId as string | null | undefined) : undefined;
+      if (chatId && b.paneId && validPaneIds.has(b.paneId)) placement[chatId] = b.paneId;
+    }
+    const fingerprint = JSON.stringify(placement);
+    if (fingerprint !== chatPlacementFingerprintRef.current) {
+      chatPlacementFingerprintRef.current = fingerprint;
+      writeStorageItem(getChatPanesStorageKey(), fingerprint);
+    }
+  }, [_panes, buffers, buffersRef, layoutRestored]);
+
   // Save layout snapshot on relevant state changes (skip first render).
   // Use buffersRef to avoid re-running on every keystroke (Map identity changes
   // on content updates). Only save when layout-relevant properties actually differ.
@@ -189,6 +272,9 @@ export function useLayoutPersistence({
       hasFirstRenderCompletedRef.current = true;
       return;
     }
+    // Saving before the restore would store the still-empty tab set over the
+    // saved one.
+    if (!layoutRestored) return;
 
     const allBuffers = buffersRef.current;
     const validPaneIds = new Set(panesRef.current.map((p) => p.id));
@@ -244,7 +330,7 @@ export function useLayoutPersistence({
       };
       saveLayoutSnapshot(snapshot);
     }
-  }, [activePaneId, activeBufferId, buffersRef, panesRef]);
+  }, [activePaneId, activeBufferId, buffersRef, panesRef, layoutRestored]);
 
   // Cleanup on unmount
   useEffect(() => {

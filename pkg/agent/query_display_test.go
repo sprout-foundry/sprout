@@ -56,7 +56,13 @@ func TestQueryDisplaysSurviveSessionFile(t *testing.T) {
 	if got := state.DisplayMessages()[0].Content; got != "Looking into 'make build'…" {
 		t.Fatalf("restored bubble = %q", got)
 	}
-	if state.Messages[0].Content == "Looking into 'make build'…" {
+	displays := state.QueryDisplays
+	state.QueryDisplays = nil
+	if got := state.DisplayMessages()[0].Content; got != batch {
+		t.Fatalf("without a display the bubble = %q, want the message minus its envelope", got)
+	}
+	state.QueryDisplays = displays
+	if state.Messages[0].Content == "Looking into 'make build'…" || state.Messages[0].Content == batch {
 		t.Fatal("DisplayMessages rewrote the stored conversation")
 	}
 

@@ -151,6 +151,12 @@
   text-overflow: ellipsis;
 }
 
+.chs-row-match {
+  background: none;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .chs-row-age {
   flex-shrink: 0;
   font-size: 10px;

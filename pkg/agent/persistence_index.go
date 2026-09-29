@@ -208,21 +208,21 @@ func SetGetStateDirForTestError(msg string) func() (string, error) {
 	})
 }
 
-// DisplayMessages returns the messages as the chat showed them: a user
-// message with a recorded bubble text reads as that text.
+// DisplayMessages returns the messages as the chat showed them: user messages
+// without the timestamp envelope the model was sent, or as their recorded
+// bubble text where one differs.
 func (s *ConversationState) DisplayMessages() []api.Message {
-	if len(s.QueryDisplays) == 0 {
-		return s.Messages
-	}
 	out := make([]api.Message, len(s.Messages))
 	copy(out, s.Messages)
 	for i, msg := range out {
 		if msg.Role != "user" {
 			continue
 		}
-		if display, ok := s.QueryDisplays[StripUserMessageTimestamp(msg.Content)]; ok {
-			out[i].Content = display
+		content := StripUserMessageTimestamp(msg.Content)
+		if display, ok := s.QueryDisplays[content]; ok {
+			content = display
 		}
+		out[i].Content = content
 	}
 	return out
 }

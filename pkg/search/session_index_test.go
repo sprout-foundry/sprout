@@ -83,7 +83,7 @@ func TestSessionIndex_BuildFromScratch(t *testing.T) {
 	}
 
 	// Version should be 1.
-	if idx.Version != 1 {
+	if idx.Version != IndexFormatVersion {
 		t.Errorf("expected version 1, got %d", idx.Version)
 	}
 
@@ -143,7 +143,7 @@ func TestSessionIndex_LoadSaveRoundTrip(t *testing.T) {
 	// Create an index with known entries.
 	now := time.Now().Truncate(time.Second)
 	idx := &SessionIndex{
-		Version: 1,
+		Version: IndexFormatVersion,
 		BuiltAt: now,
 		Sessions: map[string]SessionIndexEntry{
 			"alpha": {
@@ -236,7 +236,7 @@ func TestSessionIndex_LoadSaveRoundTrip(t *testing.T) {
 	}
 
 	// Version preserved.
-	if loaded.Version != 1 {
+	if loaded.Version != IndexFormatVersion {
 		t.Errorf("Version = %d, want 1", loaded.Version)
 	}
 }
@@ -424,7 +424,7 @@ func TestSessionIndex_AtomicSave(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 20; i++ {
 			idx := &SessionIndex{
-				Version: 1,
+				Version: IndexFormatVersion,
 				Sessions: map[string]SessionIndexEntry{
 					"iter-" + string(rune('a'+i%26)): {
 						SessionID:    "s",
@@ -656,5 +656,39 @@ func TestSessionIndex_TextConcatenation(t *testing.T) {
 	// Verify all content is lowercased.
 	if e.Text != strings.ToLower(e.Text) {
 		t.Errorf("Text is not lowercased: %q", e.Text)
+	}
+}
+
+func TestSessionIndex_DropsTimeEnvelope(t *testing.T) {
+	tmp := t.TempDir()
+	s := makeBaseSession("Stamped", "/a")
+	s.Messages[0].Content = "<current-time>2026-01-02T03:04:05Z (Local: 2026-01-02 03:04:05, UTC)</current-time>\n\nHello there"
+	writeSession(t, tmp, "ses-1", s)
+
+	idx, err := BuildIndex(tmp, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := idx.Sessions["ses-1"].Text
+	if strings.Contains(text, "current-time") || strings.Contains(text, "2026") {
+		t.Fatalf("index text keeps the envelope: %q", text)
+	}
+	if !strings.HasPrefix(text, "hello there\n") {
+		t.Fatalf("index text = %q, want the message itself", text)
+	}
+}
+
+func TestSessionIndex_LoadDiscardsOlderFormat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "index.json")
+	old := &SessionIndex{Version: 1, Sessions: map[string]SessionIndexEntry{"ses-1": {SessionID: "ses-1", Text: "stale"}}}
+	if err := SaveIndex(path, old); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := LoadIndex(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idx.Sessions) != 0 {
+		t.Fatalf("older-format index served %d stale entries", len(idx.Sessions))
 	}
 }

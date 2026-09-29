@@ -66,6 +66,29 @@ func DefaultIndexPath() string {
 	return filepath.Join(stateDir, "sessions", "search-index.json")
 }
 
+// IndexFormatVersion identifies the text-extraction rules an index was built
+// with. Version 2 drops the <current-time> envelope the agent prefixes to
+// user messages, which otherwise matched date searches and showed up in
+// result previews.
+const IndexFormatVersion = 2
+
+// stripTimeEnvelope removes the leading <current-time>…</current-time> block
+// the agent adds to user messages (agent.StripUserMessageTimestamp; that
+// package imports this one).
+func stripTimeEnvelope(content string) string {
+	const openTag, closeTag = "<current-time>", "</current-time>"
+	if !strings.HasPrefix(content, openTag) {
+		return content
+	}
+	end := strings.Index(content, closeTag)
+	if end < 0 {
+		return content
+	}
+	body := content[end+len(closeTag):]
+	body = strings.TrimPrefix(body, "\r\n\r\n")
+	return strings.TrimPrefix(body, "\n\n")
+}
+
 // LoadIndex reads and parses the search index from the given path.
 //
 // If the file does not exist a zero-value SessionIndex with an
@@ -83,6 +106,11 @@ func LoadIndex(path string) (*SessionIndex, error) {
 	var idx SessionIndex
 	if err := json.Unmarshal(data, &idx); err != nil {
 		return nil, fmt.Errorf("parse index file %q: %w", path, err)
+	}
+	if idx.Version != IndexFormatVersion {
+		// Built from older extraction rules; start over so every session is
+		// re-read rather than served stale.
+		return &SessionIndex{Sessions: make(map[string]SessionIndexEntry)}, nil
 	}
 	if idx.Sessions == nil {
 		idx.Sessions = make(map[string]SessionIndexEntry)
@@ -131,7 +159,7 @@ func SaveIndex(path string, idx *SessionIndex) error {
 // without re-parsing.  Entries whose session files no longer exist on
 // disk are removed from the index.
 //
-// idx.Version is set to 1 and idx.BuiltAt is updated to now.
+// idx.Version is set to IndexFormatVersion and idx.BuiltAt is updated to now.
 func BuildIndex(sessionsDir string, idx *SessionIndex) (*SessionIndex, error) {
 	if idx == nil {
 		idx = &SessionIndex{Sessions: make(map[string]SessionIndexEntry)}
@@ -180,7 +208,7 @@ func BuildIndex(sessionsDir string, idx *SessionIndex) (*SessionIndex, error) {
 		}
 	}
 
-	idx.Version = 1
+	idx.Version = IndexFormatVersion
 	idx.BuiltAt = time.Now()
 
 	return idx, nil
@@ -268,8 +296,12 @@ func indexSessionFile(path, sessionID string, mtime time.Time) (SessionIndexEntr
 		}
 		first = false
 
+		content := m.Content
+		if m.Role == "user" {
+			content = stripTimeEnvelope(content)
+		}
 		start := sb.Len()
-		sb.WriteString(m.Content)
+		sb.WriteString(content)
 		end := sb.Len()
 		key := fmt.Sprintf("%s:%d", sessionID, msgIdx)
 		tokens[key] = []int{start, end}

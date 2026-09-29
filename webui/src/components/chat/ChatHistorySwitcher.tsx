@@ -5,6 +5,7 @@ import { clientFetch } from '../../services/clientSession';
 import { supportsExport } from '../../config/mode';
 import { getSessions, searchSessions } from '../../services/api/sessionApi';
 import type { SessionEntry, SessionSearchResult } from '../../services/api/types/session';
+import { highlightExcerpt } from './highlightExcerpt';
 import { showThemedConfirm } from '../ThemedDialog';
 import { useLog } from '../../utils/log';
 import './ChatHistorySwitcher.css';
@@ -266,7 +267,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession }: ChatHistorySwitc
                   )}
                   <span className="chs-row-body">
                     <span className="chs-row-name">{r.name || r.id}</span>
-                    <span className="chs-row-preview">{r.preview}</span>
+                    <span className="chs-row-preview">{highlightExcerpt(r.preview, query)}</span>
                   </span>
                   <span className="chs-row-age">{r.age}</span>
                 </button>

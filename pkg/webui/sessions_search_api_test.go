@@ -29,7 +29,7 @@ func testSearchIndexPath(root string) string {
 // makeTestIndex builds a SessionIndex with three entries for testing.
 func makeTestIndex() *search.SessionIndex {
 	return &search.SessionIndex{
-		Version: 1,
+		Version: search.IndexFormatVersion,
 		BuiltAt: time.Now(),
 		Sessions: map[string]search.SessionIndexEntry{
 			"sess-embed": {

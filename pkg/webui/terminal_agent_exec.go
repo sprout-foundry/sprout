@@ -82,6 +82,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 		session.mutex.RUnlock()
 		return "", -1, fmt.Errorf("ExecuteCommandAndWait is only for hidden sessions")
 	}
+	echoesInput := !session.NoPTY
 	session.mutex.RUnlock()
 
 	// Generate a unique sentinel marker.
@@ -301,12 +302,12 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 									output := buf.String()[:idx]
 
 									// Strip the command echo from the beginning of the output.
-									// The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
+									// Pipe (NoPTY) sessions have no echo. The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
 									// We find the echo by looking for the "/bin/sh -c '" prefix and
 									// stripping everything up to and including the first newline after it.
 									echoPrefix := "/bin/sh -c '"
 									echoIdx := strings.Index(output, echoPrefix)
-									if echoIdx != -1 {
+									if echoesInput && echoIdx != -1 {
 										restAfterEcho := output[echoIdx:]
 										newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
 										if newlineIdx != nil {

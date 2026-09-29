@@ -3,7 +3,7 @@
 .themed-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -291,7 +291,7 @@
 .security-approval-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -825,7 +825,7 @@
 .security-prompt-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1020,7 +1020,7 @@
 .ask-user-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1362,7 +1362,7 @@
 .model-selection-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1729,7 +1729,7 @@
 .password-prompt-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-primary) 78%, #000 22%);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;

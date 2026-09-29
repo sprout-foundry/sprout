@@ -141,3 +141,15 @@
     bottom: auto;
   }
 }
+
+/* Phones: the top holds the toolbar and chat picker (and its open list),
+   so sit at the very bottom over the status row and terminal strip. */
+@media (max-width: 768px) {
+  .sync-status-banner {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
+  }
+}

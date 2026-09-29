@@ -538,6 +538,29 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     expect(stateHolder.current.perChatCache['chat-1'].pendingEvents).toHaveLength(1);
   });
 
+  it('names the chat an approval request comes from when it is not the chat on screen', () => {
+    const { stateHolder } = setupWithCache('chat-1', {});
+    stateHolder.current = { ...stateHolder.current, chatSessions: [{ id: 'chat-1', name: 'Refactor' }] };
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'a1',
+        type: 'shell_approval_request',
+        data: { chat_id: 'chat-1', request_id: 'r1', command: 'rm x' },
+      });
+    });
+    expect(stateHolder.current.shellApprovalRequest?.fromChat).toBe('Refactor');
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'a2',
+        type: 'shell_approval_request',
+        data: { chat_id: 'other-chat', request_id: 'r2', command: 'ls' },
+      });
+    });
+    expect(stateHolder.current.shellApprovalRequest?.fromChat).toBeUndefined();
+  });
+
   it("files a background chat's metrics under that chat, not the chat on screen", () => {
     const { stateHolder } = setupWithCache('chat-1', { stats: { total_tokens: 10 } });
     stateHolder.current = { ...stateHolder.current, stats: { total_tokens: 999 } };

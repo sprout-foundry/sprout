@@ -37,7 +37,8 @@ vi.mock('../components/StatusBar', () => ({
 }));
 
 vi.mock('../components/Terminal', () => ({
-  default: () => createElement('div', { className: 'mock-terminal' }),
+  default: (props: { isExpanded?: boolean }) =>
+    createElement('div', { className: 'mock-terminal', 'data-expanded': String(!!props.isExpanded) }),
 }));
 
 vi.mock('../components/design/DesignSurface', () => ({
@@ -145,6 +146,19 @@ describe('CodeShell', () => {
       root.render(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false })));
     });
     expect(container.querySelector('.mock-terminal')).not.toBeNull();
+  });
+
+  it('opens the placeholder terminal only when the user left it open', () => {
+    act(() => {
+      root.render(
+        createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: false })),
+      );
+    });
+    expect(container.querySelector('.mock-terminal')?.getAttribute('data-expanded')).toBe('false');
+    act(() => {
+      root.render(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: true })));
+    });
+    expect(container.querySelector('.mock-terminal')?.getAttribute('data-expanded')).toBe('true');
   });
 
   it('omits the placeholder terminal when a local terminal is supported', () => {

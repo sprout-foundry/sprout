@@ -190,6 +190,29 @@ describe('tool badge lifecycle (live stream → completion → render)', () => {
     container?.remove();
   });
 
+  it('a turn that opens with a tool call gets its own badge, not the previous answer', () => {
+    ({ stateHolder } = mountHook());
+    stateHolder.current = {
+      ...stateHolder.current,
+      messages: [
+        { id: 'q1', type: 'user', content: 'Say hello', timestamp: new Date() },
+        { id: 'a1', type: 'assistant', content: 'Hello.', timestamp: new Date() },
+        { id: 'q2', type: 'user', content: 'Count the files', timestamp: new Date() },
+      ],
+    };
+
+    fire({
+      type: 'tool_start',
+      data: { tool_call_id: 'tc-ls', tool_name: 'shell_command', display_name: 'shell_command' },
+    });
+
+    const messages = stateHolder.current.messages as Message[];
+    expect(messages.find((m) => m.id === 'a1')?.toolRefs).toBeUndefined();
+    const answer = messages[messages.length - 1];
+    expect(answer.type).toBe('assistant');
+    expect(answer.toolRefs?.map((r) => r.toolId)).toEqual(['tc-ls']);
+  });
+
   function renderFinalMessages(): void {
     const messages = stateHolder.current.messages as Message[];
     act(() => {

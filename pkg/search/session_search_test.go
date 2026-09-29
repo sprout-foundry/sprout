@@ -26,7 +26,7 @@ func makeOlder() time.Time {
 func buildTestIndex(t *testing.T) *SessionIndex {
 	t.Helper()
 	return &SessionIndex{
-		Version: 1,
+		Version: IndexFormatVersion,
 		Sessions: map[string]SessionIndexEntry{
 			"session-1": {
 				SessionID:    "session-1",

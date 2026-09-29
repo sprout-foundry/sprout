@@ -51,6 +51,8 @@ type ConversationState struct {
 	WorkingDirectory        string           `json:"working_directory"` // Directory where session was created
 	InterruptedAt           *time.Time       `json:"interrupted_at,omitempty"`
 	RecoveredFromJournal    bool             `json:"recovered_from_journal,omitempty"`
+	// QueryDisplays: see AgentState.QueryDisplays.
+	QueryDisplays map[string]string `json:"query_displays,omitempty"`
 
 	// ConfigOverrides stores session-scoped configuration overrides.
 	// Applied on top of global and workspace config when the session is restored.
@@ -204,4 +206,23 @@ func SetGetStateDirForTestError(msg string) func() (string, error) {
 	return SetGetStateDirFunc(func() (string, error) {
 		return "", err
 	})
+}
+
+// DisplayMessages returns the messages as the chat showed them: user messages
+// without the timestamp envelope the model was sent, or as their recorded
+// bubble text where one differs.
+func (s *ConversationState) DisplayMessages() []api.Message {
+	out := make([]api.Message, len(s.Messages))
+	copy(out, s.Messages)
+	for i, msg := range out {
+		if msg.Role != "user" {
+			continue
+		}
+		content := StripUserMessageTimestamp(msg.Content)
+		if display, ok := s.QueryDisplays[content]; ok {
+			content = display
+		}
+		out[i].Content = content
+	}
+	return out
 }

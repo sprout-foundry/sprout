@@ -31,7 +31,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     );
     expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
     expect(screen.getByText(/Refactor sweep/)).toBeTruthy();
-    expect(screen.getByText(/send anyway queues after it/)).toBeTruthy();
+    expect(screen.getByText(/your message is queued and sends when it finishes/)).toBeTruthy();
   });
 
   it('Send-anyway queues the draft and clears the notice', () => {

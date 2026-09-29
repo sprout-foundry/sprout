@@ -1,3 +1,4 @@
+import type { WsEvent } from '@sprout/events';
 import type { Message, ToolRef } from '@sprout/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
@@ -11,13 +12,16 @@ import {
   renameChatSession,
   switchChatSession,
 } from '../services/chatSessions';
-import type { AppState } from '../types/app';
+import type { AppState, WorkspaceBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
+import { processingAfter, requestChatReplay } from '../utils/chatReplay';
+import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
 function extractToolRefsFromContent(content: string): ToolRef[] {
@@ -36,6 +40,22 @@ function extractToolRefsFromContent(content: string): ToolRef[] {
   return refs;
 }
 
+const WORKSPACE_BUSY_RECHECK_MS = 4000;
+
+/**
+ * The server transcript plus local messages it doesn't have yet. A local
+ * message counts as saved when the server copy's tail already holds the same
+ * turn (same role and text).
+ */
+function appendNotYetSaved(saved: Message[], local: Message[]): Message[] {
+  const tail = saved.slice(-Math.max(local.length, 1) * 2);
+  const out = [...saved];
+  for (const m of local) {
+    if (!tail.some((t) => t.type === m.type && t.content.trim() === m.content.trim())) out.push(m);
+  }
+  return out;
+}
+
 export interface QueuedMessage {
   message: string;
   chatId: string | null;
@@ -47,6 +67,8 @@ export interface UseChatSessionManagerParams {
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
+  /** The chat held back by workspace_busy, if any; its queued messages wait for the running chat. */
+  workspaceBusy?: WorkspaceBusyInfo | null;
 }
 
 export interface UseChatSessionManagerReturn {
@@ -95,6 +117,7 @@ export function useChatSessionManager({
   activeChatIdRef,
   queuedMessagesRef,
   isProcessing,
+  workspaceBusy = null,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   // Mirror of queuedMessagesRef for rendering. The ref is the source of
@@ -120,15 +143,7 @@ export function useChatSessionManager({
       if (activeChatId) {
         try {
           const switchResp = await switchChatSession(activeChatId);
-          initialMessages = (switchResp.chat_session.messages ?? [])
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m, i) => ({
-              id: `chat-${activeChatId}-${i}`,
-              type: m.role as 'user' | 'assistant',
-              content: typeof m.content === 'string' ? m.content : '',
-              timestamp: new Date(),
-              ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-            }));
+          initialMessages = chatTranscriptToMessages(activeChatId, switchResp.chat_session.messages);
           if (!activeChatIdRef.current) {
             activeChatIdRef.current = activeChatId;
           }
@@ -143,12 +158,15 @@ export function useChatSessionManager({
         // Showing messages for a chat the user isn't in desyncs the transcript
         // from activeChatId; the switch response already loaded the right one.
         const initialChatStillActive = !prev.activeChatId || prev.activeChatId === activeChatId;
+        // A message sent right after load, before this arrived, is already on
+        // screen; keeping only it hid the whole earlier conversation. Show the
+        // transcript with what was added since after it.
         return {
           chatSessions: response.chat_sessions ?? [],
           activeChatId: prev.activeChatId || activeChatId,
           messages:
-            initialChatStillActive && prev.messages.length === 0 && initialMessages.length > 0
-              ? trimMessages(initialMessages)
+            initialChatStillActive && initialMessages.length > 0
+              ? trimMessages(appendNotYetSaved(initialMessages, prev.messages))
               : prev.messages,
         };
       });
@@ -166,19 +184,31 @@ export function useChatSessionManager({
 
       // Track the expected chat ID to detect stale async responses
       const switchId = id;
+      let shownAtSwitchStart = new Set<string>();
+      // Events this chat received in the background. When none were dropped,
+      // the cached state plus these is its exact current state — the
+      // server's stored copy of a running chat lacks the turn in progress.
+      let replayEvents: WsEvent[] = [];
       activeChatIdRef.current = id;
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
+        const pending = cached?.pendingEvents ?? [];
+        const replayLocally = !!cached && pending.length > 0 && !cached.pendingEventsTruncated;
+        replayEvents = replayLocally ? pending : [];
         // Check pending events for completion signals. If the cache says
         // isProcessing=true but a query_completed/session_terminated/error
         // event arrived while viewing another chat, the cached flag is stale.
         // The backend fetch below will confirm, but this prevents a brief
         // phantom spinner on switch-back.
-        const hasCompletionInPending = (cached?.pendingEvents ?? []).some(
+        const hasCompletionInPending = pending.some(
           (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
         );
-        const restoredIsProcessing = hasCompletionInPending ? false : (cached?.isProcessing ?? false);
+        const restoredIsProcessing = replayLocally
+          ? processingAfter(cached.isProcessing ?? false, pending)
+          : hasCompletionInPending
+            ? false
+            : (cached?.isProcessing ?? false);
         const newCache = currentId
           ? {
               ...prev.perChatCache,
@@ -194,10 +224,16 @@ export function useChatSessionManager({
                 provider: prev.provider,
                 model: prev.model,
                 queryCount: prev.queryCount,
+                stats: prev.stats,
               },
             }
           : prev.perChatCache;
+        if (replayLocally) {
+          const { pendingEvents: _replayed, pendingEventsTruncated: _complete, ...rest } = cached;
+          newCache[id] = rest;
+        }
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
+        shownAtSwitchStart = new Set((cached?.messages ?? []).map((m) => m.id));
         return {
           activeChatId: id,
           messages: cached?.messages ?? [],
@@ -211,9 +247,15 @@ export function useChatSessionManager({
           // viewing another chat is worse than no indicator.
           queryProgress: restoredIsProcessing ? (cached?.queryProgress ?? null) : null,
           lastError: cached?.lastError ?? null,
+          // This chat's own figures; the server republishes them on switch.
+          stats: cached?.stats ?? {},
           perChatCache: newCache,
         };
       });
+
+      const replayedLocally = replayEvents.length > 0;
+      let installedStoredCopy = false;
+      requestChatReplay(id, replayEvents);
 
       try {
         const response = await switchChatSession(id, mode);
@@ -221,15 +263,7 @@ export function useChatSessionManager({
         // Report `false` so callers waiting on the switch (boot restore)
         // know it never landed and can fall back.
         if (activeChatIdRef.current !== switchId) return false;
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${id}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
+        const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
         const backendIsActive = response.chat_session.active_query;
 
         setState((prev) => {
@@ -240,8 +274,12 @@ export function useChatSessionManager({
           // shorter local state when streaming hadn't been persisted yet.
           const cached = prev.perChatCache[id];
           const hadPendingEvents = !!cached?.pendingEvents?.length;
+          // A locally replayed chat is already current; the stored copy can
+          // only be as new, or older while a run is in progress.
           const useBackendMessages =
-            backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents;
+            !replayedLocally &&
+            (backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents);
+          installedStoredCopy = useBackendMessages;
           // Drain pending events — the backend fetch is authoritative now.
           const newPerChatCache = { ...prev.perChatCache };
           if (cached && cached.pendingEvents) {
@@ -249,14 +287,29 @@ export function useChatSessionManager({
             delete newPerChatCache[id].pendingEvents;
           }
           const finalIsProcessing = backendIsActive;
-          activeRequestsRef.current = finalIsProcessing ? 1 : 0;
+          // A message sent (or an answer streamed) while this switch was in
+          // flight isn't in the server copy yet; dropping it lost the user's
+          // bubble and let the answer run into the previous reply.
+          const addedDuringSwitch = prev.messages.filter((m) => !shownAtSwitchStart.has(m.id));
+          const sentDuringSwitch = addedDuringSwitch.some((m) => m.type === 'user');
+          activeRequestsRef.current = finalIsProcessing || sentDuringSwitch ? 1 : 0;
+          const merged = useBackendMessages ? appendNotYetSaved(backendMessages, addedDuringSwitch) : prev.messages;
           return {
-            activeChatId: response.active_chat_id,
-            messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
-            isProcessing: finalIsProcessing,
+            // The chat the user picked. The response's active_chat_id can
+            // already name a chat another tab switched to, which would pair
+            // this chat's transcript with another chat's id.
+            activeChatId: id,
+            messages: useBackendMessages ? trimMessages(merged) : prev.messages,
+            isProcessing: finalIsProcessing || sentDuringSwitch,
             perChatCache: newPerChatCache,
           };
         });
+        // The stored copy of a running chat stops before the turn in
+        // progress; the server sends that turn's events to rebuild it.
+        // Only on top of that stored copy: a cached view already has the run.
+        if (installedStoredCopy && backendIsActive && activeChatIdRef.current === switchId) {
+          requestChatReplay(id, response.chat_session.run_events ?? []);
+        }
 
         // Refresh the session list (tab titles/counts) without blocking the
         // switch — the messages are already on screen from the switch
@@ -274,6 +327,24 @@ export function useChatSessionManager({
       } catch (error) {
         if (activeChatIdRef.current !== switchId) return false;
         activeChatIdRef.current = currentId;
+        // The screen already moved to the target chat; move it back with the
+        // ref, or the previous chat's events keep landing in the target's
+        // transcript.
+        setState((prev) => {
+          const back = currentId ? prev.perChatCache[currentId] : undefined;
+          activeRequestsRef.current = back?.isProcessing ? 1 : 0;
+          return {
+            activeChatId: currentId,
+            messages: back?.messages ?? [],
+            isProcessing: back?.isProcessing ?? false,
+            toolExecutions: back?.toolExecutions ?? [],
+            fileEdits: back?.fileEdits ?? [],
+            subagentActivities: back?.subagentActivities ?? [],
+            currentTodos: back?.currentTodos ?? [],
+            queryProgress: back?.isProcessing ? (back?.queryProgress ?? null) : null,
+            lastError: back?.lastError ?? null,
+          };
+        });
         debugLog('[chat] Failed to switch chat session:', error);
         // User tapped a chat tab and nothing happened — say why.
         notificationBus.notify(
@@ -348,18 +419,30 @@ export function useChatSessionManager({
   const handleDeleteChat = useCallback(
     async (id: string, options?: { removeWorktree?: boolean }) => {
       try {
-        await deleteChatSession(id, options?.removeWorktree === true);
+        // The server won't delete the active chat, so move to another chat
+        // in the same lane first (most recently active; the list is sorted
+        // that way).
         if (id === activeChatIdRef.current) {
-          const sessionsResp = await listChatSessions();
-          if (sessionsResp.chat_sessions.length > 0) {
-            await handleActiveChatChange(sessionsResp.active_chat_id);
-          } else {
-            setState((prev) => ({ chatSessions: [], activeChatId: null, messages: [] }));
+          const before = await listChatSessions();
+          const doomed = before.chat_sessions.find((c) => c.id === id);
+          const lane = doomed?.mode === 'design' ? 'design' : 'code';
+          const next = before.chat_sessions.find(
+            (c) => c.id !== id && (c.mode === 'design' ? 'design' : 'code') === lane,
+          );
+          if (!next) {
+            notificationBus.notify(
+              'info',
+              'Chat',
+              'This is the only chat here — start another before deleting it.',
+              5000,
+            );
+            return;
           }
-        } else {
-          const sessionsResp = await listChatSessions();
-          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+          if (!(await handleActiveChatChange(next.id))) return;
         }
+        await deleteChatSession(id, options?.removeWorktree === true);
+        const sessionsResp = await listChatSessions();
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
         // The tab the user tried to delete is still there — explain it.
@@ -490,15 +573,7 @@ export function useChatSessionManager({
         const bubbleId = generateMessageId();
         setState((prev) => ({
           lastError: null,
-          messages: trimMessages([
-            ...prev.messages,
-            {
-              id: bubbleId,
-              type: 'user',
-              content: trimmedMessage,
-              timestamp: new Date(),
-            },
-          ]),
+          messages: trimMessages([...prev.messages, pendingSteerBubble(bubbleId, trimmedMessage)]),
         }));
         await apiService.steerQuery(trimmedMessage, targetChatId);
         // Remember the steer for possible retraction via Up-arrow.
@@ -510,13 +585,14 @@ export function useChatSessionManager({
 
       activeRequestsRef.current += 1;
 
+      const userBubbleId = generateMessageId();
       setState((prev) => ({
         isProcessing: true,
         lastError: null,
         messages: trimMessages([
           ...prev.messages,
           {
-            id: generateMessageId(),
+            id: userBubbleId,
             type: 'user',
             content: trimmedMessage,
             timestamp: new Date(),
@@ -532,11 +608,11 @@ export function useChatSessionManager({
       } catch (error) {
         // workspace_busy (SP-142 §3): another chat in this client context has
         // a query running — the server refuses to start a second concurrent
-        // runner on one workspace. Surface an inline composer notice with a
-        // send-anyway affordance instead of dead-ending as an error; the
-        // queued entry drains on the running chat's completion (the drain
-        // effect below). The optimistic user bubble stays: the message WILL
-        // be sent, just after the running chat finishes.
+        // runner on one workspace. Queue the message for this chat and hold
+        // it until the running chat finishes (the drain effect waits while
+        // workspaceBusy names this chat). The optimistic bubble comes back
+        // out: until it is sent it lives in the queue panel, not the
+        // transcript.
         if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
           const busy = error as Error & { code?: string; runningChatId?: string; runningChatName?: string };
           // Roll back the optimistic active-request bump — nothing is running
@@ -544,9 +620,15 @@ export function useChatSessionManager({
           if (activeRequestsRef.current > 0) {
             activeRequestsRef.current -= 1;
           }
+          queuedMessagesRef.current.push({ message: trimmedMessage, chatId: targetChatId ?? null });
+          setQueuedMessages([...queuedMessagesRef.current]);
+          setQueuedMessagesCount(queuedMessagesRef.current.length);
           setState((prev) => ({
             isProcessing: false,
+            inputValue: '',
+            messages: prev.messages.filter((m) => m.id !== userBubbleId),
             workspaceBusy: {
+              chatId: targetChatId ?? '',
               runningChatId: busy.runningChatId ?? '',
               runningChatName: busy.runningChatName ?? 'another chat',
             },
@@ -562,7 +644,14 @@ export function useChatSessionManager({
           debugLog('[chat] backend reports query in progress — steering instead');
           // Counter was already incremented before the send attempt and the
           // backend query is still active — keep it at 1, don't double-count.
-          setState((prev) => ({ isProcessing: true, lastError: null }));
+          setState((prev) => ({
+            isProcessing: true,
+            lastError: null,
+            messages: [
+              ...prev.messages.filter((m) => m.id !== userBubbleId),
+              ...prev.messages.filter((m) => m.id === userBubbleId).map(markSteerPending),
+            ],
+          }));
           try {
             await apiService.steerQuery(trimmedMessage, targetChatId);
             lastSteerMessageRef.current = trimmedMessage;
@@ -674,11 +763,19 @@ export function useChatSessionManager({
       setQueuedMessagesCount(0);
       lastSteerMessageRef.current = '';
       lastSteerBubbleIdRef.current = '';
-      setState((prev) => ({
-        isProcessing: false,
-        queryProgress: null,
-        lastError: null,
-      }));
+      setState((prev) => {
+        // Stopped before any answer streamed: say so, or the question just
+        // sits there as if it were still pending or had been ignored.
+        const last = prev.messages[prev.messages.length - 1];
+        const messages =
+          last?.type === 'user'
+            ? trimMessages([
+                ...prev.messages,
+                { id: generateMessageId(), type: 'assistant' as const, content: '_Stopped._', timestamp: new Date() },
+              ])
+            : prev.messages;
+        return { isProcessing: false, queryProgress: null, lastError: null, messages };
+      });
     } catch (error) {
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
@@ -785,6 +882,10 @@ export function useChatSessionManager({
       return;
     }
     const activeChat = activeChatIdRef.current;
+    // Held back behind another chat's run: wait for it to finish.
+    if (workspaceBusy && workspaceBusy.chatId === (activeChat ?? '')) {
+      return;
+    }
     const headIdx = queuedMessagesRef.current.findIndex(
       (entry) => entry.chatId === null || entry.chatId === activeChat,
     );
@@ -813,7 +914,25 @@ export function useChatSessionManager({
     });
     // activeChatIdRef is a ref; isProcessing/queuedMessagesCount drive re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current]);
+  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, workspaceBusy]);
+
+  // The running chat's completion normally clears workspaceBusy (event
+  // routing), but a missed event would hold the queue forever. While held,
+  // poll the chat list and release once the running chat is idle.
+  const runningChatId = workspaceBusy?.runningChatId ?? '';
+  useEffect(() => {
+    if (!runningChatId) return;
+    const timer = setInterval(() => {
+      void listChatSessions()
+        .then((resp) => {
+          const running = (resp.chat_sessions ?? []).find((c) => c.id === runningChatId);
+          if (running?.active_query) return;
+          setState((prev) => (prev.workspaceBusy?.runningChatId === runningChatId ? { workspaceBusy: null } : {}));
+        })
+        .catch((err) => debugLog('[chat] busy re-check failed:', err));
+    }, WORKSPACE_BUSY_RECHECK_MS);
+    return () => clearInterval(timer);
+  }, [runningChatId, setState]);
 
   // Reload the active chat's authoritative history from the backend. Triggered
   // when a reconnect reports a gap (the server's run buffer had already evicted
@@ -825,15 +944,7 @@ export function useChatSessionManager({
       try {
         const response = await switchChatSession(id);
         if (activeChatIdRef.current !== id) return; // user moved on while loading
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${id}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
+        const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
         const backendIsActive = response.chat_session.active_query;
         activeRequestsRef.current = backendIsActive ? 1 : 0;
         setState(() => ({

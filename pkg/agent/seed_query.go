@@ -191,6 +191,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// display text (raw user text, or "Looking into '…'…" for wakeup
 	// turns) — never the internal wakeup batch prepended for the model.
 	display := a.takePendingQueryDisplay()
+	a.rememberQueryDisplay(userQuery, display)
 	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEventWithDisplay(
 		userQuery, display, source, a.GetProvider(), a.GetModel()))
 
@@ -493,6 +494,18 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
 
 			return truncatedResult, nil
+		}
+
+		// A stop (the interrupt context was cancelled) is not a failure: keep
+		// what the run produced and report it as interrupted. Classifying it
+		// turned the cancelled request into a "temporary error … could not
+		// recover" answer plus a failed-query event.
+		if qc.runCtx.Err() != nil || errors.Is(err, core.ErrInterrupted) {
+			rebase := a.syncSeedStateToSprout(qc.seedAgent)
+			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+			a.state.SetLastRunTerminationReason(RunTerminationInterrupted)
+			a.journalSeedState(qc.seedAgent.State())
+			return "", fmt.Errorf("%w: %w", ErrRunInterrupted, err)
 		}
 
 		// Classify the error to provide a user-friendly message.

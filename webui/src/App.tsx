@@ -9,6 +9,7 @@ import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
+import { ApprovalOriginNotice } from './components/ApprovalOriginNotice';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
@@ -272,6 +273,7 @@ function AppInner() {
     activeChatIdRef,
     queuedMessagesRef,
     isProcessing: state.isProcessing,
+    workspaceBusy: state.workspaceBusy,
   });
 
   // Background chat panes (chat buffers open in non-active split panes)
@@ -510,6 +512,15 @@ function AppInner() {
                       <InstallPromptBanner />
                       <SyncStatusBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />
+                      <ApprovalOriginNotice
+                        chatName={
+                          state.securityApprovalRequest?.fromChat ??
+                          state.securityPromptRequest?.fromChat ??
+                          state.askUserRequest?.fromChat ??
+                          state.editApprovalRequest?.fromChat ??
+                          state.shellApprovalRequest?.fromChat
+                        }
+                      />
                       {state.securityApprovalRequest && (
                         <SecurityApprovalDialog
                           requestId={state.securityApprovalRequest.requestId}

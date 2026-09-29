@@ -146,7 +146,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onStopProcessing,
   onRetractSteer,
   queuedMessages,
-  queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -168,6 +167,7 @@ const AppContent: React.FC<AppContentProps> = ({
 }) => {
   const {
     buffers,
+    buffersRef,
     activeBufferId,
     activePaneId,
     openFile,
@@ -321,20 +321,6 @@ const AppContent: React.FC<AppContentProps> = ({
     [setAppState],
   );
 
-  // SP-142 §3: send-anyway on a workspace_busy rejection — queue locally
-  // behind the running chat (the drain effect fires it on completion) and
-  // retire the notice + draft.
-  const handleSendAnyway = useCallback(
-    (message: string) => {
-      const trimmed = message.trim();
-      if (!trimmed) return;
-      onQueueMessage(trimmed);
-      setInputValue('');
-      setAppState((prev) => ({ ...prev, workspaceBusy: null }));
-    },
-    [onQueueMessage, setAppState, setInputValue],
-  );
-
   const handleDismissBusy = useCallback(() => {
     setAppState((prev) => ({ ...prev, workspaceBusy: null }));
   }, [setAppState]);
@@ -372,8 +358,6 @@ const AppContent: React.FC<AppContentProps> = ({
     isSwitchingInstance,
     onInstanceChange: handleInstanceChange,
   } = useInstances({ apiService, isConnected });
-  const buffersRef = useRef(buffers);
-  buffersRef.current = buffers;
 
   // Session search restore: call API then dispatch the custom event
   const log = useLog();
@@ -460,7 +444,6 @@ const AppContent: React.FC<AppContentProps> = ({
     mode: workspaceMode.id,
     buffersRef,
     updateBufferTitle,
-    updateBufferMetadata,
     setBufferPinned,
     setBufferClosable,
     closeBuffer,
@@ -474,18 +457,23 @@ const AppContent: React.FC<AppContentProps> = ({
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
       if (view === 'chat') {
+        // Land on the active chat's own tab. Reopening the generic chat path
+        // refocused whichever chat first claimed it, and the tab-driven
+        // switch then moved the conversation back to that chat.
+        const ownTab = Array.from(buffersRef.current?.values() ?? []).find(
+          (b) => b.kind === 'chat' && activeChatId && b.metadata?.chatId === activeChatId,
+        );
         openWorkspaceBuffer({
           kind: 'chat',
-          path: '__workspace/chat',
-          title: 'Chat',
+          path: ownTab?.file.path ?? '__workspace/chat',
+          title: ownTab?.file.name ?? 'Chat',
           ext: '.chat',
-          isPinned: true,
           isClosable: false,
         });
       }
       onViewChange(view);
     },
-    [onViewChange, openWorkspaceBuffer],
+    [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
@@ -953,23 +941,57 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeChatId, isForking, setAppState],
   );
 
+  // The queue holds every chat's held-back messages; the composer shows (and
+  // edits) only this chat's, so its actions translate back to queue positions.
+  const chatQueue = useMemo(() => {
+    const positions: number[] = [];
+    queuedMessages.forEach((entry, i) => {
+      if (!entry.chatId || entry.chatId === activeChatId) positions.push(i);
+    });
+    return {
+      messages: positions.map((i) => queuedMessages[i].message),
+      remove: (index: number) => {
+        if (positions[index] !== undefined) onQueueMessageRemove(positions[index]);
+      },
+      edit: (index: number, text: string) => {
+        if (positions[index] !== undefined) onQueueMessageEdit(positions[index], text);
+      },
+      reorder: (from: number, to: number) => {
+        if (positions[from] !== undefined && positions[to] !== undefined) {
+          onQueueReorder(positions[from], positions[to]);
+        }
+      },
+      clear: () => {
+        if (positions.length === queuedMessages.length) {
+          onClearQueuedMessages();
+          return;
+        }
+        for (const i of [...positions].reverse()) onQueueMessageRemove(i);
+      },
+    };
+  }, [queuedMessages, activeChatId, onQueueMessageRemove, onQueueMessageEdit, onQueueReorder, onClearQueuedMessages]);
+
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
       onSendMessage: sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages: queuedMessages.map((entry) => entry.message),
-      queuedMessagesCount,
+      onQueueMessageRemove: chatQueue.remove,
+      onQueueMessageEdit: chatQueue.edit,
+      onQueueReorder: chatQueue.reorder,
+      onClearQueuedMessages: chatQueue.clear,
+      queuedMessages: chatQueue.messages,
+      queuedMessagesCount: chatQueue.messages.length,
       inputValue,
       onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
-      workspaceBusy: state.workspaceBusy,
-      onSendAnyway: handleSendAnyway,
+      // The notice belongs to the chat whose send was held back, not
+      // whichever chat is on screen.
+      workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
+      // Names the chat for per-chat actions (Export); inactive panes pass
+      // their own, so without it only background panes offered Export.
+      chatId: activeChatId ?? undefined,
       onDismissBusy: handleDismissBusy,
       pendingDraft: inputValue,
       toolExecutions: state.toolExecutions,
@@ -998,18 +1020,13 @@ const AppContent: React.FC<AppContentProps> = ({
       state.messages,
       sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages,
-      queuedMessagesCount,
+      chatQueue,
       inputValue,
       setInputValue,
       state.isProcessing,
       state.lastError,
       state.workspaceBusy,
-      handleSendAnyway,
+      activeChatId,
       handleDismissBusy,
       inputValue,
       state.toolExecutions,

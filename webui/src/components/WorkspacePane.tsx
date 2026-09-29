@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import React, { Suspense, lazy } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
+import { previewWithPending, processingAfter } from '../utils/chatReplay';
 import Chat from './ChatView';
 import CompareTab from './CompareTab';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
@@ -41,9 +42,21 @@ interface GitDiffResponse {
   diff: string;
 }
 
+/**
+ * A chat with no provider of its own runs on the default one, which the
+ * active chat's stats name when that chat has no override either. Only
+ * provider and model carry over — never another chat's token or cost figures.
+ */
+function defaultModel(stats: unknown): Record<string, unknown> {
+  const s = (stats ?? {}) as { provider?: unknown; model?: unknown };
+  return typeof s.provider === 'string' && s.provider ? { provider: s.provider, model: s.model } : {};
+}
+
 interface WorkspacePaneProps {
   paneId: string;
   perChatCache?: Record<string, PerChatState>;
+  /** Chat list entries, for a pane's model line before its chat reports metrics. */
+  chatSessions?: Array<{ id: string; provider?: string; model?: string }>;
   activeChatId?: string | null;
   onOpenCommandPalette?: () => void;
   onOpenTerminal?: () => void;
@@ -71,7 +84,7 @@ interface WorkspacePaneProps {
 }
 
 const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
-  ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId }) => {
+  ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId, chatSessions }) => {
     const { panes, buffers } = useEditorManager();
     const pane = panes.find((item) => item.id === paneId);
     const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -104,15 +117,27 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
 
         // Inactive chat pane — use cached state for this specific chat
         const cached = perChatCache[bufferChatId];
+        // Until this chat reports metrics, show at least its model.
+        const listed = chatSessions?.find((c) => c.id === bufferChatId);
+        const knownModel = cached?.provider
+          ? { provider: cached.provider, model: cached.model }
+          : listed?.provider
+            ? { provider: listed.provider, model: listed.model }
+            : chatSessions?.find((c) => c.id === activeChatId)?.provider
+              ? {}
+              : defaultModel(chatProps.stats);
         const inactiveChatProps = {
           ...chatProps,
-          messages: cached?.messages ?? [],
+          // Its queued events show here as they arrive; the cached state
+          // alone froze the pane while the chat ran.
+          messages: previewWithPending(cached?.messages ?? [], cached?.pendingEvents),
           toolExecutions: cached?.toolExecutions ?? [],
           subagentActivities: cached?.subagentActivities ?? [],
           currentTodos: cached?.currentTodos ?? [],
           queryProgress: cached?.queryProgress ?? null,
           lastError: cached?.lastError ?? null,
-          isProcessing: cached?.isProcessing ?? false,
+          isProcessing: processingAfter(cached?.isProcessing ?? false, cached?.pendingEvents ?? []),
+          stats: cached?.stats ?? knownModel,
           inputValue: '',
           queuedMessagesCount: 0,
           queuedMessages: [],

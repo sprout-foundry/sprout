@@ -36,4 +36,19 @@ describe('inactive chat pane metrics', () => {
     );
     expect(seen.stats).toEqual({ provider: 'deepinfra', model: 'flash' });
   });
+
+  it("falls back to the default provider and model, without the active chat's figures", () => {
+    render(
+      <WorkspacePane
+        paneId="pane-2"
+        activeChatId="chat-a"
+        perChatCache={{}}
+        chatSessions={[{ id: 'chat-b' }]}
+        chatProps={{ stats: { provider: 'deepinfra', model: 'flash', total_tokens: 999, total_cost: 1.5 } } as never}
+        reviewProps={{} as never}
+        diffState={{} as never}
+      />,
+    );
+    expect(seen.stats).toEqual({ provider: 'deepinfra', model: 'flash' });
+  });
 });

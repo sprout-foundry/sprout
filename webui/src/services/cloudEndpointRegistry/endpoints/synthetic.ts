@@ -190,8 +190,9 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/lsp/status',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { running: false, error: 'LSP not available in browser mode' },
-    description: 'LSP server status (not available in browser mode)',
+    // No servers is a status, not a failure: the client reads `servers`.
+    syntheticResponse: { running: false, servers: [] },
+    description: 'LSP server status (none in browser mode)',
   },
   {
     path: '/api/lsp/ws',

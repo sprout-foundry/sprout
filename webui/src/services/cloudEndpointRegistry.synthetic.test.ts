@@ -493,3 +493,11 @@ describe('CloudEndpointRegistry — Synthetic Stub Response Verification', () =>
     });
   });
 });
+
+describe('LSP status in browser mode', () => {
+  it('reports no servers as a successful status', async () => {
+    const res = getSyntheticResponse('/api/lsp/status', 'GET');
+    expect(res?.status).toBe(200);
+    expect(JSON.parse(await res!.text())).toEqual({ running: false, servers: [] });
+  });
+});

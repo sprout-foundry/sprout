@@ -3,100 +3,85 @@
 package computer_use
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os/exec"
+	"math"
 	"sync"
-	"time"
+
+	"github.com/ebitengine/purego"
 )
 
-// osascriptChordWatcher is a macOS chord watcher that uses osascript to
-// detect keyboard chords via System Events.
-//
-// NOTE: AppleScript's "get modifiers" only exposes modifier state (cmd/option/
-// ctrl/shift), not arbitrary key state. Full chord detection for arbitrary
-// keys requires a Cocoa event monitor (NSEvent) which cannot be scripted from
-// vanilla osascript. This watcher verifies that osascript is available and
-// keeps a background polling loop alive so Stop() can cancel it cleanly.
-//
-// On non-interactive macOS sessions (e.g. launched from SSH or launchd
-// without a GUI session), osascript may fail with a TCC permission error or
-// a window-server error. The watcher logs the failure and returns gracefully
-// so the panic key still works programmatically (WebUI button, etc.).
-type osascriptChordWatcher struct {
-	keys []string
-
-	mu      sync.Mutex
-	cancel  context.CancelFunc
-	stopped chan struct{}
-}
-
-// Compile-time check: *osascriptChordWatcher implements ChordWatcher.
-var _ ChordWatcher = (*osascriptChordWatcher)(nil)
-
 func newPlatformWatcher(keys []string) ChordWatcher {
-	return &osascriptChordWatcher{keys: keys}
+	return &pollingChordWatcher{keys: keys, open: openQuartzKeyReader}
 }
 
-func (w *osascriptChordWatcher) Start(ctx context.Context) error {
-	w.mu.Lock()
-	w.stopped = make(chan struct{})
-	w.mu.Unlock()
+// Reading the keyboard state of other apps' key presses needs the Input
+// Monitoring permission; without it CGEventSourceKeyState reports every key
+// as up.
+var errInputMonitoringDenied = errors.New("panic-key chord needs the Input Monitoring permission — allow sprout (or the terminal running it) in System Settings → Privacy & Security → Input Monitoring, then restart sprout")
 
-	if len(w.keys) == 0 {
-		return nil
-	}
-	log.Printf("[computer-use] panic-key chord %s is configured, but chord detection is not implemented yet — stop the agent to halt computer use", formatChordForLog(w.keys))
-	if _, err := exec.LookPath("osascript"); err != nil {
-		return errMissingHelper("osascript")
-	}
+const hidSystemState = 1
 
-	// Verify osascript can reach the window server. A simple "get modifiers"
-	// call will fail if there's no GUI session or no accessibility permission.
-	script := `tell application "System Events" to get modifiers`
-	if err := exec.CommandContext(ctx, "osascript", "-e", script).Run(); err != nil {
-		return fmt.Errorf("osascript cannot reach window server (no GUI session or accessibility permission?): %w", err)
-	}
+var quartz struct {
+	once sync.Once
+	err  error
 
-	watchCtx, cancel := context.WithCancel(ctx)
-	w.mu.Lock()
-	w.cancel = cancel
-	w.mu.Unlock()
-
-	// NOTE: Full chord detection for arbitrary keys requires a Cocoa event
-	// monitor (NSEvent) which cannot be scripted from vanilla osascript.
-	// The polling loop keeps the goroutine alive so Stop() can cancel it
-	// cleanly. Future work: integrate with a small Cocoa helper binary or
-	// use a key-binding daemon that maps the OS chord to a signal.
-	go func() {
-		defer close(w.stopped)
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-watchCtx.Done():
-				return
-			case <-ticker.C:
-				continue
-			}
-		}
-	}()
-	return nil
+	keyState        func(stateID int32, key uint16) bool
+	preflightListen func() bool
+	requestListen   func() bool
 }
 
-func (w *osascriptChordWatcher) Stop() {
-	w.mu.Lock()
-	cancel := w.cancel
-	stopped := w.stopped
-	w.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	if stopped != nil {
-		select {
-		case <-stopped:
-		case <-time.After(2 * time.Second):
+func loadQuartz() error {
+	quartz.once.Do(func() {
+		lib, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_NOW|purego.RTLD_GLOBAL)
+		if err != nil {
+			quartz.err = fmt.Errorf("loading CoreGraphics: %w", err)
+			return
 		}
+		purego.RegisterLibFunc(&quartz.keyState, lib, "CGEventSourceKeyState")
+		purego.RegisterLibFunc(&quartz.preflightListen, lib, "CGPreflightListenEventAccess")
+		purego.RegisterLibFunc(&quartz.requestListen, lib, "CGRequestListenEventAccess")
+	})
+	return quartz.err
+}
+
+type quartzKeyReader struct{}
+
+func openQuartzKeyReader() (keyReader, error) {
+	if err := loadQuartz(); err != nil {
+		return nil, err
 	}
+	if !quartz.preflightListen() {
+		// Adds sprout to the Input Monitoring list (and shows the system
+		// prompt once), so the user only has to flip the switch.
+		quartz.requestListen()
+		return nil, errInputMonitoringDenied
+	}
+	return quartzKeyReader{}, nil
+}
+
+func (quartzKeyReader) resolve(token string) ([]int, bool) {
+	codes, ok := macKeyCodes[canonicalChordKey(token)]
+	return codes, ok
+}
+
+func (quartzKeyReader) held() (func(int) bool, error) {
+	return func(code int) bool {
+		return code >= 0 && code <= math.MaxUint16 && quartz.keyState(hidSystemState, uint16(code))
+	}, nil
+}
+
+func (quartzKeyReader) close() {}
+
+// Virtual key codes from Carbon's Events.h (kVK_*); they name physical
+// positions on an ANSI keyboard.
+var macKeyCodes = map[string][]int{
+	"ctrl": {59, 62}, "shift": {56, 60}, "alt": {58, 61}, "cmd": {55, 54},
+	"escape": {53}, "space": {49}, "enter": {36}, "tab": {48}, "backspace": {51}, "delete": {117},
+	"a": {0}, "s": {1}, "d": {2}, "f": {3}, "h": {4}, "g": {5}, "z": {6}, "x": {7}, "c": {8}, "v": {9},
+	"b": {11}, "q": {12}, "w": {13}, "e": {14}, "r": {15}, "y": {16}, "t": {17},
+	"1": {18}, "2": {19}, "3": {20}, "4": {21}, "6": {22}, "5": {23}, "9": {25}, "7": {26}, "8": {28}, "0": {29},
+	"o": {31}, "u": {32}, "i": {34}, "p": {35}, "l": {37}, "j": {38}, "k": {40}, "n": {45}, "m": {46},
+	"f1": {122}, "f2": {120}, "f3": {99}, "f4": {118}, "f5": {96}, "f6": {97},
+	"f7": {98}, "f8": {100}, "f9": {101}, "f10": {109}, "f11": {103}, "f12": {111},
 }

@@ -33,7 +33,7 @@ native embeddings). This matrix documents what's available on each.
 | **OOM watchdog** | ✅ /proc scan | ❌ No-op | ❌ No-op | ✅ Full |
 | **Automate sessions** | ✅ PID tracking | ✅ PID tracking | ❌ Not available | ✅ Full |
 | **Foreground app detection** | ✅ osascript/xdotool | ❌ Not available | ❌ N/A | ✅ Full |
-| **Panic key chord** | ❌ Not implemented (watcher checks access, no key detection) | ❌ Not available | ❌ N/A | ❌ Not implemented |
+| **Panic key chord** | ⚠️ macOS: needs Input Monitoring permission; Linux: X11/XWayland only | ❌ Not available | ❌ N/A | ⚠️ Same as Linux/macOS (pure Go) |
 | **Computer use** | ✅ Full | ⚠️ No process groups | ❌ N/A | ✅ Full |
 | **Structured file tools** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
 | **Memory / settings** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |

@@ -55,11 +55,32 @@
   border-top: 1px solid var(--border-subtle);
   font-size: 11px;
   color: var(--editor-pane-footer-fg);
+  white-space: nowrap;
+  /* Items drop by the pane's width: a pane beside the sidebar, outline and
+   * conversation can be narrow on a wide screen. */
+  container-type: inline-size;
 }
 
 .editor-stats {
   display: flex;
   gap: 12px;
+}
+
+@container (max-width: 560px) {
+  .pane-footer .line-count,
+  .pane-footer .char-count,
+  .pane-footer .encoding-indicator,
+  .pane-footer .whitespace-mode {
+    display: none;
+  }
+}
+
+@container (max-width: 400px) {
+  .pane-footer .tab-size,
+  .pane-footer .zoom-control,
+  .pane-footer .zoom-level {
+    display: none;
+  }
 }
 
 .pane-footer .tab-size {

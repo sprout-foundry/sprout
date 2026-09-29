@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -48,8 +49,7 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 	defer os.Remove(tmpPath)
 
-	parts := strings.Fields(editor)
-	parts = append(parts, tmpPath)
+	parts := append(editorArgv(editor), tmpPath)
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -83,12 +83,36 @@ func chooseEditor() string {
 	if e := strings.TrimSpace(os.Getenv("EDITOR")); e != "" {
 		return e
 	}
-	for _, candidate := range []string{"vi"} {
+	for _, candidate := range fallbackEditors() {
 		if _, err := exec.LookPath(candidate); err == nil {
 			return candidate
 		}
 	}
 	return ""
+}
+
+func fallbackEditors() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"vi", "notepad"}
+	}
+	return []string{"vi"}
+}
+
+// editorArgv splits $EDITOR into program and arguments. Windows editors
+// usually live under "C:\Program Files\...", so a value naming an existing
+// file is taken whole, and a leading double-quoted program is honored
+// ("\"C:\Program Files\...\code.exe\" --wait"); otherwise the value is
+// split on whitespace.
+func editorArgv(editor string) []string {
+	if fi, err := os.Stat(editor); err == nil && !fi.IsDir() {
+		return []string{editor}
+	}
+	if strings.HasPrefix(editor, `"`) {
+		if end := strings.Index(editor[1:], `"`); end >= 0 {
+			return append([]string{editor[1 : end+1]}, strings.Fields(editor[end+2:])...)
+		}
+	}
+	return strings.Fields(editor)
 }
 
 // writeEditTempFile creates a temp .md file pre-populated with the given

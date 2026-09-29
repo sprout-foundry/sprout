@@ -194,7 +194,9 @@ func TestValidateFeedbackDir(t *testing.T) {
 		root := t.TempDir()
 		dir := filepath.Join(root, "design", "feedback")
 		require.NoError(t, os.MkdirAll(dir, 0o755))
-		require.NoError(t, os.Symlink(filepath.Join(dir, "missing-target"), filepath.Join(dir, "trap.json")))
+		if err := os.Symlink(filepath.Join(dir, "missing-target"), filepath.Join(dir, "trap.json")); err != nil {
+			t.Skipf("symlink not supported (Windows needs Developer Mode or admin): %v", err)
+		}
 
 		_, err := ValidateFeedbackDir(root)
 		require.Error(t, err, "an unreadable feedback entry must be an I/O error, not a silent pass")

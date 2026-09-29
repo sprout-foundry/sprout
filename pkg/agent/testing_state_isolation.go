@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/search"
+	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
 
 // SetTestStateDirHook overrides the session state dir to the given
@@ -73,7 +73,7 @@ func liveSproutInstanceRunning() bool {
 	}
 	staleBefore := time.Now().Add(-instanceStaleAfterForTest)
 	for _, info := range instances {
-		if info.LastPing.After(staleBefore) && info.PID > 0 && pidAlive(info.PID) {
+		if info.LastPing.After(staleBefore) && info.PID > 0 && pidalive.IsAlive(info.PID) {
 			return true
 		}
 	}
@@ -107,17 +107,6 @@ func instancesConfigDir() string {
 		}
 	}
 	return filepath.Join(home, ".config", "sprout")
-}
-
-func pidAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return p.Signal(syscall.Signal(0)) == nil
 }
 
 // AssertNoStateLeak is the TestMain counterpart of the Layer-5 check

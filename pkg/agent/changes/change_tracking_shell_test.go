@@ -34,6 +34,16 @@ func newTrackerForShellTest(t *testing.T) *ChangeTracker {
 	}
 }
 
+// absTestPath maps a slash-separated fixture path to the absolute form the
+// tracker stores ("/work/dist" is C:\work\dist on Windows).
+func absTestPath(p string) string {
+	abs, err := filepath.Abs(filepath.FromSlash(p))
+	if err != nil {
+		return p
+	}
+	return abs
+}
+
 // TestRecordShellMutations_BulkRollupCollapsesBuildOutput is the
 // canonical SP-061-1 case: `npm run build` (or equivalent) drops
 // thousands of files under one top-level directory. They collapse
@@ -78,7 +88,7 @@ func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
 	if src == nil || !strings.HasSuffix(src.FilePath, "src/lib.go") {
 		t.Errorf("source edit should survive the rollup, got %+v", src)
 	}
-	if tracker.autoSkipDirs == nil || !tracker.autoSkipDirs["/work/dist"] {
+	if tracker.autoSkipDirs == nil || !tracker.autoSkipDirs[absTestPath("/work/dist")] {
 		t.Errorf("expected /work/dist to be added to autoSkipDirs after rollup, got %+v", tracker.autoSkipDirs)
 	}
 }
@@ -126,7 +136,7 @@ func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 	if !strings.HasPrefix(ch.FilePath, "repo") {
 		t.Errorf("expected rollup label to start with 'repo/', got %q", ch.FilePath)
 	}
-	if !tracker.autoSkipDirs["/work/repo"] {
+	if !tracker.autoSkipDirs[absTestPath("/work/repo")] {
 		t.Errorf("expected /work/repo in autoSkipDirs, got %+v", tracker.autoSkipDirs)
 	}
 }
@@ -155,7 +165,7 @@ func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 		t.Fatalf("expected 1 rollup, got %d", got)
 	}
 	ch := tracker.changes[0]
-	want := "env/lib/python3.11/site-packages"
+	want := filepath.FromSlash("env/lib/python3.11/site-packages")
 	if ch.FilePath != want+string(filepath.Separator) {
 		t.Errorf("expected sharpened label %q/, got %q", want, ch.FilePath)
 	}
@@ -163,7 +173,7 @@ func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 	// so future commands that touch a sibling like env/bin/ also get
 	// suppressed automatically — they're almost always part of the
 	// same venv that we already decided is build output.
-	if !tracker.autoSkipDirs["/work/env"] {
+	if !tracker.autoSkipDirs[absTestPath("/work/env")] {
 		t.Errorf("expected /work/env in autoSkipDirs, got %+v", tracker.autoSkipDirs)
 	}
 }
@@ -231,7 +241,7 @@ func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
 		bulksByLabel[ch.FilePath] = ch.BulkCount
 	}
 	distLabel := "dist" + string(filepath.Separator)
-	envLabel := "env/lib/python3.11/site-packages" + string(filepath.Separator)
+	envLabel := filepath.FromSlash("env/lib/python3.11/site-packages") + string(filepath.Separator)
 	if bulksByLabel[distLabel] != 150 {
 		t.Errorf("expected dist rollup with count 150, got %+v", bulksByLabel)
 	}
@@ -1804,6 +1814,9 @@ func setupGitRepoCT(t *testing.T) string {
 	runGitInDirCT(t, dir, "init", "-b", "main")
 	runGitInDirCT(t, dir, "config", "user.email", "test@test.com")
 	runGitInDirCT(t, dir, "config", "user.name", "Test")
+	// Git for Windows ships core.autocrlf=true system-wide; checkouts would
+	// then rewrite LF fixtures to CRLF.
+	runGitInDirCT(t, dir, "config", "core.autocrlf", "false")
 
 	// Initial commit so HEAD exists.
 	mustWriteFile(t, filepath.Join(dir, "init.go"), []byte("package x\n"))

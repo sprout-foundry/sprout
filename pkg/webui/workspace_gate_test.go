@@ -62,7 +62,7 @@ func TestIsHomeWorkspace(t *testing.T) {
 // tries os.UserHomeDir() first, which honors the $HOME env var at call time.
 func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
 	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	setTestHome(t, tmpHome)
 	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 	if hasHomeWorkspaceConsent() {
@@ -90,7 +90,7 @@ func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
 // passes the isWithinWorkspace check and reaches the home gate.
 func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	setTestHome(t, tmpHome)
 	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
 	home := resolveHomeDir()
@@ -169,7 +169,7 @@ func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpHome := t.TempDir()
-			t.Setenv("HOME", tmpHome)
+			setTestHome(t, tmpHome)
 			// Override the global SPROUT_STATE_DIR from TestMain so
 			// homeConsentPath resolves under this test's temp home.
 			t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
@@ -210,7 +210,7 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			setTestHome(t, home)
 			t.Setenv("SPROUT_STATE_DIR", filepath.Join(home, ".local", "state", "sprout"))
 			useTestWorkspaceConsent(t, home, tc.consented)
 

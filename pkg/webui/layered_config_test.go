@@ -148,7 +148,7 @@ func TestSanitizeClientID_BackslashTraversal(t *testing.T) {
 func TestGetLayeredConfigManager_CreatesPerClientDir(t *testing.T) {
 	// Test that getLayeredConfigManager creates session dir for client
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -186,7 +186,7 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 	// Test that two clients with different workspaces get config managers
 	// scoped to their respective workspace directories.
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -247,7 +247,7 @@ func makeSettingsRequest(ws *ReactWebServer, method, urlPath string, body string
 // file was correct but cm.GetConfig() kept serving the old value until restart.
 func TestHandlePutWorkspaceSettings_ReachesLiveConfigManager(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 	t.Setenv("SPROUT_CONFIG", "")
@@ -296,7 +296,7 @@ func makeClientRequest(clientID string) *http.Request {
 
 func TestHandlePutSessionSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 	t.Setenv("CI", "1")
@@ -342,7 +342,7 @@ func TestHandlePutSessionSettings(t *testing.T) {
 
 func TestHandlePutWorkspaceSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -376,7 +376,7 @@ func TestHandlePutWorkspaceSettings(t *testing.T) {
 
 func TestHandlePutGlobalSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	os.Unsetenv("XDG_CONFIG_HOME") // Ensure no leftover from other tests
 	os.Unsetenv("SPROUT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
@@ -412,7 +412,7 @@ func TestHandlePutGlobalSettings(t *testing.T) {
 
 func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -435,7 +435,7 @@ func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
 // that the Settings panel uses when clicking "Create Workspace Config".
 func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -492,7 +492,7 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 
 func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -544,7 +544,7 @@ func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
 
 func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	os.Unsetenv("XDG_CONFIG_HOME")
 	os.Unsetenv("SPROUT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
@@ -598,7 +598,7 @@ func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
 
 func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -647,7 +647,7 @@ func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 
 func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 

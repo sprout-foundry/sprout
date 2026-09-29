@@ -85,8 +85,17 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 	ctx = WithWorkspaceRoot(ctx, workspace)
 	ctx = WithAuditLogger(ctx, logger)
 
+	// The read gate only audits paths that exist, and Windows has no /etc/passwd.
+	outside := "/etc/passwd"
+	if _, err := os.Stat(outside); err != nil {
+		outside = filepath.Join(scratchHome(t), "outside.txt")
+		if err := os.WriteFile(outside, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// Try to resolve path outside workspace (should be denied)
-	_, err := SafeResolvePathWithBypass(ctx, "/etc/passwd")
+	_, err := SafeResolvePathWithBypass(ctx, outside)
 	if err == nil {
 		t.Fatal("expected error for path outside workspace")
 	}

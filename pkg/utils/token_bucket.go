@@ -60,8 +60,9 @@ func (tb *TokenBucket) Wait(ctx context.Context) error {
 
 	now := time.Now()
 
-	// If nextReservation is in the future, someone is already waiting, so we join the queue
-	if !tb.nextReservation.Before(now) {
+	// If nextReservation is in the future, someone is already waiting, so we join the queue.
+	// Strictly After: an equal timestamp (common with Windows' coarse clock) means no waiter.
+	if tb.nextReservation.After(now) {
 		// Join the reservation queue
 		reservationTime := tb.nextReservation
 		tb.nextReservation = reservationTime.Add(time.Duration(float64(time.Second) / tb.rate))

@@ -82,7 +82,7 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			continue
 		}
 
-		n, err := os.Stdin.Read(buf)
+		n, err := stdinRead(buf)
 		if n == 0 {
 			// No byte ready (or EOF). Sleep briefly via the ticker
 			// instead of busy-spinning, then re-check stopCh.

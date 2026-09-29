@@ -63,8 +63,9 @@ func setupDaemonLogging() {
 		}
 
 		go func() {
-			io.Copy(writer, r)
-			r.Close()
+			_, _ = io.Copy(writer, r)
+			_ = r.Close()
+			_ = writer.Close()
 		}()
 
 		return w

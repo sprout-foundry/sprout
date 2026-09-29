@@ -349,3 +349,20 @@
 .home-open .header-context-toggle-btn {
   visibility: hidden;
 }
+
+/* Phone toolbar: the project's name, since its sidebar is in the drawer. */
+.top-mobile-project {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}

@@ -12,6 +12,7 @@ import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { QueryProgress } from '../types/app';
 import { useCommandOutput } from '../hooks/useCommandOutput';
+import { useComposerFocusRequest } from '../hooks/useComposerFocusRequest';
 import CommandOutputPanel from './CommandOutputPanel';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
@@ -79,6 +80,7 @@ function Chat(props: ChatProps): JSX.Element {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
+  useComposerFocusRequest(inputContainerRef, chatId);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);

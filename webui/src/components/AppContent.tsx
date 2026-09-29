@@ -18,6 +18,7 @@ import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { requestComposerFocus } from '../hooks/useComposerFocusRequest';
 import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
@@ -499,10 +500,12 @@ const AppContent: React.FC<AppContentProps> = ({
           metadata: { chatId: id },
         });
       }
-      void onActiveChatChange?.(id, 'code');
+      const switched = Promise.resolve(onActiveChatChange?.(id, 'code'));
       onViewChange('chat');
+      // A phone keyboard would cover the conversation being opened.
+      if (!isMobile) void switched.finally(() => requestComposerFocus(id));
     },
-    [chatSessions, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
+    [chatSessions, isMobile, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
   );
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here

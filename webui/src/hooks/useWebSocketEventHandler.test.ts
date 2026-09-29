@@ -62,6 +62,7 @@ vi.mock('../services/lspClientService', () => ({
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { useWebSocketEventHandler, type UseWebSocketEventHandlerRefs } from './useWebSocketEventHandler';
 import type { WsEvent } from '@sprout/events';
+import { requestChatReplay } from '../utils/chatReplay';
 
 // ---------------------------------------------------------------------------
 // Minimal state (mirrors AppStore fields used by the handler)
@@ -483,6 +484,43 @@ describe('chat_run_restored', () => {
   });
 });
 
+describe('replaying background events for a chat', () => {
+  function setup(activeChatId: string) {
+    const stateHolder = { current: { ...createDefaultState(), messages: [] as unknown[], activeChatId } };
+    const setStateMock = vi.fn((updater: unknown) => {
+      const prev = stateHolder.current;
+      stateHolder.current = { ...prev, ...((updater as (p: unknown) => object)(prev) as object) };
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: activeChatId };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    return stateHolder;
+  }
+
+  it('applies the events, in order, to the chat now on screen', () => {
+    const state = setup('chat-a');
+    act(() => {
+      requestChatReplay('chat-a', [
+        { type: 'query_started', data: { chat_id: 'chat-a', query: 'Run the build' } },
+        { type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: 'Build ' } },
+        { type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: 'passed.' } },
+        { type: 'query_completed', data: { chat_id: 'chat-a', query: 'Run the build', response: 'Build passed.' } },
+      ] as never);
+    });
+    const messages = state.current.messages as Array<{ type: string; content: string }>;
+    expect(messages.map((m) => `${m.type}:${m.content}`)).toEqual(['user:Run the build', 'assistant:Build passed.']);
+  });
+
+  it('ignores a replay for a chat that is not on screen', () => {
+    const state = setup('chat-a');
+    act(() => {
+      requestChatReplay('chat-b', [{ type: 'query_started', data: { chat_id: 'chat-b', query: 'x' } }] as never);
+    });
+    expect(state.current.messages).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests: per-chat cache mirrors the error lifecycle for background chats
 //
@@ -536,6 +574,59 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     // Recovery must not resurrect processing state either.
     expect(stateHolder.current.perChatCache['chat-1'].isProcessing).toBe(true); // untouched by queue path
     expect(stateHolder.current.perChatCache['chat-1'].pendingEvents).toHaveLength(1);
+  });
+
+  it('names the chat an approval request comes from when it is not the chat on screen', () => {
+    const { stateHolder } = setupWithCache('chat-1', {});
+    stateHolder.current = { ...stateHolder.current, chatSessions: [{ id: 'chat-1', name: 'Refactor' }] };
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'a1',
+        type: 'shell_approval_request',
+        data: { chat_id: 'chat-1', request_id: 'r1', command: 'rm x' },
+      });
+    });
+    expect(stateHolder.current.shellApprovalRequest?.fromChat).toBe('Refactor');
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'a2',
+        type: 'shell_approval_request',
+        data: { chat_id: 'other-chat', request_id: 'r2', command: 'ls' },
+      });
+    });
+    expect(stateHolder.current.shellApprovalRequest?.fromChat).toBeUndefined();
+  });
+
+  it("files a background chat's metrics under that chat, not the chat on screen", () => {
+    const { stateHolder } = setupWithCache('chat-1', { stats: { total_tokens: 10 } });
+    stateHolder.current = { ...stateHolder.current, stats: { total_tokens: 999 } };
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-m', type: 'metrics_update', data: { chat_id: 'chat-1', total_tokens: 42 } });
+    });
+
+    expect((stateHolder.current.stats as { total_tokens: number }).total_tokens).toBe(999);
+    expect(stateHolder.current.perChatCache['chat-1'].stats).toMatchObject({ total_tokens: 42 });
+  });
+
+  it('releases a chat held back by workspace_busy when the running chat finishes in the background', () => {
+    const { stateHolder } = setupWithCache('chat-1', { isProcessing: true });
+    stateHolder.current = {
+      ...stateHolder.current,
+      workspaceBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
+    };
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-sub', type: 'query_completed', data: { chat_id: 'chat-1', subagent_depth: 1 } });
+    });
+    expect(stateHolder.current.workspaceBusy).not.toBeNull();
+
+    act(() => {
+      hookHandleEvent!({ id: 'evt-done', type: 'query_completed', data: { chat_id: 'chat-1', response: 'done' } });
+    });
+    expect(stateHolder.current.workspaceBusy).toBeNull();
   });
 
   it('clears cached lastError when a background chat starts a new primary query', () => {

@@ -48,6 +48,7 @@ afterEach(() => {
 const emptyCache = (
   pending: number,
   messages = [{ id: 'm1', type: 'user', content: 'hi', timestamp: new Date() }],
+  runEnded = true,
 ) => ({
   messages,
   toolExecutions: [],
@@ -60,7 +61,10 @@ const emptyCache = (
   provider: '',
   model: '',
   queryCount: 0,
-  pendingEvents: Array.from({ length: pending }, (_, i) => ({ type: 'stream_chunk', data: { i } })),
+  pendingEvents: [
+    ...Array.from({ length: pending }, (_, i) => ({ type: 'stream_chunk', data: { i } })),
+    ...(runEnded ? [{ type: 'query_completed', data: {} }] : []),
+  ],
 });
 
 describe('useBackgroundChatSync', () => {
@@ -107,5 +111,34 @@ describe('useBackgroundChatSync', () => {
       await vi.advanceTimersByTimeAsync(700);
     });
     expect(mocks.fetchMessages).not.toHaveBeenCalled();
+  });
+
+  it('leaves a chat that is still running alone', async () => {
+    act(() => {
+      root.render(
+        createElement(Probe, {
+          perChatCache: { 'chat-b': emptyCache(3, undefined, false) },
+          activeChatId: 'chat-a',
+        }),
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    // Its stored transcript stops before the turn in progress; adopting it
+    // blanked the pane. The queued events wait for the switch to replay.
+    expect(mocks.fetchMessages).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stored copy older than the pane', async () => {
+    mocks.fetchMessages.mockResolvedValue({ chat_session: { id: 'chat-b', messages: [], active_query: false } });
+    act(() => {
+      root.render(createElement(Probe, { perChatCache: { 'chat-b': emptyCache(1) }, activeChatId: 'chat-a' }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(mocks.fetchMessages).toHaveBeenCalledTimes(1);
+    expect(applied).toEqual([{}]);
   });
 });

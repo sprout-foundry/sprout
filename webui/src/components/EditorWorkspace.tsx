@@ -9,6 +9,11 @@ import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
+import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
+import { useEngagedWithin } from '../hooks/useEngagedWithin';
+
+/** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
+const PERMANENT_DEFAULT_CHAT_ID = 'default';
 
 export interface EditorWorkspaceProps {
   currentView: ViewType;
@@ -22,6 +27,8 @@ export interface EditorWorkspaceProps {
     is_default?: boolean;
     active_query?: boolean;
     worktree_path?: string;
+    provider?: string;
+    model?: string;
   }>;
   /** Switch the active chat when a chat tab is middle-clicked/cycled. */
   onActiveChatChange?: (id: string) => void;
@@ -95,13 +102,15 @@ const EditorPaneComponent: React.FC<{
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
+  chatSessions?: React.ComponentProps<typeof WorkspacePane>['chatSessions'];
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, chatSessions }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
         paneId={paneId}
         perChatCache={perChatCache}
         activeChatId={activeChatId}
+        chatSessions={chatSessions}
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}
@@ -162,10 +171,13 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return set;
   }, [chatSessions]);
 
+  // The chats that can't be deleted: the daemon's permanent "default" chat.
+  // Not the wire is_default flag — the list endpoint sets it on whichever
+  // chat is active, which hid Rename and Delete on the chat you were in.
   const defaultChatIds = useMemo(() => {
     const set = new Set<string>();
     for (const session of chatSessions ?? []) {
-      if (session.is_default) set.add(session.id);
+      if (session.id === PERMANENT_DEFAULT_CHAT_ID) set.add(session.id);
     }
     return set;
   }, [chatSessions]);
@@ -200,37 +212,33 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 
   // Refs for values read inside memoized render helpers to keep dependency
-  // arrays stable. Writes happen in useEffect (not during render) so
-  // concurrent renders see consistent values.
+  // arrays stable. Assigned during render: the helpers read them in this same
+  // render, and an effect-time write lands after it — the pane then showed the
+  // previous chat state (a just-sent message missing, a finished run still
+  // spinning) until some unrelated re-render.
   const activePaneIdRef = useRef(activePaneId);
+  activePaneIdRef.current = activePaneId;
+  // Only the pane you're working in shows its tab as focused: with focus in
+  // the sidebar, terminal or another pane, each pane's tab stays marked as
+  // shown but not highlighted.
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const engaged = useEngagedWithin(workspaceRef);
+  const engagedRef = useRef(engaged);
+  engagedRef.current = engaged;
   const panesRef = useRef(panes);
+  panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
+  perChatCacheRef.current = perChatCache;
   const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
   const chatPropsRef = useRef(chatProps);
+  chatPropsRef.current = chatProps;
   const reviewPropsRef = useRef(reviewProps);
+  reviewPropsRef.current = reviewProps;
   const diffStateRef = useRef(diffState);
-
-  React.useEffect(() => {
-    activePaneIdRef.current = activePaneId;
-  }, [activePaneId]);
-  React.useEffect(() => {
-    panesRef.current = panes;
-  }, [panes]);
-  React.useEffect(() => {
-    perChatCacheRef.current = perChatCache;
-  }, [perChatCache]);
-  React.useEffect(() => {
-    activeChatIdRef.current = activeChatId;
-  }, [activeChatId]);
-  React.useEffect(() => {
-    chatPropsRef.current = chatProps;
-  }, [chatProps]);
-  React.useEffect(() => {
-    reviewPropsRef.current = reviewProps;
-  }, [reviewProps]);
-  React.useEffect(() => {
-    diffStateRef.current = diffState;
-  }, [diffState]);
+  diffStateRef.current = diffState;
+  const chatSessionsRef = useRef(chatSessions);
+  chatSessionsRef.current = chatSessions;
 
   // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
   const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
@@ -450,6 +458,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           <div className="pane-shell">
             <EditorTabs
               paneId={pane.id}
+              paneFocused={engagedRef.current && pane.id === activePaneIdRef.current}
               compact
               actions={renderSplitControls(pane.id)}
               onActiveChatChange={onActiveChatChange}
@@ -484,6 +493,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                 chatProps={chatPropsRef.current}
                 reviewProps={reviewPropsRef.current}
                 diffState={diffStateRef.current}
+                chatSessions={chatSessionsRef.current}
               />
             </EditorPaneWrapper>
           </div>
@@ -690,9 +700,27 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // single-column layout. No hierarchy, no sheets-over-anything.
   if (isMobileViewport) {
     const chatBufferOpen = activePaneHasChat();
+    const laneChats = (chatSessions ?? []).filter((c) => (c as { mode?: string }).mode !== 'design');
     return (
       <div className="mobile-peer-surfaces" data-testid="mobile-peer-surfaces">
         <div className="mobile-peer-surface" data-active={chatBufferOpen} data-testid="mobile-chat-surface">
+          {/* No tab strip on phones: the chat picker stands in for it. */}
+          {onActiveChatChange && laneChats.length > 0 && (
+            <MobileChatSwitcher
+              chats={laneChats}
+              activeChatId={activeChatId ?? null}
+              onSelect={onActiveChatChange}
+              onCreate={
+                onCreateChat
+                  ? () => {
+                      void onCreateChat().then((id) => {
+                        if (id) onActiveChatChange(id);
+                      });
+                    }
+                  : undefined
+              }
+            />
+          )}
           <Chat {...chatProps} />
         </div>
         {!chatBufferOpen && (
@@ -719,7 +747,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       isFileOpen={currentBuffer?.kind === 'file'}
       onNavigateToSymbol={handleOutlineNavigateToSymbol}
     >
-      <div className={`editor-workspace ${paneLayout}`}>
+      <div ref={workspaceRef} className={`editor-workspace ${paneLayout}`}>
         <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
           {renderPaneLayout()}
         </div>

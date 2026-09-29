@@ -202,6 +202,7 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
 		Command string `json:"command"`
+		ChatID  string `json:"chat_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
@@ -219,7 +220,12 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 	}
 
 	clientID := ws.resolveClientID(r)
-	chatID := ws.resolveChatID(r, clientID)
+	// The UI names the chat in the body (a background pane's /clear must hit
+	// that chat, not whichever chat is active).
+	chatID := strings.TrimSpace(req.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
 		if isProviderConfigError(err) {

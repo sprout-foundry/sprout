@@ -22,9 +22,13 @@ type UIEvent struct {
 
 // Common event types
 const (
-	EventTypeQueryStarted            = "query_started"
-	EventTypeQueryProgress           = "query_progress"
-	EventTypeQueryCompleted          = "query_completed"
+	EventTypeQueryStarted   = "query_started"
+	EventTypeQueryProgress  = "query_progress"
+	EventTypeQueryCompleted = "query_completed"
+	// EventTypeSteerDelivered marks the moment a steer message sent during a
+	// run reaches the model: text streamed before it answers the earlier
+	// input, text after it may answer the steer.
+	EventTypeSteerDelivered          = "steer_delivered"
 	EventTypeError                   = "error"
 	EventTypeToolStart               = "tool_start"
 	EventTypeToolEnd                 = "tool_end"

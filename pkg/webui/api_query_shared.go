@@ -4,6 +4,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -456,40 +457,21 @@ func (ws *ReactWebServer) runChatQuery(
 		_, err := clientAgent.ProcessQueryWithContinuityAs(agent.QuerySourceWebUI, query)
 		queryDuration := time.Since(queryStart)
 
-		// Record cost after query completes
-		chargedCost := clientAgent.GetChargedCostTotal()
-		tokenCost := clientAgent.GetTokenCostTotal()
-		if chargedCost > 0 || tokenCost > 0 {
-			providerName := clientAgent.GetProvider()
-			GetCostStore().RecordCostWithBilling(
-				providerName,
-				clientAgent.GetModel(),
-				clientAgent.GetSessionID(),
-				chatID,
-				clientAgent.GetSessionName(),
-				clientAgent.GetWorkspaceRoot(),
-				resolveBillingTypeForProvider(providerName),
-				clientAgent.GetPromptTokens(),
-				clientAgent.GetCompletionTokens(),
-				chargedCost,
-				tokenCost,
+		recordQueryCost(clientAgent, chatID)
+		ws.syncChatStateAsync(clientID, chatID, logTag)
+
+		if errors.Is(err, agent.ErrRunInterrupted) {
+			// Stopped, not failed: close the turn for every viewer without an
+			// error banner.
+			ws.log().Info("query stopped",
+				slog.String("handler", logTag),
+				slog.String("chat_id", chatID),
+				slog.Duration("duration", queryDuration),
 			)
-		}
-
-		// Sync state asynchronously so the query goroutine returns
-		// immediately. ExportState can take seconds for large conversations,
-		// and the deferred active-query cleanup must not wait for it.
-		utils.SafeGo(ws.log(), "state sync", func() {
-			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
-				ws.log().Error("async state sync failed",
-					slog.String("handler", logTag),
-					slog.String("chat_id", chatID),
-					slog.Any("err", err),
-				)
-			}
-		}, slog.String("handler", logTag), slog.String("chat_id", chatID))
-
-		if err != nil {
+			stopped := events.QueryCompletedEvent(query, "", 0, 0, queryDuration)
+			stopped["status"] = "interrupted"
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryCompleted, stopped)
+		} else if err != nil {
 			ws.log().Error("query failed",
 				slog.String("handler", logTag),
 				slog.String("chat_id", chatID),
@@ -523,4 +505,57 @@ func (ws *ReactWebServer) runChatQuery(
 		resp["query"] = query
 	}
 	writeJSON(w, http.StatusAccepted, resp)
+}
+
+// recordQueryCost books the usage a has accrued since its last booking. The
+// agent's cost and token figures are running totals for the conversation, so
+// booking them as-is after every turn would count each earlier turn again.
+func recordQueryCost(a *agent.Agent, chatID string) {
+	u := a.TakeUnbookedUsage()
+	if u.ChargedCost <= 0 && u.TokenCost <= 0 {
+		return
+	}
+	providerName := a.GetProvider()
+	GetCostStore().RecordCostWithBilling(
+		providerName,
+		a.GetModel(),
+		a.GetSessionID(),
+		chatID,
+		a.GetSessionName(),
+		a.GetWorkspaceRoot(),
+		resolveBillingTypeForProvider(providerName),
+		u.PromptTokens,
+		u.CompletionTokens,
+		u.ChargedCost,
+		u.TokenCost,
+	)
+}
+
+// syncChatStateAsync refreshes the chat's stored snapshot — what a reload or
+// chat switch shows — off the calling goroutine: ExportState can take seconds
+// for a large conversation.
+func (ws *ReactWebServer) syncChatStateAsync(clientID, chatID, logTag string) {
+	utils.SafeGo(ws.log(), "state sync", func() {
+		if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+			ws.log().Error("async state sync failed",
+				slog.String("handler", logTag),
+				slog.String("chat_id", chatID),
+				slog.Any("err", err),
+			)
+		}
+	}, slog.String("handler", logTag), slog.String("chat_id", chatID))
+}
+
+// watchWakeupTurns gives a chat agent's self-started resume turns the same
+// wrap-up as a turn started through the API: cost booked and the chat's
+// snapshot refreshed, so the turn survives a reload.
+func (ws *ReactWebServer) watchWakeupTurns(a *agent.Agent, clientID, chatID string) {
+	a.SetWakeupDoneFn(func(error) {
+		chat := a.GetChatID()
+		if chat == "" {
+			chat = chatID
+		}
+		recordQueryCost(a, chat)
+		ws.syncChatStateAsync(clientID, chat, "wakeup")
+	})
 }

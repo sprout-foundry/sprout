@@ -56,3 +56,37 @@ func TestCommandExecuteClearRotatesAndNotifies(t *testing.T) {
 		t.Fatalf("expected a rotated session id, got %q", got)
 	}
 }
+
+// TestCommandExecuteTargetsBodyChat: the UI names the chat in the request
+// body, so /clear from a background pane must rotate that chat's session and
+// leave the active chat alone.
+func TestCommandExecuteTargetsBodyChat(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	active, err := ws.getChatAgent(testConcurrentClientID, defaultChatID)
+	if err != nil {
+		t.Fatalf("active chat agent: %v", err)
+	}
+	background, err := ws.getChatAgent(testConcurrentClientID, "chat-bg")
+	if err != nil {
+		t.Fatalf("background chat agent: %v", err)
+	}
+	activeBefore, backgroundBefore := active.GetSessionID(), background.GetSessionID()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/command/execute",
+		strings.NewReader(`{"command":"/clear","chat_id":"chat-bg"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(webClientIDHeader, testConcurrentClientID)
+	rec := httptest.NewRecorder()
+	ws.handleAPICommandExecute(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if got := active.GetSessionID(); got != activeBefore {
+		t.Errorf("active chat session changed from %q to %q", activeBefore, got)
+	}
+	if got := background.GetSessionID(); got == backgroundBefore {
+		t.Errorf("background chat session was not rotated (still %q)", got)
+	}
+}

@@ -24,14 +24,16 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.5.5
+require github.com/sprout-foundry/seed v1.5.6
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/coder/hnsw v0.6.1
+	github.com/ebitengine/purego v0.11.1
 	github.com/google/uuid v1.6.0
+	github.com/jezek/xgb v1.3.1
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/sprout-foundry/sinter v0.6.1

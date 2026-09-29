@@ -1,0 +1,19 @@
+.approval-origin-notice {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Above the approval dialogs' overlays. */
+  z-index: 10001;
+  max-width: calc(100vw - 32px);
+  padding: 6px 12px;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent-warning);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+}

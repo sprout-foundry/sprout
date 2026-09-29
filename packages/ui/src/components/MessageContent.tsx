@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { stripAnsiCodes } from '../utils/ansi';
 import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from '../utils/markdownCode';
@@ -19,7 +20,10 @@ interface MessageContentProps {
 const MessageContent = memo(function MessageContent({ content }: MessageContentProps): JSX.Element {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      // A single newline is a line break: chat answers use it for lists,
+      // steps and "one per line" output, which plain markdown folded into
+      // one paragraph.
+      remarkPlugins={[remarkGfm, remarkBreaks]}
       components={{
         code({ className, children, ...props }: HTMLAttributes<HTMLElement> & { children?: ReactNode }) {
           const languageMatch = /language-(\w+)/.exec(className || '');

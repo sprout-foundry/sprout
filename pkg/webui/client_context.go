@@ -39,7 +39,10 @@ const (
 )
 
 type webClientContext struct {
-	WorkspaceRoot    string
+	WorkspaceRoot string
+	// ProjectRoot is the workspace the user selected. WorkspaceRoot follows
+	// the active chat into its worktree; chats without one use ProjectRoot.
+	ProjectRoot      string
 	SSHHostAlias     string
 	SSHSessionKey    string
 	SSHLauncherURL   string
@@ -414,6 +417,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	}
 
 	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectRoot = workspaceRoot
 	ctx.SSHHostAlias = ""
 	ctx.SSHSessionKey = ""
 	ctx.SSHLauncherURL = ""
@@ -686,6 +690,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 	created.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
+	ws.watchWakeupTurns(created, clientID, chatID)
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).
@@ -829,6 +834,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	// through to stdin (ask_user) or time out (approvals).
 	agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 	agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
+	ws.watchWakeupTurns(agentInst, clientID, chatID)
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).

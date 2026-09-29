@@ -25,7 +25,9 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   localStorage.setItem('sprout-welcome-dismissed', 'true');
-  localStorage.removeItem('sprout.editor.layoutState');
+  Object.keys(localStorage)
+    .filter((k) => k.startsWith('sprout.editor.'))
+    .forEach((k) => localStorage.removeItem(k));
 });
 
 afterEach(() => {

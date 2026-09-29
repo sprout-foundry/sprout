@@ -71,10 +71,6 @@ function setup(opts: {
       mode: opts.mode,
       buffersRef,
       updateBufferTitle: vi.fn(),
-      updateBufferMetadata: (id, updates) => {
-        const b = opts.buffers.get(id);
-        if (b) opts.buffers.set(id, { ...b, metadata: { ...b.metadata, ...updates } });
-      },
       setBufferPinned: (id, v) => {
         calls.pinned.push([id, v]);
         const b = opts.buffers.get(id);
@@ -84,6 +80,12 @@ function setup(opts: {
         calls.closable.push([id, v]);
         const b = opts.buffers.get(id);
         if (b) opts.buffers.set(id, { ...b, isClosable: v });
+      },
+      closeBuffer: (id) => {
+        const b = opts.buffers.get(id);
+        if (!b || b.isClosable === false) return;
+        opts.closedIds?.push(id);
+        opts.buffers.delete(id);
       },
       openWorkspaceBuffer: openWorkspaceBuffer as never,
     }),
@@ -96,13 +98,113 @@ describe('useChatSessionsSync', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
 
-  it('claims the initial chat buffer for the active session (stays pinned)', () => {
+  it('gives the active chat its own focused tab and retires the initial stand-in', () => {
+    const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([
-      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, isActive: true })],
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isClosable: false, isActive: true })],
     ]);
-    setup({ sessions: [{ id: 'A' }], activeChatId: 'A', buffers });
-    // No new tab should be opened for the active session when buffer-chat is unclaimed.
-    expect(buffers.get('buffer-chat')?.metadata?.chatId).toBe('A');
+    const { calls } = setup({ sessions: [{ id: 'A' }], activeChatId: 'A', buffers, closedIds });
+    expect(calls.open.find((c) => c.id === '__workspace/chat/A')).toMatchObject({ activate: true, isPinned: false });
+    expect(closedIds).toEqual(['buffer-chat']);
+  });
+
+  it('opens tabs in creation order, not most-recently-active order', () => {
+    const buffers = new Map<string, EditorBuffer>();
+    const { calls } = setup({
+      sessions: [
+        { id: 'newer', created_at: '2026-01-02T00:00:00Z' },
+        { id: 'older', created_at: '2026-01-01T00:00:00Z' },
+      ] as never,
+      activeChatId: 'newer',
+      buffers,
+    });
+    expect(calls.open.map((c) => c.id)).toEqual(['__workspace/chat/older', '__workspace/chat/newer']);
+  });
+
+  it('closes the tab of a chat that was deleted', () => {
+    const closedIds: string[] = [];
+    const tab = (chatId: string) =>
+      makeBuffer({
+        id: `__workspace/chat/${chatId}`,
+        file: { ...makeBuffer({ id: 'x' }).file, path: `__workspace/chat/${chatId}` },
+        metadata: { chatId },
+      });
+    const buffers = new Map<string, EditorBuffer>([
+      ['__workspace/chat/A', tab('A')],
+      ['__workspace/chat/gone', { ...tab('gone'), isClosable: false }],
+    ]);
+    const props = { sessions: [{ id: 'A' }, { id: 'gone' }, { id: 'fresh' }] as { id: string }[] };
+    const { rerender } = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: props.sessions as never,
+        activeChatId: 'A',
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        closeBuffer: (id) => {
+          closedIds.push(id);
+          buffers.delete(id);
+        },
+        openWorkspaceBuffer: ((o: { path: string; metadata?: Record<string, unknown> }) => {
+          buffers.set(o.path, tab(String(o.metadata?.chatId)));
+          return o.path;
+        }) as never,
+      }),
+    );
+    // "gone" is deleted; "late" has a tab but hasn't reached the list yet.
+    buffers.set('__workspace/chat/late', tab('late'));
+    props.sessions = [{ id: 'A' }, { id: 'fresh' }];
+    rerender();
+    expect(closedIds).toEqual(['__workspace/chat/gone']);
+  });
+
+  it('does not pull focus from a restored file when the active chat first becomes known', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      [
+        'file-1',
+        makeBuffer({
+          id: 'file-1',
+          kind: 'file',
+          isActive: true,
+          file: { ...makeBuffer({ id: 'x' }).file, path: 'README.md' },
+        }),
+      ],
+    ]);
+    const props = { active: 'A' as string | null };
+    const opened: Array<{ path: string; activate?: boolean }> = [];
+    const { rerender } = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: [{ id: 'A' }, { id: 'B' }] as never,
+        activeChatId: props.active,
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        openWorkspaceBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
+          opened.push({ path: o.path, activate: o.activate });
+          buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
+          return o.path;
+        }) as never,
+      }),
+    );
+    expect(opened.find((o) => o.path === '__workspace/chat/A')?.activate).toBe(false);
+
+    // Switching chats does focus the chat you switched to.
+    buffers.delete('__workspace/chat/B');
+    props.active = 'B';
+    rerender();
+    expect(opened.filter((o) => o.path === '__workspace/chat/B').pop()?.activate).toBe(true);
+  });
+
+  it('keeps the stand-in while the active chat is unknown', () => {
+    const closedIds: string[] = [];
+    const buffers = new Map<string, EditorBuffer>([
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isClosable: false, isActive: true })],
+    ]);
+    const { calls } = setup({ sessions: [{ id: 'A' }, { id: 'B' }], activeChatId: null, buffers, closedIds });
+    expect(closedIds).toEqual([]);
+    expect(calls.open.every((c) => c.activate === false)).toBe(true);
   });
 
   it('opens a non-active session as an unpinned, closable, NON-activating tab', () => {
@@ -148,7 +250,7 @@ describe('useChatSessionsSync', () => {
     expect(mutated.get('__workspace/chat/B')?.isPinned).toBe(false);
   });
 
-  it('keeps the active chat tab pinned and unclosable (single pinned tab)', () => {
+  it('keeps the active chat tab unclosable but never pinned', () => {
     const buffers = new Map<string, EditorBuffer>([
       ['buffer-chat', makeBuffer({ id: 'buffer-chat', isPinned: true, isClosable: false, metadata: { chatId: 'A' } })],
     ]);
@@ -157,9 +259,35 @@ describe('useChatSessionsSync', () => {
       activeChatId: 'A',
       buffers,
     });
-    // Active chat's own tab must NOT be unpinned or made closable.
     expect(calls.closable.some(([id, v]) => id === 'buffer-chat' && v === true)).toBe(false);
-    expect(calls.pinned.some(([id, v]) => id === 'buffer-chat' && v === false)).toBe(false);
+    // A pinned chat tab collapses to an icon with the selected accent; the
+    // active chat's tab is unpinned so only the focused tab looks focused.
+    expect(buffers.get('buffer-chat')?.isPinned).toBe(false);
+    expect(Array.from(buffers.values()).some((b) => b.isPinned)).toBe(false);
+  });
+
+  it('opens the active chat tab unpinned', () => {
+    const buffers = new Map<string, EditorBuffer>();
+    const { calls } = setup({ sessions: [{ id: 'A' }, { id: 'B' }], activeChatId: 'B', buffers });
+    expect(calls.open.find((c) => c.id === '__workspace/chat/B')).toMatchObject({ isPinned: false, activate: true });
+  });
+
+  it('drops the unclaimed initial tab when the active chat already has its own tab', () => {
+    const closedIds: string[] = [];
+    const buffers = new Map<string, EditorBuffer>([
+      ['buffer-chat', makeBuffer({ id: 'buffer-chat', isClosable: false, metadata: { chatId: null } })],
+      [
+        '__workspace/chat/B',
+        makeBuffer({
+          id: '__workspace/chat/B',
+          file: { ...makeBuffer({ id: 'x' }).file, path: '__workspace/chat/B' },
+          metadata: { chatId: 'B' },
+        }),
+      ],
+    ]);
+    setup({ sessions: [{ id: 'A' }, { id: 'B' }], activeChatId: 'B', buffers, closedIds });
+    expect(closedIds).toEqual(['buffer-chat']);
+    expect(Array.from(buffers.values()).filter((b) => b.metadata?.chatId === 'B')).toHaveLength(1);
   });
 
   it('mode lanes: the design lane mirrors only design chats, the code lane the rest', () => {
@@ -211,7 +339,6 @@ describe('useChatSessionsSync', () => {
         mode: props.mode,
         buffersRef: { current: buffers },
         updateBufferTitle: vi.fn(),
-        updateBufferMetadata: vi.fn(),
         setBufferPinned: vi.fn(),
         setBufferClosable: vi.fn(),
         closeBuffer,

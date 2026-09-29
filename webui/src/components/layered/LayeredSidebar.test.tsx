@@ -11,9 +11,14 @@ vi.mock('../../config/mode', () => ({
 vi.mock('../../services/activeRepo', () => ({ useActiveRepoURL: () => undefined }));
 vi.mock('../../services/recentRepos', () => ({ useRecentRepos: () => [] }));
 vi.mock('../UserMenu', () => ({ UserMenu: () => null }));
-vi.mock('../ThemedDialog', () => ({ showThemedPrompt: vi.fn(), showThemedAlert: vi.fn() }));
+vi.mock('../ThemedDialog', () => ({
+  showThemedPrompt: vi.fn(),
+  showThemedAlert: vi.fn(),
+  showThemedConfirm: vi.fn(),
+}));
 
 import LayeredSidebar, { type LayeredSidebarProps } from './LayeredSidebar';
+import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -132,6 +137,35 @@ describe('LayeredSidebar', () => {
     click(container.querySelector('.project-rail-project[aria-label="api"]'));
     expect(onInstanceChange).toHaveBeenCalledWith(2);
     expect(onCloseDrawer).toHaveBeenCalled();
+  });
+
+  it('renames and deletes a conversation from its menu', async () => {
+    const onRename = vi.fn();
+    const onDelete = vi.fn();
+    const base = renderSidebar();
+    renderSidebar({ conversations: { ...base.conversations!, onRename, onDelete, canDelete: (id) => id !== 'c1' } });
+
+    const menuItems = () => Array.from(document.querySelectorAll('.context-menu-item')).map((b) => b.textContent);
+    act(() => {
+      itemByText('Add checkout')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(menuItems()).toEqual(['Rename']);
+
+    vi.mocked(showThemedPrompt).mockResolvedValueOnce('  Checkout flow ');
+    await act(async () => {
+      (Array.from(document.querySelectorAll('.context-menu-item'))[0] as HTMLElement).click();
+    });
+    expect(onRename).toHaveBeenCalledWith('c1', 'Checkout flow');
+
+    act(() => {
+      itemByText('Fix CI')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(menuItems()).toEqual(['Rename', 'Delete conversation']);
+    vi.mocked(showThemedConfirm).mockResolvedValueOnce(true);
+    await act(async () => {
+      (Array.from(document.querySelectorAll('.context-menu-item'))[1] as HTMLElement).click();
+    });
+    expect(onDelete).toHaveBeenCalledWith('c2');
   });
 
   it('shows only the rail when collapsed', () => {

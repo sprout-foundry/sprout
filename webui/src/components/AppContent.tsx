@@ -1180,6 +1180,10 @@ const AppContent: React.FC<AppContentProps> = ({
               isWorking: (id) => (id === activeChatId ? state.isProcessing : !!perChatCache?.[id]?.isProcessing),
               inMain: showContextSidebar,
               onSelect: (id) => openConversation(id),
+              onRename: onRenameChat,
+              onDelete: onDeleteChat ? (id) => void onDeleteChat(id) : undefined,
+              // The daemon keeps its built-in chat; hosted chats can all go.
+              canDelete: (id) => id !== 'default',
               onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
               onCreate: onCreateChat
                 ? () => {

@@ -23,7 +23,9 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
+import { ContextMenu } from '@sprout/ui';
+import { useState, type ReactElement, type ReactNode } from 'react';
+import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
 import type { ChatSession } from '../../services/chatSessions';
 
 export type ProjectNavTarget =
@@ -42,6 +44,10 @@ export interface ProjectNavConversations {
   /** Whether a chat's agent is currently answering; overrides the list's `active_query`, which can be stale. */
   isWorking?: (id: string) => boolean;
   onCreate?: () => void;
+  onRename?: (id: string, name: string) => void;
+  onDelete?: (id: string) => void;
+  /** Whether a chat may be deleted (a host can keep one permanent chat). */
+  canDelete?: (id: string) => boolean;
 }
 
 interface NavEntry {
@@ -85,6 +91,28 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
 
 export default function ProjectNav(props: ProjectNavProps): ReactElement {
   const { title, conversations, conversationInMain, current, onNavigate, drill } = props;
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
+  const canDeleteMenuChat = menu && conversations?.onDelete && (conversations.canDelete?.(menu.id) ?? true);
+
+  const renameChat = async (id: string, name: string) => {
+    setMenu(null);
+    const next = await showThemedPrompt('New name for this conversation:', {
+      title: 'Rename conversation',
+      defaultValue: name,
+    });
+    const trimmed = next?.trim();
+    if (trimmed && trimmed !== name) conversations?.onRename?.(id, trimmed);
+  };
+
+  const deleteChat = async (id: string, name: string) => {
+    setMenu(null);
+    const ok = await showThemedConfirm(`Delete "${name}" and its messages?`, {
+      title: 'Delete conversation',
+      confirmLabel: 'Delete',
+      type: 'danger',
+    });
+    if (ok) conversations?.onDelete?.(id);
+  };
 
   const hideButton = props.onHide ? (
     <button
@@ -160,6 +188,11 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
               type="button"
               className={`project-nav-item${conversationInMain && s.id === conversations?.activeId ? ' active' : ''}`}
               onClick={() => onNavigate({ kind: 'conversation', id: s.id })}
+              onContextMenu={(e) => {
+                if (!conversations?.onRename && !conversations?.onDelete) return;
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, id: s.id, name: s.name || 'Untitled' });
+              }}
               title={s.name}
             >
               <MessageSquare size={15} />
@@ -177,6 +210,22 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
         )}
       </div>
       <div className="project-nav-footer">{props.footerEntries.map(item)}</div>
+      <ContextMenu isOpen={menu !== null} x={menu?.x ?? 0} y={menu?.y ?? 0} onClose={() => setMenu(null)} zIndex={1500}>
+        {menu && conversations?.onRename && (
+          <button type="button" className="context-menu-item" onClick={() => void renameChat(menu.id, menu.name)}>
+            Rename
+          </button>
+        )}
+        {menu && canDeleteMenuChat && (
+          <button
+            type="button"
+            className="context-menu-item danger"
+            onClick={() => void deleteChat(menu.id, menu.name)}
+          >
+            Delete conversation
+          </button>
+        )}
+      </ContextMenu>
     </div>
   );
 }

@@ -3,7 +3,6 @@ package configuration
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -113,7 +112,7 @@ func Initialize() (*Config, *APIKeys, error) {
 
 	// Populate from individual environment variables — these take priority over JSON blob
 	if !apiKeys.PopulateFromEnvironment() {
-		log.Printf("[debug] no API keys found in environment variables")
+		logNoEnvKeys()
 	}
 
 	// Check if this is first run (no provider selected)

@@ -20,6 +20,18 @@ export function setAgentEventDispatcher(fn: ((event: unknown) => void) | null): 
 }
 
 /**
+ * The daemon announces file writes, creates and deletes as file_changed
+ * events; the git panel refreshes on them. Delivered after the request
+ * returns, as a server event would be.
+ */
+function announceFileChange(filePath: string, action: 'write' | 'created' | 'deleted'): void {
+  const dispatchEvent = agentEventDispatcher;
+  if (!dispatchEvent) return;
+  const event = { type: 'file_changed', data: { file_path: filePath, action, ts: new Date().toISOString() } };
+  queueMicrotask(() => dispatchEvent(event));
+}
+
+/**
  * Shell-escape an argument for use in a command string.
  * Wraps in single quotes and escapes any embedded single quotes.
  */
@@ -505,6 +517,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
     return jsonError(err, 500);
   }
   trackFileWrite(safePath);
+  announceFileChange(safePath, 'write');
   // Same success contract as the daemon's write endpoint: the buffer manager
   // clears the unsaved flag only on this shape.
   return jsonOk({ message: 'File saved successfully', success: true });
@@ -536,6 +549,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
     }
     trackFileWrite(safePath);
   }
+  announceFileChange(safePath, 'created');
   return jsonOk({ message: 'ok', path: safePath });
 }
 
@@ -558,6 +572,7 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
       return jsonError(result.stderr || err, 500);
     }
   }
+  announceFileChange(safePath, 'deleted');
   return jsonOk({ message: 'ok', path: safePath });
 }
 
@@ -578,6 +593,8 @@ function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
   if (result.exitCode !== 0) {
     return jsonError(result.stderr || 'rename failed', 500);
   }
+  announceFileChange(safeOld, 'deleted');
+  announceFileChange(safeNew, 'created');
   return jsonOk({ message: 'ok', old_path: safeOld, new_path: safeNew });
 }
 

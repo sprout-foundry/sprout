@@ -9,10 +9,17 @@ package agent
 import (
 	"context"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/approvals"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
+
+// Compile-time assertion that *Agent satisfies the broker seam: the
+// forwarder in approval_broker.go passes *Agent as approvals.ApprovalAgent,
+// and this guard keeps the interface and the method surface from drifting
+// apart silently.
+var _ approvals.ApprovalAgent = (*Agent)(nil)
 
 // Client returns the agent's provider client under the client lock.
 func (a *Agent) Client() api.ClientInterface {

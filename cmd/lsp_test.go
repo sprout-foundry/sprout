@@ -293,8 +293,13 @@ func TestLoadLanguageServers(t *testing.T) {
 }
 
 func TestLoadLanguageServers_WithNoConfig(t *testing.T) {
-	// Point config to a non-existent dir so LoadOrInitConfig fails
-	t.Setenv("SPROUT_CONFIG", "/nonexistent/sprout-test")
+	// Point config beneath a regular file so LoadOrInitConfig fails without
+	// creating anything ("/nonexistent/..." is creatable on Windows).
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SPROUT_CONFIG", filepath.Join(blocker, "sprout-test"))
 
 	servers := loadLanguageServers()
 

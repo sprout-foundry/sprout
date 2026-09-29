@@ -565,9 +565,7 @@ function EditorTabs({
                         <RefreshCw size={11} aria-hidden="true" />
                       </button>
                     )}
-                    {/* Pin button hidden on chat tabs — pin/unpin a chat
-                     * isn't a typical workflow, and the pinned-default-chat
-                     * gets a forced pinned state via context anyway. */}
+                    {/* No pin button on chat tabs; see the context menu note. */}
                     {buffer.kind !== 'chat' && (
                       <button
                         className="pin-indicator"
@@ -698,9 +696,8 @@ function EditorTabs({
                 <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
               </button>
             ))}
-            {/* Pin is meaningless for chat tabs (defaults are forced
-             * pinned by the context). Only surface the action on real
-             * file tabs. */}
+            {/* Chat tabs aren't pinnable: every chat already stays in the
+             * tab row until closed or deleted. Only file tabs pin. */}
             {activeContextBuffer.kind !== 'chat' && (
               <button
                 className="context-menu-item"

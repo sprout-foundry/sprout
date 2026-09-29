@@ -80,3 +80,20 @@ func TestApplyStateDoesNotRebookRestoredUsage(t *testing.T) {
 		t.Fatalf("restored session booked again: %+v", got)
 	}
 }
+
+func TestQueryDisplaysSurviveAnExportTakenMidTurn(t *testing.T) {
+	a := newTestAgent(t)
+	batch := "[wakeup] Background command completed"
+	a.rememberQueryDisplay(batch, "Looking into 'make build'…")
+
+	// The turn's message isn't in the history yet when this export runs.
+	a.state.SetMessages([]api.Message{{Role: "user", Content: "earlier"}, {Role: "assistant", Content: "ok"}})
+	if _, err := a.ExportState(); err != nil {
+		t.Fatal(err)
+	}
+
+	a.state.SetMessages(append(a.state.GetMessages(), api.Message{Role: "user", Content: batch}))
+	if got := a.queryDisplaysFor(a.state.GetMessages()); got[batch] == "" {
+		t.Fatalf("display lost after a mid-turn export: %v", got)
+	}
+}

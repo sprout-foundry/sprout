@@ -26,6 +26,8 @@ export interface EditorWorkspaceProps {
     is_default?: boolean;
     active_query?: boolean;
     worktree_path?: string;
+    provider?: string;
+    model?: string;
   }>;
   /** Switch the active chat when a chat tab is middle-clicked/cycled. */
   onActiveChatChange?: (id: string) => void;
@@ -99,13 +101,15 @@ const EditorPaneComponent: React.FC<{
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
+  chatSessions?: React.ComponentProps<typeof WorkspacePane>['chatSessions'];
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, chatSessions }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
       <WorkspacePane
         paneId={paneId}
         perChatCache={perChatCache}
         activeChatId={activeChatId}
+        chatSessions={chatSessions}
         chatProps={chatProps}
         reviewProps={reviewProps}
         diffState={diffState}
@@ -225,6 +229,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   reviewPropsRef.current = reviewProps;
   const diffStateRef = useRef(diffState);
   diffStateRef.current = diffState;
+  const chatSessionsRef = useRef(chatSessions);
+  chatSessionsRef.current = chatSessions;
 
   // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
   const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
@@ -478,6 +484,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                 chatProps={chatPropsRef.current}
                 reviewProps={reviewPropsRef.current}
                 diffState={diffStateRef.current}
+                chatSessions={chatSessionsRef.current}
               />
             </EditorPaneWrapper>
           </div>

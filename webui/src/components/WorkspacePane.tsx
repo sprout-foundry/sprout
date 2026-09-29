@@ -44,6 +44,8 @@ interface GitDiffResponse {
 interface WorkspacePaneProps {
   paneId: string;
   perChatCache?: Record<string, PerChatState>;
+  /** Chat list entries, for a pane's model line before its chat reports metrics. */
+  chatSessions?: Array<{ id: string; provider?: string; model?: string }>;
   activeChatId?: string | null;
   onOpenCommandPalette?: () => void;
   onOpenTerminal?: () => void;
@@ -71,7 +73,7 @@ interface WorkspacePaneProps {
 }
 
 const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
-  ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId }) => {
+  ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId, chatSessions }) => {
     const { panes, buffers } = useEditorManager();
     const pane = panes.find((item) => item.id === paneId);
     const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -104,6 +106,13 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
 
         // Inactive chat pane — use cached state for this specific chat
         const cached = perChatCache[bufferChatId];
+        // Until this chat reports metrics, show at least its model.
+        const listed = chatSessions?.find((c) => c.id === bufferChatId);
+        const knownModel = cached?.provider
+          ? { provider: cached.provider, model: cached.model }
+          : listed?.provider
+            ? { provider: listed.provider, model: listed.model }
+            : {};
         const inactiveChatProps = {
           ...chatProps,
           messages: cached?.messages ?? [],
@@ -113,7 +122,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           queryProgress: cached?.queryProgress ?? null,
           lastError: cached?.lastError ?? null,
           isProcessing: cached?.isProcessing ?? false,
-          stats: cached?.stats ?? {},
+          stats: cached?.stats ?? knownModel,
           inputValue: '',
           queuedMessagesCount: 0,
           queuedMessages: [],

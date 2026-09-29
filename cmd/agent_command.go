@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -91,21 +90,20 @@ func runStartupPermissionCheck() error {
 	return nil
 }
 
-// resolveGlobalConfigDir returns the global config directory regardless of
-// SPROUT_CONFIG override. This is used when layering workspace config
-// on top of the global config so API keys are always resolved from the
-// user's home directory.
+// resolveGlobalConfigDir returns the global config directory for layering a
+// workspace config on top. SPROUT_CONFIG is not consulted: isolated-config
+// mode repoints it at the workspace's own .sprout directory. An explicit
+// SPROUT_CONFIG_DIR still wins, and otherwise $XDG_CONFIG_HOME/sprout or
+// ~/.config/sprout — the same place the isolated config was seeded from.
 func resolveGlobalConfigDir() string {
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
-		if h := os.Getenv("HOME"); h != "" {
-			homeDir = h
-		}
+	if dir := strings.TrimSpace(os.Getenv("SPROUT_CONFIG_DIR")); dir != "" {
+		return dir
 	}
-	if homeDir == "" {
+	dir, err := configuration.DefaultConfigDir()
+	if err != nil {
 		return ""
 	}
-	return filepath.Join(homeDir, ".config", "sprout")
+	return dir
 }
 
 // shouldPreloadLocalModel reports whether createChatAgent should eagerly

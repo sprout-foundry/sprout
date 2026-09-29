@@ -291,31 +291,38 @@ func (a *Agent) rememberQueryDisplay(query, display string) {
 	a.queryDisplays[query] = display
 }
 
+// queryDisplayPruneAt bounds the remembered displays: past it, entries whose
+// message has left the conversation (compacted, cleared) are forgotten.
+const queryDisplayPruneAt = 256
+
 // queryDisplaysFor returns the remembered bubble texts of the given user
-// messages; entries for messages no longer in the conversation are dropped.
+// messages. It never forgets an entry just because its message is missing
+// from this list: an export can run mid-turn, before the turn's message is
+// in the history, and forgetting then lost the display for good.
 func (a *Agent) queryDisplaysFor(messages []api.Message) map[string]string {
 	a.notifMu.Lock()
 	defer a.notifMu.Unlock()
 	if len(a.queryDisplays) == 0 {
 		return nil
 	}
-	kept := make(map[string]string)
+	out := make(map[string]string)
 	for _, msg := range messages {
 		if msg.Role != "user" {
 			continue
 		}
 		key := StripUserMessageTimestamp(msg.Content)
 		if display, ok := a.queryDisplays[key]; ok {
-			kept[key] = display
+			out[key] = display
 		}
 	}
-	a.queryDisplays = kept
-	if len(kept) == 0 {
-		return nil
+	if len(a.queryDisplays) > queryDisplayPruneAt {
+		a.queryDisplays = make(map[string]string, len(out))
+		for k, v := range out {
+			a.queryDisplays[k] = v
+		}
 	}
-	out := make(map[string]string, len(kept))
-	for k, v := range kept {
-		out[k] = v
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

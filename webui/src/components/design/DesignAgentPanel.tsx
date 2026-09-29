@@ -18,6 +18,9 @@
 import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
 import Chat from '../ChatView';
+// The panel's own rules live with the design view's; the empty-state surface
+// renders the panel without the view, so load them here too.
+import './DesignView.css';
 
 export interface DesignAgentPanelProps {
   /** The shell's chat payload — the Code shell's own chat props object. */

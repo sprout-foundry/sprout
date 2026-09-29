@@ -90,6 +90,8 @@ export interface PerChatState {
   /** This chat's metrics (tokens, cost, context) as last reported. */
   stats?: Record<string, unknown>;
   pendingEvents?: WsEvent[];
+  /** Set when pendingEvents overflowed and dropped its oldest entries. */
+  pendingEventsTruncated?: boolean;
 }
 
 /** All navigable views in the editor (chat, editor, git) plus any plugin-registered view IDs. */

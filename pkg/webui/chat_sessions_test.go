@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestNewChatSessionWorktree(t *testing.T) {
@@ -425,5 +426,32 @@ func TestClientStaysActiveWhileAnyChatRuns(t *testing.T) {
 	cc.setChatQueryActive(a.ID, false, "")
 	if cc.ActiveQuery {
 		t.Fatal("client still active after every chat finished")
+	}
+}
+
+func TestChatSessionWithMessagesIncludesRunInProgress(t *testing.T) {
+	cs := newChatSession("test-id", "Test Chat")
+	cs.runBuffer = newChatRunRingBuffer()
+	for _, ev := range []events.UIEvent{
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "earlier run"}},
+		{Type: events.EventTypeQueryCompleted, Data: map[string]interface{}{}},
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "run the build"}},
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "delegated", "subagent_depth": 1}},
+		{Type: events.EventTypeStreamChunk, Data: map[string]interface{}{"chunk": "Building"}},
+	} {
+		cs.runBuffer.Append(ev)
+	}
+
+	if _, ok := cs.chatSessionWithMessages()["run_events"]; ok {
+		t.Fatal("run_events sent for a chat with no run in progress")
+	}
+
+	cs.ActiveQuery = true
+	run, _ := cs.chatSessionWithMessages()["run_events"].([]map[string]interface{})
+	if len(run) != 3 {
+		t.Fatalf("run_events has %d events, want the 3 from the current run's start", len(run))
+	}
+	if data, _ := run[0]["data"].(map[string]interface{}); data["query"] != "run the build" {
+		t.Fatalf("run_events starts at %v, want the current run's query_started", run[0])
 	}
 }

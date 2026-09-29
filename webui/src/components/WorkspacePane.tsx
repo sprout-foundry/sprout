@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import React, { Suspense, lazy } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
+import { previewWithPending, processingAfter } from '../utils/chatReplay';
 import Chat from './ChatView';
 import CompareTab from './CompareTab';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
@@ -127,13 +128,15 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
               : defaultModel(chatProps.stats);
         const inactiveChatProps = {
           ...chatProps,
-          messages: cached?.messages ?? [],
+          // Its queued events show here as they arrive; the cached state
+          // alone froze the pane while the chat ran.
+          messages: previewWithPending(cached?.messages ?? [], cached?.pendingEvents),
           toolExecutions: cached?.toolExecutions ?? [],
           subagentActivities: cached?.subagentActivities ?? [],
           currentTodos: cached?.currentTodos ?? [],
           queryProgress: cached?.queryProgress ?? null,
           lastError: cached?.lastError ?? null,
-          isProcessing: cached?.isProcessing ?? false,
+          isProcessing: processingAfter(cached?.isProcessing ?? false, cached?.pendingEvents ?? []),
           stats: cached?.stats ?? knownModel,
           inputValue: '',
           queuedMessagesCount: 0,

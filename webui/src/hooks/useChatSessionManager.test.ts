@@ -12,6 +12,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import type { AppState } from '../types/app';
+import { onChatReplay } from '../utils/chatReplay';
 import { useChatSessionManager } from './useChatSessionManager';
 
 const apiDouble = vi.hoisted(() => ({
@@ -601,5 +602,146 @@ describe('queue drain routing', () => {
     });
 
     expect(apiDouble.sendQuery).toHaveBeenCalledWith('untagged', 'chat-A');
+  });
+});
+
+describe('switching back to a chat that ran in the background', () => {
+  function setupSwitch(initial: Partial<AppState>) {
+    let state: AppState = {
+      messages: [],
+      isProcessing: false,
+      lastError: null,
+      activeChatId: 'other-chat',
+      perChatCache: {},
+      ...initial,
+    } as unknown as AppState;
+    const setState: AppStoreSetState = (updater) => {
+      const partial =
+        typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+      state = { ...state, ...partial };
+    };
+    const activeRequestsRef = { current: 0 };
+    const utils = renderHook(() =>
+      useChatSessionManager({
+        setState,
+        activeRequestsRef,
+        activeChatIdRef: { current: 'other-chat' as string | null },
+        queuedMessagesRef: { current: [] as import('./useChatSessionManager').QueuedMessage[] },
+        isProcessing: false,
+      }),
+    );
+    const replays: Array<{ chatId: string; types: string[] }> = [];
+    const stop = onChatReplay((chatId, events) => replays.push({ chatId, types: events.map((e) => e.type) }));
+    return { ...utils, getState: () => state, replays, stop, activeRequestsRef };
+  }
+
+  const question = { id: 'q1', type: 'user' as const, content: 'Run the build', timestamp: new Date() };
+  const answerSoFar = { id: 'a1', type: 'assistant' as const, content: 'Starting', timestamp: new Date() };
+
+  it('replays its queued events instead of adopting the shorter stored copy of a running chat', async () => {
+    chatSessionsDouble.switchChatSession.mockResolvedValue({
+      active_chat_id: 'chat-a',
+      chat_session: { messages: [], active_query: true },
+    });
+    const pending = [
+      { type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: ' the build' } },
+      { type: 'tool_start', data: { chat_id: 'chat-a', tool_name: 'shell_command', tool_call_id: 't1' } },
+    ];
+    const hook = setupSwitch({
+      perChatCache: {
+        'chat-a': { messages: [question, answerSoFar], isProcessing: true, queryCount: 1, pendingEvents: pending },
+      } as unknown as AppState['perChatCache'],
+    });
+
+    await act(async () => {
+      await hook.result.current.handleActiveChatChange('chat-a');
+    });
+    hook.stop();
+
+    expect(hook.replays).toEqual([{ chatId: 'chat-a', types: ['stream_chunk', 'tool_start'] }]);
+    expect(hook.getState().messages.map((m) => m.id)).toEqual(['q1', 'a1']);
+    expect(hook.getState().perChatCache['chat-a']?.pendingEvents).toBeUndefined();
+    expect(hook.activeRequestsRef.current).toBe(1);
+  });
+
+  it('falls back to the stored copy plus the server run replay when events were dropped', async () => {
+    chatSessionsDouble.switchChatSession.mockResolvedValue({
+      active_chat_id: 'chat-a',
+      chat_session: {
+        messages: [],
+        active_query: true,
+        run_events: [{ type: 'query_started', data: { chat_id: 'chat-a', query: 'Run the build' } }],
+      },
+    });
+    const hook = setupSwitch({
+      perChatCache: {
+        'chat-a': {
+          messages: [question],
+          isProcessing: true,
+          queryCount: 1,
+          pendingEvents: [{ type: 'stream_chunk', data: { chat_id: 'chat-a', chunk: 'x' } }],
+          pendingEventsTruncated: true,
+        },
+      } as unknown as AppState['perChatCache'],
+    });
+
+    await act(async () => {
+      await hook.result.current.handleActiveChatChange('chat-a');
+    });
+    hook.stop();
+
+    expect(hook.replays).toEqual([{ chatId: 'chat-a', types: ['query_started'] }]);
+  });
+
+  it('does not replay the server run over a cached view that already has it', async () => {
+    chatSessionsDouble.switchChatSession.mockResolvedValue({
+      active_chat_id: 'chat-a',
+      chat_session: {
+        messages: [],
+        active_query: true,
+        run_events: [{ type: 'query_started', data: { chat_id: 'chat-a', query: 'Run the build' } }],
+      },
+    });
+    const hook = setupSwitch({
+      perChatCache: {
+        'chat-a': { messages: [question, answerSoFar], isProcessing: true, queryCount: 1 },
+      } as unknown as AppState['perChatCache'],
+    });
+
+    await act(async () => {
+      await hook.result.current.handleActiveChatChange('chat-a');
+    });
+    hook.stop();
+
+    expect(hook.replays).toEqual([]);
+    expect(hook.getState().messages.map((m) => m.id)).toEqual(['q1', 'a1']);
+  });
+
+  it('counts a run that started and finished in the background as done', async () => {
+    chatSessionsDouble.switchChatSession.mockResolvedValue({
+      active_chat_id: 'chat-a',
+      chat_session: { messages: [], active_query: false },
+    });
+    const hook = setupSwitch({
+      perChatCache: {
+        'chat-a': {
+          messages: [question],
+          isProcessing: false,
+          queryCount: 1,
+          pendingEvents: [
+            { type: 'query_started', data: { chat_id: 'chat-a' } },
+            { type: 'query_completed', data: { chat_id: 'chat-a' } },
+          ],
+        },
+      } as unknown as AppState['perChatCache'],
+    });
+
+    await act(async () => {
+      await hook.result.current.handleActiveChatChange('chat-a');
+    });
+    hook.stop();
+
+    expect(hook.activeRequestsRef.current).toBe(0);
+    expect(hook.getState().messages.map((m) => m.id)).toEqual(['q1']);
   });
 });

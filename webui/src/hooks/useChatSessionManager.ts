@@ -1,3 +1,4 @@
+import type { WsEvent } from '@sprout/events';
 import type { Message, ToolRef } from '@sprout/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
@@ -19,6 +20,7 @@ import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
+import { processingAfter, requestChatReplay } from '../utils/chatReplay';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
@@ -180,19 +182,30 @@ export function useChatSessionManager({
       // Track the expected chat ID to detect stale async responses
       const switchId = id;
       let shownAtSwitchStart = new Set<string>();
+      // Events this chat received in the background. When none were dropped,
+      // the cached state plus these is its exact current state — the
+      // server's stored copy of a running chat lacks the turn in progress.
+      let replayEvents: WsEvent[] = [];
       activeChatIdRef.current = id;
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
+        const pending = cached?.pendingEvents ?? [];
+        const replayLocally = !!cached && pending.length > 0 && !cached.pendingEventsTruncated;
+        replayEvents = replayLocally ? pending : [];
         // Check pending events for completion signals. If the cache says
         // isProcessing=true but a query_completed/session_terminated/error
         // event arrived while viewing another chat, the cached flag is stale.
         // The backend fetch below will confirm, but this prevents a brief
         // phantom spinner on switch-back.
-        const hasCompletionInPending = (cached?.pendingEvents ?? []).some(
+        const hasCompletionInPending = pending.some(
           (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
         );
-        const restoredIsProcessing = hasCompletionInPending ? false : (cached?.isProcessing ?? false);
+        const restoredIsProcessing = replayLocally
+          ? processingAfter(cached.isProcessing ?? false, pending)
+          : hasCompletionInPending
+            ? false
+            : (cached?.isProcessing ?? false);
         const newCache = currentId
           ? {
               ...prev.perChatCache,
@@ -212,6 +225,10 @@ export function useChatSessionManager({
               },
             }
           : prev.perChatCache;
+        if (replayLocally) {
+          const { pendingEvents: _replayed, pendingEventsTruncated: _complete, ...rest } = cached;
+          newCache[id] = rest;
+        }
         activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
         shownAtSwitchStart = new Set((cached?.messages ?? []).map((m) => m.id));
         return {
@@ -233,6 +250,10 @@ export function useChatSessionManager({
         };
       });
 
+      const replayedLocally = replayEvents.length > 0;
+      let installedStoredCopy = false;
+      requestChatReplay(id, replayEvents);
+
       try {
         const response = await switchChatSession(id, mode);
         // Bail if user switched to yet another chat while we were loading.
@@ -250,8 +271,12 @@ export function useChatSessionManager({
           // shorter local state when streaming hadn't been persisted yet.
           const cached = prev.perChatCache[id];
           const hadPendingEvents = !!cached?.pendingEvents?.length;
+          // A locally replayed chat is already current; the stored copy can
+          // only be as new, or older while a run is in progress.
           const useBackendMessages =
-            backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents;
+            !replayedLocally &&
+            (backendMessages.length >= prev.messages.length || !backendIsActive || hadPendingEvents);
+          installedStoredCopy = useBackendMessages;
           // Drain pending events — the backend fetch is authoritative now.
           const newPerChatCache = { ...prev.perChatCache };
           if (cached && cached.pendingEvents) {
@@ -276,6 +301,12 @@ export function useChatSessionManager({
             perChatCache: newPerChatCache,
           };
         });
+        // The stored copy of a running chat stops before the turn in
+        // progress; the server sends that turn's events to rebuild it.
+        // Only on top of that stored copy: a cached view already has the run.
+        if (installedStoredCopy && backendIsActive && activeChatIdRef.current === switchId) {
+          requestChatReplay(id, response.chat_session.run_events ?? []);
+        }
 
         // Refresh the session list (tab titles/counts) without blocking the
         // switch — the messages are already on screen from the switch

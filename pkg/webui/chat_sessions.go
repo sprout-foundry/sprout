@@ -914,6 +914,14 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 	if cs.ActiveQuery && cs.CurrentQuery != "" {
 		summary["current_query"] = cs.CurrentQuery
 	}
+	// The stored transcript is synced when a run ends, so a running chat's
+	// copy lacks the turn in progress; ship that turn's events for the client
+	// to replay on top.
+	if cs.ActiveQuery && cs.runBuffer != nil {
+		if run := currentRunEvents(cs.runBuffer); len(run) > 0 {
+			summary["run_events"] = run
+		}
+	}
 	// The lane this chat belongs to (SP-142); see chatSessionSummary.
 	if cs.Mode == "design" {
 		summary["mode"] = cs.Mode

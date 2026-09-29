@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 
@@ -533,7 +534,10 @@ func TestMCPToolWrapper_Execute_Success_SingleTextContent(t *testing.T) {
 	assert.Equal(t, "Search found 5 results", result.Output)
 	assert.Empty(t, result.Errors)
 	assert.NotNil(t, result.ExecutionTime)
-	assert.Greater(t, result.ExecutionTime, time.Duration(0))
+	// Windows' monotonic clock ticks coarsely enough that a mocked call measures 0.
+	if runtime.GOOS != "windows" {
+		assert.Greater(t, result.ExecutionTime, time.Duration(0))
+	}
 }
 
 func TestMCPToolWrapper_Execute_Success_ImageContent(t *testing.T) {

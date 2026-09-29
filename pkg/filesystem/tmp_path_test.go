@@ -74,3 +74,35 @@ func TestIsUnderTmpPathExported(t *testing.T) {
 		t.Errorf("IsUnderTmpPath(%q) = false, want true", filepath.Join(resolvedTemp, "sub", "file.txt"))
 	}
 }
+
+// A directory merely named tmp must not inherit the tmp exemption; only the
+// filesystem-root /tmp (on Windows, the drive-root \tmp) does.
+func TestIsInTmpPathRequiresRootTmp(t *testing.T) {
+	root, err := filepath.Abs(string(filepath.Separator))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isInTmpPath(filepath.Join(root, "tmp", "sprout", "x.txt")) {
+		t.Errorf("isInTmpPath(%q) = false, want true", filepath.Join(root, "tmp", "sprout", "x.txt"))
+	}
+	nested := filepath.Join(root, "proj", "tmp", "x.txt")
+	if isInTmpPath(nested) {
+		t.Errorf("isInTmpPath(%q) = true, want false", nested)
+	}
+	if isInTmpPath(filepath.Join(root, "tmpfoo", "x.txt")) {
+		t.Errorf("isInTmpPath(%q) = true, want false", filepath.Join(root, "tmpfoo", "x.txt"))
+	}
+}
+
+// "/etc/passwd" is rooted but not filepath.IsAbs on Windows; it must resolve
+// to the drive root, never to <workspace>\etc\passwd.
+func TestSafeResolveAbsRootedPathLeavesWorkspace(t *testing.T) {
+	ws := t.TempDir()
+	got, err := SafeResolveAbs(WithWorkspaceRoot(context.Background(), ws), "/etc/passwd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isUnderPrefix(got, ws) {
+		t.Errorf("SafeResolveAbs(/etc/passwd) = %q, resolved inside workspace %q", got, ws)
+	}
+}

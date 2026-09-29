@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -536,6 +537,10 @@ func TestResolveToolRisk_FileWriteSensitivePathNotSessionAllowed(t *testing.T) {
 	// /etc/passwd is a Sensitive-tier path (system directory).
 	sensitivePath := "/etc/passwd"
 	sensitiveFolder := "/etc"
+	if runtime.GOOS == "windows" {
+		sensitiveFolder = filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc")
+		sensitivePath = filepath.Join(sensitiveFolder, "hosts")
+	}
 
 	// Simulate a (should-be-impossible) attempt to session-allowlist a
 	// sensitive folder. The allowlist check is tier-blind, so the folder
@@ -1326,7 +1331,11 @@ func TestResolveToolRisk_FileOperationPathTier_Sensitive(t *testing.T) {
 	agent.SetWorkspaceRoot(workspace)
 	agent.SetShellCwd(workspace)
 
-	args := map[string]interface{}{"path": "/etc/passwd"}
+	sensitive := "/etc/passwd"
+	if runtime.GOOS == "windows" {
+		sensitive = filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts")
+	}
+	args := map[string]interface{}{"path": sensitive}
 	assessment := agent.ResolveToolRisk("write_file", args)
 
 	if assessment.PathTier != PathTierSensitive {

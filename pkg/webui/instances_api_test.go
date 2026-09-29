@@ -151,7 +151,7 @@ func TestHandleAPIInstancesRejectsInvalidMethod(t *testing.T) {
 
 func TestHandleAPISSHHostsReturnsParsedEntries(t *testing.T) {
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	setTestHome(t, homeDir)
 
 	sshDir := filepath.Join(homeDir, ".ssh")
 	if err := os.MkdirAll(sshDir, 0755); err != nil {

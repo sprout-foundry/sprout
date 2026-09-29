@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -191,6 +192,9 @@ func TestExecuteSessionExport_FilePermissionsAre0600(t *testing.T) {
 	}
 
 	_, perms := h.readExportedFile(t)
+	if runtime.GOOS == "windows" {
+		return // Windows reports only the read-only bit; 0600 is not expressible.
+	}
 	if perms != 0o600 {
 		t.Errorf("expected file permissions 0600, got %04o", perms)
 	}

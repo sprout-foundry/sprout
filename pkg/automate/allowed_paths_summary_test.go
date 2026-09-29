@@ -19,8 +19,8 @@ func TestSummarize_AllowedPaths(t *testing.T) {
 	mustWriteFile(t, path, `{
 		"initial": {"prompt": "do the thing"},
 		"allowed_paths": [
-			{"path": "/var/log/sprout", "mode": "read_only", "reason": "Tail logs"},
-			{"path": "/srv/datasets", "mode": "read_write", "reason": "Read training data"}
+			{"path": `+fixtureJSONPath("/var/log/sprout")+`, "mode": "read_only", "reason": "Tail logs"},
+			{"path": `+fixtureJSONPath("/srv/datasets")+`, "mode": "read_write", "reason": "Read training data"}
 		]
 	}`)
 
@@ -32,13 +32,13 @@ func TestSummarize_AllowedPaths(t *testing.T) {
 		t.Fatalf("expected 2 allowed_paths entries, got %d", len(s.AllowedPaths))
 	}
 	// Sorted ascending by path: /srv/datasets < /var/log/sprout.
-	if s.AllowedPaths[0].Path != "/srv/datasets" {
+	if s.AllowedPaths[0].Path != fixtureAbs("/srv/datasets") {
 		t.Errorf("entries should be sorted by path; got %q first", s.AllowedPaths[0].Path)
 	}
 	if s.AllowedPaths[0].Mode != "read_write" || s.AllowedPaths[0].Reason != "Read training data" {
 		t.Errorf("entry[0] = %+v; want mode=read_write reason=Read training data", s.AllowedPaths[0])
 	}
-	if s.AllowedPaths[1].Path != "/var/log/sprout" || s.AllowedPaths[1].Mode != "read_only" || s.AllowedPaths[1].Reason != "Tail logs" {
+	if s.AllowedPaths[1].Path != fixtureAbs("/var/log/sprout") || s.AllowedPaths[1].Mode != "read_only" || s.AllowedPaths[1].Reason != "Tail logs" {
 		t.Errorf("entry[1] = %+v; want path=/var/log/sprout mode=read_only reason=Tail logs", s.AllowedPaths[1])
 	}
 }
@@ -56,7 +56,7 @@ func TestSummarize_AllowedPaths_BadPath(t *testing.T) {
 	mustWriteFile(t, path, `{
 		"initial": {"prompt": "do the thing"},
 		"allowed_paths": [
-			{"path": "/srv/datasets", "mode": "read_write"},
+			{"path": `+fixtureJSONPath("/srv/datasets")+`, "mode": "read_write"},
 			{"path": "relative/path", "mode": "read_only"}
 		]
 	}`)
@@ -83,7 +83,7 @@ func TestSummarize_AllowedPaths_BadMode(t *testing.T) {
 	mustWriteFile(t, path, `{
 		"initial": {"prompt": "do the thing"},
 		"allowed_paths": [
-			{"path": "/srv/datasets", "mode": "rw"}
+			{"path": `+fixtureJSONPath("/srv/datasets")+`, "mode": "rw"}
 		]
 	}`)
 
@@ -108,7 +108,7 @@ func TestSummarize_AllowedPaths_SystemPrefixWarning(t *testing.T) {
 	mustWriteFile(t, path, `{
 		"initial": {"prompt": "do the thing"},
 		"allowed_paths": [
-			{"path": "/etc/sprout-stuff", "mode": "read_only"}
+			{"path": `+fixtureJSONPath("/etc/sprout-stuff")+`, "mode": "read_only"}
 		]
 	}`)
 
@@ -123,7 +123,7 @@ func TestSummarize_AllowedPaths_SystemPrefixWarning(t *testing.T) {
 		t.Fatal("expected Warnings slice to be populated for system prefix")
 	}
 	joined := strings.Join(s.Warnings, "\n")
-	if !strings.Contains(joined, "/etc/sprout-stuff") {
+	if !strings.Contains(joined, "sprout-stuff") {
 		t.Errorf("warning should mention the offending path, got: %s", joined)
 	}
 	if !strings.Contains(joined, "system prefix") {

@@ -15,6 +15,7 @@ function Probe() {
     null,
     createElement('div', { ref, id: 'inside' }, 'workspace'),
     createElement('button', { id: 'outside' }, 'sidebar'),
+    createElement('div', { className: 'context-menu' }, createElement('button', { id: 'menu-item' }, 'Delete')),
   );
 }
 
@@ -50,5 +51,14 @@ describe('useEngagedWithin', () => {
       document.getElementById('outside')!.focus();
     });
     expect(engaged).toBe(false);
+  });
+
+  it('ignores menus and dialogs', () => {
+    mount();
+    act(() => {
+      document.getElementById('menu-item')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      document.getElementById('menu-item')!.focus();
+    });
+    expect(engaged).toBe(true);
   });
 });

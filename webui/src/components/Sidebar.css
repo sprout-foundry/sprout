@@ -2020,14 +2020,16 @@
   flex-shrink: 0;
 }
 
-.git-sidebar-row-actions {
-  opacity: 0;
-  transition: opacity 0.1s ease;
+/* Hidden actions take no room, so names get the row's width until the row is
+ * hovered, selected or focused. */
+.git-sidebar-file-row .git-sidebar-row-actions {
+  display: none;
 }
 
 .git-sidebar-file-row:hover .git-sidebar-row-actions,
-.git-sidebar-file-row.selected .git-sidebar-row-actions {
-  opacity: 1;
+.git-sidebar-file-row.selected .git-sidebar-row-actions,
+.git-sidebar-file-row:focus-within .git-sidebar-row-actions {
+  display: inline-flex;
 }
 
 .git-sidebar-file-section-title span {
@@ -2254,6 +2256,10 @@
   color: var(--text-primary);
   font-weight: 500;
   flex-shrink: 0;
+  /* The directory gives way first; a name longer than the row ellipsizes. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .git-sidebar-file-row.previewing .git-sidebar-file-dir,

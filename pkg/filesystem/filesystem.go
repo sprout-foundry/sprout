@@ -219,11 +219,7 @@ func SafeResolveAbs(ctx context.Context, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
 	}
-	abs := filepath.Clean(filePath)
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(base, abs)
-	}
-	abs, err = filepath.Abs(abs)
+	abs, err := filepath.Abs(joinUnderRoot(base, filepath.Clean(filePath)))
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -292,11 +288,7 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 
 	// Resolve relative paths against the explicit workspace root instead of the
 	// process-global cwd.
-	absPath := cleanPath
-	if !filepath.IsAbs(absPath) {
-		absPath = filepath.Join(cwdAbs, cleanPath)
-	}
-	absPath, err = filepath.Abs(absPath)
+	absPath, err := filepath.Abs(joinUnderRoot(cwdAbs, cleanPath))
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -318,14 +310,7 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 		return resolvedAbs, nil
 	}
 
-	// Check if the resolved path is within the resolved working directory
-	relPath, err := filepath.Rel(resolvedCwd, resolvedAbs)
-	if err != nil {
-		return "", fmt.Errorf("failed to determine relative path: %w", err)
-	}
-
-	// If the relative path starts with "..", it's outside the working directory
-	if strings.HasPrefix(relPath, "..") {
+	if !isUnderPrefix(resolvedAbs, resolvedCwd) {
 		// Check if path is under effective cwd or session-allowlisted folders
 		if isUnderAgentContext(ctx, resolvedAbs) {
 			// Allowed via effective cwd or session folders (SP-127 Phase 2.6: audit)
@@ -407,23 +392,38 @@ func isUnderAgentContext(ctx context.Context, resolvedPath string) bool {
 
 // isUnderPrefix reports whether path is equal to prefix or is a proper subdirectory of it.
 // Both paths must already be cleaned and, for symlink safety, resolved.
+// filepath.Rel gives Windows its case-insensitive comparison; its error for
+// paths on different volumes means "not under", so the check fails closed.
 func isUnderPrefix(path, prefix string) bool {
-	if path == prefix {
-		return true
+	rel, err := filepath.Rel(prefix, path)
+	if err != nil || filepath.IsAbs(rel) {
+		return false
 	}
-	return strings.HasPrefix(path, prefix+string(filepath.Separator))
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// joinUnderRoot makes p absolute against root. A Windows path rooted
+// without a drive (`\etc\passwd`, which is what "/etc/passwd" cleans to) is
+// not filepath.IsAbs, but it names the root of a drive — not a
+// subdirectory of the workspace — so it takes root's volume.
+func joinUnderRoot(root, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	if filepath.VolumeName(p) == "" && p != "" && os.IsPathSeparator(p[0]) {
+		return filepath.VolumeName(root) + p
+	}
+	return filepath.Join(root, p)
 }
 
 // isInTmpPath checks if a path is within the OS temp directory (os.TempDir()).
 // This handles platforms like Termux where the temp dir is not /tmp.
 func isInTmpPath(path string) bool {
 	cleanPath := filepath.Clean(path)
-	tempDir := os.TempDir()
-	tempClean := filepath.Clean(tempDir)
 
 	// Check if the path is within the OS temp directory
 	// This handles /tmp, /private/tmp (macOS), /data/data/com.termux/files/usr/tmp (Termux), etc.
-	if strings.HasPrefix(cleanPath, tempClean+string(filepath.Separator)) || cleanPath == tempClean {
+	if isUnderPrefix(cleanPath, filepath.Clean(os.TempDir())) {
 		return true
 	}
 
@@ -439,19 +439,17 @@ func isInTmpPath(path string) bool {
 	}
 
 	// Also check for /tmp and /private/tmp as fallbacks (for cross-platform compatibility
-	// even if os.TempDir() returns something else on some platforms).
-	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" ||
-		strings.HasPrefix(cleanPath, "/private/tmp/") || cleanPath == "/private/tmp" {
-		return true
+	// even if os.TempDir() returns something else on some platforms). On
+	// Windows a model-written "/tmp/..." resolves to the root of a drive
+	// (C:\tmp), so a drive letter is dropped before comparing. Matching any tmp/temp
+	// path component instead would exempt directories such as D:\proj\tmp
+	// from the workspace gate.
+	unrooted := cleanPath
+	if vol := filepath.VolumeName(cleanPath); len(vol) == 2 && vol[1] == ':' {
+		unrooted = cleanPath[len(vol):]
 	}
-
-	// Also check for Windows-style temp paths
-	lowerPath := strings.ToLower(cleanPath)
-	if strings.Contains(lowerPath, "\\temp\\") || strings.Contains(lowerPath, "\\tmp\\") {
-		return true
-	}
-
-	return false
+	return isUnderPrefix(unrooted, filepath.Clean("/tmp")) ||
+		isUnderPrefix(unrooted, filepath.Clean("/private/tmp"))
 }
 
 // resolvedTempDirOnce caches the symlink-resolved os.TempDir() (e.g.
@@ -687,11 +685,7 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
 	}
 
-	absPath := cleanPath
-	if !filepath.IsAbs(absPath) {
-		absPath = filepath.Join(cwdAbs, cleanPath)
-	}
-	absPath, err = filepath.Abs(absPath)
+	absPath, err := filepath.Abs(joinUnderRoot(cwdAbs, cleanPath))
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -739,14 +733,7 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
 	}
 
-	// Check if the resolved parent directory is within the resolved working directory
-	relPath, err := filepath.Rel(resolvedCwd, resolvedParent)
-	if err != nil {
-		return "", fmt.Errorf("failed to determine relative path: %w", err)
-	}
-
-	// If the relative path starts with "..", it's outside the working directory
-	if strings.HasPrefix(relPath, "..") {
+	if !isUnderPrefix(resolvedParent, resolvedCwd) {
 		// Check if path is under effective cwd or session-allowlisted folders
 		if isUnderAgentContext(ctx, absPath) {
 			// Path is allowed via effective cwd or session folders (SP-127 Phase 2.6: audit)
@@ -780,14 +767,7 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 				return resolvedTarget, nil
 			}
 
-			// Check if the resolved target is under an allowed root
-			targetRelPath, err := filepath.Rel(resolvedCwd, resolvedTarget)
-			if err != nil {
-				return "", fmt.Errorf("failed to determine symlink target relative path: %w", err)
-			}
-
-			// Also check against effective cwd and session folders
-			if strings.HasPrefix(targetRelPath, "..") && !isUnderAgentContext(ctx, resolvedTarget) {
+			if !isUnderPrefix(resolvedTarget, resolvedCwd) && !isUnderAgentContext(ctx, resolvedTarget) {
 				// Symlink target is outside allowed paths (SP-127 Phase 2.6: audit denied)
 				logFsGateDecision(ctx, "filesystem_write", cleanPath, "denied", "high", "symlink target is outside allowed paths")
 				return "", fmt.Errorf("%w: symlink target is outside allowed paths: %s (resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedTarget)

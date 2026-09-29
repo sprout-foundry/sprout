@@ -23,7 +23,13 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 			return filePath
 		}
 	}
-	abs, err := filepath.Abs(filepath.Join(root, filePath))
+	joined := filepath.Join(root, filePath)
+	// A drive-less rooted Windows path ("/etc/shadow") names the root of
+	// the workspace's drive, as pkg/filesystem resolves it for the write.
+	if filePath != "" && os.IsPathSeparator(filePath[0]) {
+		joined = filepath.VolumeName(root) + filepath.Clean(filePath)
+	}
+	abs, err := filepath.Abs(joined)
 	if err != nil {
 		return filePath
 	}
@@ -59,9 +65,11 @@ func (ct *ChangeTracker) IsOutsideWorkspace(filePath string) bool {
 		absWorkspace = resolvedWorkspace
 	}
 
+	// Rel fails when the two paths share no root (different Windows
+	// volumes); such a file is outside by definition.
 	rel, err := filepath.Rel(absWorkspace, absFile)
 	if err != nil {
-		return false
+		return true
 	}
 
 	return strings.HasPrefix(rel, "..")
@@ -82,9 +90,10 @@ func resolveSymlinksPath(path string) string {
 			return filepath.Join(resolvedDir, base)
 		}
 		base = filepath.Join(filepath.Base(dir), base)
-		dir = filepath.Dir(dir)
-		if dir == "/" || dir == "." {
+		parent := filepath.Dir(dir)
+		if parent == dir || parent == "." {
 			return path
 		}
+		dir = parent
 	}
 }

@@ -584,7 +584,7 @@ func customProviderFilePath(providerName string) string {
 		// Fallback to env-based resolution if GetConfigDir fails
 		configRoot := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
 		if configRoot == "" {
-			if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+			if homeDir, homeErr := envutil.HomeDir(); homeErr == nil {
 				configRoot = filepath.Join(homeDir, ".config", "sprout")
 			}
 		}
@@ -598,8 +598,16 @@ func customProviderFilePath(providerName string) string {
 // overrides. Used as a fallback when customProviderFilePath (which honors
 // SPROUT_CONFIG) doesn't find the file — e.g. when running inside a
 // workspace with isolated config but the provider was registered globally.
+//
+// Resolution must match configuration.getDefaultConfigDir, which writes the
+// file: $XDG_CONFIG_HOME/sprout, else $HOME/.config/sprout. os.UserHomeDir
+// alone reads %USERPROFILE% on Windows, which diverges from $HOME under
+// Git Bash and hid saved providers from model listing.
 func globalCustomProviderFilePath(providerName string) string {
-	homeDir, err := os.UserHomeDir()
+	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
+		return filepath.Join(xdg, "sprout", "providers", providerName+".json")
+	}
+	homeDir, err := envutil.HomeDir()
 	if err != nil {
 		return ""
 	}

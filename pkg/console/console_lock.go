@@ -169,7 +169,7 @@ func printBackground(line string, fallback *os.File) {
 		PrintExternal(line)
 		return
 	}
-	fmt.Fprint(fallback, line)
+	_, _ = fmt.Fprint(fallback, line)
 }
 
 // promptOnScreen reports whether an input or steer reader owns the prompt

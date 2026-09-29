@@ -13,11 +13,11 @@ import (
 // point StopProcess at an unrelated process. Fails open when the process
 // cannot be queried.
 func processStartedBefore(pid int, cutoff time.Time) bool {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid)) //nolint:gosec // G115: Windows PIDs fit in uint32
 	if err != nil {
 		return true
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	var creation, exit, kernel, user windows.Filetime
 	if err := windows.GetProcessTimes(h, &creation, &exit, &kernel, &user); err != nil {
 		return true

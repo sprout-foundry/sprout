@@ -15,7 +15,7 @@ import (
 func RestoreTerminal() {
 	StopGlobalStatusFooter()
 	if term.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Fprint(os.Stdout, bracketedPasteDisable+MouseTrackingDisable+modifyOtherKeysDisable+"\033[?25h")
+		_, _ = fmt.Fprint(os.Stdout, bracketedPasteDisable+MouseTrackingDisable+modifyOtherKeysDisable+"\033[?25h")
 	}
 	restoreStartupConsoleModes()
 }

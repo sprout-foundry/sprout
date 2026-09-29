@@ -64,7 +64,7 @@ func gitBashCandidates() []string {
 }
 
 func isFile(p string) bool {
-	fi, err := os.Stat(p)
+	fi, err := os.Stat(p) //nolint:gosec // G703: p is a Git install path built from trusted system env vars
 	return err == nil && !fi.IsDir()
 }
 
@@ -109,7 +109,7 @@ func prepare(cmd *exec.Cmd, command string) {
 // holding the output pipes, so a timed-out command never returned.
 func killTree(p *os.Process) error {
 	taskkill := filepath.Join(os.Getenv("SystemRoot"), "System32", "taskkill.exe")
-	if err := exec.Command(taskkill, "/T", "/F", "/PID", strconv.Itoa(p.Pid)).Run(); err == nil {
+	if err := exec.Command(taskkill, "/T", "/F", "/PID", strconv.Itoa(p.Pid)).Run(); err == nil { //nolint:gosec // G204: SystemRoot's taskkill, our own child PID
 		return nil
 	}
 	return p.Kill()

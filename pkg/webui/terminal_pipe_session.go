@@ -75,7 +75,7 @@ func (tm *TerminalManager) resolveWindowsShell(shellOverride string) (string, []
 // byte rather than a signal.
 func (tm *TerminalManager) startPipeSession(sessionID, shell string, shellArgs []string) (*TerminalSession, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, shell, shellArgs...)
+	cmd := exec.CommandContext(ctx, shell, shellArgs...) //nolint:gosec // G204: the user's terminal shell, by design
 	if strings.TrimSpace(tm.workspaceRoot) != "" {
 		cmd.Dir = tm.workspaceRoot
 	}
@@ -92,8 +92,8 @@ func (tm *TerminalManager) startPipeSession(sessionID, shell string, shellArgs [
 	outR, outW, err := os.Pipe()
 	if err != nil {
 		cancel()
-		stdinR.Close()
-		stdinW.Close()
+		_ = stdinR.Close()
+		_ = stdinW.Close()
 		return nil, fmt.Errorf("pipe session stdout pipe: %w", err)
 	}
 	cmd.Stdin = stdinR
@@ -101,12 +101,12 @@ func (tm *TerminalManager) startPipeSession(sessionID, shell string, shellArgs [
 	cmd.Stderr = outW
 
 	startErr := cmd.Start()
-	stdinR.Close()
-	outW.Close()
+	_ = stdinR.Close()
+	_ = outW.Close()
 	if startErr != nil {
 		cancel()
-		stdinW.Close()
-		outR.Close()
+		_ = stdinW.Close()
+		_ = outR.Close()
 		return nil, fmt.Errorf("pipe session start %s: %w", shell, startErr)
 	}
 
@@ -136,7 +136,7 @@ func (tm *TerminalManager) runPipeReader(session *TerminalSession, stdout *os.Fi
 		session.mutex.Unlock()
 		session.closeAllSubs()
 	}
-	defer stdout.Close()
+	defer func() { _ = stdout.Close() }()
 	defer func() {
 		if r := recover(); r != nil {
 			webuiLogger.Error("pipe terminal reader panicked", slog.String("session_id", session.ID), slog.Any("panic", r))

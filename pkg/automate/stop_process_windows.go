@@ -28,7 +28,7 @@ func StopProcess(pid int) (bool, error) {
 		}
 		return false, err
 	}
-	defer process.Release()
+	defer func() { _ = process.Release() }()
 	if err := process.Kill(); err != nil {
 		if !IsProcessAlive(pid) {
 			return true, nil

@@ -44,7 +44,7 @@ func runSleeperIfRequested() {
 // POSIX coreutils are on PATH, and PID 1 is not a live process on Windows.
 func startSleeper(t *testing.T) int {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // G204: re-executes this test binary as a live sleeper
 	cmd.Env = append(os.Environ(), sleeperEnv+"=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start sleeper: %v", err)

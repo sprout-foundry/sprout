@@ -42,8 +42,8 @@ func (r *inputRecord) isCharKeyDown() bool {
 	if r.EventType != keyEventType {
 		return false
 	}
-	keyDown := *(*uint32)(unsafe.Pointer(&r.Event[0])) != 0
-	char := *(*uint16)(unsafe.Pointer(&r.Event[10]))
+	keyDown := *(*uint32)(unsafe.Pointer(&r.Event[0])) != 0 //nolint:gosec // G103: mirrors the fixed-size INPUT_RECORD layout
+	char := *(*uint16)(unsafe.Pointer(&r.Event[10]))        //nolint:gosec // G103: mirrors the fixed-size INPUT_RECORD layout
 	return keyDown && char != 0
 }
 
@@ -136,7 +136,7 @@ func waitForStdinReadable(_ int, timeout time.Duration) bool {
 		if remaining <= 0 {
 			return false
 		}
-		ms := uint32((remaining + time.Millisecond - 1) / time.Millisecond)
+		ms := uint32((remaining + time.Millisecond - 1) / time.Millisecond) //nolint:gosec // G115: timeout ms is far below the uint32 ceiling
 		ev, err := windows.WaitForSingleObject(h, ms)
 		if err != nil {
 			return true
@@ -153,7 +153,7 @@ func waitForStdinReadable(_ int, timeout time.Duration) bool {
 func charKeyWaiting(h windows.Handle) (bool, error) {
 	var recs [64]inputRecord
 	var n uint32
-	r, _, err := procPeekConsoleInputW.Call(uintptr(h), uintptr(unsafe.Pointer(&recs[0])), uintptr(len(recs)), uintptr(unsafe.Pointer(&n)))
+	r, _, err := procPeekConsoleInputW.Call(uintptr(h), uintptr(unsafe.Pointer(&recs[0])), uintptr(len(recs)), uintptr(unsafe.Pointer(&n))) //nolint:gosec // G103: console input-queue peek via a lazy system call
 	if r == 0 {
 		return false, err
 	}
@@ -164,7 +164,8 @@ func charKeyWaiting(h windows.Handle) (bool, error) {
 	}
 	if n > 0 {
 		var removed uint32
-		procReadConsoleInputW.Call(uintptr(h), uintptr(unsafe.Pointer(&recs[0])), uintptr(n), uintptr(unsafe.Pointer(&removed)))
+		// Best-effort drain of queued non-key input records (focus, resize).
+		_, _, _ = procReadConsoleInputW.Call(uintptr(h), uintptr(unsafe.Pointer(&recs[0])), uintptr(n), uintptr(unsafe.Pointer(&removed))) //nolint:gosec // G103: audited console input-queue drain
 	}
 	return false, nil
 }

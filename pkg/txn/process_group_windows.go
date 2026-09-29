@@ -36,12 +36,12 @@ func trackTxnProcessGroup(cmd *exec.Cmd) *txnProcessGroup {
 	if err != nil {
 		return g
 	}
-	proc, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid))
+	proc, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid)) //nolint:gosec // G115: Windows PIDs fit in uint32
 	if err != nil {
 		_ = windows.CloseHandle(job)
 		return g
 	}
-	defer windows.CloseHandle(proc)
+	defer func() { _ = windows.CloseHandle(proc) }()
 	if err := windows.AssignProcessToJobObject(job, proc); err != nil {
 		_ = windows.CloseHandle(job)
 		return g

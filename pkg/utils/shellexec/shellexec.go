@@ -15,7 +15,7 @@ import (
 // Command returns an *exec.Cmd that runs command through the user's shell.
 func Command(command string) *exec.Cmd {
 	name, args := argv(command)
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) //nolint:gosec // G204: the user's own shell, by design
 	prepare(cmd, command)
 	return cmd
 }
@@ -23,7 +23,7 @@ func Command(command string) *exec.Cmd {
 // CommandContext is Command bound to ctx (the process is killed when ctx ends).
 func CommandContext(ctx context.Context, command string) *exec.Cmd {
 	name, args := argv(command)
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // G204: the user's own shell, by design
 	prepare(cmd, command)
 	return cmd
 }
@@ -31,7 +31,7 @@ func CommandContext(ctx context.Context, command string) *exec.Cmd {
 // ScriptCommandContext runs the script at path with the user's shell.
 func ScriptCommandContext(ctx context.Context, path string) *exec.Cmd {
 	if sh := Path(); sh != "" {
-		return exec.CommandContext(ctx, sh, path)
+		return exec.CommandContext(ctx, sh, path) //nolint:gosec // G204: the user's own shell, by design
 	}
 	return CommandContext(ctx, `"`+path+`"`)
 }

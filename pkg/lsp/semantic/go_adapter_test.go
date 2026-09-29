@@ -2880,7 +2880,7 @@ func initFakeWorker(a *typeScriptSessionAdapter, stdin io.WriteCloser, stdout *b
 	// The worker is a real, harmless child (this test binary running no
 	// tests): a hand-built os.Process carries no handle, and killing it
 	// panics on Windows. Kill and Wait in resetWorkerLocked reap it.
-	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // G204: re-executes this test binary with no tests
 	if err := cmd.Start(); err != nil {
 		panic(fmt.Sprintf("start fake worker: %v", err))
 	}

@@ -300,6 +300,9 @@ func isDangerousPattern(cmd string) bool {
 			return true
 		}
 	}
+	if isWindowsDiskDestruction(evalCmd) {
+		return true
+	}
 
 	// Check for workspace commands targeting system directories.
 	// This catches cp/mv/chmod/etc. that modify files in /etc/, /usr/, etc.
@@ -428,7 +431,7 @@ func isCautionPattern(cmd string) bool {
 			return true
 		}
 	}
-	return false
+	return isWindowsDeletion(cmdLower)
 }
 
 // xargsShortFlagsWithSeparateValue is the set of xargs short flags whose
@@ -1059,6 +1062,12 @@ func isSafeRmRfComponent(target string) bool {
 func pathIsWorkspaceSafe(pathStr string) bool {
 	if pathStr == "" || pathStr == "-" {
 		return true
+	}
+	if isUNCPath(pathStr) {
+		return false
+	}
+	if slashed, ok := windowsDrivePathAsSlash(pathStr); ok {
+		pathStr = slashed
 	}
 
 	// Clean the path to resolve . and .. segments.

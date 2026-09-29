@@ -38,7 +38,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   latestContext = undefined;
   localStorage.setItem('sprout-welcome-dismissed', 'true');
-  Object.keys(localStorage).filter((k) => k.startsWith('sprout.editor.')).forEach((k) => localStorage.removeItem(k));
+  Object.keys(localStorage)
+    .filter((k) => k.startsWith('sprout.editor.'))
+    .forEach((k) => localStorage.removeItem(k));
   localStorage.removeItem('editor.max-panes');
 });
 

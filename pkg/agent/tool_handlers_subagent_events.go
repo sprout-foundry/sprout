@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -162,18 +163,20 @@ func stripAnsiCodes(s string) string {
 
 // isPathInWorkspace checks if a path is within the workspace directory
 func isPathInWorkspace(path, workspaceDir string) bool {
-	if path == workspaceDir {
-		return true
+	rel, err := filepath.Rel(workspaceDir, path)
+	if err != nil {
+		return false
 	}
-	return strings.HasPrefix(path, workspaceDir+string(filepath.Separator))
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// isPathInTmp checks if a path is in /tmp/ for temporary file access
+// isPathInTmp checks if a path is in /tmp/ or the OS temp dir for temporary file access
 func isPathInTmp(path string) bool {
 	// Check for /tmp/ or /var/folders/.../T/ (macOS temp dir) or any path containing tmp
 	return strings.Contains(path, "/tmp/") ||
 		strings.Contains(path, "/var/folders/.../T/") ||
-		strings.Contains(strings.ToLower(path), "/tmp/")
+		strings.Contains(strings.ToLower(path), "/tmp/") ||
+		(filepath.IsAbs(path) && isPathInWorkspace(path, os.TempDir()))
 }
 
 // commonParent finds the common parent directory of multiple paths
@@ -186,8 +189,14 @@ func commonParent(paths []string) string {
 	}
 	result := paths[0]
 	for _, p := range paths[1:] {
-		for !strings.HasPrefix(p+string(filepath.Separator), result+string(filepath.Separator)) && p != result {
-			result = filepath.Dir(result)
+		for !isPathInWorkspace(p, result) {
+			parent := filepath.Dir(result)
+			// A volume root is its own parent ("C:\" on Windows); paths on
+			// different drives share no parent at all.
+			if parent == result {
+				return ""
+			}
+			result = parent
 			if result == "/" || result == "." {
 				return result
 			}

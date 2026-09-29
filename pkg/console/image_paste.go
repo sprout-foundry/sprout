@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -174,6 +175,6 @@ func SavePastedImage(data []byte, baseDir string) (string, error) {
 		return "", fmt.Errorf("failed to write image file: %w", err)
 	}
 
-	relativePath := "./" + filepath.Join(PastedImageDirName, filename)
+	relativePath := "./" + path.Join(PastedImageDirName, filename)
 	return relativePath, nil
 }

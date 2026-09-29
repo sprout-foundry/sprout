@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // agentsMdLargeTokenThreshold is the token count above which AGENTS.md (and
@@ -53,6 +54,7 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
+	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
 	// Context files (AGENTS.md, etc.) - placed before volatile content to preserve prompt-prefix cache.
 	contextFiles, err := LoadContextFiles()
@@ -85,6 +87,7 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
+	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {

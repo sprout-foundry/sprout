@@ -72,7 +72,12 @@ func DefaultIndexPath() string {
 // initialised (non-nil) Sessions map is returned — not an error.
 // Malformed JSON returns the underlying parse error.
 func LoadIndex(path string) (*SessionIndex, error) {
-	data, err := os.ReadFile(path)
+	var data []byte
+	err := retryTransientFS(func() error {
+		var readErr error
+		data, readErr = os.ReadFile(path)
+		return readErr
+	})
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &SessionIndex{Sessions: make(map[string]SessionIndexEntry)}, nil
@@ -114,7 +119,7 @@ func SaveIndex(path string, idx *SessionIndex) error {
 		return fmt.Errorf("write temp index %q: %w", tmp, err)
 	}
 
-	if err := os.Rename(tmp, path); err != nil {
+	if err := retryTransientFS(func() error { return os.Rename(tmp, path) }); err != nil {
 		return fmt.Errorf("rename %q → %q: %w", tmp, path, err)
 	}
 	return nil

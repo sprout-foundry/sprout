@@ -28,12 +28,9 @@ func getDefaultConfigDir() (string, error) {
 	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
 		return filepath.Join(xdg, "sprout"), nil
 	}
-	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
-		return filepath.Join(h, ".config", "sprout"), nil
-	}
-	hd, err := os.UserHomeDir()
+	hd, err := envutil.HomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+		return "", err
 	}
 	return filepath.Join(hd, ".config", "sprout"), nil
 }
@@ -197,7 +194,7 @@ func isHomeDir(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	home, err := os.UserHomeDir()
+	home, err := envutil.HomeDir()
 	if err != nil || home == "" {
 		return false
 	}

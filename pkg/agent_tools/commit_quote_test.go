@@ -32,7 +32,7 @@ func TestCommitMessage_RealRepoKeepsMessageAndExtraArgs(t *testing.T) {
 	dir := t.TempDir()
 	git := func(args ...string) string {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", args...) //nolint:gosec // G204: test-driven git invocations with controlled args
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {

@@ -23,7 +23,7 @@ func captureStderrOutput(t *testing.T, fn func()) string {
 	}()
 	fn()
 	os.Stderr = orig
-	w.Close()
+	_ = w.Close()
 	return <-done
 }
 

@@ -725,7 +725,7 @@ func TestHelpCommand_Execute_Output(t *testing.T) {
 	var buf bytes.Buffer
 	drained := make(chan struct{})
 	go func() {
-		buf.ReadFrom(r)
+		_, _ = buf.ReadFrom(r)
 		close(drained)
 	}()
 

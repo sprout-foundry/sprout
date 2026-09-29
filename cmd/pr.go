@@ -202,7 +202,7 @@ func runWebMode(ctx context.Context, repoDir string) {
 func openURL(url string) error {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start() //nolint:gosec // G204: trusted PR URL opened in the browser
 	case "darwin":
 		return exec.Command("open", url).Start()
 	default:

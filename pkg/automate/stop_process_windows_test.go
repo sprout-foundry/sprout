@@ -22,7 +22,7 @@ func TestHelperSleeperProcess(t *testing.T) {
 
 func startSleeper(t *testing.T, newGroup bool) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperSleeperProcess$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperSleeperProcess$") //nolint:gosec // G204: re-executes this test binary as a sleeper
 	cmd.Env = append(os.Environ(), sleeperEnv+"=1")
 	if newGroup {
 		console.SetNewProcessGroup(cmd)

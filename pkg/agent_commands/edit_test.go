@@ -36,7 +36,7 @@ func makeTempScript(t *testing.T, body string) string {
 		os.Remove(f.Name())
 		t.Fatalf("Chmod failed: %v", err)
 	}
-	t.Cleanup(func() { os.Remove(f.Name()) })
+	t.Cleanup(func() { _ = os.Remove(f.Name()) })
 	if runtime.GOOS != "windows" {
 		return f.Name()
 	}
@@ -51,7 +51,7 @@ func makeTempScript(t *testing.T, body string) string {
 	if err := os.WriteFile(launcher, []byte(body), 0o755); err != nil {
 		t.Fatalf("write launcher: %v", err)
 	}
-	t.Cleanup(func() { os.Remove(launcher) })
+	t.Cleanup(func() { _ = os.Remove(launcher) })
 	return launcher
 }
 

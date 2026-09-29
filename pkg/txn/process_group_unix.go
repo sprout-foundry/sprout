@@ -10,7 +10,7 @@ import (
 
 // txnShellCommand runs command under /bin/sh -c (or an absolute $SHELL).
 func txnShellCommand(command string) *exec.Cmd {
-	return exec.Command(shellPath(), "-c", command)
+	return exec.Command(shellPath(), "-c", command) //nolint:gosec // G204: runs the user's transaction under a shell, by design
 }
 
 // shellPath honors SHELL only when it is an absolute path — the container

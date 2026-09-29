@@ -1,4 +1,4 @@
-package agent
+package subagents
 
 import (
 	"strings"
@@ -11,7 +11,7 @@ import (
 func TestAppendSubagentPreamble(t *testing.T) {
 	base := "# Reviewer Subagent\n\nYou are a code-review specialist.\n"
 
-	got := appendSubagentPreamble(base)
+	got := AppendSubagentPreamble(base)
 	if !strings.Contains(got, "## Subagent Operating Rules (framework)") {
 		t.Fatal("preamble not appended")
 	}
@@ -34,17 +34,17 @@ func TestAppendSubagentPreamble(t *testing.T) {
 	}
 
 	// Idempotent: appending twice must not duplicate the section.
-	once := appendSubagentPreamble(base)
-	twice := appendSubagentPreamble(once)
+	once := AppendSubagentPreamble(base)
+	twice := AppendSubagentPreamble(once)
 	if twice != once {
-		t.Error("appendSubagentPreamble is not idempotent")
+		t.Error("AppendSubagentPreamble is not idempotent")
 	}
 	if strings.Count(twice, "## Subagent Operating Rules (framework)") != 1 {
 		t.Error("preamble duplicated")
 	}
 
 	// Also idempotent when the marker is at the start (defensive).
-	if got := appendSubagentPreamble("## Subagent Operating Rules (framework)\n\nx"); got != "## Subagent Operating Rules (framework)\n\nx" {
+	if got := AppendSubagentPreamble("## Subagent Operating Rules (framework)\n\nx"); got != "## Subagent Operating Rules (framework)\n\nx" {
 		t.Error("prompt already carrying the marker must be returned unchanged")
 	}
 }

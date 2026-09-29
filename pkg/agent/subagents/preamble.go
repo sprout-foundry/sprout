@@ -1,4 +1,4 @@
-package agent
+package subagents
 
 import "strings"
 
@@ -21,7 +21,7 @@ const subagentPreamble = `## Subagent Operating Rules (framework)
 // persona system prompt. Idempotent: if the marker is already present
 // (e.g. a user-configured prompt that inlined it), the prompt is returned
 // unchanged.
-func appendSubagentPreamble(prompt string) string {
+func AppendSubagentPreamble(prompt string) string {
 	if strings.Contains(prompt, "## Subagent Operating Rules (framework)") {
 		return prompt
 	}

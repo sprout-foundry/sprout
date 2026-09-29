@@ -1,9 +1,11 @@
-package agent
+package subagents
 
 import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 )
 
 func TestCompactCount(t *testing.T) {
@@ -25,7 +27,7 @@ func TestSubagentStatSuffix(t *testing.T) {
 		Cost:        0.0234,
 		ToolCalls:   4,
 		Elapsed:     8100 * time.Millisecond,
-		FileChanges: []TrackedFileChange{{}, {}, {}},
+		FileChanges: []changes.TrackedFileChange{{}, {}, {}},
 	}
 	got := subagentStatSuffix(res)
 	want := " · 3 files · 12.5k tok · $0.02 · 4 tools · 8.1s"
@@ -33,12 +35,12 @@ func TestSubagentStatSuffix(t *testing.T) {
 		t.Errorf("suffix = %q, want %q", got, want)
 	}
 	// Singular file/tool.
-	if got := subagentStatSuffix(&SubagentResult{FileChanges: []TrackedFileChange{{}}, ToolCalls: 1}); got != " · 1 file · 1 tool" {
+	if got := subagentStatSuffix(&SubagentResult{FileChanges: []changes.TrackedFileChange{{}}, ToolCalls: 1}); got != " · 1 file · 1 tool" {
 		t.Errorf("singular suffix = %q", got)
 	}
 }
 
 func TestPrintSubagentDone_NilSafe(t *testing.T) {
-	printSubagentDone("coder", nil)                                        // must not panic
-	printSubagentDone("coder", &SubagentResult{Error: errors.New("boom")}) // error path
+	PrintSubagentDone("coder", nil)                                        // must not panic
+	PrintSubagentDone("coder", &SubagentResult{Error: errors.New("boom")}) // error path
 }

@@ -158,12 +158,15 @@ export function useChatSessionManager({
         // Showing messages for a chat the user isn't in desyncs the transcript
         // from activeChatId; the switch response already loaded the right one.
         const initialChatStillActive = !prev.activeChatId || prev.activeChatId === activeChatId;
+        // A message sent right after load, before this arrived, is already on
+        // screen; keeping only it hid the whole earlier conversation. Show the
+        // transcript with what was added since after it.
         return {
           chatSessions: response.chat_sessions ?? [],
           activeChatId: prev.activeChatId || activeChatId,
           messages:
-            initialChatStillActive && prev.messages.length === 0 && initialMessages.length > 0
-              ? trimMessages(initialMessages)
+            initialChatStillActive && initialMessages.length > 0
+              ? trimMessages(appendNotYetSaved(initialMessages, prev.messages))
               : prev.messages,
         };
       });

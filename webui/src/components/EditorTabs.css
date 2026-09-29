@@ -76,8 +76,16 @@
 .tab.active {
   background: var(--bg-primary);
   border-color: transparent;
-  border-bottom-color: var(--brand-active-cyan, #22d3ee);
+  border-bottom-color: var(--border-default);
   z-index: 2;
+}
+
+/* The cyan mark belongs to the pane being worked in. A pane's shown tab
+ * elsewhere (another pane focused, or the sidebar/terminal) keeps the
+ * merged background so you can see what's open, but not the highlight —
+ * otherwise every pane's tab looked focused at once. */
+.tab.active.focused {
+  border-bottom-color: var(--brand-active-cyan, #22d3ee);
 }
 
 .tab-content {
@@ -106,6 +114,10 @@
 
 .tab.active .tab-name {
   font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.tab.active.focused .tab-name {
   color: var(--text-primary);
 }
 
@@ -259,6 +271,10 @@
 .tab.active.pinned {
   background: var(--accent-primary-alpha);
   border-color: var(--border-focus);
+  border-bottom-color: var(--border-default);
+}
+
+.tab.active.pinned.focused {
   border-bottom-color: var(--accent-primary);
 }
 

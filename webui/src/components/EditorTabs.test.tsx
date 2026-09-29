@@ -1313,3 +1313,51 @@ describe('reload from disk affordances', () => {
     expect(texts.some((t) => t.includes('Reload from disk'))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: the shown tab is highlighted only in the pane being worked in
+// ---------------------------------------------------------------------------
+
+describe('EditorTabs focus highlight', () => {
+  function setupTwoPanes() {
+    const left = makeMockBuffer('buf-left', 'pane-1', {
+      kind: 'chat',
+      file: { path: '__workspace/chat/a', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+      metadata: { chatId: 'a' },
+    });
+    const right = makeMockBuffer('buf-right', 'pane-2', {
+      kind: 'chat',
+      file: { path: '__workspace/chat/b', name: 'Chat 2', ext: '.chat', isDir: false, size: 0, modified: 0 },
+      metadata: { chatId: 'b' },
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([
+        ['buf-left', left],
+        ['buf-right', right],
+      ]),
+      panes: [
+        { id: 'pane-1', bufferId: 'buf-left' },
+        { id: 'pane-2', bufferId: 'buf-right' },
+      ],
+      activeBufferId: 'buf-right',
+      activePaneId: 'pane-2',
+    });
+  }
+
+  test('marks the pane’s own shown tab, even when another pane is active', () => {
+    setupTwoPanes();
+    renderEditorTabs({ paneId: 'pane-1', paneFocused: false });
+    const tab = container!.querySelector('.tab[data-buffer-id="buf-left"]') as HTMLElement;
+    expect(tab.classList.contains('active')).toBe(true);
+    expect(tab.classList.contains('focused')).toBe(false);
+  });
+
+  test('highlights the shown tab of the pane being worked in', () => {
+    setupTwoPanes();
+    renderEditorTabs({ paneId: 'pane-2', paneFocused: true });
+    const tab = container!.querySelector('.tab[data-buffer-id="buf-right"]') as HTMLElement;
+    expect(tab.classList.contains('active')).toBe(true);
+    expect(tab.classList.contains('focused')).toBe(true);
+  });
+});

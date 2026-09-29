@@ -10,6 +10,7 @@ import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
+import { useEngagedWithin } from '../hooks/useEngagedWithin';
 
 /** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
 const PERMANENT_DEFAULT_CHAT_ID = 'default';
@@ -217,6 +218,13 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // spinning) until some unrelated re-render.
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
+  // Only the pane you're working in shows its tab as focused: with focus in
+  // the sidebar, terminal or another pane, each pane's tab stays marked as
+  // shown but not highlighted.
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const engaged = useEngagedWithin(workspaceRef);
+  const engagedRef = useRef(engaged);
+  engagedRef.current = engaged;
   const panesRef = useRef(panes);
   panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
@@ -450,6 +458,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           <div className="pane-shell">
             <EditorTabs
               paneId={pane.id}
+              paneFocused={engagedRef.current && pane.id === activePaneIdRef.current}
               compact
               actions={renderSplitControls(pane.id)}
               onActiveChatChange={onActiveChatChange}
@@ -734,7 +743,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       isFileOpen={currentBuffer?.kind === 'file'}
       onNavigateToSymbol={handleOutlineNavigateToSymbol}
     >
-      <div className={`editor-workspace ${paneLayout}`}>
+      <div ref={workspaceRef} className={`editor-workspace ${paneLayout}`}>
         <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
           {renderPaneLayout()}
         </div>

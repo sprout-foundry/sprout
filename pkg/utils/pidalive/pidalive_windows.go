@@ -3,28 +3,25 @@
 package pidalive
 
 import (
+	"errors"
+
 	"golang.org/x/sys/windows"
 )
 
-// IsAlive uses OpenProcess to obtain a real handle to the PID. If the
-// process is not accessible (already exited, recycled, access denied),
-// OpenProcess returns an error and we report not-alive. For accessible
-// PIDs, we query GetExitCodeProcess: an exit code of 259 (STILL_ACTIVE)
-// means the process is still running; any other code means it exited.
+// IsAlive uses OpenProcess to obtain a real handle to the PID and then
+// GetExitCodeProcess: STILL_ACTIVE (259) means the process is running.
+// Unlike os.FindProcess this distinguishes running PIDs from exited ones.
 //
-// This is the Windows-correct alternative to os.FindProcess, which
-// returns a non-nil handle even for dead/recycled PIDs.
-//
-// Uses golang.org/x/sys/windows (modern pattern) — not the legacy
-// syscall.NewLazyDLL pattern in pkg/utils/terminal_windows.go. SP-112
-// platform parity spec, C2 convention note.
+// ERROR_ACCESS_DENIED means the PID names a live process we may not query
+// (another user's, or an elevated one); OpenProcess fails with
+// ERROR_INVALID_PARAMETER when no such process exists.
 func IsAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
-		return false
+		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
 	}
 	defer windows.CloseHandle(h)
 	var exitCode uint32

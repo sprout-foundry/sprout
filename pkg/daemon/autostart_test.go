@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -610,6 +611,20 @@ func killHelperByMarker(t *testing.T, markerFile string) {
 		pids = append(pids, pid)
 	}
 	if len(pids) == 0 {
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		// No SIGTERM on Windows, and the helper must be gone (not just
+		// signalled) before TempDir cleanup: it holds daemon.log open.
+		for _, pid := range pids {
+			p, err := os.FindProcess(pid)
+			if err != nil {
+				continue
+			}
+			_ = p.Kill()
+			_, _ = p.Wait()
+		}
 		return
 	}
 
@@ -1383,6 +1398,9 @@ func TestEnsureDaemon_FastPath_UnixSocket(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEnsureDaemon_InvalidPIDFilePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores directory permission bits; a 0000 dir stays writable")
+	}
 	port := freePort(t)
 	tmpDir := t.TempDir()
 

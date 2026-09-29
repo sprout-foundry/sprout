@@ -299,7 +299,7 @@ func runWorkflowByPath(path string) error {
 		case sig := <-sigCh:
 			// First signal: forward to the child and keep waiting.
 			console.GlyphWarning.Printf("Received %v, forwarding to workflow (PID %d)...", sig, cmd.Process.Pid)
-			if err := cmd.Process.Signal(sig); err != nil {
+			if err := forwardSignal(cmd, sig); err != nil {
 				if err == syscall.ESRCH {
 					// Child already exited — report its real result.
 					waitErr := <-waitDone

@@ -191,6 +191,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// display text (raw user text, or "Looking into '…'…" for wakeup
 	// turns) — never the internal wakeup batch prepended for the model.
 	display := a.takePendingQueryDisplay()
+	a.rememberQueryDisplay(userQuery, display)
 	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEventWithDisplay(
 		userQuery, display, source, a.GetProvider(), a.GetModel()))
 

@@ -934,6 +934,9 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 				content := msg.Content
 				if msg.Role == "user" {
 					content = agent.StripUserMessageTimestamp(content)
+					if display, ok := state.QueryDisplays[content]; ok {
+						content = display
+					}
 				}
 				m := map[string]interface{}{
 					"role":    msg.Role,

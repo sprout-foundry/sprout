@@ -192,6 +192,12 @@ type Agent struct {
 	// resume turns must run there or streamed prose renders one chunk
 	// per line via the PrintExternal fallback.
 	wakeupWakeFn atomic.Pointer[func()]
+	// wakeupDoneFn runs after each background (non-REPL) resume turn ends.
+	// That turn starts inside the agent, so whoever owns the conversation
+	// outside it — the WebUI's chat snapshot and cost ledger — has no other
+	// signal that it happened.
+	wakeupDoneFn atomic.Pointer[func(error)]
+	usage        usageLedger
 	// pendingWakeupResume holds formatted wakeup batches stashed by
 	// TryAutoResume for the REPL to run as auto-queued turns. Guarded
 	// by wakeupMu.
@@ -212,6 +218,10 @@ type Agent struct {
 	// or the raw user text when wakeup batches are prepended to a user
 	// query). Consumed by prepareQueryRun when publishing query_started.
 	pendingQueryDisplay string
+	// queryDisplays remembers the bubble text of every turn whose display
+	// differs from what the model was sent, keyed by the latter, so a
+	// restored transcript shows what the user saw. Guarded by notifMu.
+	queryDisplays map[string]string
 
 	// lifetimeCtx is a process-scoped context for background goroutines that must outlive a single turn.
 	lifetimeCtx    context.Context

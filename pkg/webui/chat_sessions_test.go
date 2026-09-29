@@ -169,6 +169,27 @@ func TestChatSessionWithMessagesStripsUserTimestamp(t *testing.T) {
 	}
 }
 
+func TestChatSessionWithMessagesShowsQueryDisplay(t *testing.T) {
+	cs := newChatSession("test-id", "Test Chat")
+	batch := "[wakeup] Background command completed\nBackground session bg-1 finished"
+	state := agent.AgentState{
+		Messages: []api.Message{
+			{Role: "user", Content: batch},
+			{Role: "assistant", Content: "Done."},
+		},
+		QueryDisplays: map[string]string{batch: "Looking into 'make build'…"},
+	}
+	var err error
+	cs.AgentState, err = json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := cs.chatSessionWithMessages()["messages"].([]map[string]interface{})
+	if got := messages[0]["content"]; got != "Looking into 'make build'…" {
+		t.Fatalf("wakeup turn shows %q, want its display text", got)
+	}
+}
+
 func TestChatSessionChatSessionWithProvider(t *testing.T) {
 	cs := newChatSession("test-id", "Test Chat")
 	cs.Provider = "openai"

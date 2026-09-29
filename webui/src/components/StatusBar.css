@@ -5,6 +5,9 @@
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
+  /* Items drop by the bar's own width, not the window's: beside a sidebar
+   * the bar can be narrow on a wide screen. */
+  container-type: inline-size;
 }
 
 .statusbar-wrapper .statusbar {
@@ -161,8 +164,7 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Mobile responsive */
-@media (max-width: 768px) {
+@container (max-width: 768px) {
   .statusbar {
     padding: 0 8px;
   }
@@ -175,7 +177,7 @@
   }
 }
 
-@media (max-width: 520px) {
+@container (max-width: 520px) {
   .statusbar-item-cursor,
   .statusbar-item-encoding,
   .statusbar-item-line-ending,

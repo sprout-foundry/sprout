@@ -27,6 +27,11 @@ import './EditorTabs.css';
 
 interface EditorTabsProps {
   paneId?: string;
+  /**
+   * Whether this pane is the one being worked in. Its shown tab is
+   * highlighted only then; otherwise it is marked as shown but muted.
+   */
+  paneFocused?: boolean;
   actions?: ReactNode;
   compact?: boolean;
 
@@ -50,6 +55,7 @@ interface EditorTabsProps {
 
 function EditorTabs({
   paneId,
+  paneFocused = true,
   actions,
   compact = false,
   onActiveChatChange,
@@ -123,6 +129,8 @@ function EditorTabs({
     });
     return order;
   }, [panes]);
+
+  const shownBufferId = paneId ? (panes.find((pane) => pane.id === paneId)?.bufferId ?? null) : activeBufferId;
 
   // Preserve insertion order, filter by paneId.
   // Uses `buffers` directly — Array.from + filter is trivially cheap.
@@ -463,7 +471,8 @@ function EditorTabs({
           >
             {bufferList.map((buffer) => {
               const chatId = getChatId(buffer);
-              const isActive = buffer.id === activeBufferId;
+              // The tab shown in this pane — each pane has its own.
+              const isActive = buffer.id === shownBufferId;
               const isRenaming = buffer.id === renamingBufferId;
 
               // Chat-specific data lookups (all O(1))
@@ -474,7 +483,7 @@ function EditorTabs({
               return (
                 <div
                   key={buffer.id}
-                  className={`tab ${isActive ? 'active' : ''} ${buffer.isPinned ? 'pinned' : ''} ${buffer.kind === 'chat' ? 'chat-tab' : ''}`}
+                  className={`tab ${isActive ? 'active' : ''} ${isActive && paneFocused ? 'focused' : ''} ${buffer.isPinned ? 'pinned' : ''} ${buffer.kind === 'chat' ? 'chat-tab' : ''}`}
                   ref={(el) => {
                     tabRefs.current[buffer.id] = el;
                   }}

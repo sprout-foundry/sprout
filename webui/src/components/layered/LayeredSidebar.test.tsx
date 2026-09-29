@@ -117,6 +117,23 @@ describe('LayeredSidebar', () => {
     expect(props.onModeSectionChange).toHaveBeenCalledWith('tokens');
   });
 
+  it('closes the phone drawer when a project is picked on the rail', () => {
+    const onCloseDrawer = vi.fn();
+    const onInstanceChange = vi.fn();
+    renderSidebar({
+      isMobile: true,
+      onCloseDrawer,
+      onInstanceChange,
+      instances: [
+        { pid: 1, working_dir: '/home/ada/my-app', is_current: true },
+        { pid: 2, working_dir: '/home/ada/api', is_current: false },
+      ] as never,
+    });
+    click(container.querySelector('.project-rail-project[aria-label="api"]'));
+    expect(onInstanceChange).toHaveBeenCalledWith(2);
+    expect(onCloseDrawer).toHaveBeenCalled();
+  });
+
   it('shows only the rail when collapsed', () => {
     const onToggleCollapsed = vi.fn();
     renderSidebar({ collapsed: true, onToggleCollapsed });

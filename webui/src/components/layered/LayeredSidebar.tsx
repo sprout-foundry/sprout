@@ -155,14 +155,21 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         id: url,
         label: githubRepoSlug(url) ?? url,
         active: !home.open && githubRepoSlug(url) === repoSlug,
-        onSelect: () => (githubRepoSlug(url) === repoSlug ? closeHome() : openRepo(url)),
+        onSelect: () => {
+          if (githubRepoSlug(url) === repoSlug) closeHome();
+          else openRepo(url);
+          props.onCloseDrawer?.();
+        },
       }))
     : props.instances.length > 0
       ? props.instances.map((inst) => ({
           id: String(inst.pid),
           label: basename(inst.working_dir),
           active: inst.is_current,
-          onSelect: () => props.onInstanceChange?.(inst.pid),
+          onSelect: () => {
+            props.onInstanceChange?.(inst.pid);
+            props.onCloseDrawer?.();
+          },
         }))
       : [{ id: 'local', label: title, active: true }];
 
@@ -175,7 +182,12 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         onAddProject={isCloud ? () => void promptForRepo() : undefined}
         onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })}
         homeActive={home.open}
-        onOpenHome={() => openHome(home.path)}
+        onOpenHome={() => {
+          // On phones the rail sits inside the drawer: choosing a place
+          // there should show it, as choosing a sidebar entry does.
+          openHome(home.path);
+          props.onCloseDrawer?.();
+        }}
       />
       {!props.collapsed && home.open && (
         <HomeNav

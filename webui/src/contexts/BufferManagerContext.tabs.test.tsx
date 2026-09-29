@@ -133,4 +133,42 @@ describe('chat tab bookkeeping', () => {
     localStorage.removeItem('sprout.editor.panes:_default');
     localStorage.removeItem('sprout.editor.paneLayout:_default');
   });
+
+  it('reopens tabs in the saved order and keeps a later drag', async () => {
+    localStorage.setItem('sprout.editor.tabOrder:_default', JSON.stringify(['__workspace/chat/c2', 'notes.md']));
+    mount();
+    for (let i = 0; i < 50 && !latest; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+    // Let the restore settle before tabs reopen (file first, then the chat).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+    let now = 9_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => ++now);
+    act(() => {
+      latest.openWorkspaceBuffer({ kind: 'file', path: 'notes.md', title: 'notes.md' });
+    });
+    act(() => {
+      latest.openWorkspaceBuffer({
+        kind: 'chat',
+        path: '__workspace/chat/c2',
+        title: 'Chat 2',
+        metadata: { chatId: 'c2' },
+      });
+    });
+    vi.restoreAllMocks();
+    const order = () =>
+      Array.from(latest.buffers.values())
+        .map((b) => b.file.path)
+        .filter((p) => p !== '__workspace/chat');
+    expect(order()).toEqual(['__workspace/chat/c2', 'notes.md']);
+
+    const ids = Object.fromEntries(Array.from(latest.buffers.values()).map((b) => [b.file.path, b.id]));
+    act(() => latest.reorderBuffers(ids['notes.md'], ids['__workspace/chat/c2']));
+    expect(order()).toEqual(['notes.md', '__workspace/chat/c2']);
+    localStorage.removeItem('sprout.editor.tabOrder:_default');
+  });
 });

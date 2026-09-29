@@ -104,6 +104,10 @@ export const useChatSessionsSync = ({
   // when the active chat changes (which deliberately reopens a closed tab
   // for the now-active chat).
   useEffect(() => {
+    // A switch from one chat to another focuses the new chat's tab. The
+    // active chat first becoming known at startup does not, when a restored
+    // file already has focus.
+    const switchedFromChat = !!prevActiveChatIdRef.current && activeChatId !== prevActiveChatIdRef.current;
     if (activeChatId !== prevActiveChatIdRef.current) {
       if (activeChatId && closedChatIdsRef.current.has(activeChatId)) {
         closedChatIdsRef.current.delete(activeChatId);
@@ -119,6 +123,7 @@ export const useChatSessionsSync = ({
     // following it reshuffled the tab strip on every reload.
     const byCreation = [...laneSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
     const savedPlacement = loadChatPanePlacement();
+    const fileFocused = Array.from(currentBuffers.values()).some((b) => b.kind !== 'chat' && b.isActive);
     byCreation.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
@@ -142,7 +147,7 @@ export const useChatSessionsSync = ({
         title: session.name || 'Chat',
         isPinned: false,
         isClosable: !isActive,
-        activate: isActive,
+        activate: isActive && (switchedFromChat || !fileFocused),
         paneId: savedPlacement[session.id],
         metadata: { chatId: session.id },
       });

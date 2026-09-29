@@ -159,6 +159,44 @@ describe('useChatSessionsSync', () => {
     expect(closedIds).toEqual(['__workspace/chat/gone']);
   });
 
+  it('does not pull focus from a restored file when the active chat first becomes known', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      [
+        'file-1',
+        makeBuffer({
+          id: 'file-1',
+          kind: 'file',
+          isActive: true,
+          file: { ...makeBuffer({ id: 'x' }).file, path: 'README.md' },
+        }),
+      ],
+    ]);
+    const props = { active: 'A' as string | null };
+    const opened: Array<{ path: string; activate?: boolean }> = [];
+    const { rerender } = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: [{ id: 'A' }, { id: 'B' }] as never,
+        activeChatId: props.active,
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        openWorkspaceBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
+          opened.push({ path: o.path, activate: o.activate });
+          buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
+          return o.path;
+        }) as never,
+      }),
+    );
+    expect(opened.find((o) => o.path === '__workspace/chat/A')?.activate).toBe(false);
+
+    // Switching chats does focus the chat you switched to.
+    buffers.delete('__workspace/chat/B');
+    props.active = 'B';
+    rerender();
+    expect(opened.filter((o) => o.path === '__workspace/chat/B').pop()?.activate).toBe(true);
+  });
+
   it('keeps the stand-in while the active chat is unknown', () => {
     const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([

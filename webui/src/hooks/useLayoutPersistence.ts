@@ -18,6 +18,8 @@ import {
   loadSavedPaneLayout,
   loadSavedPaneSizes,
   loadChatPanePlacement,
+  loadTabOrder,
+  getTabOrderStorageKey,
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
@@ -40,6 +42,27 @@ interface UseLayoutPersistenceParams {
   paneSizes: Record<string, number>;
   setPaneLayout?: (layout: PaneLayout) => void;
   setPaneSizes?: (sizes: PaneSize) => void;
+}
+
+const MAX_TAB_ORDER = 100;
+
+/**
+ * The tab order to save: open tabs in their current order, with tabs that
+ * aren't open (yet) keeping their slots. Tabs reopen at different times after
+ * a reload (files from the snapshot, chats from the chat list); replacing the
+ * saved order with only the tabs open so far lost the rest's positions.
+ */
+export function mergeTabOrder(saved: string[], open: string[]): string[] {
+  const openSet = new Set(open);
+  const queue = [...open];
+  const merged: string[] = [];
+  for (const path of saved) {
+    if (!openSet.has(path)) merged.push(path);
+    else if (queue.length > 0) merged.push(queue.shift()!);
+  }
+  merged.push(...queue);
+  const unique = Array.from(new Set(merged));
+  return unique.slice(Math.max(0, unique.length - MAX_TAB_ORDER));
 }
 
 /** Layout persistence: restore open tabs on mount, save snapshot on changes, cleanup. */
@@ -182,6 +205,20 @@ export function useLayoutPersistence({
       if (buf) newBuffers.set(buf.id, buf);
     }
 
+    // A restored file that was active takes its pane: the other tabs there
+    // (the startup chat tab) stop being the pane's active one, or the chat
+    // tab sync would treat it as focused and move focus back to chat.
+    const restoredActivePanes = new Set(
+      Array.from(newBuffers.values())
+        .filter((b) => b.kind === 'file' && b.isActive && pathToBufferId.has(b.file.path))
+        .map((b) => b.paneId),
+    );
+    for (const [id, b] of newBuffers) {
+      if (b.isActive && restoredActivePanes.has(b.paneId) && !pathToBufferId.has(b.file.path)) {
+        newBuffers.set(id, { ...b, isActive: false });
+      }
+    }
+    buffersRef.current = newBuffers;
     setBuffers(newBuffers);
     setPanes((prev) =>
       prev.map((pane) => {
@@ -259,6 +296,49 @@ export function useLayoutPersistence({
       writeStorageItem(getChatPanesStorageKey(), fingerprint);
     }
   }, [_panes, buffers, buffersRef, layoutRestored]);
+
+  // Keep the tab strip in the saved order. Chat tabs reopen from the chat
+  // list after files are restored, so without this every reload put the
+  // files first. Tabs are sorted only when the set of tabs changes (a tab
+  // appeared); a pure reorder is the user dragging, and is just saved.
+  const tabSetRef = useRef('');
+  const tabOrderRef = useRef('');
+  useEffect(() => {
+    if (!layoutRestored) return;
+    const all = Array.from(buffers.entries()).filter(([, b]) => !b.metadata?.creating);
+    const tabSet = all
+      .map(([, b]) => b.file.path)
+      .sort()
+      .join('\n');
+    if (tabSet !== tabSetRef.current) {
+      tabSetRef.current = tabSet;
+      const saved = loadTabOrder();
+      if (saved) {
+        const rank = new Map(saved.map((path, i) => [path, i]));
+        const entries = Array.from(buffers.entries());
+        const sorted = entries
+          .map((entry, i) => ({ entry, i, r: rank.get(entry[1].file.path) ?? Number.POSITIVE_INFINITY }))
+          .sort((a, b) => (a.r === b.r ? a.i - b.i : a.r - b.r))
+          .map((x) => x.entry);
+        if (sorted.some((entry, i) => entry[0] !== entries[i][0])) {
+          const next = new Map(sorted);
+          buffersRef.current = next;
+          setBuffers(next);
+          return;
+        }
+      }
+    }
+    const order = JSON.stringify(
+      mergeTabOrder(
+        loadTabOrder() ?? [],
+        all.map(([, b]) => b.file.path),
+      ),
+    );
+    if (order !== tabOrderRef.current) {
+      tabOrderRef.current = order;
+      writeStorageItem(getTabOrderStorageKey(), order);
+    }
+  }, [buffers, layoutRestored, buffersRef, setBuffers]);
 
   // Save layout snapshot on relevant state changes (skip first render).
   // Use buffersRef to avoid re-running on every keystroke (Map identity changes

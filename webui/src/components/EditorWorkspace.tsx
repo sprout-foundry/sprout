@@ -9,6 +9,7 @@ import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
+import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
 
 /** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
 const PERMANENT_DEFAULT_CHAT_ID = 'default';
@@ -679,9 +680,27 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // single-column layout. No hierarchy, no sheets-over-anything.
   if (isMobileViewport) {
     const chatBufferOpen = activePaneHasChat();
+    const laneChats = (chatSessions ?? []).filter((c) => (c as { mode?: string }).mode !== 'design');
     return (
       <div className="mobile-peer-surfaces" data-testid="mobile-peer-surfaces">
         <div className="mobile-peer-surface" data-active={chatBufferOpen} data-testid="mobile-chat-surface">
+          {/* No tab strip on phones: the chat picker stands in for it. */}
+          {onActiveChatChange && laneChats.length > 0 && (
+            <MobileChatSwitcher
+              chats={laneChats}
+              activeChatId={activeChatId ?? null}
+              onSelect={onActiveChatChange}
+              onCreate={
+                onCreateChat
+                  ? () => {
+                      void onCreateChat().then((id) => {
+                        if (id) onActiveChatChange(id);
+                      });
+                    }
+                  : undefined
+              }
+            />
+          )}
           <Chat {...chatProps} />
         </div>
         {!chatBufferOpen && (

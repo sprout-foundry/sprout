@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // resolveAbsPath resolves filePath to a cleaned absolute path, using
@@ -25,8 +27,11 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	}
 	joined := filepath.Join(root, filePath)
 	// A drive-less rooted Windows path ("/etc/shadow") names the root of
-	// the workspace's drive, as pkg/filesystem resolves it for the write.
-	if filePath != "" && os.IsPathSeparator(filePath[0]) {
+	// the workspace's drive, as pkg/filesystem resolves it for the write —
+	// except /tmp, which follows Git Bash to the user's temp dir.
+	if tmp, ok := filesystem.PosixTmpPath(filePath); ok {
+		joined = tmp
+	} else if filePath != "" && os.IsPathSeparator(filePath[0]) {
 		joined = filepath.VolumeName(root) + filepath.Clean(filePath)
 	}
 	abs, err := filepath.Abs(joined)

@@ -41,3 +41,23 @@ func LocalizeScratchDir(text string) string {
 	}
 	return strings.ReplaceAll(text, "/tmp/sprout", ScratchDir)
 }
+
+// PosixTmpPath maps a drive-less "/tmp" path to the directory Git Bash
+// calls /tmp — the user's temp dir — on Windows. Resolved literally,
+// "/tmp/x" names <drive>:\tmp\x, so a file the agent wrote with a file
+// tool was not the one its shell commands saw at /tmp/x. Reports false
+// for every other path and on other platforms. The path is cleaned first,
+// so "/tmp/../etc" is not treated as temp.
+func PosixTmpPath(p string) (string, bool) {
+	if runtime.GOOS != "windows" || p == "" || filepath.VolumeName(p) != "" {
+		return "", false
+	}
+	slashed := filepath.ToSlash(filepath.Clean(p))
+	if slashed == "/tmp" {
+		return os.TempDir(), true
+	}
+	if rest, ok := strings.CutPrefix(slashed, "/tmp/"); ok {
+		return filepath.Join(os.TempDir(), filepath.FromSlash(rest)), true
+	}
+	return "", false
+}

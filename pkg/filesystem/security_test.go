@@ -449,8 +449,14 @@ func TestSafeResolvePathTmpExemption(t *testing.T) {
 
 	// Create a file in /tmp to test
 	tmpFile := "/tmp/testfile_existing.txt"
-	defer os.Remove(tmpFile)
-	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+	// On Windows the tools resolve /tmp like Git Bash (the user's temp
+	// dir), not <drive>:\tmp; create the file where they will look.
+	onDisk := tmpFile
+	if mapped, ok := PosixTmpPath(tmpFile); ok {
+		onDisk = mapped
+	}
+	defer os.Remove(onDisk)
+	if err := os.WriteFile(onDisk, []byte("test"), 0644); err != nil {
 		t.Skipf("skipping: cannot write to /tmp on this platform: %v", err)
 	}
 

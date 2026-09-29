@@ -16,6 +16,7 @@ import { isCloud, supportsWorkspaceSwitching } from '../config/mode';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
+import { polledStatsPatch } from '../utils/polledStats';
 import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
 import { listChatSessions } from '../services/chatSessions';
@@ -254,20 +255,24 @@ export function useAppInitialization({
         apiService
           .getStats()
           .then((stats: StatsResponse) => {
-            setState((prev) => ({
-              // Only update provider/model from stats when the backend
-              // has a real value.  An empty string means the agent hasn't
-              // been lazily created yet — we should keep whatever the
-              // frontend already knows (persisted state, WS event…).
-              provider: stats.provider || prev.provider,
-              model: stats.model || prev.model,
-              // Merge, not replace: a poll response without cost/token
-              // fields (nil-agent window during lazy recreation) must not
-              // erase the last-known values — that was the status bar's
-              // "flashes to $0.00 then back" flicker. Absent keys keep the
-              // previous value; present keys are authoritative.
-              stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : { ...prev.stats, ...stats },
-            }));
+            const patch = polledStatsPatch(stats, isCloud);
+            setState((prev) => {
+              const merged = { ...prev.stats, ...patch };
+              return {
+                // Only update provider/model from stats when the backend
+                // has a real value.  An empty string means the agent hasn't
+                // been lazily created yet — we should keep whatever the
+                // frontend already knows (persisted state, WS event…).
+                provider: stats.provider || prev.provider,
+                model: stats.model || prev.model,
+                // Merge, not replace: a poll response without cost/token
+                // fields (nil-agent window during lazy recreation) must not
+                // erase the last-known values — that was the status bar's
+                // "flashes to $0.00 then back" flicker. Absent keys keep the
+                // previous value; present keys are authoritative.
+                stats: JSON.stringify(prev.stats) === JSON.stringify(merged) ? prev.stats : merged,
+              };
+            });
           })
           .catch((err) =>
             log.error(`Failed to initialize connection: ${err instanceof Error ? err.message : String(err)}`, {

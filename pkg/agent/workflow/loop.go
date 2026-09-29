@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -25,6 +24,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // LoopAgent is the seam the loop needs from its runner agent — the
@@ -261,11 +261,7 @@ func RunTodoLoop(ctx context.Context, loopAgent LoopAgent, configPath string, lo
 		buildCmd := strings.TrimSpace(loop.BuildCommand)
 		if buildCmd != "" {
 			fmt.Fprintf(os.Stderr, "%s\n", buildCmd)
-			shell := os.Getenv("SHELL")
-			if shell == "" {
-				shell = "/bin/sh"
-			}
-			cmd := exec.CommandContext(ctx, shell, "-c", buildCmd) // #nosec G204 G702 -- build_command comes from the user's own workflow JSON; running it IS the feature
+			cmd := shellexec.CommandContext(ctx, buildCmd) // #nosec G204 G702 -- build_command comes from the user's own workflow JSON; running it IS the feature
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if bErr := cmd.Run(); bErr != nil {
@@ -332,11 +328,7 @@ func RunTodoLoop(ctx context.Context, loopAgent LoopAgent, configPath string, lo
 
 			// Re-check build.
 			if buildCmd != "" {
-				shell := os.Getenv("SHELL")
-				if shell == "" {
-					shell = "/bin/sh"
-				}
-				cmd := exec.CommandContext(ctx, shell, "-c", buildCmd) // #nosec G204 G702 -- retry of the same user-authored build_command
+				cmd := shellexec.CommandContext(ctx, buildCmd) // #nosec G204 G702 -- retry of the same user-authored build_command
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				if bErr := cmd.Run(); bErr != nil {

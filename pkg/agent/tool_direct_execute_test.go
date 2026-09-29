@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestExecuteToolByName_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("hello from tool"), 0o644))
 
 	content, toolErr := a.ExecuteToolByName(context.Background(), "read_file",
-		`{"path":`+`"`+filePath+`"}`)
+		`{"path":`+strconv.Quote(filePath)+`}`)
 	assert.Empty(t, toolErr, "read_file must not return an error")
 	assert.Contains(t, content, "hello from tool", "read_file must return file contents")
 }

@@ -1,10 +1,10 @@
-//go:build !linux && !js
+//go:build !linux && !windows && !js
 
 package automate
 
 import "time"
 
-// processStartedBefore is a stub for non-Linux platforms (macOS, Windows, WASM)
+// processStartedBefore is a stub for platforms (macOS, WASM)
 // where reading process start time is platform-specific and not worth the
 // complexity. Returns true (fail-open) — legitimate operations are never
 // blocked. PID reuse is rare on these desktop/dev environments.

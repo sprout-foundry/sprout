@@ -112,11 +112,12 @@ func TestSessionPathModes_Snapshot(t *testing.T) {
 	if len(snap) != 2 {
 		t.Fatalf("expected 2 entries in mode snapshot, got %d (%+v)", len(snap), snap)
 	}
-	if snap[dirA] != "read_write" {
-		t.Errorf("snap[dirA] = %q, want read_write", snap[dirA])
+	// Keys are stored normalized (case-folded on Windows).
+	if snap[normalizePath(dirA)] != "read_write" {
+		t.Errorf("snap[dirA] = %q, want read_write", snap[normalizePath(dirA)])
 	}
-	if snap[dirB] != "read_only" {
-		t.Errorf("snap[dirB] = %q, want read_only", snap[dirB])
+	if snap[normalizePath(dirB)] != "read_only" {
+		t.Errorf("snap[dirB] = %q, want read_only", snap[normalizePath(dirB)])
 	}
 
 	// Mutate the snapshot — the manager must not observe the change.
@@ -124,7 +125,7 @@ func TestSessionPathModes_Snapshot(t *testing.T) {
 	// snapshot to read_only must NOT flip the manager's behavior.
 	// If it did, writes would now be denied under dirA — assert that
 	// writes are still allowed (the manager's actual mode).
-	snap[dirA] = "read_only"
+	snap[normalizePath(dirA)] = "read_only"
 	if !sm.IsFolderSessionWriteAllowed(filepath.Join(dirA, "x.txt")) {
 		t.Error("mutating the snapshot must not affect the manager's mode")
 	}

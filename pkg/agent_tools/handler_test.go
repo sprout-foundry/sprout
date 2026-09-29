@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -2042,7 +2043,7 @@ func TestGetBaseName_ZC(t *testing.T) {
 		{
 			name: "root",
 			path: "/",
-			want: "/",
+			want: string(filepath.Separator),
 		},
 		{
 			name: "empty string",

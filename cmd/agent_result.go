@@ -142,7 +142,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
 			if f = strings.TrimSpace(f); f != "" {
 				untrackedFiles = append(untrackedFiles, f)
-				cmd := exec.Command("git", "diff", "--no-index", "/dev/null", f)
+				cmd := exec.Command("git", "diff", "--no-index", os.DevNull, f) //nolint:gosec // G204: f is a repo-relative path from git ls-files --others
 				d, err := cmd.Output()
 				if err != nil {
 					// Exit code 1 = files differ (normal); accept output.

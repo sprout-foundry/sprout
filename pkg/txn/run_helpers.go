@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -13,8 +14,15 @@ func encodeBase64(content []byte) string {
 
 // formatFileMode renders a FileMode as the contract's octal string form
 // ("0644"), matching how the browser side parses "mode".
+//
+// Windows has no permission bits: os.Stat synthesizes 0666 (0444 when
+// read-only), which would land world-writable in a Linux container.
 func formatFileMode(mode os.FileMode) string {
-	return fmt.Sprintf("%04o", uint32(mode.Perm()))
+	perm := mode.Perm()
+	if runtime.GOOS == "windows" {
+		perm &^= 0o022
+	}
+	return fmt.Sprintf("%04o", uint32(perm))
 }
 
 // rollingBuffer keeps the LAST cap bytes written to it. A build can emit

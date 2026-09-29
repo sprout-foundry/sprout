@@ -5,7 +5,9 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -288,7 +290,9 @@ func (a *AllowedPath) Validate() error {
 		return fmt.Errorf("path must be absolute; got %q", path)
 	}
 	cleaned := filepath.Clean(path)
-	if cleaned != path {
+	// FromSlash lets Windows authors write C:/data in JSON without the
+	// separator conversion counting as "needs cleaning".
+	if cleaned != filepath.FromSlash(path) {
 		// filepath.Clean strips trailing slashes and collapses `./` and
 		// `foo/../bar`. We reject any input that needs cleaning because
 		// the user almost certainly meant to write a different path —
@@ -332,10 +336,13 @@ func IsSystemPathPrefix(p string) bool {
 		return false
 	}
 	for _, prefix := range systemPathPrefixList() {
-		if p == prefix {
-			return true
+		// filepath.Rel compares case-insensitively on Windows and fails
+		// across volumes, which correctly reads as "not under".
+		rel, err := filepath.Rel(prefix, p)
+		if err != nil {
+			continue
 		}
-		if strings.HasPrefix(p, prefix+string(filepath.Separator)) {
+		if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
 			return true
 		}
 	}
@@ -347,6 +354,9 @@ func IsSystemPathPrefix(p string) bool {
 // var) so tests can override it and so the match logic in
 // isSystemPathPrefix stays next to its data.
 func systemPathPrefixList() []string {
+	if runtime.GOOS == "windows" {
+		return windowsSystemPathPrefixList()
+	}
 	return []string{
 		"/etc",
 		"/usr",
@@ -367,4 +377,24 @@ func systemPathPrefixList() []string {
 		"/private/var",
 		"/Applications",
 	}
+}
+
+// windowsSystemPathPrefixList reads the install roots from the environment
+// because Windows need not live on C:.
+func windowsSystemPathPrefixList() []string {
+	defaults := []struct{ env, fallback string }{
+		{"SystemRoot", `C:\Windows`},
+		{"ProgramFiles", `C:\Program Files`},
+		{"ProgramFiles(x86)", `C:\Program Files (x86)`},
+		{"ProgramData", `C:\ProgramData`},
+	}
+	prefixes := make([]string, 0, len(defaults))
+	for _, d := range defaults {
+		dir := os.Getenv(d.env)
+		if dir == "" {
+			dir = d.fallback
+		}
+		prefixes = append(prefixes, filepath.Clean(dir))
+	}
+	return prefixes
 }

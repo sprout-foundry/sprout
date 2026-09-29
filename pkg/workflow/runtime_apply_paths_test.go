@@ -86,20 +86,20 @@ func TestApplyWorkflowRuntimeAllowedPaths_OnePath(t *testing.T) {
 	}
 
 	// added should contain the one path.
-	if len(added) != 1 || added[0] != "/tmp/foo" {
+	if len(added) != 1 || added[0] != stored("/tmp/foo") {
 		t.Errorf("added: got %v, want [/tmp/foo]", added)
 	}
 
 	// Agent should now have the path.
 	folders := a.SnapshotSessionAllowedFolders()
-	if len(folders) != 1 || folders[0] != "/tmp/foo" {
+	if len(folders) != 1 || folders[0] != stored("/tmp/foo") {
 		t.Errorf("agent allowlist after apply: got %v, want [/tmp/foo]", folders)
 	}
 
 	// Mode should be recorded.
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/tmp/foo"] != "read_write" {
-		t.Errorf("mode for /tmp/foo: got %q, want read_write", modeMap["/tmp/foo"])
+	if modeMap[stored("/tmp/foo")] != "read_write" {
+		t.Errorf("mode for /tmp/foo: got %q, want read_write", modeMap[stored("/tmp/foo")])
 	}
 }
 
@@ -119,7 +119,7 @@ func TestApplyWorkflowRuntimeAllowedPaths_TwoPaths(t *testing.T) {
 		t.Errorf("added count: got %d, want 2", len(added))
 	}
 	sort.Strings(added)
-	if added[0] != "/srv/data" || added[1] != "/tmp/foo" {
+	if added[0] != stored("/srv/data") || added[1] != stored("/tmp/foo") {
 		t.Errorf("added: got %v, want [/srv/data, /tmp/foo] (sorted)", added)
 	}
 
@@ -128,11 +128,11 @@ func TestApplyWorkflowRuntimeAllowedPaths_TwoPaths(t *testing.T) {
 		t.Errorf("agent allowlist: got %d entries, want 2", len(folders))
 	}
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/srv/data"] != "read_only" {
-		t.Errorf("mode for /srv/data: got %q, want read_only", modeMap["/srv/data"])
+	if modeMap[stored("/srv/data")] != "read_only" {
+		t.Errorf("mode for /srv/data: got %q, want read_only", modeMap[stored("/srv/data")])
 	}
-	if modeMap["/tmp/foo"] != "read_write" {
-		t.Errorf("mode for /tmp/foo: got %q, want read_write", modeMap["/tmp/foo"])
+	if modeMap[stored("/tmp/foo")] != "read_write" {
+		t.Errorf("mode for /tmp/foo: got %q, want read_write", modeMap[stored("/tmp/foo")])
 	}
 }
 
@@ -149,8 +149,8 @@ func TestApplyWorkflowRuntimeAllowedPaths_DefaultMode(t *testing.T) {
 	}
 
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/tmp/defaultmode"] != "read_write" {
-		t.Errorf("default mode: got %q, want read_write", modeMap["/tmp/defaultmode"])
+	if modeMap[stored("/tmp/defaultmode")] != "read_write" {
+		t.Errorf("default mode: got %q, want read_write", modeMap[stored("/tmp/defaultmode")])
 	}
 }
 
@@ -168,7 +168,7 @@ func TestApplyWorkflowRuntimeAllowedPaths_Idempotent(t *testing.T) {
 	}
 
 	// Path should only appear once in added.
-	if len(added) != 1 || added[0] != "/tmp/foo" {
+	if len(added) != 1 || added[0] != stored("/tmp/foo") {
 		t.Errorf("added (idempotent): got %v, want [/tmp/foo]", added)
 	}
 
@@ -177,8 +177,8 @@ func TestApplyWorkflowRuntimeAllowedPaths_Idempotent(t *testing.T) {
 	// the implementation checks currentSet BEFORE setting mode, so a second
 	// declaration of the same path in one call is silently ignored.
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/tmp/foo"] != "read_write" {
-		t.Errorf("mode after idempotent in-call: got %q, want read_write (first entry wins)", modeMap["/tmp/foo"])
+	if modeMap[stored("/tmp/foo")] != "read_write" {
+		t.Errorf("mode after idempotent in-call: got %q, want read_write (first entry wins)", modeMap[stored("/tmp/foo")])
 	}
 }
 
@@ -216,8 +216,8 @@ func TestApplyWorkflowRuntimeAllowedPaths_IdempotentAcrossCalls(t *testing.T) {
 	// path is already present. This is the documented idempotent behavior:
 	// duplicate paths in a step's allowed_paths list are silently ignored.
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/tmp/foo"] != "read_write" {
-		t.Errorf("mode after second call: got %q, want read_write (unchanged)", modeMap["/tmp/foo"])
+	if modeMap[stored("/tmp/foo")] != "read_write" {
+		t.Errorf("mode after second call: got %q, want read_write (unchanged)", modeMap[stored("/tmp/foo")])
 	}
 }
 
@@ -274,12 +274,12 @@ func TestRestoreWorkflowRuntimeAllowedPaths_PreservesPreExisting(t *testing.T) {
 	}
 
 	folders := a.SnapshotSessionAllowedFolders()
-	if len(folders) != 1 || folders[0] != "/already/here" {
+	if len(folders) != 1 || folders[0] != stored("/already/here") {
 		t.Errorf("allowlist after restore: got %v, want [/already/here]", folders)
 	}
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/already/here"] != "read_only" {
-		t.Errorf("mode for /already/here: got %q, want read_only", modeMap["/already/here"])
+	if modeMap[stored("/already/here")] != "read_only" {
+		t.Errorf("mode for /already/here: got %q, want read_only", modeMap[stored("/already/here")])
 	}
 }
 
@@ -316,7 +316,7 @@ func TestRestoreWorkflowRuntimeAllowedPaths_OverlappingPathNotRemoved(t *testing
 		t.Errorf("step2 snapshot: got %v, want empty", snap2)
 	}
 	// Step 2 added should contain /tmp/shared.
-	if len(added2) != 1 || added2[0] != "/tmp/shared" {
+	if len(added2) != 1 || added2[0] != stored("/tmp/shared") {
 		t.Errorf("step2 added: got %v, want [/tmp/shared]", added2)
 	}
 
@@ -354,8 +354,8 @@ func TestRestoreWorkflowRuntimeAllowedPaths_ModeRestored(t *testing.T) {
 
 	// Mode of /existing should still be read_only (this step didn't touch it).
 	modeMap := a.SnapshotSessionAllowedFolderModes()
-	if modeMap["/existing"] != "read_only" {
-		t.Errorf("mode of /existing (untouched by step): got %q, want read_only", modeMap["/existing"])
+	if modeMap[stored("/existing")] != "read_only" {
+		t.Errorf("mode of /existing (untouched by step): got %q, want read_only", modeMap[stored("/existing")])
 	}
 
 	// Simulate: step changed /existing's mode (e.g., another part of the step
@@ -369,13 +369,13 @@ func TestRestoreWorkflowRuntimeAllowedPaths_ModeRestored(t *testing.T) {
 	}
 
 	modeMapAfter := a.SnapshotSessionAllowedFolderModes()
-	if modeMapAfter["/existing"] != "read_only" {
-		t.Errorf("mode of /existing after restore: got %q, want read_only", modeMapAfter["/existing"])
+	if modeMapAfter[stored("/existing")] != "read_only" {
+		t.Errorf("mode of /existing after restore: got %q, want read_only", modeMapAfter[stored("/existing")])
 	}
 
 	// /newpath should be removed.
 	folders := a.SnapshotSessionAllowedFolders()
-	if len(folders) != 1 || folders[0] != "/existing" {
+	if len(folders) != 1 || folders[0] != stored("/existing") {
 		t.Errorf("allowlist after restore: got %v, want [/existing]", folders)
 	}
 }
@@ -426,7 +426,7 @@ func TestRestoreWorkflowRuntimeAllowedPaths_ConsecutiveStepsBehavior(t *testing.
 		t.Errorf("step2 added count: got %d, want 2", len(added2))
 	}
 	sort.Strings(added2)
-	if len(added2) == 2 && (added2[0] != "/b" || added2[1] != "/c") {
+	if len(added2) == 2 && (added2[0] != stored("/b") || added2[1] != stored("/c")) {
 		t.Errorf("step2 added: got %v, want [/b, /c] (sorted)", added2)
 	}
 
@@ -468,7 +468,16 @@ func TestRestoreWorkflowRuntimeAllowedPaths_EmptyAddedPaths(t *testing.T) {
 
 	// Pre-existing path should still be there.
 	folders := a.SnapshotSessionAllowedFolders()
-	if len(folders) != 1 || folders[0] != "/preexisting" {
+	if len(folders) != 1 || folders[0] != stored("/preexisting") {
 		t.Errorf("allowlist after empty-step restore: got %v, want [/preexisting]", folders)
 	}
+}
+
+// stored returns the form the agent keeps for an allowlist entry
+// (canonicalized; case-folded on Windows), which is what the snapshot,
+// mode map, and addedPaths report.
+func stored(p string) string {
+	a := agent.NewTestAgent()
+	a.AddSessionAllowedFolder(p)
+	return a.SnapshotSessionAllowedFolders()[0]
 }

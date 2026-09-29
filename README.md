@@ -80,6 +80,8 @@ make build-all               # WASM shell + embedded Web UI + Go binary
 ./sprout                     # run from the repo root
 ```
 
+On Windows without `make`/bash, `powershell -File scripts\prepare-grammars.ps1` then `go build .` builds the binary; the agent's shell tool uses Git for Windows' bash when installed (cmd.exe otherwise).
+
 | Command | What it does |
 |---|---|
 | `make build-all` | Build everything (WASM, Web UI, binary) |

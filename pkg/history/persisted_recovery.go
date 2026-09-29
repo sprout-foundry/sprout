@@ -121,8 +121,7 @@ func FindPersistedOriginal(filename string) (PersistedOriginal, bool, error) {
 // content files for one change directory, using the same filename
 // mangling and legacy-plain-fallback as fetchAllChanges.
 func readPersistedContentPair(changeDir, filename string) (original, updated string, err error) {
-	safe := strings.ReplaceAll(filename, "/", "_")
-	safe = strings.ReplaceAll(safe, "\\", "_")
+	safe := SafeChangeFilename(filename)
 
 	originalBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safe+originalSuffix))
 	if err != nil {

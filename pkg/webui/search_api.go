@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -621,15 +622,17 @@ func parsePatterns(patterns string) []string {
 	return result
 }
 
-// matchesAnyPattern checks if a path matches any of the patterns
-func matchesAnyPattern(path string, patterns []string) bool {
-	base := filepath.Base(path)
+// matchesAnyPattern checks if a path matches any of the patterns. Both sides
+// are compared in slash form so "src/*.go" matches native Windows paths.
+func matchesAnyPattern(filePath string, patterns []string) bool {
+	slashPath := filepath.ToSlash(filePath)
+	base := path.Base(slashPath)
 	for _, pattern := range patterns {
-		pattern = strings.TrimSpace(pattern)
-		if matched, err := filepath.Match(pattern, base); err == nil && matched {
+		pattern = filepath.ToSlash(strings.TrimSpace(pattern))
+		if matched, err := path.Match(pattern, base); err == nil && matched {
 			return true
 		}
-		if matched, err := filepath.Match(pattern, path); err == nil && matched {
+		if matched, err := path.Match(pattern, slashPath); err == nil && matched {
 			return true
 		}
 	}

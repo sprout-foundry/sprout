@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -548,7 +549,12 @@ func TestDesignExportHandler_SymlinkedGeneratedDirRefused(t *testing.T) {
 	dxWriteTokens(t, root, dxTokenJSON)
 
 	outside := t.TempDir()
-	require.NoError(t, os.Symlink(outside, filepath.Join(root, "design", design.GeneratedSubdir)))
+	if err := os.Symlink(outside, filepath.Join(root, "design", design.GeneratedSubdir)); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("creating symlinks on Windows needs Developer Mode or admin: %v", err)
+		}
+		require.NoError(t, err)
+	}
 
 	h := &designExportHandler{}
 	res, err := h.Execute(newTestCtx(root), newTestEnv(t, root), map[string]any{"targets": "css"})

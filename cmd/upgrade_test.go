@@ -157,6 +157,9 @@ func TestProbeWritableInstallDir(t *testing.T) {
 	})
 
 	t.Run("read-only", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows ignores directory mode bits; see the missing-dir case")
+		}
 		if os.Geteuid() == 0 {
 			t.Skip("root bypasses mode bits; run as a normal user to exercise this")
 		}
@@ -170,20 +173,34 @@ func TestProbeWritableInstallDir(t *testing.T) {
 			t.Fatal("expected write failure in read-only dir, got nil")
 		}
 	})
+
+	t.Run("missing", func(t *testing.T) {
+		if err := probeWritableInstallDir(filepath.Join(t.TempDir(), "missing")); err == nil {
+			t.Fatal("expected write failure in missing dir, got nil")
+		}
+	})
 }
 
 // requireWritableInstallDir's error is the contract users see when they
 // installed via sudo — assert the actionable guidance survives refactors.
 func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses mode bits; run as a normal user to exercise this")
-	}
 	dir := t.TempDir()
-	// #nosec G302 -- deliberately restrictive dir mode is the test's subject
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatal(err)
+	wants := []string{"is not writable", "sudo sprout upgrade", "SPROUT_INSTALL_DIR"}
+	if runtime.GOOS == "windows" {
+		// Directory mode bits are ignored on Windows, so a missing dir stands in
+		// for an unwritable one.
+		dir = filepath.Join(dir, "missing")
+		wants = []string{"is not writable", "Administrator", "SPROUT_INSTALL_DIR", "install.ps1"}
+	} else {
+		if os.Geteuid() == 0 {
+			t.Skip("root bypasses mode bits; run as a normal user to exercise this")
+		}
+		// #nosec G302 -- deliberately restrictive dir mode is the test's subject
+		if err := os.Chmod(dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // #nosec G302 -- restore TempDir for cleanup
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // #nosec G302 -- restore TempDir for cleanup
 	execPath := filepath.Join(dir, "sprout")
 
 	err := requireWritableInstallDir(execPath)
@@ -191,7 +208,7 @@ func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
 		t.Fatal("expected error for non-writable dir")
 	}
 	msg := err.Error()
-	for _, want := range []string{"is not writable", "sudo sprout upgrade", "SPROUT_INSTALL_DIR", execPath} {
+	for _, want := range append(wants, execPath) {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error missing %q:\n%s", want, msg)
 		}

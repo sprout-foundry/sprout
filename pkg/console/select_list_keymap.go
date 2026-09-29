@@ -2,7 +2,6 @@
 package console
 
 import (
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -72,7 +71,18 @@ func (s *SelectList) recordDismissKey(text string) {
 	if b := text[0]; b == 0x7F || b == 0x08 {
 		return
 	}
-	s.dismissKey = text
+	// Keys typed ahead in the same burst belong to the prompt too; stop at
+	// the first control byte so a queued Enter is never replayed as a
+	// submit.
+	rest := s.pending
+	for i, b := range rest {
+		if b < 0x20 || b == 0x7F {
+			rest = rest[:i]
+			break
+		}
+	}
+	s.dismissKey = text + string(rest)
+	s.pending = nil
 }
 
 // handleEscape dispatches the bytes that follow ESC. Returns done=true
@@ -84,48 +94,39 @@ func (s *SelectList) handleEscape(n int, buf []byte) (done bool, val string, ok 
 		// Could be a plain ESC or the start of a CSI sequence. Read
 		// one more byte non-blockingly via a short poll; if nothing
 		// arrives, treat as cancel.
-		var follow [1]byte
 		deadline := time.Now().Add(20 * time.Millisecond)
-		for time.Now().Before(deadline) {
-			m, _ := os.Stdin.Read(follow[:])
-			if m == 1 {
-				if follow[0] != '[' && follow[0] != 'O' {
-					// Not a CSI sequence — treat ESC as cancel.
-					return true, "", false
-				}
-				// Check if the next byte after '[' is '<' (SGR mouse)
-				// or something else (CSI arrow key).
-				var next [1]byte
-				for time.Now().Before(deadline) {
-					k, _ := os.Stdin.Read(next[:])
-					if k == 1 {
-						if next[0] == '<' {
-							// SGR mouse event — consume until M/m.
-							s.consumeSGRMouse()
-							s.render()
-							return false, "", false
-						}
-						// Regular CSI — dispatch the final byte if it's
-						// in the valid range, otherwise keep reading.
-						if next[0] >= 0x40 && next[0] <= 0x7E {
-							s.dispatchCSI(next[0])
-							s.render()
-							return false, "", false
-						}
-						// Parameter/intermediate byte — fall through to
-						// consumeCSI to drain the rest.
-						return false, "", s.consumeCSI()
-					}
-					time.Sleep(1 * time.Millisecond)
-				}
-				// Timed out reading third byte — treat as CSI with no
-				// final byte (ignore).
-				return false, "", false
-			}
-			time.Sleep(2 * time.Millisecond)
+		follow, got := s.readByteBefore(deadline)
+		if !got {
+			// No follow-up byte → plain ESC means cancel.
+			return true, "", false
 		}
-		// No follow-up byte → plain ESC means cancel.
-		return true, "", false
+		if follow != '[' && follow != 'O' {
+			// Not a CSI sequence — treat ESC as cancel.
+			return true, "", false
+		}
+		// Check if the next byte after '[' is '<' (SGR mouse)
+		// or something else (CSI arrow key).
+		next, got := s.readByteBefore(deadline)
+		if !got {
+			// Timed out reading third byte — treat as CSI with no
+			// final byte (ignore).
+			return false, "", false
+		}
+		if next == '<' {
+			// SGR mouse event — consume until M/m.
+			s.consumeSGRMouse()
+			s.render()
+			return false, "", false
+		}
+		// Regular CSI — dispatch the final byte if it's
+		// in the valid range, otherwise keep reading.
+		if next >= 0x40 && next <= 0x7E {
+			s.dispatchCSI(next)
+			s.render()
+			return false, "", false
+		}
+		// Parameter/intermediate byte — drain the rest.
+		return false, "", s.consumeCSI()
 	}
 	// We got the whole sequence in one read.
 	if n >= 3 && buf[1] == '[' {
@@ -147,15 +148,12 @@ func (s *SelectList) handleEscape(n int, buf []byte) (done bool, val string, ok 
 // (0x40..0x7E), then dispatches based on it. Always returns false (no
 // confirm/cancel — just navigation).
 func (s *SelectList) consumeCSI() bool {
-	var ch [1]byte
 	deadline := time.Now().Add(50 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		n, _ := os.Stdin.Read(ch[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
+	for {
+		b, got := s.readByteBefore(deadline)
+		if !got {
+			return false
 		}
-		b := ch[0]
 		if b >= 0x40 && b <= 0x7E {
 			s.dispatchCSI(b)
 			s.render()
@@ -164,7 +162,6 @@ func (s *SelectList) consumeCSI() bool {
 		// Parameter byte (0x30..0x3F) or intermediate (0x20..0x2F) —
 		// keep reading.
 	}
-	return false
 }
 
 // consumeSGRMouse reads bytes from stdin until it finds the SGR mouse
@@ -176,14 +173,11 @@ func (s *SelectList) consumeCSI() bool {
 func (s *SelectList) consumeSGRMouse() {
 	var buf strings.Builder
 	deadline := time.Now().Add(100 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		var ch [1]byte
-		n, _ := os.Stdin.Read(ch[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
+	for {
+		b, got := s.readByteBefore(deadline)
+		if !got {
+			return
 		}
-		b := ch[0]
 		buf.WriteByte(b)
 		if b == 'M' || b == 'm' {
 			// Normalize lowercase 'm' (release) to 'M' for parsing.
@@ -201,14 +195,11 @@ func (s *SelectList) consumeSGRMouseFromBuf(buf []byte) {
 	var b strings.Builder
 	b.Write(buf)
 	deadline := time.Now().Add(100 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		var ch [1]byte
-		n, _ := os.Stdin.Read(ch[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
+	for {
+		byteVal, got := s.readByteBefore(deadline)
+		if !got {
+			return
 		}
-		byteVal := ch[0]
 		b.WriteByte(byteVal)
 		if byteVal == 'M' || byteVal == 'm' {
 			seq := b.String()

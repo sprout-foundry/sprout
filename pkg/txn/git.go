@@ -225,7 +225,9 @@ func validateRelPath(path string) string {
 // every platform, so a manifest authored on one OS cannot smuggle an
 // absolute path past a container running another.
 func isAbsAnyOS(path string) bool {
-	if filepath.IsAbs(path) {
+	// filepath.IsAbs is false on Windows for "/etc" (rooted but
+	// drive-relative) and "C:foo" (drive-relative); both escape the root.
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") || filepath.VolumeName(path) != "" {
 		return true
 	}
 	if os.PathSeparator != '\\' {

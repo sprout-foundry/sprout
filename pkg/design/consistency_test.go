@@ -200,7 +200,7 @@ func TestConsistencyReadmeScreenRefs(t *testing.T) {
 		assert.Equal(t, 1, rules[ruleManifestLinkDangling], "got %#v", findings)
 		for _, f := range findings {
 			if f.Rule == ruleManifestLinkDangling {
-				assert.Equal(t, filepath.Join(DirName, ManifestName), f.File)
+				assert.Equal(t, DirName+"/"+ManifestName, f.File)
 				assert.Equal(t, SeverityWarn, f.Severity, "a missing README screen reference is an advisory consistency warn")
 				assert.Contains(t, f.Message, "checkout")
 				assert.Equal(t, 9, f.Line, "the finding anchors at the listing bullet")
@@ -347,7 +347,7 @@ func TestValidateTreeConsistencyFindings(t *testing.T) {
 			assert.Equal(t, SeverityWarn, f.Severity)
 			assert.Contains(t, f.Message, "profile")
 		case ruleManifestLinkDangling:
-			assert.Equal(t, filepath.Join(DirName, ManifestName), f.File)
+			assert.Equal(t, DirName+"/"+ManifestName, f.File)
 			assert.Equal(t, SeverityWarn, f.Severity)
 			assert.Contains(t, f.Message, "billing")
 		}

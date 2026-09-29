@@ -11,6 +11,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const canReadTTYReply = true
+
 // probeReplyTerminator is the final byte of a CSI reply ("… c" for
 // DA2). The read loop returns as soon as it is observed.
 const probeReplyTerminator = 'c'

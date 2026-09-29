@@ -123,6 +123,8 @@ export interface AppState {
   // Snapshot of per-chat state, saved on switch-away and restored on switch-back
   perChatCache: Record<string, PerChatState>;
   securityApprovalRequest: {
+    /** Set when another chat (not the one on screen) is asking. */
+    fromChat?: string;
     requestId: string;
     toolName: string;
     riskLevel: string;
@@ -170,12 +172,16 @@ export interface AppState {
     deliveryError?: string;
   } | null;
   securityPromptRequest: {
+    /** Set when another chat (not the one on screen) is asking. */
+    fromChat?: string;
     requestId: string;
     prompt: string;
     filePath?: string;
     concern?: string;
   } | null;
   askUserRequest: {
+    /** Set when another chat (not the one on screen) is asking. */
+    fromChat?: string;
     requestId: string;
     question: string;
     header?: string;
@@ -199,6 +205,8 @@ export interface AppState {
     prompt: string;
   } | null;
   shellApprovalRequest: {
+    /** Set when another chat (not the one on screen) is asking. */
+    fromChat?: string;
     requestId: string;
     command: string;
     parts: Array<{
@@ -220,6 +228,8 @@ export interface AppState {
     };
   } | null;
   editApprovalRequest: {
+    /** Set when another chat (not the one on screen) is asking. */
+    fromChat?: string;
     requestId: string;
     filePath: string;
     unifiedDiff?: string;

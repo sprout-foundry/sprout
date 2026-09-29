@@ -9,6 +9,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
 import SyncStatusBanner from './components/SyncStatusBanner';
+import { ApprovalOriginNotice } from './components/ApprovalOriginNotice';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
@@ -512,6 +513,15 @@ function AppInner() {
                       <InstallPromptBanner />
                       <SyncStatusBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />
+                      <ApprovalOriginNotice
+                        chatName={
+                          state.securityApprovalRequest?.fromChat ??
+                          state.securityPromptRequest?.fromChat ??
+                          state.askUserRequest?.fromChat ??
+                          state.editApprovalRequest?.fromChat ??
+                          state.shellApprovalRequest?.fromChat
+                        }
+                      />
                       {state.securityApprovalRequest && (
                         <SecurityApprovalDialog
                           requestId={state.securityApprovalRequest.requestId}

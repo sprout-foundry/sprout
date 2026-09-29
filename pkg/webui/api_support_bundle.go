@@ -145,7 +145,8 @@ func writeBundleLogFile(zw *zip.Writer, entryName, path string) error {
 		return err
 	}
 
-	return writeBundleBytes(zw, "logs/"+entryName, data)
+	// Zip entry names must use forward slashes on every platform.
+	return writeBundleBytes(zw, "logs/"+filepath.ToSlash(entryName), data)
 }
 
 // writeBundleBytes adds a file entry to the zip archive.

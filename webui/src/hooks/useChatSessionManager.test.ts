@@ -148,6 +148,70 @@ describe('chat deletion', () => {
   });
 });
 
+describe('loading the transcript after a reload', () => {
+  it('keeps the conversation when a message was sent before it arrived', async () => {
+    chatSessionsDouble.listChatSessions.mockResolvedValueOnce({
+      chat_sessions: [{ id: 'chat-1' }],
+      active_chat_id: 'chat-1',
+    });
+    chatSessionsDouble.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-1',
+      chat_session: {
+        messages: [
+          { role: 'user', content: 'Reply with exactly: FIRST-CONVO' },
+          { role: 'assistant', content: 'FIRST-CONVO' },
+        ],
+        active_query: false,
+      },
+    });
+    const hook = setupHook();
+    // Typed during the load: its bubble is already on screen.
+    act(() => {
+      hook.getState().messages = [
+        { id: 'local-q', type: 'user', content: 'What word did you reply with?', timestamp: new Date() },
+      ] as never;
+    });
+
+    await act(async () => {
+      await hook.result.current.loadChatSessions();
+    });
+
+    expect(hook.getState().messages.map((m) => `${m.type}:${m.content}`)).toEqual([
+      'user:Reply with exactly: FIRST-CONVO',
+      'assistant:FIRST-CONVO',
+      'user:What word did you reply with?',
+    ]);
+  });
+
+  it('does not repeat messages that are already on screen', async () => {
+    const transcript = [
+      { role: 'user', content: 'Say hi' },
+      { role: 'assistant', content: 'Hi.' },
+    ];
+    chatSessionsDouble.listChatSessions.mockResolvedValueOnce({
+      chat_sessions: [{ id: 'chat-1' }],
+      active_chat_id: 'chat-1',
+    });
+    chatSessionsDouble.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-1',
+      chat_session: { messages: transcript, active_query: false },
+    });
+    const hook = setupHook();
+    act(() => {
+      hook.getState().messages = [
+        { id: 'm1', type: 'user', content: 'Say hi', timestamp: new Date() },
+        { id: 'm2', type: 'assistant', content: 'Hi.', timestamp: new Date() },
+      ] as never;
+    });
+
+    await act(async () => {
+      await hook.result.current.loadChatSessions();
+    });
+
+    expect(hook.getState().messages).toHaveLength(2);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Tests: per-chat lastError snapshot/restore across chat switches
 //

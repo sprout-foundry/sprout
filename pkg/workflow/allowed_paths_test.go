@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -65,7 +66,7 @@ func TestAllowedPath_Validate(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ap := AllowedPath{Path: tt.path, Mode: tt.mode}
+			ap := AllowedPath{Path: fixturePath(tt.path), Mode: tt.mode}
 			err := ap.Validate()
 			if tt.wantErr == "" {
 				if err != nil {
@@ -98,7 +99,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths(t *testing.T) {
 			{"path": "relative/path", "mode": "read_write"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -126,7 +127,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_BadMode(t *testing.T) {
 			{"path": "/var/log/sprout", "mode": "RO"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -155,7 +156,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_Traversal(t *testing.T) {
 			{"path": "/srv/data/../etc", "mode": "read_only"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -181,7 +182,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_AbsoluteAccepted(t *testing.T
 			{"path": "/var/log/sprout", "mode": "read_only"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadAgentWorkflowConfig(path)
@@ -191,7 +192,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_AbsoluteAccepted(t *testing.T
 	if len(cfg.AllowedPaths) != 2 {
 		t.Fatalf("expected 2 allowed_paths entries, got %d", len(cfg.AllowedPaths))
 	}
-	if cfg.AllowedPaths[0].Path != "/srv/datasets" || cfg.AllowedPaths[0].Mode != "read_write" || cfg.AllowedPaths[0].Reason != "Read training data" {
+	if cfg.AllowedPaths[0].Path != fixturePath("/srv/datasets") || cfg.AllowedPaths[0].Mode != "read_write" || cfg.AllowedPaths[0].Reason != "Read training data" {
 		t.Errorf("entry[0] not preserved: %+v", cfg.AllowedPaths[0])
 	}
 	if cfg.AllowedPaths[1].Mode != "read_only" {
@@ -216,7 +217,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_SystemPrefixWarn(t *testing.T
 			{"path": "/System/Library/foo", "mode": "read_only"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
@@ -245,7 +246,7 @@ func TestAgentWorkflowConfig_Validate_AllowedPaths_SystemPrefixWarn(t *testing.T
 	if !strings.Contains(logs, "WARNING") {
 		t.Fatalf("expected a WARNING log line for the system prefix, got logs: %q", logs)
 	}
-	if !strings.Contains(logs, "/etc/sprout-stuff") {
+	if !strings.Contains(logs, fixturePath("/etc/sprout-stuff")) {
 		t.Fatalf("warning should mention the offending path, got logs: %q", logs)
 	}
 }
@@ -268,6 +269,9 @@ func TestAllowedPath_NilReceiver(t *testing.T) {
 // touch /etc without a warning.
 func TestIsSystemPathPrefix(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix system prefixes; TestIsSystemPathPrefixWindows covers Windows")
+	}
 	cases := []struct {
 		path string
 		want bool
@@ -329,7 +333,7 @@ func TestValidate_StepAllowedPaths_ValidEntry(t *testing.T) {
 			}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadAgentWorkflowConfig(path)
@@ -342,10 +346,10 @@ func TestValidate_StepAllowedPaths_ValidEntry(t *testing.T) {
 	if len(cfg.Steps[0].AllowedPaths) != 2 {
 		t.Fatalf("expected 2 allowed_paths entries on step, got %d", len(cfg.Steps[0].AllowedPaths))
 	}
-	if cfg.Steps[0].AllowedPaths[0].Path != "/srv/datasets" || cfg.Steps[0].AllowedPaths[0].Mode != "read_only" {
+	if cfg.Steps[0].AllowedPaths[0].Path != fixturePath("/srv/datasets") || cfg.Steps[0].AllowedPaths[0].Mode != "read_only" {
 		t.Errorf("step allowed_paths[0] wrong: %+v", cfg.Steps[0].AllowedPaths[0])
 	}
-	if cfg.Steps[0].AllowedPaths[1].Path != "/tmp/output" || cfg.Steps[0].AllowedPaths[1].Mode != "read_write" {
+	if cfg.Steps[0].AllowedPaths[1].Path != fixturePath("/tmp/output") || cfg.Steps[0].AllowedPaths[1].Mode != "read_write" {
 		t.Errorf("step allowed_paths[1] wrong: %+v", cfg.Steps[0].AllowedPaths[1])
 	}
 }
@@ -367,7 +371,7 @@ func TestValidate_StepAllowedPaths_InvalidRelativePath(t *testing.T) {
 			}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -402,7 +406,7 @@ func TestValidate_StepAllowedPaths_InvalidMode(t *testing.T) {
 			}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -442,7 +446,7 @@ func TestValidate_StepAllowedPaths_WorkflowStepConflictDifferentModes(t *testing
 			}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
@@ -480,7 +484,7 @@ func TestValidate_StepAllowedPaths_WorkflowStepConflictDifferentModes(t *testing
 	if !strings.Contains(logs, "WARNING") {
 		t.Fatalf("expected a WARNING log line for the mode conflict, got logs: %q", logs)
 	}
-	if !strings.Contains(logs, "/srv/datasets") {
+	if !strings.Contains(logs, fixturePath("/srv/datasets")) {
 		t.Fatalf("warning should mention the conflicting path, got logs: %q", logs)
 	}
 	if !strings.Contains(logs, "workflow level") {
@@ -505,7 +509,7 @@ func TestValidate_InitialAllowedPaths_ValidEntry(t *testing.T) {
 			]
 		}
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadAgentWorkflowConfig(path)
@@ -518,7 +522,7 @@ func TestValidate_InitialAllowedPaths_ValidEntry(t *testing.T) {
 	if len(cfg.Initial.AllowedPaths) != 1 {
 		t.Fatalf("expected 1 initial-level allowed_path, got %d", len(cfg.Initial.AllowedPaths))
 	}
-	if cfg.Initial.AllowedPaths[0].Path != "/tmp/work" || cfg.Initial.AllowedPaths[0].Mode != "read_write" {
+	if cfg.Initial.AllowedPaths[0].Path != fixturePath("/tmp/work") || cfg.Initial.AllowedPaths[0].Mode != "read_write" {
 		t.Errorf("initial allowed_paths[0] wrong: %+v", cfg.Initial.AllowedPaths[0])
 	}
 }
@@ -537,7 +541,7 @@ func TestValidate_InitialAllowedPaths_InvalidEntry(t *testing.T) {
 			]
 		}
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadAgentWorkflowConfig(path)
@@ -566,7 +570,7 @@ func TestValidate_InitialAllowedPaths_SystemPrefixWarn(t *testing.T) {
 			]
 		}
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
@@ -595,7 +599,7 @@ func TestValidate_InitialAllowedPaths_SystemPrefixWarn(t *testing.T) {
 	if !strings.Contains(logs, "WARNING") {
 		t.Fatalf("expected a WARNING log line for the system prefix, got logs: %q", logs)
 	}
-	if !strings.Contains(logs, "/etc/sprout-stuff") {
+	if !strings.Contains(logs, fixturePath("/etc/sprout-stuff")) {
 		t.Fatalf("warning should mention the offending path, got logs: %q", logs)
 	}
 }
@@ -619,7 +623,7 @@ func TestValidate_InitialAllowedPaths_WorkflowInitialConflictDifferentModes(t *t
 			{"path": "/srv/datasets", "mode": "read_only"}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Hold the lock for the entire test body so the buffer snapshot is stable.
@@ -657,7 +661,7 @@ func TestValidate_InitialAllowedPaths_WorkflowInitialConflictDifferentModes(t *t
 	if !strings.Contains(logs, "WARNING") {
 		t.Fatalf("expected a WARNING log line for the mode conflict, got logs: %q", logs)
 	}
-	if !strings.Contains(logs, "/srv/datasets") {
+	if !strings.Contains(logs, fixturePath("/srv/datasets")) {
 		t.Fatalf("warning should mention the conflicting path, got logs: %q", logs)
 	}
 	if !strings.Contains(logs, "initial") {
@@ -691,7 +695,7 @@ func TestValidate_StepAllowedPaths_MultipleSteps(t *testing.T) {
 			}
 		]
 	}`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(fixtureJSON(content)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadAgentWorkflowConfig(path)
@@ -701,10 +705,36 @@ func TestValidate_StepAllowedPaths_MultipleSteps(t *testing.T) {
 	if len(cfg.Steps) != 2 {
 		t.Fatalf("expected 2 steps, got %d", len(cfg.Steps))
 	}
-	if len(cfg.Steps[0].AllowedPaths) != 1 || cfg.Steps[0].AllowedPaths[0].Path != "/tmp/step1" {
+	if len(cfg.Steps[0].AllowedPaths) != 1 || cfg.Steps[0].AllowedPaths[0].Path != fixturePath("/tmp/step1") {
 		t.Errorf("step 0 allowed_paths wrong: %+v", cfg.Steps[0].AllowedPaths)
 	}
-	if len(cfg.Steps[1].AllowedPaths) != 1 || cfg.Steps[1].AllowedPaths[0].Path != "/tmp/step2" {
+	if len(cfg.Steps[1].AllowedPaths) != 1 || cfg.Steps[1].AllowedPaths[0].Path != fixturePath("/tmp/step2") {
 		t.Errorf("step 1 allowed_paths wrong: %+v", cfg.Steps[1].AllowedPaths)
+	}
+}
+
+func TestIsSystemPathPrefixWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows install roots")
+	}
+	t.Setenv("SystemRoot", `C:\Windows`)
+	t.Setenv("ProgramFiles", `C:\Program Files`)
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{`C:\Windows`, true},
+		{`c:\windows\System32\drivers`, true},
+		{"C:/Windows/System32", true},
+		{`C:\Program Files\App`, true},
+		{`C:\WindowsApps`, false},
+		{`C:\Users\me\src`, false},
+		{`D:\Windows`, false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := IsSystemPathPrefix(c.path); got != c.want {
+			t.Errorf("IsSystemPathPrefix(%q) = %v, want %v", c.path, got, c.want)
+		}
 	}
 }

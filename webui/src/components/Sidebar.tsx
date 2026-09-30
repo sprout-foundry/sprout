@@ -547,6 +547,20 @@ function Sidebar({
             workspaceRoot={gitPanel?.workspaceRoot}
             instances={instances}
             onInstanceChange={onInstanceChange}
+            // Standalone: the title opens other folders and SSH hosts, as the
+            // classic sidebar's location switcher does.
+            projectSwitcher={
+              supportsWorkspaceSwitching ? (
+                <LocationSwitcher
+                  isConnected={isConnected}
+                  instances={instances}
+                  selectedInstancePID={selectedInstancePID}
+                  isSwitchingInstance={isSwitchingInstance}
+                  onInstanceChange={onInstanceChange}
+                  nameOnly
+                />
+              ) : undefined
+            }
             renderSection={renderContentPane}
             collapsed={effectiveSidebarCollapsed}
             onToggleCollapsed={handleLogoToggle}

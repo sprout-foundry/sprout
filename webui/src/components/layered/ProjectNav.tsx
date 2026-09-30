@@ -60,6 +60,8 @@ interface NavEntry {
 
 interface ProjectNavProps {
   title: string;
+  /** Shown in place of the title, e.g. a project switcher. */
+  titleControl?: ReactNode;
   onHide?: () => void;
   hideLabel?: string;
   conversations?: ProjectNavConversations;
@@ -172,9 +174,11 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
   return (
     <div className="project-nav" data-testid="project-nav">
       <div className="project-nav-header">
-        <span className="project-nav-title" title={title}>
-          {title}
-        </span>
+        {props.titleControl ?? (
+          <span className="project-nav-title" title={title}>
+            {title}
+          </span>
+        )}
         {hideButton}
         {conversations?.onCreate && (
           <button type="button" className="project-nav-new" onClick={conversations.onCreate} title="New conversation">

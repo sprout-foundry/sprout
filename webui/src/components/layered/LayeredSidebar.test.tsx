@@ -202,6 +202,12 @@ describe('LayeredSidebar', () => {
     expect(menuItems()).toEqual(['Delete conversation']);
   });
 
+  it('shows a project switcher in place of the title when given one', () => {
+    renderSidebar({ projectSwitcher: <button data-testid="switcher">my-app ▾</button> });
+    expect(container.querySelector('[data-testid="switcher"]')).toBeTruthy();
+    expect(container.querySelector('.project-nav-title')).toBeNull();
+  });
+
   it('shows only the rail when collapsed', () => {
     const onToggleCollapsed = vi.fn();
     renderSidebar({ collapsed: true, onToggleCollapsed });

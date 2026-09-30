@@ -18,6 +18,8 @@ export interface LocationSwitcherProps {
   isSwitchingInstance?: boolean;
   onInstanceChange?: (pid: number) => void;
   sidebarCollapsed?: boolean;
+  /** Label the trigger with the folder's own name only, for a narrow header. */
+  nameOnly?: boolean;
 }
 
 const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
@@ -27,6 +29,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   isSwitchingInstance = false,
   onInstanceChange,
   sidebarCollapsed = false,
+  nameOnly = false,
 }) => {
   // ─── Main component owns panel toggle state ───
   const [isOpen, setIsOpen] = useState(false);
@@ -71,10 +74,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
   // ─── Derived values ───
   const triggerWorkspaceName = useMemo(() => {
+    if (nameOnly) return ws.workspaceRoot?.split('/').filter(Boolean).pop() || ws.workspaceRoot || '';
     const display = getPathDisplayName(ws.workspaceRoot);
     if (!ws.remoteContext?.homePath) return display;
     return collapseHomePath(ws.workspaceRoot, ws.remoteContext.homePath);
-  }, [ws.remoteContext?.homePath, ws.workspaceRoot]);
+  }, [nameOnly, ws.remoteContext?.homePath, ws.workspaceRoot]);
 
   // ─── Render ───
   return (

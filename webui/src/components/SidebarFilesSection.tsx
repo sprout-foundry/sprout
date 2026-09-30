@@ -93,9 +93,6 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           // No repos/ yet (or the backend is unreachable): keep [].
         });
     }, []);
-    useEffect(() => {
-      refreshRepos();
-    }, [refreshRepos]);
 
     // The cwd row is shell-scoped: the studio shell is a single native
     // workspace (the gate modal picks it, the shell owns the root), so the
@@ -110,6 +107,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       setIsStudioShell(getShellIdentity() === 'studio');
       return onShellIdentityChange((identity) => setIsStudioShell(identity === 'studio'));
     }, []);
+
+    // Only the studio shell shows the repo selector; elsewhere the list has
+    // no reader, and a workspace without repos/ answers with an error.
+    useEffect(() => {
+      if (isStudioShell) refreshRepos();
+    }, [isStudioShell, refreshRepos]);
 
     // Keep the cwd honest: if the selected repo disappears (removed while the
     // store still points at it), fall back to the root rather than rooting the

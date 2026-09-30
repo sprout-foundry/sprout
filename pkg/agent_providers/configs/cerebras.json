@@ -7,7 +7,7 @@
   },
   "headers": {},
   "defaults": {
-    "model": "zai-glm-4.7",
+    "model": "qwen-3.8-27b",
     "temperature": 1.0,
     "max_tokens": -1,
     "top_p": 0.95
@@ -25,12 +25,12 @@
   "models": {
     "default_context_limit": 65536,
     "model_overrides": {
-      "zai-glm-4.7": 65536
+      "qwen-3.8-27b": 65536
     },
     "pattern_overrides": [],
     "supports_vision": false,
     "vision_model": "",
-    "default_model": "zai-glm-4.7",
+    "default_model": "qwen-3.8-27b",
     "available_models": []
   },
   "retry": {

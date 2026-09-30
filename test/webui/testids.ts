@@ -250,6 +250,7 @@ const TESTIDS = {
   "gh-signout-btn": "gh-signout-btn",
   "home-nav": "home-nav",
   "platform-home": "platform-home",
+  "phone-tab-bar": "phone-tab-bar",
   "header-search": "header-search",
   "project-nav": "project-nav",
   "project-rail": "project-rail",

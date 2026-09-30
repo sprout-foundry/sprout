@@ -7,6 +7,10 @@
 :root {
   color-scheme: dark;
   --sprout-terminal-reserved-height: 42px;
+  /* The phone tab bar sits under the terminal; bottom-anchored surfaces
+   * clear both. */
+  --sprout-bottom-nav-height: 0px;
+  --sprout-bottom-reserved-height: calc(var(--sprout-terminal-reserved-height) + var(--sprout-bottom-nav-height));
   /* Row height for the unified diff renderer (DiffSurface). Kept as a token
    * so CSS and the virtualization math in DiffSurface.tsx stay in sync. */
   --diff-row-height: 20px;
@@ -336,7 +340,7 @@ body {
      Android WebViews resolve viewport units to 0 for height (see
      index.html seed script). */
   height: 100%;
-  padding-bottom: var(--sprout-terminal-reserved-height);
+  padding-bottom: var(--sprout-bottom-reserved-height);
   box-sizing: border-box;
   background: var(--app-shell-bg);
   overflow: hidden;
@@ -915,7 +919,7 @@ body {
     position: fixed !important;
     top: 35px; /* Below header bar */
     right: 0;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     width: 50%;
     z-index: 800;
     border-left: 1px solid var(--border-strong);
@@ -931,7 +935,7 @@ body {
     position: fixed;
     inset: 0;
     top: 35px;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     background: rgba(0, 0, 0, 0.3);
     z-index: 750;
   }

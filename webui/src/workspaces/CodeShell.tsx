@@ -13,6 +13,7 @@ import React from 'react';
 import ContextSidebar from '../components/ContextSidebar';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
@@ -103,6 +104,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
                   {projectTitle}
                 </button>
               )}
+              {/* The phone header row gives way to the tab bar; the balance moves here. */}
+              {isLayeredLayout && isCloud && <CreditsChip />}
               {currentView !== 'chat' && (
                 <button
                   className="top-mobile-chat-btn"

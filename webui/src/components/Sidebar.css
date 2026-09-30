@@ -1356,7 +1356,7 @@
     top: 0;
     left: 0;
     right: 0;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     height: auto;
     width: 100vw;
     min-width: 100vw;

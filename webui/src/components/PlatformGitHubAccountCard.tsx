@@ -9,6 +9,7 @@ import { ExternalLink, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import './GitHubAccountPanel.css';
+import { onPlatformLinkClick } from '../services/homeView';
 import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from '../services/platformGitHub';
 
 interface PlatformGitHubAccountCardProps {
@@ -64,7 +65,13 @@ export default function PlatformGitHubAccountCard({
           ? 'GitHub is connected through your Sprout Foundry account.'
           : 'Connect GitHub on your Sprout Foundry account to list and clone your repositories, including private ones.'}
       </span>
-      <a className="gh-account-signout" href={href} target="_top" data-testid="platform-gh-manage">
+      <a
+        className="gh-account-signout"
+        href={href}
+        target="_top"
+        onClick={onPlatformLinkClick('/settings')}
+        data-testid="platform-gh-manage"
+      >
         {connected ? 'Manage' : 'Connect GitHub'} <ExternalLink size={12} aria-hidden="true" />
       </a>
     </div>

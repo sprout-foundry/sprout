@@ -7,8 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { isCloud } from '../config/mode';
-import { isLayeredLayout } from '../config/layout';
-import { openHome, useHomeView } from '../services/homeView';
+import { onPlatformLinkClick, useHomeView } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 
 const REFRESH_MS = 60_000;
@@ -67,12 +66,7 @@ export function CreditsChip(): JSX.Element | null {
       className={`header-credits-chip${remaining <= 0 ? ' is-empty' : ''}`}
       title={`${remaining.toLocaleString('en-US')} credits remaining — usage and billing`}
       data-testid="header-credits-chip"
-      onClick={(e) => {
-        if (isLayeredLayout && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault();
-          openHome('/account/billing');
-        }
-      }}
+      onClick={onPlatformLinkClick('/account/billing')}
     >
       {compact.format(Math.max(remaining, 0))} credits
     </a>

@@ -33,6 +33,14 @@ function readLayout(): ShellLayout {
 }
 
 export const shellLayout: ShellLayout = readLayout();
+
+// Recorded even when it's the default: the platform app on this origin reads
+// it to open a bookmarked account page inside the editor's shell.
+try {
+  if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEY, shellLayout);
+} catch {
+  // Storage unavailable; platform pages keep their own chrome.
+}
 export const isLayeredLayout = shellLayout === 'layered';
 
 // Layout-specific CSS keys off this class (see components/layered/Layered.css).

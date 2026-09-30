@@ -276,6 +276,20 @@ function finishTurnMessages(
 }
 
 // Handle query_completed event
+// A stopped turn says so: its last answer is marked, or, when the agent
+// hadn't answered yet, a marker-only reply closes the turn.
+export function markTurnStopped(messages: Message[]): Message[] {
+  const lastUser = messages.map((m) => m.type).lastIndexOf('user');
+  const idx = lastPrimaryAssistantIndex(messages);
+  if (idx > lastUser) {
+    return messages.map((m, i) => (i === idx ? { ...m, stopped: true } : m));
+  }
+  return [
+    ...messages,
+    { id: generateMessageId(), type: 'assistant', content: '', timestamp: new Date(), stopped: true },
+  ];
+}
+
 export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   const { event, setState, activeRequestsRef } = ctx;
   const logEntry = createLogEntry(event);
@@ -287,6 +301,7 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
     .toLowerCase();
   const completedResponse = data.response;
   const wasClearCommand = completedQuery === '/clear';
+  const wasStopped = data.status === 'interrupted';
   const tokensUsed = typeof data.tokens_used === 'number' ? data.tokens_used : undefined;
   const cost = typeof data.cost === 'number' ? data.cost : undefined;
 
@@ -313,7 +328,10 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   setState((prev) => {
     let nextMessages = wasClearCommand
       ? []
-      : abovePendingSteers(prev.messages, (body) => finishTurnMessages(body, completedResponse, tokensUsed, cost));
+      : abovePendingSteers(prev.messages, (body) => {
+          const finished = finishTurnMessages(body, completedResponse, tokensUsed, cost);
+          return wasStopped ? markTurnStopped(finished) : finished;
+        });
 
     if (!wasClearCommand) nextMessages = trimMessages(nextMessages);
 

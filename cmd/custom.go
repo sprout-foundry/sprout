@@ -74,8 +74,7 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	fmt.Println("Custom Provider Setup")
-	fmt.Println("=====================")
+	console.Heading(os.Stdout, "Custom Provider Setup")
 	fmt.Println("Sprout assumes the endpoint is OpenAI-compatible and discovers models from /v1/models.")
 	fmt.Println()
 
@@ -370,8 +369,7 @@ func runCustomModelList() error {
 	}
 	sort.Strings(names)
 
-	fmt.Println("Custom Providers")
-	fmt.Println("================")
+	console.Heading(os.Stdout, "Custom Providers")
 	for _, name := range names {
 		provider := cfg.CustomProviders[name]
 		path, _ := configuration.GetCustomProviderPath(name)

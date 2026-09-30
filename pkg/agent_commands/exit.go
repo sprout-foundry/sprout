@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 var exitProcess = os.Exit
@@ -44,8 +45,8 @@ func (e *ExitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Print full session summary before exiting
-	fmt.Println("\n-- Goodbye! Here's your session summary:")
-	fmt.Println("=====================================")
+	fmt.Println()
+	console.Heading(os.Stdout, "Session summary")
 	if chatAgent != nil {
 		chatAgent.PrintConversationSummary(true)
 		sessionID := strings.TrimSpace(chatAgent.GetSessionID())

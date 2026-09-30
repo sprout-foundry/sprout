@@ -4,19 +4,30 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"golang.org/x/term"
 )
 
 // ANSI escape sequence helpers for consistent terminal control.
 
+// Esc returns an SGR color/style code when color output is enabled and ""
+// under NO_COLOR (or a non-color terminal), so call sites that splice codes
+// into format strings honor the user's preference without their own check.
+func Esc(code string) string {
+	if !envutil.ResolveColorPreference(true) {
+		return ""
+	}
+	return code
+}
+
 // Colorize wraps text with a color code and reset
 func Colorize(text, color string) string {
-	return color + text + ColorReset
+	return Esc(color) + text + Esc(ColorReset)
 }
 
 // ColorizeBold wraps text with bold and a color code
 func ColorizeBold(text, color string) string {
-	return ColorBold + color + text + ColorReset
+	return Esc(ColorBold) + Esc(color) + text + Esc(ColorReset)
 }
 
 // MoveCursorSeq returns the escape sequence to move the cursor to (x,y)
@@ -89,7 +100,7 @@ func StderrIsTerminal() bool {
 
 // BoldText wraps text with bold formatting using ANSI codes.
 func BoldText(text string) string {
-	return ColorBold + text + ColorReset
+	return Esc(ColorBold) + text + Esc(ColorReset)
 }
 
 func formatYesNoPrompt(yesDefault bool, isTerminal func() bool) string {

@@ -494,6 +494,8 @@ func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
 }
 
 func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
 	got := cliui.FormatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
 	want := "  [OK] read_file (foo.go) \x1b[2m· 0.1s\x1b[0m"
 	if got != want {

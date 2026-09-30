@@ -31,8 +31,8 @@ func runMCPTest(serverName string) error {
 	// If no server name provided, list available servers
 	if serverName == "" {
 		if len(mcpConfig.Servers) == 0 {
-			fmt.Println("No MCP servers configured.")
-			fmt.Println("Run 'sprout mcp add' to add a server.")
+			console.GlyphInfo.Print("No MCP servers configured.")
+			console.Hintln(os.Stderr, "Run 'sprout mcp add' to add a server.")
 			return nil
 		}
 
@@ -80,8 +80,7 @@ func runMCPTest(serverName string) error {
 		return fmt.Errorf("server '%s' not found", serverName)
 	}
 
-	fmt.Printf("[test] Testing MCP Server: %s\n", serverName)
-	fmt.Println("========================")
+	console.Heading(os.Stdout, "Testing MCP server: "+serverName)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 
@@ -99,19 +98,19 @@ func runMCPTest(serverName string) error {
 		return errors.New("failed to get server from manager")
 	}
 
-	fmt.Println("[...] Starting server...")
+	console.GlyphAction.Print("Starting server…")
 	if err := server.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	defer func() {
-		fmt.Println("⏹ Stopping server...")
+		console.GlyphStopped.Print("Stopping server…")
 		server.Stop(context.Background())
 	}()
 
 	console.GlyphSuccess.Fprintln(os.Stdout, "Server started successfully!")
 
-	fmt.Println("[~] Initializing server...")
+	console.GlyphAction.Print("Initializing server…")
 	if err := server.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // EditCommand opens $EDITOR to compose or edit a query.
@@ -28,12 +29,12 @@ func (c *EditCommand) Usage() string {
 
 func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		return fmt.Errorf("[edit] agent not available")
+		return fmt.Errorf("/edit: agent not available")
 	}
 
 	editor := chooseEditor()
 	if editor == "" {
-		return fmt.Errorf("[edit] no $VISUAL or $EDITOR set and no fallback editor (vi) found")
+		return fmt.Errorf("/edit: no $VISUAL or $EDITOR set and no fallback editor (vi) found")
 	}
 
 	// Pre-fill content from args.
@@ -44,7 +45,7 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	tmpPath, err := writeEditTempFile(content)
 	if err != nil {
-		return fmt.Errorf("[edit] failed to create temp file: %w", err)
+		return fmt.Errorf("/edit: failed to create temp file: %w", err)
 	}
 	defer os.Remove(tmpPath)
 
@@ -57,17 +58,17 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Release stdin to cooked mode so the editor reads keystrokes
 	// normally. No-op when no turn / steer reader is active.
 	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
-		return fmt.Errorf("[edit] %s exited: %w", editor, err)
+		return fmt.Errorf("/edit: %s exited: %w", editor, err)
 	}
 
 	data, err := os.ReadFile(tmpPath)
 	if err != nil {
-		return fmt.Errorf("[edit] failed to read back buffer: %w", err)
+		return fmt.Errorf("/edit: failed to read back buffer: %w", err)
 	}
 
 	line := strings.TrimRight(string(data), "\r\n")
 	if line == "" {
-		fmt.Fprintln(os.Stderr, "[edit] empty buffer — nothing sent")
+		console.GlyphInfo.Print("Empty buffer — nothing sent.")
 		return nil
 	}
 

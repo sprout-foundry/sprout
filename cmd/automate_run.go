@@ -349,7 +349,7 @@ func exitCodeFromWaitErr(waitErr error) int {
 // buildAgentSubprocessArgs constructs the argument list for the sprout agent
 // subprocess that executes the workflow. Extracted for testability.
 func buildAgentSubprocessArgs(path string, summary *automate.Summary) []string {
-	args := []string{"agent", "--workflow-config", path, "--skip-prompt", "--no-web-ui"}
+	args := []string{"agent", "--workflow-config", path, "--yes", "--no-web-ui"}
 
 	// Plumb --max-iterations from the workflow JSON.
 	// Non-zero values are passed explicitly; 0 (unlimited) is the default so

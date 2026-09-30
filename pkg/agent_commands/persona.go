@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -22,7 +23,9 @@ import (
 // Workflow-level provider/model overrides (sprout automate) and per-spawn
 // overrides (`run_subagent` arguments) remain available — those are
 // transient, programmatic, and tracked separately.
-type PersonaCommand struct{}
+type PersonaCommand struct {
+	outputSink
+}
 
 func (p *PersonaCommand) Name() string        { return "persona" }
 func (p *PersonaCommand) Description() string { return "List, activate, and enable/disable personas" }
@@ -48,7 +51,9 @@ func (p *PersonaCommand) Usage() string {
 }
 
 // SubagentPersonaCommand is a backwards-compatible alias for /persona.
-type SubagentPersonaCommand struct{}
+type SubagentPersonaCommand struct {
+	outputSink
+}
 
 func (s *SubagentPersonaCommand) Name() string        { return "subagent-persona" }
 func (s *SubagentPersonaCommand) Description() string { return "Alias for /persona" }
@@ -60,11 +65,13 @@ func (s *SubagentPersonaCommand) Usage() string { return (&PersonaCommand{}).Usa
 func (s *SubagentPersonaCommand) SafeDuringSteer() bool { return true }
 
 func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return (&PersonaCommand{}).Execute(args, chatAgent)
+	return (&PersonaCommand{outputSink: s.outputSink}).Execute(args, chatAgent)
 }
 
 // SubagentPersonasCommand is a backwards-compatible alias for /persona list.
-type SubagentPersonasCommand struct{}
+type SubagentPersonasCommand struct {
+	outputSink
+}
 
 func (s *SubagentPersonasCommand) Name() string        { return "subagent-personas" }
 func (s *SubagentPersonasCommand) Description() string { return "Alias for /persona list" }
@@ -76,7 +83,7 @@ func (s *SubagentPersonasCommand) Usage() string { return (&PersonaCommand{}).Us
 func (s *SubagentPersonasCommand) SafeDuringSteer() bool { return true }
 
 func (s *SubagentPersonasCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return (&PersonaCommand{}).Execute(nil, chatAgent)
+	return (&PersonaCommand{outputSink: s.outputSink}).Execute(nil, chatAgent)
 }
 
 func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
@@ -92,7 +99,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if strings.EqualFold(args[0], "none") || strings.EqualFold(args[0], "clear") {
 		chatAgent.ClearActivePersona()
-		console.GlyphSuccess.Print("Cleared active persona; restored base system prompt")
+		console.GlyphSuccess.Fprintln(p.out(), "Cleared active persona; restored base system prompt")
 		return nil
 	}
 
@@ -106,9 +113,9 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			return fmt.Errorf("persona apply: %w", err)
 		}
 		provider, model, _ := chatAgent.GetPersonaProviderModel(personaID)
-		console.GlyphSuccess.Printf("Active persona: %s (%s)", persona.Name, personaID)
-		fmt.Printf("   Provider: %s\n", provider)
-		fmt.Printf("   Model: %s\n", model)
+		console.GlyphSuccess.Fprintf(p.out(), "Active persona: %s (%s)", persona.Name, personaID)
+		p.printf("   Provider: %s\n", provider)
+		p.printf("   Model: %s\n", model)
 		return nil
 	}
 
@@ -117,22 +124,22 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	case "show":
 		return p.showPersona(personaID, *persona, chatAgent)
 	case "enable":
-		return setPersonaDisabled(personaID, false, configManager)
+		return setPersonaDisabled(p.out(), personaID, false, configManager)
 	case "disable":
-		return setPersonaDisabled(personaID, true, configManager)
+		return setPersonaDisabled(p.out(), personaID, true, configManager)
 	default:
 		return fmt.Errorf("unknown action: %s (valid: apply, show, enable, disable, clear)", action)
 	}
 }
 
 func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *agent.Agent) error {
-	fmt.Println()
-	console.GlyphInfo.Print("Personas")
+	p.println()
+	console.GlyphInfo.Fprintln(p.out(), "Personas")
 	active := chatAgent.GetActivePersona()
 	if active == "" {
 		active = "<none>"
 	}
-	fmt.Printf("Active: %s\n", active)
+	p.printf("Active: %s\n", active)
 
 	ids := make([]string, 0, len(config.SubagentTypes))
 	for id := range config.SubagentTypes {
@@ -157,14 +164,14 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 				modifier = " (local only — unavailable in cloud)"
 			}
 		}
-		fmt.Printf("- %s (%s): %s%s\n", id, persona.Name, status, modifier)
+		p.printf("- %s (%s): %s%s\n", id, persona.Name, status, modifier)
 	}
 
-	fmt.Println("\nUsage:")
-	fmt.Println("  /persona <name>                 - Activate persona now")
-	fmt.Println("  /persona <name> show            - Show persona details")
-	fmt.Println("  /persona <name> enable|disable  - Toggle availability")
-	fmt.Println("  /persona clear                  - Clear active persona")
+	p.println("\nUsage:")
+	p.println("  /persona <name>                 - Activate persona now")
+	p.println("  /persona <name> show            - Show persona details")
+	p.println("  /persona <name> enable|disable  - Toggle availability")
+	p.println("  /persona clear                  - Clear active persona")
 	return nil
 }
 
@@ -173,24 +180,24 @@ func (p *PersonaCommand) showPersona(personaID string, persona configuration.Sub
 	cfg := chatAgent.GetConfigManager().GetConfig()
 	enabled := cfg == nil || !cfg.IsPersonaDisabled(personaID)
 
-	fmt.Println()
-	console.GlyphInfo.Printf("%s (%s)", persona.Name, personaID)
-	fmt.Printf("Description: %s\n", persona.Description)
-	fmt.Printf("Enabled: %t\n", enabled)
-	fmt.Printf("Provider: %s\n", provider)
-	fmt.Printf("Model: %s\n", model)
+	p.println()
+	console.GlyphInfo.Fprintf(p.out(), "%s (%s)", persona.Name, personaID)
+	p.printf("Description: %s\n", persona.Description)
+	p.printf("Enabled: %t\n", enabled)
+	p.printf("Provider: %s\n", provider)
+	p.printf("Model: %s\n", model)
 	if len(persona.AllowedTools) > 0 {
-		fmt.Printf("Allowed tools: %s\n", strings.Join(persona.AllowedTools, ", "))
+		p.printf("Allowed tools: %s\n", strings.Join(persona.AllowedTools, ", "))
 	}
 	if strings.TrimSpace(persona.SystemPrompt) != "" {
-		fmt.Printf("System prompt: %s\n", persona.SystemPrompt)
+		p.printf("System prompt: %s\n", persona.SystemPrompt)
 	}
 	return nil
 }
 
 // setPersonaDisabled writes the (canonical) persona ID into / out of
 // Config.DisabledPersonas. The catalog itself is never mutated.
-func setPersonaDisabled(personaID string, disabled bool, cm *configuration.Manager) error {
+func setPersonaDisabled(w io.Writer, personaID string, disabled bool, cm *configuration.Manager) error {
 	err := cm.UpdateConfig(func(cfg *configuration.Config) error {
 		cfg.SetPersonaDisabled(personaID, disabled)
 		return nil
@@ -202,7 +209,7 @@ func setPersonaDisabled(personaID string, disabled bool, cm *configuration.Manag
 	if disabled {
 		verb = "disabled"
 	}
-	console.GlyphSuccess.Printf("Persona %s %s", personaID, verb)
+	console.GlyphSuccess.Fprintf(w, "Persona %s %s", personaID, verb)
 	return nil
 }
 

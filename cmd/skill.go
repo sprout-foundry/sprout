@@ -126,7 +126,7 @@ var skillListCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
-		fmt.Println("## Built-in Skills")
+		console.Heading(os.Stdout, "Built-in Skills")
 		fmt.Println()
 		// Derive the list from pkg/skills so a new skill added under
 		// pkg/skills/library/<id>/SKILL.md shows up here automatically.
@@ -195,7 +195,7 @@ func printSkillsSection(header, dir, fallbackTag string) {
 	}
 
 	fmt.Println()
-	fmt.Println("## " + header)
+	console.Heading(os.Stdout, header)
 	fmt.Println()
 	for _, row := range rows {
 		fmt.Printf("  %-25s %s\n", row.id, row.desc)

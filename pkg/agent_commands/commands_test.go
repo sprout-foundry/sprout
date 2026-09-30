@@ -548,7 +548,7 @@ func TestBoost_IndexCommand_Status(t *testing.T) {
 		err := c.Execute([]string{"status"}, a)
 		assert.NoError(t, err)
 	})
-	assert.Contains(t, output, "Status")
+	assert.Contains(t, output, "Workspace index")
 }
 
 // =====================================================================

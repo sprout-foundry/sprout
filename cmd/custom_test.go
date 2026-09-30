@@ -1188,7 +1188,7 @@ func TestPrintPerTurnSummary_SuppressedInTestEnv(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
+	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0, 0)
 
 	w.Close()
 	got, err := io.ReadAll(r)

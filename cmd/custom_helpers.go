@@ -117,7 +117,7 @@ func promptForCredentialIfNeeded(reader *bufio.Reader, providerName, envVar stri
 		return
 	}
 	if storeErr := credentials.SetToActiveBackend(providerName, strings.TrimSpace(key)); storeErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to store credential: %v\n", storeErr)
+		console.GlyphWarning.Printf("Could not store credential: %v", storeErr)
 		return
 	}
 	console.GlyphSuccess.Printf("Stored credential for %s", providerName)

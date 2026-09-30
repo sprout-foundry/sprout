@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -27,8 +28,7 @@ func runMCPList() error {
 	// Redact MCP config to remove sensitive data before displaying
 	redactedConfig := mcp.RedactMCPConfig(mcpConfig)
 
-	fmt.Println("MCP Configuration")
-	fmt.Println("==================")
+	console.Heading(os.Stdout, "MCP Configuration")
 	fmt.Printf("Enabled: %t\n", redactedConfig.Enabled)
 	fmt.Printf("Auto-start: %t\n", redactedConfig.AutoStart)
 	fmt.Printf("Auto-discover: %t\n", redactedConfig.AutoDiscover)
@@ -42,8 +42,7 @@ func runMCPList() error {
 		return nil
 	}
 
-	fmt.Println("Configured Servers:")
-	fmt.Println("-------------------")
+	console.Heading(os.Stdout, "Configured Servers")
 
 	for name, server := range redactedConfig.Servers {
 		fmt.Printf("%s%s\n", console.GlyphSuccess.Prefix(), name)

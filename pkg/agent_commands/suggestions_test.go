@@ -74,6 +74,17 @@ func TestSuggestCommands_TooDifferent_ReturnsNothing(t *testing.T) {
 	}
 }
 
+func TestSuggestCommands_NamesCommandsNotPunctuationAliases(t *testing.T) {
+	r := NewCommandRegistry()
+	for _, typo := range []string{"md", "hx", "qq"} {
+		for _, s := range r.SuggestCommands(typo, 5) {
+			if _, isCommand := r.commands[s]; !isCommand {
+				t.Errorf("SuggestCommands(%q) returned alias %q; want canonical command names", typo, s)
+			}
+		}
+	}
+}
+
 func TestSuggestCommands_EmptyInput(t *testing.T) {
 	r := NewCommandRegistry()
 	if got := r.SuggestCommands("", 3); got != nil {

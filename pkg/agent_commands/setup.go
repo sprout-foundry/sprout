@@ -176,7 +176,7 @@ func (s *SetupCommand) printWarnings(cfg *configuration.Config, mgr *configurati
 	console.GlyphWarning.Print("Warnings")
 	fmt.Println()
 	for _, w := range warnings {
-		fmt.Printf("  ⚠  %s\n", w)
+		fmt.Printf("  %s%s\n", console.GlyphWarning.Prefix(), w)
 	}
 }
 

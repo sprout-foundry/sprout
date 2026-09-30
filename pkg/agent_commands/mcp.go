@@ -21,7 +21,9 @@ import (
 )
 
 // MCPCommand implements the /mcp slash command
-type MCPCommand struct{}
+type MCPCommand struct {
+	outputSink
+}
 
 // Name returns the command name
 func (m *MCPCommand) Name() string {
@@ -93,22 +95,22 @@ func (m *MCPCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // showHelp displays usage information
 func (m *MCPCommand) showHelp() error {
-	fmt.Println("MCP (Model Context Protocol) Server Management")
-	fmt.Println("==============================================")
-	fmt.Println()
-	fmt.Println("Available subcommands:")
-	fmt.Println("  /mcp add              - Add a new MCP server interactively")
-	fmt.Println("  /mcp remove [name]   - Remove an MCP server")
-	fmt.Println("  /mcp list             - List all configured MCP servers")
-	fmt.Println("  /mcp test [name]     - Test MCP server connection")
-	fmt.Println("  /mcp help             - Show this help")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  /mcp add              - Start interactive setup for MCP servers")
-	fmt.Println("  /mcp list             - See all configured servers")
-	fmt.Println("  /mcp test git         - Test Git MCP server")
-	fmt.Println("  /mcp test github      - Test GitHub MCP server")
-	fmt.Println("  /mcp remove git       - Remove Git MCP server")
+	m.println("MCP (Model Context Protocol) Server Management")
+	m.println("==============================================")
+	m.println()
+	m.println("Available subcommands:")
+	m.println("  /mcp add              - Add a new MCP server interactively")
+	m.println("  /mcp remove [name]   - Remove an MCP server")
+	m.println("  /mcp list             - List all configured MCP servers")
+	m.println("  /mcp test [name]     - Test MCP server connection")
+	m.println("  /mcp help             - Show this help")
+	m.println()
+	m.println("Examples:")
+	m.println("  /mcp add              - Start interactive setup for MCP servers")
+	m.println("  /mcp list             - See all configured servers")
+	m.println("  /mcp test git         - Test Git MCP server")
+	m.println("  /mcp test github      - Test GitHub MCP server")
+	m.println("  /mcp remove git       - Remove Git MCP server")
 
 	return nil
 }
@@ -117,9 +119,9 @@ func (m *MCPCommand) showHelp() error {
 func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("[>>] MCP Server Setup")
-	fmt.Println("==================")
-	fmt.Println()
+	m.println("[>>] MCP Server Setup")
+	m.println("==================")
+	m.println()
 
 	// Load existing config (no longer needed for MCP)
 
@@ -138,19 +140,19 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry *mcp.MCPServerRegistry, reader *bufio.Reader) error {
 	// Show available templates
 	templates := registry.ListTemplates()
-	fmt.Println("Select MCP server type:")
-	fmt.Println()
+	m.println("Select MCP server type:")
+	m.println()
 
 	for i, template := range templates {
-		fmt.Printf("%d. %s\n", i+1, template.Name)
-		fmt.Printf("   %s\n", template.Description)
+		m.printf("%d. %s\n", i+1, template.Name)
+		m.printf("   %s\n", template.Description)
 		if len(template.Features) > 0 {
-			fmt.Printf("   Features: %s\n", strings.Join(template.Features, ", "))
+			m.printf("   Features: %s\n", strings.Join(template.Features, ", "))
 		}
-		fmt.Println()
+		m.println()
 	}
 
-	fmt.Print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
+	m.print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
 	choice, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
@@ -167,18 +169,18 @@ func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry 
 
 // setupServerFromTemplate sets up an MCP server from a specific template
 func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template mcp.MCPServerTemplate, reader *bufio.Reader) error {
-	fmt.Println()
-	console.GlyphInfo.Printf("%s Setup", template.Name)
-	fmt.Println(strings.Repeat("=", len(template.Name)+7))
-	fmt.Println()
+	m.println()
+	console.GlyphInfo.Fprintf(m.out(), "%s Setup", template.Name)
+	m.println(strings.Repeat("=", len(template.Name)+7))
+	m.println()
 
 	if template.Docs != "" {
-		fmt.Printf("[lib] Documentation: %s\n", template.Docs)
-		fmt.Println()
+		m.printf("  Documentation: %s\n", template.Docs)
+		m.println()
 	}
 
 	// Get server name
-	fmt.Printf("Enter server name (default: %s): ", strings.ToLower(strings.ReplaceAll(template.Name, " ", "-")))
+	m.printf("Enter server name (default: %s): ", strings.ToLower(strings.ReplaceAll(template.Name, " ", "-")))
 	nameInput, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read server name: %w", err)
@@ -198,10 +200,10 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 
 	// Check if server already exists
 	if _, exists := mcpConfig.Servers[serverName]; exists {
-		fmt.Printf("Server '%s' already exists. Reconfigure? %s: ", serverName, utils.DefaultChoiceHint(false))
+		m.printf("Server '%s' already exists. Reconfigure? %s: ", serverName, utils.DefaultChoiceHint(false))
 		confirm, _ := reader.ReadString('\n')
 		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-			fmt.Println("Setup cancelled.")
+			m.println("Setup cancelled.")
 			return nil
 		}
 	}
@@ -214,22 +216,22 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		// Check if already set in environment
 		if existingValue := os.Getenv(envVar.Name); existingValue != "" {
 			if envVar.Secret {
-				fmt.Printf("Using existing %s from environment\n", envVar.Name)
+				m.printf("Using existing %s from environment\n", envVar.Name)
 			} else {
-				fmt.Printf("Using existing %s from environment: %s\n", envVar.Name, existingValue)
+				m.printf("Using existing %s from environment: %s\n", envVar.Name, existingValue)
 			}
 			value = existingValue
 		} else {
 			// Prompt user for value
-			fmt.Printf("%s:\n", envVar.Description)
+			m.printf("%s:\n", envVar.Description)
 			if envVar.Required {
-				fmt.Print("Enter " + envVar.Name + ": ")
+				m.print("Enter " + envVar.Name + ": ")
 			} else {
 				defaultText := ""
 				if envVar.Default != "" {
 					defaultText = fmt.Sprintf(" (default: %s)", envVar.Default)
 				}
-				fmt.Printf("Enter %s%s: ", envVar.Name, defaultText)
+				m.printf("Enter %s%s: ", envVar.Name, defaultText)
 			}
 
 			input, err := reader.ReadString('\n')
@@ -253,7 +255,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	var customArgs []string
 
 	if template.ID == "http-generic" {
-		fmt.Print("Enter MCP server URL: ")
+		m.print("Enter MCP server URL: ")
 		urlInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read URL: %w", err)
@@ -265,7 +267,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	}
 
 	if template.ID == "stdio-generic" {
-		fmt.Print("Enter command: ")
+		m.print("Enter command: ")
 		cmdInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read command: %w", err)
@@ -275,7 +277,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 			return errors.New("command is required for stdio servers")
 		}
 
-		fmt.Print("Enter arguments (space-separated, or press Enter for none): ")
+		m.print("Enter arguments (space-separated, or press Enter for none): ")
 		argsInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read arguments: %w", err)
@@ -298,22 +300,22 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
-	fmt.Println()
-	console.GlyphSuccess.Printf("%s configured successfully!", template.Name)
+	m.println()
+	console.GlyphSuccess.Fprintf(m.out(), "%s configured successfully!", template.Name)
 	if serverConfig.Type == "http" {
-		fmt.Printf("Type: Remote HTTP server\n")
-		fmt.Printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
+		m.printf("Type: Remote HTTP server\n")
+		m.printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+		m.printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	}
-	fmt.Println()
-	fmt.Printf("To test the configuration, run: /mcp test %s\n", serverName)
+	m.println()
+	m.printf("To test the configuration, run: /mcp test %s\n", serverName)
 
 	if len(template.Features) > 0 {
-		fmt.Println()
-		console.GlyphInfo.Print("Features available:")
+		m.println()
+		console.GlyphInfo.Fprintln(m.out(), "Features available:")
 		for _, feature := range template.Features {
-			fmt.Printf("• %s\n", feature)
+			m.printf("• %s\n", feature)
 		}
 	}
 
@@ -334,20 +336,20 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	// If no server name provided, list available servers
 	if serverName == "" {
 		if len(mcpConfig.Servers) == 0 {
-			fmt.Println("No MCP servers configured.")
+			m.println("No MCP servers configured.")
 			return nil
 		}
 
-		fmt.Println("Available servers:")
+		m.println("Available servers:")
 		i := 1
 		serverNames := make([]string, 0, len(mcpConfig.Servers))
 		for name := range mcpConfig.Servers {
-			fmt.Printf("%d. %s\n", i, name)
+			m.printf("%d. %s\n", i, name)
 			serverNames = append(serverNames, name)
 			i++
 		}
 
-		fmt.Print("Select server to remove (1-" + strconv.Itoa(len(serverNames)) + "): ")
+		m.print("Select server to remove (1-" + strconv.Itoa(len(serverNames)) + "): ")
 		choice, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read input: %w", err)
@@ -367,14 +369,14 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	}
 
 	// Confirm removal
-	fmt.Printf("Are you sure you want to remove server '%s'? %s: ", serverName, utils.DefaultChoiceHint(false))
+	m.printf("Are you sure you want to remove server '%s'? %s: ", serverName, utils.DefaultChoiceHint(false))
 	confirm, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
 
 	if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-		fmt.Println("Removal cancelled.")
+		m.println("Removal cancelled.")
 		return nil
 	}
 
@@ -403,10 +405,10 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	if err := mcp.SaveMCPConfig(config); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
-	console.GlyphSuccess.Printf("Server '%s' removed successfully!", serverName)
+	console.GlyphSuccess.Fprintf(m.out(), "Server '%s' removed successfully!", serverName)
 
 	if len(mcpConfig.Servers) == 0 {
-		fmt.Println("MCP disabled (no servers remain).")
+		m.println("MCP disabled (no servers remain).")
 	}
 
 	return nil
@@ -424,66 +426,65 @@ func (m *MCPCommand) listServers() error {
 	// Redact MCP config to remove sensitive data before displaying
 	redactedConfig := mcp.RedactMCPConfig(mcpConfig)
 
-	fmt.Println("MCP Configuration")
-	fmt.Println("==================")
-	fmt.Printf("Enabled: %t\n", redactedConfig.Enabled)
-	fmt.Printf("Auto-start: %t\n", redactedConfig.AutoStart)
-	fmt.Printf("Auto-discover: %t\n", redactedConfig.AutoDiscover)
-	fmt.Printf("Default timeout: %v\n", redactedConfig.Timeout)
-	fmt.Printf("Total servers: %d\n", len(redactedConfig.Servers))
-	fmt.Println()
+	m.println("MCP Configuration")
+	m.println("==================")
+	m.printf("Enabled: %t\n", redactedConfig.Enabled)
+	m.printf("Auto-start: %t\n", redactedConfig.AutoStart)
+	m.printf("Auto-discover: %t\n", redactedConfig.AutoDiscover)
+	m.printf("Default timeout: %v\n", redactedConfig.Timeout)
+	m.printf("Total servers: %d\n", len(redactedConfig.Servers))
+	m.println()
 
 	if len(redactedConfig.Servers) == 0 {
-		fmt.Println("No MCP servers configured.")
-		fmt.Println("Run '/mcp add' to add a server.")
+		m.println("No MCP servers configured.")
+		m.println("Run '/mcp add' to add a server.")
 		return nil
 	}
 
-	fmt.Println("Configured Servers:")
-	fmt.Println("-------------------")
+	console.Heading(m.out(), "Configured servers")
 
 	for name, server := range redactedConfig.Servers {
-		fmt.Printf("[signal] %s\n", name)
+		m.printf("%s%s\n", console.GlyphAction.Prefix(), name)
 		if server.Type == "http" {
-			fmt.Printf("   Type: HTTP Remote Server\n")
-			fmt.Printf("   URL: %s\n", secretdetect.RedactOpaque(server.URL))
+			m.printf("   Type: HTTP Remote Server\n")
+			m.printf("   URL: %s\n", secretdetect.RedactOpaque(server.URL))
 		} else {
-			fmt.Printf("   Command: %s %v\n", server.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", server.Args)))
+			m.printf("   Command: %s %v\n", server.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", server.Args)))
 		}
-		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
-		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)
-		fmt.Printf("   Timeout: %v\n", server.Timeout)
+		m.printf("   Auto-start: %t\n", server.AutoStart)
+		m.printf("   Max restarts: %d\n", server.MaxRestarts)
+		m.printf("   Timeout: %v\n", server.Timeout)
 
 		if server.WorkingDir != "" {
-			fmt.Printf("   Working dir: %s\n", server.WorkingDir)
+			m.printf("   Working dir: %s\n", server.WorkingDir)
 		}
 
 		if len(server.Env) > 0 {
-			fmt.Printf("   Environment vars: ")
+			m.printf("   Environment vars: ")
 			envEntries := make([]string, 0, len(server.Env))
 			for key, value := range server.Env {
 				envEntries = append(envEntries, key+"="+value)
 			}
-			fmt.Printf("%s\n", strings.Join(envEntries, ", "))
+			m.printf("%s\n", strings.Join(envEntries, ", "))
 		}
 
 		// Show credentials if present (placeholder references are safe; actual secrets are masked)
 		if len(server.Credentials) > 0 {
-			fmt.Printf("   Credentials: ")
+			m.printf("   Credentials: ")
 			credEntries := make([]string, 0, len(server.Credentials))
 			for key, value := range server.Credentials {
 				credEntries = append(credEntries, key+"="+value)
 			}
-			fmt.Printf("%s\n", strings.Join(credEntries, ", "))
+			m.printf("%s\n", strings.Join(credEntries, ", "))
 		}
 
-		fmt.Println()
+		m.println()
 	}
 
-	fmt.Println("Commands:")
-	fmt.Println("  /mcp test [server] - Test server connection")
-	fmt.Println("  /mcp add           - Add new server")
-	fmt.Println("  /mcp remove        - Remove server")
+	m.println("Commands:")
+	m.println("  /mcp test [server] - Test server connection")
+	m.println("  /mcp add           - Add new server")
+	m.println("  /mcp remove        - Remove server")
 
 	return nil
 }
@@ -502,21 +503,21 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	// If no server name provided, list available servers
 	if serverName == "" {
 		if len(mcpConfig.Servers) == 0 {
-			fmt.Println("No MCP servers configured.")
-			fmt.Println("Run '/mcp add' to add a server.")
+			m.println("No MCP servers configured.")
+			m.println("Run '/mcp add' to add a server.")
 			return nil
 		}
 
-		fmt.Println("Available servers:")
+		m.println("Available servers:")
 		i := 1
 		serverNames := make([]string, 0, len(mcpConfig.Servers))
 		for name := range mcpConfig.Servers {
-			fmt.Printf("%d. %s\n", i, name)
+			m.printf("%d. %s\n", i, name)
 			serverNames = append(serverNames, name)
 			i++
 		}
 
-		fmt.Print("Select server to test (1-" + strconv.Itoa(len(serverNames)) + "): ")
+		m.print("Select server to test (1-" + strconv.Itoa(len(serverNames)) + "): ")
 		choice, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read input: %w", err)
@@ -536,15 +537,14 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 		return fmt.Errorf("server '%s' not found", serverName)
 	}
 
-	fmt.Printf("[test] Testing MCP Server: %s\n", serverName)
-	fmt.Println("========================")
+	console.Heading(m.out(), "Testing MCP server: "+serverName)
 	if serverConfig.Type == "http" {
-		fmt.Printf("Type: HTTP Remote Server\n")
-		fmt.Printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
+		m.printf("Type: HTTP Remote Server\n")
+		m.printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+		m.printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	}
-	fmt.Println()
+	m.println()
 
 	// Create manager and client
 	manager := mcp.NewMCPManager(nil)
@@ -560,47 +560,47 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 		return errors.New("failed to get server from manager")
 	}
 
-	fmt.Println("[...] Starting server...")
+	console.GlyphAction.Fprintln(m.out(), "Starting server…")
 	if err := server.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	defer func() {
-		console.GlyphStopped.Print("Stopping server...")
+		console.GlyphStopped.Fprintln(m.out(), "Stopping server...")
 		server.Stop(context.Background())
 	}()
 
-	console.GlyphSuccess.Print("Server started successfully!")
+	console.GlyphSuccess.Fprintln(m.out(), "Server started successfully!")
 
-	fmt.Println("[~] Initializing server...")
+	console.GlyphAction.Fprintln(m.out(), "Initializing server…")
 	if err := server.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
-	console.GlyphSuccess.Print("Server initialized successfully!")
+	console.GlyphSuccess.Fprintln(m.out(), "Server initialized successfully!")
 
-	fmt.Println("[search] Listing available tools...")
+	console.GlyphAction.Fprintln(m.out(), "Listing available tools…")
 	tools, err := server.ListTools(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
 	if len(tools) == 0 {
-		console.GlyphWarning.Print("No tools available from this server.")
+		console.GlyphWarning.Fprintln(m.out(), "No tools available from this server.")
 		return nil
 	}
 
-	console.GlyphSuccess.Printf("Found %d tools:", len(tools))
-	fmt.Println()
+	console.GlyphSuccess.Fprintf(m.out(), "Found %d tools:", len(tools))
+	m.println()
 
 	for i, tool := range tools {
-		fmt.Printf("%d. %s\n", i+1, tool.Name)
+		m.printf("%d. %s\n", i+1, tool.Name)
 		if tool.Description != "" {
-			fmt.Printf("   Description: %s\n", tool.Description)
+			m.printf("   Description: %s\n", tool.Description)
 		}
-		fmt.Println()
+		m.println()
 	}
 
-	fmt.Printf("[done] Test completed successfully! Server '%s' is working properly.\n", serverName)
+	console.GlyphSuccess.Fprintf(m.out(), "Server '%s' is working.", serverName)
 
 	return nil
 }

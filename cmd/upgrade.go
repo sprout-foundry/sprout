@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/updatecheck"
 )
 
@@ -71,6 +72,9 @@ func init() {
 		"Consider pre-release tags as candidates for 'latest'.")
 	upgradeCmd.Flags().BoolVar(&upgradeRollback, "rollback", false,
 		"Restore the previous binary saved by the last upgrade and exit.")
+	upgradeCmd.MarkFlagsMutuallyExclusive("check", "rollback")
+	upgradeCmd.MarkFlagsMutuallyExclusive("rollback", "version")
+	upgradeCmd.MarkFlagsMutuallyExclusive("rollback", "pre-release")
 }
 
 func runUpgrade(cmd *cobra.Command, _ []string) error {
@@ -88,25 +92,25 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 
 	current := updatecheck.NormalizeVersion(version)
 	if target == current && !upgradeCheckOnly && upgradeVersion == "" {
-		fmt.Printf("sprout is already at %s — nothing to do.\n", current)
+		console.GlyphSuccess.Printf("sprout is already at %s", current)
 		return nil
 	}
 
 	if upgradeCheckOnly {
 		if target == current {
-			fmt.Printf("sprout %s is up to date.\n", current)
+			console.GlyphSuccess.Printf("sprout %s is up to date", current)
 			return nil
 		}
-		fmt.Printf("Upgrade available: %s → %s\n", current, target)
-		fmt.Println("Run `sprout upgrade` to install.")
+		console.GlyphInfo.Printf("Upgrade available: %s → %s", current, target)
+		console.Hintln(os.Stderr, "Run 'sprout upgrade' to install.")
 		return nil
 	}
 
-	fmt.Printf("Upgrading sprout: %s → %s\n", current, target)
+	console.GlyphAction.Printf("Upgrading sprout: %s → %s", current, target)
 
 	if !upgradeYes {
 		if !confirm("Proceed?") {
-			fmt.Println("Aborted.")
+			console.GlyphStopped.Print("Aborted.")
 			return nil
 		}
 	}
@@ -206,13 +210,13 @@ func performUpgrade(target string) error {
 
 	archivePath := filepath.Join(tempDir, archiveName)
 	archiveURL := fmt.Sprintf("%s/%s/%s", releaseBaseURL, target, archiveName)
-	fmt.Printf("Downloading %s\n", archiveName)
+	console.GlyphAction.Printf("Downloading %s", archiveName)
 	if err := downloadTo(archiveURL, archivePath); err != nil {
 		return fmt.Errorf("download %s: %w", archiveName, err)
 	}
 
 	if skip := os.Getenv("SPROUT_SKIP_CHECKSUM"); skip == "1" {
-		fmt.Println("WARN: SPROUT_SKIP_CHECKSUM=1 — skipping checksum verification.")
+		console.GlyphWarning.Print("SPROUT_SKIP_CHECKSUM=1 — skipping checksum verification")
 	} else {
 		sumsPath := filepath.Join(tempDir, "SHA256SUMS")
 		sumsURL := fmt.Sprintf("%s/%s/SHA256SUMS", releaseBaseURL, target)
@@ -247,9 +251,9 @@ func performUpgrade(target string) error {
 		return err
 	}
 
-	fmt.Printf("sprout upgraded to %s\n", target)
+	console.GlyphSuccess.Printf("sprout upgraded to %s", target)
 	if runtime.GOOS == "windows" {
-		fmt.Println("Restart any running sprout process to pick up the new binary.")
+		console.Hintln(os.Stderr, "Restart any running sprout process to pick up the new binary.")
 	}
 	return nil
 }
@@ -310,7 +314,7 @@ func replaceBinary(targetPath, newPath string) error {
 			return fmt.Errorf("install new binary at %s: %w\n\n%s",
 				targetPath, err, upgradeNotWritableHelp(targetPath))
 		}
-		fmt.Printf("Previous binary saved at %s (use `sprout upgrade --rollback` to restore).\n", backup)
+		console.Hintln(os.Stderr, fmt.Sprintf("Previous binary saved at %s — 'sprout upgrade --rollback' restores it.", backup))
 		return nil
 	}
 
@@ -345,7 +349,7 @@ func replaceBinary(targetPath, newPath string) error {
 		_ = os.Remove(stagingPath)
 		return fmt.Errorf("replace %s: %w\n\nIf sprout was installed system-wide, re-run with sudo or use the install script", targetPath, err)
 	}
-	fmt.Printf("Previous binary saved at %s (use `sprout upgrade --rollback` to restore).\n", backup)
+	console.Hintln(os.Stderr, fmt.Sprintf("Previous binary saved at %s — 'sprout upgrade --rollback' restores it.", backup))
 	return nil
 }
 
@@ -384,7 +388,8 @@ func rollbackBinary() error {
 			_ = os.Rename(dyingPath, execPath)
 			return fmt.Errorf("restore backup: %w", err)
 		}
-		fmt.Printf("Rolled back to previous binary. The replaced version is at %s — remove it once you've restarted.\n", dyingPath)
+		console.GlyphSuccess.Print("Rolled back to the previous binary")
+		console.Hintln(os.Stderr, fmt.Sprintf("The replaced version is at %s — remove it once you've restarted.", dyingPath))
 		return nil
 	}
 
@@ -395,7 +400,7 @@ func rollbackBinary() error {
 	if err := os.Rename(backup, execPath); err != nil {
 		return fmt.Errorf("restore backup: %w", err)
 	}
-	fmt.Println("Rolled back to previous binary.")
+	console.GlyphSuccess.Print("Rolled back to the previous binary")
 	return nil
 }
 

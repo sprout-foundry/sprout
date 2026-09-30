@@ -13,6 +13,7 @@ import (
 
 // SubagentConfigCommand implements the /subagent-provider and /subagent-model commands
 type SubagentConfigCommand struct {
+	outputSink
 	configType string // "provider" or "model"
 }
 
@@ -148,17 +149,17 @@ func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
 	provider := config.GetSubagentProvider()
 	model := config.GetSubagentModel()
 
-	fmt.Println()
-	console.GlyphInfo.Print("Subagent Configuration:")
-	fmt.Printf("Provider: %s\n", formatValue(provider))
-	fmt.Printf("Model:    %s\n", formatValue(model))
-	fmt.Println()
-	console.GlyphInfo.Print("Usage:")
-	fmt.Println("  /subagent-provider <provider>  - Set subagent provider")
-	fmt.Println("  /subagent-model <model>        - Set subagent model")
-	fmt.Println()
-	console.GlyphInfo.Print("Subagents will use these settings instead of the parent agent's configuration.")
-	console.GlyphInfo.Print("Leave empty to use the parent agent's provider/model.")
+	s.println()
+	console.GlyphInfo.Fprintln(s.out(), "Subagent Configuration:")
+	s.printf("Provider: %s\n", formatValue(provider))
+	s.printf("Model:    %s\n", formatValue(model))
+	s.println()
+	console.GlyphInfo.Fprintln(s.out(), "Usage:")
+	s.println("  /subagent-provider <provider>  - Set subagent provider")
+	s.println("  /subagent-model <model>        - Set subagent model")
+	s.println()
+	console.GlyphInfo.Fprintln(s.out(), "Subagents will use these settings instead of the parent agent's configuration.")
+	console.GlyphInfo.Fprintln(s.out(), "Leave empty to use the parent agent's provider/model.")
 	return nil
 }
 
@@ -175,9 +176,9 @@ func (s *SubagentConfigCommand) setProvider(provider string, configManager *conf
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println()
-	console.GlyphSuccess.Printf("Subagent provider set to: %s", provider)
-	console.GlyphInfo.Print("Subagents will now use this provider for all executions.")
+	s.println()
+	console.GlyphSuccess.Fprintf(s.out(), "Subagent provider set to: %s", provider)
+	console.GlyphInfo.Fprintln(s.out(), "Subagents will now use this provider for all executions.")
 	return nil
 }
 
@@ -190,9 +191,9 @@ func (s *SubagentConfigCommand) setModel(model string, configManager *configurat
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println()
-	console.GlyphSuccess.Printf("Subagent model set to: %s", model)
-	console.GlyphInfo.Print("Subagents will now use this model for all executions.")
+	s.println()
+	console.GlyphSuccess.Fprintf(s.out(), "Subagent model set to: %s", model)
+	console.GlyphInfo.Fprintln(s.out(), "Subagents will now use this model for all executions.")
 	return nil
 }
 

@@ -60,7 +60,7 @@ func TestWorkspaceConfigDirLeavesTheRepositoryClean(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil { //nolint:gosec // G204: git on the test's own temp dir
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	if err := EnsureWorkspaceConfigDir(root); err != nil {
@@ -71,7 +71,7 @@ func TestWorkspaceConfigDirLeavesTheRepositoryClean(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	out, err := exec.Command("git", "-C", root, "status", "--porcelain", "--untracked-files=all").CombinedOutput()
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain", "--untracked-files=all").CombinedOutput() //nolint:gosec // G204: git on the test's own temp dir
 	if err != nil {
 		t.Fatalf("git status: %v: %s", err, out)
 	}

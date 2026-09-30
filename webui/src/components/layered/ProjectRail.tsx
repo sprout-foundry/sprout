@@ -18,9 +18,15 @@ export interface RailProject {
   onSelect?: () => void;
 }
 
+export interface RailAddAction {
+  label: string;
+  onSelect: () => void;
+}
+
 interface ProjectRailProps {
   projects: RailProject[];
-  onAddProject?: () => void;
+  /** What "+" offers; a single action runs directly, several open a menu. */
+  addActions?: RailAddAction[];
   onOpenSettings?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -62,7 +68,7 @@ function RailHoverCard({ label, anchor }: { label: string; anchor: HTMLElement }
 
 export default function ProjectRail({
   projects,
-  onAddProject,
+  addActions,
   onOpenSettings,
   collapsed,
   onToggleCollapsed,
@@ -71,6 +77,7 @@ export default function ProjectRail({
   onOpenActivity,
 }: ProjectRailProps): ReactElement {
   const [hovered, setHovered] = useState<{ label: string; anchor: HTMLElement } | null>(null);
+  const [addMenu, setAddMenu] = useState<DOMRect | null>(null);
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
       {collapsed && onToggleCollapsed && (
@@ -123,16 +130,49 @@ export default function ProjectRail({
         );
       })}
       {hovered && <RailHoverCard label={hovered.label} anchor={hovered.anchor} />}
-      {onAddProject && (
+      {addActions && addActions.length > 0 && (
         <button
           type="button"
           className="project-rail-btn"
-          title="Open another project"
-          aria-label="Open another project"
-          onClick={onAddProject}
+          title="Add a project"
+          aria-label="Add a project"
+          aria-haspopup={addActions.length > 1 ? 'menu' : undefined}
+          aria-expanded={addActions.length > 1 ? addMenu !== null : undefined}
+          onClick={(e) => {
+            if (addActions.length === 1) addActions[0].onSelect();
+            else setAddMenu(addMenu ? null : e.currentTarget.getBoundingClientRect());
+          }}
         >
           <Plus size={18} />
         </button>
+      )}
+      {addMenu && addActions && (
+        <>
+          <div className="user-menu-backdrop" onClick={() => setAddMenu(null)} aria-hidden="true" />
+          <div
+            className="user-menu-list"
+            role="menu"
+            aria-label="Add a project"
+            style={{ position: 'fixed', left: addMenu.right + 8, top: addMenu.top, right: 'auto' }}
+            onKeyDown={(e) => e.key === 'Escape' && setAddMenu(null)}
+          >
+            {addActions.map((action, i) => (
+              <button
+                key={action.label}
+                type="button"
+                role="menuitem"
+                className="user-menu-item"
+                autoFocus={i === 0}
+                onClick={() => {
+                  setAddMenu(null);
+                  action.onSelect();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
       <div className="project-rail-spacer" />
       <button

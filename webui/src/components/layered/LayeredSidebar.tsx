@@ -18,6 +18,7 @@ import { githubRepoSlug } from '../../utils/platformUrl';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
+import NewProjectDialog from './NewProjectDialog';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -89,6 +90,7 @@ async function promptForRepo(): Promise<void> {
 
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
+  const [creating, setCreating] = useState(false);
   const activeRepo = useActiveRepoURL();
   const repoSlug = githubRepoSlug(activeRepo);
   const recentRepos = useRecentRepos();
@@ -204,7 +206,14 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         projects={projects}
         collapsed={props.collapsed}
         onToggleCollapsed={props.isMobile ? undefined : props.onToggleCollapsed}
-        onAddProject={isCloud ? () => void promptForRepo() : undefined}
+        addActions={
+          isCloud
+            ? [
+                { label: 'New project…', onSelect: () => setCreating(true) },
+                { label: 'Open a repository…', onSelect: () => void promptForRepo() },
+              ]
+            : undefined
+        }
         onOpenSettings={() => navigate({ kind: 'section', id: 'settings' })}
         homeActive={home.open}
         onOpenActivity={props.onCloseDrawer}
@@ -247,6 +256,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
           }
         />
       )}
+      {creating && <NewProjectDialog onClose={() => setCreating(false)} onCreated={openRepo} />}
     </>
   );
 }

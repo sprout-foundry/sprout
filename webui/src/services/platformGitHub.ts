@@ -71,3 +71,38 @@ function toGitHubRepo(r: PlatformRepo): GitHubRepo {
     owner: { login: owner, avatar_url: '' },
   };
 }
+
+/** Why a repository couldn't be created, in terms the form can act on. */
+export class CreateRepoError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'invalid_name' | 'name_unavailable' | 'github_not_connected' | 'failed',
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Creates a repository in the account's GitHub (with an initial commit, so it
+ * opens straight away) and returns its web URL.
+ */
+export async function createPlatformRepo(opts: { name: string; private: boolean }): Promise<string> {
+  const res = await fetch(platformHref('/user/me/repos'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ name: opts.name, private: opts.private }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    html_url?: string;
+    error?: string | { code?: string; message?: string };
+    code?: string;
+  };
+  if (res.ok && body.html_url) return body.html_url;
+  if (typeof body.error === 'object' && body.error?.code === 'github_reauth_required') {
+    throw new CreateRepoError('Connect GitHub to your account to create repositories.', 'github_not_connected');
+  }
+  const message = typeof body.error === 'string' ? body.error : `Could not create the repository (HTTP ${res.status}).`;
+  if (body.code === 'invalid_name' || body.code === 'name_unavailable') throw new CreateRepoError(message, body.code);
+  throw new CreateRepoError(message, 'failed');
+}

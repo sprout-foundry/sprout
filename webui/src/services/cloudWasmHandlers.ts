@@ -8,6 +8,7 @@
 import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
+import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
@@ -193,6 +194,23 @@ export function trackFileWrite(rawPath: string): void {
  */
 export function getVfsManifestSnapshot(): Set<string> {
   return new Set(vfsManifest);
+}
+
+/**
+ * Writes the agent's platform provider, with the managed model's context
+ * window, at the path Go's GetConfigDir() resolves ($HOME/.config/sprout,
+ * HOME being /home/user in the VFS). Best-effort: a config written earlier
+ * still serves if this write fails.
+ */
+function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
+  try {
+    shell.writeFile(
+      '/home/user/.config/sprout/providers/platform.json',
+      JSON.stringify(platformProviderConfig(apiOrigin, reportedManagedContextWindow())),
+    );
+  } catch {
+    // Keep the previously written config.
+  }
 }
 
 /** Chats (by id, '' for the default) whose run the user asked to stop. */
@@ -1089,38 +1107,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // own message never renders.
   dispatch('query_started', { query });
 
-  // Write a sprout config with an OpenAI-compatible custom provider that
-  // routes to the platform proxy. Must be an absolute URL because the
-  // provider config normalizer rejects relative URLs.
-  //
-  // We use window.location.origin as the base so this works in both local
-  // dev (http://localhost:808) and production (https://api.sproutfoundry.dev).
+  // The agent's provider routes to the platform proxy, on this origin in
+  // both local dev and production.
   const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
-  const platformProviderConfig = {
-    name: 'platform',
-    endpoint: `${apiOrigin}/proxy/chat`,
-    model_name: 'managed',
-    context_size: 131072,
-    requires_api_key: false,
-    // Streams then end with a usage chunk (the platform forwards it only when
-    // asked), so the footer's token count isn't stuck at 0.
-    include_usage: true,
-    message_conversion: {
-      include_tool_call_id: true,
-      convert_tool_role_to_user: false,
-    },
-  };
-
-  // Write the provider config to the virtual filesystem.
-  // Must use the absolute path that matches Go's GetConfigDir()
-  // resolution: $HOME/.config/sprout/providers/platform.json
-  // In the WASM VFS, HOME is /home/user.
-  try {
-    shell.writeFile('/home/user/.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
-  } catch {
-    // best-effort: a config that already exists is fine — the agent falls
-    // back to the previously-written platform config.
-  }
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   // The chat's transcript records the turn itself, so switching away mid-turn
@@ -1131,6 +1120,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // A chat is named after its first question: have the list pick it up, as
   // the daemon's session_changed does.
   if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
+  writePlatformProviderConfig(shell, apiOrigin);
   shell
     .runAgent(
       'platform',

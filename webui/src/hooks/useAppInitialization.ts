@@ -92,9 +92,13 @@ export function useAppInitialization({
         .then((config) => {
           if (config.appMode === 'cloud' && !config.user) {
             // No session — redirect to platform login with return_to so the
-            // user comes back to the browser IDE after authenticating, not
-            // stranded on the dashboard.
-            window.location.href = '/login?return_to=' + encodeURIComponent('/webui/');
+            // user comes back to the browser IDE (on the same project and
+            // page) after authenticating, not stranded on the dashboard.
+            // The query is re-encoded: the platform refuses a return path
+            // containing "://", which a hand-typed ?repo=https://… has.
+            const params = new URLSearchParams(window.location.search).toString();
+            window.location.href =
+              '/login?return_to=' + encodeURIComponent(window.location.pathname + (params ? `?${params}` : ''));
             return;
           }
           initApp();

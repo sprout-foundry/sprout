@@ -277,7 +277,11 @@ func TestRunMCPTest_EmptyServers(t *testing.T) {
 	restoreStdin := replaceStdinWithClosedPipe(t)
 	defer restoreStdin()
 
-	out := testutil.CaptureStdout(t, func() {
+	// The "No MCP servers configured" outcome line and the "sprout mcp add"
+	// hint go to stderr per the output conventions (glyph outcome + hint),
+	// while any interactive setup prompts that follow go to stdout —
+	// capture both and assert on the combined visible output.
+	out := testutil.CaptureStdoutAndStderr(t, func() {
 		if err := runMCPTest(""); err != nil {
 			t.Fatalf("runMCPTest returned error: %v", err)
 		}

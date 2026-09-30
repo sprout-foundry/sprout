@@ -101,11 +101,25 @@ export function getHomeView(): HomeViewState {
   return state;
 }
 
-/** Accepts "/tasks", "#/tasks" or "/?from=editor#/tasks". */
+/**
+ * Accepts "/tasks", "#/tasks" or "/?from=editor#/tasks". A route's own query
+ * stays ("/team?invite=…" is how an invitation link names the invite); a
+ * platform link's query before the "#" doesn't.
+ */
 export function normalizeHomePath(path: string): string {
-  const hash = path.includes('#') ? path.slice(path.indexOf('#') + 1) : path;
-  const route = hash.split('?')[0] || '/';
-  return route.startsWith('/') ? route : `/${route}`;
+  const hasHash = path.includes('#');
+  const hash = hasHash ? path.slice(path.indexOf('#') + 1) : path;
+  const q = hash.indexOf('?');
+  let route = (q >= 0 ? hash.slice(0, q) : hash) || '/';
+  if (!route.startsWith('/')) route = `/${route}`;
+  const query = q >= 0 ? hash.slice(q + 1) : '';
+  if (!hasHash && route === '/') return '/';
+  return query ? `${route}?${query}` : route;
+}
+
+/** The route without its query, for matching pages. */
+export function homeRoute(path: string): string {
+  return path.split('?')[0] || '/';
 }
 
 function subscribe(listener: () => void): () => void {

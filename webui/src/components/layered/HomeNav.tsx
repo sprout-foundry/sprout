@@ -18,7 +18,7 @@ import {
 import type { ReactElement } from 'react';
 import { getBootstrapUser } from '../../bootstrapAdapter';
 import { useFullWorkspacesAvailable } from '../../services/fullWorkspace';
-import { openHome } from '../../services/homeView';
+import { homeRoute, openHome } from '../../services/homeView';
 
 interface HomeEntry {
   path: string;
@@ -41,7 +41,8 @@ const ACCOUNT: HomeEntry[] = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
-function isActive(entry: HomeEntry, path: string): boolean {
+function isActive(entry: HomeEntry, fullPath: string): boolean {
+  const path = homeRoute(fullPath);
   const roots = [entry.path, ...(entry.also ?? [])];
   return roots.some((root) => (root === '/' ? path === '/' : path === root || path.startsWith(`${root}/`)));
 }
@@ -50,7 +51,8 @@ function isActive(entry: HomeEntry, path: string): boolean {
 export function homePageLabel(path: string): string {
   const entry = [...WORK, ...ACCOUNT].find((e) => isActive(e, path));
   if (entry) return entry.label;
-  return path === '/admin' || path.startsWith('/admin/') ? 'Admin' : 'Home';
+  const route = homeRoute(path);
+  return route === '/admin' || route.startsWith('/admin/') ? 'Admin' : 'Home';
 }
 
 interface HomeNavProps {

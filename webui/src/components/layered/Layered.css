@@ -44,10 +44,51 @@
 }
 
 .project-rail-project {
-  font-weight: 700;
-  font-size: 14px;
+  align-items: baseline;
+  gap: 1px;
+  padding-top: 3px;
   border-color: var(--border-subtle);
   background: var(--bg-elevated);
+  line-height: 1;
+}
+
+/* Read like an element symbol: large first letter, small second. */
+.project-rail-mono-major {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.project-rail-mono-minor {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.project-rail-project.active .project-rail-mono-minor {
+  color: var(--text-secondary);
+}
+
+.rail-hover-card {
+  position: fixed;
+  z-index: 1300;
+  transform: translateY(-50%);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-elevated);
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.rail-hover-card-owner {
+  color: var(--text-tertiary);
+}
+
+.rail-hover-card-name {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .project-rail-project.active {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/search"
@@ -35,6 +36,7 @@ import (
 // don't run under WASM, so the TestMain only fires for the native
 // build where the leak actually happens.
 func TestMain(m *testing.M) {
+	finishProviders := configuration.IsolateGlobalConfigForTests()
 	runSleeperIfRequested()
 	// The git_api/… suites exec git subprocesses against real temp repos;
 	// redirect git config so the developer's ~/.gitconfig is never touched.
@@ -142,7 +144,7 @@ func TestMain(m *testing.M) {
 	}
 
 	restore := agent.SetTestStateDirHook(sessionsDir)
-	code := m.Run()
+	code := finishProviders(m.Run())
 	restore()
 	_ = os.Chdir(origWd)
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -337,21 +336,9 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			defer unsubscribe()
 		}
 
-		// cwd sync: the agent's tool paths resolve against
-		// a.GetWorkspaceRoot() (stamped from os.Getwd() at construction —
-		// see NewAgentWithClient), NOT the process cwd. The agent is
-		// cached across turns, so a host-side changeDir between turns
-		// (studio bridge: selecting a different repo in the Files
-		// workspace row) would otherwise never reach tool resolution —
-		// the first turn's cwd would keep winning forever. Re-stamp the
-		// root from the live process cwd at every turn so the cached
-		// agent tracks the host's selection.
-		if cwd, err := os.Getwd(); err == nil {
-			if abs, absErr := filepath.Abs(cwd); absErr == nil {
-				cwd = abs
-			}
-			ag.SetWorkspaceRoot(cwd)
-		}
+		// The agent is cached across turns; a host-side changeDir between
+		// turns (studio: picking another repo) must reach its tool paths.
+		ag.SetWorkspaceRoot(workspaceRoot)
 
 		response, err := ag.ProcessQuery(query)
 		chatAgentsMu.Lock()

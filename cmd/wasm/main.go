@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"syscall/js"
 
 	"github.com/sprout-foundry/sprout/pkg/wasmshell"
@@ -19,10 +17,10 @@ func main() {
 	wasmshell.SetShellEnv(wasmshell.NewEnv())
 	store = newStore()
 
-	// Set up the home directory in MEMFS.
+	// The shell's home holds its config; the project gets its own directory.
 	home := wasmshell.ShellEnv.Get("HOME")
 	os.MkdirAll(home, 0755)
-	os.Chdir(home)
+	_ = setWorkspaceRoot(workspaceRoot)
 
 	// Plug our IndexedDB store into the wasmshell package.
 	wasmshell.SetStoreWriter(store)
@@ -38,6 +36,7 @@ func main() {
 		"executeCommandAsync": js.FuncOf(executeCommandAsyncFunc),
 		"autoComplete":        js.FuncOf(autoCompleteFunc),
 		"getCwd":              js.FuncOf(getCwdFunc),
+		"getWorkspaceRoot":    js.FuncOf(getWorkspaceRootFunc),
 		"changeDir":           js.FuncOf(changeDirFunc),
 		"writeFile":           js.FuncOf(writeFileFunc),
 		"readFile":            js.FuncOf(readFileFunc),
@@ -111,9 +110,12 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 			if homeKey.Type() == js.TypeString {
 				h := homeKey.String()
 				os.MkdirAll(h, 0755)
-				os.Chdir(h)
 				wasmshell.ShellEnv.Set("HOME", h)
-				wasmshell.ShellEnv.Set("PWD", h)
+			}
+			if ws := cfg.Get("workspace"); ws.Type() == js.TypeString {
+				if err := setWorkspaceRoot(ws.String()); err != nil {
+					return "init: workspace: " + err.Error()
+				}
 			}
 		}
 	}
@@ -171,7 +173,14 @@ func getCwdFunc(this js.Value, args []js.Value) interface{} {
 	return cwd
 }
 
-// changeDirFunc changes the current directory.
+// getWorkspaceRootFunc returns the project directory the host's paths are
+// relative to.
+func getWorkspaceRootFunc(this js.Value, args []js.Value) interface{} {
+	return workspaceRoot
+}
+
+// changeDirFunc makes a directory the workspace: the host's paths, the
+// agent and the shell all work from it.
 func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	type result struct {
 		CWD   string `json:"cwd"`
@@ -185,13 +194,7 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	dir := args[0].String()
-	if dir == "~" {
-		dir = wasmshell.ShellEnv.Get("HOME")
-	} else if strings.HasPrefix(dir, "~/") {
-		dir = wasmshell.ShellEnv.Get("HOME") + dir[1:]
-	}
-
-	target := wasmshell.ResolvePath(dir)
+	target := workspacePath(dir)
 	info, err := os.Stat(target)
 	if err != nil || !info.IsDir() {
 		r := result{Error: fmt.Sprintf("cd: %s: No such directory", dir)}
@@ -199,16 +202,13 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 		return string(data)
 	}
 
-	if err := os.Chdir(target); err != nil {
+	if err := setWorkspaceRoot(target); err != nil {
 		r := result{Error: fmt.Sprintf("cd: %s: %s", dir, err.Error())}
 		data, _ := json.Marshal(r)
 		return string(data)
 	}
 
-	abs, _ := filepath.Abs(target)
-	wasmshell.ShellEnv.Set("PWD", abs)
-
-	r := result{CWD: abs}
+	r := result{CWD: workspaceRoot}
 	data, _ := json.Marshal(r)
 	return string(data)
 }
@@ -222,7 +222,7 @@ func writeFileFunc(this js.Value, args []js.Value) interface{} {
 	path := args[0].String()
 	content := args[1].String()
 
-	if err := wasmshell.SyncWriteFile(wasmshell.ResolvePath(path), content); err != nil {
+	if err := wasmshell.SyncWriteFile(workspacePath(path), content); err != nil {
 		return err.Error()
 	}
 	return ""
@@ -242,7 +242,7 @@ func readFileFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	path := args[0].String()
-	content, err := wasmshell.ReadFileContent(path)
+	content, err := wasmshell.ReadFileContent(workspacePath(path))
 	if err != nil {
 		r := result{Error: err.Error()}
 		data, _ := json.Marshal(r)
@@ -261,7 +261,7 @@ func listDirFunc(this js.Value, args []js.Value) interface{} {
 		path = args[0].String()
 	}
 
-	jsonStr, err := wasmshell.ListDirEntryJSON(path)
+	jsonStr, err := wasmshell.ListDirEntryJSON(workspacePath(path))
 	if err != nil {
 		type result struct {
 			Error string `json:"error"`
@@ -281,7 +281,7 @@ func deleteFileFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	path := args[0].String()
-	if err := wasmshell.DeleteFilePath(path); err != nil {
+	if err := wasmshell.DeleteFilePath(workspacePath(path)); err != nil {
 		return err.Error()
 	}
 	return ""

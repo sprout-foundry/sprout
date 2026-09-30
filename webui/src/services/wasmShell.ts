@@ -64,9 +64,11 @@ export interface WasmShell {
   executeCommandAsync?(input: string): Promise<WasmShellResult>;
   /** Tab-complete a partial command. */
   autoComplete(input: string): WasmCompletionResult;
-  /** Get the current working directory. */
+  /** Get the current working directory (the terminal's; `cd` moves it). */
   getCwd(): string;
-  /** Change directory. */
+  /** The project directory: relative paths given to the shell resolve here. */
+  getWorkspaceRoot(): string;
+  /** Make a directory the workspace. */
   changeDir(dir: string): WasmChangeDirResult;
   /** Write content to a file (synced to IndexedDB). */
   writeFile(path: string, content: string): string; // error or ""
@@ -229,6 +231,8 @@ export interface SproutWasmAPI {
   executeCommandAsync?(input: string): Promise<string>;
   autoComplete(input: string): string;
   getCwd(): string;
+  /** Absent in binaries built before the workspace root existed. */
+  getWorkspaceRoot?(): string;
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
   readFile(path: string): string;
@@ -433,6 +437,10 @@ export async function initWasmShell(config?: {
 
       getCwd(): string {
         return wasm.getCwd();
+      },
+
+      getWorkspaceRoot(): string {
+        return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
       },
 
       changeDir(dir: string): WasmChangeDirResult {

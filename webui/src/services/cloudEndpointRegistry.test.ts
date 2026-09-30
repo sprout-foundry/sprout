@@ -715,8 +715,8 @@ describe('cloudEndpointRegistry', () => {
       expect(getResult?.category).toBe('synthetic');
       expect(getResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/home/user',
-        daemon_root: '/home/user',
+        workspace_root: '/workspace',
+        daemon_root: '/workspace',
       });
 
       const postResult = classifyEndpoint('/api/workspace', 'POST');
@@ -724,8 +724,8 @@ describe('cloudEndpointRegistry', () => {
       expect(postResult?.category).toBe('synthetic');
       expect(postResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/home/user',
-        daemon_root: '/home/user',
+        workspace_root: '/workspace',
+        daemon_root: '/workspace',
       });
     });
 

@@ -160,13 +160,19 @@ export function handleWasmLocal(
  */
 const vfsManifest = new Set<string>();
 
-/** Normalize a path to absolute form. Uses the WASM shell's CWD as base
- *  for relative paths — NOT a hardcoded /home/user, because the actual
- *  CWD depends on the WASM binary's init (can be / or /home/user). */
+// The project directory. Binaries built before the bridge exposed it kept
+// everything at the (unmovable) cwd.
+function workspaceRootOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
+  if (!wasm) return '/workspace';
+  return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
+}
+
+/** Normalize a path to absolute form; relative paths are relative to the
+ *  workspace (never the terminal's cwd, which `cd` moves). */
 function normalizePath(p: string): string {
   if (!p.startsWith('/')) {
-    const cwd = typeof window !== 'undefined' && window.SproutWasm?.getCwd ? window.SproutWasm.getCwd() : '/home/user';
-    p = p === '.' ? cwd : `${cwd}/${p}`;
+    const root = workspaceRootOf(typeof window !== 'undefined' ? window.SproutWasm : undefined);
+    p = p === '.' ? root : `${root}/${p}`;
   }
   // Collapse ./ and resolve ../
   const parts = p.split('/');
@@ -248,7 +254,7 @@ function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): b
  * Used by browserGit to sync the working tree before git operations.
  */
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
-  const cwd = shell.getCwd();
+  const cwd = workspaceRootOf(shell);
   // Try to get all file paths via the flattenEntries/listFilesTracked logic
   const files: Array<{ path: string; content: string }> = [];
 
@@ -267,15 +273,10 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
-        // Make path relative to CWD
-        let relPath = absPath;
+        // Only the workspace's own files, relative to it.
         const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
-        if (absPath.startsWith(normalizedCwd)) {
-          relPath = absPath.slice(normalizedCwd.length);
-        } else if (absPath.startsWith('/home/user/')) {
-          relPath = absPath.slice('/home/user/'.length);
-        }
-        files.push({ path: relPath, content: result.content });
+        if (!absPath.startsWith(normalizedCwd)) continue;
+        files.push({ path: absPath.slice(normalizedCwd.length), content: result.content });
       }
     } catch {
       // best-effort: skip unreadable entries.
@@ -287,8 +288,6 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
 /**
  * Get all known files from the manifest that are descendants of dir.
  * Tries listDir first; falls back to manifest on error.
- * When dir listing fails and the manifest has entries under a different
- * base (e.g. /home/user while CWD is /), returns ALL manifest entries.
  */
 function listFilesTracked(shell: WasmShell, dir: string): string[] {
   // Try the WASM binary's listDir first — works on newer binaries.
@@ -309,19 +308,10 @@ function listFilesTracked(shell: WasmShell, dir: string): string[] {
 
   // Fall back to the manifest.
   const normalizedDir = normalizePath(dir);
-  let files = Array.from(vfsManifest).filter((path) => {
+  const files = Array.from(vfsManifest).filter((path) => {
     if (normalizedDir === '/') return path.startsWith('/'); // root: match everything
     return path.startsWith(normalizedDir + '/') || path === normalizedDir;
   });
-
-  // If nothing matched under the requested dir, and the dir is / or /home/user,
-  // return the entire manifest — the WASM binary's CWD may not match
-  // where files were written (importRepo writes to /home/user/... but
-  // getCwd() may return /).
-  if (files.length === 0 && vfsManifest.size > 0) {
-    files = Array.from(vfsManifest);
-  }
-
   return files.sort();
 }
 
@@ -429,9 +419,10 @@ function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: str
  * the top level — folders vanished.
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
-  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
+  const root = workspaceRootOf(shell);
+  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || root : root;
   const dir = normalizePath(cwd);
-  const rootDir = normalizePath(shell.getCwd());
+  const rootDir = normalizePath(root);
 
   // Try listDir first; fall back to the manifest.
   const dirResult = shell.listDir(dir);
@@ -640,7 +631,7 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
 
   if (!query) return jsonOk({ results: [], total_matches: 0, total_files: 0, truncated: false, query: '' });
 
-  const cwd = shell.getCwd();
+  const cwd = workspaceRootOf(shell);
   // Build grep command
   let grepCmd = 'grep';
   if (!caseSensitive) grepCmd += ' -i';

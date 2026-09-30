@@ -11,6 +11,7 @@ interface EditorToolbarProps {
   saving?: boolean;
   breadcrumbProps?: {
     filePath: string;
+    workspaceRoot?: string;
     showFileName?: boolean;
     /** Show the unsaved-changes dot, for layouts without a tab strip to show it. */
     modified?: boolean;
@@ -50,6 +51,7 @@ function EditorToolbar({
             <div className="toolbar-breadcrumb">
               <EditorBreadcrumb
                 filePath={breadcrumbProps.filePath}
+                workspaceRoot={breadcrumbProps.workspaceRoot}
                 showFileName={breadcrumbProps.showFileName}
                 onNavigate={breadcrumbProps.onNavigate}
                 symbols={breadcrumbProps.symbols}

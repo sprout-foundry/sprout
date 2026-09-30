@@ -1567,6 +1567,66 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, and document-heavy professional work, with a 1.05M-token context window.",
+        "id": "gpt-6.1-sol",
+        "input_cost": 2,
+        "name": "GPT-6.1 Sol",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro is the same underlying model as GPT-6.1 Sol, served with reasoning.mode set to pro for higher-quality responses on complex tasks. Pro mode spends substantially more reasoning tokens, so the effective cost per request is higher.",
+        "id": "gpt-6.1-sol-pro",
+        "input_cost": 2,
+        "name": "GPT-6.1 Sol Pro",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro (batch) serves GPT-6.1 Sol in pro reasoning mode through the Batch API at a 50% discount for asynchronous, non-latency-sensitive workloads.",
+        "id": "gpt-6.1-sol-pro:batch",
+        "input_cost": 1,
+        "name": "GPT-6.1 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol (batch) is OpenAI's GPT-6.1 Sol served through the Batch API at a 50% discount for asynchronous, non-latency-sensitive workloads. Suited for agentic coding, computer use, and document-heavy professional work.",
+        "id": "gpt-6.1-sol:batch",
+        "input_cost": 1,
+        "name": "GPT-6.1 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

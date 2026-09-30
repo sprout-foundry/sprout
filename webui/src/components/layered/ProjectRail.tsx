@@ -9,6 +9,7 @@ import { Bell, FolderGit2, Home, PanelLeftOpen, Plus, Settings } from 'lucide-re
 import { useState, type ReactElement } from 'react';
 import { isCloud } from '../../config/mode';
 import { OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
+import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
 import { UserMenu } from '../UserMenu';
 
 export interface RailProject {
@@ -78,6 +79,7 @@ export default function ProjectRail({
 }: ProjectRailProps): ReactElement {
   const [hovered, setHovered] = useState<{ label: string; anchor: HTMLElement } | null>(null);
   const [addMenu, setAddMenu] = useState<DOMRect | null>(null);
+  const unread = useUnreadNotificationCount();
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
       {collapsed && onToggleCollapsed && (
@@ -179,13 +181,14 @@ export default function ProjectRail({
         type="button"
         className="project-rail-btn"
         title="Activity"
-        aria-label="Activity"
+        aria-label={unread > 0 ? `Activity (${unread} unread)` : 'Activity'}
         onClick={(e) => {
           window.dispatchEvent(new CustomEvent(OPEN_NOTIFICATIONS_EVENT, { detail: { anchor: e.currentTarget } }));
           onOpenActivity?.();
         }}
       >
         <Bell size={18} />
+        {unread > 0 && <span className="activity-badge">{unread > 99 ? '99+' : unread}</span>}
       </button>
       {isCloud ? (
         <div className="project-rail-account">

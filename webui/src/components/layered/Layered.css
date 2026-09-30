@@ -564,3 +564,36 @@
   font-size: var(--text-sm);
   color: var(--accent-error);
 }
+
+.project-rail-btn,
+.phone-tab {
+  position: relative;
+}
+
+.activity-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent-error);
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.phone-tab > .activity-badge {
+  top: 4px;
+  right: calc(50% - 18px);
+  max-width: none;
+}
+
+/* Activity has its place in the rail and the phone tab bar. */
+.layout-layered .statusbar-item-notification {
+  display: none;
+}

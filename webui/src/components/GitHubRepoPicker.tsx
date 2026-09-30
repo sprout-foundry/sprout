@@ -9,17 +9,22 @@
  *    flow writes to.
  *  - signed out: the shared PAT sign-in card (GitHubAccountPanel).
  *
+ * With `onSelect` the picker chooses instead of cloning: the hosted editor's
+ * project rail opens the picked repository as a project.
+ *
  * Loading, empty, error, and cloning states are all inline — no window.alert.
  * The token is passed to the clone call and never logged.
  */
 
-import { AlertTriangle, Download, GitBranch, Loader2, Lock, Search, X } from 'lucide-react';
+import { AlertTriangle, Download, FolderOpen, GitBranch, Loader2, Lock, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { clearGitHubAccount, getStoredToken, getStoredUser, listRepos } from '../services/githubService';
 import type { GitHubRepo, GitHubUser } from '../services/githubService';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
+import { parseRepoRef } from '../services/workspaceFs/workspaceGit';
+import { useHomeView } from '../services/homeView';
 import { type CloneResult } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
@@ -33,6 +38,18 @@ export interface GitHubRepoPickerProps {
   onClose: () => void;
   /** Called after a successful clone (parent refreshes the file tree). */
   onCloned?: (repo: GitHubRepo, result: CloneResult) => void;
+  /** Pick instead of clone: called with the repository's web URL. */
+  onSelect?: (htmlURL: string) => void;
+}
+
+// A typed "owner/name" or URL, when it names a repository.
+function typedRepoURL(query: string): string | null {
+  if (!query.trim().includes('/')) return null;
+  try {
+    return parseRepoRef(query.trim()).url.replace(/\.git$/, '');
+  } catch {
+    return null;
+  }
 }
 
 function formatUpdated(iso: string): string {
@@ -48,7 +65,12 @@ function formatUpdated(iso: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
-export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRepoPickerProps): ReactElement | null {
+export default function GitHubRepoPicker({
+  isOpen,
+  onClose,
+  onCloned,
+  onSelect,
+}: GitHubRepoPickerProps): ReactElement | null {
   const [user, setUser] = useState<GitHubUser | null>(() => getStoredUser());
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [repos, setRepos] = useState<GitHubRepo[] | null>(null);
@@ -108,6 +130,14 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
     }
   }, [isOpen, loadRepos, platformMode]);
 
+  // The account card's link opens Home (account settings); get out of its way.
+  const homeOpen = useHomeView().open;
+  const homeWasOpen = useRef(homeOpen);
+  useEffect(() => {
+    if (isOpen && homeOpen && !homeWasOpen.current && !cloningRepo) onClose();
+    homeWasOpen.current = homeOpen;
+  }, [homeOpen, isOpen, onClose, cloningRepo]);
+
   /* ── Keyboard: Escape closes (not while cloning) ─────────────── */
 
   useEffect(() => {
@@ -131,6 +161,11 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
   /* ── Clone ───────────────────────────────────────────────────── */
 
   const handleClone = async (repo: GitHubRepo) => {
+    if (onSelect) {
+      onClose();
+      onSelect(repo.html_url);
+      return;
+    }
     const activeToken = token ?? getStoredToken();
     if ((!activeToken && !platformMode) || cloningRepo) return;
 
@@ -218,6 +253,10 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
   };
 
   const showRepoList = platformMode ? platformConnected === true : Boolean(token);
+  const title = onSelect ? 'Open a repository' : 'Clone from GitHub';
+  const typedURL = onSelect ? typedRepoURL(query) : null;
+  const typedIsListed =
+    typedURL !== null && filteredRepos.some((r) => r.html_url.toLowerCase() === typedURL.toLowerCase());
 
   // Portal to document.body so the fixed overlay isn't clipped or
   // repositioned by transformed/overflow-hidden sidebar ancestors.
@@ -227,7 +266,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"
-      aria-label="Clone from GitHub"
+      aria-label={title}
       data-testid="gh-picker-overlay"
     >
       <div className="gh-picker-card" onClick={(e) => e.stopPropagation()}>
@@ -235,7 +274,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
         <div className="gh-picker-header">
           <div className="gh-picker-title">
             <GitBranch size={16} />
-            <h2>{showRepoList ? 'Clone from GitHub' : platformMode ? 'Connect GitHub' : 'Sign in to GitHub'}</h2>
+            <h2>{showRepoList ? title : platformMode ? 'Connect GitHub' : 'Sign in to GitHub'}</h2>
           </div>
           <button
             type="button"
@@ -319,7 +358,7 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                   className="gh-picker-search-input"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Filter repositories…"
+                  placeholder={onSelect ? 'Filter, or type owner/name…' : 'Filter repositories…'}
                   aria-label="Filter repositories"
                   disabled={Boolean(cloningRepo)}
                   data-testid="gh-picker-search"
@@ -345,6 +384,28 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                     <span>No repositories match “{query}”.</span>
                   )}
                 </div>
+              )}
+
+              {typedURL && !typedIsListed && (
+                <button
+                  type="button"
+                  className="gh-repo-row"
+                  onClick={() => {
+                    onClose();
+                    onSelect?.(typedURL);
+                  }}
+                  data-testid="gh-picker-open-typed"
+                >
+                  <span className="gh-repo-main">
+                    <span className="gh-repo-name">{typedURL.replace(/^https:\/\/github\.com\//, '')}</span>
+                  </span>
+                  <span className="gh-repo-meta">
+                    <span className="gh-repo-action">
+                      <FolderOpen size={13} />
+                      <span>Open</span>
+                    </span>
+                  </span>
+                </button>
               )}
 
               {!loading && !listError && filteredRepos.length > 0 && (
@@ -374,8 +435,14 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
                           <span className="gh-repo-meta">
                             <span className="gh-repo-updated">{formatUpdated(repo.updated_at)}</span>
                             <span className="gh-repo-action">
-                              {isCloning ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
-                              <span>{isCloning ? 'Cloning…' : 'Clone'}</span>
+                              {isCloning ? (
+                                <Loader2 size={13} className="spin" />
+                              ) : onSelect ? (
+                                <FolderOpen size={13} />
+                              ) : (
+                                <Download size={13} />
+                              )}
+                              <span>{isCloning ? 'Cloning…' : onSelect ? 'Open' : 'Clone'}</span>
                             </span>
                           </span>
                         </button>
@@ -391,9 +458,11 @@ export default function GitHubRepoPicker({ isOpen, onClose, onCloned }: GitHubRe
         {/* Footer */}
         <div className="gh-picker-footer">
           <span className="gh-picker-footer-hint">
-            {showRepoList
-              ? 'Shallow clone (depth 1) of the default branch into your workspace.'
-              : 'Or close this dialog and paste a public repository URL instead.'}
+            {showRepoList && onSelect
+              ? 'Opens it as a project here. Any public repository works too — type owner/name.'
+              : showRepoList
+                ? 'Shallow clone (depth 1) of the default branch into your workspace.'
+                : 'Or close this dialog and paste a public repository URL instead.'}
           </span>
         </div>
       </div>

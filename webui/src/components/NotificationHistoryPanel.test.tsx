@@ -60,6 +60,20 @@ describe('NotificationHistoryPanel', () => {
     expect(titles).toEqual(['Second', 'First']);
   });
 
+  it("keeps a notification's action after its toast is gone", () => {
+    const onClose = renderPanel();
+    const onClick = vi.fn();
+    act(() => {
+      notificationBus.notify('success', 'Task finished', 'Add dark mode', undefined, { label: 'View task', onClick });
+    });
+    const action = Array.from(document.querySelectorAll<HTMLButtonElement>('.notification-history-item-action')).find(
+      (b) => b.textContent === 'View task',
+    );
+    act(() => action!.click());
+    expect(onClick).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it('marks existing notifications read when opened', () => {
     const anchor = createRef<HTMLButtonElement>();
     function Harness({ open }: { open: boolean }): JSX.Element {

@@ -46,7 +46,7 @@ import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-rel
 import { useRef, useCallback } from 'react';
 import { createAutoCloseTagCompartment, getInitialAutoCloseTagExtensions } from '../extensions/autoCloseTag';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
-import { createCodeActionsExtension } from '../extensions/codeActions';
+import { codeActionsGutter, createCodeActionsExtension } from '../extensions/codeActions';
 import { codeLensPlugin } from '../extensions/codeLens';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { diffGutter } from '../extensions/diffGutter';
@@ -58,7 +58,7 @@ import { indentGuidesPlugin } from '../extensions/indentGuides';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { getLanguageExtensions } from '../extensions/languageRegistry';
 import { linkedScrollExtension } from '../extensions/linkedScroll';
-import { lintDiagnostics } from '../extensions/lintDiagnostics';
+import { lintDiagnostics, lintDiagnosticsGutter } from '../extensions/lintDiagnostics';
 import { minimapExtension } from '../extensions/minimap';
 import { renameHighlightField } from '../extensions/renameOverlay';
 import { customSearchExtension } from '../extensions/searchPanel';
@@ -93,6 +93,18 @@ export interface ExtensionSettings {
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
+  /** Line numbers and the diff bar only: no lint, quick-fix or fold column (phones). */
+  compactGutters?: boolean;
+}
+
+/** The lint and quick-fix marker columns, left of the line numbers. */
+export function markerGutters(): Extension[] {
+  return [lintDiagnosticsGutter(), codeActionsGutter()];
+}
+
+/** The fold column, right of the line numbers. */
+export function foldMarkerGutter(): Extension {
+  return foldGutter({ openText: 'v', closedText: '>' });
 }
 
 export interface ThemeConfig {
@@ -160,6 +172,8 @@ export interface UseEditorExtensionsReturn {
     signatureHelp: Compartment;
     aiCompletions: Compartment;
     history: Compartment;
+    markerGutters: Compartment;
+    foldGutter: Compartment;
   };
   /**
    * Build the full CodeMirror extension array for `EditorState.create()`.
@@ -190,6 +204,8 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     signatureHelp: new Compartment(),
     aiCompletions: new Compartment(),
     history: new Compartment(),
+    markerGutters: new Compartment(),
+    foldGutter: new Compartment(),
   }).current; // stable reference — never recreated
 
   // ── Extension builder ─────────────────────────────────────────────────
@@ -254,6 +270,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       lintDiagnostics(),
       errorLensPlugin(),
       createCodeActionsExtension(buffer.getFilePath, buffer.getContent),
+      compartments.markerGutters.of(settings.compactGutters ? [] : markerGutters()),
       trailingWhitespacePlugin(),
       unsavedLineHighlight(),
 
@@ -264,7 +281,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       // valid Extension values; the difference is the @uiw package pre-bakes the extension.
       compartments.relativeLineNumbers.of(settings.relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
-      foldGutter({ openText: 'v', closedText: '>' }),
+      compartments.foldGutter.of(settings.compactGutters ? [] : foldMarkerGutter()),
       codeFolding(),
       compartments.minimap.of(settings.minimapEnabled ? minimapExtension() : []),
       compartments.inlayHints.of(

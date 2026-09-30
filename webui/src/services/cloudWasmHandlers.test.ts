@@ -515,3 +515,45 @@ describe('file mutations announce file_changed like the daemon', () => {
     ]);
   });
 });
+
+describe('/api/query in the browser — a stop is not a failure', () => {
+  function runningShell() {
+    let reject: (err: Error) => void = () => {};
+    const shell = createMockShell({
+      runAgent: () =>
+        new Promise((_, r) => {
+          reject = r;
+        }),
+      stopAgent: () => reject(new Error('process query: query interrupted: context canceled')),
+    });
+    return { shell, fail: (msg: string) => reject(new Error(msg)) };
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  async function eventsFor(run: (shell: WasmShell, fail: (msg: string) => void) => void) {
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    setAgentEventDispatcher((e) => events.push(e as (typeof events)[number]));
+    const { shell, fail } = runningShell();
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', JSON.stringify({ query: 'hi', chat_id: 'c1' }));
+    await settle();
+    run(shell, fail);
+    await settle();
+    setAgentEventDispatcher(null);
+    return events.filter((e) => e.type === 'query_completed' || e.type === 'error');
+  }
+
+  it('ends a stopped run as interrupted, with no error', async () => {
+    const events = await eventsFor((shell) => {
+      handleWasmLocal(shell, '/api/query/stop', 'POST', '/api/query/stop?chat_id=c1');
+    });
+    expect(events).toEqual([
+      { type: 'query_completed', data: { query: 'hi', response: '', status: 'interrupted', chat_id: 'c1' } },
+    ]);
+  });
+
+  it('still reports a run that fails on its own', async () => {
+    const events = await eventsFor((_shell, fail) => fail('upstream exploded'));
+    expect(events.map((e) => e.type)).toEqual(['error']);
+  });
+});

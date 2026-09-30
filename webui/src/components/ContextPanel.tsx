@@ -123,9 +123,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           {activeTab.icon}
           <h4>{activeTab.label}</h4>
         </div>
-        <div className="side-panel-header-actions">
-          <span className="tool-count">{activeTab.count}</span>
-        </div>
+        {activeTab.count && (
+          <div className="side-panel-header-actions">
+            <span className="tool-count">{activeTab.count}</span>
+          </div>
+        )}
       </div>
       <div className="side-panel-body">{renderTabContent()}</div>
     </>

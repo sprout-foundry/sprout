@@ -561,3 +561,22 @@ describe('/api/query in the browser — a stop is not a failure', () => {
     expect(events.map((e) => e.type)).toEqual(['error']);
   });
 });
+
+describe('handleWasmLocal — /api/search', () => {
+  it('reports matches with workspace-relative paths', async () => {
+    let ran = '';
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      executeCommand: (cmd: string) => {
+        ran = cmd;
+        return { stdout: '/workspace/src/a.go:3:func Device() {}\n', stderr: '', exitCode: 0 };
+      },
+    });
+
+    const res = handleWasmLocal(shell, '/api/search', 'GET', 'http://x/api/search?query=Device', undefined);
+    const body = await res.json();
+
+    expect(ran).toContain("'/workspace'");
+    expect(body.results.map((r: { file: string }) => r.file)).toEqual(['src/a.go']);
+  });
+});

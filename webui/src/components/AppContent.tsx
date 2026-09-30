@@ -51,6 +51,7 @@ import { WorktreeChatDialog } from './WorktreeChatDialog';
 import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
 import PhoneTabBar from './layered/PhoneTabBar';
+import NotificationCenterHost from './NotificationCenterHost';
 import PlatformHome from './layered/PlatformHome';
 
 interface AppContentProps {
@@ -1312,6 +1313,7 @@ const AppContent: React.FC<AppContentProps> = ({
         </ErrorBoundary>
       ) : null}
       {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
+      <NotificationCenterHost />
       {isLayeredLayout && isCloud && isMobile && (
         <PhoneTabBar drawerOpen={isSidebarOpen} onToggleDrawer={onToggleSidebar} onCloseDrawer={onCloseSidebar} />
       )}

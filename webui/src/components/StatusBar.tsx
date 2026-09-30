@@ -1,7 +1,7 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen, Zap } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
@@ -9,7 +9,6 @@ import { githubRepoSlug } from '../utils/platformUrl';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';
-import { OPEN_NOTIFICATIONS_EVENT } from '../config/layout';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -77,22 +76,9 @@ function StatusBar({
 
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
-  // The layered layout's rail opens the same notification history.
-  const railAnchorRef = useRef<HTMLElement | null>(null);
-  const [anchoredToRail, setAnchoredToRail] = useState(false);
-  useEffect(() => {
-    const open = (e: Event) => {
-      railAnchorRef.current = (e as CustomEvent<{ anchor?: HTMLElement }>).detail?.anchor ?? null;
-      setAnchoredToRail(!!railAnchorRef.current);
-      setIsNotificationCenterOpen(true);
-    };
-    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open);
-    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open);
-  }, []);
   const bellIconRef = useRef<HTMLButtonElement>(null);
 
   const toggleNotificationCenter = useCallback(() => {
-    setAnchoredToRail(false);
     setIsNotificationCenterOpen((prev) => !prev);
   }, []);
 
@@ -202,10 +188,7 @@ function StatusBar({
         )}
       </button>
       {isNotificationCenterOpen && (
-        <NotificationHistoryPanel
-          anchorRef={anchoredToRail ? (railAnchorRef as React.RefObject<HTMLElement>) : bellIconRef}
-          onClose={closeNotificationCenter}
-        />
+        <NotificationHistoryPanel anchorRef={bellIconRef} onClose={closeNotificationCenter} />
       )}
     </div>
   );

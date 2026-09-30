@@ -644,8 +644,13 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
     return jsonError(result.stderr || 'search failed', 500);
   }
 
-  // Parse grep output into structured results
-  const results = parseGrepOutput(result.stdout);
+  // Parse grep output into structured results, with workspace-relative
+  // paths like the daemon's search returns.
+  const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  const results = parseGrepOutput(result.stdout).map((r) => ({
+    ...r,
+    file: r.file.startsWith(prefix) ? r.file.slice(prefix.length) : r.file,
+  }));
   const totalMatches = results.reduce((sum, r) => sum + r.match_count, 0);
   return jsonOk({
     results,

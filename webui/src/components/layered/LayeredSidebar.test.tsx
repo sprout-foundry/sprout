@@ -18,6 +18,7 @@ vi.mock('../ThemedDialog', () => ({
 }));
 
 import LayeredSidebar, { type LayeredSidebarProps } from './LayeredSidebar';
+import { __resetHomeViewForTests, closeHome, openHome } from '../../services/homeView';
 import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
 
 let container: HTMLDivElement;
@@ -28,6 +29,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  __resetHomeViewForTests();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -150,6 +152,16 @@ describe('LayeredSidebar', () => {
     click(container.querySelector('.project-rail-project[aria-label="api"]'));
     expect(onInstanceChange).toHaveBeenCalledWith(2);
     expect(onCloseDrawer).toHaveBeenCalled();
+  });
+
+  it('closes the phone drawer when something else opens a Home page', () => {
+    const onCloseDrawer = vi.fn();
+    renderSidebar({ isMobile: true, onCloseDrawer });
+    expect(onCloseDrawer).not.toHaveBeenCalled();
+    act(() => openHome('/settings'));
+    expect(onCloseDrawer).toHaveBeenCalledTimes(1);
+    act(() => closeHome());
+    expect(onCloseDrawer).toHaveBeenCalledTimes(1);
   });
 
   it('closes the phone drawer when a new conversation is created', () => {

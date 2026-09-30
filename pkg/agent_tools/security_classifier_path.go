@@ -192,27 +192,28 @@ func classifyBrowseURL(args map[string]interface{}) SecurityResult {
 // isScreenshotPathAllowed checks if a cleaned screenshot path falls within
 // allowed directories (cwd, /tmp/sprout/*, ~/Downloads).
 func isScreenshotPathAllowed(cleanedPath string) bool {
-	// Relative paths are always allowed (resolve within cwd)
-	if !filepath.IsAbs(cleanedPath) {
+	if !isRootedPath(cleanedPath) {
 		return true
 	}
 
 	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot workspace)
-	if strings.HasPrefix(cleanedPath, "/tmp/sprout") {
+	if strings.HasPrefix(filepath.ToSlash(cleanedPath), "/tmp/sprout") {
 		return true
 	}
 
-	// ~/Downloads is allowed
+	abs := absPathLexical(cleanedPath)
+	if pathWithin(abs, absPathLexical(filepath.Join(os.TempDir(), "sprout"))) {
+		return true
+	}
+
 	if homeDir, err := os.UserHomeDir(); err == nil {
-		downloads := filepath.Join(homeDir, "Downloads")
-		if strings.HasPrefix(cleanedPath, downloads) {
+		if pathWithin(abs, filepath.Join(homeDir, "Downloads")) {
 			return true
 		}
 	}
 
-	// CWD is allowed
 	if cwd, err := os.Getwd(); err == nil {
-		if strings.HasPrefix(cleanedPath, cwd) {
+		if pathWithin(abs, cwd) {
 			return true
 		}
 	}

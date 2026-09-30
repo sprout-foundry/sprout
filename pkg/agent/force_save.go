@@ -2,6 +2,8 @@ package agent
 
 import (
 	"os"
+
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ForceSaveAndExit performs a best-effort synchronous state save and exits.
@@ -12,5 +14,6 @@ func (a *Agent) ForceSaveAndExit(code int) {
 	if a != nil && a.state != nil && !a.IsSubagent() {
 		a.autoSaveState()
 	}
+	console.RestoreTerminal()
 	os.Exit(code)
 }

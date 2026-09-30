@@ -2,10 +2,6 @@
 
 package tools
 
-import (
-	"golang.org/x/sys/windows"
-)
-
 // attachProcessToJobAndGetHandle is called after cmd.Start() on Windows
 // to assign the process to a Job Object. Returns the Job handle (0 on
 // error). Build-tagged to windows; non-Windows callers get the no-op
@@ -30,11 +26,15 @@ func attachProcessToJobAndGetHandle(pid int) uintptr {
 // no-op for the kernel; closing it while descendants are still alive
 // (because KILL_ON_JOB_CLOSE is set) terminates them.
 //
+// The handle is closed only through the registry's LoadAndDelete claim:
+// jobHandle is the same handle stored there, so closing it directly as
+// well double-closed it — and if killProcessGroup already claimed it, the
+// stale value could close an unrelated handle that reused the number.
+//
 // SP-112-1.
 func closeJobHandleOnProcessExit(jobHandle uintptr, pid int) {
 	if jobHandle == 0 {
 		return
 	}
-	windows.CloseHandle(windows.Handle(jobHandle))
 	CloseJobForPID(pid)
 }

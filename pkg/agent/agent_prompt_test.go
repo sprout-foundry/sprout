@@ -134,9 +134,6 @@ func TestResolvePromptPathRepoRelative(t *testing.T) {
 }
 
 func TestFindRepoRootFromCWD(t *testing.T) {
-	origCwd, _ := os.Getwd()
-	defer os.Chdir(origCwd)
-
 	t.Run("finds repo root from within repo", func(t *testing.T) {
 		repoRoot, err := findRepoRootFromCWD()
 		if err != nil {
@@ -155,7 +152,7 @@ func TestFindRepoRootFromCWD(t *testing.T) {
 		}
 
 		nestedDir := filepath.Join(repoRoot, "pkg", "agent")
-		os.Chdir(nestedDir)
+		t.Chdir(nestedDir)
 
 		repoRoot2, err := findRepoRootFromCWD()
 		if err != nil {
@@ -167,8 +164,7 @@ func TestFindRepoRootFromCWD(t *testing.T) {
 	})
 
 	t.Run("returns error when no go.mod found", func(t *testing.T) {
-		dir := t.TempDir()
-		os.Chdir(dir)
+		t.Chdir(t.TempDir())
 
 		_, err := findRepoRootFromCWD()
 		if err == nil {

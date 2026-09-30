@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -82,7 +83,7 @@ func (c *RewindCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("rewind failed: %w", err)
 	}
 
-	fmt.Printf("\n[rewind] Rewound to turn %d\n", targetIndex)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Rewound to turn %d", targetIndex)
 	fmt.Printf("          Turns discarded: %d\n", result.TurnsDiscarded)
 	fmt.Printf("          Messages removed: %d\n", result.MessagesRemoved)
 	if len(result.FilesReverted) > 0 {

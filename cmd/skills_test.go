@@ -11,15 +11,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// testWorkingDir creates a temp dir, changes to it, and returns a cleanup func.
-// Each test that calls runSkillsAllow/runSkillsRevoke/runSkillsList should use
-// this to isolate file-system effects.
+// testWorkingDir creates a temp dir and changes to it for the duration of the
+// test. The cwd is restored before TempDir cleanup because Windows cannot
+// remove a directory that is some process's working directory.
 func testWorkingDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("failed to chdir to %s: %v", dir, err)
-	}
+	t.Chdir(dir)
 	return dir
 }
 

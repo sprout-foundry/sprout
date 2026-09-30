@@ -79,7 +79,7 @@ func TestGetFileGitPath(t *testing.T) {
 	os.Chdir(sub)
 	relPath, err := GetFileGitPath("git_test.go")
 	assert.NoError(t, err)
-	assert.Equal(t, "pkg/git/git_test.go", relPath)
+	assert.Equal(t, filepath.FromSlash("pkg/git/git_test.go"), relPath)
 }
 
 func TestGetGitStatus(t *testing.T) {
@@ -892,6 +892,25 @@ func TestIsFileContentCommitted_FileInSubdirectory(t *testing.T) {
 		committed, err := IsFileContentCommitted("pkg/core/handler.go")
 		assert.NoError(t, err)
 		assert.True(t, committed, "a committed file in a subdirectory should be reported as committed")
+	})
+}
+
+// TestIsFileContentCommitted_CWDInSubdirectory pins that the git checks
+// run from the repo root: relPath is root-relative, so running them from
+// a subdirectory CWD would look up the wrong entry.
+func TestIsFileContentCommitted_CWDInSubdirectory(t *testing.T) {
+	dir := newTestGitRepo(t)
+	sub := filepath.Join(dir, "pkg", "core")
+	assert.NoError(t, os.MkdirAll(sub, 0755))
+	fp := filepath.Join(sub, "handler.go")
+	assert.NoError(t, os.WriteFile(fp, []byte("package core"), 0644))
+	gitRun(t, dir, "add", "pkg/core/handler.go")
+	gitRun(t, dir, "commit", "-m", "add handler.go")
+
+	withDir(t, sub, func() {
+		committed, err := IsFileContentCommitted(fp)
+		assert.NoError(t, err)
+		assert.True(t, committed, "a committed file must be reported as committed when CWD is a subdirectory")
 	})
 }
 

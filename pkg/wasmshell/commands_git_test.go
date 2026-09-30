@@ -163,7 +163,7 @@ func TestGrep_Recursive(t *testing.T) {
 	if r.ExitCode != 0 {
 		t.Fatalf("exit = %d stderr = %q", r.ExitCode, r.Stderr)
 	}
-	if !strings.Contains(r.Stdout, "a.go") || !strings.Contains(r.Stdout, "sub/c.go") {
+	if !strings.Contains(r.Stdout, "a.go") || !strings.Contains(r.Stdout, filepath.FromSlash("sub/c.go")) {
 		t.Errorf("stdout = %q — recursive hits must carry file prefixes", r.Stdout)
 	}
 }

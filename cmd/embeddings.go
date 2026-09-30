@@ -64,7 +64,7 @@ func runEmbeddingsClear() error {
 	switch embeddingsClearType {
 	case "code", "conversation_turn", "memory", "all":
 	default:
-		return fmt.Errorf("invalid --type %q: valid options are code, conversation_turn, memory, all", embeddingsClearType)
+		return usageErrorAt("sprout embeddings clear", "invalid --type %q: valid options are code, conversation_turn, memory, all", embeddingsClearType)
 	}
 
 	// Resolve the embedding index directory

@@ -157,7 +157,7 @@ func TestApplyDelta_InvalidModeSkipped(t *testing.T) {
 	if len(result.Skipped) != 2 {
 		t.Fatalf("skipped = %+v, want two invalid_mode entries", result.Skipped)
 	}
-	if perm := modeOf(t, dir, "c.txt"); perm != 0o644 {
+	if perm := modeOf(t, dir, "c.txt"); posixPerms && perm != 0o644 {
 		t.Fatalf("c.txt mode = %o, want 644", perm)
 	}
 }
@@ -176,6 +176,9 @@ func TestApplyDelta_EmptyManifestIsOK(t *testing.T) {
 }
 
 func TestApplyDelta_UnwritableTargetSkipped(t *testing.T) {
+	if !posixPerms {
+		t.Skip("Windows ignores directory permission bits; a 0555 dir stays writable")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root — a 0555 dir would still be writable")
 	}

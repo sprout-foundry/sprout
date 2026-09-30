@@ -17,6 +17,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // newTestAgent creates a minimal agent for unit tests using the test client path.
@@ -419,6 +420,7 @@ func assertPromptContainsBody(t *testing.T, loaded string, profile configuration
 	if err != nil {
 		t.Fatalf("extract embedded prompt for %s profile: %v", label, err)
 	}
+	embedded = filesystem.LocalizeScratchDir(embedded)
 	if !strings.Contains(loaded, strings.TrimSpace(embedded)) {
 		const headChars = 200
 		loadedHead := loaded

@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -122,22 +123,22 @@ Line three`
 
 func TestResolveSkillPathAbsolute(t *testing.T) {
 	// Absolute paths are returned as-is
-	result := resolveSkillPath("/absolute/path/to/skill")
-	if result != "/absolute/path/to/skill" {
-		t.Errorf("resolveSkillPath(absolute) = %q, want %q", result, "/absolute/path/to/skill")
+	abs := filepath.Join(t.TempDir(), "absolute", "path", "to", "skill")
+	result := resolveSkillPath(abs)
+	if result != abs {
+		t.Errorf("resolveSkillPath(absolute) = %q, want %q", result, abs)
 	}
 }
 
 func TestResolveSkillPathRelative(t *testing.T) {
 	// Relative paths become absolute (joined with exe dir or cwd)
 	result := resolveSkillPath("relative/path/to/skill")
-	// The result should be an absolute path
-	if result == "relative/path/to/skill" {
-		t.Errorf("resolveSkillPath(relative) returned unchanged relative path; expected absolute")
+	if !filepath.IsAbs(result) {
+		t.Errorf("resolveSkillPath(relative) = %q; expected absolute", result)
 	}
-	// It should contain "relative/path/to/skill"
-	if result[len(result)-len("relative/path/to/skill"):] != "relative/path/to/skill" {
-		t.Errorf("resolveSkillPath(relative) = %q, should end with %q", result, "relative/path/to/skill")
+	want := filepath.FromSlash("relative/path/to/skill")
+	if !strings.HasSuffix(result, want) {
+		t.Errorf("resolveSkillPath(relative) = %q, should end with %q", result, want)
 	}
 }
 

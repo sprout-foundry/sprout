@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,7 +40,7 @@ var policyListCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		fmt.Println("=== Shell Permission Policy ===")
+		console.Heading(os.Stdout, "Shell Permission Policy")
 		fmt.Println()
 
 		// User safe patterns
@@ -181,7 +182,7 @@ The pattern is added as a prefix match by default.`,
 				return fmt.Errorf("pattern '%s' already exists in dangerous patterns", pattern)
 			}
 		default:
-			return fmt.Errorf("invalid tier %q (must be 'safe' or 'dangerous')", tier)
+			return usageErrorf(cmd, "invalid tier %q (must be 'safe' or 'dangerous')", tier)
 		}
 
 		sp := configuration.ShellPattern{
@@ -241,7 +242,7 @@ Examples:
 			}
 			config.Shell.UserDangerousPatterns = removePattern(config.Shell.UserDangerousPatterns, idx)
 		default:
-			return fmt.Errorf("invalid tier %q (must be 'safe' or 'dangerous')", tier)
+			return usageErrorf(cmd, "invalid tier %q (must be 'safe' or 'dangerous')", tier)
 		}
 
 		if err := config.Save(); err != nil {

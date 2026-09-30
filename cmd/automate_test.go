@@ -749,7 +749,7 @@ func TestBuildAgentSubprocessArgs_Basic(t *testing.T) {
 	}
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui"}, args)
 }
 
 func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
@@ -765,7 +765,7 @@ func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
 	}
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "500"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui", "--max-iterations", "500"}, args)
 }
 
 func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
@@ -781,7 +781,7 @@ func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
 	}
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--budget-usd", "10", "--budget-warn", "0.5,0.8", "--heartbeat", "600"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui", "--budget-usd", "10", "--budget-warn", "0.5,0.8", "--heartbeat", "600"}, args)
 }
 
 func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
@@ -797,7 +797,7 @@ func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
 	}
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "100", "--budget-usd", "25", "--budget-warn", "0.5,0.8", "--heartbeat", "300"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui", "--max-iterations", "100", "--budget-usd", "25", "--budget-warn", "0.5,0.8", "--heartbeat", "300"}, args)
 }
 
 func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
@@ -807,7 +807,7 @@ func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
 	automateHeartbeatSeconds = 0
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", nil)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui"}, args)
 }
 
 func TestBuildAgentSubprocessArgs_NilInitial(t *testing.T) {
@@ -821,7 +821,7 @@ func TestBuildAgentSubprocessArgs_NilInitial(t *testing.T) {
 	}
 
 	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
-	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--yes", "--no-web-ui"}, args)
 }
 
 // =============================================================================

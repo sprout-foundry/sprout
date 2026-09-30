@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -56,7 +57,7 @@ func SavePastedText(content, baseDir string) (string, error) {
 		return "", fmt.Errorf("failed to write paste file: %w", err)
 	}
 
-	return "./" + filepath.Join(PastedTextDirName, filename), nil
+	return "./" + path.Join(PastedTextDirName, filename), nil
 }
 
 // ShouldSmartSavePaste reports whether content is large enough to merit

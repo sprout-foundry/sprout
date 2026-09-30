@@ -77,7 +77,7 @@ func runDiagComputerUse() error {
 		return enc.Encode(out)
 	}
 
-	fmt.Println("=== Computer Use Preflight ===")
+	console.Heading(os.Stdout, "Computer Use Preflight")
 	fmt.Println()
 	allOK := true
 	for _, c := range checks {

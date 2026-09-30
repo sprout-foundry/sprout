@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -178,7 +179,7 @@ func TestSave_ValidStore(t *testing.T) {
 		t.Fatalf("stat file: %v", err)
 	}
 	perm := info.Mode().Perm()
-	if perm != 0600 {
+	if runtime.GOOS != "windows" && perm != 0600 {
 		t.Fatalf("expected 0600 permissions, got %04o", perm)
 	}
 }
@@ -335,6 +336,7 @@ func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 }
 
 func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
+	skipWithoutUnixPermissions(t)
 	// Make home directory lookup fail by setting HOME to a very long invalid path
 	// that will cause os.MkdirAll to fail. Use a temp dir as SPROUT_CONFIG
 	// with a non-existent sub-path that we make unwritable.
@@ -362,6 +364,7 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 }
 
 func TestLoad_ReadError(t *testing.T) {
+	skipWithoutUnixPermissions(t)
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
 
@@ -490,6 +493,7 @@ func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 // even without HOME, so we detect that and skip.
 func TestGetConfigDir_HomeError(t *testing.T) {
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 
 	// Also clear SPROUT_CONFIG and XDG_CONFIG_HOME to force the home dir path
 	t.Setenv("SPROUT_CONFIG", "")
@@ -511,6 +515,7 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 // from GetAPIKeysPath() when GetConfigDir() fails.
 func TestLoad_GetAPIKeysPathError(t *testing.T) {
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -528,8 +533,13 @@ func TestLoad_GetAPIKeysPathError(t *testing.T) {
 // fails during Save (GetConfigDir → MkdirAll error or HomeDir error).
 func TestSave_GetAPIKeysPathError(t *testing.T) {
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
 
 	err := Save(Store{"test": "val"})
 	if err == nil {
@@ -543,6 +553,7 @@ func TestResolve_LoadError(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -563,6 +574,7 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	// Explicitly unset the named env var so os.Getenv returns empty
@@ -581,6 +593,7 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 // TestSave_WriteFileError covers lines 84-86: os.WriteFile fails when
 // the target directory is read-only.
 func TestSave_WriteFileError(t *testing.T) {
+	skipWithoutUnixPermissions(t)
 	if os.Getuid() == 0 {
 		t.Skip("skipping: root user can write to read-only directories")
 	}
@@ -781,6 +794,7 @@ func TestResolve_NilLikeEmptyProvider(t *testing.T) {
 // TestLoad_GetAPIKeysPathErrorViaUnreadableConfigDir covers the Load error path
 // where the config directory's parent is not creatable.
 func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
+	skipWithoutUnixPermissions(t)
 	if os.Getuid() == 0 {
 		t.Skip("skipping: root user bypasses permission checks")
 	}
@@ -820,5 +834,15 @@ func TestResolve_EnvVarSetButProvidedNameNotInEnv(t *testing.T) {
 	}
 	if resolved.Source != "stored" {
 		t.Fatalf("expected source 'stored', got %q", resolved.Source)
+	}
+}
+
+// skipWithoutUnixPermissions skips tests that rely on chmod to deny access:
+// on Windows os.Chmod only toggles the read-only attribute, which neither
+// blocks reads nor stops file creation inside a directory.
+func skipWithoutUnixPermissions(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod cannot deny access on Windows")
 	}
 }

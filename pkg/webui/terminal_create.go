@@ -68,7 +68,7 @@ var envVarsToStripFromUserShell = []string{"NO_COLOR", "FORCE_COLOR"}
 // (TERM, COLORTERM, SHELL, the SPROUT marker vars, and COLUMNS/LINES).
 //
 // This is the single source of truth for the terminal env block, shared by
-// createUnixSession, createFallbackUnixSession, and createWindowsSession.
+// createUnixSession and startPipeSession.
 func buildTerminalEnv(shell string, size *pty.Winsize) []string {
 	// envOverrides lists the names that buildTerminalEnv sets explicitly on
 	// the appended entries below. Any pre-existing entries with the same
@@ -169,7 +169,7 @@ func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...stri
 
 	switch runtime.GOOS {
 	case "windows":
-		session, err = tm.createWindowsSession(sessionID)
+		session, err = tm.createWindowsSession(sessionID, override)
 	default:
 		session, err = tm.createUnixSession(sessionID, override)
 	}
@@ -302,128 +302,6 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 	}
 }
 
-// createFallbackUnixSession creates a terminal session without a real PTY,
-// using exec.Cmd with stdin/stdout pipes instead. This is the fallback path
-// when pty.StartWithSize fails (e.g. on Alpine Linux, minimal containers, or
-// systems without /dev/pts mounted).
-//
-// The approach mirrors createWindowsSession: the stdin pipe is stored in
-// session.Pty (so WriteRawInput and ExecuteCommandInHidden continue to work),
-// and a goroutine reads from stdout to broadcast output to subscribers.
-//
-// Limitations of the fallback mode (session.NoPTY == true):
-//   - Terminal resize is a no-op (pipes don't support TIOCSWINSZ).
-//   - Full interactive terminal features (line editing, cursor control) are
-//     degraded because the shell is not connected to a real TTY.
-//   - Signal delivery (Ctrl+C via \x03) may not work reliably.
-func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride string) (*TerminalSession, error) {
-	shell, shellArgs, err := tm.resolveShell(shellOverride)
-	if err != nil {
-		return nil, fmt.Errorf("resolve shell: %w", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, shell, shellArgs...)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		cmd.Dir = tm.workspaceRoot
-	}
-
-	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
-
-	cmd.Env = buildTerminalEnv(shell, defaultSize)
-
-	// Create stdin pipe — stored in session.Pty for write compatibility.
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("fallback session stdin pipe: %w", err)
-	}
-
-	// Combine stdout and stderr into a single reader.
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("fallback session stdout pipe: %w", err)
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, fmt.Errorf("fallback session start: %w", err)
-	}
-
-	// Wrap the stdin pipe as an *os.File so session.Pty.Write continues to work.
-	// stdin is an *os.File on Unix (os.Pipe), so this assertion should succeed.
-	ptyFile, ok := stdin.(*os.File)
-	if !ok {
-		// Close pipes and process if type assertion fails.
-		stdin.Close()
-		stdout.Close()
-		cmd.Process.Kill()
-		cancel()
-		return nil, fmt.Errorf("fallback session: stdin pipe is not *os.File (unexpected type %T)", stdin)
-	}
-
-	session := &TerminalSession{
-		ID:        sessionID,
-		Command:   cmd,
-		Pty:       ptyFile,
-		Cancel:    cancel,
-		Active:    true,
-		LastUsed:  time.Now(),
-		StartedAt: time.Now(),
-		Size:      defaultSize,
-		ring:      newSessRing(),
-		NoPTY:     true,
-	}
-
-	// Reader goroutine — reads from stdout pipe (not from session.Pty which is stdin).
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				webuiLogger.Error("fallback terminal reader panicked", slog.String("session_id", session.ID), slog.Any("panic", r))
-				session.mutex.Lock()
-				session.Active = false
-				session.closeBackgroundDoneLocked()
-				session.mutex.Unlock()
-				session.closeAllSubs()
-			}
-		}()
-		buf := make([]byte, 32768)
-		for {
-			n, readErr := stdout.Read(buf)
-			if n > 0 {
-				chunk := make([]byte, n)
-				copy(chunk, buf[:n])
-				session.mutex.Lock()
-				session.LastUsed = time.Now()
-				session.mutex.Unlock()
-				session.broadcast(chunk)
-				if completed, code, isBg := session.checkBackgroundSentinel(chunk); completed {
-					tm.notifySessionUpdate(map[string]interface{}{
-						"session_id": session.ID,
-						"chat_id":    session.ChatID,
-						"event":      "completed",
-						"exit_code":  code,
-						"is_bg":      isBg,
-					})
-				}
-			}
-			if readErr != nil {
-				webuiLogger.Info("fallback terminal stdout closed", slog.String("session_id", session.ID), slog.Any("err", readErr))
-				session.mutex.Lock()
-				session.Active = false
-				session.closeBackgroundDoneLocked()
-				session.mutex.Unlock()
-				session.closeAllSubs()
-				return
-			}
-		}
-	}()
-
-	return session, nil
-}
-
 // resolveShell determines which shell to use on Unix systems.
 // shellOverride, if non-empty, is used directly (after verifying it exists).
 func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, shellArgs []string, err error) {
@@ -459,110 +337,12 @@ func (tm *TerminalManager) resolveShell(shellOverride string) (shell string, she
 	return "", nil, fmt.Errorf("no suitable shell found; tried %v", candidates)
 }
 
-// createWindowsSession creates a fallback session for Windows (non-PTY).
-func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSession, error) {
-	// Windows implementation - simplified fallback without PTY.
-	// Full PTY on Windows requires conpty which is more complex.
-	cmd := exec.Command("cmd")
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd = exec.CommandContext(ctx, cmd.Path)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		cmd.Dir = tm.workspaceRoot
-	}
-
-	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
-
-	// Run cmd.exe under the same sanitized env as the Unix shells so the
-	// user-interactive terminal on Windows does not inherit sprout's
-	// log-suppression NO_COLOR / FORCE_COLOR (same leak fix as the Unix
-	// paths — see buildTerminalEnv).
-	cmd.Env = buildTerminalEnv("cmd", defaultSize)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
-
-	session := &TerminalSession{
-		ID:        sessionID,
-		Command:   cmd,
-		Cancel:    cancel,
-		Active:    true,
-		LastUsed:  time.Now(),
-		StartedAt: time.Now(),
-		Size:      &pty.Winsize{Rows: 24, Cols: 80},
-		ring:      newSessRing(),
-	}
-
-	// Store stdin in the Pty field for WriteRawInput compatibility.
-	if ptyFile, ok := stdin.(*os.File); ok {
-		session.Pty = ptyFile
-	}
-
-	// Start a reader goroutine for the stdout pipe.
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				webuiLogger.Error("Windows terminal reader panicked", slog.String("session_id", sessionID), slog.Any("panic", r))
-				session.mutex.Lock()
-				session.Active = false
-				session.closeBackgroundDoneLocked()
-				session.mutex.Unlock()
-				session.closeAllSubs()
-			}
-		}()
-		buf := make([]byte, 32768)
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				chunk := make([]byte, n)
-				copy(chunk, buf[:n])
-				session.mutex.Lock()
-				session.LastUsed = time.Now()
-				session.mutex.Unlock()
-				session.broadcast(chunk)
-				if completed, code, isBg := session.checkBackgroundSentinel(chunk); completed {
-					tm.notifySessionUpdate(map[string]interface{}{
-						"session_id": session.ID,
-						"chat_id":    session.ChatID,
-						"event":      "completed",
-						"exit_code":  code,
-						"is_bg":      isBg,
-					})
-				}
-			}
-			if err != nil {
-				session.mutex.Lock()
-				session.Active = false
-				session.closeBackgroundDoneLocked()
-				session.mutex.Unlock()
-				session.closeAllSubs()
-				return
-			}
-		}
-	}()
-
-	return session, nil
-}
-
 // resolveShellArgs returns the extra arguments to pass when launching a shell
 // in login/interactive mode so that rc files are sourced correctly.
 func resolveShellArgs(shell string) []string {
-	base := shell
-	if idx := strings.LastIndex(shell, "/"); idx >= 0 {
-		base = shell[idx+1:]
+	base := filepath.Base(shell)
+	if ext := filepath.Ext(base); strings.EqualFold(ext, ".exe") {
+		base = strings.TrimSuffix(base, ext)
 	}
 	switch base {
 	case "bash", "zsh":
@@ -650,7 +430,7 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 	// Create the underlying PTY session (without inserting into map).
 	switch runtime.GOOS {
 	case "windows":
-		session, err = tm.createWindowsSession(id)
+		session, err = tm.createWindowsSession(id, "")
 	default:
 		session, err = tm.createUnixSession(id, "")
 	}

@@ -71,6 +71,7 @@ To create workflows, activate the workflow-automation skill in an agent session
 or see: sprout skill list`,
 	Args: cobra.NoArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		routeGoLogForTerminal()
 		sproutDir, err := automateSessionRoot()
 		if err != nil {
 			return err
@@ -78,9 +79,9 @@ or see: sprout skill list`,
 		removed, err := automate.SweepStaleSessions(sproutDir)
 		if err != nil {
 			// Log warning but don't fail
-			fmt.Fprintf(os.Stderr, "warn: stale session sweep: %v\n", err)
+			console.GlyphWarning.Printf("Stale session sweep failed: %v", err)
 		} else if removed > 0 {
-			fmt.Fprintf(os.Stderr, "Cleaned up %d stale session(s)\n", removed)
+			console.GlyphInfo.Printf("Cleaned up %d stale session(s)", removed)
 		}
 		return nil
 	},

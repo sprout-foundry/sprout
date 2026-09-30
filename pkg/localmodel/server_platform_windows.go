@@ -2,12 +2,15 @@
 
 package localmodel
 
-import "syscall"
+import (
+	"syscall"
 
-// detachedSysProcAttr returns platform-specific process attributes to
-// detach the server from the parent's process group so it survives CLI exit.
+	"golang.org/x/sys/windows"
+)
+
+// detachedSysProcAttr gives the server its own hidden console and process
+// group so it survives CLI exit: a child sharing the CLI's console dies
+// when that terminal closes or receives Ctrl+C/Ctrl+Break.
 func detachedSysProcAttr() *syscall.SysProcAttr {
-	// CREATE_NEW_PROCESS_GROUP (0x200) lets the child run in its own
-	// process group so Ctrl+C on the parent doesn't kill it.
-	return &syscall.SysProcAttr{CreationFlags: 0x00000200}
+	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
 }

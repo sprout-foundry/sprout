@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 
 import { getActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, getHomeView, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
 import { platformHref } from '../../utils/platformUrl';
+import { homePageLabel } from './HomeNav';
 
 type EmbedMessage = { type: 'sprout:open-editor'; href: string } | { type: 'sprout:platform-route'; path: string };
 
@@ -127,7 +128,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
           <button type="button" className="project-nav-back" onClick={onOpenMenu} aria-label="Open navigation">
             <Menu size={18} />
           </button>
-          <span>Home</span>
+          <span>{homePageLabel(path)}</span>
         </div>
       )}
       <iframe

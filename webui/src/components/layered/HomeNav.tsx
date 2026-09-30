@@ -46,6 +46,13 @@ function isActive(entry: HomeEntry, path: string): boolean {
   return roots.some((root) => (root === '/' ? path === '/' : path === root || path.startsWith(`${root}/`)));
 }
 
+/** The Home page a route belongs to, by its nav label ("Tasks" for a task). */
+export function homePageLabel(path: string): string {
+  const entry = [...WORK, ...ACCOUNT].find((e) => isActive(e, path));
+  if (entry) return entry.label;
+  return path === '/admin' || path.startsWith('/admin/') ? 'Admin' : 'Home';
+}
+
 interface HomeNavProps {
   path: string;
   projectLabel: string;

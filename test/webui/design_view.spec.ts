@@ -84,8 +84,12 @@ async function openDesignView(target: Page = page): Promise<void> {
   // The active mode persists per instance, so a reload inside this serial run
   // may come back already in Design. Wait for the shell to mount either way,
   // then switch only if we are not already there.
+  // Code mode may come back with a file in front (a previous test opened a
+  // flow's source), not the chat.
   const designView = target.getByTestId("design-view");
-  const codeShell = target.getByTestId(TESTIDS["chat-shell"]);
+  const codeShell = target
+    .getByTestId(TESTIDS["chat-shell"])
+    .or(target.getByTestId(TESTIDS["editor-pane"]));
   await expect(designView.or(codeShell).first()).toBeVisible({
     timeout: 30_000,
   });

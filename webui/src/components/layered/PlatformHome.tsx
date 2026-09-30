@@ -8,10 +8,18 @@
 import { Menu } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { getActiveRepoURL } from '../../services/activeRepo';
-import { closeHome, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
+import { closeHome, getHomeView, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
 import { platformHref } from '../../utils/platformUrl';
 
 type EmbedMessage = { type: 'sprout:open-editor'; href: string } | { type: 'sprout:platform-route'; path: string };
+
+function frameHoldsEditor(frame: HTMLIFrameElement | null): boolean {
+  try {
+    return (frame?.contentWindow as unknown as Record<string, unknown> | null)?.__sproutEditor === true;
+  } catch {
+    return false;
+  }
+}
 
 function sameRepo(a: string | null, b: string | null): boolean {
   const norm = (u: string | null) =>
@@ -73,7 +81,21 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
       if (e.data.type === 'sprout:open-editor') {
         const target = new URL(e.data.href, window.location.origin);
         const repo = target.searchParams.get('repo');
+        // A platform page that meant to show itself inside the editor (the
+        // frame navigated to /webui/?home=…): show it here, in the frame.
+        const homeRoute = target.searchParams.get('home');
+        if (homeRoute && (!repo || sameRepo(repo, getActiveRepoURL()))) {
+          if (frameRef.current) frameRef.current.src = platformHref(`/?embed=1#${homeRoute}`);
+          syncHomePath(homeRoute);
+          return;
+        }
         if (!repo || sameRepo(repo, getActiveRepoURL())) {
+          // Leaving Home for the editor. A frame that ended up holding an
+          // editor (which refused to render nested) goes back to a platform
+          // page; a platform page stays loaded.
+          if (frameHoldsEditor(frameRef.current)) {
+            frameRef.current!.src = platformHref(`/?embed=1#${getHomeView().path}`);
+          }
           closeHome();
           return;
         }

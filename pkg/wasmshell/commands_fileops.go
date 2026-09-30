@@ -37,27 +37,27 @@ func cmdCd(args []string, stdin string) CmdResult {
 	if target == "-" {
 		target = ShellEnv.Get("OLDPWD")
 		if target == "" {
-			return CmdResult{"", "cd: OLDPWD not set\n", 1}
+			return CmdResult{Stdout: "", Stderr: "cd: OLDPWD not set\n", ExitCode: 1}
 		}
 		printDir = true
 	}
 	path := ResolvePath(target)
 	info, err := os.Stat(path) //nolint:gosec // G703: shell commands act on the paths the user names
 	if err != nil {
-		return CmdResult{"", fmt.Sprintf("cd: %s: %s\n", target, describeErr(err)), 1}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cd: %s: %s\n", target, describeErr(err)), ExitCode: 1}
 	}
 	if !info.IsDir() {
-		return CmdResult{"", fmt.Sprintf("cd: %s: Not a directory\n", target), 1}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cd: %s: Not a directory\n", target), ExitCode: 1}
 	}
 	old, _ := os.Getwd()
 	if err := os.Chdir(path); err != nil {
-		return CmdResult{"", fmt.Sprintf("cd: %s: %s\n", target, describeErr(err)), 1}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cd: %s: %s\n", target, describeErr(err)), ExitCode: 1}
 	}
 	abs, _ := filepath.Abs(path)
 	ShellEnv.Set("OLDPWD", old)
 	ShellEnv.Set("PWD", abs)
 	if printDir {
-		return CmdResult{abs + "\n", "", 0}
+		return CmdResult{Stdout: abs + "\n", Stderr: "", ExitCode: 0}
 	}
 	return CmdResult{}
 }
@@ -65,9 +65,9 @@ func cmdCd(args []string, stdin string) CmdResult {
 func cmdPwd(args []string, stdin string) CmdResult {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return CmdResult{"", "pwd: error getting working directory\n", 1}
+		return CmdResult{Stdout: "", Stderr: "pwd: error getting working directory\n", ExitCode: 1}
 	}
-	return CmdResult{cwd + "\n", "", 0}
+	return CmdResult{Stdout: cwd + "\n", Stderr: "", ExitCode: 0}
 }
 
 func cmdCat(args []string, stdin string) CmdResult {
@@ -95,13 +95,13 @@ func cmdCat(args []string, stdin string) CmdResult {
 		}
 		data, err := readFileArg(f)
 		if err != nil {
-			return CmdResult{raw.String(), fmt.Sprintf("cat: %s: %s\n", f, describeErrText(err)), 1}
+			return CmdResult{Stdout: raw.String(), Stderr: fmt.Sprintf("cat: %s: %s\n", f, describeErrText(err)), ExitCode: 1}
 		}
 		raw.WriteString(data)
 	}
 	text := raw.String()
 	if !strings.ContainsAny(flags, "nbsEA") || text == "" {
-		return CmdResult{text, "", 0}
+		return CmdResult{Stdout: text, Stderr: "", ExitCode: 0}
 	}
 	trailing := strings.HasSuffix(text, "\n")
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
@@ -132,7 +132,7 @@ func cmdCat(args []string, stdin string) CmdResult {
 			out.WriteString("\n")
 		}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func describeErrText(err error) string {
@@ -146,7 +146,7 @@ func cmdMkdir(args []string, stdin string) CmdResult {
 	flags, dirs := splitFlags(args)
 	parents := strings.Contains(flags, "p") || containsArg(args, "--parents")
 	if len(dirs) == 0 {
-		return CmdResult{"", "mkdir: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "mkdir: missing operand\n", ExitCode: 1}
 	}
 	var errs strings.Builder
 	for _, d := range dirs {
@@ -162,7 +162,7 @@ func cmdMkdir(args []string, stdin string) CmdResult {
 		}
 	}
 	if errs.Len() > 0 {
-		return CmdResult{"", errs.String(), 1}
+		return CmdResult{Stdout: "", Stderr: errs.String(), ExitCode: 1}
 	}
 	return CmdResult{}
 }
@@ -185,7 +185,7 @@ func cmdRm(args []string, stdin string) CmdResult {
 		if force {
 			return CmdResult{}
 		}
-		return CmdResult{"", "rm: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "rm: missing operand\n", ExitCode: 1}
 	}
 	var errs strings.Builder
 	for _, t := range targets {
@@ -213,7 +213,7 @@ func cmdRm(args []string, stdin string) CmdResult {
 		}
 	}
 	if errs.Len() > 0 {
-		return CmdResult{"", errs.String(), 1}
+		return CmdResult{Stdout: "", Stderr: errs.String(), ExitCode: 1}
 	}
 	return CmdResult{}
 }
@@ -221,13 +221,13 @@ func cmdRm(args []string, stdin string) CmdResult {
 func cmdRmdir(args []string, stdin string) CmdResult {
 	flags, dirs := splitFlags(args)
 	if len(dirs) == 0 {
-		return CmdResult{"", "rmdir: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "rmdir: missing operand\n", ExitCode: 1}
 	}
 	for _, d := range dirs {
 		path := ResolvePath(d)
 		for {
 			if err := os.Remove(path); err != nil { //nolint:gosec // G703: shell commands act on the paths the user names
-				return CmdResult{"", fmt.Sprintf("rmdir: failed to remove '%s': %s\n", d, describeErr(err)), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("rmdir: failed to remove '%s': %s\n", d, describeErr(err)), ExitCode: 1}
 			}
 			if !strings.Contains(flags, "p") {
 				break
@@ -260,7 +260,7 @@ func cmdCp(args []string, stdin string) CmdResult {
 	noClobber := strings.Contains(flags, "n")
 	verbose := strings.Contains(flags, "v")
 	if len(ops) < 2 {
-		return CmdResult{"", "cp: missing destination file operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "cp: missing destination file operand\n", ExitCode: 1}
 	}
 	dst := ResolvePath(ops[len(ops)-1])
 	srcs := ops[:len(ops)-1]
@@ -297,9 +297,9 @@ func cmdCp(args []string, stdin string) CmdResult {
 		}
 	}
 	if errs.Len() > 0 {
-		return CmdResult{out.String(), errs.String(), 1}
+		return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: 1}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func copyPath(src, dst string) error {
@@ -336,7 +336,7 @@ func cmdMv(args []string, stdin string) CmdResult {
 	noClobber := strings.Contains(flags, "n")
 	verbose := strings.Contains(flags, "v")
 	if len(ops) < 2 {
-		return CmdResult{"", "mv: missing destination file operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "mv: missing destination file operand\n", ExitCode: 1}
 	}
 	dst := ResolvePath(ops[len(ops)-1])
 	srcs := ops[:len(ops)-1]
@@ -371,9 +371,9 @@ func cmdMv(args []string, stdin string) CmdResult {
 		}
 	}
 	if errs.Len() > 0 {
-		return CmdResult{out.String(), errs.String(), 1}
+		return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: 1}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdTouch(args []string, stdin string) CmdResult {
@@ -392,7 +392,7 @@ func cmdTouch(args []string, stdin string) CmdResult {
 		}
 	}
 	if len(files) == 0 {
-		return CmdResult{"", "touch: missing file operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "touch: missing file operand\n", ExitCode: 1}
 	}
 	for _, f := range files {
 		path := ResolvePath(f)
@@ -405,10 +405,10 @@ func cmdTouch(args []string, stdin string) CmdResult {
 			continue
 		}
 		if _, err := os.Stat(filepath.Dir(path)); err != nil { //nolint:gosec // G703: shell commands act on the paths the user names
-			return CmdResult{"", fmt.Sprintf("touch: cannot touch '%s': No such file or directory\n", f), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("touch: cannot touch '%s': No such file or directory\n", f), ExitCode: 1}
 		}
 		if err := SyncWriteFile(path, ""); err != nil {
-			return CmdResult{"", fmt.Sprintf("touch: cannot touch '%s': %s\n", f, describeErr(err)), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("touch: cannot touch '%s': %s\n", f, describeErr(err)), ExitCode: 1}
 		}
 	}
 	return CmdResult{}

@@ -82,7 +82,7 @@ func (in *ioIn) readLine(delim byte) (line string, ok bool) {
 // commands.
 func ParseAndExecute(input string) CmdResult {
 	if strings.TrimSpace(input) == "" {
-		return CmdResult{"", "", 0}
+		return CmdResult{Stdout: "", Stderr: "", ExitCode: 0}
 	}
 	addToHistory(input)
 	sh := &interp{name: "sh", lastExit: lastExitCode}
@@ -94,9 +94,9 @@ func ParseAndExecute(input string) CmdResult {
 func parseFailure(err error) CmdResult {
 	var se *shellError
 	if errors.As(err, &se) && se.unsupported {
-		return CmdResult{"", "sh: " + err.Error() + "\n", ExitCommandNotFound}
+		return CmdResult{Stdout: "", Stderr: "sh: " + err.Error() + "\n", ExitCode: ExitCommandNotFound}
 	}
-	return CmdResult{"", "sh: " + err.Error() + "\n", 2}
+	return CmdResult{Stdout: "", Stderr: "sh: " + err.Error() + "\n", ExitCode: 2}
 }
 
 func (sh *interp) runSource(src string, in *ioIn) CmdResult {
@@ -113,8 +113,7 @@ func (sh *interp) runSource(src string, in *ioIn) CmdResult {
 }
 
 func (r *CmdResult) add(o CmdResult) {
-	r.Stdout += o.Stdout
-	r.Stderr += o.Stderr
+	r.appendOutput(o)
 	r.ExitCode = o.ExitCode
 }
 
@@ -171,12 +170,18 @@ func (sh *interp) execPipeline(p *pipelineNode, in *ioIn) CmdResult {
 	stdin := in
 	codes := make([]int, 0, len(p.cmds))
 	for i, c := range p.cmds {
-		if i > 0 {
-			stdin = &ioIn{data: out.Stdout}
-		}
 		r := sh.execCommand(c, stdin)
-		out.Stdout = r.Stdout
-		out.Stderr += r.Stderr
+		if i == len(p.cmds)-1 {
+			out.appendOutput(r)
+		} else {
+			// An earlier stage's stdout feeds the next; only its stderr shows.
+			for _, s := range r.segs() {
+				if s.Err {
+					out.writeErr(s.Text)
+				}
+			}
+			stdin = &ioIn{data: r.Stdout}
+		}
 		codes = append(codes, r.ExitCode)
 		// Stages of a real pipeline run in subshells: exit or break there
 		// ends only that stage.
@@ -240,15 +245,15 @@ func (sh *interp) execCommand(c command, in *ioIn) CmdResult {
 	case *condCmd:
 		return sh.withRedirs(c.redirs, in, func(*ioIn) CmdResult { return sh.evalDoubleBracket(c.words) })
 	}
-	return CmdResult{"", "sh: unknown command node\n", 2}
+	return CmdResult{Stdout: "", Stderr: "sh: unknown command node\n", ExitCode: 2}
 }
 
 func errResult(err error) CmdResult {
 	var se *shellError
 	if errors.As(err, &se) && se.unsupported {
-		return CmdResult{"", "sh: " + err.Error() + "\n", ExitCommandNotFound}
+		return CmdResult{Stdout: "", Stderr: "sh: " + err.Error() + "\n", ExitCode: ExitCommandNotFound}
 	}
-	return CmdResult{"", "sh: " + err.Error() + "\n", 1}
+	return CmdResult{Stdout: "", Stderr: "sh: " + err.Error() + "\n", ExitCode: 1}
 }
 
 func (sh *interp) child() *interp {
@@ -365,7 +370,7 @@ func (sh *interp) execSimple(c *simpleCmd, in *ioIn) CmdResult {
 
 func (sh *interp) flushSideErr(r CmdResult) CmdResult {
 	if sh.sideErr.Len() > 0 {
-		r.Stderr = sh.sideErr.String() + r.Stderr
+		r.prependErr(sh.sideErr.String())
 		sh.sideErr.Reset()
 	}
 	sh.lastExit = r.ExitCode
@@ -388,7 +393,7 @@ func (sh *interp) run(argv []string, in *ioIn) CmdResult {
 	if strings.Contains(name, "/") {
 		return sh.runScriptFile(name, argv[1:], in)
 	}
-	return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), ExitCommandNotFound}
+	return CmdResult{Stdout: "", Stderr: fmt.Sprintf("command not found: %s\n", name), ExitCode: ExitCommandNotFound}
 }
 
 // runArgv runs an already-expanded command line with the given input
@@ -402,7 +407,7 @@ func (sh *interp) runArgv(argv []string, stdin string) CmdResult {
 
 func (sh *interp) callFunction(body command, args []string, in *ioIn) CmdResult {
 	if sh.funcDepth >= maxFuncDepth {
-		return CmdResult{"", "sh: maximum function nesting level exceeded\n", 1}
+		return CmdResult{Stdout: "", Stderr: "sh: maximum function nesting level exceeded\n", ExitCode: 1}
 	}
 	savedPos := sh.positional
 	sh.positional = args

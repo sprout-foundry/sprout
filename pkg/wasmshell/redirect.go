@@ -33,7 +33,7 @@ func (sh *interp) withRedirs(rs []*redir, in *ioIn, fn func(*ioIn) CmdResult) Cm
 	for _, r := range rs {
 		newIn, err := sh.openRedir(r, routes)
 		if err != nil {
-			return CmdResult{"", "sh: " + err.Error() + "\n", 1}
+			return CmdResult{Stdout: "", Stderr: "sh: " + err.Error() + "\n", ExitCode: 1}
 		}
 		if newIn != nil {
 			in = newIn
@@ -41,20 +41,30 @@ func (sh *interp) withRedirs(rs []*redir, in *ioIn, fn func(*ioIn) CmdResult) Cm
 	}
 	res := fn(in)
 	out := CmdResult{ExitCode: res.ExitCode}
-	write := func(s sink, text string) {
+	var files []string
+	fileText := map[string]string{}
+	for _, seg := range res.segs() {
+		s := routes[1]
+		if seg.Err {
+			s = routes[2]
+		}
 		switch s.kind {
 		case sinkOut:
-			out.Stdout += text
+			out.writeOut(seg.Text)
 		case sinkErr:
-			out.Stderr += text
+			out.writeErr(seg.Text)
 		case sinkFile:
-			if err := appendToFile(s.path, text); err != nil {
-				out.Stderr += fmt.Sprintf("sh: %s: %s\n", s.path, err)
+			if _, seen := fileText[s.path]; !seen {
+				files = append(files, s.path)
 			}
+			fileText[s.path] += seg.Text
 		}
 	}
-	write(routes[1], res.Stdout)
-	write(routes[2], res.Stderr)
+	for _, path := range files {
+		if err := appendToFile(path, fileText[path]); err != nil {
+			out.writeErr(fmt.Sprintf("sh: %s: %s\n", path, err))
+		}
+	}
 	return out
 }
 

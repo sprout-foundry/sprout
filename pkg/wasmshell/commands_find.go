@@ -63,7 +63,7 @@ func biFind(sh *interp, args []string, _ *ioIn) CmdResult {
 		if strings.Contains(f.err.Error(), "not supported") {
 			code = ExitCommandNotFound
 		}
-		return CmdResult{"", "find: " + f.err.Error() + "\n", code}
+		return CmdResult{Stdout: "", Stderr: "find: " + f.err.Error() + "\n", ExitCode: code}
 	}
 	if expr == nil {
 		expr = func(*findEntry) bool { return true }
@@ -131,7 +131,7 @@ func biFind(sh *interp, args []string, _ *ioIn) CmdResult {
 			f.code = 1
 		}
 	}
-	return CmdResult{f.out.String(), f.errs.String(), f.code}
+	return CmdResult{Stdout: f.out.String(), Stderr: f.errs.String(), ExitCode: f.code}
 }
 
 func joinFindPath(root, rel string) string {

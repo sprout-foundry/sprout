@@ -89,15 +89,15 @@ func cmdHead(args []string, stdin string) CmdResult {
 		for _, t := range targets {
 			data, err := os.ReadFile(ResolvePath(t))
 			if err != nil {
-				return CmdResult{"", fmt.Sprintf("head: %s: %s\n", t, describeErr(err)), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("head: %s: %s\n", t, describeErr(err)), ExitCode: 1}
 			}
 			writeInput(t, string(data))
 		}
-		return CmdResult{out.String(), "", 0}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 	}
 
 	writeInput("", stdin)
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdTail(args []string, stdin string) CmdResult {
@@ -192,15 +192,15 @@ func cmdTail(args []string, stdin string) CmdResult {
 		for _, t := range targets {
 			data, err := os.ReadFile(ResolvePath(t))
 			if err != nil {
-				return CmdResult{"", fmt.Sprintf("tail: %s: %s\n", t, describeErr(err)), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("tail: %s: %s\n", t, describeErr(err)), ExitCode: 1}
 			}
 			writeInput(t, string(data))
 		}
-		return CmdResult{out.String(), "", 0}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 	}
 
 	writeInput("", stdin)
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 type wcCounts struct {
@@ -296,12 +296,12 @@ func cmdWc(args []string, stdin string) CmdResult {
 	if errs.Len() > 0 {
 		code = 1
 	}
-	return CmdResult{out.String(), errs.String(), code}
+	return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: code}
 }
 
 func cmdTee(args []string, stdin string) CmdResult {
 	if len(args) == 0 {
-		return CmdResult{stdin, "", 0}
+		return CmdResult{Stdout: stdin, Stderr: "", ExitCode: 0}
 	}
 
 	appendMode := false
@@ -328,5 +328,5 @@ func cmdTee(args []string, stdin string) CmdResult {
 		}
 	}
 
-	return CmdResult{stdin, "", 0}
+	return CmdResult{Stdout: stdin, Stderr: "", ExitCode: 0}
 }

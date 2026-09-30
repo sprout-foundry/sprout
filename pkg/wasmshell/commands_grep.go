@@ -233,11 +233,11 @@ func buildMatcher(patterns []string, fixed, extended, word, line, fold bool) (*r
 func cmdGrep(args []string, stdin string) CmdResult {
 	o := &grepOpts{s: &searcher{binary: "report"}}
 	if err := o.parse(args); err != nil {
-		return CmdResult{"", "grep: " + err.Error() + "\n", 2}
+		return CmdResult{Stdout: "", Stderr: "grep: " + err.Error() + "\n", ExitCode: 2}
 	}
 	re, err := buildMatcher(o.patterns, o.fixed, o.extended, o.word, o.line, o.fold)
 	if err != nil {
-		return CmdResult{"", "grep: invalid pattern: " + err.Error() + "\n", 2}
+		return CmdResult{Stdout: "", Stderr: "grep: invalid pattern: " + err.Error() + "\n", ExitCode: 2}
 	}
 	s := o.s
 	s.re = re
@@ -305,7 +305,7 @@ func grepResult(s *searcher, errs string, hadErr bool) CmdResult {
 	if hadErr && (!s.quiet || !s.matched) {
 		code = 2
 	}
-	return CmdResult{s.out.String(), errs, code}
+	return CmdResult{Stdout: s.out.String(), Stderr: errs, ExitCode: code}
 }
 
 func (o *grepOpts) walk(root, abs string) {

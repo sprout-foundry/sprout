@@ -75,16 +75,16 @@ func cmdGit(args []string, stdin string) CmdResult {
 	}
 
 	if !ReadOnlyGitSubcommands[sub] {
-		return CmdResult{"", fmt.Sprintf("git: '%s' is not available in the browser shell (read-only subcommands only)\n", sub), 127}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("git: '%s' is not available in the browser shell (read-only subcommands only)\n", sub), ExitCode: 127}
 	}
 
 	if gitExecutor == nil {
-		return CmdResult{"", "git: not available in this shell\n", 127}
+		return CmdResult{Stdout: "", Stderr: "git: not available in this shell\n", ExitCode: 127}
 	}
 
 	return gitExecutor(sub, rest)
 }
 
 func gitUsageHint() CmdResult {
-	return CmdResult{"", "usage: git <read-only subcommand> (status, diff, log, show, branch, remote, ls-files, rev-list, rev-parse)\n", 1}
+	return CmdResult{Stdout: "", Stderr: "usage: git <read-only subcommand> (status, diff, log, show, branch, remote, ls-files, rev-list, rev-parse)\n", ExitCode: 1}
 }

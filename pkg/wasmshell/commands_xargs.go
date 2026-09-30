@@ -133,17 +133,16 @@ func biXargs(sh *interp, args []string, in *ioIn) CmdResult {
 	var out CmdResult
 	for _, argv := range batches {
 		if trace {
-			out.Stderr += strings.Join(argv, " ") + "\n"
+			out.writeErr(strings.Join(argv, " ") + "\n")
 		}
 		r := sh.runArgv(argv, "")
-		out.Stdout += r.Stdout
-		out.Stderr += r.Stderr
+		out.appendOutput(r)
 		switch {
 		case r.ExitCode == ExitCommandNotFound:
 			out.ExitCode = ExitCommandNotFound
 			return out
 		case r.ExitCode == 255:
-			out.Stderr += fmt.Sprintf("xargs: %s: exited with status 255; aborting\n", argv[0])
+			out.writeErr(fmt.Sprintf("xargs: %s: exited with status 255; aborting\n", argv[0]))
 			out.ExitCode = 124
 			return out
 		case r.ExitCode != 0:

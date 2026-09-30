@@ -51,11 +51,11 @@ func init() {
 	for _, name := range []string{"wait", "trap", "hash", "shopt", "ulimit", "disown"} {
 		shellBuiltins[name] = func(*interp, []string, *ioIn) CmdResult { return CmdResult{} }
 	}
-	shellBuiltins["umask"] = func(*interp, []string, *ioIn) CmdResult { return CmdResult{"0022\n", "", 0} }
+	shellBuiltins["umask"] = func(*interp, []string, *ioIn) CmdResult { return CmdResult{Stdout: "0022\n", Stderr: "", ExitCode: 0} }
 }
 
 func usage(name, msg string, code int) CmdResult {
-	return CmdResult{"", fmt.Sprintf("%s: %s\n", name, msg), code}
+	return CmdResult{Stdout: "", Stderr: fmt.Sprintf("%s: %s\n", name, msg), ExitCode: code}
 }
 
 func biExit(sh *interp, args []string, _ *ioIn) CmdResult {
@@ -137,7 +137,7 @@ func biSet(sh *interp, args []string, _ *ioIn) CmdResult {
 		for _, k := range sortedKeys(ShellEnv.All()) {
 			fmt.Fprintf(&b, "%s=%s\n", k, ShellEnv.Get(k))
 		}
-		return CmdResult{b.String(), "", 0}
+		return CmdResult{Stdout: b.String(), Stderr: "", ExitCode: 0}
 	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -198,7 +198,7 @@ func biLocal(sh *interp, args []string, _ *ioIn) CmdResult {
 func biDeclare(sh *interp, args []string, in *ioIn) CmdResult {
 	for _, a := range args {
 		if strings.HasPrefix(a, "-") && strings.ContainsAny(a, "aA") {
-			return CmdResult{"", "declare: arrays are not supported by the in-browser shell\n", ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: "declare: arrays are not supported by the in-browser shell\n", ExitCode: ExitCommandNotFound}
 		}
 	}
 	if sh.funcDepth > 0 {
@@ -288,7 +288,7 @@ func biRead(sh *interp, args []string, in *ioIn) CmdResult {
 				}
 			}
 		case "-a":
-			return CmdResult{"", "read: arrays are not supported by the in-browser shell\n", ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: "read: arrays are not supported by the in-browser shell\n", ExitCode: ExitCommandNotFound}
 		default:
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
 				raw = raw || strings.Contains(a, "r")

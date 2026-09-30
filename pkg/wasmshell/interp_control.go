@@ -51,7 +51,7 @@ func (sh *interp) loopControl() bool {
 }
 
 func loopLimit(out CmdResult) CmdResult {
-	out.Stderr += fmt.Sprintf("sh: loop stopped after %d iterations\n", maxLoopIterations)
+	out.writeErr(fmt.Sprintf("sh: loop stopped after %d iterations\n", maxLoopIterations))
 	out.ExitCode = 1
 	return out
 }
@@ -66,8 +66,7 @@ func (sh *interp) execWhile(c *loopCmd, in *ioIn) CmdResult {
 		sh.condDepth++
 		r := sh.execList(c.cond, in)
 		sh.condDepth--
-		out.Stdout += r.Stdout
-		out.Stderr += r.Stderr
+		out.appendOutput(r)
 		if sh.flow != flowNone {
 			if sh.loopControl() {
 				break
@@ -78,8 +77,7 @@ func (sh *interp) execWhile(c *loopCmd, in *ioIn) CmdResult {
 			break
 		}
 		b := sh.execList(c.body, in)
-		out.Stdout += b.Stdout
-		out.Stderr += b.Stderr
+		out.appendOutput(b)
 		code = b.ExitCode
 		if sh.loopControl() {
 			break

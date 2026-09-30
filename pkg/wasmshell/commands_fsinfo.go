@@ -68,9 +68,9 @@ func cmdHashSum(name string, newHash func() hash.Hash, args []string, stdin stri
 		fmt.Fprintf(&out, "%s  %s\n", sum(data), f)
 	}
 	if errs.Len() > 0 {
-		return CmdResult{out.String(), errs.String(), 1}
+		return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: 1}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func hashCheck(name string, sum func(string) string, files []string, stdin string) CmdResult {
@@ -78,7 +78,7 @@ func hashCheck(name string, sum func(string) string, files []string, stdin strin
 	if len(files) > 0 {
 		data, err := readFileArg(files[0])
 		if err != nil {
-			return CmdResult{"", fmt.Sprintf("%s: %s: %s\n", name, files[0], describeErrText(err)), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("%s: %s: %s\n", name, files[0], describeErrText(err)), ExitCode: 1}
 		}
 		list = data
 	}
@@ -98,9 +98,9 @@ func hashCheck(name string, sum func(string) string, files []string, stdin strin
 		fmt.Fprintf(&out, "%s: OK\n", file)
 	}
 	if failed > 0 {
-		return CmdResult{out.String(), fmt.Sprintf("%s: WARNING: %d computed checksum did NOT match\n", name, failed), 1}
+		return CmdResult{Stdout: out.String(), Stderr: fmt.Sprintf("%s: WARNING: %d computed checksum did NOT match\n", name, failed), ExitCode: 1}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdBase64(args []string, stdin string) CmdResult {
@@ -134,10 +134,10 @@ func cmdBase64(args []string, stdin string) CmdResult {
 		data, err := base64.StdEncoding.DecodeString(clean)
 		if err != nil {
 			if data, err = base64.RawStdEncoding.DecodeString(strings.TrimRight(clean, "=")); err != nil {
-				return CmdResult{"", "base64: invalid input\n", 1}
+				return CmdResult{Stdout: "", Stderr: "base64: invalid input\n", ExitCode: 1}
 			}
 		}
-		return CmdResult{string(data), "", 0}
+		return CmdResult{Stdout: string(data), Stderr: "", ExitCode: 0}
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(input))
 	if wrap > 0 {
@@ -152,7 +152,7 @@ func cmdBase64(args []string, stdin string) CmdResult {
 	if enc == "" {
 		return CmdResult{}
 	}
-	return CmdResult{enc + "\n", "", 0}
+	return CmdResult{Stdout: enc + "\n", Stderr: "", ExitCode: 0}
 }
 
 func fileTypeName(info os.FileInfo) string {
@@ -184,7 +184,7 @@ func cmdStat(args []string, _ string) CmdResult {
 		}
 	}
 	if len(files) == 0 {
-		return CmdResult{"", "stat: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "stat: missing operand\n", ExitCode: 1}
 	}
 	var out, errs strings.Builder
 	for _, f := range files {
@@ -202,9 +202,9 @@ func cmdStat(args []string, _ string) CmdResult {
 			info.ModTime().Format("2006-01-02 15:04:05.000000000 -0700"))
 	}
 	if errs.Len() > 0 {
-		return CmdResult{out.String(), errs.String(), 1}
+		return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: 1}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func statFormat(format, name string, info os.FileInfo) string {
@@ -290,7 +290,7 @@ func cmdDu(args []string, _ string) CmdResult {
 		root := ResolvePath(f)
 		rootInfo, err := os.Stat(root) //nolint:gosec // G703: shell commands act on the paths the user names
 		if err != nil {
-			return CmdResult{out.String(), fmt.Sprintf("du: cannot access '%s': %s\n", f, describeErr(err)), 1}
+			return CmdResult{Stdout: out.String(), Stderr: fmt.Sprintf("du: cannot access '%s': %s\n", f, describeErr(err)), ExitCode: 1}
 		}
 		if !rootInfo.IsDir() {
 			fmt.Fprintf(&out, "%s\t%s\n", size(rootInfo.Size()), f)
@@ -330,7 +330,7 @@ func cmdDu(args []string, _ string) CmdResult {
 	if total {
 		fmt.Fprintf(&out, "%s\ttotal\n", size(grand))
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func relTo(root, p string) string {
@@ -371,7 +371,7 @@ func cmdReadlink(args []string, _ string) CmdResult {
 		}
 		out.WriteString(target + "\n")
 	}
-	return CmdResult{out.String(), "", code}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 }
 
 func cmdMktemp(args []string, _ string) CmdResult {
@@ -401,7 +401,7 @@ func cmdMktemp(args []string, _ string) CmdResult {
 		}
 	}
 	if err := os.MkdirAll(ResolvePath(parent), 0o755); err != nil { //nolint:gosec // G703: shell commands act on the paths the user names
-		return CmdResult{"", fmt.Sprintf("mktemp: %s: %s\n", parent, describeErr(err)), 1}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("mktemp: %s: %s\n", parent, describeErr(err)), ExitCode: 1}
 	}
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	for attempt := 0; attempt < 100; attempt++ {
@@ -426,11 +426,11 @@ func cmdMktemp(args []string, _ string) CmdResult {
 			err = SyncWriteFile(abs, "")
 		}
 		if err != nil {
-			return CmdResult{"", fmt.Sprintf("mktemp: failed to create %s: %s\n", path, describeErr(err)), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("mktemp: failed to create %s: %s\n", path, describeErr(err)), ExitCode: 1}
 		}
-		return CmdResult{path + "\n", "", 0}
+		return CmdResult{Stdout: path + "\n", Stderr: "", ExitCode: 0}
 	}
-	return CmdResult{"", "mktemp: too many templates\n", 1}
+	return CmdResult{Stdout: "", Stderr: "mktemp: too many templates\n", ExitCode: 1}
 }
 
 func cmdFile(args []string, _ string) CmdResult {
@@ -466,7 +466,7 @@ func cmdFile(args []string, _ string) CmdResult {
 		}
 		fmt.Fprintf(&out, "%s: %s\n", f, kind)
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func isASCII(s string) bool {

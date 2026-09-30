@@ -80,7 +80,7 @@ func (sh *interp) runScriptFile(path string, args []string, in *ioIn) CmdResult 
 	data, err := os.ReadFile(ResolvePath(path)) //nolint:gosec // G703: shell commands act on the paths the user names
 	if err != nil {
 		if os.IsNotExist(err) {
-			return CmdResult{"", fmt.Sprintf("command not found: %s\n", path), ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("command not found: %s\n", path), ExitCode: ExitCommandNotFound}
 		}
 		return usage("sh", path+": "+describeErr(err), 126)
 	}
@@ -96,7 +96,7 @@ func (sh *interp) runScriptFile(path string, args []string, in *ioIn) CmdResult 
 			}
 		}
 		if !shellInterpreters[interpName] {
-			return CmdResult{"", fmt.Sprintf("%s: %s is not available in the in-browser shell\n", path, interpName), ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("%s: %s is not available in the in-browser shell\n", path, interpName), ExitCode: ExitCommandNotFound}
 		}
 	}
 	return biSh(sh, append([]string{path}, args...), in)
@@ -133,7 +133,7 @@ func biCommand(sh *interp, args []string, in *ioIn) CmdResult {
 				fmt.Fprintf(&out, "%s is a shell %s\n", name, kind)
 			}
 		}
-		return CmdResult{out.String(), "", code}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 	}
 	if args[0] == "-p" {
 		args = args[1:]
@@ -177,7 +177,7 @@ func biType(sh *interp, args []string, _ *ioIn) CmdResult {
 			fmt.Fprintf(&out, "%s is a shell %s\n", name, kind)
 		}
 	}
-	return CmdResult{out.String(), errOut.String(), code}
+	return CmdResult{Stdout: out.String(), Stderr: errOut.String(), ExitCode: code}
 }
 
 func biExec(sh *interp, args []string, in *ioIn) CmdResult {
@@ -246,7 +246,7 @@ func biTime(sh *interp, args []string, in *ioIn) CmdResult {
 		r = sh.run(args, in)
 	}
 	d := time.Since(start)
-	r.Stderr += fmt.Sprintf("\nreal\t%dm%.3fs\nuser\t0m0.000s\nsys\t0m0.000s\n", int(d.Minutes()), d.Seconds()-float64(int(d.Minutes())*60))
+	r.writeErr(fmt.Sprintf("\nreal\t%dm%.3fs\nuser\t0m0.000s\nsys\t0m0.000s\n", int(d.Minutes()), d.Seconds()-float64(int(d.Minutes())*60)))
 	return r
 }
 

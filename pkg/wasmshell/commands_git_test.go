@@ -391,7 +391,7 @@ func TestGit_ReadOnlySubcommandWithExecutor(t *testing.T) {
 	called := ""
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
 		called = subcommand
-		return CmdResult{"M file.txt\n", "", 0}
+		return CmdResult{Stdout: "M file.txt\n", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 
@@ -413,7 +413,7 @@ func TestGit_GlobalFlagC(t *testing.T) {
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
 		seenSub = subcommand
 		seenArgs = args
-		return CmdResult{"", "", 0}
+		return CmdResult{Stdout: "", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 
@@ -428,7 +428,7 @@ func TestGit_GlobalFlagC(t *testing.T) {
 
 func TestGit_InChain(t *testing.T) {
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
-		return CmdResult{"ok\n", "", 0}
+		return CmdResult{Stdout: "ok\n", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 

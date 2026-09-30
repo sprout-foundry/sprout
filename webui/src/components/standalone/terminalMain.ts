@@ -17,6 +17,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { terminalText } from '../../services/terminalText';
 import type { WasmShell } from '../../services/wasmShell';
 
 const host = document.getElementById('terminal')!;
@@ -74,8 +75,8 @@ async function execute(line: string) {
   } finally {
     busy = false;
   }
-  if (result.stdout) term.write(`\r\n${result.stdout.replace(/\n/g, '\r\n')}`);
-  if (result.stderr) term.write(`\r\n\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+  const text = terminalText(result);
+  if (text) term.write(`\r\n${text}`);
   post('command', { command, exitCode: result.exitCode });
   prompt();
 }

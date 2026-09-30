@@ -48,6 +48,7 @@ func runShellCases(t *testing.T, files map[string]string, cases []shellCase) {
 				t.Errorf("script:\n%s\nstdout = %q (exit %d), want %q (exit %d)\nstderr = %q",
 					tc.script, r.Stdout, r.ExitCode, tc.stdout, tc.exit, r.Stderr)
 			}
+			assertOrderedMatchesStreams(t, r)
 		})
 	}
 }

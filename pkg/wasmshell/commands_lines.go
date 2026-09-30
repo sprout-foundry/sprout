@@ -34,7 +34,7 @@ func cmdPaste(args []string, stdin string) CmdResult {
 		if f != "-" {
 			var err error
 			if data, err = readFileArg(f); err != nil {
-				return CmdResult{"", fmt.Sprintf("paste: %s: %s\n", f, describeErr(err)), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("paste: %s: %s\n", f, describeErr(err)), ExitCode: 1}
 			}
 		}
 		cols = append(cols, splitLines(data))
@@ -54,7 +54,7 @@ func cmdPaste(args []string, stdin string) CmdResult {
 		for _, c := range cols {
 			out.WriteString(join(c) + "\n")
 		}
-		return CmdResult{out.String(), "", 0}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 	}
 	rows := 0
 	for _, c := range cols {
@@ -69,7 +69,7 @@ func cmdPaste(args []string, stdin string) CmdResult {
 		}
 		out.WriteString(join(row) + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func linesFromArgs(cmd string, args []string, stdin string) ([]string, *CmdResult) {
@@ -100,7 +100,7 @@ func cmdRev(args []string, stdin string) CmdResult {
 		}
 		out.WriteString(string(rs) + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdTac(args []string, stdin string) CmdResult {
@@ -112,7 +112,7 @@ func cmdTac(args []string, stdin string) CmdResult {
 	for i := len(lines) - 1; i >= 0; i-- {
 		out.WriteString(lines[i] + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdNl(args []string, stdin string) CmdResult {
@@ -169,7 +169,7 @@ func cmdNl(args []string, stdin string) CmdResult {
 		out.WriteString(num + sep + l + "\n")
 		n++
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdColumn(args []string, stdin string) CmdResult {
@@ -200,7 +200,7 @@ func cmdColumn(args []string, stdin string) CmdResult {
 		return *errRes
 	}
 	if !table {
-		return CmdResult{input, "", 0}
+		return CmdResult{Stdout: input, Stderr: "", ExitCode: 0}
 	}
 	var rows [][]string
 	var widths []int
@@ -230,7 +230,7 @@ func cmdColumn(args []string, stdin string) CmdResult {
 		}
 		out.WriteString("\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdFold(args []string, stdin string) CmdResult {
@@ -253,7 +253,7 @@ func cmdFold(args []string, stdin string) CmdResult {
 		}
 	}
 	if width < 1 {
-		return CmdResult{"", "fold: invalid number of columns\n", 1}
+		return CmdResult{Stdout: "", Stderr: "fold: invalid number of columns\n", ExitCode: 1}
 	}
 	input, errRes := readInputs("fold", files, stdin)
 	if errRes != nil {
@@ -275,5 +275,5 @@ func cmdFold(args []string, stdin string) CmdResult {
 		}
 		out.WriteString(string(rs) + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }

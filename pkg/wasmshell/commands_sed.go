@@ -58,18 +58,18 @@ func cmdSed(args []string, stdin string) CmdResult {
 			inPlace = true
 		case a == "-e" || a == "--expression":
 			if i+1 >= len(args) {
-				return CmdResult{"", "sed: option requires an argument -- 'e'\n", 1}
+				return CmdResult{Stdout: "", Stderr: "sed: option requires an argument -- 'e'\n", ExitCode: 1}
 			}
 			i++
 			scripts = append(scripts, args[i])
 		case a == "-f" || a == "--file":
 			if i+1 >= len(args) {
-				return CmdResult{"", "sed: option requires an argument -- 'f'\n", 1}
+				return CmdResult{Stdout: "", Stderr: "sed: option requires an argument -- 'f'\n", ExitCode: 1}
 			}
 			i++
 			data, err := readFileArg(args[i])
 			if err != nil {
-				return CmdResult{"", fmt.Sprintf("sed: couldn't open file %s: %s\n", args[i], describeErr(err)), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("sed: couldn't open file %s: %s\n", args[i], describeErr(err)), ExitCode: 1}
 			}
 			scripts = append(scripts, data)
 		case a == "--posix" || a == "-u" || a == "--unbuffered" || a == "--debug":
@@ -79,7 +79,7 @@ func cmdSed(args []string, stdin string) CmdResult {
 			inPlace = inPlace || strings.Contains(a, "i")
 			separate = separate || strings.Contains(a, "s")
 		case len(a) > 1 && a[0] == '-' && a != "-":
-			return CmdResult{"", fmt.Sprintf("sed: unsupported option %s\n", a), ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("sed: unsupported option %s\n", a), ExitCode: ExitCommandNotFound}
 		default:
 			if len(scripts) == 0 && !hasScriptFromFlags(args[:i]) {
 				scripts = append(scripts, a)
@@ -89,7 +89,7 @@ func cmdSed(args []string, stdin string) CmdResult {
 		}
 	}
 	if len(scripts) == 0 {
-		return CmdResult{"", "sed: no script specified\n", 1}
+		return CmdResult{Stdout: "", Stderr: "sed: no script specified\n", ExitCode: 1}
 	}
 	prog := &sedProg{ere: ere}
 	cmds, err := prog.parse(strings.Join(scripts, "\n"))
@@ -98,13 +98,13 @@ func cmdSed(args []string, stdin string) CmdResult {
 		if strings.Contains(err.Error(), "not supported") {
 			code = ExitCommandNotFound
 		}
-		return CmdResult{"", "sed: -e expression: " + err.Error() + "\n", code}
+		return CmdResult{Stdout: "", Stderr: "sed: -e expression: " + err.Error() + "\n", ExitCode: code}
 	}
 	prog.cmds = cmds
 
 	if inPlace {
 		if len(files) == 0 {
-			return CmdResult{"", "sed: no input files\n", 1}
+			return CmdResult{Stdout: "", Stderr: "sed: no input files\n", ExitCode: 1}
 		}
 		var errs strings.Builder
 		for _, f := range files {
@@ -122,7 +122,7 @@ func cmdSed(args []string, stdin string) CmdResult {
 		if errs.Len() > 0 {
 			code = 2
 		}
-		return CmdResult{"", errs.String(), code}
+		return CmdResult{Stdout: "", Stderr: errs.String(), ExitCode: code}
 	}
 
 	if separate && len(files) > 0 {
@@ -131,13 +131,13 @@ func cmdSed(args []string, stdin string) CmdResult {
 		for _, f := range files {
 			data, err := readFileArg(f)
 			if err != nil {
-				return CmdResult{out.String(), fmt.Sprintf("sed: can't read %s: %s\n", f, describeErr(err)), 2}
+				return CmdResult{Stdout: out.String(), Stderr: fmt.Sprintf("sed: can't read %s: %s\n", f, describeErr(err)), ExitCode: 2}
 			}
 			o, c := prog.run(data, quiet)
 			out.WriteString(o)
 			code = c
 		}
-		return CmdResult{out.String(), "", code}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 	}
 	input := stdin
 	if len(files) > 0 {
@@ -149,7 +149,7 @@ func cmdSed(args []string, stdin string) CmdResult {
 			}
 			data, err := readFileArg(f)
 			if err != nil {
-				return CmdResult{"", fmt.Sprintf("sed: can't read %s: %s\n", f, describeErr(err)), 2}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("sed: can't read %s: %s\n", f, describeErr(err)), ExitCode: 2}
 			}
 			b.WriteString(data)
 			if data != "" && !strings.HasSuffix(data, "\n") {
@@ -159,7 +159,7 @@ func cmdSed(args []string, stdin string) CmdResult {
 		input = b.String()
 	}
 	out, code := prog.run(input, quiet)
-	return CmdResult{out, "", code}
+	return CmdResult{Stdout: out, Stderr: "", ExitCode: code}
 }
 
 func hasScriptFromFlags(prev []string) bool {

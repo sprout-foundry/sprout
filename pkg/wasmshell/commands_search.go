@@ -86,9 +86,9 @@ func cmdTree(args []string, stdin string) CmdResult {
 	})
 
 	if err != nil {
-		return CmdResult{"", fmt.Sprintf("tree: %s\n", err.Error()), 1}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("tree: %s\n", err.Error()), ExitCode: 1}
 	}
 
 	fmt.Fprintf(&out, "\n%d directories, %d files\n", counts[0], counts[1])
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }

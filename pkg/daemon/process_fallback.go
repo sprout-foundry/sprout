@@ -32,3 +32,7 @@ func ensureStdioDevNull(cmd *exec.Cmd) error {
 	}
 	return nil
 }
+
+func electionLockPath(pidFilePath string) string {
+	return pidFilePath
+}

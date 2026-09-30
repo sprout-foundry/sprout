@@ -133,7 +133,7 @@ func TestWalkCodeFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("filepath.Rel failed: %v", err)
 		}
-		relative = append(relative, rel)
+		relative = append(relative, filepath.ToSlash(rel))
 	}
 
 	// Should have exactly 3 files (main.go, api/handler.go, utils.js).

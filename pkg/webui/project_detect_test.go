@@ -290,7 +290,7 @@ func TestFindProjectsInDirectory_HiddenDirs(t *testing.T) {
 // into — even though they can contain project markers.
 func TestFindProjectsInDirectory_SkipsProtectedHomeDirs(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 
 	// A protected dir that would otherwise register as a project.
 	docs := filepath.Join(home, "Documents", "some-repo")
@@ -333,7 +333,7 @@ func TestFindProjectsInDirectory_SkipsProtectedHomeDirs(t *testing.T) {
 // contain a "Documents" folder, and scanning a non-home root must be unaffected.
 func TestFindProjectsInDirectory_ProtectedNamesOnlyGatedAtHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 
 	// Scan root is NOT home, so "Documents" here carries no privacy meaning.
 	root := t.TempDir()

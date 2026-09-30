@@ -73,6 +73,9 @@ func resetFlavorCache() {
 // "stdin read error: read /dev/stdin: bad file descriptor" (EBADF) on the
 // next turn. Raw syscalls never close the borrowed fd.
 func probeBottomAnchored(fd uintptr, w *os.File) bool {
+	if !canReadTTYReply {
+		return false
+	}
 	old, err := term.MakeRaw(int(fd))
 	if err != nil {
 		return false

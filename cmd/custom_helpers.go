@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -97,32 +96,6 @@ func resolvePreferredCustomProviderModel(input string, models []configuration.Pr
 	return "", fmt.Errorf("model %q was not found in the discovered model list", trimmed)
 }
 
-func promptForCredentialIfNeeded(reader *bufio.Reader, providerName, envVar string) {
-	if envVar == "" {
-		return
-	}
-	if strings.TrimSpace(os.Getenv(envVar)) != "" {
-		return
-	}
-	if hasStoredCredential(providerName) {
-		return
-	}
-	answer, err := promptLine(reader, fmt.Sprintf("\nSet the API key for %s now via the credential backend? %s: ",
-		providerName, console.FormatYesNoPromptStdout(false)))
-	if err != nil || !isYes(answer) {
-		return
-	}
-	key, keyErr := promptLine(reader, fmt.Sprintf("API key (will be stored; or set %s): ", envVar))
-	if keyErr != nil || strings.TrimSpace(key) == "" {
-		return
-	}
-	if storeErr := credentials.SetToActiveBackend(providerName, strings.TrimSpace(key)); storeErr != nil {
-		console.GlyphWarning.Printf("Could not store credential: %v", storeErr)
-		return
-	}
-	console.GlyphSuccess.Printf("Stored credential for %s", providerName)
-}
-
 func hasStoredCredential(provider string) bool {
 	resolved, err := credentials.ResolveProvider(provider)
 	if err != nil {
@@ -137,8 +110,8 @@ func hasStoredCredential(provider string) bool {
 // half-configured provider.
 var errCustomSetupCancelled = errors.New("custom provider setup cancelled by user")
 
-func discoverAndPickModel(reader *bufio.Reader, provider *configuration.CustomProviderConfig) error {
-	models, discoverErr := configuration.DiscoverCustomProviderModels(*provider)
+func discoverAndPickModel(reader *bufio.Reader, provider *configuration.CustomProviderConfig, apiKey string) error {
+	models, discoverErr := configuration.DiscoverCustomProviderModelsWithKey(*provider, apiKey)
 	if discoverErr != nil {
 		fmt.Println()
 		console.GlyphWarning.Printf("Model discovery failed: %v", discoverErr)
@@ -218,8 +191,8 @@ func discoverAndPickModel(reader *bufio.Reader, provider *configuration.CustomPr
 // Discovery is cheap and avoids storing an extra copy of the list in the
 // wizard's state. Returns nil if discovery fails — the caller falls back to
 // "reuse default model" without prompting.
-func getModelListForVisionPicker(provider configuration.CustomProviderConfig) []configuration.ProviderDiscoveryModel {
-	models, err := configuration.DiscoverCustomProviderModels(provider)
+func getModelListForVisionPicker(provider configuration.CustomProviderConfig, apiKey string) []configuration.ProviderDiscoveryModel {
+	models, err := configuration.DiscoverCustomProviderModelsWithKey(provider, apiKey)
 	if err != nil {
 		return nil
 	}

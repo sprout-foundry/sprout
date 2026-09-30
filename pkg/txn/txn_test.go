@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -147,7 +148,7 @@ func TestApplyDelta_WritesFilesAndCreatesParents(t *testing.T) {
 	if err != nil || !info.IsDir() {
 		t.Fatalf("parent dir not created: %v", err)
 	}
-	if info.Mode().Perm() != 0o755 {
+	if posixPerms && info.Mode().Perm() != 0o755 {
 		t.Fatalf("parent dir mode = %o, want 755", info.Mode().Perm())
 	}
 }
@@ -164,10 +165,10 @@ func TestApplyDelta_DefaultModeAndExplicitMode(t *testing.T) {
 	if result.Status != StatusOK {
 		t.Fatalf("status = %q: %+v", result.Status, result.Skipped)
 	}
-	if perm := modeOf(t, dir, "default.txt"); perm != 0o644 {
+	if perm := modeOf(t, dir, "default.txt"); posixPerms && perm != 0o644 {
 		t.Fatalf("default.txt mode = %o, want 644", perm)
 	}
-	if perm := modeOf(t, dir, "run.sh"); perm != 0o755 {
+	if perm := modeOf(t, dir, "run.sh"); posixPerms && perm != 0o755 {
 		t.Fatalf("run.sh mode = %o, want 755", perm)
 	}
 }
@@ -193,7 +194,7 @@ func TestApplyDelta_RewritesExistingFileAndConvergesMode(t *testing.T) {
 	}
 	// WriteFile applies the mode only on creation; the explicit chmod is
 	// what makes push/pull converge on a pre-existing file.
-	if perm := modeOf(t, dir, "existing.txt"); perm != 0o644 {
+	if perm := modeOf(t, dir, "existing.txt"); posixPerms && perm != 0o644 {
 		t.Fatalf("mode = %o, want 644 after rewrite", perm)
 	}
 }
@@ -381,3 +382,7 @@ func modeOf(t *testing.T, dir, rel string) os.FileMode {
 	}
 	return info.Mode().Perm()
 }
+
+// posixPerms is false on Windows, where os.Stat synthesizes 0666/0777
+// and chmod can only toggle the read-only attribute.
+var posixPerms = runtime.GOOS != "windows"

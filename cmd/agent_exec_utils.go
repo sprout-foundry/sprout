@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 	"golang.org/x/term"
 )
 
@@ -36,8 +36,7 @@ func ExecuteCommand(cmd string) (string, error) {
 	// Enhance command to force colors for git and other tools
 	enhancedCmd := enhanceCommandForColors(cmd)
 
-	// Run command through bash -c with color support
-	command := exec.Command("bash", "-c", enhancedCmd)
+	command := shellexec.Command(enhancedCmd)
 
 	// Explicitly set working directory to current directory
 	if wd, err := os.Getwd(); err == nil {

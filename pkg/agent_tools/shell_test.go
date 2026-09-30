@@ -10,6 +10,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,7 +88,7 @@ func main() {
 		err := os.WriteFile(badGoFile, []byte(badCode), 0644)
 		require.NoError(t, err)
 
-		command := "go build " + badGoFile
+		command := "go build '" + filepath.ToSlash(badGoFile) + "'"
 
 		output, err := ExecuteShellCommand(ctx, command)
 

@@ -36,7 +36,8 @@ func isIdentRune(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
-var goErrorRE = regexp.MustCompile(`^[^:]+:(\d+):(\d+): (.+)$`)
+// The optional drive prefix admits Windows paths ("C:\...\main.go:4:14: ...").
+var goErrorRE = regexp.MustCompile(`^(?:[A-Za-z]:)?[^:]+:(\d+):(\d+): (.+)$`)
 
 func parseGofmtErrors(output, content string) []ToolDiagnostic {
 	var diags []ToolDiagnostic

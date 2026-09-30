@@ -186,7 +186,7 @@ func applyTrainingConfig() {
 		return
 	}
 
-	mgr, err := configuration.NewManager()
+	mgr, err := configuration.NewManagerSilent()
 	if err != nil {
 		return
 	}

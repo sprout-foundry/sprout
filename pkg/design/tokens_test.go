@@ -3,6 +3,7 @@ package design
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -895,6 +896,9 @@ func TestValidateTokensDirAliasScopeIsPerFile(t *testing.T) {
 func TestValidateTokensDirReadError(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: chmod 0o000 does not block reads")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 0o000 does not block reads on Windows")
 	}
 	root := t.TempDir()
 	locked := filepath.Join(root, DirName, "tokens", "locked.tokens.json")

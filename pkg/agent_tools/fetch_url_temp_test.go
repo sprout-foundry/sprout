@@ -4,10 +4,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// readFileRetrying tolerates the sharing violation Windows returns when a
+// concurrent writer is renaming over the file at the moment it is opened.
+func readFileRetrying(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	for attempt := 0; err != nil && runtime.GOOS == "windows" && attempt < 50; attempt++ {
+		time.Sleep(10 * time.Millisecond)
+		data, err = os.ReadFile(path)
+	}
+	return data, err
+}
 
 func TestBuildSectionTOC(t *testing.T) {
 	t.Run("no headers returns fallback summary", func(t *testing.T) {
@@ -172,6 +185,9 @@ func TestSaveFetchContent(t *testing.T) {
 	})
 
 	t.Run("file permissions are 0600", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows has no POSIX permission bits; os.FileMode reports 0666 for any writable file")
+		}
 		path, err := saveFetchContent("https://perm-test.com", "secret")
 		if err != nil {
 			t.Fatalf("saveFetchContent failed: %v", err)
@@ -201,7 +217,7 @@ func TestSaveFetchContent(t *testing.T) {
 					t.Errorf("saveFetchContent failed: %v", err)
 					return
 				}
-				data, err := os.ReadFile(path)
+				data, err := readFileRetrying(path)
 				if err != nil {
 					t.Errorf("ReadFile failed: %v", err)
 					return

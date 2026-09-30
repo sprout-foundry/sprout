@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -177,13 +178,15 @@ var sketchConventions = map[string][]string{
 }
 
 // targetDirFor maps a sketch target to its canonical design/ subdirectory path
-// ("wireframes" → "design/wireframes"). Unknown targets yield "".
+// ("wireframes" → "design/wireframes"). Unknown targets yield "". The result
+// is slash-separated on every OS: it is shown to the model and spliced into
+// "/"-joined artifact paths, where an OS separator would yield "design\x/y".
 func targetDirFor(target string) string {
 	dir, ok := design.SubdirByName(target)
 	if !ok {
 		return ""
 	}
-	return dir
+	return filepath.ToSlash(dir)
 }
 
 // isSketchTargetName reports whether name is one of the three accepted import
@@ -410,7 +413,7 @@ func sketchNextSteps(target, slug string) []string {
 			fmt.Sprintf("Write the wireframe to design/wireframes/%s.svg with write_file, viewBox-only, structure not polish.", slug),
 			"If the sketch shows a multi-screen journey, write one SVG per screen and wire them with data-nav slugs.",
 			"Add or update the design/README.md manifest entry for the new screen (name, status marker, one-line summary).",
-			"Prefer converting to the primary screen tier (design/screens/%s.html) — the wireframe tier is deprecated and design_validate errors on it.",
+			fmt.Sprintf("Prefer converting to the primary screen tier (design/screens/%s.html) — the wireframe tier is deprecated and design_validate errors on it.", slug),
 		)
 	case sketchTargetTokens:
 		steps = append(steps,

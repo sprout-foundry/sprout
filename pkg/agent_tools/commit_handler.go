@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -84,7 +86,9 @@ func (h *commitHandler) Interactive() bool      { return false }
 // special characters that would be interpreted passing -m through the shell.
 //
 // This is shared by both the commit tool and the git tool's commit operation.
-func commitMessage(ctx context.Context, message, workingDir string) (ToolResult, error) {
+// extraArgs are further `git commit` flags (e.g. --amend), already in shell
+// syntax.
+func commitMessage(ctx context.Context, message, workingDir string, extraArgs ...string) (ToolResult, error) {
 	msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
@@ -98,7 +102,12 @@ func commitMessage(ctx context.Context, message, workingDir string) (ToolResult,
 	}
 	msgFile.Close()
 
-	cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
+	cmd := "git commit -F " + shellQuotePath(msgFile.Name())
+	for _, a := range extraArgs {
+		if a = strings.TrimSpace(a); a != "" {
+			cmd += " " + a
+		}
+	}
 	output, err := execShellCmd(ctx, cmd, workingDir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
@@ -123,4 +132,16 @@ func execShellCmd(ctx context.Context, cmd string, workingDir string) (string, e
 		return "", err
 	}
 	return result.Output, nil
+}
+
+// shellQuotePath renders a local path for a command line run by the shell
+// tool. Forward slashes survive Git Bash, which strips unquoted
+// backslashes from Windows paths like C:\Users\me\AppData\Local\Temp, and
+// git accepts them on every OS. Double quotes keep spaces intact in both
+// bash and the cmd.exe fallback; the characters bash still expands inside
+// them are escaped.
+func shellQuotePath(p string) string {
+	p = filepath.ToSlash(p)
+	p = strings.NewReplacer(`"`, `\"`, "$", `\$`, "`", "\\`").Replace(p)
+	return `"` + p + `"`
 }

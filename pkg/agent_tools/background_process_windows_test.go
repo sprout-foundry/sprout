@@ -18,7 +18,7 @@ func TestBackgroundProcess_AttachesJobOnStart(t *testing.T) {
 	defer bpm.Close()
 
 	// Start a background process that will stay alive for a while
-	sessionID, err := bpm.Start(context.Background(), "timeout /t 30 /nobreak > nul", "")
+	sessionID, err := bpm.Start(context.Background(), "ping -n 30 127.0.0.1", "")
 	if err != nil {
 		t.Fatalf("Failed to start background process: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestBackgroundProcess_StopKillsViaJobObject(t *testing.T) {
 	defer bpm.Close()
 
 	// Start a background process that stays alive
-	sessionID, err := bpm.Start(context.Background(), "timeout /t 30 /nobreak > nul", "")
+	sessionID, err := bpm.Start(context.Background(), "ping -n 30 127.0.0.1", "")
 	if err != nil {
 		t.Fatalf("Failed to start background process: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestBackgroundProcessManager_MultipleProcesses(t *testing.T) {
 	sessionIDs := make([]string, numProcesses)
 
 	for i := 0; i < numProcesses; i++ {
-		sid, err := bpm.Start(context.Background(), "timeout /t 30 /nobreak > nul", "")
+		sid, err := bpm.Start(context.Background(), "ping -n 30 127.0.0.1", "")
 		if err != nil {
 			t.Fatalf("Failed to start background process %d: %v", i, err)
 		}
@@ -245,4 +245,46 @@ func TestBackgroundProcessManager_GetBaseDir(t *testing.T) {
 	// We can't easily test this without modifying the filesystem,
 	// but we can verify the path looks reasonable
 	t.Logf("Background process base directory: %s", baseDir)
+}
+
+// TestBackgroundProcess_StopKillsDescendantsPromptly pins that Stop tears
+// down the whole Job at the terminate step: the trailing echo forces the
+// shell to fork ping rather than exec it, so killing only the shell would
+// leave ping holding the output pipe and Stop blocked until the final
+// escalation.
+func TestBackgroundProcess_StopKillsDescendantsPromptly(t *testing.T) {
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "ping -n 30 127.0.0.1 & echo started", "")
+	if err != nil {
+		t.Fatalf("Failed to start background process: %v", err)
+	}
+	proc, ok := bpm.GetProcess(sessionID)
+	if !ok {
+		t.Fatal("Process not found in BPM")
+	}
+
+	var pingPID int
+	deadline := time.Now().Add(5 * time.Second)
+	for pingPID == 0 && time.Now().Before(deadline) {
+		if kids := childPIDs(t, proc.GetPID()); len(kids) > 0 {
+			pingPID = kids[0]
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if pingPID == 0 {
+		t.Fatal("shell never spawned a child")
+	}
+
+	start := time.Now()
+	if err := bpm.Stop(sessionID, 500*time.Millisecond); err != nil {
+		t.Logf("Stop returned error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("Stop took %v; descendants were not killed at the terminate step", elapsed)
+	}
+	if !waitUntilDead(pingPID, 5*time.Second) {
+		t.Errorf("descendant %d still alive after Stop", pingPID)
+	}
 }

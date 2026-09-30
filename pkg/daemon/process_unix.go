@@ -80,3 +80,9 @@ func ensureStdioDevNull(cmd *exec.Cmd) error {
 	}
 	return nil
 }
+
+// electionLockPath is the PID file itself: flock(2) is advisory, so the
+// winner can write its PID into the file it holds the lock on.
+func electionLockPath(pidFilePath string) string {
+	return pidFilePath
+}

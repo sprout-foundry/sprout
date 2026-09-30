@@ -131,7 +131,8 @@ func TestRunCustomModelAddKnown_EmptyKey(t *testing.T) {
 	credentials.ResetStorageBackend()
 
 	// "y" + empty key — should not store anything.
-	reader := bufio.NewReader(strings.NewReader("y\n\n"))
+	stubReadSecret(t, "")
+	reader := bufio.NewReader(strings.NewReader("y\n"))
 	if err := runCustomModelAddKnown(reader, known); err != nil {
 		t.Errorf("runCustomModelAddKnown returned error: %v", err)
 	}
@@ -164,13 +165,13 @@ func TestRunCustomModelAddKnown_UserAcceptsAndStoresKey(t *testing.T) {
 	credentials.ResetStorageBackend()
 
 	// "y" + a real-looking key. The wizard should:
-	//   1. Print "Set the API key for ai-worker now via the credential backend? [Y/n]"
+	//   1. Print "Set the API key for ai-worker now? [Y/n]"
 	//   2. Read "y\n"
-	//   3. Print "API key (will be stored; or set AI_WORKER_API_KEY):"
-	//   4. Read "sk-test-12345\n"
-	//   5. Store via credentials.SetToActiveBackend
-	//   6. Print "Stored credential for ai-worker"
-	reader := bufio.NewReader(strings.NewReader("y\nsk-test-12345\n"))
+	//   3. Read the key without echo ("API key (input hidden):")
+	//   4. Store via credentials.SetToActiveBackend
+	//   5. Print "Stored credential for ai-worker"
+	calls := stubReadSecret(t, "sk-test-12345")
+	reader := bufio.NewReader(strings.NewReader("y\n"))
 	if err := runCustomModelAddKnown(reader, known); err != nil {
 		t.Fatalf("runCustomModelAddKnown returned error: %v", err)
 	}
@@ -182,6 +183,9 @@ func TestRunCustomModelAddKnown_UserAcceptsAndStoresKey(t *testing.T) {
 	}
 	if strings.TrimSpace(resolved.Value) != "sk-test-12345" {
 		t.Errorf("Expected stored credential sk-test-12345, got %q", resolved.Value)
+	}
+	if *calls != 1 {
+		t.Errorf("the key must be read through the hidden-input reader exactly once, got %d reads", *calls)
 	}
 }
 

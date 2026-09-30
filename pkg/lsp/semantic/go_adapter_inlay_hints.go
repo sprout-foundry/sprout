@@ -121,7 +121,7 @@ func runGoInlayHints(input ToolInput) (ToolResult, error) {
 		"method":  "textDocument/didOpen",
 		"params": map[string]interface{}{
 			"textDocument": map[string]interface{}{
-				"uri":        "file://" + input.FilePath,
+				"uri":        fileURI(input.FilePath),
 				"languageId": "go",
 				"version":    1,
 				"text":       input.Content,
@@ -148,7 +148,7 @@ func runGoInlayHints(input ToolInput) (ToolResult, error) {
 		"method":  "textDocument/inlayHint",
 		"params": map[string]interface{}{
 			"textDocument": map[string]interface{}{
-				"uri": "file://" + input.FilePath,
+				"uri": fileURI(input.FilePath),
 			},
 		},
 	}
@@ -243,7 +243,7 @@ func runGoInlayHintsWithRemote(input ToolInput, _, remoteAddr string) (ToolResul
 		"method":  "textDocument/didOpen",
 		"params": map[string]interface{}{
 			"textDocument": map[string]interface{}{
-				"uri":        "file://" + input.FilePath,
+				"uri":        fileURI(input.FilePath),
 				"languageId": "go",
 				"version":    1,
 				"text":       input.Content,
@@ -270,7 +270,7 @@ func runGoInlayHintsWithRemote(input ToolInput, _, remoteAddr string) (ToolResul
 		"method":  "textDocument/inlayHint",
 		"params": map[string]interface{}{
 			"textDocument": map[string]interface{}{
-				"uri": "file://" + input.FilePath,
+				"uri": fileURI(input.FilePath),
 			},
 		},
 	}

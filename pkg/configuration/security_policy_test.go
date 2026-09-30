@@ -58,10 +58,10 @@ func TestLoadSecurityPolicy(t *testing.T) {
 		if policy.Rules[0].Reason != "no deletes" {
 			t.Errorf("expected first rule reason=no deletes, got %q", policy.Rules[0].Reason)
 		}
-		if len(policy.AllowedPaths) != 1 || policy.AllowedPaths[0] != "/workspace/src" {
+		if len(policy.AllowedPaths) != 1 || policy.AllowedPaths[0] != filepath.Clean("/workspace/src") {
 			t.Errorf("expected AllowedPaths=[/workspace/src], got %v", policy.AllowedPaths)
 		}
-		if len(policy.DeniedPaths) != 1 || policy.DeniedPaths[0] != "/etc" {
+		if len(policy.DeniedPaths) != 1 || policy.DeniedPaths[0] != filepath.Clean("/etc") {
 			t.Errorf("expected DeniedPaths=[/etc], got %v", policy.DeniedPaths)
 		}
 		if len(policy.DeniedCommands) != 1 || policy.DeniedCommands[0] != "sudo" {

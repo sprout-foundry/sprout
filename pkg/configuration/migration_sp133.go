@@ -72,7 +72,7 @@ var credentialsFiles = []string{
 // NeedsMigration returns true when a legacy ~/.sprout directory exists
 // and no migration marker is present in the state dir.
 func NeedsMigration() bool {
-	home, err := os.UserHomeDir()
+	home, err := envutil.HomeDir()
 	if err != nil || home == "" {
 		return false
 	}
@@ -98,7 +98,7 @@ func NeedsMigration() bool {
 // The legacy directory is left in place (empty of moved content) so a
 // failed migration is diagnosable.
 func RunMigration() error {
-	home, err := os.UserHomeDir()
+	home, err := envutil.HomeDir()
 	if err != nil {
 		return fmt.Errorf("get home directory: %w", err)
 	}

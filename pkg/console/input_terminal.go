@@ -85,11 +85,17 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 
 // updateTerminalWidth gets the current terminal width
 func (ir *InputReader) updateTerminalWidth() {
-	if width, _, err := term.GetSize(ir.termFd); err == nil {
+	if width, _, err := term.GetSize(ir.termFd); err == nil && width > 0 {
 		ir.terminalWidth = width
-	} else {
-		ir.terminalWidth = 80 // Fallback to standard width
+		return
 	}
+	// A Windows console input handle has no screen buffer, so its size
+	// query always fails; the output handle reports the real width.
+	if width, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && width > 0 {
+		ir.terminalWidth = width
+		return
+	}
+	ir.terminalWidth = 80 // Fallback to standard width
 }
 
 // setupInputTerm enables bracketed paste, SGR mouse tracking, and

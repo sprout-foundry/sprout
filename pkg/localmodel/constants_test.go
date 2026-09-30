@@ -11,7 +11,7 @@ import (
 func TestResolveDefaultModelsDirIsSproutLocal(t *testing.T) {
 	t.Setenv("SPROUT_LLM_MODELS_DIR", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	t.Setenv("SPROUT_DATA_DIR", t.TempDir())
 
 	want := filepath.Join(home, ".sprout-local", "models")
@@ -26,7 +26,7 @@ func TestResolveDefaultModelsDirIsSproutLocal(t *testing.T) {
 func TestMigrateLegacyDevModels(t *testing.T) {
 	t.Setenv("SPROUT_LLM_MODELS_DIR", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	t.Setenv("SPROUT_DATA_DIR", t.TempDir())
 
 	legacy := filepath.Join(home, "dev", "llm-models")
@@ -58,7 +58,7 @@ func TestMigrateLegacyDevModels(t *testing.T) {
 func TestMigrateLegacyXDGMovesFromDataDir(t *testing.T) {
 	t.Setenv("SPROUT_LLM_MODELS_DIR", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dataDir := t.TempDir()
 	t.Setenv("SPROUT_DATA_DIR", dataDir)
 
@@ -84,7 +84,7 @@ func TestMigrateLegacyXDGMovesFromDataDir(t *testing.T) {
 func TestMigrateLegacyPrefersOldestSource(t *testing.T) {
 	t.Setenv("SPROUT_LLM_MODELS_DIR", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	dataDir := t.TempDir()
 	t.Setenv("SPROUT_DATA_DIR", dataDir)
 
@@ -114,7 +114,7 @@ func TestMigrateLegacyPrefersOldestSource(t *testing.T) {
 func TestMigrateDoesNotOverwriteExisting(t *testing.T) {
 	t.Setenv("SPROUT_LLM_MODELS_DIR", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	t.Setenv("SPROUT_DATA_DIR", t.TempDir())
 
 	legacy := filepath.Join(home, "dev", "llm-models")
@@ -179,4 +179,12 @@ func TestMoveDirCrossDevice(t *testing.T) {
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
 		t.Errorf("source not removed after move: %v", err)
 	}
+}
+
+// setHome points os.UserHomeDir at home: it reads $HOME on Unix and
+// %USERPROFILE% on Windows.
+func setHome(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 }

@@ -122,8 +122,8 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedModelWhy: "Prefer strong open coding models over older generic chat defaults.",
 	},
 	"cerebras": {
-		Description:         "High-performance provider with fast inference and GLM model support.",
-		SetupHint:           "Create a Cerebras API key and start with zai-glm-4.7.",
+		Description:         "High-performance provider with fast inference.",
+		SetupHint:           "Create a Cerebras API key and start with qwen-3.8-27b.",
 		DocsURL:             "https://inference-docs.cerebras.ai/",
 		SignupURL:           "https://cloud.cerebras.ai/",
 		APIKeyLabel:         "Cerebras API Key",

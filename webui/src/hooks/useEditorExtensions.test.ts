@@ -89,8 +89,6 @@ const mockSignatureHelpExtension = vi.fn((fp, gc, id) => `mock-signatureHelp(${i
 const mockTabExpandSnippets = vi.fn(() => 'mock-tabExpandSnippets');
 const mockStickyScrollPlugin = vi.fn(() => 'mock-stickyScroll');
 const mockTrailingWhitespacePlugin = vi.fn(() => 'mock-trailingWhitespace');
-const mockUnsavedLineHighlight = vi.fn(() => 'mock-unsavedLineHighlight');
-const mockSetOriginalContentOf = vi.fn((v) => `mock-setOriginalContent(${v})`);
 const mockWhitespaceRenderingPlugin = vi.fn((m) => `mock-whitespaceRendering(${m})`);
 const mockWordHighlightsExtension = vi.fn(() => 'mock-wordHighlights');
 
@@ -239,10 +237,6 @@ vi.mock('../extensions/stickyScroll', () => ({
 }));
 vi.mock('../extensions/trailingWhitespace', () => ({
   trailingWhitespacePlugin: (...a) => mockTrailingWhitespacePlugin(...a),
-}));
-vi.mock('../extensions/unsavedLineHighlight', () => ({
-  unsavedLineHighlight: (...a) => mockUnsavedLineHighlight(...a),
-  setOriginalContent: { of: (...a) => mockSetOriginalContentOf(...a) },
 }));
 vi.mock('../extensions/whitespaceRendering', () => ({
   whitespaceRenderingPlugin: (...a) => mockWhitespaceRenderingPlugin(...a),
@@ -421,7 +415,6 @@ describe('buildExtensions — array structure', () => {
     expect(ext).toContain('mock-lintDiagnostics');
     expect(ext).toContain('mock-searchExtension');
     expect(ext).toContain('mock-trailingWhitespace');
-    expect(ext).toContain('mock-unsavedLineHighlight');
     expect(ext).toContain('mock-wordHighlights');
   });
 

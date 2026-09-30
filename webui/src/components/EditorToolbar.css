@@ -107,6 +107,15 @@
 /* Inline saving spinner next to the breadcrumb. Save is bound to Ctrl/⌘+S
  * and surfaced via the dirty `●` on the tab + the omnibox command;
  * there's no longer a dedicated Save button. */
+.toolbar-modified {
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent-warning);
+  flex-shrink: 0;
+}
+
 .toolbar-saving {
   display: inline-flex;
   align-items: center;

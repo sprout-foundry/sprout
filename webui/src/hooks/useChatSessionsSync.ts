@@ -84,10 +84,15 @@ export const useChatSessionsSync = ({
   const closeRef = useRef(closeBuffer);
   closeRef.current = closeBuffer;
   const prevLaneRef = useRef<string | null>(null);
+  // The next active-chat change after a lane switch is that lane restoring its
+  // own conversation (useChatModePinning) — a background switch that must not
+  // pull focus off a file, e.g. a design's source opened into Code.
+  const laneRestorePendingRef = useRef(false);
   useEffect(() => {
     const prev = prevLaneRef.current;
     prevLaneRef.current = mode ?? 'code';
     if (prev === null || prev === (mode ?? 'code')) return;
+    laneRestorePendingRef.current = true;
     const close = closeRef.current;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
@@ -111,7 +116,9 @@ export const useChatSessionsSync = ({
     // active chat first becoming known at startup does not, when a restored
     // file already has focus.
     const switchedFromChat = !!prevActiveChatIdRef.current && activeChatId !== prevActiveChatIdRef.current;
+    const laneRestore = switchedFromChat && laneRestorePendingRef.current;
     if (activeChatId !== prevActiveChatIdRef.current) {
+      laneRestorePendingRef.current = false;
       if (activeChatId && closedChatIdsRef.current.has(activeChatId)) {
         closedChatIdsRef.current.delete(activeChatId);
       }
@@ -150,7 +157,7 @@ export const useChatSessionsSync = ({
         title: session.name || 'Chat',
         isPinned: false,
         isClosable: !isActive,
-        activate: isActive && (switchedFromChat || !fileFocused),
+        activate: isActive && ((switchedFromChat && !laneRestore) || !fileFocused),
         paneId: savedPlacement[session.id],
         metadata: { chatId: session.id },
       });

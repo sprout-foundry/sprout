@@ -158,7 +158,7 @@ test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
     expect(posts[0].contentType).toContain('application/json');
     expect(posts[0].body).toEqual({
       repo_url: 'https://github.com/example/repo',
-      prompt: 'Continue building this repository. Escalation reason: git_push_failed.',
+      prompt: 'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
     });
 
     // Terminal state: status flips to completed and the platform link points
@@ -166,7 +166,7 @@ test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
     await expect(statusLine).toHaveText(/Cloud task completed/, { timeout: 20_000 });
     await expect(page.getByTestId(TESTIDS['escalation-toast-cloud-task-link'])).toHaveAttribute(
       'href',
-      `/tasks/${TASK_ID}`,
+      `/#/tasks/${TASK_ID}`,
     );
 
     // Polling stopped at the terminal status (mock keeps returning

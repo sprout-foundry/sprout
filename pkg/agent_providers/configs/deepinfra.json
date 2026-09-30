@@ -1351,13 +1351,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.04,
+        "cached_input_cost": 0.03,
         "context_length": 28672,
         "description": "NVIDIA Nemotron 3.5 Lightning is NVIDIA's fastest open model for always-on agents and high-volume specialized tasks. It delivers a substantial leap in agentic capability over its predecessor Nemotron 3 Nano, with up to 4x higher throughput on a 1M-token context.",
         "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
-        "input_cost": 0.08,
+        "input_cost": 0.06,
         "name": "Nemotron 3.5 Lightning",
-        "output_cost": 0.2,
+        "output_cost": 0.16,
         "tags": [
           "tools",
           "structured_output"
@@ -1583,7 +1583,7 @@
         "context_length": 1048576,
         "description": "MiMo-V2.6-Pro is Xiaomi's flagship foundation model. Built at over 1T parameters, it targets the most demanding reasoning, coding, and agentic workloads with a 1M-token context window.",
         "id": "XiaomiMiMo/MiMo-V2.6-Pro",
-        "input_cost": 0.435,
+        "input_cost": 0.43,
         "name": "MiMo V2.6 Pro",
         "output_cost": 0.87,
         "tags": [
@@ -1604,6 +1604,34 @@
         "tags": [
           "tools",
           "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Claude Sonnet 5.5 is Anthropic's latest Sonnet model, balancing speed and capability for everyday coding, agents, and enterprise work. It supports a 1M-token context window and up to 128K output tokens.",
+        "id": "anthropic/claude-sonnet-5-5",
+        "input_cost": 2,
+        "name": "Claude Sonnet 5.5",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.042,
+        "context_length": 1048576,
+        "description": "Hy4 Preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that benefit from its 1M-token context window.",
+        "id": "tencent/Hy4-preview",
+        "input_cost": 0.834,
+        "name": "Hy4 Preview",
+        "output_cost": 2.501,
+        "tags": [
+          "tools",
           "reasoning",
           "structured_output"
         ]

@@ -139,6 +139,15 @@ describe('LayeredSidebar', () => {
     expect(onCloseDrawer).toHaveBeenCalled();
   });
 
+  it('closes the phone drawer when a new conversation is created', () => {
+    const onCloseDrawer = vi.fn();
+    const base = renderSidebar();
+    const props = renderSidebar({ isMobile: true, onCloseDrawer, conversations: base.conversations });
+    click(container.querySelector('.project-nav-new'));
+    expect(props.conversations!.onCreate).toHaveBeenCalled();
+    expect(onCloseDrawer).toHaveBeenCalled();
+  });
+
   it('renames and deletes a conversation from its menu', async () => {
     const onRename = vi.fn();
     const onDelete = vi.fn();

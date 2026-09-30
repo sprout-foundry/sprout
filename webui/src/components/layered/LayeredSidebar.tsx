@@ -96,6 +96,22 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const inCode = props.activeModeId !== 'design';
   const conversationInMain = inCode && !!props.conversations?.inMain;
 
+  // A new conversation opens in the main view, like picking one does.
+  const createConversation = props.conversations?.onCreate;
+  const conversations =
+    props.conversations && createConversation
+      ? {
+          ...props.conversations,
+          onCreate: () => {
+            closeHome();
+            if (!inCode) props.onSelectMode?.('code');
+            setOpen(null);
+            createConversation();
+            props.onCloseDrawer?.();
+          },
+        }
+      : props.conversations;
+
   const navigate = (target: ProjectNavTarget) => {
     closeHome();
     if (target.kind === 'conversation') {
@@ -206,7 +222,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
           title={title}
           onHide={props.onToggleCollapsed}
           hideLabel={props.isMobile ? 'Close sidebar' : 'Collapse sidebar'}
-          conversations={props.conversations}
+          conversations={conversations}
           conversationInMain={conversationInMain && !open}
           current={open}
           onNavigate={navigate}

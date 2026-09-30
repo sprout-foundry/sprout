@@ -248,6 +248,10 @@ export function useAppInitialization({
             WebSocketService.getInstance().deliverLocal(event as WsEvent);
           });
         });
+        // The managed model's context window decides the agent's context mode.
+        void import('../services/platformProvider').then(({ loadManagedContextWindow }) =>
+          loadManagedContextWindow(window.location.origin),
+        );
       }
 
       // Load initial stats

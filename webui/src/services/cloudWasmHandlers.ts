@@ -99,13 +99,16 @@ export function handleWasmLocal(
         return handleWasmAgentQuery(shell, bodyStr);
 
       // ── Agent stop (interrupts in-browser agent loop) ───────
-      case '/api/query/stop':
+      case '/api/query/stop': {
         // Compile-time short-circuit (R-4): no in-browser agent loop to stop.
         if (NATIVE_CHAT_ENABLED) {
           return jsonError('Chat provided by the native shell', 501);
         }
-        shell.stopAgent(new URL(fullUrl, 'http://local').searchParams.get('chat_id') || chatIdFromBody(bodyStr));
+        const stopChatId = new URL(fullUrl, 'http://local').searchParams.get('chat_id') || chatIdFromBody(bodyStr);
+        stopRequested.add(stopChatId ?? '');
+        shell.stopAgent(stopChatId);
         return jsonOk({ status: 'ok', stopped: true });
+      }
 
       // ── Agent steer (injects into persistent agent) ─────────
       case '/api/query/steer':
@@ -196,6 +199,9 @@ export function getVfsManifestSnapshot(): Set<string> {
  * Read all files from the WASM VFS, returning {path, content} pairs.
  * Used by browserGit to sync the working tree before git operations.
  */
+/** Chats (by id, '' for the default) whose run the user asked to stop. */
+const stopRequested = new Set<string>();
+
 /** HOME inside the WASM shell's virtual filesystem. */
 const AGENT_HOME = '/home/user';
 
@@ -1113,6 +1119,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   // The chat's transcript records the turn itself, so switching away mid-turn
   // loses neither the question nor the answer.
+  stopRequested.delete(chatId ?? '');
   setChatRunning(chatId, true);
   recordTurn(chatId, query);
   // A chat is named after its first question: have the list pick it up, as
@@ -1154,6 +1161,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       JSON.stringify(historyForChat(chatId, query)),
     )
     .then((result) => {
+      stopRequested.delete(chatId ?? '');
       setChatRunning(chatId, false);
       recordTurn(chatId, query, result.response);
       dispatch('query_completed', {
@@ -1165,6 +1173,12 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     })
     .catch((err) => {
       setChatRunning(chatId, false);
+      // Stopped, not failed: end the turn without an error, as the daemon does.
+      if (stopRequested.delete(chatId ?? '')) {
+        dispatch('query_completed', { query, response: '', status: 'interrupted' });
+        if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
+        return;
+      }
       const { message, creditsBlocked } = describeAgentError(err instanceof Error ? err.message : String(err));
       dispatch('error', { message });
       if (creditsBlocked) notifyCreditsBlocked(message);

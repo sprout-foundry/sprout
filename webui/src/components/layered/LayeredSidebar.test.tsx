@@ -110,9 +110,22 @@ describe('LayeredSidebar', () => {
     click(itemByText('Files'));
     expect(props.onSectionChange).toHaveBeenCalledWith('files');
     expect(container.querySelector('[data-testid="section-panel"]')).toBeTruthy();
-    expect(container.querySelector('.project-nav-drill-title')?.textContent).toBe('Files');
+    expect(container.querySelector('.project-nav-sibling.active')?.textContent).toBe('Files');
     click(container.querySelector('[aria-label="Back to project"]'));
     expect(container.querySelector('[data-testid="section-panel"]')).toBeNull();
+  });
+
+  it('switches between sibling tools in one click, without going back', () => {
+    const props = renderSidebar();
+    click(itemByText('Files'));
+    const tab = (label: string) => container.querySelector(`.project-nav-sibling[aria-label="${label}"]`);
+    expect(tab('Files')?.getAttribute('aria-selected')).toBe('true');
+
+    click(tab('Source control'));
+
+    expect(props.onSectionChange).toHaveBeenLastCalledWith('git');
+    expect(tab('Source control')?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-testid="section-panel"]')).not.toBeNull();
   });
 
   it('switches to design mode for design entries', () => {

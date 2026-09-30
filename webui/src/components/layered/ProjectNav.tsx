@@ -146,13 +146,43 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
   ) : null;
 
   if (drill) {
+    // The open tool's siblings (Files · Search · Source control, or the
+    // design sections) switch in one click, without going back to the list.
+    const siblings = current
+      ? [props.codeEntries, props.designEntries]
+          .find((group) => group.some((e) => same(current, e.target)))
+          ?.filter((e) => e.target.id !== 'terminal')
+      : undefined;
     return (
       <div className="project-nav" data-testid="project-nav">
         <div className="project-nav-drill-header">
           <button type="button" className="project-nav-back" onClick={drill.onBack} aria-label="Back to project">
             <ChevronLeft size={16} />
           </button>
-          <span className="project-nav-drill-title">{drill.title}</span>
+          {siblings && siblings.length > 1 ? (
+            <div className="project-nav-siblings" role="tablist" aria-label={drill.title}>
+              {siblings.map((e) => {
+                const active = same(current, e.target);
+                return (
+                  <button
+                    key={`${e.target.kind}:${e.target.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    className={`project-nav-sibling${active ? ' active' : ''}`}
+                    title={e.label}
+                    aria-label={e.label}
+                    onClick={() => !active && onNavigate(e.target)}
+                  >
+                    <e.icon size={15} />
+                    {active && <span>{e.label}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="project-nav-drill-title">{drill.title}</span>
+          )}
           {hideButton}
         </div>
         <div className="project-nav-drill-body content-pane-scroll">{drill.content}</div>

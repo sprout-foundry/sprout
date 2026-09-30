@@ -138,6 +138,18 @@
   touch-action: none;
 }
 
+/* A 6px seam is a hard target for a mouse too: the grab zone reaches 5px
+ * past it on each side, over the status bar above and the terminal's top
+ * edge below, without moving the visible seam. */
+.terminal-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  bottom: -5px;
+}
+
 @media (hover: none) and (min-width: 769px) {
   .terminal-resize-handle {
     height: 28px;

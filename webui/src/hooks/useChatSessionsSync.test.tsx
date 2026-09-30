@@ -197,6 +197,46 @@ describe('useChatSessionsSync', () => {
     expect(opened.filter((o) => o.path === '__workspace/chat/B').pop()?.activate).toBe(true);
   });
 
+  it('does not pull focus from a file when a lane switch restores its own conversation', () => {
+    const buffers = new Map<string, EditorBuffer>([
+      [
+        'file-1',
+        makeBuffer({
+          id: 'file-1',
+          kind: 'file',
+          isActive: true,
+          file: { ...makeBuffer({ id: 'x' }).file, path: 'design/flows/sign-up.mmd' },
+        }),
+      ],
+    ]);
+    const props = { active: 'D' as string | null, mode: 'design' };
+    const opened: Array<{ path: string; activate?: boolean }> = [];
+    const { rerender } = renderHook(() =>
+      useChatSessionsSync({
+        chatSessions: [{ id: 'D', mode: 'design' }, { id: 'C' }] as never,
+        activeChatId: props.active,
+        mode: props.mode,
+        buffersRef: { current: buffers },
+        updateBufferTitle: vi.fn(),
+        setBufferPinned: vi.fn(),
+        setBufferClosable: vi.fn(),
+        openWorkspaceBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
+          opened.push({ path: o.path, activate: o.activate });
+          buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
+          return o.path;
+        }) as never,
+      }),
+    );
+
+    // Opening a design's source switches to Code, which then restores Code's
+    // own conversation; the file stays in front.
+    props.mode = 'code';
+    rerender();
+    props.active = 'C';
+    rerender();
+    expect(opened.filter((o) => o.path === '__workspace/chat/C').pop()?.activate).toBe(false);
+  });
+
   it('keeps the stand-in while the active chat is unknown', () => {
     const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([

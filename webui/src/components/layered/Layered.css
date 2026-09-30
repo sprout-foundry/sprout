@@ -89,6 +89,13 @@
   flex-shrink: 0;
 }
 
+/* The standalone project switcher stands in for the title: it takes the
+ * header's free width, and its folder name ellipsizes within it. */
+.project-nav-header .location-switcher {
+  flex: 1;
+  min-width: 0;
+}
+
 .project-nav-title,
 .project-nav-drill-title {
   flex: 1;

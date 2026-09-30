@@ -52,6 +52,8 @@ export interface LayeredSidebarProps {
   workspaceRoot?: string;
   instances: SproutInstance[];
   onInstanceChange?: (pid: number) => void;
+  /** Replaces the plain project title with a control that switches projects. */
+  projectSwitcher?: ReactNode;
   /** Renders the classic sidebar panel for the selected section. */
   renderSection: () => ReactNode;
   /** Collapsed: only the rail shows (narrow windows, tablets). */
@@ -220,6 +222,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       {!props.collapsed && !home.open && (
         <ProjectNav
           title={title}
+          titleControl={props.projectSwitcher}
           onHide={props.onToggleCollapsed}
           hideLabel={props.isMobile ? 'Close sidebar' : 'Collapse sidebar'}
           conversations={conversations}

@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,5 +52,30 @@ func TestWorkspaceGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(path); string(got) != custom {
 		t.Errorf("a user-written .gitignore was overwritten:\n%s", got)
+	}
+}
+
+func TestWorkspaceConfigDirLeavesTheRepositoryClean(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	if err := EnsureWorkspaceConfigDir(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"config.json", "workspace.json"} {
+		if err := os.WriteFile(filepath.Join(root, ConfigDirName, f), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain", "--untracked-files=all").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status: %v: %s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("sprout's own files show as changes:\n%s", out)
 	}
 }

@@ -112,6 +112,9 @@ func WorkspaceConfigDir(workspaceRoot string) string {
 // workspace .sprout/ directory. It covers personal overrides and
 // per-workspace state that should never be committed.
 const workspaceGitignoreContent = workspaceGitignoreHeader + `
+# This file itself: sprout recreates it, so it needn't be committed and
+# doesn't leave an untracked file in every repository sprout opens.
+.gitignore
 # Personal overrides (machine-specific settings)
 *.local.json
 # Settings sprout writes here for this machine — they carry command history

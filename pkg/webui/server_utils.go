@@ -82,8 +82,13 @@ func normalizeOriginForCompare(u *url.URL) string {
 // This is more restrictive than os.ExpandEnv (which expands all env vars)
 // and avoids surprising behavior from arbitrary environment variable expansion.
 func expandHomeVar(path string) string {
-	home := os.Getenv("HOME")
-	if home == "" {
+	if !strings.Contains(path, "$HOME") && !strings.Contains(path, "${HOME}") {
+		return path
+	}
+	// os.UserHomeDir rather than $HOME: Windows sets USERPROFILE, and HOME
+	// only exists there when launched from Git Bash.
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
 		return path
 	}
 	path = strings.ReplaceAll(path, "${HOME}", home)
@@ -91,10 +96,15 @@ func expandHomeVar(path string) string {
 	return path
 }
 
+// hasTildePrefix reports "~" or "~/..." (also "~\..." on Windows).
+func hasTildePrefix(p string) bool {
+	return p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~"+string(filepath.Separator))
+}
+
 func filepathAbsEval(path string) (string, error) {
 	// Expand $HOME / ${HOME} and tilde in the path.
 	expanded := expandHomeVar(path)
-	if strings.HasPrefix(expanded, "~/") || expanded == "~" {
+	if hasTildePrefix(expanded) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("resolve home directory: %w", err)
@@ -133,7 +143,7 @@ func filepathAbsEval(path string) (string, error) {
 // behave exactly as before.
 func filepathAbsEvalFrom(path, base string) (string, error) {
 	expanded := expandHomeVar(path)
-	if strings.HasPrefix(expanded, "~/") || expanded == "~" {
+	if hasTildePrefix(expanded) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("resolve home directory: %w", err)

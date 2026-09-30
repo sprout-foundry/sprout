@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // LogEntry represents a structured log entry
@@ -186,6 +188,12 @@ func (l *AgentLogger) writeEntry(level, message string, extraFields map[string]s
 		}
 
 		line := fmt.Sprintf("[%s] [%s]%s %s\n", timestamp, level, contextStr, message)
+		if l.file == nil {
+			// The stderr fallback reaches the live terminal; go above
+			// the prompt instead of writing over it.
+			console.PrintLine(line)
+			return
+		}
 		_, _ = writer.WriteString(line)
 	}
 }

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 // fetchTempDir returns the directory for cached fetch_url content files.
@@ -59,12 +61,26 @@ func saveFetchContent(url string, content string) (string, error) {
 		os.Remove(tmpPath)
 		return "", fmt.Errorf("write fetch content to %s: %w", path, err)
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := renameReplacing(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
 		return "", fmt.Errorf("rename fetch content to %s: %w", path, err)
 	}
 
 	return path, nil
+}
+
+// renameReplacing retries os.Rename briefly: on Windows, replacing a file
+// fails with "Access is denied" while any other handle (a concurrent reader
+// or another writer's rename) has the destination open.
+func renameReplacing(oldPath, newPath string) error {
+	var err error
+	for attempt := 0; attempt < 50; attempt++ {
+		if err = os.Rename(oldPath, newPath); err == nil || runtime.GOOS != "windows" {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return err
 }
 
 // evictOldFiles removes the oldest files in the fetch temp dir when the count

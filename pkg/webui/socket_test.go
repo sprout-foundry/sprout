@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -91,8 +92,8 @@ func TestServer_StartUnixSocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("socket file should exist: %v", err)
 	}
-	perm := info.Mode().Perm()
-	if perm != 0600 {
+	// Windows AF_UNIX sockets carry no POSIX mode; access is governed by ACLs.
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0600 {
 		t.Errorf("socket file permissions should be 0600, got %o", perm)
 	}
 
@@ -111,7 +112,7 @@ func TestServer_StartUnixSocket(t *testing.T) {
 			},
 		},
 	}
-	req, _ := http.NewRequest("GET", "http://localhost/", nil)
+	req, _ := http.NewRequest("GET", "http://localhost/health", nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("HTTP request to unix socket: %v", err)

@@ -23,23 +23,23 @@ import (
 // cleanup path.
 var jobRegistry sync.Map // key: int (pid), value: windows.Handle
 
-// setProcessGroup is currently a no-op on Windows because Job Object
-// creation must happen post-Start (the PID is only known after Start
-// returns). The actual Job assignment happens in AttachProcessToJob,
-// which background_process.go calls via AttachProcessToJob after
-// cmd.Start() succeeds.
-//
-// This function exists for parity with the Unix setProcessGroup which
-// configures SysProcAttr.Setpgid before start. The Windows equivalent
-// of that pre-start configuration is a no-op because CREATE_SUSPENDED +
-// post-start assignment would require modifying the spawn flow.
+// setProcessGroup starts the child as the leader of a new console
+// process group — the Windows analogue of Setpgid. Without it the child's
+// PID is not a valid CTRL_BREAK_EVENT target and interruptProcessGroup
+// would broadcast the event to sprout's own console. Descendant cleanup
+// is handled separately by the Job Object in AttachProcessToJob.
 //
 // SP-112-1.
-func setProcessGroup(_ *exec.Cmd) {}
+func setProcessGroup(cmd *exec.Cmd) {
+	console.SetNewProcessGroup(cmd)
+}
 
-// detachFromSession is a no-op on Windows. Windows has no Unix session
-// concept, so there's no SIGHUP propagation to guard against.
-func detachFromSession(_ *exec.Cmd) {}
+// detachFromSession has no session concept to escape on Windows, but the
+// child still needs its own process group so it can be interrupted
+// without signalling the parent's console.
+func detachFromSession(cmd *exec.Cmd) {
+	console.SetNewProcessGroup(cmd)
+}
 
 // interruptProcessGroup sends a graceful shutdown request via
 // CTRL_BREAK_EVENT, then falls back to forceful kill. Errors from the
@@ -54,10 +54,12 @@ func interruptProcessGroup(p *os.Process) error {
 	return p.Kill()
 }
 
-// terminateProcessGroup is a forceful per-process kill. Windows has no
-// SIGTERM, so this is the same as the interrupt path's fallback.
+// terminateProcessGroup is the SIGTERM-to-the-group step. Windows has no
+// SIGTERM, so it closes the Job: killing only the leader would leave its
+// descendants running and holding the output pipe open, which keeps
+// cmd.Wait (and so Stop) blocked until the final kill escalation.
 func terminateProcessGroup(p *os.Process) error {
-	return p.Kill()
+	return killProcessGroup(p)
 }
 
 // killProcessGroup terminates the Job Object that owns the process,

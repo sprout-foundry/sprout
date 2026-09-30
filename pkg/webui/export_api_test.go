@@ -96,7 +96,7 @@ var fakeAPIKey string
 func setupExportTest(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
 	root := t.TempDir()
-	t.Setenv("HOME", root)
+	setTestHome(t, root)
 
 	// webui's TestMain installs a package-wide state-dir hook via
 	// agent.SetTestStateDirHook, so t.Setenv("HOME", root) alone

@@ -57,6 +57,8 @@ func (e *ExitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		fmt.Printf("To Continue: `sprout agent --session-id %s`\n", sessionID)
 		fmt.Println("Or Resume Latest: `sprout agent --last-session`")
 	}
+	// os.Exit skips the REPL's deferred footer/terminal cleanup.
+	console.RestoreTerminal()
 	exitProcess(0)
 	return nil // unreachable — os.Exit(0)
 }

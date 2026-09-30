@@ -3,14 +3,12 @@
 package tools
 
 import (
-	"bufio"
-	"bytes"
-	"fmt"
 	"os/exec"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 
 	"github.com/sprout-foundry/sprout/pkg/utils/pidalive"
 )
@@ -108,32 +106,18 @@ func TestAttachProcessToJob_RoundTrip(t *testing.T) {
 // TestKillProcessGroup_CascadeKillsDescendants tests that killing a
 // parent process kills its children as well (via Job Object).
 //
-// Strategy: launch a parent cmd.exe which spawns a long-running child
-// ping.exe. Enumerate child PIDs via tasklist, then kill the parent via
-// killProcessGroup. Verify both parent AND child are dead — if only the
-// parent dies, the Job Object wasn't attached and descendants leaked.
+// The parent cmd.exe must outlive the attach: AssignProcessToJobObject on
+// an exited process fails with "Access is denied". It runs two pings in
+// sequence so the second one is spawned well after the attach and is
+// therefore guaranteed to inherit the Job.
 func TestKillProcessGroup_CascadeKillsDescendants(t *testing.T) {
-	// Start a parent process that spawns a child:
-	// cmd.exe /c "start /b cmd.exe /c ping -n 30 127.0.0.1 >nul"
-	// This creates a parent cmd.exe and a child ping.exe
-	cmd := exec.Command("cmd.exe", "/c", "start", "/b", "cmd.exe", "/c", "ping", "-n", "30", "127.0.0.1", ">nul")
+	cmd := exec.Command("cmd.exe", "/d", "/c", "ping -n 2 127.0.0.1 >nul & ping -n 30 127.0.0.1 >nul")
 	if err := cmd.Start(); err != nil {
 		t.Skipf("skipping: could not start test process: %v", err)
 	}
 	defer cmd.Process.Kill()
 
 	parentPID := cmd.Process.Pid
-	t.Logf("Started parent process with PID %d", parentPID)
-
-	// Give the child process time to spawn (slow on some CI runners —
-	// cmd.exe's `start` command can take up to 1s to actually fork).
-	time.Sleep(1 * time.Second)
-
-	// Attach parent to Job Object. NOTE: the child spawned via `start`
-	// may or may not inherit the Job depending on timing — see the
-	// documented race in AttachProcessToJob's comment. To make this
-	// test deterministic, attach BEFORE `start` runs by spawning cmd
-	// directly and using a shell script that uses & to background.
 	jobHandle, err := AttachProcessToJob(parentPID)
 	if err != nil {
 		t.Fatalf("AttachProcessToJob(%d) failed: %v", parentPID, err)
@@ -142,24 +126,30 @@ func TestKillProcessGroup_CascadeKillsDescendants(t *testing.T) {
 		t.Fatal("AttachProcessToJob returned zero handle")
 	}
 
-	// Enumerate children BEFORE killing (tasklist /FI "PPID eq <pid>")
-	// On Windows, tasklist filters by PPID; we capture the set of child
-	// PIDs and verify they all die after killProcessGroup.
-	children := enumerateChildPIDs(t, parentPID)
-	t.Logf("Found %d child processes before kill: %v", len(children), children)
+	var children []int
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if kids := childPIDs(t, parentPID); len(kids) > 0 {
+			if first := kids[0]; len(children) > 0 && children[0] != first {
+				children = kids
+				break
+			}
+			children = kids
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if len(children) == 0 {
+		t.Fatalf("parent %d never spawned a child", parentPID)
+	}
+	t.Logf("children before kill: %v", children)
 
-	// Kill via Job Object (should kill parent and any children in the Job)
 	if err := killProcessGroup(cmd.Process); err != nil {
 		t.Logf("killProcessGroup returned error: %v", err)
 	}
 
-	// Wait (with deadline) for parent to die.
 	if !waitUntilDead(parentPID, 5*time.Second) {
 		t.Errorf("parent process %d should be dead after killProcessGroup", parentPID)
 	}
-
-	// Verify every captured child is also dead — this is the cascade
-	// assertion the test name promises.
 	for _, childPID := range children {
 		if !waitUntilDead(childPID, 5*time.Second) {
 			t.Errorf("child PID %d (of parent %d) should be dead after killProcessGroup (Job Object cascade)",
@@ -168,32 +158,19 @@ func TestKillProcessGroup_CascadeKillsDescendants(t *testing.T) {
 	}
 }
 
-// enumerateChildPIDs returns the list of PIDs whose parent is the
-// given PID. Uses tasklist /FI "PPID eq <pid>" /FO CSV /NH and parses
-// the output. Returns an empty slice if tasklist is unavailable or
-// finds no children. Skips the test (via t.Skipf) on hard errors.
-func enumerateChildPIDs(t *testing.T, parentPID int) []int {
+func childPIDs(t *testing.T, parentPID int) []int {
 	t.Helper()
-	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("PPID eq %d", parentPID),
-		"/FO", "CSV", "/NH").CombinedOutput()
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		t.Skipf("tasklist not available: %v", err)
-		return nil
+		t.Fatalf("CreateToolhelp32Snapshot: %v", err)
 	}
+	defer windows.CloseHandle(snap)
 	var pids []int
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		// Format: "ping.exe","12345","Console","1","12,345 K"
-		fields := strings.Split(scanner.Text(), ",")
-		if len(fields) < 2 {
-			continue
+	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	for err = windows.Process32First(snap, &entry); err == nil; err = windows.Process32Next(snap, &entry) {
+		if int(entry.ParentProcessID) == parentPID {
+			pids = append(pids, int(entry.ProcessID))
 		}
-		pidStr := strings.Trim(fields[1], "\" ")
-		pid, err := strconv.Atoi(pidStr)
-		if err != nil {
-			continue
-		}
-		pids = append(pids, pid)
 	}
 	return pids
 }

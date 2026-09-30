@@ -51,7 +51,7 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 
 	// Write command to PTY
 	if session.Pty != nil {
-		n, err := session.Pty.Write([]byte(command))
+		n, err := session.writeInputLocked([]byte(command))
 		if err != nil {
 			return fmt.Errorf("failed to write command to PTY: %w", err)
 		}
@@ -89,7 +89,7 @@ func (tm *TerminalManager) WriteRawInput(sessionID, input string) error {
 		return fmt.Errorf("no PTY available for session %s", sessionID)
 	}
 
-	if _, err := session.Pty.Write([]byte(input)); err != nil {
+	if _, err := session.writeInputLocked([]byte(input)); err != nil {
 		return fmt.Errorf("failed to write raw input to PTY: %w", err)
 	}
 

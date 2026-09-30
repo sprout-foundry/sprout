@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -2417,8 +2418,10 @@ func TestRedirectGoLogToWorkspace_Coverage(t *testing.T) {
 // =============================================================================
 
 func TestPidaliveIsAlive_Coverage(t *testing.T) {
-	// PID 1 (init) should always be alive on Linux
-	if !pidalive.IsAlive(1) {
+	if !pidalive.IsAlive(os.Getpid()) {
+		t.Error("current process should be alive")
+	}
+	if runtime.GOOS != "windows" && !pidalive.IsAlive(1) {
 		t.Error("PID 1 should be alive")
 	}
 	// PID 0 should return false
@@ -2571,11 +2574,14 @@ func TestPrintPerTurnSummary_NonTTY_Coverage(t *testing.T) {
 // =============================================================================
 
 func TestSaveFirstRunState_WriteError_Coverage(t *testing.T) {
-	// Use a path inside /dev/null which is writable but can't hold files
+	parentFile := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(parentFile, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	state := &sproutState{SeenFirstRunHint: []string{"/test"}}
-	err := saveFirstRunState("/dev/null/state.json", state)
+	err := saveFirstRunState(filepath.Join(parentFile, "state.json"), state)
 	if err == nil {
-		t.Error("expected error when saving to /dev/null")
+		t.Error("expected error when the parent path is a regular file")
 	}
 }
 
@@ -3300,7 +3306,7 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 
 	// When all env vars are empty, getConfigDir falls back to os.UserHomeDir()
 	// which varies by platform. Just verify the result is a valid config path.
-	if !strings.HasSuffix(got, "/.config/sprout") {
+	if !strings.HasSuffix(got, filepath.Join(".config", "sprout")) {
 		t.Errorf("getConfigDir() fallback = %q, want path ending in /.config/sprout", got)
 	}
 }

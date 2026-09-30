@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // ringCapacity is the number of bytes retained in the per-session scrollback ring.
@@ -158,6 +160,10 @@ type TerminalSession struct {
 	// unavailable). Commands are run via exec.Cmd with stdin/stdout pipes
 	// instead. Terminal resize and raw terminal features are degraded.
 	NoPTY bool `json:"-"`
+
+	// pipeLine is the line being typed into a NoPTY session, held back until
+	// Enter (see writeInputLocked). Guarded by mutex.
+	pipeLine []byte
 
 	// History for shell command navigation.
 	History      []string
@@ -636,12 +642,17 @@ func (tm *TerminalManager) availableUnixShells() []ShellInfo {
 	return shells
 }
 
-// availableWindowsShells returns available shells on Windows.
+// availableWindowsShells returns available shells on Windows. Git Bash is
+// the default when installed, matching what createWindowsSession starts.
 func (tm *TerminalManager) availableWindowsShells() []ShellInfo {
 	var shells []ShellInfo
 
+	gitBash := shellexec.Path()
+	if gitBash != "" {
+		shells = append(shells, ShellInfo{Name: "bash", Path: gitBash, Default: true})
+	}
 	if path, err := exec.LookPath("cmd.exe"); err == nil {
-		shells = append(shells, ShellInfo{Name: "cmd.exe", Path: path, Default: true})
+		shells = append(shells, ShellInfo{Name: "cmd.exe", Path: path, Default: gitBash == ""})
 	}
 	if path, err := exec.LookPath("powershell.exe"); err == nil {
 		shells = append(shells, ShellInfo{Name: "powershell.exe", Path: path, Default: false})

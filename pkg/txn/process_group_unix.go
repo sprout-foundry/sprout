@@ -3,9 +3,25 @@
 package txn
 
 import (
+	"os"
 	"os/exec"
 	"syscall"
 )
+
+// txnShellCommand runs command under /bin/sh -c (or an absolute $SHELL).
+func txnShellCommand(command string) *exec.Cmd {
+	return exec.Command(shellPath(), "-c", command) //nolint:gosec // G204: runs the user's transaction under a shell, by design
+}
+
+// shellPath honors SHELL only when it is an absolute path — the container
+// contract pins /bin/sh, and an inherited relative SHELL would make exec
+// resolve against the workdir.
+func shellPath() string {
+	if shell := os.Getenv("SHELL"); shell != "" && shell[0] == '/' {
+		return shell
+	}
+	return "/bin/sh"
+}
 
 // setTxnProcessGroup puts the command in its own process group (pgid ==
 // pid) so a timeout can kill the WHOLE tree — the shell and every compiler
@@ -22,14 +38,19 @@ func setTxnProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
-// killTxnProcessGroup SIGKILLs the negative pgid, which the kernel applies
-// to every member of the group. A stale pid cannot be reused in the window
-// between the child's exit and this call: the group is not reaped until
-// cmd.Wait returns, so the pid stays allocated to a dead-but-unreaped
-// member (SIGKILL on it is a harmless no-op).
-func killTxnProcessGroup(cmd *exec.Cmd) {
-	if cmd.Process == nil {
-		return
-	}
-	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+type txnProcessGroup struct{ pid int }
+
+func trackTxnProcessGroup(cmd *exec.Cmd) *txnProcessGroup {
+	return &txnProcessGroup{pid: cmd.Process.Pid}
 }
+
+// kill SIGKILLs the negative pgid, which the kernel applies to every
+// member of the group. A stale pid cannot be reused in the window between
+// the child's exit and this call: the group is not reaped until cmd.Wait
+// returns, so the pid stays allocated to a dead-but-unreaped member
+// (SIGKILL on it is a harmless no-op).
+func (g *txnProcessGroup) kill() {
+	_ = syscall.Kill(-g.pid, syscall.SIGKILL)
+}
+
+func (g *txnProcessGroup) release() {}

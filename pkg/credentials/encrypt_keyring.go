@@ -3,7 +3,6 @@ package credentials
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -41,7 +40,7 @@ func LoadOrCreateMachineKey() (*age.X25519Identity, error) {
 
 	// Use flock for proper file locking that survives process death
 	fileLock := flock.New(keyPath + ".lock")
-	locked, err := fileLock.TryLockContext(context.Background(), 5*time.Second)
+	locked, err := tryLock(fileLock, false, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire lock for key generation: %w", err)
 	}

@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -225,8 +224,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 	}
 
 	// Sanitize filename to avoid creating subdirectories within the change dir
-	safeFilename := strings.ReplaceAll(filename, "/", "_")
-	safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+	safeFilename := SafeChangeFilename(filename)
 
 	// Encode file contents in base64 to avoid grep conflicts
 	originalEncoded := base64.StdEncoding.EncodeToString([]byte(originalCode))
@@ -347,8 +345,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			continue
 		}
 
-		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
-		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+		safeFilename := SafeChangeFilename(metadata.Filename)
 
 		// Tier detection: a revision dir is "warm" when conversation.json
 		// has been dropped (the compaction policy's only transition
@@ -466,8 +463,7 @@ func GetAllChangesMetadata() ([]ChangeLog, error) {
 		// reading + base64-decoding. Store in OriginalCode/NewCode as
 		// non-empty sentinels so existing callers that check
 		// `OriginalCode != ""` for recoverability still work.
-		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
-		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+		safeFilename := SafeChangeFilename(metadata.Filename)
 
 		hasOriginal := fileExists(filepath.Join(changeDir, safeFilename+originalSuffix))
 		hasNew := fileExists(filepath.Join(changeDir, safeFilename+updatedSuffix))

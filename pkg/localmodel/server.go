@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -180,7 +181,7 @@ func findServerBinary() (string, error) {
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
-		candidate := filepath.Join(exeDir, "llm_server")
+		candidate := filepath.Join(exeDir, serverBinaryName())
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
@@ -188,7 +189,7 @@ func findServerBinary() (string, error) {
 
 	// 2. Current working directory.
 	if wd, err := os.Getwd(); err == nil {
-		candidate := filepath.Join(wd, "llm_server")
+		candidate := filepath.Join(wd, serverBinaryName())
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
@@ -260,4 +261,13 @@ func StopServer(port int) error {
 	}
 	resp.Body.Close()
 	return nil
+}
+
+// serverBinaryName is the on-disk name of llm_server: os.Stat, unlike
+// exec.LookPath, does not append .exe on Windows.
+func serverBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "llm_server.exe"
+	}
+	return "llm_server"
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/internal/testgit"
@@ -13,6 +14,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/search"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // TestMain isolates session-state persistence for the webui package's
@@ -33,6 +35,7 @@ import (
 // don't run under WASM, so the TestMain only fires for the native
 // build where the leak actually happens.
 func TestMain(m *testing.M) {
+	runSleeperIfRequested()
 	// The git_api/… suites exec git subprocesses against real temp repos;
 	// redirect git config so the developer's ~/.gitconfig is never touched.
 	testgit.Configure()
@@ -42,7 +45,11 @@ func TestMain(m *testing.M) {
 	// a leak now costs ~2MB, and no test ever sources the user's rc files.
 	// Tests that exercise shell resolution explicitly t.Setenv their own
 	// override (resolveShell reads the env at call time).
-	_ = os.Setenv("SPROUT_TEST_SHELL", "/bin/sh")
+	testShell := "/bin/sh"
+	if runtime.GOOS == "windows" {
+		testShell = shellexec.Path()
+	}
+	_ = os.Setenv("SPROUT_TEST_SHELL", testShell)
 	defer func() { _ = os.Unsetenv("SPROUT_TEST_SHELL") }()
 	// Onboarding/agent tests that select the sprout-local provider would
 	// otherwise pull the user's REAL multi-GB model weights into this test
@@ -57,6 +64,11 @@ func TestMain(m *testing.M) {
 	}
 	// Isolate all four category roots so state/cache/data never leak
 	// to the developer's real directories.
+	// Snapshot the developer's real state dir before the overrides below
+	// redirect it: taken afterwards, "real" would be the temp dir itself and
+	// every legitimate session save would read as a leak.
+	realDir, beforeSnapshot := agent.SnapshotRealStateDir()
+
 	origStateDir := os.Getenv("SPROUT_STATE_DIR")
 	origCacheDir := os.Getenv("SPROUT_CACHE_DIR")
 	origDataDir := os.Getenv("SPROUT_DATA_DIR")
@@ -92,8 +104,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	realDir, beforeSnapshot := agent.SnapshotRealStateDir()
-
 	// Re-aim the search index updater at the temp sessions dir so the
 	// SP-083-3 SaveSession hook doesn't leak search-index.json into the
 	// developer's real $HOME. Stops the previous updater (and cancels
@@ -121,9 +131,20 @@ func TestMain(m *testing.M) {
 	recentWorkspaces.workspaces = nil
 	recentWorkspaces.mu.Unlock()
 
+	// Run from a scratch CWD: handlers and the workflows they start in the
+	// background resolve .sprout/ against the process CWD, and some of those
+	// writes land after the test that triggered them has returned, so no
+	// per-test t.Chdir can contain them.
+	origWd, _ := os.Getwd()
+	scratchWd := filepath.Join(tmpDir, "cwd")
+	if err := os.MkdirAll(scratchWd, 0o700); err == nil {
+		_ = os.Chdir(scratchWd)
+	}
+
 	restore := agent.SetTestStateDirHook(sessionsDir)
 	code := m.Run()
 	restore()
+	_ = os.Chdir(origWd)
 
 	leakCode := agent.AssertNoStateLeak(realDir, beforeSnapshot)
 	recentLeakCode := assertNoRecentWorkspacesLeak(realRecentPath, realRecentBefore)

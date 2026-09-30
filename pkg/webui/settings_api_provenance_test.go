@@ -100,7 +100,7 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 
 	// Create isolated home directory
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 	// Ensure SPROUT_CONFIG/SPROUT_CONFIG don't override XDG_CONFIG_HOME

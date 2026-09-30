@@ -959,12 +959,12 @@ func TestGetWorkspaceConfigPath(t *testing.T) {
 		{
 			name:     "joins workspace root with .sprout/workspace.json",
 			root:     "/home/user/project",
-			expected: "/home/user/project/.sprout/workspace.json",
+			expected: filepath.Join("/home/user/project", ".sprout", "workspace.json"),
 		},
 		{
 			name:     "handles nested paths",
 			root:     "/a/b/c/d",
-			expected: "/a/b/c/d/.sprout/workspace.json",
+			expected: filepath.Join("/a/b/c/d", ".sprout", "workspace.json"),
 		},
 		{
 			name:     "handles relative paths",

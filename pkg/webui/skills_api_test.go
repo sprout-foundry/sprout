@@ -36,7 +36,7 @@ func newSkillsWS() *ReactWebServer {
 func TestHandleAPIListSkills_Empty(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills", nil)
@@ -60,7 +60,7 @@ func TestHandleAPIListSkills_Empty(t *testing.T) {
 func TestHandleAPIListSkills_WithInstalled(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	// Install a skill first via the underlying API.
 	srcDir := t.TempDir()
@@ -107,7 +107,7 @@ func TestHandleAPIListSkills_WithInstalled(t *testing.T) {
 func TestHandleAPIListSkills_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodPost, "/api/skills", nil)
@@ -126,7 +126,7 @@ func TestHandleAPIListSkills_MethodNotAllowed(t *testing.T) {
 func TestHandleAPIListRegistry(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/registry", nil)
@@ -159,7 +159,7 @@ func TestHandleAPIListRegistry(t *testing.T) {
 func TestHandleAPIListRegistry_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodPost, "/api/skills/registry", nil)
@@ -178,7 +178,7 @@ func TestHandleAPIListRegistry_MethodNotAllowed(t *testing.T) {
 func TestHandleAPIInstallSkill_FromPath(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	srcDir := t.TempDir()
 	writeSkillMDForTest(t, srcDir, "path-installed-skill")
@@ -208,7 +208,7 @@ func TestHandleAPIInstallSkill_FromPath(t *testing.T) {
 func TestHandleAPIInstallSkill_AlreadyInstalled_NoForce(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	srcDir := t.TempDir()
 	writeSkillMDForTest(t, srcDir, "dup-skill")
@@ -243,7 +243,7 @@ func TestHandleAPIInstallSkill_AlreadyInstalled_NoForce(t *testing.T) {
 func TestHandleAPIInstallSkill_WithForce(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	srcDir := t.TempDir()
 	writeSkillMDForTest(t, srcDir, "force-skill")
@@ -278,7 +278,7 @@ func TestHandleAPIInstallSkill_WithForce(t *testing.T) {
 func TestHandleAPIInstallSkill_MissingSource(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	body, _ := json.Marshal(map[string]string{})
@@ -295,7 +295,7 @@ func TestHandleAPIInstallSkill_MissingSource(t *testing.T) {
 func TestHandleAPIInstallSkill_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/install", nil)
@@ -314,7 +314,7 @@ func TestHandleAPIInstallSkill_MethodNotAllowed(t *testing.T) {
 func TestHandleAPIUpdateSkill_NotInstalled(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	body, _ := json.Marshal(map[string]string{"id": "nope"})
@@ -331,7 +331,7 @@ func TestHandleAPIUpdateSkill_NotInstalled(t *testing.T) {
 func TestHandleAPIUpdateSkill_PathOrigin_ErrNotGitOrigin(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	srcDir := t.TempDir()
 	writeSkillMDForTest(t, srcDir, "path-update-skill")
@@ -366,7 +366,7 @@ func TestHandleAPIUpdateSkill_PathOrigin_ErrNotGitOrigin(t *testing.T) {
 func TestHandleAPIRemoveSkill_NotInstalled(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	body, _ := json.Marshal(map[string]string{"id": "nope"})
@@ -386,7 +386,7 @@ func TestHandleAPIRemoveSkill_NotInstalled(t *testing.T) {
 func TestHandleAPIRemoveSkill_MethodNotAllowed(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/remove", nil)
@@ -401,7 +401,7 @@ func TestHandleAPIRemoveSkill_MethodNotAllowed(t *testing.T) {
 func TestHandleAPIRemoveSkill_Success(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	srcDir := t.TempDir()
 	writeSkillMDForTest(t, srcDir, "removable-skill")
@@ -437,7 +437,7 @@ func TestHandleAPIRemoveSkill_Success(t *testing.T) {
 func TestHandleAPISkillsRoutes_UnknownSubpath(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/bogus", nil)
@@ -452,7 +452,7 @@ func TestHandleAPISkillsRoutes_UnknownSubpath(t *testing.T) {
 func TestHandleAPISkillsRoutes_DispatchesToList(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/", nil)
@@ -471,7 +471,7 @@ func TestHandleAPISkillsRoutes_DispatchesToList(t *testing.T) {
 func TestHandleAPIInstallSkill_FromRegistry(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	// Create a local "registry repo" with one skill
 	repoDir := t.TempDir()
@@ -527,7 +527,7 @@ func TestHandleAPIInstallSkill_FromRegistry(t *testing.T) {
 func TestHandleAPISkillsRoutes_RoutesToRegistry(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	ws := newSkillsWS()
 	req := httptest.NewRequest(http.MethodGet, "/api/skills/registry", nil)

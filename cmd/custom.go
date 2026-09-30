@@ -24,8 +24,9 @@ var customModelCmd = &cobra.Command{
 	Use:   "custom",
 	Short: "Manage custom OpenAI-compatible providers",
 	Long: `Manage custom OpenAI-compatible providers backed by ~/.config/sprout/providers/*.json.
-Each custom provider stores an endpoint URL and optional API-key environment variable,
-and sprout discovers available models from the provider's /v1/models endpoint.`,
+Each custom provider stores an endpoint URL and how its API key is supplied: a pasted
+key kept in the credential store (the default), an environment variable, or none.
+Sprout discovers available models from the provider's /v1/models endpoint.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
@@ -61,7 +62,7 @@ var customModelListCmd = &cobra.Command{
 }
 
 func runCustomModelAdd() error {
-	// The wizard prompts interactively for endpoint URL, API key env var,
+	// The wizard prompts interactively for endpoint URL, API key source,
 	// and preferred model. If stdin isn't a terminal, promptLine will block
 	// on EOF forever — fail fast with guidance instead.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -100,33 +101,22 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("invalid endpoint URL: %w", err)
 	}
 
-	envVar, err := promptLine(reader, "API key env var (leave empty for no auth): ")
-	if err != nil {
-		return fmt.Errorf("failed to prompt for API key env var: %w", err)
-	}
-	envVar = strings.TrimSpace(envVar)
-
-	// If the user named an env var that's already set in the environment,
-	// tell them — no need to ask them to re-set the credential via
-	// `sprout keys set`.
-	if envVar != "" && strings.TrimSpace(os.Getenv(envVar)) != "" {
-		fmt.Printf("(env var %s is already set; discovery will use it)\n", envVar)
-	}
-
 	provider := configuration.CustomProviderConfig{
-		Name:           name,
-		Endpoint:       endpoint,
-		EnvVar:         envVar,
-		RequiresAPIKey: envVar != "",
+		Name:     name,
+		Endpoint: endpoint,
+	}
+	pastedKey, err := configureKeySource(reader, &provider)
+	if err != nil {
+		return err
 	}
 
-	if err := discoverAndPickModel(reader, &provider); err != nil {
+	if err := discoverAndPickModel(reader, &provider, pastedKey); err != nil {
 		if errors.Is(err, errCustomSetupCancelled) {
 			return nil
 		}
 		return err
 	}
-	models := getModelListForVisionPicker(provider)
+	models := getModelListForVisionPicker(provider, pastedKey)
 
 	// Prompt for default context size.
 	// If discovery succeeded and the default model has a known context size,
@@ -192,8 +182,13 @@ func runCustomModelAdd() error {
 	fmt.Printf("Saved provider '%s'\n", normalized.Name)
 	fmt.Printf("  Chat endpoint: %s\n", secretdetect.RedactOpaque(normalized.Endpoint))
 	fmt.Printf("  Models endpoint: %s\n", secretdetect.RedactOpaque(normalized.ModelsEndpoint()))
-	if normalized.EnvVar != "" {
-		fmt.Printf("  API key env: %s\n", normalized.EnvVar)
+	switch {
+	case normalized.EnvVar != "":
+		fmt.Printf("  API key: env var %s\n", normalized.EnvVar)
+	case pastedKey != "":
+		fmt.Println("  API key: credential store")
+	case !normalized.RequiresAPIKey:
+		fmt.Println("  API key: none")
 	}
 	if normalized.ModelName != "" {
 		fmt.Printf("  Default model: %s\n", normalized.ModelName)
@@ -208,11 +203,7 @@ func runCustomModelAdd() error {
 	}
 	fmt.Printf("  File: %s\n", path)
 
-	// If the user declared an API key env var, offer to set it now via
-	// the active credential backend. Skip the prompt when the env var is
-	// already set in the environment (no need to copy it into the store)
-	// or when the provider doesn't need auth.
-	promptForCredentialIfNeeded(reader, normalized.Name, normalized.EnvVar)
+	storePastedKey(normalized.Name, pastedKey)
 
 	return nil
 }
@@ -261,12 +252,12 @@ func runCustomModelAddKnown(reader *bufio.Reader, known configuration.KnownProvi
 			known.Name, console.FormatYesNoPromptStdout(true)))
 		if err != nil || !isYes(answer) {
 			fmt.Println()
-			fmt.Printf("Skipped. Run `/keys set %s <key>` (or `sprout keys set %s <key>`) later.\n",
+			fmt.Printf("Skipped. Re-run `sprout custom add %s` (or `/custom add %s` in chat) later.\n",
 				known.Name, known.Name)
 			return nil
 		}
 
-		key, keyErr := promptLine(reader, fmt.Sprintf("API key (or set %s): ", known.EnvVar))
+		key, keyErr := readSecret("API key (input hidden): ")
 		if keyErr != nil {
 			return fmt.Errorf("failed to read API key: %w", keyErr)
 		}
@@ -376,11 +367,7 @@ func runCustomModelList() error {
 		fmt.Printf("%s\n", name)
 		fmt.Printf("  Chat endpoint: %s\n", secretdetect.RedactOpaque(provider.Endpoint))
 		fmt.Printf("  Models endpoint: %s\n", secretdetect.RedactOpaque(provider.ModelsEndpoint()))
-		if provider.EnvVar != "" {
-			fmt.Printf("  API key env: %s\n", provider.EnvVar)
-		} else {
-			fmt.Printf("  API key env: none\n")
-		}
+		fmt.Printf("  API key: %s\n", describeKeySource(name, provider))
 		if model := cfg.ProviderModels[name]; model != "" {
 			fmt.Printf("  Selected model: %s\n", model)
 			if ctxSz := provider.ContextSize; ctxSz > 0 {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -183,17 +184,26 @@ func newTestAgentWithSecurity(workspaceRoot string) *Agent {
 
 // --- Tests for IsCdTargetAllowed ---
 
+// absFixture makes a slash-rooted fixture path absolute on every platform
+// ("/workspace" is not absolute on Windows without a volume).
+func absFixture(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
+
 func TestIsCdTargetAllowed_Workspace(t *testing.T) {
-	a := newTestAgentWithSecurity("/workspace")
+	a := newTestAgentWithSecurity(absFixture("/workspace"))
 
 	tests := []struct {
 		name     string
 		target   string
 		expected bool
 	}{
-		{"workspace root", "/workspace", true},
-		{"subdirectory", "/workspace/sub/dir", true},
-		{"another subdirectory", "/workspace/a/b/c", true},
+		{"workspace root", absFixture("/workspace"), true},
+		{"subdirectory", absFixture("/workspace/sub/dir"), true},
+		{"another subdirectory", absFixture("/workspace/a/b/c"), true},
 	}
 
 	for _, tt := range tests {
@@ -207,20 +217,20 @@ func TestIsCdTargetAllowed_Workspace(t *testing.T) {
 }
 
 func TestIsCdTargetAllowed_AllowedPath(t *testing.T) {
-	a := newTestAgentWithSecurity("/workspace")
+	a := newTestAgentWithSecurity(absFixture("/workspace"))
 
 	// Add /tmp/workspace as an allowed folder.
-	a.AddSessionAllowedFolder("/tmp/workspace")
+	a.AddSessionAllowedFolder(absFixture("/tmp/workspace"))
 
 	tests := []struct {
 		name     string
 		target   string
 		expected bool
 	}{
-		{"allowed path root", "/tmp/workspace", true},
-		{"allowed path subdirectory", "/tmp/workspace/sub", true},
-		{"allowed path deep subdirectory", "/tmp/workspace/a/b/c", true},
-		{"workspace not allowed path", "/other/path", false},
+		{"allowed path root", absFixture("/tmp/workspace"), true},
+		{"allowed path subdirectory", absFixture("/tmp/workspace/sub"), true},
+		{"allowed path deep subdirectory", absFixture("/tmp/workspace/a/b/c"), true},
+		{"workspace not allowed path", absFixture("/other/path"), false},
 	}
 
 	for _, tt := range tests {
@@ -292,9 +302,9 @@ func TestIsCdTargetAllowed_InvalidInput(t *testing.T) {
 // --- Tests for ListAllowedCdTargets ---
 
 func TestListAllowedCdTargets(t *testing.T) {
-	a := newTestAgentWithSecurity("/workspace")
-	a.AddSessionAllowedFolder("/tmp/workspace")
-	a.AddSessionAllowedFolder("/home/user/allowed")
+	a := newTestAgentWithSecurity(absFixture("/workspace"))
+	a.AddSessionAllowedFolder(absFixture("/tmp/workspace"))
+	a.AddSessionAllowedFolder(absFixture("/home/user/allowed"))
 
 	targets := a.ListAllowedCdTargets()
 
@@ -304,16 +314,16 @@ func TestListAllowedCdTargets(t *testing.T) {
 	}
 
 	// First should be workspace root.
-	if targets[0] != "/workspace" {
+	if normalizePath(targets[0]) != normalizePath(absFixture("/workspace")) {
 		t.Errorf("first target should be workspace root, got %q", targets[0])
 	}
 
 	// Rest should be sorted.
-	expected := []string{"/workspace", "/home/user/allowed", "/tmp/workspace"}
+	expected := []string{absFixture("/workspace"), absFixture("/home/user/allowed"), absFixture("/tmp/workspace")}
 	for _, exp := range expected {
 		found := false
 		for _, got := range targets {
-			if got == exp {
+			if normalizePath(got) == normalizePath(exp) {
 				found = true
 				break
 			}

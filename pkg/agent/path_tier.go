@@ -114,12 +114,7 @@ func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
 // usual installation roots.
 func systemPathPrefixes() []string {
 	if runtime.GOOS == "windows" {
-		return []string{
-			`C:\Windows`,
-			`C:\Program Files`,
-			`C:\Program Files (x86)`,
-			`C:\ProgramData`,
-		}
+		return windowsSystemPathPrefixes()
 	}
 	return []string{
 		"/etc",
@@ -141,6 +136,27 @@ func systemPathPrefixes() []string {
 		"/private/var",
 		"/Applications",
 	}
+}
+
+// windowsSystemPathPrefixes reads the install roots from the environment
+// (Windows need not live on C:) and case-folds them to match
+// normalizePath, which lowercases every path it compares on Windows.
+func windowsSystemPathPrefixes() []string {
+	defaults := map[string]string{
+		"SystemRoot":        `C:\Windows`,
+		"ProgramFiles":      `C:\Program Files`,
+		"ProgramFiles(x86)": `C:\Program Files (x86)`,
+		"ProgramData":       `C:\ProgramData`,
+	}
+	prefixes := make([]string, 0, len(defaults))
+	for env, fallback := range defaults {
+		dir := os.Getenv(env)
+		if dir == "" {
+			dir = fallback
+		}
+		prefixes = append(prefixes, strings.ToLower(filepath.Clean(dir)))
+	}
+	return prefixes
 }
 
 func isSystemPath(absPath string) bool {
@@ -173,6 +189,9 @@ func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
 	// Also check the original (unresolved) path against system prefixes.
 	// This handles cases where the system prefix itself is a symlink
 	// (e.g., /etc → /system/etc on some Linux systems).
+	if originalPath != "" && runtime.GOOS == "windows" {
+		originalPath = strings.ToLower(filepath.Clean(originalPath))
+	}
 	if originalPath != "" && originalPath != resolvedPath {
 		for _, prefix := range systemPathPrefixes() {
 			if isUnderPrefix(originalPath, prefix) {
@@ -188,6 +207,16 @@ func isSystemPathWithOriginal(resolvedPath, originalPath string) bool {
 // here — that's the filesystem layer's job. On Windows the path
 // becomes case-insensitive for comparison.
 func normalizePath(p string) string {
+	clean := canonicalPath(p)
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(clean)
+	}
+	return clean
+}
+
+// canonicalPath is normalizePath without the Windows case folding — the
+// form to show a user, since it keeps the path's real spelling.
+func canonicalPath(p string) string {
 	if p == "" {
 		return p
 	}
@@ -196,9 +225,6 @@ func normalizePath(p string) string {
 	// mismatches between allowlist entries and canonical paths.
 	if evaled, err := filepath.EvalSymlinks(clean); err == nil {
 		clean = evaled
-	}
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(clean)
 	}
 	return clean
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // ---------------------------------------------------------------------------
@@ -340,11 +341,9 @@ func buildChangeExample(changeDir string, maxSize int) (*FileChangeExample, bool
 // ---------------------------------------------------------------------------
 
 // readBase64File reads a base64-encoded file from a change directory.
-// The filename is sanitized (/ replaced with _) to match the on-disk naming.
+// The filename is sanitized exactly as pkg/history writes it.
 func readBase64File(changeDir, filename, suffix string) (string, bool) {
-	safe := strings.ReplaceAll(filename, "/", "_")
-	safe = strings.ReplaceAll(safe, "\\", "_")
-	path := filepath.Join(changeDir, safe+suffix)
+	path := filepath.Join(changeDir, history.SafeChangeFilename(filename)+suffix)
 
 	raw, err := os.ReadFile(path)
 	if err != nil {

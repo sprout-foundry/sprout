@@ -137,9 +137,13 @@ vi.mock('../hooks/useEditorExtensions', () => ({
       inlayHints: new Compartment(),
       signatureHelp: new Compartment(),
       history: new Compartment(),
+      markerGutters: new Compartment(),
+      foldGutter: new Compartment(),
     },
     buildExtensions: () => [],
   }),
+  markerGutters: () => [],
+  foldMarkerGutter: () => [],
   TAB_SIZE_DEFAULT: 4,
 }));
 // Mock useEditorFileIO to avoid deep CodeMirror dependency cascade

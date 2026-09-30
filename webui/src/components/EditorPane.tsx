@@ -7,7 +7,7 @@ import { useEditorContextMenu } from '../hooks/useEditorContextMenu';
 import { useEditorCursor } from '../hooks/useEditorCursor';
 import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
 import { useEditorEvents } from '../hooks/useEditorEvents';
-import { useEditorExtensions } from '../hooks/useEditorExtensions';
+import { foldMarkerGutter, markerGutters, useEditorExtensions } from '../hooks/useEditorExtensions';
 import { useEditorFileIO } from '../hooks/useEditorFileIO';
 import { useEditorFileType } from '../hooks/useEditorFileType';
 import { useEditorKeymaps } from '../hooks/useEditorKeymaps';
@@ -252,6 +252,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     inlayHintsEnabled: settings.inlayHintsEnabled,
     signatureHelpEnabled: settings.signatureHelpEnabled,
     aiCompletionsEnabled: settings.aiCompletionsEnabled,
+    compactGutters: isMobileViewport,
   };
 
   // Resolve language for the current buffer. The CM extensions builder
@@ -369,6 +370,17 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // the ref indirection. Writes are safe during render — the ref object
   // is stable, only its `.current` changes.
   cmViewApiRef.current = cmViewApi;
+
+  // Phones get line numbers and the diff bar only; the lint, quick-fix and
+  // fold columns come back when the viewport widens.
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: [
+        compartments.markerGutters.reconfigure(isMobileViewport ? [] : markerGutters()),
+        compartments.foldGutter.reconfigure(isMobileViewport ? [] : foldMarkerGutter()),
+      ],
+    });
+  }, [compartments, isMobileViewport]);
 
   // Tracks whether this pane is the active one. Updated on every render so
   // useEditorEvents' stable handler can read the latest value via the ref

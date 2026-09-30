@@ -595,18 +595,21 @@ function pluginForView(view: EditorView): CodeActionsPlugin | null {
 
 // ─── Public API ───────────────────────────────────────────────────
 
-/** Build the code actions extension with lightbulb gutter and Ctrl+. menu. */
+/**
+ * Build the code actions extension (the Ctrl+. menu). The lightbulb gutter is
+ * separate (`codeActionsGutter`), so a layout can go without it.
+ */
 export function createCodeActionsExtension(
   getFilePath: () => string | undefined,
   getContent: () => string,
   onApplyEdits?: (edits: CodeActionEdit[]) => void,
 ): Extension {
-  return [
-    codeActionsConfig.of({ getFilePath, getContent, onApplyEdits }),
-    codeActionsField,
-    codeActionsPlugin,
-    codeActionGutter,
-  ];
+  return [codeActionsConfig.of({ getFilePath, getContent, onApplyEdits }), codeActionsField, codeActionsPlugin];
+}
+
+/** The lightbulb gutter marking lines with code actions. */
+export function codeActionsGutter(): Extension {
+  return codeActionGutter;
 }
 
 /** Create a keybinding for Ctrl/Cmd+. to open the quick actions menu. */

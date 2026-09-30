@@ -1,9 +1,10 @@
-import { FileTree, type FileInfo } from '@sprout/ui';
+import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isCloud } from '../config/mode';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
+import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
 import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
@@ -22,7 +23,7 @@ import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
 
 export interface FileTreeHandle {
-  refresh: () => void;
+  refresh: (options?: FileTreeRefreshOptions) => void;
   revealFile: (filePath: string) => void;
 }
 
@@ -55,11 +56,14 @@ interface SidebarFilesSectionProps {
 
 const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>(
   ({ onFileClick, workspaceRoot }, ref) => {
-    const fileTreeRef = useRef<{ refresh: () => void; revealFile: (filePath: string) => void } | null>(null);
+    const fileTreeRef = useRef<FileTreeHandle | null>(null);
+    // Files the agent or a shell command creates or deletes show up without
+    // a manual refresh; in place, so the tree doesn't flash.
+    useFileTreeAutoRefresh(() => fileTreeRef.current?.refresh({ quiet: true }));
 
     useImperativeHandle(ref, () => ({
-      refresh: () => {
-        fileTreeRef.current?.refresh();
+      refresh: (options) => {
+        fileTreeRef.current?.refresh(options);
       },
       revealFile: (filePath: string) => {
         fileTreeRef.current?.revealFile(filePath);

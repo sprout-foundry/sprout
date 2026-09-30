@@ -4,7 +4,7 @@
  * are the classic sidebar's own sections, rendered by the caller.
  */
 
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../../config/mode';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
@@ -104,6 +104,15 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const repoSlug = githubRepoSlug(activeRepo);
   const recentRepos = useRecentRepos();
   const home = useHomeView();
+  // Phones: whatever opens a Home page (a dialog's "Connect GitHub", a
+  // notification, the account card) shows it — the drawer gets out of the way.
+  const onCloseDrawer = props.onCloseDrawer;
+  const homeShown = home.open ? home.path : null;
+  const lastHomeShown = useRef(homeShown);
+  useEffect(() => {
+    if (homeShown !== null && homeShown !== lastHomeShown.current) onCloseDrawer?.();
+    lastHomeShown.current = homeShown;
+  }, [homeShown, onCloseDrawer]);
   const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';

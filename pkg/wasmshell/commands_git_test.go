@@ -261,7 +261,7 @@ func TestFind_Not(t *testing.T) {
 }
 
 func TestFind_UnsupportedPredicateEscalates(t *testing.T) {
-	r := ParseAndExecute("find . -exec wc -l {} \\;")
+	r := ParseAndExecute("find . -fstype nfs")
 	if r.ExitCode != 127 {
 		t.Errorf("exit = %d, want 127 (escalate to container)", r.ExitCode)
 	}

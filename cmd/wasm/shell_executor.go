@@ -298,5 +298,6 @@ func escalateUnavailableCommand(command string, local wasmshell.CmdResult) (stdo
 }
 
 // browserShellNote explains a 127 from the in-browser shell to the model.
-const browserShellNote = "\n[sprout] This command isn't available in the in-browser shell, which only " +
-	"provides basic file and text tools. It needs a cloud workspace to run.\n"
+const browserShellNote = "\n[sprout] This command isn't available in the in-browser shell, which runs " +
+	"shell scripts and built-in file and text tools but no compilers, package managers, interpreters or " +
+	"network tools. It needs a cloud workspace to run.\n"

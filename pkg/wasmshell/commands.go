@@ -1,11 +1,7 @@
 package wasmshell
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -95,19 +91,6 @@ type CommandFunc func(args []string, stdin string) CmdResult
 // CmdRegistry maps command names to their implementations.
 var CmdRegistry = map[string]CommandFunc{}
 
-// BuiltinNames lists all built-in command names.
-var BuiltinNames = map[string]bool{
-	"ls": true, "cd": true, "pwd": true, "cat": true, "mkdir": true,
-	"rm": true, "rmdir": true, "cp": true, "mv": true, "touch": true,
-	"echo": true, "head": true, "tail": true, "wc": true, "grep": true,
-	"sort": true, "find": true, "tree": true, "clear": true, "help": true,
-	"date": true, "whoami": true, "env": true, "export": true, "which": true,
-	"type": true, "history": true, "println": true, "basename": true,
-	"dirname": true, "realpath": true, "tr": true, "uniq": true,
-	"cut": true, "tee": true,
-	"git": true,
-}
-
 func init() {
 	CmdRegistry["ls"] = cmdLs
 	CmdRegistry["cd"] = cmdCd
@@ -123,26 +106,18 @@ func init() {
 	CmdRegistry["head"] = cmdHead
 	CmdRegistry["tail"] = cmdTail
 	CmdRegistry["wc"] = cmdWc
-	CmdRegistry["grep"] = cmdGrep
-	CmdRegistry["sort"] = cmdSort
-	CmdRegistry["find"] = cmdFind
 	CmdRegistry["tree"] = cmdTree
 	CmdRegistry["clear"] = cmdClear
 	CmdRegistry["help"] = cmdHelp
 	CmdRegistry["date"] = cmdDate
 	CmdRegistry["whoami"] = cmdWhoami
-	CmdRegistry["env"] = cmdEnv
 	CmdRegistry["export"] = cmdExport
 	CmdRegistry["which"] = cmdWhich
-	CmdRegistry["type"] = cmdType
 	CmdRegistry["history"] = cmdHistory
 	CmdRegistry["println"] = cmdPrintln
 	CmdRegistry["basename"] = cmdBasename
 	CmdRegistry["dirname"] = cmdDirname
 	CmdRegistry["realpath"] = cmdRealpath
-	CmdRegistry["tr"] = cmdTr
-	CmdRegistry["uniq"] = cmdUniq
-	CmdRegistry["cut"] = cmdCut
 	CmdRegistry["tee"] = cmdTee
 	CmdRegistry["git"] = cmdGit
 }
@@ -283,93 +258,3 @@ func WriteFileContent(path, content string) error {
 func DeleteFilePath(path string) error {
 	return SyncDeleteFile(ResolvePath(path))
 }
-
-// pipeStdin reads from a reader and returns string.
-func pipeStdin(r io.Reader) string {
-	data, _ := io.ReadAll(r)
-	return string(data)
-}
-
-// stringReader converts a string to a reader for piping.
-func stringReader(s string) io.Reader {
-	return strings.NewReader(s)
-}
-
-// pipeCommands runs multiple commands connected by pipes.
-func pipeCommands(commands [][]string) CmdResult {
-	var stdin string
-	for i, cmdArgs := range commands {
-		if len(cmdArgs) == 0 {
-			continue
-		}
-		name := cmdArgs[0]
-		args := cmdArgs[1:]
-
-		// Expand globs in args
-		args = ExpandGlobs(args)
-
-		if i > 0 {
-			if fn, ok := CmdRegistry[name]; ok {
-				result := fn(args, stdin)
-				if result.ExitCode != 0 && len(commands) > 1 {
-					return result
-				}
-				stdin = result.Stdout
-			} else {
-				return CmdResult{stdin, fmt.Sprintf("command not found: %s\n", name), 127}
-			}
-		} else {
-			if fn, ok := CmdRegistry[name]; ok {
-				result := fn(args, stdin)
-				if result.ExitCode != 0 {
-					return result
-				}
-				stdin = result.Stdout
-			} else {
-				return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), 127}
-			}
-		}
-	}
-
-	return CmdResult{stdin, "", 0}
-}
-
-// RunCommandWithRedirects runs a command with optional redirect support.
-func RunCommandWithRedirects(name string, args []string, stdin string, stdoutRedirect *string, stderrRedirect *string, appendStdout bool) CmdResult {
-	args = ExpandGlobs(args)
-
-	fn, ok := CmdRegistry[name]
-	if !ok {
-		return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), 127}
-	}
-
-	result := fn(args, stdin)
-
-	// Handle stdout redirect
-	if stdoutRedirect != nil && *stdoutRedirect != "" {
-		redirectPath := ResolvePath(*stdoutRedirect)
-		if appendStdout {
-			existing := ""
-			if data, err := os.ReadFile(redirectPath); err == nil {
-				existing = string(data)
-			}
-			SyncWriteFile(redirectPath, existing+result.Stdout)
-		} else {
-			SyncWriteFile(redirectPath, result.Stdout)
-		}
-		result.Stdout = ""
-	}
-
-	// Handle stderr redirect
-	if stderrRedirect != nil && *stderrRedirect != "" {
-		redirectPath := ResolvePath(*stderrRedirect)
-		SyncWriteFile(redirectPath, result.Stderr)
-		result.Stderr = ""
-	}
-
-	return result
-}
-
-// Copying bufio into scope since it's used by some utilities.
-var _ = bufio.NewReader
-var _ = (*bytes.Buffer)(nil)

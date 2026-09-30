@@ -414,7 +414,10 @@ export async function gitFileDiff(path: string) {
   await ensureInitialized();
   await syncVfsToGitFs();
   const fs = getFs().promises;
-  const rel = path.replace(/^\/+/, '').replace(/^repo\//, '');
+  const rel = path
+    .replace(/^\/workspace\//, '')
+    .replace(/^\/+/, '')
+    .replace(/^repo\//, '');
 
   let original = '';
   try {

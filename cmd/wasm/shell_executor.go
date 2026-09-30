@@ -74,7 +74,7 @@ func init() {
 			}
 		}
 
-		r := wasmshell.ParseAndExecute(command)
+		r := fromWorkspace(func() wasmshell.CmdResult { return wasmshell.ParseAndExecute(command) })
 		if r.ExitCode == wasmshell.ExitCommandNotFound {
 			return escalateUnavailableCommand(command, r)
 		}

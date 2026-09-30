@@ -109,7 +109,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     // toWorkspaceResponse) defaults these to false/[] via nullish coalescing.
     // In cloud mode, workspace selection is not needed — the WASM shell owns the
     // virtual filesystem root, so needs_workspace_selection is effectively false.
-    syntheticResponse: { message: 'ok', workspace_root: '/home/user', daemon_root: '/home/user' },
+    syntheticResponse: { message: 'ok', workspace_root: '/workspace', daemon_root: '/workspace' },
     description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
   },
 

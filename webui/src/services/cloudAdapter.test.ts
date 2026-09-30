@@ -379,8 +379,8 @@ describe('CloudAdapter', () => {
 
   const workspaceSyntheticResponse = {
     message: 'ok',
-    workspace_root: '/home/user',
-    daemon_root: '/home/user',
+    workspace_root: '/workspace',
+    daemon_root: '/workspace',
   };
 
   describe('fetch - workspace endpoint synthetic response', () => {

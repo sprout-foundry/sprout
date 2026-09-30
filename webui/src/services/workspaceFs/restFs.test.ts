@@ -69,3 +69,44 @@ describe('restFs.list', () => {
     expect(await createRestFs(rootForEverything).list('repos', 1)).toEqual({ ok: true, files: [] });
   });
 });
+
+describe('restFs read and write', () => {
+  function fileEndpoint(files: Record<string, { body: BodyInit; type: string }>) {
+    const calls: string[] = [];
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://x');
+      const path = url.searchParams.get('path') ?? '';
+      calls.push(`${init?.method ?? 'GET'} ${url.pathname} ${path}${init?.body ? ` ${String(init.body)}` : ''}`);
+      if (init?.method === 'POST') return new Response(JSON.stringify({ success: true }), { status: 200 });
+      const f = files[path];
+      if (!f) return new Response(JSON.stringify({ error: 'file_not_found' }), { status: 404 });
+      return new Response(f.body, { status: 200, headers: { 'Content-Type': f.type } });
+    }) as typeof fetch;
+    return { fetchFn, calls };
+  }
+
+  it('reads text files as content and other files as base64', async () => {
+    const { fetchFn, calls } = fileEndpoint({
+      'src/a.ts': { body: 'export {}', type: 'text/plain; charset=utf-8' },
+      'logo.png': { body: new Uint8Array([137, 80, 78, 71]), type: 'image/png' },
+    });
+    const fs = createRestFs(fetchFn);
+
+    expect(await fs.read('src/a.ts')).toEqual({ ok: true, path: 'src/a.ts', content: 'export {}' });
+    expect(await fs.read('logo.png')).toEqual({ ok: true, path: 'logo.png', contentBase64: 'iVBORw==' });
+    expect(await fs.read('missing.ts')).toEqual({ ok: false, error: 'file_not_found' });
+    expect(calls[0]).toBe('GET /api/file src/a.ts');
+  });
+
+  it('writes text through the file endpoint and refuses binary', async () => {
+    const { fetchFn, calls } = fileEndpoint({});
+    const fs = createRestFs(fetchFn);
+
+    expect(await fs.write('src/a.ts', 'hi')).toEqual({ ok: true });
+    expect(calls).toEqual(['POST /api/file src/a.ts {"content":"hi"}']);
+    expect(await fs.write('logo.png', { path: 'logo.png', contentBase64: 'iVBORw==' })).toEqual({
+      ok: false,
+      error: 'unsupported',
+    });
+  });
+});

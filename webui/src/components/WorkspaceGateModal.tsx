@@ -1,9 +1,10 @@
 import { AlertTriangle, FolderPlus, Loader2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supportsFolderPicker, supportsWorkspaceSwitching } from '../config/mode';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
 import { ApiService } from '../services/api';
 import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
+import { setWorkspaceGateOpen } from '../services/workspaceGate';
 import WorkspaceBrowser from './WorkspaceBrowser';
 import WorkspacePicker from './WorkspacePicker';
 import './WorkspaceGateModal.css';
@@ -86,6 +87,12 @@ function WorkspaceGateModal({
     },
     [pending],
   );
+
+  useEffect(() => {
+    if (!supportsWorkspaceSwitching) return undefined;
+    setWorkspaceGateOpen(true);
+    return () => setWorkspaceGateOpen(false);
+  }, []);
 
   // Cloud mode (and any mode without workspace switching) is never gated.
   if (!supportsWorkspaceSwitching) return null;

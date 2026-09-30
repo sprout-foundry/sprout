@@ -5,7 +5,6 @@ import { supportsSSH } from '../config/mode';
 import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
-import { SSHWorkspacePickerDialog } from './locationSwitcher/SSHWorkspacePickerDialog';
 import { useSSHData } from './locationSwitcher/useSSHData';
 import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
 import { useWorkspaceSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
@@ -193,20 +192,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           selectedInstancePID={selectedInstancePID}
           isSwitchingInstance={isSwitchingInstance}
           onInstanceChange={onInstanceChange}
-        />
-      )}
-
-      {supportsSSH && ws.showSSHWorkspacePicker && (
-        <SSHWorkspacePickerDialog
-          show={ws.showSSHWorkspacePicker}
-          sshPickerHostAlias={ws.sshPickerHostAlias}
-          sshPickerPath={ws.sshPickerPath}
-          remoteRecentWorkspaces={ws.remoteRecentWorkspaces}
-          sshFavoriteWorkspaces={ws.sshFavoriteWorkspaces}
-          sshHomePaths={ws.sshHomePaths}
-          submitWorkspaceChange={ws.submitWorkspaceChange}
-          setShow={ws.setShowSSHWorkspacePicker}
-          setSshPickerPath={ws.setSshPickerPath}
         />
       )}
     </div>

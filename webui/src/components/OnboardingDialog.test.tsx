@@ -19,6 +19,7 @@ import { createElement, type ReactElement, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { OnboardingProviderOption } from '../services/api';
 import type { OnboardingState } from '../types/app';
+import { setWorkspaceGateOpen } from '../services/workspaceGate';
 import OnboardingDialog from './OnboardingDialog';
 
 // ---------------------------------------------------------------------------
@@ -229,6 +230,15 @@ describe('OnboardingDialog', () => {
       renderOnboardingDialog({ ...mockOnboarding, open: false });
 
       expect(container.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('waits while the workspace gate is asking for a folder', () => {
+      act(() => setWorkspaceGateOpen(true));
+      renderOnboardingDialog();
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+      act(() => setWorkspaceGateOpen(false));
+      expect(container.textContent).toContain('Set Up Sprout');
     });
 
     it('displays correct title based on isReonboarding flag', () => {

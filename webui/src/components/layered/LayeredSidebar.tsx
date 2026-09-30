@@ -19,6 +19,8 @@ import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
 import NewProjectDialog from './NewProjectDialog';
+import GitHubRepoPicker from '../GitHubRepoPicker';
+import { fetchPlatformGitHubConnected } from '../../services/platformGitHub';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -91,6 +93,13 @@ async function promptForRepo(): Promise<void> {
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
+  const [picking, setPicking] = useState(false);
+  // With GitHub connected, pick from the account's repositories (typing any
+  // public one still works there); otherwise type one in.
+  const chooseRepo = async () => {
+    if (await fetchPlatformGitHubConnected().catch(() => false)) setPicking(true);
+    else await promptForRepo();
+  };
   const activeRepo = useActiveRepoURL();
   const repoSlug = githubRepoSlug(activeRepo);
   const recentRepos = useRecentRepos();
@@ -210,7 +219,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
           isCloud
             ? [
                 { label: 'New project…', onSelect: () => setCreating(true) },
-                { label: 'Open a repository…', onSelect: () => void promptForRepo() },
+                { label: 'Open a repository…', onSelect: () => void chooseRepo() },
               ]
             : undefined
         }
@@ -257,6 +266,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         />
       )}
       {creating && <NewProjectDialog onClose={() => setCreating(false)} onCreated={openRepo} />}
+      {picking && <GitHubRepoPicker isOpen onClose={() => setPicking(false)} onSelect={openRepo} />}
     </>
   );
 }

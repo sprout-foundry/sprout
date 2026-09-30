@@ -56,9 +56,9 @@ afterEach(() => {
   container.remove();
 });
 
-async function open() {
+async function open(onSelect?: (url: string) => void) {
   await act(async () => {
-    root.render(<GitHubRepoPicker isOpen onClose={() => undefined} />);
+    root.render(<GitHubRepoPicker isOpen onClose={() => undefined} onSelect={onSelect} />);
   });
   for (let i = 0; i < 5; i++) {
     await act(async () => {
@@ -84,5 +84,29 @@ describe('GitHubRepoPicker with the Foundry account connection', () => {
     expect(link?.textContent).toContain('Connect GitHub');
     expect(link?.getAttribute('href')).toBe('/?from=editor#/settings');
     expect(document.body.querySelector('input[aria-label="GitHub personal access token"]')).toBeNull();
+  });
+
+  it('picks instead of cloning when choosing a project', async () => {
+    const onSelect = vi.fn();
+    await open(onSelect);
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>('[data-testid="gh-repo-acme/widgets"]')!.click(),
+    );
+    expect(onSelect).toHaveBeenCalledWith('https://github.com/acme/widgets');
+    expect(mockClone).not.toHaveBeenCalled();
+  });
+
+  it('offers a typed repository that is not in the list', async () => {
+    const onSelect = vi.fn();
+    await open(onSelect);
+    const input = document.body.querySelector<HTMLInputElement>('[data-testid="gh-picker-search"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'cli/oauth');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>('[data-testid="gh-picker-open-typed"]')!.click(),
+    );
+    expect(onSelect).toHaveBeenCalledWith('https://github.com/cli/oauth');
   });
 });

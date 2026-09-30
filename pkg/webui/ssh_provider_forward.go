@@ -97,7 +97,7 @@ func (f *sshForwardedProvider) fingerprint() string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(h, "%s=%s\x00", k, f.Env[k])
+		_, _ = fmt.Fprintf(h, "%s=%s\x00", k, f.Env[k])
 	}
 	h.Write(f.Definition)
 	return hex.EncodeToString(h.Sum(nil))
@@ -113,12 +113,12 @@ func (f *sshForwardedProvider) stdinPayload() string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&b, "ENV %s %s\n", k, base64.StdEncoding.EncodeToString([]byte(f.Env[k])))
+		_, _ = fmt.Fprintf(&b, "ENV %s %s\n", k, base64.StdEncoding.EncodeToString([]byte(f.Env[k])))
 	}
 	if len(f.Definition) > 0 {
-		fmt.Fprintf(&b, "FILE %s %s\n", f.Provider, base64.StdEncoding.EncodeToString(f.Definition))
+		_, _ = fmt.Fprintf(&b, "FILE %s %s\n", f.Provider, base64.StdEncoding.EncodeToString(f.Definition))
 	}
-	fmt.Fprintf(&b, "FP %s -\n", f.fingerprint())
+	_, _ = fmt.Fprintf(&b, "FP %s -\n", f.fingerprint())
 	b.WriteString(sshForwardEnd + "\n")
 	return b.String()
 }

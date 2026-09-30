@@ -25,7 +25,7 @@ func runForwardScript(t *testing.T, fwd *sshForwardedProvider, report string) (s
 	if strings.Contains(script, fwd.Env["TEST_PROVIDER_KEY"]) && fwd.Env["TEST_PROVIDER_KEY"] != "" {
 		t.Fatal("the key must not be part of the script (it would show on the remote command line)")
 	}
-	cmd := exec.Command("bash", "-c", script)
+	cmd := exec.Command("bash", "-c", script) //nolint:gosec // G204: runs the launch script under test
 	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH")}
 	cmd.Stdin = strings.NewReader(fwd.stdinPayload())
 	out, err := cmd.CombinedOutput()
@@ -85,7 +85,7 @@ func TestForwardedProviderWinsOverTheRemoteShell(t *testing.T) {
 		"set -e",
 		"FORWARD_PROVIDER=1",
 	}, sshForwardReadScript...), "export SPROUT_PROVIDER=remote-own"), append(sshForwardApplyScript, `printf '%s' "$SPROUT_PROVIDER"`)...), "\n")
-	cmd := exec.Command("bash", "-c", script)
+	cmd := exec.Command("bash", "-c", script) //nolint:gosec // G204: runs the launch script under test
 	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
 	cmd.Stdin = strings.NewReader(fwd.stdinPayload())
 	out, err := cmd.CombinedOutput()

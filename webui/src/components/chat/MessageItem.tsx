@@ -1,5 +1,5 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { AlertTriangle, BrainCircuit, Bot, GitFork } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Bot, GitFork, Square } from 'lucide-react';
 import { memo } from 'react';
 import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
@@ -57,6 +57,15 @@ interface MessageItemProps {
   isForking?: boolean;
 }
 
+function StoppedMarker() {
+  return (
+    <div className="message-stopped">
+      <Square size={10} aria-hidden="true" />
+      Stopped
+    </div>
+  );
+}
+
 export const MessageItem = memo(function MessageItem({
   message,
   activeToolDetail,
@@ -106,7 +115,11 @@ export const MessageItem = memo(function MessageItem({
           depth={message.subagentDepth}
           dataMessageIndex={messageIndex}
         >
-          <span className="empty-assistant-placeholder">(no response text)</span>
+          {message.stopped ? (
+            <StoppedMarker />
+          ) : (
+            <span className="empty-assistant-placeholder">(no response text)</span>
+          )}
         </MessageBubble>
       );
     }
@@ -223,6 +236,7 @@ export const MessageItem = memo(function MessageItem({
               onToggle={onToolDetailToggle ?? (() => undefined)}
             />
           )}
+          {message.stopped && <StoppedMarker />}
         </>
       ) : (
         <MessageContent content={message.content} />

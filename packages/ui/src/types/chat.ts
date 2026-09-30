@@ -64,6 +64,8 @@ export interface Message {
   subagentRunComplete?: boolean;
   /** Persona name for the inline subagent run (e.g. "coder", "tester"). */
   subagentPersona?: string;
+  /** The user stopped this turn before it finished. */
+  stopped?: boolean;
 }
 
 export interface ToolExecution {

@@ -121,3 +121,24 @@
   line-height: 1;
   padding: 2px 4px;
 }
+
+.notification-history-item-action {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-primary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.notification-history-item-action:hover {
+  text-decoration: underline;
+}
+
+.notification-history-item-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-radius: var(--radius-sm);
+}

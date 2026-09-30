@@ -127,6 +127,18 @@ function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPan
                 <div className="notification-history-item-title">{n.title}</div>
                 {n.message && <div className="notification-history-item-message">{n.message}</div>}
                 <div className="notification-history-item-time">{formatNotificationAge(n.createdAt)}</div>
+                {n.action && (
+                  <button
+                    type="button"
+                    className="notification-history-item-action"
+                    onClick={() => {
+                      n.action?.onClick();
+                      onClose();
+                    }}
+                  >
+                    {n.action.label}
+                  </button>
+                )}
               </div>
               <button
                 type="button"

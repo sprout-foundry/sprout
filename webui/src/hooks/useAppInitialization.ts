@@ -482,9 +482,11 @@ export function useAppInitialization({
                   }),
                 );
               }
-              // Clean the URL so refresh doesn't re-trigger
-              const cleanUrl = window.location.pathname + window.location.hash;
-              window.history.replaceState({}, '', cleanUrl);
+              // Drop ?chat= so a refresh doesn't re-trigger; the rest of the
+              // query (?repo=, ?home=) still describes where the editor is.
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('chat');
+              window.history.replaceState(window.history.state, '', cleanUrl);
             }
           }
         } catch (error) {
@@ -512,9 +514,10 @@ export function useAppInitialization({
                   }),
                 );
               }, 300);
-              // Clean the URL so refresh doesn't re-trigger
-              const cleanUrl = window.location.pathname + window.location.hash;
-              window.history.replaceState({}, '', cleanUrl);
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('file');
+              cleanUrl.searchParams.delete('line');
+              window.history.replaceState(window.history.state, '', cleanUrl);
             }
           }
         } catch (error) {

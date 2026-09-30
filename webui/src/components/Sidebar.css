@@ -36,9 +36,12 @@
 }
 
 /* Sidebar resize handle — flex child of wrapper, sits between sidebar and main content */
+/* z-index needs !important: ResizeHandle sets an inline z-index (1 at rest),
+ * which would drop the handle under the sidebar (100) and cut the half of its
+ * grab zone that overlaps the sidebar. */
 .sidebar-resize-handle {
   position: relative;
-  z-index: 101;
+  z-index: 101 !important;
   cursor: col-resize;
   touch-action: none;
   width: 8px;

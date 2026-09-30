@@ -33,6 +33,7 @@
 }
 
 .context-panel-resizer {
+  position: relative;
   width: 6px;
   min-height: 0;
   border-radius: 8px;
@@ -44,6 +45,16 @@
     border-color 0.15s ease,
     opacity 150ms var(--ease-out);
   flex-shrink: 0;
+}
+
+/* The grab zone reaches past the thin rail on both sides. */
+.context-panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  right: -6px;
 }
 
 .context-panel-resizer:focus {

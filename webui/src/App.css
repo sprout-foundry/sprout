@@ -1324,6 +1324,12 @@ select option {
   gap: 0;
 }
 
+/* A row, so the panel's resizer stretches to the panel's full height (as a
+ * block child it collapsed to its borders, a 2px target). */
+.context-panel-container {
+  display: flex;
+}
+
 .split-controls {
   display: flex;
   align-items: center;

@@ -156,6 +156,13 @@ vi.mock('../hooks/useSidebarModel', () => ({
 import Sidebar from './Sidebar';
 import { useSidebarModel as useSidebarModelMock } from '../hooks/useSidebarModel';
 
+// These cover the classic layout, still available as ?layout=classic.
+vi.mock('../config/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../config/layout')>()),
+  shellLayout: 'classic',
+  isLayeredLayout: false,
+}));
+
 function makeModelState(overrides = {}) {
   return {
     selectedProvider: 'openai',

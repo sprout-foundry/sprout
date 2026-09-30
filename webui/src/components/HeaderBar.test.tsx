@@ -13,6 +13,13 @@ vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo })
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import HeaderBar from './HeaderBar';
 
+// These cover the classic layout, still available as ?layout=classic.
+vi.mock('../config/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../config/layout')>()),
+  shellLayout: 'classic',
+  isLayeredLayout: false,
+}));
+
 let container: HTMLDivElement;
 let root: Root;
 

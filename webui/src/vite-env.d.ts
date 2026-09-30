@@ -3,6 +3,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_SPROUT_MODE: 'cloud' | 'local' | undefined;
+  readonly VITE_SHELL_LAYOUT?: 'classic' | 'layered';
   readonly VITE_FOUNDRY_API_URL: string | undefined;
   readonly VITE_FOUNDRY_WS_URL: string | undefined;
   readonly VITE_TERMINAL_WS_URL: string | undefined;

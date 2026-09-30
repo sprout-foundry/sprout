@@ -162,6 +162,13 @@ vi.mock('../utils/log', () => ({
 import DesignRail from './design/DesignRail';
 import Sidebar from './Sidebar';
 
+// These cover the classic layout, still available as ?layout=classic.
+vi.mock('../config/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../config/layout')>()),
+  shellLayout: 'classic',
+  isLayeredLayout: false,
+}));
+
 // ---------------------------------------------------------------------------
 // Test setup
 // ---------------------------------------------------------------------------

@@ -15,8 +15,9 @@ import (
 )
 
 var skillsCmd = &cobra.Command{
-	Use:   "skills",
-	Short: "Manage skill allowlist",
+	Use:    "skills",
+	Short:  "Manage skill allowlist",
+	Hidden: true,
 	Long: `Manage which skills are allowed for your project.
 
 When an allowlist is configured, only the listed skills can be activated.
@@ -40,8 +41,8 @@ If no allowlist exists yet, one will be created. Skills that are already
 allowed will be reported but not cause an error.
 
 Examples:
-  sprout skills allow project-planning
-  sprout skills allow project-planning browse-debugging`,
+  sprout skill allow project-planning
+  sprout skill allow project-planning browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSkillsAllow(args)
@@ -56,8 +57,8 @@ var skillsRevokeCmd = &cobra.Command{
 If no allowlist is configured, an error will be shown.
 
 Examples:
-  sprout skills revoke project-planning
-  sprout skills revoke browse-debugging`,
+  sprout skill revoke project-planning
+  sprout skill revoke browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSkillsRevoke(args)
@@ -232,4 +233,37 @@ func init() {
 	skillsCmd.AddCommand(skillsRevokeCmd)
 	skillsCmd.AddCommand(skillsListCmd)
 	rootCmd.AddCommand(skillsCmd)
+
+	// The allowlist lives under `skill` alongside install/list; `skills`
+	// remains as a deprecated spelling. A cobra command has one parent, so
+	// these are sibling definitions sharing the same handlers.
+	skillCmd.AddCommand(
+		sharedHandlerCommand(skillsAllowCmd, "allow <id>..."),
+		sharedHandlerCommand(skillsRevokeCmd, "revoke <id>..."),
+		sharedHandlerCommand(skillsListCmd, "allowlist"),
+	)
+	warnDeprecatedCommand(skillsAllowCmd, "sprout skill allow")
+	warnDeprecatedCommand(skillsRevokeCmd, "sprout skill revoke")
+	warnDeprecatedCommand(skillsListCmd, "sprout skill allowlist")
+}
+
+// warnDeprecatedCommand prefixes a retired command's handler with a
+// glyph-style notice naming its replacement. Applied after the replacement
+// was built from the same handler, so only the old spelling warns.
+func warnDeprecatedCommand(c *cobra.Command, replacement string) {
+	run := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		console.GlyphWarning.Printf("'%s' is deprecated; use '%s'", cmd.CommandPath(), replacement)
+		return run(cmd, args)
+	}
+}
+
+func sharedHandlerCommand(src *cobra.Command, use string) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: src.Short,
+		Long:  src.Long,
+		Args:  src.Args,
+		RunE:  src.RunE,
+	}
 }

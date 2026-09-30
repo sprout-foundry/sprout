@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
+
+var searchDir string
 
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
@@ -24,7 +27,7 @@ Examples:
   sprout search "embedding index"
   sprout search --reindex "auth error"
   sprout search --json "test"
-  sprout search --cwd /tmp --since 2026-01-01 "foo"`,
+  sprout search --dir /tmp --since 2026-01-01 "foo"`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSearch(cmd, args)
@@ -33,7 +36,8 @@ Examples:
 
 func init() {
 	searchCmd.Flags().Bool("reindex", false, "Force full index rebuild before searching")
-	searchCmd.Flags().String("cwd", "", "Restrict to sessions in a specific working directory")
+	searchCmd.Flags().StringVar(&searchDir, "dir", "", "Restrict to sessions in a specific working directory")
+	stringFlagAlias(searchCmd.Flags(), &searchDir, "cwd", "dir", aliasDeprecated)
 	searchCmd.Flags().String("since", "", "Only sessions with LastUpdated >= date (RFC3339 or YYYY-MM-DD)")
 	searchCmd.Flags().String("until", "", "Only sessions with LastUpdated <= date")
 	searchCmd.Flags().Int("limit", 0, "Max results (default 20)")
@@ -48,7 +52,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	// Read flags
 	reindex, _ := cmd.Flags().GetBool("reindex")
-	cwd, _ := cmd.Flags().GetString("cwd")
+	cwd := searchDir
 	sinceStr, _ := cmd.Flags().GetString("since")
 	untilStr, _ := cmd.Flags().GetString("until")
 	limit, _ := cmd.Flags().GetInt("limit")
@@ -65,14 +69,14 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	if sinceStr != "" {
 		t, err := parseSearchDate(sinceStr)
 		if err != nil {
-			return fmt.Errorf("--since: %w", err)
+			return usageErrorf(cmd, "--since: %w", err)
 		}
 		opts.Since = t
 	}
 	if untilStr != "" {
 		t, err := parseSearchDate(untilStr)
 		if err != nil {
-			return fmt.Errorf("--until: %w", err)
+			return usageErrorf(cmd, "--until: %w", err)
 		}
 		opts.Until = t
 	}
@@ -94,7 +98,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("build search index: %w", err)
 		}
 		if err := search.SaveIndex(search.DefaultIndexPath(), idx); err != nil {
-			fmt.Fprintf(os.Stderr, "[search] warning: could not save index: %v\n", err)
+			console.GlyphWarning.Printf("Could not save the search index: %v", err)
 		}
 	}
 

@@ -2550,7 +2550,7 @@ func TestPrintPerTurnSummary_NonTTY_Coverage(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0)
+	cliui.PrintPerTurnSummary(nil, time.Now().Add(-time.Second), 0, 0, 0)
 
 	w.Close()
 	os.Stderr = old

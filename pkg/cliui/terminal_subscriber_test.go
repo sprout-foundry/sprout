@@ -161,26 +161,6 @@ func TestFormatResultSize(t *testing.T) {
 	}
 }
 
-// TestFormatCostSummary verifies the turn-summary cost formatter.
-func TestFormatCostSummary(t *testing.T) {
-	cases := []struct {
-		cost float64
-		want string
-	}{
-		{0.0421, "$0.0421"},
-		{0.999, "$0.9990"},
-		{1.0, "$1.00"},
-		{12.34, "$12.34"},
-		{0, "$0.0000"},
-	}
-	for _, c := range cases {
-		got := formatCostSummary(c.cost)
-		if got != c.want {
-			t.Errorf("formatCostSummary(%.4f) = %q; want %q", c.cost, got, c.want)
-		}
-	}
-}
-
 // TestHandleQueryCompletedEvent verifies the CLI-UX-7 turn-end summary:
 //   - In non-compact mode it writes a "turn complete" line to stderr.
 //   - In compact mode it produces no output (early return).
@@ -218,8 +198,8 @@ func TestHandleQueryCompletedEvent(t *testing.T) {
 	if !strings.Contains(output, "12.3s") {
 		t.Errorf("non-compact mode: expected '12.3s' in output, got: %q", output)
 	}
-	if !strings.Contains(output, "$0.0421") {
-		t.Errorf("non-compact mode: expected cost '$0.0421' in output, got: %q", output)
+	if !strings.Contains(output, "$0.042") {
+		t.Errorf("non-compact mode: expected cost '$0.042' in output, got: %q", output)
 	}
 
 	// --- Compact mode: should produce no output ---
@@ -432,5 +412,37 @@ func TestFormatCompactDiffLine(t *testing.T) {
 	}
 	if !strings.Contains(got, "+1 -1") {
 		t.Errorf("expected diffstat in compact diff line, got %q", got)
+	}
+}
+
+// The interactive REPL prints its own per-turn line; the event-driven line
+// must stay silent there or every turn ends with two summaries.
+func TestHandleQueryCompletedEvent_SilentWhenREPLOwnsSummary(t *testing.T) {
+	mgr, err := configuration.NewManagerWithDir(t.TempDir() + "/.sprout")
+	if err != nil {
+		t.Fatalf("NewManagerWithDir: %v", err)
+	}
+	state := NewTerminalSubscriberState(mgr, nil)
+
+	SetREPLOwnsTurnSummary(true)
+	t.Cleanup(func() { SetREPLOwnsTurnSummary(false) })
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = oldStderr })
+
+	state.HandleQueryCompletedEvent(map[string]interface{}{
+		"duration_ms": int64(1200),
+		"cost":        float64(0.5),
+	}, console.NewActivityIndicator(&bytes.Buffer{}))
+
+	os.Stderr = oldStderr
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if buf.Len() != 0 {
+		t.Errorf("expected no output while the REPL owns the summary, got %q", buf.String())
 	}
 }

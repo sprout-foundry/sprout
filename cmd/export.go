@@ -80,7 +80,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	switch format {
 	case export.FormatMarkdown, export.FormatHTML, export.FormatJSON:
 	default:
-		return fmt.Errorf("invalid format %q — must be markdown, html, or json", formatStr)
+		return usageErrorf(cmd, "invalid --format %q: must be markdown, html, or json", formatStr)
 	}
 
 	// Validate mutual exclusions
@@ -88,7 +88,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("provide either a session-id or --latest/--all, not both")
 	}
 	if latest && all {
-		return fmt.Errorf("--latest and --all are mutually exclusive")
+		return usageErrorf(cmd, "--latest and --all are mutually exclusive")
 	}
 
 	// Build export options

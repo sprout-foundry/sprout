@@ -16,7 +16,9 @@ import (
 // `sprout custom {add,remove,list}` so users don't have to leave the
 // chat to manage custom providers (e.g. after `/provider <name>` fails
 // with a not-registered error).
-type CustomCommand struct{}
+type CustomCommand struct {
+	outputSink
+}
 
 // Name returns the command name.
 func (c *CustomCommand) Name() string {
@@ -64,7 +66,7 @@ func (c *CustomCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	case "remove", "rm", "delete":
 		return c.runSubcommand("remove", args[1:])
 	case "help", "--help", "-h":
-		fmt.Println(c.Usage())
+		c.println(c.Usage())
 		return nil
 	default:
 		return fmt.Errorf("unknown action %q. Use: list, add, remove", args[0])

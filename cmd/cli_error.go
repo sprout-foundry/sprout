@@ -60,6 +60,10 @@ func renderExecuteError(err error) {
 	if err == nil || errors.Is(err, errReported) {
 		return
 	}
+	if exitCodeFor(err) == exitUsage {
+		renderUsageError(err)
+		return
+	}
 
 	// --why flag: print the risk assessment for security errors
 	if whyFlag {
@@ -86,6 +90,9 @@ func renderExecuteError(err error) {
 		return
 	}
 	console.GlyphError.Fprintln(os.Stderr, cleanErrorMessage(err))
+	if he, ok := errors.AsType[*hintedError](err); ok {
+		console.Hintln(os.Stderr, he.hint)
+	}
 }
 
 // renderProviderSetupHint prints an actionable block on how to configure a

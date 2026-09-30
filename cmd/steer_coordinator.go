@@ -298,8 +298,8 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 		console.StopGlobalStatusFooter()
 		fmt.Println()
 		console.GlyphStopped.Printf("Force quitting immediately...")
-		c.agent.ForceSaveAndExit(1)
-		os.Exit(1)
+		c.agent.ForceSaveAndExit(exitInterrupted)
+		os.Exit(exitInterrupted)
 	}
 	atomic.StoreInt64(&c.lastInterruptAt, now)
 	c.agent.TriggerInterrupt()

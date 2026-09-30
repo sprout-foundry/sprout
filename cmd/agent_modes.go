@@ -409,9 +409,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
-							chatAgent.ForceSaveAndExit(1)
+							chatAgent.ForceSaveAndExit(exitInterrupted)
 						}
-						os.Exit(1)
+						os.Exit(exitInterrupted)
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
@@ -448,9 +448,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					fmt.Println()
 					console.GlyphStopped.Printf("Force quitting...")
 					if chatAgent != nil {
-						chatAgent.ForceSaveAndExit(1)
+						chatAgent.ForceSaveAndExit(exitInterrupted)
 					}
-					os.Exit(1)
+					os.Exit(exitInterrupted)
 				}()
 
 				// Any subsequent signal after shutdown starts should force quit.
@@ -460,9 +460,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
-							chatAgent.ForceSaveAndExit(1)
+							chatAgent.ForceSaveAndExit(exitInterrupted)
 						}
-						os.Exit(1)
+						os.Exit(exitInterrupted)
 					case <-ctx.Done():
 						return
 					}
@@ -747,7 +747,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		console.GlyphDim.Print("Shutting down web server...")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
-			console.GlyphWarning.Fprintf(os.Stderr, "Error shutting down web server: %v", webErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Web server did not shut down cleanly: %v", webErr)
 		} else {
 			console.GlyphSuccess.Print("Web server shut down successfully")
 		}

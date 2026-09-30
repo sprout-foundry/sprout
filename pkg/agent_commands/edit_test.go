@@ -260,8 +260,8 @@ func TestEditCommand_Execute_EmptyBuffer_NoInjection(t *testing.T) {
 	stderrOut := captureStderr(t, func() {
 		_ = cmd.Execute(nil, agent)
 	})
-	if !strings.Contains(stderrOut, "empty buffer") {
-		t.Errorf("expected stderr to contain \"empty buffer\", got: %q", stderrOut)
+	if !strings.Contains(stderrOut, "Empty buffer") {
+		t.Errorf("expected stderr to contain \"Empty buffer\", got: %q", stderrOut)
 	}
 }
 
@@ -419,8 +419,8 @@ func TestEditCommand_Execute_NoEditor(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no editor is found")
 	}
-	if !strings.Contains(err.Error(), "[edit]") {
-		t.Errorf("error should contain \"[edit]\", got: %v", err)
+	if !strings.Contains(err.Error(), "/edit: ") {
+		t.Errorf("error should contain \"/edit: \", got: %v", err)
 	}
 }
 
@@ -443,8 +443,8 @@ func TestEditCommand_Execute_EditorExitError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when editor exits non-zero")
 	}
-	if !strings.Contains(err.Error(), "[edit]") {
-		t.Errorf("error should contain \"[edit]\", got: %v", err)
+	if !strings.Contains(err.Error(), "/edit: ") {
+		t.Errorf("error should contain \"/edit: \", got: %v", err)
 	}
 
 	// Should NOT have injected anything
@@ -633,7 +633,7 @@ func TestEditCommand_Execute_ErrorWrapping(t *testing.T) {
 			editor:    "#!/bin/sh\nexit 42",
 			args:      nil,
 			wantErr:   true,
-			errSubstr: "[edit]",
+			errSubstr: "/edit: ",
 		},
 		{
 			name:      "editor that writes content",
@@ -768,8 +768,8 @@ func TestEditCommand_Execute_NilAgent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error when agent is nil")
 	}
-	if !strings.Contains(err.Error(), "[edit] agent not available") {
-		t.Errorf("error = %q, want it to contain \"[edit] agent not available\"", err.Error())
+	if !strings.Contains(err.Error(), "/edit: agent not available") {
+		t.Errorf("error = %q, want it to contain \"/edit: agent not available\"", err.Error())
 	}
 }
 

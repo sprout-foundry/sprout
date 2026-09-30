@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // processKey handles a single keypress (or escape-prefixed sequence)
@@ -47,7 +49,7 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 			s.filterAppend(string(b))
 			s.render()
 		} else if s.opts.DismissOnAnyKey {
-			s.recordDismissKey(string(b))
+			s.recordDismissKey(printableRun(buf[:n]))
 			return true, "", false
 		}
 		return false, "", false
@@ -56,7 +58,7 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 			s.consumeUTF8(b, n, buf[:])
 			s.render()
 		} else if s.opts.DismissOnAnyKey {
-			s.recordDismissKey(utf8RuneFromBuf(b, n, buf[:]))
+			s.recordDismissKey(printableRun(buf[:n]))
 			return true, "", false
 		}
 		return false, "", false
@@ -69,10 +71,29 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 // Backspace/DEL (0x7F/0x08) is intentionally NOT recorded — it's not a
 // character the user would want pre-filled into a prompt.
 func (s *SelectList) recordDismissKey(text string) {
+	if text == "" {
+		return
+	}
 	if b := text[0]; b == 0x7F || b == 0x08 {
 		return
 	}
 	s.dismissKey = text
+}
+
+// printableRun returns the leading printable text of a read. Typing fast or
+// pasting delivers several characters in one read; forwarding only the first
+// would drop the rest of what the user typed. Stops at the first control
+// byte or incomplete UTF-8 sequence.
+func printableRun(b []byte) string {
+	end := 0
+	for end < len(b) {
+		r, size := utf8.DecodeRune(b[end:])
+		if r == utf8.RuneError || unicode.IsControl(r) {
+			break
+		}
+		end += size
+	}
+	return string(b[:end])
 }
 
 // handleEscape dispatches the bytes that follow ESC. Returns done=true

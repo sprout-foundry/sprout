@@ -21,8 +21,7 @@ import (
 func runMCPAdd() error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("MCP Server Setup")
-	fmt.Println("==================")
+	console.Heading(os.Stdout, "MCP Server Setup")
 	fmt.Println()
 
 	// Load existing config
@@ -225,8 +224,7 @@ func guidedSetupFor(templateID string) (mcpSetupFunc, bool) {
 
 func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("Git MCP Server Setup")
-	fmt.Println("========================")
+	console.Heading(os.Stdout, "Git MCP Server Setup")
 	fmt.Println()
 
 	// Check if Git server already exists
@@ -372,8 +370,7 @@ func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (stri
 
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	console.GlyphInfo.Print("Playwright MCP Server Setup")
-	fmt.Println("=============================")
+	console.Heading(os.Stdout, "Playwright MCP Server Setup")
 	fmt.Println()
 
 	// Check if Playwright server already exists
@@ -469,8 +466,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 
 func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("ⓘ Chrome DevTools MCP Server Setup")
-	fmt.Println("====================================")
+	console.Heading(os.Stdout, "Chrome DevTools MCP Server Setup")
 	fmt.Println()
 
 	// Check if Chrome DevTools server already exists
@@ -541,7 +537,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	console.GlyphInfo.Print("Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
 	fmt.Println()
-	fmt.Println("ⓘ Features available:")
+	console.GlyphInfo.Print("Features available:")
 	fmt.Println("• Browser automation (click, fill forms, navigation)")
 	fmt.Println("• Performance analysis and tracing")
 	fmt.Println("• Network request inspection")
@@ -549,15 +545,14 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	fmt.Println("• Screenshot and snapshot capture")
 	fmt.Println("• DOM inspection and scripting")
 	fmt.Println()
-	fmt.Println("[read] Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
+	fmt.Println("  Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
 
 	return nil
 }
 
 func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
-	console.GlyphInfo.Print("Custom MCP Server Setup")
-	fmt.Println("==========================")
+	console.Heading(os.Stdout, "Custom MCP Server Setup")
 	fmt.Println()
 
 	// Server name

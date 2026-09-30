@@ -57,8 +57,10 @@ var outputPath string
 const maxDiffBytes = 1 << 20 // 1MB
 
 func init() {
-	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
-	agentCmd.Flags().StringVar(&outputPath, "output-path", "", "Write the structured JSON result to this file instead of stdout (requires --output-json)")
+	agentCmd.Flags().BoolVar(&outputFormatJSON, "json", false, "Print a structured JSON result to stdout after execution (for CI/SaaS integration)")
+	agentCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Write the structured JSON result to this file instead of stdout (requires --json)")
+	boolFlagAlias(agentCmd.Flags(), &outputFormatJSON, "output-json", "json", aliasSilent)
+	stringFlagAlias(agentCmd.Flags(), &outputPath, "output-path", "output", aliasSilent)
 	agentCmd.Flags().StringVar(&progressEventsTarget, "progress-events", "", "Emit one-line progress milestones to stderr, stdout, or a file path (e.g. --progress-events stderr)")
 }
 

@@ -663,7 +663,11 @@ const AppContent: React.FC<AppContentProps> = ({
     () => visibleCommands().map((cmd) => ({ ...cmd, shortcut: hotkeyForCommand(cmd.id) ?? undefined })),
     [hotkeyForCommand],
   );
-  const { allFiles: paletteAllFiles, isLoadingFiles: paletteIsLoading } = useFileIndex({
+  const {
+    allFiles: paletteAllFiles,
+    isLoadingFiles: paletteIsLoading,
+    workspaceRoot: paletteWorkspaceRoot,
+  } = useFileIndex({
     apiService,
     isOpen: isCommandPaletteOpen,
     log: paletteLog,
@@ -1315,7 +1319,13 @@ const AppContent: React.FC<AppContentProps> = ({
       {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
       <NotificationCenterHost />
       {isLayeredLayout && isCloud && isMobile && (
-        <PhoneTabBar drawerOpen={isSidebarOpen} onToggleDrawer={onToggleSidebar} onCloseDrawer={onCloseSidebar} />
+        <PhoneTabBar
+          drawerOpen={isSidebarOpen}
+          onToggleDrawer={onToggleSidebar}
+          onCloseDrawer={onCloseSidebar}
+          terminalOpen={isTerminalExpanded}
+          onLeaveTerminal={() => onTerminalExpandedChange(false)}
+        />
       )}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
@@ -1338,6 +1348,7 @@ const AppContent: React.FC<AppContentProps> = ({
         commands={paletteCommands}
         isLoading={paletteIsLoading}
         recentFiles={paletteRecentFiles}
+        workspaceRoot={paletteWorkspaceRoot}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onSearchWorkspaceSymbols={handlePaletteSearchWorkspaceSymbols}

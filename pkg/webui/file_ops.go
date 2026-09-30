@@ -108,7 +108,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		defer file.Close()
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "created", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(canonicalPath, "created", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
@@ -171,7 +171,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "deleted", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(canonicalPath, "deleted", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "success",
@@ -268,8 +268,8 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(oldCanonicalPath, "deleted", ""))
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(newCanonicalPath, "created", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(oldCanonicalPath, "deleted", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(newCanonicalPath, "created", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":  "success",
@@ -386,4 +386,13 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 	}
 
 	writeJSON(w, http.StatusOK, mergedConfig)
+}
+
+// userFileChanged is a file_changed payload for a change the user made
+// through the web UI (a save, a tree operation, git staging), marked so
+// clients don't credit it to the agent's current turn.
+func userFileChanged(path, action, content string) map[string]interface{} {
+	payload := events.FileChangedEvent(path, action, content)
+	payload["source"] = "user"
+	return payload
 }

@@ -233,7 +233,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_create", absPath))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_worktree_create", absPath))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree created successfully",
@@ -295,7 +295,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_remove", absPath))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_worktree_remove", absPath))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree removed successfully",

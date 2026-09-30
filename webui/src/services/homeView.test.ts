@@ -17,6 +17,8 @@ describe('homeView', () => {
     expect(normalizeHomePath('#/account/billing')).toBe('/account/billing');
     expect(normalizeHomePath('/?from=editor')).toBe('/');
     expect(normalizeHomePath('team')).toBe('/team');
+    expect(normalizeHomePath('/#/team?invite=abc')).toBe('/team?invite=abc');
+    expect(normalizeHomePath('/tasks?status=failed')).toBe('/tasks?status=failed');
   });
 
   it('keeps the last page across close and reopen', () => {

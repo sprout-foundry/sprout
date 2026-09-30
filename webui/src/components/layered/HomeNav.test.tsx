@@ -66,6 +66,7 @@ describe('homePageLabel', () => {
     ['/account/billing', 'Usage & billing'],
     ['/admin', 'Admin'],
     ['/nowhere', 'Home'],
+    ['/team?invite=abc', 'Team'],
   ])('%s → %s', (path, label) => {
     expect(homePageLabel(path)).toBe(label);
   });

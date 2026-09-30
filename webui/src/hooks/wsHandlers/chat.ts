@@ -174,8 +174,13 @@ export const handleFileChanged = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'file';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as FileChangedData & { ts?: string };
+  const data = (event.data ?? {}) as FileChangedData & { ts?: string; source?: string };
   const path = String(data.path || data.file_path || 'Unknown');
+  // The user's own saves and tree operations aren't the agent's work.
+  if (data.source === 'user') {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    return;
+  }
   const baseFileEdit = {
     path,
     action: String(data.action || data.operation || 'edited'),

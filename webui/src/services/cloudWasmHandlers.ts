@@ -28,7 +28,11 @@ export function setAgentEventDispatcher(fn: ((event: unknown) => void) | null): 
 function announceFileChange(filePath: string, action: 'write' | 'created' | 'deleted'): void {
   const dispatchEvent = agentEventDispatcher;
   if (!dispatchEvent) return;
-  const event = { type: 'file_changed', data: { file_path: filePath, action, ts: new Date().toISOString() } };
+  // The user's own change (a save, a tree operation), not the agent's.
+  const event = {
+    type: 'file_changed',
+    data: { file_path: filePath, action, ts: new Date().toISOString(), source: 'user' },
+  };
   queueMicrotask(() => dispatchEvent(event));
 }
 

@@ -541,7 +541,7 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 				}
 
 				// Publish file change event
-				ws.publishClientEvent(clientID, events.EventTypeFileChanged, events.FileChangedEvent(absFilePath, "write", newContent))
+				ws.publishClientEvent(clientID, events.EventTypeFileChanged, userFileChanged(absFilePath, "write", newContent))
 			}
 
 			changes = append(changes, change)

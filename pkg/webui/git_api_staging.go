@@ -66,7 +66,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_stage", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(req.Path, "git_stage", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "File staged successfully",
@@ -128,7 +128,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_unstage", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(req.Path, "git_unstage", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "File unstaged successfully",
@@ -208,7 +208,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_discard", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(req.Path, "git_discard", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Changes discarded successfully",
@@ -239,7 +239,7 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_stage_all", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_stage_all", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "All changes staged successfully",
@@ -269,7 +269,7 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_unstage_all", ""))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_unstage_all", ""))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "All changes unstaged successfully",

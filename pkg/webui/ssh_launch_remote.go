@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, forceRestart bool, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
+func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, forceRestart bool, fwd *sshForwardedProvider, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
 	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
 	if workspaceRaw == "" {
 		workspaceRaw = "$HOME"
@@ -21,9 +21,13 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 	// to the same host can detect and reuse an existing daemon instead of
 	// launching duplicates.
 
-	script := strings.Join([]string{
+	scriptHead := []string{
 		"set -e",
-		"",
+		`FORWARD_PROVIDER=` + map[bool]string{true: "1", false: "0"}[fwd != nil],
+	}
+	scriptHead = append(scriptHead, sshForwardReadScript...)
+	scriptHead = append(scriptHead, "")
+	script := strings.Join(append(scriptHead, []string{
 		// Source the user's shell startup files so that API-key environment
 		// variables (typically exported in ~/.zshrc, ~/.bashrc, etc.) are
 		// available to the daemon.  SSH non-interactive sessions skip these
@@ -70,6 +74,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  *)   _src_rc "$HOME/.profile" sh ;;`,
 		`esac`,
 		`unset -f _src_rc`,
+		strings.Join(sshForwardApplyScript, "\n"),
 		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
 		`FORCE_RESTART=` + map[bool]string{true: "1", false: "0"}[forceRestart],
 		"",
@@ -130,6 +135,12 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`# mkdir fallback leaves a stale lock directory that blocks subsequent`,
 		`# launches for the full 30-second timeout window.`,
 		`trap 'if [ -n "$LOCK_HELD" ]; then if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; else rmdir "$LOCK_FILE" 2>/dev/null || true; fi; fi' EXIT`,
+		"",
+		"# A daemon running with other provider settings than this machine's restarts.",
+		`FP_FILE="$LOCK_DIR/daemon-provider.fp"`,
+		`if [ -n "$FORWARD_FP" ] && [ "$(cat "$FP_FILE" 2>/dev/null)" != "$FORWARD_FP" ]; then`,
+		`  FORCE_RESTART=1`,
+		`fi`,
 		"",
 		"# If force-restart was requested, kill the old daemon now (under the lock).",
 		`if [ "$FORCE_RESTART" = "1" ]; then`,
@@ -225,10 +236,14 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`    exit 1`,
 		`  fi`,
 		`fi`,
+		`if [ -n "$FORWARD_FP" ]; then printf '%s\n' "$FORWARD_FP" > "$FP_FILE"; fi`,
 		`printf "%s\n%s\n%s\nnew\n" "SPROUT_DAEMON_RESULT_START" "$DAEMON_PORT" "$REMOTE_PID"`,
-	}, "\n")
+	}...), "\n")
 
 	cmd := newSSHCommandContext(ctx, hostAlias, script)
+	if fwd != nil {
+		cmd.Stdin = strings.NewReader(fwd.stdinPayload())
+	}
 	out, err := runSSHLoggedCommand(logger, "start-remote-backend", fmt.Sprintf("ssh %s start remote backend", hostAlias), cmd)
 	if err != nil {
 		return 0, 0, false, fmt.Errorf("start remote backend for %s: %w", hostAlias, err)

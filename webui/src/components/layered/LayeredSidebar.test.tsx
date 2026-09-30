@@ -177,6 +177,31 @@ describe('LayeredSidebar', () => {
     expect(onDelete).toHaveBeenCalledWith('c2');
   });
 
+  it('offers Clear instead of Delete for a chat that is kept', async () => {
+    const onClear = vi.fn();
+    const onDelete = vi.fn();
+    const base = renderSidebar();
+    renderSidebar({ conversations: { ...base.conversations!, onDelete, onClear, canDelete: (id) => id !== 'c1' } });
+
+    const menuItems = () => Array.from(document.querySelectorAll('.context-menu-item')).map((b) => b.textContent);
+    act(() => {
+      itemByText('Add checkout')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(menuItems()).toEqual(['Clear conversation']);
+
+    vi.mocked(showThemedConfirm).mockResolvedValueOnce(true);
+    await act(async () => {
+      (document.querySelector('.context-menu-item') as HTMLElement).click();
+    });
+    expect(onClear).toHaveBeenCalledWith('c1');
+    expect(onDelete).not.toHaveBeenCalled();
+
+    act(() => {
+      itemByText('Fix CI')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(menuItems()).toEqual(['Delete conversation']);
+  });
+
   it('shows only the rail when collapsed', () => {
     const onToggleCollapsed = vi.fn();
     renderSidebar({ collapsed: true, onToggleCollapsed });

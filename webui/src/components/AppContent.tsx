@@ -23,6 +23,8 @@ import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import { forkChatSession } from '../services/chatSessions';
+import { executeCommand } from '../services/api/chatApi';
+import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
@@ -275,6 +277,19 @@ const AppContent: React.FC<AppContentProps> = ({
       lastError: null,
     }));
   }, []);
+
+  const clearConversation = useCallback(
+    async (id: string) => {
+      if (id === activeChatId) handleChatCleared();
+      try {
+        const result = await executeCommand(clientFetch, '/clear', id);
+        if (result.error) notificationBus.notify('error', 'Clear conversation', result.error);
+      } catch (err) {
+        notificationBus.notify('error', 'Clear conversation', err instanceof Error ? err.message : String(err));
+      }
+    },
+    [activeChatId, handleChatCleared],
+  );
 
   // SP-139 Phase 2: the turn change strip fetched an agent-session diff;
   // open it as a review buffer. Shaped as a GitDiffResponse so the
@@ -1209,6 +1224,8 @@ const AppContent: React.FC<AppContentProps> = ({
               onDelete: onDeleteChat ? (id) => void onDeleteChat(id) : undefined,
               // The daemon keeps its built-in chat; hosted chats can all go.
               canDelete: (id) => id !== 'default',
+              // The kept chat can still be emptied.
+              onClear: (id) => void clearConversation(id),
               onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
               onCreate: onCreateChat
                 ? () => {

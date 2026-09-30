@@ -29,9 +29,9 @@ const NARROW_SCREEN_MAX = 600;
 function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPanelProps): JSX.Element {
   const { notifications, removeNotification, clearNotifications, markAllRead } = useNotifications();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ right: number; bottom: number } | { left: number; top: number } | null>(
-    null,
-  );
+  const [position, setPosition] = useState<
+    { right: number; bottom: number } | { left: number; top: number } | { left: number; bottom: number } | null
+  >(null);
 
   useEffect(() => {
     markAllRead();
@@ -49,8 +49,17 @@ function NotificationHistoryPanel({ anchorRef, onClose }: NotificationHistoryPan
         setPosition({ left: 8, top: 56 });
         return;
       }
-      // Anchors near the top (the layered layout's rail bell) open beside
-      // and below, kept on screen; the status bar bell opens above.
+      // A rail anchor (left edge) opens beside it — below from the top half,
+      // upward from the bottom — kept on screen; the status bar bell opens
+      // above.
+      if (rect.left < window.innerWidth / 4 && rect.top >= window.innerHeight / 2) {
+        const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
+        setPosition({
+          left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8)),
+          bottom: Math.max(8, window.innerHeight - rect.bottom),
+        });
+        return;
+      }
       if (rect.top < window.innerHeight / 2) {
         const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
         setPosition({ left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8)), top: rect.top });

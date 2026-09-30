@@ -4,12 +4,15 @@ import { memo } from 'react';
 import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
 import './MessageItem.css';
+import type { ContextSubagentRun } from '../contextPanel/types';
 import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {
   message: Message;
   /** The tool whose inline detail is open (at most one per transcript). */
   activeToolDetail?: ToolExecution | null;
+  /** The delegated run behind activeToolDetail, when it is a subagent call. */
+  activeSubagentRun?: ContextSubagentRun;
   /** Toggle the inline detail (re-press collapses; another pill swaps). */
   onToolDetailToggle?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
@@ -57,6 +60,7 @@ interface MessageItemProps {
 export const MessageItem = memo(function MessageItem({
   message,
   activeToolDetail,
+  activeSubagentRun,
   onToolDetailToggle,
   findMatchingToolExecution,
   getToolStatus,
@@ -213,7 +217,11 @@ export const MessageItem = memo(function MessageItem({
             />
           )}
           {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
-            <ToolDetailInline tool={activeToolDetail} onToggle={onToolDetailToggle ?? (() => undefined)} />
+            <ToolDetailInline
+              tool={activeToolDetail}
+              subagentRun={activeSubagentRun}
+              onToggle={onToolDetailToggle ?? (() => undefined)}
+            />
           )}
         </>
       ) : (

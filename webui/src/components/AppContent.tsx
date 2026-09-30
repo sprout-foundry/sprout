@@ -49,6 +49,7 @@ import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
 import PhoneTabBar from './layered/PhoneTabBar';
 import PlatformHome from './layered/PlatformHome';
 
@@ -818,7 +819,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onSidebarToggle();
         return;
       }
-      if (commandId === 'toggle_terminal' && supportsLocalTerminal) {
+      if (commandId === 'toggle_terminal') {
         onTerminalExpandedChange(!isTerminalExpanded);
         return;
       }
@@ -1227,6 +1228,13 @@ const AppContent: React.FC<AppContentProps> = ({
               canDelete: (id) => id !== 'default',
               // The kept chat can still be emptied.
               onClear: (id) => void clearConversation(id),
+              history: isLayeredLayout ? (
+                <ChatHistorySwitcher
+                  chatId={activeChatId ?? undefined}
+                  onRestoreSession={handleSessionSearchRestore}
+                  iconOnly
+                />
+              ) : undefined,
               onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
               onCreate: onCreateChat
                 ? () => {
@@ -1319,7 +1327,7 @@ const AppContent: React.FC<AppContentProps> = ({
           // recordRecentFile call needed here.
         }}
         onToggleSidebar={onSidebarToggle}
-        onToggleTerminal={supportsLocalTerminal ? () => onTerminalExpandedChange(!isTerminalExpanded) : () => {}}
+        onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}
         initialMode={commandPaletteMode}
         onNavigateToLine={(line) => {

@@ -20,6 +20,8 @@ export interface HeaderBarProps {
   isConnected: boolean;
   onToggleSidebar: () => void;
   onToggleContextPanel: () => void;
+  /** Whether there is a context panel to toggle. */
+  hasContextPanel?: boolean;
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -29,6 +31,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   isConnected,
   onToggleSidebar,
   onToggleContextPanel,
+  hasContextPanel = true,
 }) => {
   const [busy, setBusy] = useState(false);
   const repoURL = useActiveRepoURL() ?? null;
@@ -115,7 +118,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}
-        {!isMobile && (
+        {!isMobile && hasContextPanel && (
           <button
             className="header-context-toggle-btn"
             onClick={onToggleContextPanel}

@@ -20,7 +20,7 @@ import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import Chat from '../components/ChatView';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud } from '../config/mode';
+import { isCloud, supportsAgentChanges } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { githubRepoSlug } from '../utils/platformUrl';
 
@@ -68,6 +68,9 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // Layered layout: while the main view holds other work, the active
   // conversation moves into the contextual sidebar.
   const threadContent = isLayeredLayout && !showContextSidebar ? <Chat {...chatProps} /> : undefined;
+  // The panel holds the conversation (while other work has the main view)
+  // and, on a local daemon, the agent's change history.
+  const hasContextPanel = !!threadContent || supportsAgentChanges;
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = githubRepoSlug(useActiveRepoURL());
@@ -86,6 +89,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         isConnected={isConnected}
         onToggleSidebar={onToggleSidebar}
         onToggleContextPanel={onToggleContextPanel}
+        hasContextPanel={hasContextPanel}
       />
       <div className="main-view-content">
         <div className="editor-view">
@@ -126,7 +130,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
                   <SquareTerminal size={16} />
                 </button>
               )}
-              {showContextSidebar && (
+              {showContextSidebar && hasContextPanel && (
                 <button
                   className="top-mobile-context-btn"
                   onClick={onToggleContextPanel}
@@ -193,7 +197,14 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       />
       {!supportsLocalTerminal && (
         <ErrorBoundary panelName="Terminal">
-          <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          <Terminal
+            isExpanded={isTerminalExpanded}
+            onToggleExpand={onTerminalExpandedChange}
+            isConnected={false}
+            // The in-browser shell is occasional: out of the way until opened
+            // (the Terminal sidebar entry, the palette, or Ctrl+`).
+            hideWhenCollapsed
+          />
         </ErrorBoundary>
       )}
     </main>

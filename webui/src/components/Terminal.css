@@ -58,6 +58,10 @@
   box-sizing: border-box;
 }
 
+.terminal-portal--hidden {
+  display: none;
+}
+
 .terminal-portal > .terminal-container {
   position: static;
   pointer-events: auto;

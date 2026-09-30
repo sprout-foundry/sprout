@@ -304,46 +304,143 @@
 }
 
 /* ── Inline tool detail ──────────────────────────────────────────
-   The block ToolDetailInline renders directly under a tool pill row in
-   the chat transcript. It replaces the retired ContextPanel deep-link,
-   so it must read in every mode — design included. The body sections
-   (.tool-detail-section, .tool-detail-label, …) are styled by the shared
-   ChatPanel.css; this adds only the block chrome and the header row.
-   Visual language matches .tool-execution / .tool-details. */
+   The block ToolDetailInline renders under a tool pill in the transcript.
+   Self-contained: it reads the same in every mode, with or without the
+   context panel's stylesheet loaded. */
 
 .tool-detail-inline {
   margin-top: 6px;
-  padding: 8px 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   overflow: hidden;
+  font-size: 12px;
+}
+
+.tool-detail-inline--error {
+  border-color: color-mix(in srgb, var(--accent-error) 45%, var(--border-subtle));
 }
 
 .tool-detail-inline-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .tool-detail-inline .tool-name {
-  font-size: 12px;
+  flex-shrink: 0;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.tool-detail-inline .tool-duration {
-  margin-left: auto;
+.tool-detail-inline .tool-target {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
 }
 
-/* Self-contained icon rule — the unscoped .tool-icon lives in
-   ContextPanel.css (Code-mode chrome); the inline block must not depend
-   on that stylesheet being loaded. Scoped so it cannot leak onto the
-   panel's own tool cards. */
+.tool-detail-inline .tool-status {
+  display: flex;
+  margin-left: auto;
+  color: var(--text-tertiary);
+}
+
+.tool-detail-inline .tool-target + .tool-status {
+  margin-left: 0;
+}
+
+.tool-detail-inline--error .tool-status {
+  color: var(--accent-error);
+}
+
+.tool-detail-inline .tool-duration {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-detail-close {
+  display: flex;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.tool-detail-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .tool-detail-inline .tool-icon {
   display: flex;
   align-items: center;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.tool-detail-command {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tool-detail-command::before {
+  content: '$ ';
+  color: var(--text-tertiary);
+}
+
+.tool-detail-output pre,
+.tool-detail-args pre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
+.tool-detail-inline--error .tool-detail-output pre {
+  color: var(--accent-error);
+  white-space: pre-wrap;
+}
+
+.tool-detail-empty,
+.tool-detail-note {
+  padding: 8px 10px;
+  color: var(--text-tertiary);
+}
+
+.tool-detail-note {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tool-detail-args {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tool-detail-args summary {
+  padding: 6px 10px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.tool-detail-args summary:hover {
+  color: var(--text-primary);
 }

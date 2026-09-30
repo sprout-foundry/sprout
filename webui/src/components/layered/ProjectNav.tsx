@@ -19,6 +19,7 @@ import {
   ScrollText,
   Search,
   Settings,
+  SquareTerminal,
   SwatchBook,
   Zap,
   type LucideIcon,
@@ -50,6 +51,8 @@ export interface ProjectNavConversations {
   canDelete?: (id: string) => boolean;
   /** Empties a chat's messages; offered for a chat that can't be deleted. */
   onClear?: (id: string) => void;
+  /** Past conversations to restore, beside the section title. */
+  history?: ReactNode;
 }
 
 interface NavEntry {
@@ -187,7 +190,7 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
         )}
       </div>
       <div className="project-nav-scroll">
-        <Section title="Conversations">
+        <Section title="Conversations" action={conversations?.history}>
           {sessions.length === 0 && (
             // Hosts that keep a single implicit conversation list none; it
             // still exists and opens in the main view.
@@ -265,4 +268,5 @@ export const NAV_ICONS = {
   flows: Layers,
   feedback: MessageSquare,
   design: Palette,
+  terminal: SquareTerminal,
 };

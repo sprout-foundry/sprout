@@ -18,20 +18,8 @@ interface UseContextPanelStateReturn {
   panelContainerRef: React.RefObject<HTMLDivElement>;
   chatTab: ChatTabId;
   setChatTab: (v: ChatTabId) => void;
-  expandedTools: Set<string>;
-  expandedQueries: Set<number>;
-  expandedSubagents: Set<string>;
-  activeToolId: string | null;
-  setActiveToolId: (v: string | null) => void;
-  setExpandedTools: React.Dispatch<React.SetStateAction<Set<string>>>;
-  setExpandedQueries: React.Dispatch<React.SetStateAction<Set<number>>>;
-  setExpandedSubagents: React.Dispatch<React.SetStateAction<Set<string>>>;
-  toolRefs: React.MutableRefObject<Record<string, HTMLElement | null>>;
   startResize: (e: ReactMouseEvent<HTMLDivElement>) => void;
   isResizing: boolean;
-  toggleToolExpansion: (toolId: string) => void;
-  toggleQueryGroup: (queryId: number) => void;
-  toggleSubagentExpansion: (toolId: string) => void;
   isChat: boolean;
 }
 
@@ -66,13 +54,8 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
   const [panelWidth, setPanelWidthRaw] = useState(loadPersistedWidth);
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
-  const [chatTab, setChatTab] = useState<ChatTabId>('activity');
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
-  const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
-  const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
-  const [activeToolId, setActiveToolId] = useState<string | null>(null);
+  const [chatTab, setChatTab] = useState<ChatTabId>('thread');
   const [isResizing, setIsResizing] = useState(false);
-  const toolRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const isChat = props.context === 'chat';
 
@@ -85,15 +68,9 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     if (storedCollapsed === '1') {
       setPanelCollapsed(true);
     }
-    if (storedTab) {
-      // Migration: pre-merge tab ids map onto their successors
-      // ('subagents'/'tools' → 'activity'; 'tasks'/'status'/'sessions'
-      // removed — fall back to the default).
-      const legacy = storedTab as string;
-      const migrated = legacy === 'subagents' || legacy === 'tools' ? 'activity' : legacy === 'changes' ? legacy : null;
-      if (migrated) {
-        setChatTab(migrated as ChatTabId);
-      }
+    // Retired tab ids (activity, tools, subagents…) fall back to the default.
+    if (storedTab === 'changes') {
+      setChatTab(storedTab);
     }
   }, [props.context]);
 
@@ -120,14 +97,6 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(`${PANEL_TAB_KEY}.${props.context}`, chatTab);
   }, [props.context, chatTab]);
-
-  // Clear highlight after 3 seconds
-  useEffect(() => {
-    if (activeToolId) {
-      const timer = setTimeout(() => setActiveToolId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [activeToolId]);
 
   // Resize handler
   const startResize = useCallback(
@@ -163,33 +132,6 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     [panelWidth],
   );
 
-  const toggleToolExpansion = (toolId: string) => {
-    setExpandedTools((prev) => {
-      const next = new Set(prev);
-      if (next.has(toolId)) next.delete(toolId);
-      else next.add(toolId);
-      return next;
-    });
-  };
-
-  const toggleQueryGroup = (queryId: number) => {
-    setExpandedQueries((prev) => {
-      const next = new Set(prev);
-      if (next.has(queryId)) next.delete(queryId);
-      else next.add(queryId);
-      return next;
-    });
-  };
-
-  const toggleSubagentExpansion = (toolId: string) => {
-    setExpandedSubagents((prev) => {
-      const next = new Set(prev);
-      if (next.has(toolId)) next.delete(toolId);
-      else next.add(toolId);
-      return next;
-    });
-  };
-
   return {
     panelCollapsed,
     setPanelCollapsed,
@@ -198,20 +140,8 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     panelContainerRef,
     chatTab,
     setChatTab,
-    expandedTools,
-    expandedQueries,
-    expandedSubagents,
-    activeToolId,
-    setActiveToolId,
-    setExpandedTools,
-    setExpandedQueries,
-    setExpandedSubagents,
-    toolRefs,
     startResize,
     isResizing,
-    toggleToolExpansion,
-    toggleQueryGroup,
-    toggleSubagentExpansion,
     isChat,
   };
 }

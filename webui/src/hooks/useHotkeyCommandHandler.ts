@@ -83,11 +83,11 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
       const detail = (e as CustomEvent).detail;
       if (!detail?.commandId) return;
 
-      // Gate terminal commands in cloud mode
+      // The in-browser terminal opens and closes like the local one, but has
+      // no splits or process control.
       if (
         !supportsLocalTerminal &&
-        (detail.commandId === 'toggle_terminal' ||
-          detail.commandId === 'split_terminal_vertical' ||
+        (detail.commandId === 'split_terminal_vertical' ||
           detail.commandId === 'split_terminal_horizontal' ||
           detail.commandId === 'clear_terminal' ||
           detail.commandId === 'kill_terminal')

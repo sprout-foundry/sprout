@@ -23,6 +23,7 @@ import {
   shouldSuppressAgentMessageInChat,
 } from '../webSocketEventHelpers';
 import { chatTranscriptToMessages } from '../../utils/chatTranscript';
+import { recordConversationCleared } from '../bootSessionRestore';
 
 // Handle connection_status event
 export const handleConnectionStatus = (ctx: EventHandlerContext): void => {
@@ -333,6 +334,7 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
   // transcript, which is exactly the visible effect the user expects the
   // instant the button is pressed.
   const isTranscriptReset = data.change === 'switch' || data.change === 'clear';
+  if (data.change === 'clear') recordConversationCleared();
   if (isTranscriptReset && activeChatIdRef.current && chatId === activeChatIdRef.current) {
     // Another client switched/cleared this chat's session — reload the
     // transcript. Use the read-only fetch, NOT switchChatSession: a back-end

@@ -31,7 +31,7 @@ import type { SproutEvent } from '../types/events';
 import { WebSocketService } from '../services/websocket';
 import { debugLog, useLog } from '../utils/log';
 import { decideBootRestore, writeChatModePin } from '../workspaces/useChatModePinning';
-import { canAutoRestoreLatestSession } from './bootSessionRestore';
+import { canAutoRestoreLatestSession, clearedByUser } from './bootSessionRestore';
 
 interface RecentFile {
   path: string;
@@ -441,9 +441,12 @@ export function useAppInitialization({
                 .catch(() => []);
               const allowFallback = (!isCloud || !hasExplicitCurrent) && canAutoRestoreLatestSession(chats);
               if (allowFallback) {
+                // Never a conversation the user cleared: that was "start fresh".
                 const restorable = sessions.find(
                   (item: SessionEntry) =>
-                    String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+                    String(item?.session_id || '') !== currentSessionId &&
+                    Number(item?.message_count || 0) > 0 &&
+                    !clearedByUser(item?.last_updated),
                 );
                 if (restorable?.session_id) {
                   const restored = await apiService.restoreSession(String(restorable.session_id));

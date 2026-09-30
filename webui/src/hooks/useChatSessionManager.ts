@@ -22,6 +22,7 @@ import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag'
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
 import { processingAfter, requestChatReplay } from '../utils/chatReplay';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
+import { recordConversationCleared } from './bootSessionRestore';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
 function extractToolRefsFromContent(content: string): ToolRef[] {
@@ -502,6 +503,7 @@ export function useChatSessionManager({
       // Queue drain targets the chat the entry was queued for; the active
       // chat's ID is only the fallback for direct (typed) sends.
       const targetChatId = options?.chatId ?? activeChatIdRef.current ?? undefined;
+      if (isClearCommand) recordConversationCleared();
 
       // Intercept the /model and /provider slash commands client-side and
       // route them to the equivalent WebUI affordances (model picker

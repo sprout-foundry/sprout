@@ -13,6 +13,7 @@ import { useEditorFileType } from '../hooks/useEditorFileType';
 import { useEditorKeymaps } from '../hooks/useEditorKeymaps';
 import { useEditorLSP } from '../hooks/useEditorLSP';
 import { useEditorScrollSync } from '../hooks/useEditorScrollSync';
+import { useIsMobileViewport } from '../hooks/useMobileSheets';
 import { useEditorSemantic } from '../hooks/useEditorSemantic';
 import { useEditorSettings } from '../hooks/useEditorSettings';
 import { useEditorSymbols } from '../hooks/useEditorSymbols';
@@ -66,6 +67,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<CMEditorView | null>(null);
   const markdownPreviewBodyRef = useRef<HTMLDivElement>(null);
+  const isMobileViewport = useIsMobileViewport();
 
   const { compartments, buildExtensions } = useEditorExtensions();
 
@@ -557,6 +559,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,
+          // Phones have no tab strip to name the file.
+          showFileName: isMobileViewport,
           onNavigate: (path) => {
             window.dispatchEvent(
               new CustomEvent('sprout:reveal-in-explorer', {

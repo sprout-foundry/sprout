@@ -11,6 +11,7 @@ interface EditorToolbarProps {
   saving?: boolean;
   breadcrumbProps?: {
     filePath: string;
+    showFileName?: boolean;
     onNavigate?: (path: string) => void;
     symbols?: BreadcrumbSymbol[];
     onNavigateToSymbol?: (line: number) => void;
@@ -47,6 +48,7 @@ function EditorToolbar({
             <div className="toolbar-breadcrumb">
               <EditorBreadcrumb
                 filePath={breadcrumbProps.filePath}
+                showFileName={breadcrumbProps.showFileName}
                 onNavigate={breadcrumbProps.onNavigate}
                 symbols={breadcrumbProps.symbols}
                 onNavigateToSymbol={breadcrumbProps.onNavigateToSymbol}

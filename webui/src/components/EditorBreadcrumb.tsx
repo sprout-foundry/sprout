@@ -55,6 +55,8 @@ export type { BreadcrumbSymbol };
 
 interface EditorBreadcrumbProps {
   filePath: string;
+  /** Name a top-level file too; for layouts without a tab strip to name it. */
+  showFileName?: boolean;
   onNavigate?: (path: string) => void;
   symbols?: BreadcrumbSymbol[];
   onNavigateToSymbol?: (line: number) => void;
@@ -68,6 +70,7 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 function EditorBreadcrumb({
   filePath,
+  showFileName = false,
   onNavigate,
   symbols,
   onNavigateToSymbol,
@@ -79,16 +82,16 @@ function EditorBreadcrumb({
   const segments = useMemo(() => {
     // Don't show breadcrumbs for virtual workspace paths
     if (filePath.startsWith('__workspace/')) return null;
-    // Don't show breadcrumbs for empty or plain filenames without directory parts
-    if (!filePath || !filePath.includes('/')) return null;
+    if (!filePath) return null;
 
     // Display relative to the workspace when possible — the full machine
     // path is noise (and LSP buffer paths are absolute).
     const displayPath = relativizePath(filePath, cwd);
     const parts = displayPath.split('/').filter(Boolean);
-    if (parts.length < 2) return null;
+    // A top-level file's name alone would repeat its tab.
+    if (parts.length < 2 && !(showFileName && parts.length === 1)) return null;
     return parts;
-  }, [filePath, cwd]);
+  }, [filePath, cwd, showFileName]);
 
   // ── Symbol segments ──────────────────────────────────────────────────
 

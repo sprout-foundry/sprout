@@ -571,6 +571,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,
+          workspaceRoot: contextMenu.workspaceRoot,
           // Phones have no tab strip to name the file or mark it unsaved.
           showFileName: isMobileViewport,
           modified: isMobileViewport && buffer.isModified,

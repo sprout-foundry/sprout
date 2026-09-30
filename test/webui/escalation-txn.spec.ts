@@ -275,7 +275,7 @@ test.describe('Escalation — Run in cloud container (ETH-2)', () => {
     await txnButton.click();
 
     await expect(page.getByTestId(TESTIDS['escalation-toast-txn-error'])).toHaveText(
-      'another transaction is running, try again shortly',
+      'Another command is already running in the cloud workspace — try again shortly.',
       { timeout: 10_000 },
     );
 

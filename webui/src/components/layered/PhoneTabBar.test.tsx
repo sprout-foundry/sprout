@@ -12,6 +12,7 @@ import PhoneTabBar from './PhoneTabBar';
 let container: HTMLDivElement;
 let root: Root;
 const drawer = { open: false, toggle: vi.fn(), close: vi.fn() };
+const terminal = { open: false, leave: vi.fn() };
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,6 +22,8 @@ beforeEach(() => {
   drawer.open = false;
   drawer.toggle.mockReset();
   drawer.close.mockReset();
+  terminal.open = false;
+  terminal.leave.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -33,7 +36,15 @@ afterEach(() => {
 
 function render() {
   act(() =>
-    root.render(<PhoneTabBar drawerOpen={drawer.open} onToggleDrawer={drawer.toggle} onCloseDrawer={drawer.close} />),
+    root.render(
+      <PhoneTabBar
+        drawerOpen={drawer.open}
+        onToggleDrawer={drawer.toggle}
+        onCloseDrawer={drawer.close}
+        terminalOpen={terminal.open}
+        onLeaveTerminal={terminal.leave}
+      />,
+    ),
   );
 }
 
@@ -59,6 +70,16 @@ describe('PhoneTabBar', () => {
     render();
     act(() => tab('app').click());
     expect(drawer.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes a full-screen terminal instead of opening the drawer under it', () => {
+    terminal.open = true;
+    render();
+    act(() => tab('app').click());
+    expect(terminal.leave).toHaveBeenCalledTimes(1);
+    expect(drawer.toggle).not.toHaveBeenCalled();
+    act(() => tab('Search').click());
+    expect(terminal.leave).toHaveBeenCalledTimes(2);
   });
 
   it('closes an open drawer when going elsewhere', () => {

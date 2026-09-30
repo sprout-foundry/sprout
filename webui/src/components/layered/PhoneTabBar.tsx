@@ -37,12 +37,18 @@ interface PhoneTabBarProps {
   drawerOpen: boolean;
   onToggleDrawer: () => void;
   onCloseDrawer: () => void;
+  /** The terminal is open; on a phone it is full screen. */
+  terminalOpen: boolean;
+  /** Closes the terminal, which would cover the place a tab opens. */
+  onLeaveTerminal: () => void;
 }
 
 export default function PhoneTabBar({
   drawerOpen,
   onToggleDrawer,
   onCloseDrawer,
+  terminalOpen,
+  onLeaveTerminal,
 }: PhoneTabBarProps): ReactElement | null {
   const home = useHomeView();
   const repoSlug = githubRepoSlug(useActiveRepoURL());
@@ -71,6 +77,7 @@ export default function PhoneTabBar({
         onClick={() => {
           openHome(home.path);
           closeDrawer();
+          if (terminalOpen) onLeaveTerminal();
         }}
       >
         <Home size={20} aria-hidden="true" />
@@ -81,11 +88,12 @@ export default function PhoneTabBar({
         className={`phone-tab${home.open ? '' : ' active'}`}
         aria-current={home.open ? undefined : 'page'}
         title={repoSlug ?? undefined}
-        // Tapping the project you're already in opens its sections.
+        // Tapping the project you're already looking at opens its sections.
         onClick={() => {
-          if (home.open) {
+          if (home.open || terminalOpen) {
             closeHome();
             closeDrawer();
+            if (terminalOpen) onLeaveTerminal();
           } else {
             onToggleDrawer();
           }
@@ -112,6 +120,7 @@ export default function PhoneTabBar({
         onClick={() => {
           closeHome();
           closeDrawer();
+          if (terminalOpen) onLeaveTerminal();
           window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
         }}
       >

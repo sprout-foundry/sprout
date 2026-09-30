@@ -2,15 +2,20 @@
  * Shell layout choice: the classic icon-rail layout, or the layered layout
  * (a project rail, a project sidebar, the main view, and a contextual
  * sidebar). `?layout=layered` or `?layout=classic` switches and remembers the
- * choice for this browser; classic stays the default.
+ * choice for this browser; layered is the default unless the build sets
+ * VITE_SHELL_LAYOUT=classic.
  */
 
 export type ShellLayout = 'classic' | 'layered';
 
 const STORAGE_KEY = 'sprout-shell-layout';
 
+// A build can pin a different default (the e2e suites build against classic).
+const DEFAULT_LAYOUT: ShellLayout = import.meta.env.VITE_SHELL_LAYOUT === 'classic' ? 'classic' : 'layered';
+const OTHER_LAYOUT: ShellLayout = DEFAULT_LAYOUT === 'layered' ? 'classic' : 'layered';
+
 function readLayout(): ShellLayout {
-  if (typeof window === 'undefined') return 'classic';
+  if (typeof window === 'undefined') return DEFAULT_LAYOUT;
   const param = new URLSearchParams(window.location.search).get('layout');
   if (param === 'layered' || param === 'classic') {
     try {
@@ -21,9 +26,9 @@ function readLayout(): ShellLayout {
     return param;
   }
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === 'layered' ? 'layered' : 'classic';
+    return window.localStorage.getItem(STORAGE_KEY) === OTHER_LAYOUT ? OTHER_LAYOUT : DEFAULT_LAYOUT;
   } catch {
-    return 'classic';
+    return DEFAULT_LAYOUT;
   }
 }
 

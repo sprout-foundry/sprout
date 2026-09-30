@@ -553,3 +553,13 @@ describe('SearchView replace all', () => {
     expect(btn.textContent).toBe('Replace all');
   });
 });
+
+describe('SearchView result rows', () => {
+  it('drop indentation so the match stays in view', async () => {
+    await renderSearch();
+    const hit = document.querySelector('.search-match-row--hit .search-match-line');
+    expect(hit?.textContent?.startsWith('const handleClick')).toBe(true);
+    const contextRows = Array.from(document.querySelectorAll('.search-match-row--context .search-match-line'));
+    expect(contextRows.map((r) => r.textContent)).toContain('return null;');
+  });
+});

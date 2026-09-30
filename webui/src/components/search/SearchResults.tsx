@@ -116,7 +116,7 @@ function SearchMatchGroup({
         }}
       >
         <span className="search-match-line-number">{match.line_number}</span>
-        <div className="search-match-line">{highlightMatch(match.line, match.column_start, match.column_end)}</div>
+        <div className="search-match-line">{highlightHit(match, highlightMatch)}</div>
       </div>
 
       {match.context_after.map((ctx, i) => {
@@ -162,9 +162,24 @@ function SearchMatchRow({ filePath, lineNumber, text, onFileClick, onContextMenu
       }}
     >
       <span className="search-match-line-number">{lineNumber}</span>
-      <div className="search-match-line">{text}</div>
+      <div className="search-match-line">{withoutIndent(text).text}</div>
     </div>
   );
+}
+
+// Indentation says nothing in a result list, and in a narrow sidebar it
+// pushes the match itself out of view.
+function withoutIndent(line: string): { text: string; shift: number } {
+  const text = line.replace(/^\s+/, '');
+  return { text, shift: line.length - text.length };
+}
+
+function highlightHit(
+  match: { line: string; column_start: number; column_end: number },
+  highlightMatch: (line: string, colStart: number, colEnd: number) => React.ReactNode,
+): React.ReactNode {
+  const { text, shift } = withoutIndent(match.line);
+  return highlightMatch(text, Math.max(0, match.column_start - shift), Math.max(0, match.column_end - shift));
 }
 
 export default SearchResults;

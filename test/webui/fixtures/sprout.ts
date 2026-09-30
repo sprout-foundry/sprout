@@ -89,8 +89,15 @@ async function waitForHealth(baseUrl: string, timeoutMs = 30_000): Promise<void>
 // Temp directory helpers
 // ---------------------------------------------------------------------------
 
+// The daemon puts unix sockets under the config dir, and macOS caps socket
+// paths at 104 bytes — its per-user os.tmpdir() (/var/folders/…) leaves too
+// little room, so the sockets failed to bind. /tmp keeps the paths short.
+function tempBase(): string {
+  return process.platform === 'darwin' ? '/tmp' : os.tmpdir();
+}
+
 function createTempDir(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return fs.mkdtempSync(path.join(tempBase(), prefix));
 }
 
 async function removeDir(dir: string) {

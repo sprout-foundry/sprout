@@ -64,8 +64,10 @@ func resolveInitialWorkspace(path string) string {
 //   - /ws, /terminal (WebSocket upgrade) → proxied to the SSH tunnel port
 //   - everything else → HTTP-proxied to the SSH tunnel port
 func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request) {
-	// Strip the /ssh/ prefix so we're left with "{encodedKey}/{rest}"
-	trimmed := strings.TrimPrefix(r.URL.Path, "/ssh/")
+	// Strip the /ssh/ prefix so we're left with "{encodedKey}/{rest}". Split
+	// the escaped path: the key's own slashes arrive as %2F, and the decoded
+	// Path would cut the key at the first of them.
+	trimmed := strings.TrimPrefix(r.URL.EscapedPath(), "/ssh/")
 
 	var encodedKey, rest string
 	if idx := strings.Index(trimmed, "/"); idx < 0 {
@@ -74,6 +76,9 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	} else {
 		encodedKey = trimmed[:idx]
 		rest = trimmed[idx:]
+		if unescaped, err := url.PathUnescape(rest); err == nil {
+			rest = unescaped
+		}
 	}
 
 	sessionKey, err := url.PathUnescape(encodedKey)

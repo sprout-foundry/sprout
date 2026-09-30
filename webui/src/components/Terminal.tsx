@@ -48,12 +48,15 @@ interface TerminalProps {
   isConnected?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (expanded: boolean) => void;
+  /** Collapsed means gone, not a strip: for hosts where the terminal is occasional. */
+  hideWhenCollapsed?: boolean;
 }
 
 function Terminal({
   isConnected = true,
   isExpanded: externalIsExpanded = false,
   onToggleExpand,
+  hideWhenCollapsed = false,
 }: TerminalProps): JSX.Element {
   const getCollapsedHeight = useCallback(() => {
     if (typeof window === 'undefined') return 42;
@@ -166,12 +169,13 @@ function Terminal({
     // top). The terminal portal (outside #root, real viewport) reads
     // this too — it wants the LOGICAL value for its wrapper height and
     // applies the factor itself.
-    const logical = isExpanded ? terminalHeight : collapsedHeight;
+    const collapsed = hideWhenCollapsed ? 0 : collapsedHeight;
+    const logical = isExpanded ? terminalHeight : collapsed;
     document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${logical}px`);
     return () => {
-      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
+      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsed}px`);
     };
-  }, [collapsedHeight, isExpanded, terminalHeight]);
+  }, [collapsedHeight, hideWhenCollapsed, isExpanded, terminalHeight]);
 
   // Responsive collapsed height
   useEffect(() => {
@@ -294,7 +298,7 @@ function Terminal({
   // and the app's reserved-height var accounts for it (see Terminal.css).
   return createPortal(
     <div
-      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}`}
+      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}${hideWhenCollapsed && !isExpanded ? ' terminal-portal--hidden' : ''}`}
       style={{ ['--terminal-height' as string]: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
     >
       <div

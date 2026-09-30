@@ -140,7 +140,6 @@ export type ContextPanelProps = ChatContextPanelProps;
 
 export interface ContextPanelHandle {
   openTab: (tab: string) => void;
-  highlightTool: (toolId: string) => void;
   closePanel: () => void;
   /** Expand when collapsed, collapse when expanded. */
   togglePanel: () => void;
@@ -159,7 +158,7 @@ export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 /** Up to this width the panel is an overlay drawer, so it starts closed. */
 export const OVERLAY_LAYOUT_MAX_WIDTH = 1024;
 
-export type ChatTabId = 'thread' | 'activity' | 'changes';
+export type ChatTabId = 'thread' | 'changes';
 
 export interface PanelTab {
   id: ChatTabId;

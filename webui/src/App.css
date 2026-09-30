@@ -1327,7 +1327,24 @@ select option {
 .split-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+
+/* Pane actions sit in the tab strip: quiet icon buttons that the strip's
+ * flat tabs don't have to compete with. */
+.split-controls .pane-control-btn.compact {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-tertiary);
+}
+
+.split-controls .pane-control-btn.compact:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
 }
 
 /* Inactive pane's split controls are dimmed so the active pane stays

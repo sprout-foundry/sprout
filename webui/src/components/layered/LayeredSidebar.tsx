@@ -132,6 +132,11 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       setOpen(target);
       return;
     }
+    if (target.id === 'terminal') {
+      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_terminal' } }));
+      props.onCloseDrawer?.();
+      return;
+    }
     const global = target.id === 'settings' || target.id === 'logs';
     if (!global && !inCode) props.onSelectMode?.('code');
     props.onSectionChange?.(target.id as SectionTab);
@@ -148,6 +153,8 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     entry('section', 'files', 'Files'),
     entry('section', 'search', 'Search'),
     ...(supportsGit ? [entry('section', 'git', 'Source control')] : []),
+    // Hosted: the in-browser terminal stays hidden until asked for.
+    ...(isCloud ? [entry('section', 'terminal', 'Terminal')] : []),
   ];
   const designEntries = props.modes.some((m) => m.id === 'design')
     ? [

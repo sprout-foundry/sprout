@@ -126,8 +126,6 @@ const TESTIDS = {
   "context-panel": "context-panel",
   "context-panel-collapse": "context-panel-collapse",
   "context-panel-tab": "context-panel-tab",
-  "context-panel-subagents": "context-panel-subagents",
-  "context-panel-activity": "context-panel-activity",
   "context-panel-changes": "context-panel-changes",
   "context-panel-tasks": "context-panel-tasks",
 

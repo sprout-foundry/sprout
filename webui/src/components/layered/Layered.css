@@ -153,6 +153,7 @@
 
 .project-nav-heading {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-4) var(--space-1);
   color: var(--text-tertiary);

@@ -43,9 +43,14 @@ function ageLabel(iso: string): string {
 interface ChatHistorySwitcherProps {
   chatId?: string;
   onRestoreSession?: (sessionId: string, chatId?: string) => void | Promise<void>;
+  /** Icon-only trigger, for headers that have no room for the label. */
+  iconOnly?: boolean;
 }
 
-function ChatHistorySwitcherInner({ chatId, onRestoreSession }: ChatHistorySwitcherProps) {
+// Matches .chs-popover's width, so the popover stays on screen.
+const POPOVER_WIDTH = 340;
+
+function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }: ChatHistorySwitcherProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [query, setQuery] = useState('');
@@ -216,7 +221,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession }: ChatHistorySwitc
               ? {
                   position: 'fixed',
                   top: anchor.bottom + 6,
-                  left: Math.max(8, anchor.left),
+                  left: Math.max(8, Math.min(anchor.left, window.innerWidth - POPOVER_WIDTH - 8)),
                   maxHeight: Math.min(420, window.innerHeight - anchor.bottom - 24),
                 }
               : undefined
@@ -303,15 +308,16 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession }: ChatHistorySwitc
       <button
         ref={btnRef}
         type="button"
-        className="chs-trigger"
+        className={`chs-trigger${iconOnly ? ' chs-trigger--icon' : ''}`}
         onClick={() => (open ? close() : openPopover())}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={iconOnly ? 'Conversation history' : undefined}
         title="Conversation history"
         data-testid="chs-trigger"
       >
         <History size={13} />
-        <span>History</span>
+        {!iconOnly && <span>History</span>}
       </button>
       {popover}
     </div>

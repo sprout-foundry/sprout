@@ -362,6 +362,12 @@
   display: none;
 }
 
+/* A phone's full-screen terminal stops above the tab bar, so the other
+ * places stay one tap away. */
+.phone-tab-bar-shown .terminal-portal--expanded {
+  height: auto;
+}
+
 .layout-layered .terminal-portal {
   bottom: calc(var(--sprout-bottom-nav-height) * var(--ui-scale, 1));
 }

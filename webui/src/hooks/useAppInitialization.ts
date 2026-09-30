@@ -297,11 +297,14 @@ export function useAppInitialization({
               setRecentFiles(files);
             }
           })
-          .catch((err) =>
+          .catch((err) => {
+            // Before a workspace is chosen the server refuses the listing;
+            // the workspace gate is already asking for one.
+            if ((err as { code?: string })?.code === 'workspace_not_selected') return;
             log.error(`Failed to load initial data: ${err instanceof Error ? err.message : String(err)}`, {
               title: 'Initialization Error',
-            }),
-          );
+            });
+          });
       };
 
       // Load initial stats & files

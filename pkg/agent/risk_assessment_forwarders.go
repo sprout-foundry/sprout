@@ -44,12 +44,6 @@ func assessmentFromPersonaCascade(level configuration.RiskLevel, reason string) 
 	return approvals.AssessmentFromPersonaCascade(level, reason)
 }
 
-// mergeRiskSources concatenates two source lists, de-duplicating while
-// preserving first-seen order.
-func mergeRiskSources(a, b []RiskSource) []RiskSource {
-	return approvals.MergeRiskSources(a, b)
-}
-
 // resolveOldDecision derives a one-word gating decision from the old
 // dual-gate path's SecurityResult for shadow-mode comparison.
 func resolveOldDecision(res tools.SecurityResult) string {

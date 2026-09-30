@@ -93,7 +93,7 @@ func cmdTr(args []string, stdin string) CmdResult {
 		sets = append(sets, a)
 	}
 	if len(sets) == 0 || (len(sets) < 2 && !del && !squeeze) {
-		return CmdResult{"", "tr: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "tr: missing operand\n", ExitCode: 1}
 	}
 	set1 := expandTrSet(sets[0])
 	in1 := map[rune]bool{}
@@ -167,7 +167,7 @@ func cmdTr(args []string, stdin string) CmdResult {
 		}
 		result = s.String()
 	}
-	return CmdResult{result, "", 0}
+	return CmdResult{Stdout: result, Stderr: "", ExitCode: 0}
 }
 
 func cmdUniq(args []string, stdin string) CmdResult {
@@ -203,7 +203,7 @@ func cmdUniq(args []string, stdin string) CmdResult {
 	if len(files) > 0 && files[0] != "-" {
 		data, err := readFileArg(files[0])
 		if err != nil {
-			return CmdResult{"", fmt.Sprintf("uniq: %s: %s\n", files[0], describeErr(err)), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("uniq: %s: %s\n", files[0], describeErr(err)), ExitCode: 1}
 		}
 		input = data
 	}
@@ -245,11 +245,11 @@ func cmdUniq(args []string, stdin string) CmdResult {
 	}
 	if len(files) > 1 {
 		if err := SyncWriteFile(ResolvePath(files[1]), out.String()); err != nil {
-			return CmdResult{"", "uniq: " + err.Error() + "\n", 1}
+			return CmdResult{Stdout: "", Stderr: "uniq: " + err.Error() + "\n", ExitCode: 1}
 		}
 		return CmdResult{}
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 type cutRange struct{ from, to int }
@@ -339,11 +339,11 @@ func cmdCut(args []string, stdin string) CmdResult {
 		}
 	}
 	if mode == "" {
-		return CmdResult{"", "cut: you must specify a list of bytes, characters, or fields\n", 1}
+		return CmdResult{Stdout: "", Stderr: "cut: you must specify a list of bytes, characters, or fields\n", ExitCode: 1}
 	}
 	ranges, err := parseCutList(list)
 	if err != nil {
-		return CmdResult{"", "cut: " + err.Error() + "\n", 1}
+		return CmdResult{Stdout: "", Stderr: "cut: " + err.Error() + "\n", ExitCode: 1}
 	}
 	input, errRes := readInputs("cut", files, stdin)
 	if errRes != nil {
@@ -384,5 +384,5 @@ func cmdCut(args []string, stdin string) CmdResult {
 		}
 		out.WriteString(sel.String() + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }

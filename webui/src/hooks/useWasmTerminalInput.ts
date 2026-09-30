@@ -10,6 +10,7 @@
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { terminalText } from '../services/terminalText';
 import { initWasmShell, type WasmShell, type WasmShellResult } from '../services/wasmShell';
 import { debugLog } from '../utils/log';
 
@@ -122,12 +123,8 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
         const res: WasmShellResult = shell.executeCommandAsync
           ? await shell.executeCommandAsync(command)
           : shell.executeCommand(command);
-        if (res.stdout) {
-          term.write(res.stdout.replace(/\r?\n/g, '\r\n'));
-        }
-        if (res.stderr) {
-          term.write('\x1b[31m' + res.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
-        }
+        const text = terminalText(res);
+        if (text) term.write(text);
         notifyCommandUnavailable(command, res.exitCode);
       } catch (err) {
         term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);

@@ -344,6 +344,6 @@ func HistorySearch(prefix string) []string {
 
 // JSONResult marshals a CmdResult to JSON string.
 func JSONResult(r CmdResult) string {
-	data, _ := json.Marshal(r)
+	data, _ := json.Marshal(r.ordered())
 	return string(data)
 }

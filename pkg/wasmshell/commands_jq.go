@@ -43,7 +43,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 		case "-C", "-M", "-a", "--color-output", "--monochrome-output", "--ascii-output", "--seq", "--stream-errors":
 		case "--arg", "--argjson":
 			if i+2 >= len(args) {
-				return CmdResult{"", "jq: " + a + " takes two parameters (e.g. " + a + " varname value)\n", 2}
+				return CmdResult{Stdout: "", Stderr: "jq: " + a + " takes two parameters (e.g. " + a + " varname value)\n", ExitCode: 2}
 			}
 			name, val := args[i+1], args[i+2]
 			i += 2
@@ -53,12 +53,12 @@ func cmdJq(args []string, stdin string) CmdResult {
 			}
 			vals, err := decodeJSONStream(val)
 			if err != nil || len(vals) != 1 {
-				return CmdResult{"", "jq: invalid JSON text passed to --argjson\n", 2}
+				return CmdResult{Stdout: "", Stderr: "jq: invalid JSON text passed to --argjson\n", ExitCode: 2}
 			}
 			env.vars[name] = vals[0]
 		default:
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
-				return CmdResult{"", "jq: unsupported option " + a + "\n", ExitCommandNotFound}
+				return CmdResult{Stdout: "", Stderr: "jq: unsupported option " + a + "\n", ExitCode: ExitCommandNotFound}
 			}
 			if filter == nil {
 				f := a
@@ -78,7 +78,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 		if strings.Contains(err.Error(), "not supported") {
 			code = ExitCommandNotFound
 		}
-		return CmdResult{"", "jq: error: " + err.Error() + "\njq: 1 compile error\n", code}
+		return CmdResult{Stdout: "", Stderr: "jq: error: " + err.Error() + "\njq: 1 compile error\n", ExitCode: code}
 	}
 
 	input, errRes := readInputs("jq", files, stdin)
@@ -99,7 +99,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 	default:
 		vals, err := decodeJSONStream(input)
 		if err != nil {
-			return CmdResult{"", fmt.Sprintf("jq: error (at <stdin>:0): Cannot parse input: %s\n", err), 2}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("jq: error (at <stdin>:0): Cannot parse input: %s\n", err), ExitCode: 2}
 		}
 		inputs = vals
 		if slurp {
@@ -135,7 +135,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 			}
 		}
 		if err != nil {
-			return CmdResult{out.String(), "jq: error (at <stdin>:0): " + err.Error() + "\n", 5}
+			return CmdResult{Stdout: out.String(), Stderr: "jq: error (at <stdin>:0): " + err.Error() + "\n", ExitCode: 5}
 		}
 	}
 	code := 0
@@ -147,7 +147,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 			code = 1
 		}
 	}
-	return CmdResult{out.String(), "", code}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 }
 
 func init() {

@@ -68,14 +68,14 @@ func cmdSort(args []string, stdin string) CmdResult {
 		case "-M", "-R", "--random-sort", "--month-sort":
 		case "-k", "--key", "-t", "--field-separator", "-o", "--output":
 			if i+1 >= len(args) {
-				return CmdResult{"", "sort: option requires an argument -- '" + strings.TrimLeft(a, "-") + "'\n", 2}
+				return CmdResult{Stdout: "", Stderr: "sort: option requires an argument -- '" + strings.TrimLeft(a, "-") + "'\n", ExitCode: 2}
 			}
 			i++
 			switch a {
 			case "-k", "--key":
 				k, err := parseSortKey(args[i])
 				if err != nil {
-					return CmdResult{"", "sort: " + err.Error() + "\n", 2}
+					return CmdResult{Stdout: "", Stderr: "sort: " + err.Error() + "\n", ExitCode: 2}
 				}
 				sp.keys = append(sp.keys, k)
 			case "-t", "--field-separator":
@@ -85,7 +85,7 @@ func cmdSort(args []string, stdin string) CmdResult {
 			}
 		default:
 			if strings.HasPrefix(a, "-") && a != "-" {
-				return CmdResult{"", "sort: invalid option -- '" + strings.TrimLeft(a, "-") + "'\n", 2}
+				return CmdResult{Stdout: "", Stderr: "sort: invalid option -- '" + strings.TrimLeft(a, "-") + "'\n", ExitCode: 2}
 			}
 			files = append(files, a)
 		}
@@ -99,7 +99,7 @@ func cmdSort(args []string, stdin string) CmdResult {
 	if sp.check {
 		for k := 1; k < len(lines); k++ {
 			if c := cmp(lines[k-1], lines[k]); c > 0 || (sp.unique && c == 0) {
-				return CmdResult{"", fmt.Sprintf("sort: -:%d: disorder: %s\n", k+1, lines[k]), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("sort: -:%d: disorder: %s\n", k+1, lines[k]), ExitCode: 1}
 			}
 		}
 		return CmdResult{}
@@ -120,11 +120,11 @@ func cmdSort(args []string, stdin string) CmdResult {
 	}
 	if sp.output != "" {
 		if err := SyncWriteFile(ResolvePath(sp.output), out); err != nil {
-			return CmdResult{"", "sort: " + err.Error() + "\n", 2}
+			return CmdResult{Stdout: "", Stderr: "sort: " + err.Error() + "\n", ExitCode: 2}
 		}
 		return CmdResult{}
 	}
-	return CmdResult{out, "", 0}
+	return CmdResult{Stdout: out, Stderr: "", ExitCode: 0}
 }
 
 // readInputs concatenates the named files ("-" is stdin), or returns
@@ -141,7 +141,7 @@ func readInputs(cmd string, files []string, stdin string) (string, *CmdResult) {
 		}
 		data, err := readFileArg(f)
 		if err != nil {
-			return "", &CmdResult{"", fmt.Sprintf("%s: %s: %s\n", cmd, f, describeErr(err)), 2}
+			return "", &CmdResult{Stdout: "", Stderr: fmt.Sprintf("%s: %s: %s\n", cmd, f, describeErr(err)), ExitCode: 2}
 		}
 		b.WriteString(data)
 		if len(data) > 0 && !strings.HasSuffix(data, "\n") {

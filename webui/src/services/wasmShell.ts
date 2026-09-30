@@ -17,6 +17,8 @@ export interface WasmShellResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** stdout and stderr in the order they were written, for display. */
+  output?: Array<{ err?: boolean; text: string }>;
 }
 
 export interface WasmCompletionResult {

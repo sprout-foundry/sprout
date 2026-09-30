@@ -21,7 +21,7 @@ func init() {
 }
 
 func cmdClear(args []string, stdin string) CmdResult {
-	return CmdResult{"\x1b[H\x1b[2J", "", 0}
+	return CmdResult{Stdout: "\x1b[H\x1b[2J", Stderr: "", ExitCode: 0}
 }
 
 func cmdHelp(args []string, stdin string) CmdResult {
@@ -41,7 +41,7 @@ func cmdHelp(args []string, stdin string) CmdResult {
 	out.WriteString("{ } groups, $VAR ${VAR:-x} ${VAR#pat} ${VAR/a/b} $(cmd) $((expr)), globs,\n")
 	out.WriteString("set -e / -u / -o pipefail. Compilers, package managers, interpreters and\n")
 	out.WriteString("network tools are not available here.\n")
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdDate(args []string, stdin string) CmdResult {
@@ -62,20 +62,20 @@ func cmdDate(args []string, stdin string) CmdResult {
 			i++
 			t, ok := parseDateArg(args[i], now)
 			if !ok {
-				return CmdResult{"", fmt.Sprintf("date: invalid date '%s'\n", args[i]), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("date: invalid date '%s'\n", args[i]), ExitCode: 1}
 			}
 			now = t
 		case strings.HasPrefix(a, "--date="):
 			t, ok := parseDateArg(strings.TrimPrefix(a, "--date="), now)
 			if !ok {
-				return CmdResult{"", fmt.Sprintf("date: invalid date '%s'\n", a), 1}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("date: invalid date '%s'\n", a), ExitCode: 1}
 			}
 			now = t
 		case strings.HasPrefix(a, "+"):
 			format = a
 		}
 	}
-	return CmdResult{strftime(strings.TrimPrefix(format, "+"), now) + "\n", "", 0}
+	return CmdResult{Stdout: strftime(strings.TrimPrefix(format, "+"), now) + "\n", Stderr: "", ExitCode: 0}
 }
 
 func parseDateArg(s string, now time.Time) (time.Time, bool) {
@@ -184,7 +184,7 @@ func strftime(f string, t time.Time) string {
 }
 
 func cmdWhoami(args []string, stdin string) CmdResult {
-	return CmdResult{ShellEnv.Get("USER") + "\n", "", 0}
+	return CmdResult{Stdout: ShellEnv.Get("USER") + "\n", Stderr: "", ExitCode: 0}
 }
 
 func cmdEnvCmd(args []string, stdin string) CmdResult {
@@ -192,7 +192,7 @@ func cmdEnvCmd(args []string, stdin string) CmdResult {
 	for _, k := range sortedKeys(ShellEnv.All()) {
 		fmt.Fprintf(&out, "%s=%s\n", k, ShellEnv.Get(k))
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdPrintenv(args []string, _ string) CmdResult {
@@ -208,7 +208,7 @@ func cmdPrintenv(args []string, _ string) CmdResult {
 			code = 1
 		}
 	}
-	return CmdResult{out.String(), "", code}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 }
 
 func sortedKeys(m map[string]string) []string {
@@ -232,7 +232,7 @@ func cmdExport(args []string, stdin string) CmdResult {
 		for _, k := range sortedKeys(ShellEnv.All()) {
 			fmt.Fprintf(&out, "declare -x %s=%q\n", k, ShellEnv.Get(k))
 		}
-		return CmdResult{out.String(), "", 0}
+		return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 	}
 	for _, arg := range names {
 		key, value, ok := strings.Cut(arg, "=")
@@ -244,12 +244,12 @@ func cmdExport(args []string, stdin string) CmdResult {
 		}
 		ShellEnv.Set(key, value)
 	}
-	return CmdResult{"", "", 0}
+	return CmdResult{Stdout: "", Stderr: "", ExitCode: 0}
 }
 
 func cmdWhich(args []string, stdin string) CmdResult {
 	if len(args) == 0 {
-		return CmdResult{"", "which: missing argument\n", 1}
+		return CmdResult{Stdout: "", Stderr: "which: missing argument\n", ExitCode: 1}
 	}
 	var out strings.Builder
 	code := 0
@@ -263,7 +263,7 @@ func cmdWhich(args []string, stdin string) CmdResult {
 		}
 		code = 1
 	}
-	return CmdResult{out.String(), "", code}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 }
 
 func isBuiltin(name string) bool {
@@ -275,11 +275,11 @@ func cmdHistory(args []string, stdin string) CmdResult {
 	for i, entry := range commandHistory {
 		fmt.Fprintf(&out, "%5d  %s\n", i+1, entry)
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdPrintln(args []string, stdin string) CmdResult {
-	return CmdResult{strings.Join(args, " ") + "\n", "", 0}
+	return CmdResult{Stdout: strings.Join(args, " ") + "\n", Stderr: "", ExitCode: 0}
 }
 
 func cmdBasename(args []string, stdin string) CmdResult {
@@ -300,7 +300,7 @@ func cmdBasename(args []string, stdin string) CmdResult {
 		}
 	}
 	if len(names) == 0 {
-		return CmdResult{"", "basename: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "basename: missing operand\n", ExitCode: 1}
 	}
 	if !multi && len(names) == 2 {
 		suffix, names = names[1], names[:1]
@@ -313,18 +313,18 @@ func cmdBasename(args []string, stdin string) CmdResult {
 		}
 		out.WriteString(base + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdDirname(args []string, stdin string) CmdResult {
 	if len(args) == 0 {
-		return CmdResult{"", "dirname: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "dirname: missing operand\n", ExitCode: 1}
 	}
 	var out strings.Builder
 	for _, a := range args {
 		out.WriteString(filepath.Dir(a) + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdRealpath(args []string, stdin string) CmdResult {
@@ -335,17 +335,17 @@ func cmdRealpath(args []string, stdin string) CmdResult {
 		}
 	}
 	if len(names) == 0 {
-		return CmdResult{"", "realpath: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "realpath: missing operand\n", ExitCode: 1}
 	}
 	var out strings.Builder
 	for _, n := range names {
 		abs, err := filepath.Abs(ResolvePath(n))
 		if err != nil {
-			return CmdResult{out.String(), fmt.Sprintf("realpath: %s\n", err.Error()), 1}
+			return CmdResult{Stdout: out.String(), Stderr: fmt.Sprintf("realpath: %s\n", err.Error()), ExitCode: 1}
 		}
 		out.WriteString(abs + "\n")
 	}
-	return CmdResult{out.String(), "", 0}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: 0}
 }
 
 func cmdSeq(args []string, _ string) CmdResult {
@@ -370,7 +370,7 @@ func cmdSeq(args []string, _ string) CmdResult {
 	for _, n := range nums {
 		f, err := strconv.ParseFloat(n, 64)
 		if err != nil {
-			return CmdResult{"", fmt.Sprintf("seq: invalid floating point argument: '%s'\n", n), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("seq: invalid floating point argument: '%s'\n", n), ExitCode: 1}
 		}
 		if dot := strings.IndexByte(n, '.'); dot >= 0 && len(n)-dot-1 > decimals {
 			decimals = len(n) - dot - 1
@@ -386,10 +386,10 @@ func cmdSeq(args []string, _ string) CmdResult {
 	case 3:
 		first, step, last = vals[0], vals[1], vals[2]
 	default:
-		return CmdResult{"", "seq: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "seq: missing operand\n", ExitCode: 1}
 	}
 	if step == 0 {
-		return CmdResult{"", "seq: invalid Zero increment value\n", 1}
+		return CmdResult{Stdout: "", Stderr: "seq: invalid Zero increment value\n", ExitCode: 1}
 	}
 	format := func(v float64) string { return strconv.FormatFloat(v, 'f', decimals, 64) }
 	pad := 0
@@ -411,7 +411,7 @@ func cmdSeq(args []string, _ string) CmdResult {
 	if len(items) == 0 {
 		return CmdResult{}
 	}
-	return CmdResult{strings.Join(items, sep) + "\n", "", 0}
+	return CmdResult{Stdout: strings.Join(items, sep) + "\n", Stderr: "", ExitCode: 0}
 }
 
 func cmdSleep(args []string, _ string) CmdResult {
@@ -430,12 +430,12 @@ func cmdSleep(args []string, _ string) CmdResult {
 		}
 		f, err := strconv.ParseFloat(a, 64)
 		if err != nil || f < 0 || math.IsInf(f, 0) {
-			return CmdResult{"", fmt.Sprintf("sleep: invalid time interval '%s'\n", a), 1}
+			return CmdResult{Stdout: "", Stderr: fmt.Sprintf("sleep: invalid time interval '%s'\n", a), ExitCode: 1}
 		}
 		total += time.Duration(f * float64(unit))
 	}
 	if len(args) == 0 {
-		return CmdResult{"", "sleep: missing operand\n", 1}
+		return CmdResult{Stdout: "", Stderr: "sleep: missing operand\n", ExitCode: 1}
 	}
 	time.Sleep(total)
 	return CmdResult{}

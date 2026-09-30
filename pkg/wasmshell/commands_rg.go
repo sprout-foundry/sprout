@@ -79,7 +79,7 @@ func cmdRg(args []string, stdin string) CmdResult {
 	if implicit && !o.filesOnly && stdin != "" {
 		re, err := o.matcher()
 		if err != nil {
-			return CmdResult{"", "rg: " + err.Error() + "\n", 2}
+			return CmdResult{Stdout: "", Stderr: "rg: " + err.Error() + "\n", ExitCode: 2}
 		}
 		o.s.re = re
 		o.s.withName = o.forceName
@@ -114,11 +114,11 @@ func cmdRg(args []string, stdin string) CmdResult {
 		if len(files) == 0 {
 			code = 1
 		}
-		return CmdResult{out.String(), errs.String(), code}
+		return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: code}
 	}
 	re, err := o.matcher()
 	if err != nil {
-		return CmdResult{"", "rg: " + err.Error() + "\n", 2}
+		return CmdResult{Stdout: "", Stderr: "rg: " + err.Error() + "\n", ExitCode: 2}
 	}
 	o.s.re = re
 	o.s.withName = (!singleFile && !o.noName) || o.forceName
@@ -306,7 +306,9 @@ func ignoredBy(ignores map[string][]ignoreRule, root, path string, isDir bool) b
 
 func (o *rgOpts) parse(args []string) (CmdResult, bool) {
 	s := o.s
-	fail := func(msg string) (CmdResult, bool) { return CmdResult{"", "rg: " + msg + "\n", 2}, true }
+	fail := func(msg string) (CmdResult, bool) {
+		return CmdResult{Stdout: "", Stderr: "rg: " + msg + "\n", ExitCode: 2}, true
+	}
 	patternSet := false
 	args = expandClusters(args, "iSsnNlcwxFvoqHIa", "egtTmABC")
 	for i := 0; i < len(args); i++ {
@@ -417,7 +419,7 @@ func (o *rgOpts) parse(args []string) (CmdResult, bool) {
 				s.before, s.after = n, n
 			}
 		case "--json", "-U", "--multiline", "--replace", "-r", "--pre", "-z", "--search-zip":
-			return CmdResult{"", "rg: " + a + " is not supported by the in-browser shell\n", ExitCommandNotFound}, true
+			return CmdResult{Stdout: "", Stderr: "rg: " + a + " is not supported by the in-browser shell\n", ExitCode: ExitCommandNotFound}, true
 		default:
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
 				return fail("unrecognized flag " + a)

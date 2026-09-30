@@ -237,7 +237,7 @@ func cmdLs(args []string, stdin string) CmdResult {
 	if errOut.Len() > 0 {
 		exit = 2
 	}
-	return CmdResult{out.String(), errOut.String(), exit}
+	return CmdResult{Stdout: out.String(), Stderr: errOut.String(), ExitCode: exit}
 }
 
 func humanizeSize(bytes int64) string {

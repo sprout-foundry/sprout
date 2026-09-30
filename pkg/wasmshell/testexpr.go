@@ -19,7 +19,7 @@ func cmdTest(args []string, _ string) CmdResult {
 
 func cmdBracket(args []string, _ string) CmdResult {
 	if len(args) == 0 || args[len(args)-1] != "]" {
-		return CmdResult{"", "[: missing ']'\n", 2}
+		return CmdResult{Stdout: "", Stderr: "[: missing ']'\n", ExitCode: 2}
 	}
 	return runTest(&testParser{toks: args[:len(args)-1]})
 }
@@ -37,7 +37,7 @@ func runTest(p *testParser) CmdResult {
 		p.err = fmt.Errorf("unexpected argument %q", p.toks[p.pos])
 	}
 	if p.err != nil {
-		return CmdResult{"", "test: " + p.err.Error() + "\n", 2}
+		return CmdResult{Stdout: "", Stderr: "test: " + p.err.Error() + "\n", ExitCode: 2}
 	}
 	return CmdResult{ExitCode: int(boolInt(!ok))}
 }

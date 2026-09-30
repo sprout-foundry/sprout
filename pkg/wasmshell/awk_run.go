@@ -136,12 +136,12 @@ func cmdAwk(args []string, stdin string) CmdResult {
 			i++
 			data, err := readFileArg(args[i])
 			if err != nil {
-				return CmdResult{"", fmt.Sprintf("awk: can't open file %s\n", args[i]), 2}
+				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("awk: can't open file %s\n", args[i]), ExitCode: 2}
 			}
 			progSrc += data + "\n"
 			haveProg = true
 		case strings.HasPrefix(a, "-") && len(a) > 1:
-			return CmdResult{"", "awk: unsupported option " + a + "\n", ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: "awk: unsupported option " + a + "\n", ExitCode: ExitCommandNotFound}
 		default:
 			goto operands
 		}
@@ -150,7 +150,7 @@ operands:
 	operands := args[i:]
 	if !haveProg {
 		if len(operands) == 0 {
-			return CmdResult{"", "usage: awk [-F fs][-v var=value][prog | -f progfile][file ...]\n", 2}
+			return CmdResult{Stdout: "", Stderr: "usage: awk [-F fs][-v var=value][prog | -f progfile][file ...]\n", ExitCode: 2}
 		}
 		progSrc, operands = operands[0], operands[1:]
 	}
@@ -160,7 +160,7 @@ operands:
 		if strings.Contains(err.Error(), "not supported") {
 			code = ExitCommandNotFound
 		}
-		return CmdResult{"", "awk: " + err.Error() + "\n", code}
+		return CmdResult{Stdout: "", Stderr: "awk: " + err.Error() + "\n", ExitCode: code}
 	}
 	r := &awkRun{
 		prog:    prog,
@@ -208,7 +208,7 @@ operands:
 			errMsg += fmt.Sprintf("awk: can't write %s: %s\n", name, err)
 		}
 	}
-	return CmdResult{r.out.String(), errMsg, code}
+	return CmdResult{Stdout: r.out.String(), Stderr: errMsg, ExitCode: code}
 }
 
 func (r *awkRun) assignArg(a string) bool {

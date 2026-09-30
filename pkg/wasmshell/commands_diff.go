@@ -152,20 +152,20 @@ func cmdDiff(args []string, stdin string) CmdResult {
 			o.labels = append(o.labels, args[i])
 		case a == "--color" || strings.HasPrefix(a, "--color=") || a == "-a" || a == "--text" || a == "-B":
 		case strings.HasPrefix(a, "-") && a != "-":
-			return CmdResult{"", "diff: unsupported option " + a + "\n", ExitCommandNotFound}
+			return CmdResult{Stdout: "", Stderr: "diff: unsupported option " + a + "\n", ExitCode: ExitCommandNotFound}
 		default:
 			files = append(files, a)
 		}
 	}
 	if len(files) != 2 {
-		return CmdResult{"", "diff: missing operand\n", 2}
+		return CmdResult{Stdout: "", Stderr: "diff: missing operand\n", ExitCode: 2}
 	}
 	var out strings.Builder
 	code, err := o.diffPaths(&out, files[0], files[1], stdin)
 	if err != nil {
-		return CmdResult{out.String(), "diff: " + err.Error() + "\n", 2}
+		return CmdResult{Stdout: out.String(), Stderr: "diff: " + err.Error() + "\n", ExitCode: 2}
 	}
-	return CmdResult{out.String(), "", code}
+	return CmdResult{Stdout: out.String(), Stderr: "", ExitCode: code}
 }
 
 func (o *diffOpts) diffPaths(out *strings.Builder, left, right, stdin string) (int, error) {
@@ -411,15 +411,15 @@ func cmdCmp(args []string, _ string) CmdResult {
 		}
 	}
 	if len(files) != 2 {
-		return CmdResult{"", "cmp: missing operand\n", 2}
+		return CmdResult{Stdout: "", Stderr: "cmp: missing operand\n", ExitCode: 2}
 	}
 	a, err := readFileArg(files[0])
 	if err != nil {
-		return CmdResult{"", fmt.Sprintf("cmp: %s: %s\n", files[0], describeErrText(err)), 2}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cmp: %s: %s\n", files[0], describeErrText(err)), ExitCode: 2}
 	}
 	b, err := readFileArg(files[1])
 	if err != nil {
-		return CmdResult{"", fmt.Sprintf("cmp: %s: %s\n", files[1], describeErrText(err)), 2}
+		return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cmp: %s: %s\n", files[1], describeErrText(err)), ExitCode: 2}
 	}
 	if a == b {
 		return CmdResult{}
@@ -430,7 +430,7 @@ func cmdCmp(args []string, _ string) CmdResult {
 	line := 1
 	for i := 0; i < len(a) && i < len(b); i++ {
 		if a[i] != b[i] {
-			return CmdResult{fmt.Sprintf("%s %s differ: byte %d, line %d\n", files[0], files[1], i+1, line), "", 1}
+			return CmdResult{Stdout: fmt.Sprintf("%s %s differ: byte %d, line %d\n", files[0], files[1], i+1, line), Stderr: "", ExitCode: 1}
 		}
 		if a[i] == '\n' {
 			line++
@@ -440,5 +440,5 @@ func cmdCmp(args []string, _ string) CmdResult {
 	if len(b) < len(a) {
 		shorter = files[1]
 	}
-	return CmdResult{"", fmt.Sprintf("cmp: EOF on %s\n", shorter), 1}
+	return CmdResult{Stdout: "", Stderr: fmt.Sprintf("cmp: EOF on %s\n", shorter), ExitCode: 1}
 }

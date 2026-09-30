@@ -37,13 +37,13 @@ func cmdEcho(args []string, stdin string) CmdResult {
 		var stopped bool
 		line, stopped = unescapeCStop(line, true)
 		if stopped {
-			return CmdResult{line, "", 0}
+			return CmdResult{Stdout: line, Stderr: "", ExitCode: 0}
 		}
 	}
 	if newline {
 		line += "\n"
 	}
-	return CmdResult{line, "", 0}
+	return CmdResult{Stdout: line, Stderr: "", ExitCode: 0}
 }
 
 // cmdPrintf implements printf FORMAT [ARG...]: the format is reused until
@@ -53,10 +53,10 @@ func cmdPrintf(args []string, _ string) CmdResult {
 		args = args[1:]
 	}
 	if len(args) == 0 {
-		return CmdResult{"", "printf: usage: printf format [arguments]\n", 2}
+		return CmdResult{Stdout: "", Stderr: "printf: usage: printf format [arguments]\n", ExitCode: 2}
 	}
 	if args[0] == "-v" {
-		return CmdResult{"", "printf: -v is not supported by the in-browser shell\n", ExitCommandNotFound}
+		return CmdResult{Stdout: "", Stderr: "printf: -v is not supported by the in-browser shell\n", ExitCode: ExitCommandNotFound}
 	}
 	format, rest := args[0], args[1:]
 	var out, errs strings.Builder
@@ -72,7 +72,7 @@ func cmdPrintf(args []string, _ string) CmdResult {
 		}
 		rest = rest[consumed:]
 	}
-	return CmdResult{out.String(), errs.String(), code}
+	return CmdResult{Stdout: out.String(), Stderr: errs.String(), ExitCode: code}
 }
 
 // printfOnce renders format once, returning how many arguments it used.

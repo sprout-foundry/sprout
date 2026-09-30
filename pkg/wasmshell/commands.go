@@ -70,11 +70,14 @@ func (e *Env) All() map[string]string {
 // environment" — the signal the escalation path acts on.
 const ExitCommandNotFound = 127
 
-// CmdResult holds the result of a command execution.
+// CmdResult holds the result of a command execution. Output, when set,
+// is Stdout and Stderr interleaved in the order they were written; a
+// result without it wrote its stdout before its stderr.
 type CmdResult struct {
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
-	ExitCode int    `json:"exitCode"`
+	Stdout   string   `json:"stdout"`
+	Stderr   string   `json:"stderr"`
+	ExitCode int      `json:"exitCode"`
+	Output   []OutSeg `json:"output"`
 }
 
 // DirEntry represents a directory listing entry.

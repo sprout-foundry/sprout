@@ -40,12 +40,14 @@ interface PlatformHomeProps {
 export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps): ReactElement | null {
   const { open, path } = useHomeView();
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [mounted, setMounted] = useState(open);
-  const initialPath = useRef(path);
+  // The frame's first page is wherever Home first opens to (the credits
+  // chip opens it on billing); later routes move it in place.
+  const [initialPath, setInitialPath] = useState<string | null>(open ? path : null);
+  const mounted = initialPath !== null;
 
   useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
+    if (open && initialPath === null) setInitialPath(path);
+  }, [open, path, initialPath]);
 
   // The editor's top bar (search, credits) stays visible above Home on
   // wider screens; phones get Home's own bar instead.
@@ -131,7 +133,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
       <iframe
         ref={frameRef}
         title="Sprout Foundry"
-        src={platformHref(`/?embed=1#${initialPath.current}`)}
+        src={platformHref(`/?embed=1#${initialPath}`)}
         className="platform-home-frame"
       />
     </div>

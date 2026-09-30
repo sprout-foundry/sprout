@@ -227,7 +227,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       {!props.collapsed && home.open && (
         <HomeNav
           path={home.path}
-          projectLabel={title}
+          projectLabel={isCloud && !repoSlug ? 'the editor' : title}
           onBackToProject={() => {
             closeHome();
             props.onCloseDrawer?.();

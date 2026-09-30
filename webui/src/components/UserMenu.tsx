@@ -48,7 +48,12 @@ const ADMIN_ITEM = { label: 'Admin', path: '/?from=editor#/admin' };
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;
 
-export function UserMenu(): JSX.Element | null {
+interface UserMenuProps {
+  /** Shown under the avatar (the phone tab bar's "You"). */
+  label?: string;
+}
+
+export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
   // Identity is captured once at bootstrap (adapter install); re-read it
   // on the install event so a late bootstrap still populates the menu —
   // the same seam PlatformNavContext uses.
@@ -113,6 +118,15 @@ export function UserMenu(): JSX.Element | null {
         bottom: Math.max(8, window.innerHeight - rect.bottom),
       };
     }
+    // A trigger at the bottom (the phone tab bar) opens upward.
+    if (rect.top > window.innerHeight / 2) {
+      return {
+        position: 'fixed',
+        top: 'auto',
+        bottom: window.innerHeight - rect.top + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      };
+    }
     return { position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) };
   };
 
@@ -135,6 +149,7 @@ export function UserMenu(): JSX.Element | null {
         <span className="user-menu-avatar" aria-hidden="true">
           {initial}
         </span>
+        {label && <span className="user-menu-trigger-label">{label}</span>}
       </button>
       {open && (
         <>

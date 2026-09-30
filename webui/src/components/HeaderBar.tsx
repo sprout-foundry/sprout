@@ -88,7 +88,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <div className="header-bar">
-      {isLayeredLayout && <LayeredSearchButton />}
+      {/* Phones in the hosted editor search from the tab bar. */}
+      {isLayeredLayout && !(isCloud && isMobile) && <LayeredSearchButton />}
       {isCloud && !isLayeredLayout && (
         <a
           href={platformHref(repoHubPath(repoURL))}
@@ -110,7 +111,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             {busy ? 'Starting…' : 'Start Building'}
           </button>
         )}
-        <CreditsChip />
+        {!(isLayeredLayout && isCloud && isMobile) && <CreditsChip />}
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}

@@ -67,7 +67,6 @@ import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { tabExpandSnippets } from '../extensions/snippets';
 import { stickyScrollPlugin } from '../extensions/stickyScroll';
 import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
-import { unsavedLineHighlight } from '../extensions/unsavedLineHighlight';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { wordHighlightsExtension } from '../extensions/wordHighlights';
@@ -272,7 +271,6 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       createCodeActionsExtension(buffer.getFilePath, buffer.getContent),
       compartments.markerGutters.of(settings.compactGutters ? [] : markerGutters()),
       trailingWhitespacePlugin(),
-      unsavedLineHighlight(),
 
       // ── Compartment-wrapped settings ──
       compartments.whitespaceRendering.of(whitespaceRenderingPlugin(settings.whitespaceRenderingMode)),

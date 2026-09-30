@@ -9,6 +9,7 @@ import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
 import { onPlatformLinkClick } from '../services/homeView';
+import { usesPlatformGitHub } from '../services/platformGitHub';
 import { platformHref } from '../utils/platformUrl';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
@@ -486,10 +487,13 @@ export default function SidebarSettingsSection({
           )}
           <div className="section">
             <h4>GitHub</h4>
-            <p className="settings-section-desc">
-              Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
-              agent push and pull on your behalf.
-            </p>
+            {/* Hosted, the account card below says it all. */}
+            {!usesPlatformGitHub() && (
+              <p className="settings-section-desc">
+                Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
+                agent push and pull on your behalf.
+              </p>
+            )}
             <GitHubAccountPanel user={gitHubUser} onSignedIn={setGitHubUser} onSignedOut={() => setGitHubUser(null)} />
           </div>
         </>

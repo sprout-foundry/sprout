@@ -11,6 +11,7 @@ import { OPEN_COMMAND_PALETTE_EVENT, OPEN_NOTIFICATIONS_EVENT } from '../../conf
 import { useActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, openHome, useHomeView } from '../../services/homeView';
 import { githubRepoSlug } from '../../utils/platformUrl';
+import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
 import { UserMenu } from '../UserMenu';
 
 const ROOT_CLASS = 'phone-tab-bar-shown';
@@ -54,6 +55,7 @@ export default function PhoneTabBar({
   const repoSlug = githubRepoSlug(useActiveRepoURL());
   const projectLabel = repoSlug?.split('/')[1] ?? 'Project';
   const shown = !useKeyboardOpen();
+  const unread = useUnreadNotificationCount();
 
   // The bottom inset every other bottom-anchored surface (terminal, drawer,
   // main view) reserves for the bar.
@@ -111,6 +113,7 @@ export default function PhoneTabBar({
         }}
       >
         <Bell size={20} aria-hidden="true" />
+        {unread > 0 && <span className="activity-badge">{unread > 99 ? '99+' : unread}</span>}
         <span>Activity</span>
       </button>
       <button

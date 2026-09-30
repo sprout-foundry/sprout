@@ -54,6 +54,7 @@ import PhoneTabBar from './layered/PhoneTabBar';
 import NotificationCenterHost from './NotificationCenterHost';
 import PlatformHome from './layered/PlatformHome';
 import { closeHome } from '../services/homeView';
+import { startPlatformNotifications } from '../services/platformNotifications';
 
 interface AppContentProps {
   state: AppState;
@@ -207,6 +208,7 @@ const AppContent: React.FC<AppContentProps> = ({
     onSwipeRight: onToggleSidebar,
     enabled: isMobile,
   });
+  useEffect(() => (isCloud ? startPlatformNotifications() : undefined), []);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   // The layered layout's header search opens the palette from outside this tree.

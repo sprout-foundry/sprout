@@ -20,7 +20,7 @@ import (
 // down the contract.
 func TestSettingsAPI_RiskProfileRoundTrip(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -60,7 +60,7 @@ func TestSettingsAPI_RiskProfileRoundTrip(t *testing.T) {
 // it (or omits the key) — the user must be able to clear an override.
 func TestSettingsAPI_RiskProfileClearRoundTrip(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
@@ -101,7 +101,7 @@ func TestSettingsAPI_RiskProfileClearRoundTrip(t *testing.T) {
 // that would then fall back to "default" at runtime.
 func TestSettingsAPI_RiskProfileRejectsUnknown(t *testing.T) {
 	isolatedHome := t.TempDir()
-	t.Setenv("HOME", isolatedHome)
+	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 

@@ -1,8 +1,6 @@
 package console
 
-import (
-	"fmt"
-)
+import "os"
 
 // showContextMenu creates and displays the context menu
 func (ir *InputReader) showContextMenu() {
@@ -43,5 +41,5 @@ func (ir *InputReader) showContextMenu() {
 func (ir *InputReader) handleMenuItemSelected(item *ContextMenuItem) {
 	// This is a placeholder - in a real implementation,
 	// this would trigger the appropriate action
-	fmt.Printf("\n[Menu] Selected: %s\n", item.Label)
+	GlyphDim.Fprintf(os.Stdout, "Selected: %s", item.Label)
 }

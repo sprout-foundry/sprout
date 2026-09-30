@@ -15,7 +15,9 @@ import (
 // user-defined context window cap (Config.MaxContextTokens). When set, the
 // agent treats the model as if it has at most this many context tokens,
 // limiting input/output budgets as a cost-control measure.
-type MaxContextCommand struct{}
+type MaxContextCommand struct {
+	outputSink
+}
 
 func (c *MaxContextCommand) Name() string { return "max-context" }
 
@@ -72,13 +74,13 @@ func (c *MaxContextCommand) show(chatAgent *agent.Agent) error {
 	cfg := chatAgent.GetConfig()
 	native := chatAgent.GetMaxContextTokens()
 
-	fmt.Printf("  Native context window: %s\n", fmtTokens(native))
+	c.printf("  Native context window: %s\n", fmtTokens(native))
 	if cfg != nil && cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 {
 		cap := *cfg.MaxContextTokens
 		pct := float64(cap) / float64(native) * 100
-		console.GlyphInfo.Printf("Max context cap: %s (%.0f%% of native window)", fmtTokens(cap), pct)
+		console.GlyphInfo.Fprintf(c.out(), "Max context cap: %s (%.0f%% of native window)", fmtTokens(cap), pct)
 	} else {
-		console.GlyphInfo.Printf("Max context cap: not set (using full native window of %s)", fmtTokens(native))
+		console.GlyphInfo.Fprintf(c.out(), "Max context cap: not set (using full native window of %s)", fmtTokens(native))
 	}
 	return nil
 }
@@ -97,7 +99,7 @@ func (c *MaxContextCommand) set(chatAgent *agent.Agent, n int) error {
 	// Re-resolve the live cap so this session honors the new value
 	// immediately instead of waiting for the next provider/model switch.
 	chatAgent.RefreshContextCapFromConfig()
-	console.GlyphSuccess.Printf("Max context cap set to %s (persisted to config)", fmtTokens(n))
+	console.GlyphSuccess.Fprintf(c.out(), "Max context cap set to %s (persisted to config)", fmtTokens(n))
 	return nil
 }
 
@@ -115,7 +117,7 @@ func (c *MaxContextCommand) clear(chatAgent *agent.Agent) error {
 	// Re-resolve the live cap so this session honors the removal
 	// immediately instead of waiting for the next provider/model switch.
 	chatAgent.RefreshContextCapFromConfig()
-	console.GlyphSuccess.Printf("Max context cap cleared — using full native context window")
+	console.GlyphSuccess.Fprintf(c.out(), "Max context cap cleared — using full native context window")
 	return nil
 }
 

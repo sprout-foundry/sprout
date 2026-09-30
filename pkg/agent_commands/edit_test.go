@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // --- helper: create a shell script in a temp file and return its path ---
@@ -34,7 +36,34 @@ func makeTempScript(t *testing.T, body string) string {
 		os.Remove(f.Name())
 		t.Fatalf("Chmod failed: %v", err)
 	}
-	return f.Name()
+	t.Cleanup(func() { _ = os.Remove(f.Name()) })
+	if runtime.GOOS != "windows" {
+		return f.Name()
+	}
+	// Windows cannot exec a .sh file; front it with a .cmd launcher that
+	// hands the script to bash, mirroring how a real $EDITOR is a program.
+	bash := shellexec.Path()
+	if bash == "" {
+		t.Skip("fake editor scripts need a POSIX shell (Git for Windows)")
+	}
+	launcher := strings.TrimSuffix(f.Name(), ".sh") + ".cmd"
+	body = "@\"" + bash + "\" \"" + f.Name() + "\" %*\r\n"
+	if err := os.WriteFile(launcher, []byte(body), 0o755); err != nil {
+		t.Fatalf("write launcher: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(launcher) })
+	return launcher
+}
+
+// installedFallbackEditor returns the fallback chooseEditor would pick
+// when neither $VISUAL nor $EDITOR is set, or "" when none is installed.
+func installedFallbackEditor() string {
+	for _, candidate := range fallbackEditors() {
+		if _, err := exec.LookPath(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // --- helper: capture stderr around a function call ---
@@ -132,15 +161,15 @@ func TestChooseEditor_EDITOR_WithWhitespace(t *testing.T) {
 
 func TestChooseEditor_FallbackToVi(t *testing.T) {
 
-	// Only set fallback if vi is available on the system
-	if _, err := exec.LookPath("vi"); err != nil {
-		t.Skip("vi not installed, skipping fallback test")
+	want := installedFallbackEditor()
+	if want == "" {
+		t.Skip("no fallback editor installed, skipping fallback test")
 	}
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 	got := chooseEditor()
-	if got != "vi" {
-		t.Errorf("chooseEditor() fallback = %q, want \"vi\"", got)
+	if got != want {
+		t.Errorf("chooseEditor() fallback = %q, want %q", got, want)
 	}
 }
 
@@ -151,8 +180,8 @@ func TestChooseEditor_NoEditorFound(t *testing.T) {
 	// If vi is installed on the system, chooseEditor will return "vi".
 	// We can only confirm the empty return when vi is NOT installed.
 	got := chooseEditor()
-	if _, err := exec.LookPath("vi"); err != nil {
-		// vi not installed — should return ""
+	if installedFallbackEditor() == "" {
+		// no fallback installed — should return ""
 		if got != "" {
 			t.Errorf("chooseEditor() = %q, want \"\" (no editor found)", got)
 		}
@@ -260,8 +289,8 @@ func TestEditCommand_Execute_EmptyBuffer_NoInjection(t *testing.T) {
 	stderrOut := captureStderr(t, func() {
 		_ = cmd.Execute(nil, agent)
 	})
-	if !strings.Contains(stderrOut, "empty buffer") {
-		t.Errorf("expected stderr to contain \"empty buffer\", got: %q", stderrOut)
+	if !strings.Contains(stderrOut, "Empty buffer") {
+		t.Errorf("expected stderr to contain \"Empty buffer\", got: %q", stderrOut)
 	}
 }
 
@@ -407,8 +436,8 @@ func TestEditCommand_Execute_NoEditor(t *testing.T) {
 
 	// If vi is installed on the system, we can't test the "no editor" case
 	// easily since chooseEditor will fall back to vi.
-	if _, err := exec.LookPath("vi"); err == nil {
-		t.Skip("vi is installed; cannot test 'no editor' fallback path")
+	if fb := installedFallbackEditor(); fb != "" {
+		t.Skipf("%s is installed; cannot test 'no editor' fallback path", fb)
 	}
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
@@ -419,8 +448,8 @@ func TestEditCommand_Execute_NoEditor(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no editor is found")
 	}
-	if !strings.Contains(err.Error(), "[edit]") {
-		t.Errorf("error should contain \"[edit]\", got: %v", err)
+	if !strings.Contains(err.Error(), "/edit: ") {
+		t.Errorf("error should contain \"/edit: \", got: %v", err)
 	}
 }
 
@@ -443,8 +472,8 @@ func TestEditCommand_Execute_EditorExitError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when editor exits non-zero")
 	}
-	if !strings.Contains(err.Error(), "[edit]") {
-		t.Errorf("error should contain \"[edit]\", got: %v", err)
+	if !strings.Contains(err.Error(), "/edit: ") {
+		t.Errorf("error should contain \"/edit: \", got: %v", err)
 	}
 
 	// Should NOT have injected anything
@@ -633,7 +662,7 @@ func TestEditCommand_Execute_ErrorWrapping(t *testing.T) {
 			editor:    "#!/bin/sh\nexit 42",
 			args:      nil,
 			wantErr:   true,
-			errSubstr: "[edit]",
+			errSubstr: "/edit: ",
 		},
 		{
 			name:      "editor that writes content",
@@ -721,18 +750,9 @@ func TestChooseEditor_EDITOR_OnlyWhitespace(t *testing.T) {
 
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "\t\n")
-	if _, err := exec.LookPath("vi"); err != nil {
-		// vi not installed — should return ""
-		got := chooseEditor()
-		if got != "" {
-			t.Errorf("chooseEditor() = %q, want \"\"", got)
-		}
-	} else {
-		// vi IS installed — falls back to vi
-		got := chooseEditor()
-		if got != "vi" {
-			t.Errorf("chooseEditor() = %q, want \"vi\" (fallback)", got)
-		}
+	want := installedFallbackEditor()
+	if got := chooseEditor(); got != want {
+		t.Errorf("chooseEditor() = %q, want %q (installed fallback, if any)", got, want)
 	}
 }
 
@@ -768,8 +788,8 @@ func TestEditCommand_Execute_NilAgent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error when agent is nil")
 	}
-	if !strings.Contains(err.Error(), "[edit] agent not available") {
-		t.Errorf("error = %q, want it to contain \"[edit] agent not available\"", err.Error())
+	if !strings.Contains(err.Error(), "/edit: agent not available") {
+		t.Errorf("error = %q, want it to contain \"/edit: agent not available\"", err.Error())
 	}
 }
 
@@ -934,5 +954,28 @@ func TestEditCommand_Execute_LongContent(t *testing.T) {
 		}
 	default:
 		t.Error("expected long content to be injected")
+	}
+}
+
+func TestEditorArgv(t *testing.T) {
+	existing := filepath.Join(t.TempDir(), "my editor.exe")
+	if err := os.WriteFile(existing, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"vim", []string{"vim"}},
+		{"code --wait", []string{"code", "--wait"}},
+		{existing, []string{existing}},
+		{`"C:\Program Files\Editor\ed.exe" --wait -n`, []string{`C:\Program Files\Editor\ed.exe`, "--wait", "-n"}},
+		{`"unterminated --wait`, []string{`"unterminated`, "--wait"}},
+	}
+	for _, tc := range cases {
+		got := editorArgv(tc.in)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("editorArgv(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

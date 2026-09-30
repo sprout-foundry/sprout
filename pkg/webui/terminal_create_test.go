@@ -4,6 +4,7 @@ package webui
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -82,6 +83,14 @@ func TestResolveShellArgs(t *testing.T) {
 		{"/bin/bash", "/bin/bash", []string{"--login"}},
 		{"/usr/bin/zsh", "/usr/bin/zsh", []string{"--login"}},
 		{"unknown shell", "unknown-shell", nil},
+		{"bash.exe", "bash.exe", []string{"--login"}},
+	}
+	if runtime.GOOS == "windows" {
+		tests = append(tests, struct {
+			name     string
+			shell    string
+			expected []string
+		}{"git bash path", `C:\Program Files\Git\bin\bash.exe`, []string{"--login"}})
 	}
 
 	for _, tt := range tests {

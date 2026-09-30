@@ -306,13 +306,15 @@ func IsFileContentCommitted(filePath string) (bool, error) {
 	// resolved relative to the workspace root, so this is the right
 	// scope. A non-repo is not an error — it just means no git
 	// protection applies.
-	if _, err := GetGitRootDir(); err != nil {
+	gitRoot, err := GetGitRootDir()
+	if err != nil {
 		return false, nil
 	}
 
 	// Resolve the path relative to the repo root so the commands target
-	// the correct tracked entry. GetFileGitPath handles symlink
-	// resolution on both the file and the git root.
+	// the correct tracked entry, and run them from that root: a relPath
+	// is meaningless from a subdirectory CWD. GetFileGitPath handles
+	// symlink resolution on both the file and the git root.
 	relPath, err := GetFileGitPath(filePath)
 	if err != nil {
 		return false, nil
@@ -323,7 +325,7 @@ func IsFileContentCommitted(filePath string) (bool, error) {
 	// not compare against untracked files), incorrectly reporting them
 	// as committed-clean. `git ls-files --error-unmatch` exits
 	// non-zero for paths not known to git.
-	trackedCmd := SafeGitCmd("", "ls-files", "--error-unmatch", relPath)
+	trackedCmd := SafeGitCmd(gitRoot, "ls-files", "--error-unmatch", relPath)
 	if err := trackedCmd.Run(); err != nil {
 		// File is not tracked by git → not committed / not protected.
 		return false, nil
@@ -333,7 +335,7 @@ func IsFileContentCommitted(filePath string) (bool, error) {
 	// matches HEAD. `git diff --quiet HEAD -- <path>` exits 0 when the
 	// working-tree file is identical to HEAD (no uncommitted changes),
 	// and non-zero otherwise (uncommitted modifications present).
-	cmd := SafeGitCmd("", "diff", "--quiet", "--no-ext-diff", "HEAD", "--", relPath)
+	cmd := SafeGitCmd(gitRoot, "diff", "--quiet", "--no-ext-diff", "HEAD", "--", relPath)
 	if err := cmd.Run(); err != nil {
 		// exit code != 0: the file differs from HEAD (uncommitted
 		// modifications). Not committed-clean → not protected.

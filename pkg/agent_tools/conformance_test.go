@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,10 +112,9 @@ func TestReadFileHandlerConformance_MissingFile(t *testing.T) {
 
 	path := filepath.Join(dir, "nonexistent.txt")
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"path": path})
-	// The error comes from SafeResolvePathWithBypass (lstat) which says "no such file or directory"
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, err.Error(), "no such file or directory")
+	require.ErrorIs(t, err, fs.ErrNotExist)
 }
 
 func TestReadFileHandlerConformance_DirectoryPath(t *testing.T) {

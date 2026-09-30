@@ -215,6 +215,9 @@ func TestBuildStatus_RenameReportsNewPathOnly(t *testing.T) {
 }
 
 func TestBuildStatus_CatastrophicFailure(t *testing.T) {
+	if !posixPerms {
+		t.Skip("Windows ignores directory permission bits; a 0000 dir stays readable")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root — a 0000-mode dir would still be readable")
 	}

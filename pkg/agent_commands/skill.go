@@ -51,7 +51,9 @@ Examples:
 `
 
 // SkillCommand exposes the /skill slash command.
-type SkillCommand struct{}
+type SkillCommand struct {
+	outputSink
+}
 
 func (c *SkillCommand) Name() string { return "skill" }
 
@@ -68,9 +70,9 @@ func (c *SkillCommand) Usage() string { return skillUsage }
 
 func (c *SkillCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) > 0 && (args[0] == "enable" || args[0] == "disable") {
-		return executeSkillToggle(args, chatAgent, os.Stdout)
+		return executeSkillToggle(args, chatAgent, c.out())
 	}
-	return executeSkillCommand(args, os.Stdout, os.Stderr)
+	return executeSkillCommand(args, c.out(), c.out())
 }
 
 func (c *SkillCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {

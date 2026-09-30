@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -385,11 +386,12 @@ func TestHistoryPathKey(t *testing.T) {
 
 	t.Run("uses workspace root as key", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
-		a.SetWorkspaceRoot("/home/user/project")
+		root := filepath.Join(t.TempDir(), "project")
+		a.SetWorkspaceRoot(root)
 
 		key := a.historyPathKey()
-		if key != "/home/user/project" {
-			t.Errorf("expected '/home/user/project', got '%s'", key)
+		if key != root {
+			t.Errorf("expected %q, got %q", root, key)
 		}
 	})
 

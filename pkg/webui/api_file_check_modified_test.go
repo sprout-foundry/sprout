@@ -153,7 +153,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		// Request a file outside the workspace — should be skipped
 		reqBody := checkModifiedRequest{
 			Files: map[string]int64{
-				"/etc/passwd": 0,
+				filepath.Join(t.TempDir(), "passwd"): 0,
 			},
 		}
 		body, _ := json.Marshal(reqBody)

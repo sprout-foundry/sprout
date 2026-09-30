@@ -731,13 +731,15 @@ func TestHistoryClearCmd_FlagsRegistered(t *testing.T) {
 		t.Errorf("unexpected --older-than usage: %s", flag.Usage)
 	}
 
-	// Verify the --workspace flag is registered
-	flag = historyClearCmd.Flags().Lookup("workspace")
+	flag = historyClearCmd.Flags().Lookup("dir")
 	if flag == nil {
-		t.Fatal("expected --workspace flag to be registered")
+		t.Fatal("expected --dir flag to be registered")
 	}
-	if flag.Usage != "Workspace path to clear history from (default: current directory)" {
-		t.Errorf("unexpected --workspace usage: %s", flag.Usage)
+	if flag.Usage != "Workspace directory to clear history from (default: current directory)" {
+		t.Errorf("unexpected --dir usage: %s", flag.Usage)
+	}
+	if ws := historyClearCmd.Flags().Lookup("workspace"); ws == nil || ws.Annotations[deprecationAnnotation] == nil {
+		t.Error("expected --workspace to remain as a deprecated alias of --dir")
 	}
 }
 

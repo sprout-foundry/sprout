@@ -93,8 +93,9 @@ func TestAppendDetachedSessionFileArg(t *testing.T) {
 
 	automateDetach = true
 	withFlag := appendDetachedSessionFileArg(base, "/root/.sprout", "cli-automate-aa")
-	assert.Equal(t, append(append([]string{}, base...), "--automate-session-file", "/root/.sprout/automate/cli-automate-aa.json"), withFlag)
-	assert.Equal(t, "/root/.sprout/automate/cli-automate-aa.json", detachedSessionFilePath("/root/.sprout", "cli-automate-aa"),
+	wantPath := filepath.Join("/root/.sprout", "automate", "cli-automate-aa.json")
+	assert.Equal(t, append(append([]string{}, base...), "--automate-session-file", wantPath), withFlag)
+	assert.Equal(t, wantPath, detachedSessionFilePath("/root/.sprout", "cli-automate-aa"),
 		"flag path must match the launcher's own PID-file location")
 }
 

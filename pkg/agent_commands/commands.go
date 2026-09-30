@@ -352,9 +352,9 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		// did-you-mean suggestions in the error message.
 		suggestions := r.SuggestCommands(commandName, 2)
 		if len(suggestions) > 0 {
-			return fmt.Errorf("unknown command: %s — did you mean /%s?", commandName, strings.Join(suggestions, " or /"))
+			return fmt.Errorf("unknown command /%s — did you mean /%s?", commandName, strings.Join(suggestions, " or /"))
 		}
-		return fmt.Errorf("unknown command: %s", commandName)
+		return fmt.Errorf("unknown command /%s", commandName)
 	}
 
 	// Wire the agent's interrupt context into commands that support

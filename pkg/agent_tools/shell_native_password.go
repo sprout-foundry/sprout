@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // passwordRedactRe is built per-command by makePasswordRedactRe. The
@@ -95,11 +95,7 @@ const promptSettleDelay = 250 * time.Millisecond
 // stdout is a pipe, not the line-buffered tty mode), and the timer would
 // never get a chance to fire.
 func runShellCommandWithPasswordSupport(ctx context.Context, command string, prompter PasswordPrompter) (string, error) {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-	cmd := exec.Command(shell, "-c", command)
+	cmd := shellexec.Command(command)
 
 	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 		cmd.Dir = wd

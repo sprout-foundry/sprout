@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
 import ListFilter from './ListFilter';
+import ProviderKeySourceField, { type ProviderKeySource } from './ProviderKeySourceField';
 
 const PROVIDER_FILTER_THRESHOLD = 4;
 
@@ -90,6 +91,30 @@ export default function ProviderSettingsTab({
   const customProviders = settings.custom_providers || {};
   const providerEntries = Object.entries(customProviders);
   const [providerFilter, setProviderFilter] = useState('');
+  const [keySource, setKeySource] = useState<ProviderKeySource>('api_key');
+  const [envVarError, setEnvVarError] = useState('');
+
+  // Only the chosen source may reach the save handlers, which send env_var
+  // whenever it is non-empty and store any pasted key — so switching clears
+  // the other field.
+  const changeKeySource = (source: ProviderKeySource) => {
+    setKeySource(source);
+    setEnvVarError('');
+    if (source === 'api_key') {
+      setProviderEnvVar('');
+    } else {
+      setProviderApiKey('');
+    }
+  };
+
+  const submitProvider = () => {
+    if (keySource === 'env_var' && !providerEnvVar.trim()) {
+      setEnvVarError('Enter the environment variable name, or choose API key.');
+      return;
+    }
+    setEnvVarError('');
+    void (editingProvider?.mode === 'edit' ? handleUpdateProvider() : handleAddProvider());
+  };
   const normalizedProviderFilter = providerFilter.trim().toLowerCase();
   const filteredProviderEntries = normalizedProviderFilter
     ? providerEntries.filter(
@@ -283,6 +308,8 @@ export default function ProviderSettingsTab({
                   setProviderContextSize(cfg.context_size || 32768);
                   setProviderEnvVar(cfg.env_var || '');
                   setProviderApiKey('');
+                  setKeySource(cfg.env_var ? 'env_var' : 'api_key');
+                  setEnvVarError('');
                   setProviderSupportsVision(!!cfg.supports_vision);
                   setProviderVisionModel(cfg.vision_model || '');
                   setProviderBillingType(cfg.billing_type || 'pay_per_token');
@@ -388,28 +415,19 @@ export default function ProviderSettingsTab({
                 Determines how costs are tracked. Auto-detected for localhost endpoints.
               </small>
             </div>
-            <div className="form-row">
-              <label>API Key (optional)</label>
-              <input
-                type="password"
-                className="styled-input"
-                value={providerApiKey}
-                onChange={(e) => setProviderApiKey(e.target.value)}
-                placeholder="Paste API key, or use env var below"
-                autoComplete="off"
-              />
-              <small className="config-help">Enter the key directly, or set an env var name below instead</small>
-            </div>
-            <div className="form-row">
-              <label>API Key Env Var (optional)</label>
-              <input
-                type="text"
-                className="styled-input"
-                value={providerEnvVar}
-                onChange={(e) => setProviderEnvVar(e.target.value)}
-                placeholder="OPENAI_API_KEY"
-              />
-            </div>
+            <ProviderKeySourceField
+              keySource={keySource}
+              onKeySourceChange={changeKeySource}
+              apiKey={providerApiKey}
+              onApiKeyChange={setProviderApiKey}
+              envVar={providerEnvVar}
+              onEnvVarChange={(value) => {
+                setProviderEnvVar(value);
+                if (envVarError) setEnvVarError('');
+              }}
+              isEdit={editingProvider.mode === 'edit'}
+              envVarError={envVarError}
+            />
             <label className="styled-toggle">
               <input
                 type="checkbox"
@@ -432,11 +450,7 @@ export default function ProviderSettingsTab({
               </div>
             )}
             <div className="form-actions">
-              <button
-                type="button"
-                className="form-btn primary"
-                onClick={editingProvider.mode === 'edit' ? handleUpdateProvider : handleAddProvider}
-              >
+              <button type="button" className="form-btn primary" onClick={submitProvider}>
                 {editingProvider.mode === 'edit' ? 'Update' : 'Add'}
               </button>
               <button type="button" className="form-btn cancel" onClick={resetProviderForm}>
@@ -458,6 +472,8 @@ export default function ProviderSettingsTab({
               setProviderContextSize(32768);
               setProviderEnvVar('');
               setProviderApiKey('');
+              setKeySource('api_key');
+              setEnvVarError('');
               setProviderSupportsVision(false);
               setProviderVisionModel('');
               setProviderModelContextSizes('');

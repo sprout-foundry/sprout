@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// RunCommand executes shape #2: `command` runs under /bin/sh -c with the
-// workdir as cwd and the inherited environment, and its two output streams
-// are captured separately, each capped to the last 256 KiB.
+// RunCommand executes shape #2: `command` runs under /bin/sh -c (Git Bash on
+// Windows) with the workdir as cwd and the inherited environment, and its
+// two output streams are captured separately, each capped to the last 256 KiB.
 //
 // The timeout is the ONLY canceller. ctx is deliberately not wired into the
 // subprocess: a client hangup (or a cancelled request) must not SIGKILL a
@@ -37,7 +37,7 @@ func RunCommand(ctx context.Context, workdir string, request RunRequest) (RunRes
 	timeout := normalizeTimeout(request.TimeoutSeconds)
 	stdout, stderr := newRollingBuffer(MaxOutputBytes), newRollingBuffer(MaxOutputBytes)
 
-	cmd := exec.Command(shellPath(), "-c", request.Command)
+	cmd := txnShellCommand(request.Command)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	cmd.Stdout = stdout
@@ -53,6 +53,8 @@ func RunCommand(ctx context.Context, workdir string, request RunRequest) (RunRes
 		result.DurationMs = time.Since(started).Milliseconds()
 		return result, nil
 	}
+	group := trackTxnProcessGroup(cmd)
+	defer group.release()
 
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
@@ -64,7 +66,7 @@ func RunCommand(ctx context.Context, workdir string, request RunRequest) (RunRes
 	case err := <-done:
 		result.ExitCode = exitCodeOf(err, cmd)
 	case <-timer.C:
-		killTxnProcessGroup(cmd)
+		group.kill()
 		err := <-done // reap, and drain the last output the group wrote
 		result.TimedOut = true
 		result.ExitCode = TimeoutExitCode
@@ -91,14 +93,4 @@ func exitCodeOf(err error, cmd *exec.Cmd) int {
 		}
 	}
 	return -1
-}
-
-// shellPath honors SHELL only when it is an absolute path — the container
-// contract pins /bin/sh, and an inherited relative SHELL would make exec
-// resolve against the workdir.
-func shellPath() string {
-	if shell := os.Getenv("SHELL"); shell != "" && shell[0] == '/' {
-		return shell
-	}
-	return "/bin/sh"
 }

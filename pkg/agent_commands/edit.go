@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // EditCommand opens $EDITOR to compose or edit a query.
@@ -28,12 +30,12 @@ func (c *EditCommand) Usage() string {
 
 func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		return fmt.Errorf("[edit] agent not available")
+		return fmt.Errorf("/edit: agent not available")
 	}
 
 	editor := chooseEditor()
 	if editor == "" {
-		return fmt.Errorf("[edit] no $VISUAL or $EDITOR set and no fallback editor (vi) found")
+		return fmt.Errorf("/edit: no $VISUAL or $EDITOR set and no fallback editor (vi) found")
 	}
 
 	// Pre-fill content from args.
@@ -44,12 +46,11 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	tmpPath, err := writeEditTempFile(content)
 	if err != nil {
-		return fmt.Errorf("[edit] failed to create temp file: %w", err)
+		return fmt.Errorf("/edit: failed to create temp file: %w", err)
 	}
 	defer os.Remove(tmpPath)
 
-	parts := strings.Fields(editor)
-	parts = append(parts, tmpPath)
+	parts := append(editorArgv(editor), tmpPath)
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -57,17 +58,17 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Release stdin to cooked mode so the editor reads keystrokes
 	// normally. No-op when no turn / steer reader is active.
 	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
-		return fmt.Errorf("[edit] %s exited: %w", editor, err)
+		return fmt.Errorf("/edit: %s exited: %w", editor, err)
 	}
 
 	data, err := os.ReadFile(tmpPath)
 	if err != nil {
-		return fmt.Errorf("[edit] failed to read back buffer: %w", err)
+		return fmt.Errorf("/edit: failed to read back buffer: %w", err)
 	}
 
 	line := strings.TrimRight(string(data), "\r\n")
 	if line == "" {
-		fmt.Fprintln(os.Stderr, "[edit] empty buffer — nothing sent")
+		console.GlyphInfo.Print("Empty buffer — nothing sent.")
 		return nil
 	}
 
@@ -83,12 +84,36 @@ func chooseEditor() string {
 	if e := strings.TrimSpace(os.Getenv("EDITOR")); e != "" {
 		return e
 	}
-	for _, candidate := range []string{"vi"} {
+	for _, candidate := range fallbackEditors() {
 		if _, err := exec.LookPath(candidate); err == nil {
 			return candidate
 		}
 	}
 	return ""
+}
+
+func fallbackEditors() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"vi", "notepad"}
+	}
+	return []string{"vi"}
+}
+
+// editorArgv splits $EDITOR into program and arguments. Windows editors
+// usually live under "C:\Program Files\...", so a value naming an existing
+// file is taken whole, and a leading double-quoted program is honored
+// ("\"C:\Program Files\...\code.exe\" --wait"); otherwise the value is
+// split on whitespace.
+func editorArgv(editor string) []string {
+	if fi, err := os.Stat(editor); err == nil && !fi.IsDir() {
+		return []string{editor}
+	}
+	if strings.HasPrefix(editor, `"`) {
+		if end := strings.Index(editor[1:], `"`); end >= 0 {
+			return append([]string{editor[1 : end+1]}, strings.Fields(editor[end+2:])...)
+		}
+	}
+	return strings.Fields(editor)
 }
 
 // writeEditTempFile creates a temp .md file pre-populated with the given

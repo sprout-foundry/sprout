@@ -109,7 +109,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Production-only initialization steps
 	if params.isProduction {
-		// The system prompts advertise /tmp/sprout as the scratch directory;
+		// The system prompts advertise the scratch directory (/tmp/sprout);
 		// create it up front so the model's first shell write doesn't fail
 		// with ENOENT. Sandbox-isolated /tmp fails silently by design.
 		filesystem.EnsureScratchDir()
@@ -630,17 +630,14 @@ func isHomeDirPath(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return false
+	homeDir := strings.TrimSpace(os.Getenv("HOME"))
+	if homeDir == "" {
+		var err error
+		if homeDir, err = os.UserHomeDir(); err != nil {
+			return false
+		}
 	}
-	resolvedDir, dirErr := filepath.EvalSymlinks(dir)
-	resolvedHome, homeErr := filepath.EvalSymlinks(homeDir)
-	if dirErr != nil || homeErr != nil {
-		resolvedDir = dir
-		resolvedHome = homeDir
-	}
-	return resolvedDir == resolvedHome
+	return normalizePath(dir) == normalizePath(homeDir)
 }
 
 // maybeAutoActivateCoordinatorPersona activates the Coordinator persona when

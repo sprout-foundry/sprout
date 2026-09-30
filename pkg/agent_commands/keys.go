@@ -13,7 +13,9 @@ import (
 )
 
 // KeysCommand implements the /keys slash command for managing API credentials
-type KeysCommand struct{}
+type KeysCommand struct {
+	outputSink
+}
 
 // Name returns the command name
 func (k *KeysCommand) Name() string {
@@ -105,7 +107,7 @@ func (k *KeysCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 func (k *KeysCommand) listKeys(configManager *configuration.Manager) error {
 	providers := configManager.GetAvailableProviders()
 	if len(providers) == 0 {
-		console.GlyphInfo.Print("No providers configured.")
+		console.GlyphInfo.Fprintln(k.out(), "No providers configured.")
 		return nil
 	}
 
@@ -121,22 +123,22 @@ func (k *KeysCommand) listKeys(configManager *configuration.Manager) error {
 	}
 	sort.Strings(sorted)
 
-	fmt.Println("Provider Credentials")
-	fmt.Println("===================")
+	k.println("Provider Credentials")
+	k.println("===================")
 
 	hasIssues := false
 	for _, name := range sorted {
 		status := k.getCredentialStatus(configManager, name)
 		statusStr := status.icon + " " + status.text
-		fmt.Printf("%-20s %s\n", name+":", statusStr)
+		k.printf("%-20s %s\n", name+":", statusStr)
 		if status.missing {
 			hasIssues = true
 		}
 	}
 
 	if hasIssues {
-		fmt.Println()
-		fmt.Println("Use '/keys set <provider> <api_key>' to configure missing credentials.")
+		k.println()
+		k.println("Use '/keys set <provider> <api_key>' to configure missing credentials.")
 	}
 
 	return nil
@@ -259,9 +261,9 @@ func (k *KeysCommand) setKey(configManager *configuration.Manager, provider stri
 
 	envVar := credentials.ProviderEnvVar(provider)
 	if envVar != "" {
-		fmt.Printf("Credential set for %s (or set %s env var).\n", provider, envVar)
+		k.printf("Credential set for %s (or set %s env var).\n", provider, envVar)
 	} else {
-		fmt.Printf("Credential set for %s.\n", provider)
+		k.printf("Credential set for %s.\n", provider)
 	}
 
 	return nil
@@ -287,7 +289,7 @@ func (k *KeysCommand) removeKey(configManager *configuration.Manager, provider s
 		return fmt.Errorf("failed to remove credential: %w", err)
 	}
 
-	fmt.Printf("Credential removed for %s.\n", provider)
-	fmt.Println("Note: If the credential was set via environment variable, you need to unset it manually.")
+	k.printf("Credential removed for %s.\n", provider)
+	k.println("Note: If the credential was set via environment variable, you need to unset it manually.")
 	return nil
 }

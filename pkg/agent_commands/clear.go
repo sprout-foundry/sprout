@@ -2,13 +2,15 @@ package commands
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ClearCommand handles closing the current session and starting a fresh one
-type ClearCommand struct{}
+type ClearCommand struct {
+	outputSink
+}
 
 func (c *ClearCommand) Name() string {
 	return "clear"
@@ -45,6 +47,6 @@ func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return err
 	}
 
-	fmt.Printf("[clean] New session started: %s\n", newID)
+	console.GlyphSuccess.Fprintf(c.out(), "New session started: %s", newID)
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -226,7 +227,8 @@ func TestSubagentRunner_Run_Timeout(t *testing.T) {
 		t.Fatal("expected non-nil result")
 	}
 	// Result should have some elapsed time
-	if result.Elapsed == 0 {
+	// Windows' monotonic clock ticks coarsely enough that a fast failure measures 0.
+	if result.Elapsed == 0 && runtime.GOOS != "windows" {
 		t.Error("expected non-zero elapsed time")
 	}
 }
@@ -678,7 +680,8 @@ func TestSubagentRunner_PrefixFormat_SingleSubagent(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
-	if result.Elapsed == 0 {
+	// Windows' monotonic clock ticks coarsely enough that a fast failure measures 0.
+	if result.Elapsed == 0 && runtime.GOOS != "windows" {
 		t.Error("expected non-zero elapsed time")
 	}
 

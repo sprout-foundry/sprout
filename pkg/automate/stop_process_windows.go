@@ -9,32 +9,33 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils/console"
 )
 
-// StopProcess escalates signals to gracefully (then forcefully) stop a process.
-// On Windows it sends CTRL_BREAK_EVENT, waits, then terminates the process.
+// StopProcess stops a process gracefully when it can, then forcefully.
+// CTRL_BREAK_EVENT is only sent when canCtrlBreak proves it cannot spill
+// over to sprout's own console; otherwise the process is terminated.
 func StopProcess(pid int) (bool, error) {
 	if pid <= 0 {
 		return true, nil
 	}
 
-	// Try graceful shutdown via CTRL_BREAK_EVENT. This only works if the
-	// target process shares our console. If it fails we fall through to
-	// TerminateProcess.
-	_ = console.SendCtrlBreak(pid)
-	if !waitForDeath(pid, 10*time.Second) {
-		// Forceful termination via TerminateProcess.
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			return false, err
-		}
-		if err := process.Kill(); err != nil {
-			if !IsProcessAlive(pid) {
-				return true, nil
-			}
-			return false, err
-		}
-		waitForDeath(pid, 5*time.Second)
+	if canCtrlBreak(pid) && console.SendCtrlBreak(pid) == nil && waitForDeath(pid, 10*time.Second) {
+		return true, nil
 	}
 
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		if !IsProcessAlive(pid) {
+			return true, nil
+		}
+		return false, err
+	}
+	defer func() { _ = process.Release() }()
+	if err := process.Kill(); err != nil {
+		if !IsProcessAlive(pid) {
+			return true, nil
+		}
+		return false, err
+	}
+	waitForDeath(pid, 5*time.Second)
 	return !IsProcessAlive(pid), nil
 }
 

@@ -13,13 +13,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 var historyCmd = &cobra.Command{
 	Use:   "history",
-	Short: "Manage project history",
-	Long: `Manage project revision and change history.
+	Short: "Prune stored revisions, change records, and run logs",
+	Long: `Manage the revision, change, and run-log records sprout keeps per project.
+To view revisions, use 'sprout log'.
 
 Subcommands:
   clear  Remove old revisions, changes, and runlogs`,
@@ -39,7 +41,7 @@ var historyClearCmd = &cobra.Command{
 	Long: `Clear old revisions, change entries, and runlog files from project history.
 
 By default, this removes ALL history. Use --older-than to keep recent entries.
-Use --workspace to target a specific project directory.
+Use --dir to target a specific project directory.
 
 When clearing all history (no --older-than), you must pass --yes or confirm
 at the prompt. When using --older-than, no confirmation is needed.
@@ -48,7 +50,7 @@ Use --dry-run to see what would be cleared without deleting anything.
 Examples:
   sprout history clear --yes                        # Clear ALL history
   sprout history clear --older-than 30d             # Clear history older than 30 days
-  sprout history clear --older-than 7d --workspace /path/to/project  # Target specific project
+  sprout history clear --older-than 7d --dir /path/to/project        # Target specific project
   sprout history clear --dry-run                    # Show what would be cleared`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runHistoryClear()
@@ -57,12 +59,11 @@ Examples:
 
 func init() {
 	historyClearCmd.Flags().StringVar(&clearOlderThan, "older-than", "", "Duration threshold (e.g. 30d, 7d, 24h). Entries older than this are cleared. Empty means clear ALL.")
-	historyClearCmd.Flags().StringVar(&clearWorkspace, "workspace", "", "Workspace path to clear history from (default: current directory)")
+	historyClearCmd.Flags().StringVar(&clearWorkspace, "dir", "", "Workspace directory to clear history from (default: current directory)")
+	stringFlagAlias(historyClearCmd.Flags(), &clearWorkspace, "workspace", "dir", aliasDeprecated)
 	historyClearCmd.Flags().BoolVarP(&clearYes, "yes", "y", false, "Skip confirmation prompt")
+	boolFlagAlias(historyClearCmd.Flags(), &clearYes, "force", "yes", aliasDeprecated)
 	historyClearCmd.Flags().BoolVar(&clearDryRun, "dry-run", false, "Show what would be cleared without deleting anything")
-	// Keep --force as a hidden alias for backward compatibility
-	historyClearCmd.Flags().BoolVar(&clearYes, "force", false, "shorthand for --yes")
-	historyClearCmd.Flags().SetAnnotation("force", "cobra.bash_comp_hidden", []string{"true"})
 
 	historyCmd.AddCommand(historyClearCmd)
 }
@@ -94,7 +95,7 @@ func runHistoryClear() error {
 	if clearOlderThan != "" {
 		duration, err := parseDuration(clearOlderThan)
 		if err != nil {
-			return fmt.Errorf("invalid --older-than value %q: %w", clearOlderThan, err)
+			return usageErrorAt("sprout history clear", "invalid --older-than value %q: %w", clearOlderThan, err)
 		}
 		since = time.Now().Add(-duration)
 	}
@@ -385,7 +386,7 @@ func clearOldRunlogs(workspace string, since time.Time, clearAll bool) (int, err
 		path := filepath.Join(runlogsDir, entry.Name())
 		if err := os.Remove(path); err != nil {
 			// Don't fail entirely on individual file errors, just skip
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove runlog %s: %v\n", entry.Name(), err)
+			console.GlyphWarning.Printf("Could not remove runlog %s: %v", entry.Name(), err)
 			continue
 		}
 		cleared++

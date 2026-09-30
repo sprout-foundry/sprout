@@ -15,7 +15,7 @@ var agentHelpAll bool
 
 // advancedAgentFlags are the rarely-used / power-user flags hidden from the
 // default `sprout agent --help`. The everyday flags (provider, model,
-// no-web-ui, daemon, session, persona, dry-run, no-stream, skip-prompt) stay
+// no-web-ui, daemon, session, persona, dry-run, no-stream, yes) stay
 // visible; these are surfaced on demand with --help-all. Hiding happens at
 // help-render time (agentHelpFunc) so it doesn't depend on cross-file init
 // ordering and never affects flag *parsing* — every flag still works.
@@ -43,7 +43,8 @@ var advancedAgentFlags = []string{
 	"bind",
 	"bind-socket",
 	"secret",
-	"output-json",
+	"json",
+	"output",
 	"mock-llm",
 }
 

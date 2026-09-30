@@ -235,7 +235,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			counterPath := filepath.Join(dir, "retry_count")
+			counterPath := filepath.ToSlash(filepath.Join(dir, "retry_count"))
 			buildCmd := strings.ReplaceAll(tt.buildCmd, "__COUNTER_FILE__", counterPath)
 			todoPath := writeTempTodoFile(t, dir, tt.items)
 			// For the resume test, Item 1 was already processed before the

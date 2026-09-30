@@ -17,6 +17,7 @@ import {
   handleFoundryAuthError,
   translateAndProxyChat,
   _resetSessionExpiredGuardForTest,
+  signInReturningHere,
 } from './cloudProxyRoutes';
 
 // ── window.location mock ─────────────────────────────────────────────
@@ -117,6 +118,13 @@ describe('handleFoundryAuthError — 401 → event + deferred redirect', () => {
     vi.advanceTimersByTime(750);
     expect(hrefSetter).toHaveBeenCalledTimes(1);
     expect(hrefSetter).toHaveBeenCalledWith('/login?return_to=' + encodeURIComponent('/repo/demos?tab=chat&x=1'));
+  });
+
+  it('re-encodes a hand-typed repo URL so the platform accepts the return path', () => {
+    mockWindowLocation('/webui/', '?repo=https://github.com/acme/app');
+    const returnTo = decodeURIComponent(signInReturningHere().split('return_to=')[1]);
+    expect(returnTo).toBe('/webui/?repo=https%3A%2F%2Fgithub.com%2Facme%2Fapp');
+    expect(returnTo).not.toContain('://');
   });
 });
 

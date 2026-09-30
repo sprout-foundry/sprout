@@ -9,7 +9,7 @@ vi.mock('../../bootstrapAdapter', () => ({
 vi.mock('../../services/fullWorkspace', () => ({ useFullWorkspacesAvailable: () => workspaces.value }));
 
 import { __resetHomeViewForTests, getHomeView } from '../../services/homeView';
-import HomeNav from './HomeNav';
+import HomeNav, { homePageLabel } from './HomeNav';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -55,5 +55,18 @@ describe('HomeNav', () => {
     act(() => root.render(<HomeNav path="/" projectLabel="acme/app" onBackToProject={() => undefined} />));
     expect(labels()).toContain('Admin');
     expect(labels()).not.toContain('Workspaces');
+  });
+});
+
+describe('homePageLabel', () => {
+  it.each([
+    ['/', 'Dashboard'],
+    ['/tasks/abc', 'Tasks'],
+    ['/scheduled', 'Tasks'],
+    ['/account/billing', 'Usage & billing'],
+    ['/admin', 'Admin'],
+    ['/nowhere', 'Home'],
+  ])('%s → %s', (path, label) => {
+    expect(homePageLabel(path)).toBe(label);
   });
 });

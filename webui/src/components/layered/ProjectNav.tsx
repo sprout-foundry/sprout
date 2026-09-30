@@ -48,6 +48,8 @@ export interface ProjectNavConversations {
   onDelete?: (id: string) => void;
   /** Whether a chat may be deleted (a host can keep one permanent chat). */
   canDelete?: (id: string) => boolean;
+  /** Empties a chat's messages; offered for a chat that can't be deleted. */
+  onClear?: (id: string) => void;
 }
 
 interface NavEntry {
@@ -92,7 +94,9 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
 export default function ProjectNav(props: ProjectNavProps): ReactElement {
   const { title, conversations, conversationInMain, current, onNavigate, drill } = props;
   const [menu, setMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
-  const canDeleteMenuChat = menu && conversations?.onDelete && (conversations.canDelete?.(menu.id) ?? true);
+  const isPermanentMenuChat = menu !== null && !(conversations?.canDelete?.(menu.id) ?? true);
+  const canDeleteMenuChat = menu && conversations?.onDelete && !isPermanentMenuChat;
+  const canClearMenuChat = menu && conversations?.onClear && isPermanentMenuChat;
 
   const renameChat = async (id: string, name: string) => {
     setMenu(null);
@@ -112,6 +116,16 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
       type: 'danger',
     });
     if (ok) conversations?.onDelete?.(id);
+  };
+
+  const clearChat = async (id: string, name: string) => {
+    setMenu(null);
+    const ok = await showThemedConfirm(`Clear the messages in "${name}"?`, {
+      title: 'Clear conversation',
+      confirmLabel: 'Clear',
+      type: 'danger',
+    });
+    if (ok) conversations?.onClear?.(id);
   };
 
   const hideButton = props.onHide ? (
@@ -189,7 +203,7 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
               className={`project-nav-item${conversationInMain && s.id === conversations?.activeId ? ' active' : ''}`}
               onClick={() => onNavigate({ kind: 'conversation', id: s.id })}
               onContextMenu={(e) => {
-                if (!conversations?.onRename && !conversations?.onDelete) return;
+                if (!conversations?.onRename && !conversations?.onDelete && !conversations?.onClear) return;
                 e.preventDefault();
                 setMenu({ x: e.clientX, y: e.clientY, id: s.id, name: s.name || 'Untitled' });
               }}
@@ -214,6 +228,11 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
         {menu && conversations?.onRename && (
           <button type="button" className="context-menu-item" onClick={() => void renameChat(menu.id, menu.name)}>
             Rename
+          </button>
+        )}
+        {menu && canClearMenuChat && (
+          <button type="button" className="context-menu-item danger" onClick={() => void clearChat(menu.id, menu.name)}>
+            Clear conversation
           </button>
         )}
         {menu && canDeleteMenuChat && (

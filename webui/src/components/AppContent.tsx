@@ -53,6 +53,7 @@ import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
 import PhoneTabBar from './layered/PhoneTabBar';
 import NotificationCenterHost from './NotificationCenterHost';
 import PlatformHome from './layered/PlatformHome';
+import { closeHome } from '../services/homeView';
 
 interface AppContentProps {
   state: AppState;
@@ -1331,6 +1332,8 @@ const AppContent: React.FC<AppContentProps> = ({
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onOpenFile={(filePath) => {
+          // Search stays usable above Home; what it opens shows in the editor.
+          closeHome();
           const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
           const extensionIndex = fileName.lastIndexOf('.');
           const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
@@ -1343,6 +1346,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onOpenHotkeysConfig={handleOpenHotkeysConfig}
         initialMode={commandPaletteMode}
         onNavigateToLine={(line) => {
+          closeHome();
           document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
         }}
         commands={paletteCommands}

@@ -47,8 +47,15 @@ func SnapshotRealStateDir() (realDir string, before map[string]time.Time) {
 	if err != nil {
 		return "", nil
 	}
+	snapshottedRealStateDir = d
 	return d, snapshotStateDir(d)
 }
+
+// snapshottedRealStateDir is the directory SnapshotRealStateDir treated as
+// real. AssertNoStateLeak can't re-resolve it from the environment: TestMains
+// point SPROUT_STATE_DIR at a temp dir for the run and don't restore it
+// before the check (os.Exit skips their defers).
+var snapshottedRealStateDir string
 
 // liveSproutInstanceRunning reports whether any sprout process is
 // heartbeating instances.json. The detector compares mtimes under the real
@@ -165,9 +172,9 @@ func AssertNoStateLeak(realDir string, before map[string]time.Time) int {
 	// Suppression applies only when realDir IS the real state dir: unit
 	// tests pass synthetic temp dirs and must keep exercising the leak
 	// path deterministically.
-	isRealStateDir := false
-	if realState, stateErr := defaultGetStateDir(); stateErr == nil {
-		isRealStateDir = realState == realDir
+	isRealStateDir := snapshottedRealStateDir != "" && realDir == snapshottedRealStateDir
+	if realState, stateErr := defaultGetStateDir(); stateErr == nil && realState == realDir {
+		isRealStateDir = true
 	}
 	if isRealStateDir && liveSproutInstanceRunning() {
 		fmt.Fprintf(os.Stderr,

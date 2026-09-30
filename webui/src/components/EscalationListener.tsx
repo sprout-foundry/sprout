@@ -23,6 +23,7 @@ import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
 import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
 import { runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
+import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 import './EscalationToast.css';
 
@@ -208,7 +209,7 @@ export function EscalationListener() {
     if (!repoURL) {
       // No repo context: the dashboard is where a workspace gets picked.
       // `?from=editor` keeps the platform SPA from bouncing back here.
-      window.location.href = platformHref('/?from=editor');
+      if (!openPlatformPage('/')) window.location.href = platformHref('/?from=editor');
       return;
     }
     setWorkspaceError(null);
@@ -324,6 +325,7 @@ export function EscalationListener() {
                   <a
                     className="escalation-toast-task-link"
                     href={platformHref('/#/tasks/' + cloudTask.taskId)}
+                    onClick={onPlatformLinkClick('/tasks/' + cloudTask.taskId)}
                     data-testid="escalation-toast-cloud-task-link"
                   >
                     View task on platform

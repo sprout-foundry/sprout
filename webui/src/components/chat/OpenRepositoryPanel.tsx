@@ -1,7 +1,7 @@
 import { FolderGit2 } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
-import { searchForRepo } from '../../services/homeView';
+import { onPlatformLinkClick, searchForRepo } from '../../services/homeView';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { platformHref } from '../../utils/platformUrl';
 import SproutLogo from '../SproutLogo';
@@ -58,7 +58,7 @@ export function OpenRepositoryPanel(): ReactElement {
           {error}
         </div>
       )}
-      <a className="open-repo-dashboard" href={platformHref('/?from=editor')}>
+      <a className="open-repo-dashboard" href={platformHref('/?from=editor')} onClick={onPlatformLinkClick('/')}>
         Or choose from your repositories on the dashboard
       </a>
     </div>

@@ -6,6 +6,8 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { isLayeredLayout } from '../config/layout';
+import { isCloud } from '../config/mode';
 
 export interface HomeViewState {
   open: boolean;
@@ -65,6 +67,25 @@ export function searchForRepo(repo: string): string {
 /** Show a platform page ("/" for the dashboard). */
 export function openHome(path = '/'): void {
   set({ open: true, path: normalizeHomePath(path) });
+}
+
+/**
+ * A platform page the editor links to ("/#/tasks/42"). The layered layout
+ * shows it in Home, keeping the editor loaded; returns false when the caller
+ * should navigate instead.
+ */
+export function openPlatformPage(path: string): boolean {
+  if (!isLayeredLayout || !isCloud) return false;
+  openHome(path);
+  return true;
+}
+
+/** onClick for an <a> to a platform page: a plain click opens it in Home. */
+export function onPlatformLinkClick(path: string) {
+  return (e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; button: number; preventDefault(): void }) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (openPlatformPage(path)) e.preventDefault();
+  };
 }
 
 export function closeHome(): void {

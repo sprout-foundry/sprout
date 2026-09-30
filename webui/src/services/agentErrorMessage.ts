@@ -1,3 +1,4 @@
+import { openPlatformPage } from './homeView';
 import { platformHref } from '../utils/platformUrl';
 import { notificationBus } from './notificationBus';
 
@@ -18,7 +19,7 @@ export function notifyCreditsBlocked(message: string): void {
   notificationBus.notify('warning', 'Out of platform credits', message, undefined, {
     label: 'Buy credits',
     onClick: () => {
-      window.open(platformHref('/#/account/billing'), '_blank', 'noopener');
+      if (!openPlatformPage('/account/billing')) window.open(platformHref('/#/account/billing'), '_blank', 'noopener');
     },
   });
 }

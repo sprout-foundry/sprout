@@ -8,6 +8,7 @@ import { ApiService } from '../services/api';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
+import { onPlatformLinkClick } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
@@ -220,6 +221,7 @@ function ManagedModelSection(): JSX.Element {
         href={platformHref('/#/account/billing')}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={onPlatformLinkClick('/account/billing')}
       >
         View usage and billing
       </a>

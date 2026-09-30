@@ -479,6 +479,31 @@ describe('FileTree', () => {
     expect(errorEl?.textContent).toContain('Network error');
   });
 
+  it('refreshes quietly: no skeleton, new files appear, a failed reload keeps the tree', async () => {
+    const ref: { current: FileTreeHandle | null } = { current: null };
+    const later: FileInfo = { name: 'NOTES.md', path: 'NOTES.md', isDir: false, size: 1, modified: Date.now(), ext: '.md' };
+    let listing: FileInfo[] | Error = makeFiles();
+    const onFetchFiles = vi.fn(() => (listing instanceof Error ? Promise.reject(listing) : Promise.resolve(listing)));
+    await act(async () => {
+      root.render(createElement(FileTree, { ref, onFileSelect: vi.fn(), onFetchFiles }));
+    });
+    const names = () => Array.from(container.querySelectorAll('.file-tree-item')).map((el) => el.textContent ?? '');
+
+    listing = [...makeFiles(), later];
+    await act(async () => {
+      ref.current?.refresh({ quiet: true });
+      expect(container.querySelector('.file-tree-skeleton')).toBeNull();
+    });
+    expect(names().some((n) => n.includes('NOTES.md'))).toBe(true);
+
+    listing = new Error('offline');
+    await act(async () => {
+      ref.current?.refresh({ quiet: true });
+    });
+    expect(container.querySelector('.error-message')).toBeNull();
+    expect(names().some((n) => n.includes('NOTES.md'))).toBe(true);
+  });
+
   // ── Refresh button ──
 
   it('calls onRefresh when refresh button is clicked', async () => {

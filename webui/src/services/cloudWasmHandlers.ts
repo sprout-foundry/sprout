@@ -195,32 +195,40 @@ export function getVfsManifestSnapshot(): Set<string> {
   return new Set(vfsManifest);
 }
 
-/**
- * Read all files from the WASM VFS, returning {path, content} pairs.
- * Used by browserGit to sync the working tree before git operations.
- */
 /** Chats (by id, '' for the default) whose run the user asked to stop. */
 const stopRequested = new Set<string>();
 
 /** HOME inside the WASM shell's virtual filesystem. */
 const AGENT_HOME = '/home/user';
 
-const withinAgentHome = (p: string) => p === AGENT_HOME || p.startsWith(`${AGENT_HOME}/`);
+/**
+ * Directories the runtime keeps in the browser's filesystem: the agent's home
+ * (its settings and sessions) and its scratch space. They share the
+ * filesystem with the workspace but aren't workspace content.
+ */
+const RUNTIME_DIRS = [AGENT_HOME, '/tmp'];
+
+const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
+
+/** Whether `p` is runtime state rather than content of the workspace at `root`. */
+const isRuntimePath = (p: string, root: string) => RUNTIME_DIRS.some((dir) => within(p, dir) && !within(root, dir));
 
 /**
- * The agent's own home (its settings and sessions) shares the browser's
- * filesystem with the workspace but isn't workspace content — unless the
- * workspace itself is inside it. A directory that only holds it (/home)
- * is hidden with it.
+ * Hidden from the workspace's listings: runtime state, and a directory that
+ * only holds it (/home).
  */
 function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
-  if (withinAgentHome(root)) return false;
-  if (withinAgentHome(absPath)) return true;
-  if (!AGENT_HOME.startsWith(`${absPath === '/' ? '' : absPath}/`)) return false;
+  if (isRuntimePath(absPath, root)) return true;
+  const prefix = absPath === '/' ? '/' : `${absPath}/`;
+  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !within(root, dir))) return false;
   const listing = shell.listDir(absPath);
   return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
 }
 
+/**
+ * Read all files from the WASM VFS, returning {path, content} pairs.
+ * Used by browserGit to sync the working tree before git operations.
+ */
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
   const cwd = shell.getCwd();
   // Try to get all file paths via the flattenEntries/listFilesTracked logic
@@ -237,7 +245,7 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
   }
 
   for (const absPath of paths) {
-    if (withinAgentHome(absPath) && !withinAgentHome(cwd)) continue;
+    if (isRuntimePath(absPath, cwd)) continue;
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
@@ -366,9 +374,7 @@ function singleLevelFileEntries(
  */
 function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: string; path: string; isDir: boolean }> {
   const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
-  const workspacePaths = Array.from(vfsManifest).filter(
-    (p) => rootDir === undefined || withinAgentHome(rootDir) || !withinAgentHome(p),
-  );
+  const workspacePaths = Array.from(vfsManifest).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
   let base = dir;
   let paths = workspacePaths.filter(underDir);
   if (paths.length === 0 && workspacePaths.length > 0) {

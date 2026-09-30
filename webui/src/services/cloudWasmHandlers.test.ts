@@ -428,13 +428,15 @@ describe('listAllVfsFiles', () => {
 });
 
 describe('listAllVfsFiles with the workspace at the filesystem root', () => {
-  it('leaves the agent home (its settings) out of the repository files', async () => {
+  it('leaves the agent home and scratch space out of the repository files', async () => {
     const { listAllVfsFiles } = await import('./cloudWasmHandlers');
     const tree: Record<string, WasmDirEntry[]> = {
       '/': [
         { name: 'go.mod', type: 'file', size: 1 },
         { name: 'home', type: 'dir', size: 0 },
+        { name: 'tmp', type: 'dir', size: 0 },
       ],
+      '/tmp': [{ name: 'scratch.txt', type: 'file', size: 1 }],
       '/home': [{ name: 'user', type: 'dir', size: 0 }],
       '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
       '/home/user/.config': [{ name: 'platform.json', type: 'file', size: 1 }],
@@ -456,7 +458,9 @@ describe('handleWasmFileList with the workspace at the filesystem root', () => {
     '/': [
       { name: 'go.mod', type: 'file', size: 1 },
       { name: 'home', type: 'dir', size: 0 },
+      { name: 'tmp', type: 'dir', size: 0 },
     ],
+    '/tmp': [{ name: 'sprout', type: 'dir', size: 0 }],
     '/home': [{ name: 'user', type: 'dir', size: 0 }],
     '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
   };
@@ -466,7 +470,7 @@ describe('handleWasmFileList with the workspace at the filesystem root', () => {
     return (JSON.parse(await res.text()).files as Array<{ name: string }>).map((f) => f.name);
   };
 
-  it('leaves the agent home out of the tree', async () => {
+  it('leaves the agent home and scratch space out of the tree', async () => {
     expect(await listing('/', '/')).toEqual(['go.mod']);
   });
 

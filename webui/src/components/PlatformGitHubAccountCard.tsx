@@ -9,6 +9,8 @@ import { ExternalLink, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import './GitHubAccountPanel.css';
+import { isLayeredLayout } from '../config/layout';
+import { isCloud } from '../config/mode';
 import { onPlatformLinkClick } from '../services/homeView';
 import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from '../services/platformGitHub';
 
@@ -39,6 +41,8 @@ export default function PlatformGitHubAccountCard({
 
   const connected = controlled ? connectedProp : fetched;
   const href = platformGitHubSettingsHref();
+  // In the layered layout the link opens account settings inside the editor.
+  const opensInHome = isLayeredLayout && isCloud;
   const cardClass = `gh-account-card gh-account-card--platform${compact ? ' gh-account-card--compact' : ''}`;
 
   if (error) {
@@ -72,7 +76,7 @@ export default function PlatformGitHubAccountCard({
         onClick={onPlatformLinkClick('/settings')}
         data-testid="platform-gh-manage"
       >
-        {connected ? 'Manage' : 'Connect GitHub'} <ExternalLink size={12} aria-hidden="true" />
+        {connected ? 'Manage' : 'Connect GitHub'} {!opensInHome && <ExternalLink size={12} aria-hidden="true" />}
       </a>
     </div>
   );

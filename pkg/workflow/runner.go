@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, cfg *AgentWorkflowConfig, state *WorkflowExecutionState, queryExecutor QueryExecutor, overrides *CLIOverrides) (bool, error) {
@@ -295,11 +296,6 @@ func RunAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 // raw command line — this avoids quoting headaches and lets users keep
 // multi-line scripts in version control.
 func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
-	shell := strings.TrimSpace(os.Getenv("SHELL"))
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-
 	command := strings.TrimSpace(step.Command)
 	commandFile := strings.TrimSpace(step.CommandFile)
 
@@ -307,13 +303,13 @@ func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
 	switch {
 	case command != "":
 		console.GlyphShell.Fprintf(os.Stdout, "%s", singleLinePreview(command))
-		cmd = exec.CommandContext(ctx, shell, "-c", command)
+		cmd = shellexec.CommandContext(ctx, command)
 	case commandFile != "":
 		if _, err := os.Stat(commandFile); err != nil {
 			return fmt.Errorf("command_file %q not accessible: %w", commandFile, err)
 		}
-		console.GlyphShell.Fprintf(os.Stdout, "%s %s", shell, commandFile)
-		cmd = exec.CommandContext(ctx, shell, commandFile)
+		cmd = shellexec.ScriptCommandContext(ctx, commandFile)
+		console.GlyphShell.Fprintf(os.Stdout, "%s", strings.Join(cmd.Args, " "))
 	default:
 		return errors.New("shell step has neither command nor command_file")
 	}

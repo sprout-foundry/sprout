@@ -36,9 +36,12 @@
 }
 
 /* Sidebar resize handle — flex child of wrapper, sits between sidebar and main content */
+/* z-index needs !important: ResizeHandle sets an inline z-index (1 at rest),
+ * which would drop the handle under the sidebar (100) and cut the half of its
+ * grab zone that overlaps the sidebar. */
 .sidebar-resize-handle {
   position: relative;
-  z-index: 101;
+  z-index: 101 !important;
   cursor: col-resize;
   touch-action: none;
   width: 8px;
@@ -1092,63 +1095,6 @@
   align-items: center;
 }
 
-.sidebar .search-replace-input {
-  flex: 1;
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  outline: none;
-  min-height: 32px;
-}
-
-.sidebar .search-replace-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.sidebar .search-replace-input:focus {
-  outline: none;
-}
-
-.sidebar .search-replace-input:focus-visible {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
-}
-
-.sidebar .search-replace-btn {
-  height: 32px;
-  padding: 0 var(--space-3);
-  background: var(--accent-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--accent-fg);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  transition:
-    background,
-    color,
-    border-color,
-    box-shadow,
-    transform 0.15s var(--ease-out);
-}
-
-.sidebar .search-replace-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.sidebar .search-replace-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .sidebar .search-stats {
   font-size: 11px;
   color: var(--text-tertiary);
@@ -1413,7 +1359,7 @@
     top: 0;
     left: 0;
     right: 0;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     height: auto;
     width: 100vw;
     min-width: 100vw;
@@ -2077,14 +2023,16 @@
   flex-shrink: 0;
 }
 
-.git-sidebar-row-actions {
-  opacity: 0;
-  transition: opacity 0.1s ease;
+/* Hidden actions take no room, so names get the row's width until the row is
+ * hovered, selected or focused. */
+.git-sidebar-file-row .git-sidebar-row-actions {
+  display: none;
 }
 
 .git-sidebar-file-row:hover .git-sidebar-row-actions,
-.git-sidebar-file-row.selected .git-sidebar-row-actions {
-  opacity: 1;
+.git-sidebar-file-row.selected .git-sidebar-row-actions,
+.git-sidebar-file-row:focus-within .git-sidebar-row-actions {
+  display: inline-flex;
 }
 
 .git-sidebar-file-section-title span {
@@ -2311,6 +2259,10 @@
   color: var(--text-primary);
   font-weight: 500;
   flex-shrink: 0;
+  /* The directory gives way first; a name longer than the row ellipsizes. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .git-sidebar-file-row.previewing .git-sidebar-file-dir,

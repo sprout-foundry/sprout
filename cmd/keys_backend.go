@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
@@ -58,11 +59,11 @@ After successful migration, the file store is cleared.`,
 		}
 
 		if len(migrated) == 0 {
-			fmt.Println("No credentials found in file store. Nothing to migrate.")
+			console.GlyphInfo.Print("No credentials in the file store — nothing to migrate.")
 			return nil
 		}
 
-		fmt.Printf("Successfully migrated %d credential(s) to OS keyring:\n", len(migrated))
+		console.GlyphSuccess.Printf("Migrated %d credential(s) to the OS keyring", len(migrated))
 		for _, p := range migrated {
 			fmt.Printf("  - %s\n", p)
 		}
@@ -83,11 +84,11 @@ After successful migration, the keyring entries are cleared.`,
 		}
 
 		if len(migrated) == 0 {
-			fmt.Println("No credentials found in keyring. Nothing to migrate.")
+			console.GlyphInfo.Print("No credentials in the keyring — nothing to migrate.")
 			return nil
 		}
 
-		fmt.Printf("Successfully migrated %d credential(s) to file store:\n", len(migrated))
+		console.GlyphSuccess.Printf("Migrated %d credential(s) to the file store", len(migrated))
 		for _, p := range migrated {
 			fmt.Printf("  - %s\n", p)
 		}
@@ -154,7 +155,7 @@ func runBackendSet(arg string) error {
 	mode := strings.ToLower(arg)
 
 	if mode != "keyring" && mode != "file" && mode != "auto" {
-		return fmt.Errorf("invalid mode %q (must be 'keyring', 'file', or 'auto')", mode)
+		return usageErrorAt("sprout keys backend set", "invalid mode %q (must be 'keyring', 'file', or 'auto')", mode)
 	}
 
 	// Warn if switching away from keyring with credentials still in it
@@ -164,10 +165,10 @@ func runBackendSet(arg string) error {
 			return fmt.Errorf("failed to list keyring providers: %w", err)
 		}
 		if len(providers) > 0 {
-			fmt.Printf("Warning: %d provider(s) still have credentials in the OS keyring.\n", len(providers))
-			fmt.Println("Run 'sprout keys backend migrate-to-file' to migrate them first.")
+			console.GlyphWarning.Printf("%d provider(s) still have credentials in the OS keyring", len(providers))
+			console.Hintln(os.Stderr, "Run 'sprout keys backend migrate-to-file' to migrate them first.")
 			if mode == "auto" {
-				fmt.Println("After migration, credentials will be picked up from the file store.")
+				console.Hintln(os.Stderr, "After migration, credentials are read from the file store.")
 			}
 		}
 	}
@@ -182,8 +183,7 @@ func runBackendSet(arg string) error {
 		if err := os.Remove(modePath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove backend mode file: %w", err)
 		}
-		fmt.Println("Storage mode reset to auto-detection.")
-		fmt.Println("The backend will be auto-detected on next use.")
+		console.GlyphSuccess.Print("Storage mode reset to auto-detection")
 
 	case "keyring":
 		if !credentials.IsKeyringAvailable() {
@@ -193,7 +193,7 @@ func runBackendSet(arg string) error {
 			return fmt.Errorf("failed to set storage mode: %w", err)
 		}
 		credentials.ResetStorageBackend()
-		fmt.Println("Storage mode set to: keyring")
+		console.GlyphSuccess.Print("Storage mode set to keyring")
 
 		// Offer to migrate file credentials
 		store, err := credentials.Load()
@@ -201,7 +201,8 @@ func runBackendSet(arg string) error {
 			return fmt.Errorf("failed to load file credentials: %w", err)
 		}
 		if len(store) > 0 {
-			fmt.Printf("Found %d credential(s) in file store. Run 'sprout keys backend migrate-to-keyring' to migrate them.\n", len(store))
+			console.GlyphInfo.Printf("%d credential(s) are in the file store", len(store))
+			console.Hintln(os.Stderr, "Run 'sprout keys backend migrate-to-keyring' to migrate them.")
 		}
 
 	case "file":
@@ -209,7 +210,7 @@ func runBackendSet(arg string) error {
 			return fmt.Errorf("failed to set storage mode: %w", err)
 		}
 		credentials.ResetStorageBackend()
-		fmt.Println("Storage mode set to: file")
+		console.GlyphSuccess.Print("Storage mode set to file")
 	}
 
 	return nil

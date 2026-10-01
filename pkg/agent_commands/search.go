@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -189,7 +190,7 @@ func runSearch(args []string) ([]search.SearchResult, error) {
 			return nil, fmt.Errorf("build search index: %w", err)
 		}
 		if err := search.SaveIndex(path, idx); err != nil {
-			fmt.Fprintf(os.Stderr, "[search] warning: could not save index: %v\n", err)
+			console.GlyphWarning.Printf("Could not save the search index: %v", err)
 		}
 	}
 

@@ -234,22 +234,7 @@ func (c *Config) SaveToDir(dir string) error {
 // layers use WorkspaceConfigFileName so they can never collide with the
 // user-level config.json when the workspace root is $HOME.
 func (c *Config) SaveToDirAs(dir, fileName string) error {
-	// Same defense as Save() — refuse to persist the test sentinel even
-	// when callers bypass GetConfigPath() and target an explicit dir.
-	// See sanitizeTestProvider for context.
-	sanitizeTestProvider(c)
-
-	// Migrate any plaintext secrets in MCP server env blocks to the
-	// credential store before persisting.
-	for name := range c.MCP.Servers {
-		s := c.MCP.Servers[name]
-		count, err := mcp.MigrateEnvSecretsFromServer(name, &s)
-		if err != nil {
-			log.Printf("[config] Warning: failed to migrate MCP secrets for server %s: %v", name, err)
-		} else if count > 0 {
-			c.MCP.Servers[name] = s
-		}
-	}
+	c.prepareForPersist()
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create config directory %q: %w", dir, err)
@@ -273,4 +258,25 @@ func (c *Config) SaveToDirAs(dir, fileName string) error {
 	}
 
 	return nil
+}
+
+// prepareForPersist scrubs what must never reach disk before any save that
+// targets an explicit dir.
+func (c *Config) prepareForPersist() {
+	// Same defense as Save() — refuse to persist the test sentinel even
+	// when callers bypass GetConfigPath() and target an explicit dir.
+	// See sanitizeTestProvider for context.
+	sanitizeTestProvider(c)
+
+	// Migrate any plaintext secrets in MCP server env blocks to the
+	// credential store before persisting.
+	for name := range c.MCP.Servers {
+		s := c.MCP.Servers[name]
+		count, err := mcp.MigrateEnvSecretsFromServer(name, &s)
+		if err != nil {
+			log.Printf("[config] Warning: failed to migrate MCP secrets for server %s: %v", name, err)
+		} else if count > 0 {
+			c.MCP.Servers[name] = s
+		}
+	}
 }

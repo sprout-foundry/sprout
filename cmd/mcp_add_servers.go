@@ -23,8 +23,7 @@ import (
 
 func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("Git MCP Server Setup")
-	fmt.Println("========================")
+	console.Heading(os.Stdout, "Git MCP Server Setup")
 	fmt.Println()
 
 	// Check if Git server already exists
@@ -170,8 +169,7 @@ func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (stri
 
 func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
-	console.GlyphInfo.Print("Custom MCP Server Setup")
-	fmt.Println("==========================")
+	console.Heading(os.Stdout, "Custom MCP Server Setup")
 	fmt.Println()
 
 	// Server name

@@ -59,10 +59,10 @@ func FormatToolEndLine(depth int, persona, icon, toolName, preview string, durat
 	badge := console.PersonaBadge(depth, persona)
 	if cmd, ok := ShellCommandLabel(toolName, preview); ok {
 		return fmt.Sprintf("%s  %s %s%s %s· %.1fs%s",
-			indent, icon, badge, cmd, console.ColorDim, durationSec, console.ColorReset)
+			indent, icon, badge, cmd, console.Esc(console.ColorDim), durationSec, console.Esc(console.ColorReset))
 	}
 	return fmt.Sprintf("%s  %s %s%s%s %s· %.1fs%s",
-		indent, icon, badge, toolName, preview, console.ColorDim, durationSec, console.ColorReset)
+		indent, icon, badge, toolName, preview, console.Esc(console.ColorDim), durationSec, console.Esc(console.ColorReset))
 }
 
 // FormatToolRunLine renders a collapsed line for repeated calls of the
@@ -84,7 +84,7 @@ func FormatToolRunLine(depth int, persona, icon, toolName string, count int, arg
 		preview = " (" + strings.Join(argsTrail, ", ") + ")"
 	}
 	return fmt.Sprintf("%s  %s%s%s × %d%s %s· %.1fs%s",
-		indent, icon, badge, toolName, count, preview, console.ColorDim, totalSec, console.ColorReset)
+		indent, icon, badge, toolName, count, preview, console.Esc(console.ColorDim), totalSec, console.Esc(console.ColorReset))
 }
 
 // ToolEndGlyph picks the end-of-call glyph per the CLI display grammar:
@@ -124,14 +124,14 @@ func ComputeDiffStat(toolName, arguments string) string {
 		if added == 0 && removed == 0 {
 			return ""
 		}
-		return fmt.Sprintf("%s+%d -%d%s", console.ColorGreen, added, removed, console.ColorReset)
+		return fmt.Sprintf("%s+%d -%d%s", console.Esc(console.ColorGreen), added, removed, console.Esc(console.ColorReset))
 	case "write_file":
 		content, _ := args["content"].(string)
 		added := countLines(content)
 		if added == 0 {
 			return ""
 		}
-		return fmt.Sprintf("%s+%d%s", console.ColorGreen, added, console.ColorReset)
+		return fmt.Sprintf("%s+%d%s", console.Esc(console.ColorGreen), added, console.Esc(console.ColorReset))
 	case "write_structured_file":
 		// content is in "data" field as structured JSON — count lines in the
 		// serialized form for a rough size signal
@@ -139,7 +139,7 @@ func ComputeDiffStat(toolName, arguments string) string {
 			jsonBytes, _ := json.Marshal(data)
 			added := countLines(string(jsonBytes))
 			if added > 0 {
-				return fmt.Sprintf("%s+%d%s", console.ColorGreen, added, console.ColorReset)
+				return fmt.Sprintf("%s+%d%s", console.Esc(console.ColorGreen), added, console.Esc(console.ColorReset))
 			}
 		}
 	}

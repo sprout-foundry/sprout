@@ -5,8 +5,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 )
+
+// posixModes reports whether mode bits describe who can access a file.
+// On Windows access is governed by ACLs and Go synthesizes 0666/0777
+// (0444/0555 when read-only), so mode checks would warn on every startup
+// and chmod cannot tighten anything.
+var posixModes = runtime.GOOS != "windows"
 
 // PermissionChecker provides utilities to check file and directory permissions
 // for security-sensitive files in the sprout configuration directory.
@@ -24,6 +32,9 @@ func NewPermissionChecker(configDir string) *PermissionChecker {
 // CheckConfigDirPermissions checks that the config directory has secure permissions (0700).
 // Returns a warning message if permissions are too open.
 func (pc *PermissionChecker) CheckConfigDirPermissions() string {
+	if !posixModes {
+		return ""
+	}
 	info, err := os.Stat(pc.configDir)
 	if err != nil {
 		return "" // Directory doesn't exist yet, that's OK
@@ -46,6 +57,9 @@ func (pc *PermissionChecker) CheckConfigDirPermissions() string {
 // CheckFilePermissions checks that a file has secure permissions (0600).
 // Returns a warning message if permissions are too open.
 func (pc *PermissionChecker) CheckFilePermissions(filePath string) string {
+	if !posixModes {
+		return ""
+	}
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return "" // File doesn't exist yet, that's OK
@@ -124,6 +138,9 @@ func (pc *PermissionChecker) CheckAllSecurityFiles() []string {
 // Returns a list of errors encountered.
 func (pc *PermissionChecker) FixPermissions() []error {
 	errors := []error{}
+	if !posixModes {
+		return errors
+	}
 
 	// Fix config directory
 	dirInfo, err := os.Stat(pc.configDir)
@@ -318,21 +335,36 @@ func CheckSymlinkSafety(path string, configDir string) string {
 		return ""
 	}
 
-	// Check if target is absolute and outside config dir
-	if filepath.IsAbs(target) {
-		absTarget, err := filepath.Abs(target)
-		if err == nil {
-			if !filepath.HasPrefix(absTarget, configDir) {
-				return fmt.Sprintf(
-					"WARNING: %q is a symlink pointing outside config directory (%q). "+
-						"This may allow unauthorized access to sensitive data.",
-					path, absTarget,
-				)
-			}
-		}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(path), target)
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return ""
+	}
+	if !isWithinDir(absTarget, configDir) {
+		return fmt.Sprintf(
+			"WARNING: %q is a symlink pointing outside config directory (%q). "+
+				"This may allow unauthorized access to sensitive data.",
+			path, absTarget,
+		)
 	}
 
 	return ""
+}
+
+// isWithinDir reports whether path is dir or below it. filepath.Rel handles
+// Windows' case-insensitivity; its cross-volume error counts as outside.
+func isWithinDir(path, dir string) bool {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absDir, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // CheckAllSymlinks checks all files in the config directory for symlinks pointing outside.

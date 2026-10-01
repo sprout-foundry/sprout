@@ -22,6 +22,8 @@ import {
   normalizeTodoList,
   shouldSuppressAgentMessageInChat,
 } from '../webSocketEventHelpers';
+import { chatTranscriptToMessages } from '../../utils/chatTranscript';
+import { recordConversationCleared } from '../bootSessionRestore';
 
 // Handle connection_status event
 export const handleConnectionStatus = (ctx: EventHandlerContext): void => {
@@ -172,8 +174,13 @@ export const handleFileChanged = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'file';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as FileChangedData & { ts?: string };
+  const data = (event.data ?? {}) as FileChangedData & { ts?: string; source?: string };
   const path = String(data.path || data.file_path || 'Unknown');
+  // The user's own saves and tree operations aren't the agent's work.
+  if (data.source === 'user') {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    return;
+  }
   const baseFileEdit = {
     path,
     action: String(data.action || data.operation || 'edited'),
@@ -332,6 +339,7 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
   // transcript, which is exactly the visible effect the user expects the
   // instant the button is pressed.
   const isTranscriptReset = data.change === 'switch' || data.change === 'clear';
+  if (data.change === 'clear') recordConversationCleared();
   if (isTranscriptReset && activeChatIdRef.current && chatId === activeChatIdRef.current) {
     // Another client switched/cleared this chat's session — reload the
     // transcript. Use the read-only fetch, NOT switchChatSession: a back-end
@@ -342,22 +350,26 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
     fetchChatSessionMessages(chatId)
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
-        const backendMessages: Message[] = (response.chat_session.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${chatId}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-          }));
-        setState((prev) => ({
-          activeChatId: chatId,
-          messages: backendMessages,
-          // A cleared chat has no in-flight work.
-          ...(data.change === 'clear'
-            ? { isProcessing: false, toolExecutions: [], currentTodos: [], queryProgress: null }
-            : {}),
-        }));
+        const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
+        setState((prev) => {
+          if (data.change === 'clear') {
+            // A cleared chat has no in-flight work.
+            return {
+              activeChatId: chatId,
+              messages: backendMessages,
+              isProcessing: false,
+              toolExecutions: [],
+              currentTodos: [],
+              queryProgress: null,
+            };
+          }
+          // A switch echo — usually of this client's own switch — must not
+          // cut a running chat's streamed text: the server transcript only
+          // has it once the turn is saved. Take the server copy when it has
+          // caught up or nothing is running (the switch path's rule).
+          const useBackend = backendMessages.length >= prev.messages.length || !response.chat_session.active_query;
+          return { activeChatId: chatId, messages: useBackend ? backendMessages : prev.messages };
+        });
       })
       .catch((err) => debugLog('[session_changed] switch reload failed:', err));
     return;

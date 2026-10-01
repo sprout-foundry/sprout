@@ -116,20 +116,13 @@ Examples:
 		asJSON, _ := cmd.Flags().GetBool("json")
 
 		if !explainSupportedTools[toolName] {
-			return agenterrors.NewInvalidInputError(
-				fmt.Sprintf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList()),
-				nil,
-			).WithMetadata("tool", toolName)
+			return usageErrorf(cmd, "unsupported --tool %q (valid: %s)", toolName, explainToolList())
 		}
 
 		cliArgs := buildExplainArgs(args, toolName, pathFlag, opFlag)
 
-		if msg := validateExplainInput(toolName, cliArgs); msg != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), msg)
-			return agenterrors.NewInvalidInputError(
-				fmt.Sprintf("no input provided for tool %q", toolName),
-				nil,
-			).WithMetadata("tool", toolName)
+		if usage := validateExplainInput(toolName, cliArgs); usage != "" {
+			return usageErrorWithHint(cmd, usage, "nothing to classify")
 		}
 
 		secResult := tools.ClassifyToolCall(toolName, cliArgs)
@@ -188,18 +181,15 @@ func validateExplainInput(toolName string, args map[string]interface{}) string {
 	switch toolName {
 	case "shell_command":
 		if c, _ := args["command"].(string); strings.TrimSpace(c) == "" {
-			return `Usage: sprout explain '<command>'
-Provide a command string to classify (e.g. sprout explain 'rm -rf /tmp/foo').`
+			return "Usage: sprout explain '<command>'   e.g. sprout explain 'rm -rf /tmp/foo'"
 		}
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		if p, _ := args["path"].(string); strings.TrimSpace(p) == "" {
-			return fmt.Sprintf(`Usage: sprout explain --tool %s --path <path>
-Provide a --path to classify (e.g. sprout explain --tool write_file --path ./foo.txt).`, toolName)
+			return fmt.Sprintf("Usage: sprout explain --tool %s --path <path>", toolName)
 		}
 	case "git":
 		if op, _ := args["operation"].(string); strings.TrimSpace(op) == "" {
-			return `Usage: sprout explain --tool git --operation <op>
-Provide a --operation to classify (e.g. sprout explain --tool git --operation push).`
+			return "Usage: sprout explain --tool git --operation <op>   e.g. --operation push"
 		}
 	}
 	return ""

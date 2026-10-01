@@ -208,12 +208,12 @@ func (g Glyph) Prefix() string {
 // common call shape. Use Printf for format-string callers, or
 // Fprintln/Fprintf if you need to target a specific writer (tests).
 func (g Glyph) Print(msg string) {
-	fmt.Fprintln(os.Stderr, g.Prefix()+msg)
+	PrintLine(g.Prefix() + msg)
 }
 
 // Printf writes a formatted line with the glyph prefix to stderr.
 func (g Glyph) Printf(format string, args ...any) {
-	fmt.Fprint(os.Stderr, g.Prefix()+fmt.Sprintf(format, args...)+"\n")
+	PrintLine(g.Prefix() + fmt.Sprintf(format, args...))
 }
 
 // Fprintln writes the glyph-prefixed message to an explicit writer.

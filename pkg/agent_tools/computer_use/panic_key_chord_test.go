@@ -323,21 +323,6 @@ func TestFormatChordForLog(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// errMissingHelper tests
-// -----------------------------------------------------------------------
-
-func TestErrMissingHelper(t *testing.T) {
-	err := errMissingHelper("xdotool")
-	if err == nil {
-		t.Fatal("errMissingHelper() returned nil")
-	}
-	got := err.Error()
-	if got != "chord watcher requires xdotool to be installed and on $PATH; install it or set computer_use.panic_key_chord = \"disabled\"" {
-		t.Errorf("errMissingHelper() = %q, want friendly error message", got)
-	}
-}
-
-// -----------------------------------------------------------------------
 // GOOSName tests
 // -----------------------------------------------------------------------
 

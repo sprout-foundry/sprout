@@ -1,6 +1,6 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { supportsLocalTerminal } from '../config/mode';
+import { isCloud, supportsLocalTerminal } from '../config/mode';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -18,10 +18,13 @@ import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { requestComposerFocus } from '../hooks/useComposerFocusRequest';
 import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import { forkChatSession } from '../services/chatSessions';
+import { executeCommand } from '../services/api/chatApi';
+import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
@@ -45,6 +48,13 @@ import Sidebar from './Sidebar';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
+import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
+import PhoneTabBar from './layered/PhoneTabBar';
+import NotificationCenterHost from './NotificationCenterHost';
+import PlatformHome from './layered/PlatformHome';
+import { closeHome } from '../services/homeView';
+import { startPlatformNotifications } from '../services/platformNotifications';
 
 interface AppContentProps {
   state: AppState;
@@ -144,7 +154,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onStopProcessing,
   onRetractSteer,
   queuedMessages,
-  queuedMessagesCount,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -166,6 +175,7 @@ const AppContent: React.FC<AppContentProps> = ({
 }) => {
   const {
     buffers,
+    buffersRef,
     activeBufferId,
     activePaneId,
     openFile,
@@ -177,6 +187,7 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferClosable,
     splitPane,
     switchPane,
+    switchToBuffer,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
@@ -197,8 +208,18 @@ const AppContent: React.FC<AppContentProps> = ({
     onSwipeRight: onToggleSidebar,
     enabled: isMobile,
   });
+  useEffect(() => (isCloud ? startPlatformNotifications() : undefined), []);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
+  // The layered layout's header search opens the palette from outside this tree.
+  useEffect(() => {
+    const open = () => {
+      setCommandPaletteMode('all');
+      setIsCommandPaletteOpen(true);
+    };
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, open);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, open);
+  }, []);
   const [isForking, setIsForking] = useState(false);
   // The tool id whose inline detail is currently open in the chat.
   // Toggled by a tool pill; reset when the active chat session changes.
@@ -263,6 +284,19 @@ const AppContent: React.FC<AppContentProps> = ({
     }));
   }, []);
 
+  const clearConversation = useCallback(
+    async (id: string) => {
+      if (id === activeChatId) handleChatCleared();
+      try {
+        const result = await executeCommand(clientFetch, '/clear', id);
+        if (result.error) notificationBus.notify('error', 'Clear conversation', result.error);
+      } catch (err) {
+        notificationBus.notify('error', 'Clear conversation', err instanceof Error ? err.message : String(err));
+      }
+    },
+    [activeChatId, handleChatCleared],
+  );
+
   // SP-139 Phase 2: the turn change strip fetched an agent-session diff;
   // open it as a review buffer. Shaped as a GitDiffResponse so the
   // DiffWorkspaceTab text view renders it directly (no staged/unstaged
@@ -309,20 +343,6 @@ const AppContent: React.FC<AppContentProps> = ({
     [setAppState],
   );
 
-  // SP-142 §3: send-anyway on a workspace_busy rejection — queue locally
-  // behind the running chat (the drain effect fires it on completion) and
-  // retire the notice + draft.
-  const handleSendAnyway = useCallback(
-    (message: string) => {
-      const trimmed = message.trim();
-      if (!trimmed) return;
-      onQueueMessage(trimmed);
-      setInputValue('');
-      setAppState((prev) => ({ ...prev, workspaceBusy: null }));
-    },
-    [onQueueMessage, setAppState, setInputValue],
-  );
-
   const handleDismissBusy = useCallback(() => {
     setAppState((prev) => ({ ...prev, workspaceBusy: null }));
   }, [setAppState]);
@@ -360,8 +380,6 @@ const AppContent: React.FC<AppContentProps> = ({
     isSwitchingInstance,
     onInstanceChange: handleInstanceChange,
   } = useInstances({ apiService, isConnected });
-  const buffersRef = useRef(buffers);
-  buffersRef.current = buffers;
 
   // Session search restore: call API then dispatch the custom event
   const log = useLog();
@@ -417,6 +435,10 @@ const AppContent: React.FC<AppContentProps> = ({
   // rejects cross-mode switches (mode_mismatch). Only code/design are lane
   // modes today; a future mode id maps to the code lane until it earns one.
   const chatLane: 'code' | 'design' = workspaceMode.id === 'design' ? 'design' : 'code';
+  const laneChatSessions = useMemo(
+    () => (chatSessions ?? []).filter((c) => (c.mode === 'design' ? 'design' : 'code') === chatLane),
+    [chatSessions, chatLane],
+  );
   const chatModePinning = useChatModePinning({
     mode: workspaceMode.id,
     activeChatId,
@@ -448,7 +470,6 @@ const AppContent: React.FC<AppContentProps> = ({
     mode: workspaceMode.id,
     buffersRef,
     updateBufferTitle,
-    updateBufferMetadata,
     setBufferPinned,
     setBufferClosable,
     closeBuffer,
@@ -462,21 +483,55 @@ const AppContent: React.FC<AppContentProps> = ({
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
       if (view === 'chat') {
+        // Land on the active chat's own tab. Reopening the generic chat path
+        // refocused whichever chat first claimed it, and the tab-driven
+        // switch then moved the conversation back to that chat.
+        const ownTab = Array.from(buffersRef.current?.values() ?? []).find(
+          (b) => b.kind === 'chat' && activeChatId && b.metadata?.chatId === activeChatId,
+        );
         openWorkspaceBuffer({
           kind: 'chat',
-          path: '__workspace/chat',
-          title: 'Chat',
+          path: ownTab?.file.path ?? '__workspace/chat',
+          title: ownTab?.file.name ?? 'Chat',
           ext: '.chat',
-          isPinned: true,
           isClosable: false,
         });
       }
       onViewChange(view);
     },
-    [onViewChange, openWorkspaceBuffer],
+    [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
+
+  // Open a conversation from outside the tabs (the layered sidebar): focus its
+  // chat tab — or open one bound to it — exactly as clicking the tab would,
+  // then switch chat state. The focused chat tab drives the active chat
+  // (useActiveChatTab), so opening a generic chat tab would switch it back.
+  const openConversation = useCallback(
+    (id: string, title?: string) => {
+      const existing = Array.from(buffersRef.current?.values() ?? []).find(
+        (b) => b.kind === 'chat' && b.metadata?.chatId === id,
+      );
+      if (existing) {
+        switchToBuffer(existing.id);
+      } else {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: `__workspace/chat/${id}`,
+          title: title ?? chatSessions?.find((c) => c.id === id)?.name ?? 'Chat',
+          isPinned: false,
+          isClosable: true,
+          metadata: { chatId: id },
+        });
+      }
+      const switched = Promise.resolve(onActiveChatChange?.(id, 'code'));
+      onViewChange('chat');
+      // A phone keyboard would cover the conversation being opened.
+      if (!isMobile) void switched.finally(() => requestComposerFocus(id));
+    },
+    [chatSessions, isMobile, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
+  );
 
   // SP-140-5: the Design mode's active section (its rail entries). Owned here
   // because the rail (Sidebar) and the surface are siblings and must agree on
@@ -611,7 +666,11 @@ const AppContent: React.FC<AppContentProps> = ({
     () => visibleCommands().map((cmd) => ({ ...cmd, shortcut: hotkeyForCommand(cmd.id) ?? undefined })),
     [hotkeyForCommand],
   );
-  const { allFiles: paletteAllFiles, isLoadingFiles: paletteIsLoading } = useFileIndex({
+  const {
+    allFiles: paletteAllFiles,
+    isLoadingFiles: paletteIsLoading,
+    workspaceRoot: paletteWorkspaceRoot,
+  } = useFileIndex({
     apiService,
     isOpen: isCommandPaletteOpen,
     log: paletteLog,
@@ -768,7 +827,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onSidebarToggle();
         return;
       }
-      if (commandId === 'toggle_terminal' && supportsLocalTerminal) {
+      if (commandId === 'toggle_terminal') {
         onTerminalExpandedChange(!isTerminalExpanded);
         return;
       }
@@ -914,23 +973,57 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeChatId, isForking, setAppState],
   );
 
+  // The queue holds every chat's held-back messages; the composer shows (and
+  // edits) only this chat's, so its actions translate back to queue positions.
+  const chatQueue = useMemo(() => {
+    const positions: number[] = [];
+    queuedMessages.forEach((entry, i) => {
+      if (!entry.chatId || entry.chatId === activeChatId) positions.push(i);
+    });
+    return {
+      messages: positions.map((i) => queuedMessages[i].message),
+      remove: (index: number) => {
+        if (positions[index] !== undefined) onQueueMessageRemove(positions[index]);
+      },
+      edit: (index: number, text: string) => {
+        if (positions[index] !== undefined) onQueueMessageEdit(positions[index], text);
+      },
+      reorder: (from: number, to: number) => {
+        if (positions[from] !== undefined && positions[to] !== undefined) {
+          onQueueReorder(positions[from], positions[to]);
+        }
+      },
+      clear: () => {
+        if (positions.length === queuedMessages.length) {
+          onClearQueuedMessages();
+          return;
+        }
+        for (const i of [...positions].reverse()) onQueueMessageRemove(i);
+      },
+    };
+  }, [queuedMessages, activeChatId, onQueueMessageRemove, onQueueMessageEdit, onQueueReorder, onClearQueuedMessages]);
+
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
       onSendMessage: sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages: queuedMessages.map((entry) => entry.message),
-      queuedMessagesCount,
+      onQueueMessageRemove: chatQueue.remove,
+      onQueueMessageEdit: chatQueue.edit,
+      onQueueReorder: chatQueue.reorder,
+      onClearQueuedMessages: chatQueue.clear,
+      queuedMessages: chatQueue.messages,
+      queuedMessagesCount: chatQueue.messages.length,
       inputValue,
       onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
-      workspaceBusy: state.workspaceBusy,
-      onSendAnyway: handleSendAnyway,
+      // The notice belongs to the chat whose send was held back, not
+      // whichever chat is on screen.
+      workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
+      // Names the chat for per-chat actions (Export); inactive panes pass
+      // their own, so without it only background panes offered Export.
+      chatId: activeChatId ?? undefined,
       onDismissBusy: handleDismissBusy,
       pendingDraft: inputValue,
       toolExecutions: state.toolExecutions,
@@ -959,18 +1052,13 @@ const AppContent: React.FC<AppContentProps> = ({
       state.messages,
       sendWithModePin,
       onQueueMessage,
-      onQueueMessageRemove,
-      onQueueMessageEdit,
-      onQueueReorder,
-      onClearQueuedMessages,
-      queuedMessages,
-      queuedMessagesCount,
+      chatQueue,
       inputValue,
       setInputValue,
       state.isProcessing,
       state.lastError,
       state.workspaceBusy,
-      handleSendAnyway,
+      activeChatId,
       handleDismissBusy,
       inputValue,
       state.toolExecutions,
@@ -1133,6 +1221,38 @@ const AppContent: React.FC<AppContentProps> = ({
             isMobile={isMobile}
             sidebarCollapsed={sidebarCollapsed}
             onSidebarToggle={onSidebarToggle}
+            conversations={{
+              // The mode's own lane, like its chat tabs (SP-142).
+              sessions: laneChatSessions,
+              activeId: activeChatId,
+              // The chat list is only refetched on switch, so its
+              // active_query goes stale; the per-chat UI state is live.
+              isWorking: (id) => (id === activeChatId ? state.isProcessing : !!perChatCache?.[id]?.isProcessing),
+              inMain: showContextSidebar,
+              onSelect: (id) => openConversation(id),
+              onRename: onRenameChat,
+              onDelete: onDeleteChat ? (id) => void onDeleteChat(id) : undefined,
+              // The daemon keeps its built-in chat; hosted chats can all go.
+              canDelete: (id) => id !== 'default',
+              // The kept chat can still be emptied.
+              onClear: (id) => void clearConversation(id),
+              history: isLayeredLayout ? (
+                <ChatHistorySwitcher
+                  chatId={activeChatId ?? undefined}
+                  onRestoreSession={handleSessionSearchRestore}
+                  iconOnly
+                />
+              ) : undefined,
+              onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
+              onCreate: onCreateChat
+                ? () => {
+                    void (async () => {
+                      const id = await onCreateChat('code');
+                      if (id) openConversation(id, 'New Chat');
+                    })();
+                  }
+                : undefined,
+            }}
             modes={workspaceModes}
             activeModeId={workspaceMode.id}
             onSelectMode={handleSelectMode}
@@ -1199,10 +1319,23 @@ const AppContent: React.FC<AppContentProps> = ({
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       ) : null}
+      {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
+      <NotificationCenterHost />
+      {isLayeredLayout && isCloud && isMobile && (
+        <PhoneTabBar
+          drawerOpen={isSidebarOpen}
+          onToggleDrawer={onToggleSidebar}
+          onCloseDrawer={onCloseSidebar}
+          terminalOpen={isTerminalExpanded}
+          onLeaveTerminal={() => onTerminalExpandedChange(false)}
+        />
+      )}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onOpenFile={(filePath) => {
+          // Search stays usable above Home; what it opens shows in the editor.
+          closeHome();
           const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
           const extensionIndex = fileName.lastIndexOf('.');
           const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
@@ -1211,15 +1344,17 @@ const AppContent: React.FC<AppContentProps> = ({
           // recordRecentFile call needed here.
         }}
         onToggleSidebar={onSidebarToggle}
-        onToggleTerminal={supportsLocalTerminal ? () => onTerminalExpandedChange(!isTerminalExpanded) : () => {}}
+        onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}
         initialMode={commandPaletteMode}
         onNavigateToLine={(line) => {
+          closeHome();
           document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
         }}
         commands={paletteCommands}
         isLoading={paletteIsLoading}
         recentFiles={paletteRecentFiles}
+        workspaceRoot={paletteWorkspaceRoot}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onSearchWorkspaceSymbols={handlePaletteSearchWorkspaceSymbols}

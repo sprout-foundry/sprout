@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // TranscriptCommand implements the /transcript slash command, a
@@ -102,7 +103,7 @@ func (c *TranscriptCommand) Execute(args []string, chatAgent *agent.Agent) error
 		workingDir, _ := os.Getwd()
 		paths, err := agent.ListTranscriptSnapshots(sessionID, workingDir)
 		if err != nil {
-			fmt.Fprintf(c.out(), "[transcript] could not list prior snapshots: %v\n", err)
+			console.GlyphWarning.Fprintf(c.out(), "Could not list prior snapshots: %v", err)
 		} else if len(paths) > 0 {
 			priorPath = paths[len(paths)-1]
 		}
@@ -116,23 +117,23 @@ func (c *TranscriptCommand) Execute(args []string, chatAgent *agent.Agent) error
 	if err != nil {
 		return fmt.Errorf("failed to capture transcript snapshot: %w", err)
 	}
-	fmt.Fprintf(c.out(), "\n[transcript] snapshot: %s\n", path)
+	console.GlyphSuccess.Fprintf(c.out(), "Snapshot: %s", path)
 
 	if wantMarkdown {
 		mdPath, mdErr := writeTranscriptMarkdown(path)
 		if mdErr != nil {
-			fmt.Fprintf(c.out(), "[transcript] markdown render failed: %v\n", mdErr)
+			console.GlyphWarning.Fprintf(c.out(), "Markdown render failed: %v", mdErr)
 		} else {
-			fmt.Fprintf(c.out(), "[transcript] markdown: %s\n", mdPath)
+			console.GlyphSuccess.Fprintf(c.out(), "Markdown: %s", mdPath)
 		}
 	}
 
 	if wantDiff {
 		if priorPath == "" {
-			fmt.Fprintln(c.out(), "[transcript] no prior snapshot for this session to diff against")
+			console.GlyphInfo.Fprintln(c.out(), "No prior snapshot for this session to diff against.")
 		} else {
 			if err := printTranscriptDiff(c.out(), priorPath, path); err != nil {
-				fmt.Fprintf(c.out(), "[transcript] diff failed: %v\n", err)
+				console.GlyphWarning.Fprintf(c.out(), "Diff failed: %v", err)
 			}
 		}
 	}
@@ -239,10 +240,10 @@ func printTranscriptDiff(w io.Writer, olderPath, newerPath string) error {
 	}
 	diff := agent.DiffTranscriptSnapshots(older, newer)
 	if diff == nil {
-		fmt.Fprintln(w, "[transcript] diff produced no result (one snapshot was empty)")
+		console.GlyphInfo.Fprintln(w, "Diff produced no result (one snapshot was empty).")
 		return nil
 	}
-	fmt.Fprintln(w, "\n[transcript] diff vs previous snapshot:")
+	console.Heading(w, "Diff vs previous snapshot")
 	fmt.Fprintf(w, "       Previous: %s (%d msgs, %d checkpoints, %d tokens)\n",
 		filepath.Base(olderPath), diff.OlderMessageCount, diff.OlderCheckpointCount, diff.OlderTotalTokens)
 	fmt.Fprintf(w, "       Current:  %s (%d msgs, %d checkpoints, %d tokens)\n",

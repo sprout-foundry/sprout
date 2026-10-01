@@ -36,7 +36,7 @@ func NewVisionProcessor(client api.ClientInterface, logger *utils.Logger, debug 
 
 // GetCustomProviderConfig returns the custom provider configuration for a given type
 func GetCustomProviderConfig(providerType api.ClientType) (configuration.CustomProviderConfig, bool) {
-	configManager, err := configuration.NewManager()
+	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
 		return configuration.CustomProviderConfig{}, false
 	}
@@ -54,7 +54,7 @@ func GetCustomProviderConfig(providerType api.ClientType) (configuration.CustomP
 
 // GetCustomVisionProviders returns a list of custom providers that support vision
 func GetCustomVisionProviders() []api.ClientType {
-	configManager, err := configuration.NewManager()
+	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
 		return nil
 	}
@@ -85,7 +85,7 @@ func GetCustomVisionFallback(providerType api.ClientType) (api.ClientType, strin
 		return "", "", false
 	}
 
-	configManager, err := configuration.NewManager()
+	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
 		return "", "", false
 	}
@@ -317,7 +317,7 @@ func visionProviderCandidates() []api.ClientType {
 	// credentialed ones, then the rest (shared with onboarding's
 	// provider ordering). Explicit and stable — never alphabetical.
 	var cfg *configuration.Config
-	if cm, err := configuration.NewManager(); err == nil {
+	if cm, err := configuration.NewManagerSilent(); err == nil {
 		cfg = cm.GetConfig()
 	}
 	for _, name := range configuration.OrderProvidersByUsage(names, cfg) {

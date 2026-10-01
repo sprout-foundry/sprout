@@ -18,9 +18,11 @@ var rawLog bool // Flag to indicate if raw verbose log should be displayed
 
 var logCmd = &cobra.Command{
 	Use:   "log",
-	Short: "Print revision history or verbose log",
-	Long: `Displays a log of all changes made by sprout, allowing you to review, revert, or restore them.
-	Use the --raw-log flag to view the verbose internal log file.`,
+	Short: "Show the file-change revisions sprout has made in this project",
+	Long: `Show every file-change revision sprout has recorded in this project, so you
+can review, revert, or restore them. Pass --raw-log to print the internal log file.
+
+To prune stored revisions, use 'sprout history clear'.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if rawLog {
 			displayVerboseLog()

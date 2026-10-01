@@ -90,7 +90,7 @@ func TestNormalizeGitPath_EdgeCases(t *testing.T) {
 }
 
 func TestMakeGitRelativePath_SameAsRoot(t *testing.T) {
-	got := makeGitRelativePath("/workspace", "/workspace")
+	got := makeGitRelativePath(osAbs("/workspace"), osAbs("/workspace"))
 	if got != "." {
 		t.Errorf("got %q, want %q", got, ".")
 	}
@@ -104,7 +104,7 @@ func TestMakeGitRelativePath_EdgeCases(t *testing.T) {
 		want          string
 	}{
 		{"empty ws", "/ws/foo.go", "", "/ws/foo.go"},
-		{"nested in ws", "/ws/a/b/c.go", "/ws", "a/b/c.go"},
+		{"nested in ws", osAbs("/ws/a/b/c.go"), osAbs("/ws"), "a/b/c.go"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

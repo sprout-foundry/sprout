@@ -363,6 +363,36 @@ func (b *StreamingResponseBuilder) GetTokenGenerationDuration() time.Duration {
 }
 
 // ParseSSEData parses SSE data into a streaming response
+// StreamError is an error an OpenAI-compatible server sends inside an
+// already-open stream (`data: {"error": {...}}`), after its 200 status went
+// out.
+type StreamError struct {
+	Code    string
+	Message string
+}
+
+// ParseSSEError reports whether an SSE data payload is an in-stream error.
+// error.code may be a string or a number depending on the server.
+func ParseSSEError(data string) (StreamError, bool) {
+	var payload struct {
+		Error *struct {
+			Message string          `json:"message"`
+			Code    json.RawMessage `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(data), &payload); err != nil || payload.Error == nil {
+		return StreamError{}, false
+	}
+	code := strings.Trim(string(payload.Error.Code), `"`)
+	if code == "null" {
+		code = ""
+	}
+	if payload.Error.Message == "" && code == "" {
+		return StreamError{}, false
+	}
+	return StreamError{Code: code, Message: payload.Error.Message}, true
+}
+
 func ParseSSEData(data string) (*StreamingChatResponse, error) {
 	// Handle special [DONE] message
 	if data == "[DONE]" {

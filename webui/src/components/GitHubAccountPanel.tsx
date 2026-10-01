@@ -16,6 +16,8 @@ import { LogOut, Loader2, ExternalLink, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import './GitHubAccountPanel.css';
+import { usesPlatformGitHub } from '../services/platformGitHub';
+import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
 import { GITHUB_TOKENS_URL, clearGitHubAccount, storeToken, storeUser, validateToken } from '../services/githubService';
 import type { GitHubUser } from '../services/githubService';
 import {
@@ -38,7 +40,7 @@ export interface GitHubAccountPanelProps {
   compact?: boolean;
 }
 
-export default function GitHubAccountPanel({
+function TokenGitHubAccountPanel({
   user,
   onSignedIn,
   onSignedOut,
@@ -294,4 +296,9 @@ export default function GitHubAccountPanel({
       </p>
     </form>
   );
+}
+
+export default function GitHubAccountPanel(props: GitHubAccountPanelProps): ReactElement {
+  if (usesPlatformGitHub()) return <PlatformGitHubAccountCard compact={props.compact} />;
+  return <TokenGitHubAccountPanel {...props} />;
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -276,6 +277,78 @@ func (a *Agent) takePendingQueryDisplay() string {
 	return out
 }
 
+// rememberQueryDisplay records the bubble text shown for query when it
+// differs from the query itself.
+func (a *Agent) rememberQueryDisplay(query, display string) {
+	if a == nil || display == "" || display == query {
+		return
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	if a.queryDisplays == nil {
+		a.queryDisplays = make(map[string]string)
+	}
+	a.queryDisplays[query] = display
+}
+
+// queryDisplayPruneAt bounds the remembered displays: past it, entries whose
+// message has left the conversation (compacted, cleared) are forgotten.
+const queryDisplayPruneAt = 256
+
+// queryDisplaysFor returns the remembered bubble texts of the given user
+// messages. It never forgets an entry just because its message is missing
+// from this list: an export can run mid-turn, before the turn's message is
+// in the history, and forgetting then lost the display for good.
+func (a *Agent) queryDisplaysFor(messages []api.Message) map[string]string {
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	if len(a.queryDisplays) == 0 {
+		return nil
+	}
+	out := make(map[string]string)
+	for _, msg := range messages {
+		if msg.Role != "user" {
+			continue
+		}
+		key := StripUserMessageTimestamp(msg.Content)
+		if display, ok := a.queryDisplays[key]; ok {
+			out[key] = display
+		}
+	}
+	if len(a.queryDisplays) > queryDisplayPruneAt {
+		a.queryDisplays = make(map[string]string, len(out))
+		for k, v := range out {
+			a.queryDisplays[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (a *Agent) restoreQueryDisplays(displays map[string]string) {
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	a.queryDisplays = nil
+	for k, v := range displays {
+		if a.queryDisplays == nil {
+			a.queryDisplays = make(map[string]string, len(displays))
+		}
+		a.queryDisplays[k] = v
+	}
+}
+
+// SetWakeupDoneFn registers fn to run after each background resume turn,
+// with the turn's error. nil clears it.
+func (a *Agent) SetWakeupDoneFn(fn func(err error)) {
+	if fn == nil {
+		a.wakeupDoneFn.Store(nil)
+		return
+	}
+	a.wakeupDoneFn.Store(&fn)
+}
+
 // TryAutoResume checks whether there are pending background-task
 // notifications that warrant an automatic agent resume. If so, it
 // drains them and re-invokes the agent so it can act on the completed
@@ -354,6 +427,9 @@ func (a *Agent) TryAutoResume() bool {
 		a.setPendingQueryDisplay(display)
 		tokensBefore := a.GetTotalTokens()
 		_, err := a.ProcessQueryWithContinuityAs(QuerySourceAutoResume, msg)
+		if fn := a.wakeupDoneFn.Load(); fn != nil {
+			defer (*fn)(err)
+		}
 		if err != nil {
 			a.Logger().Debug("[wakeup] auto-resume failed: %v\n", err)
 			return

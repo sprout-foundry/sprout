@@ -1,0 +1,24 @@
+.chat-error-message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--accent-error);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.chat-error-message > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+/* A turn the user stopped before it finished. */
+.message-stopped {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}

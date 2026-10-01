@@ -104,7 +104,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 							return nil
 						}
 						lastInterruptAt = now
-						fmt.Println("(press Ctrl+C again to exit)")
+						console.Hintln(os.Stdout, "Press Ctrl+C again to exit.")
 						continue
 					}
 					// EOF and context cancellation are graceful exits, not
@@ -130,8 +130,8 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Handle exit commands (before history — don't persist these)
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
-				fmt.Println("\n-- Goodbye! Here's your session summary:")
-				fmt.Println("=====================================")
+				fmt.Println()
+				console.Heading(os.Stdout, "Session summary")
 				chatAgent.PrintConversationSummary(true)
 				printContinuationHint(chatAgent)
 				return nil
@@ -186,6 +186,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnStart := time.Now()
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
+			turnCostStart := chatAgent.GetTotalCost()
 			turnTotalStart := chatAgent.GetTotalTokens()
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
@@ -300,7 +301,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).
-			cliui.PrintPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart)
+			cliui.PrintPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
 			// Charge REPL-run auto-resume turns against the wakeup budget —
 			// the background-goroutine path does this in TryAutoResume, so
 			// this keeps both surfaces equivalent.

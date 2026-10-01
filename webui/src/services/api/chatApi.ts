@@ -117,8 +117,10 @@ export async function executeCommand(
   };
 }
 
-export async function stopQuery(fetchFn: typeof fetch): Promise<void> {
-  const response = await fetchFn('/api/query/stop', { method: 'POST' });
+export async function stopQuery(fetchFn: typeof fetch, chatId?: string): Promise<void> {
+  // Stop the given chat's query; without one the server stops the active chat.
+  const path = chatId ? `/api/query/stop?chat_id=${encodeURIComponent(chatId)}` : '/api/query/stop';
+  const response = await fetchFn(path, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to stop query');
 }
 

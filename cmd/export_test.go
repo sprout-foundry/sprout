@@ -283,8 +283,9 @@ func TestExportCmd_InvalidFormat(t *testing.T) {
 	cmd.SetArgs([]string{"test-export-1", "--format", "docx"})
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid format")
+	assert.Contains(t, err.Error(), "invalid --format")
 	assert.Contains(t, err.Error(), "docx")
+	assert.Equal(t, exitUsage, exitCodeFor(err))
 }
 
 // Test 9: Non-existent session returns non-zero exit and clear error

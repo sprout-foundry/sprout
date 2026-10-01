@@ -58,6 +58,8 @@ export interface QueryCompletedData {
   cost?: number;
   duration_ms?: number;
   chat_id?: string;
+  /** "interrupted" when the user stopped the run before it finished. */
+  status?: string;
 }
 
 export interface StreamChunkData {

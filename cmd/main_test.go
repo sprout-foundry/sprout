@@ -8,6 +8,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/internal/testgit"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
@@ -32,6 +33,7 @@ import (
 // is timestamp-based, so collisions don't happen and the shared dir
 // keeps the test setup cheap.
 func TestMain(m *testing.M) {
+	finishProviders := configuration.IsolateGlobalConfigForTests()
 	// Every git subprocess a cmd test spawns (agents shelling out, sync/txn
 	// helpers, review_staged) must inherit a sandboxed git config, never the
 	// developer's real ~/.gitconfig.
@@ -83,7 +85,7 @@ func TestMain(m *testing.M) {
 	search.InitGlobalUpdater(filepath.Join(sessionsDir, "search-index.json"), sessionsDir)
 
 	restore := agent.SetTestStateDirHook(sessionsDir)
-	code := m.Run()
+	code := finishProviders(m.Run())
 	restore()
 
 	// Stop the test updater and restore whatever was there before the

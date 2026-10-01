@@ -1,11 +1,16 @@
 import { PanelRightClose } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { isCloud } from '../config/mode';
+import { isLayeredLayout } from '../config/layout';
+import { LayeredSearchButton } from './layered/LayeredTopBar';
+import { useActiveRepoURL } from '../services/activeRepo';
+import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
-import { platformHref } from '../utils/platformUrl';
+import { githubRepoSlug, platformHref, repoHubPath } from '../utils/platformUrl';
 import MenuBar from './MenuBar';
-import { UserMenu } from './UserMenu';
+import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
+import { UserMenu } from './UserMenu';
 import WorkspaceBar from './WorkspaceBar';
 
 export interface HeaderBarProps {
@@ -15,6 +20,8 @@ export interface HeaderBarProps {
   isConnected: boolean;
   onToggleSidebar: () => void;
   onToggleContextPanel: () => void;
+  /** Whether there is a context panel to toggle. */
+  hasContextPanel?: boolean;
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -24,88 +31,50 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   isConnected,
   onToggleSidebar,
   onToggleContextPanel,
+  hasContextPanel = true,
 }) => {
   const [busy, setBusy] = useState(false);
-  const [repoURL, setRepoURL] = useState<string | null>(null);
+  const repoURL = useActiveRepoURL() ?? null;
+  // The back-link returns to the hub page of the repo being edited.
+  const repoSlug = githubRepoSlug(repoURL);
+  // Hidden on deployments without workspace compute rather than offering an
+  // action that can only fail.
+  const workspacesAvailable = useFullWorkspacesAvailable(isCloud);
 
-  useEffect(() => {
-    if (!isCloud) return;
-    const params = new URLSearchParams(window.location.search);
-    const repo = params.get('repo');
-    if (repo) setRepoURL(repo);
-  }, []);
+  const retry = () => {
+    // Defer so the toast's dismiss finishes before the next request starts.
+    queueMicrotask(() => {
+      void handleStartBuilding();
+    });
+  };
 
   const handleStartBuilding = async () => {
     if (busy) return;
-    const url = repoURL;
-    if (!url) {
+    if (!repoURL) {
       notificationBus.notify(
         'info',
-        'Open a repo first',
-        'Import a repository into the browser workspace, then start a full workspace.',
-        undefined,
-        {
-          label: 'Show how',
-          onClick: () => {
-            // Nothing else to wire — user is already in the workspace
-            // picker flow; the toast itself surfaces the next step.
-          },
-        },
+        'Add a repository first',
+        'A full workspace is created for a repository. Use "Add repository" in the Files panel, then start one.',
       );
       return;
     }
 
     setBusy(true);
     try {
-      const response = await fetch(`${window.location.origin}/workspace/fly`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: url }),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        const msg = errData.error || `HTTP ${response.status}`;
-        if (response.status === 503) {
-          notificationBus.notify(
-            'warning',
-            'Workspaces coming soon',
-            'Full workspaces are not yet configured. Explore in the browser for now.',
-            undefined,
-            {
-              label: 'Open browser workspace',
-              onClick: () => {
-                // User opted into the browser-only flow — keep them on
-                // the current page rather than navigating away.
-              },
-            },
-          );
-        } else {
-          notificationBus.notify('error', 'Failed to start workspace', msg, undefined, {
-            label: 'Retry',
-            onClick: () => {
-              // Defer to a microtask so the dismiss animation can
-              // finish before the next fetch kicks off; otherwise the
-              // busy state would flicker as the second request races.
-              queueMicrotask(() => {
-                void handleStartBuilding();
-              });
-            },
-          });
-        }
-        return;
-      }
-
-      const data = await response.json();
-      if (data.url && data.session_token) {
-        // Follow the same auth exchange pattern as the platform webui.
-        const wsUrl = new URL(data.url);
-        wsUrl.pathname = '/auth/exchange';
-        wsUrl.searchParams.set('token', data.session_token);
-        window.location.href = wsUrl.toString();
-      } else {
-        notificationBus.notify('info', 'Workspace status', data.status || 'Unknown');
+      const result = await startFullWorkspace(repoURL);
+      if (result.kind === 'unavailable') {
+        notificationBus.notify(
+          'warning',
+          'Full workspaces unavailable',
+          "This deployment doesn't offer full workspaces. You can keep working in the browser workspace.",
+        );
+      } else if (result.kind === 'error') {
+        notificationBus.notify('error', 'Failed to start workspace', result.message, undefined, {
+          label: 'Retry',
+          onClick: retry,
+        });
+      } else if (result.kind === 'status') {
+        notificationBus.notify('info', 'Workspace status', result.status);
       }
     } catch (e) {
       notificationBus.notify(
@@ -113,14 +82,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         'Error starting workspace',
         e instanceof Error ? e.message : String(e),
         undefined,
-        {
-          label: 'Retry',
-          onClick: () => {
-            queueMicrotask(() => {
-              void handleStartBuilding();
-            });
-          },
-        },
+        { label: 'Retry', onClick: retry },
       );
     } finally {
       setBusy(false);
@@ -129,17 +91,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <div className="header-bar">
-      {isCloud && (
-        <a href={platformHref('/?from=editor')} className="header-back-to-dashboard" title="Back to Dashboard">
-          ← Dashboard
+      {/* Phones in the hosted editor search from the tab bar. */}
+      {isLayeredLayout && !(isCloud && isMobile) && <LayeredSearchButton />}
+      {isCloud && !isLayeredLayout && (
+        <a
+          href={platformHref(repoHubPath(repoURL))}
+          className="header-back-to-dashboard"
+          title={repoSlug ? `Back to ${repoSlug} on the dashboard` : 'Back to Dashboard'}
+        >
+          ← <span className="header-back-to-dashboard-label">{repoSlug ?? 'Dashboard'}</span>
         </a>
       )}
       {!isCloud && <MenuBar />}
       <div className="header-bar-actions">
-        {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
-         * local mode or without a bootstrap identity. */}
-        <UserMenu />
-        {isCloud && (
+        {isCloud && workspacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
             onClick={handleStartBuilding}
@@ -149,7 +114,11 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             {busy ? 'Starting…' : 'Start Building'}
           </button>
         )}
-        {!isMobile && (
+        {!(isLayeredLayout && isCloud && isMobile) && <CreditsChip />}
+        {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
+         * local mode or without a bootstrap identity. */}
+        {!isLayeredLayout && <UserMenu />}
+        {!isMobile && hasContextPanel && (
           <button
             className="header-context-toggle-btn"
             onClick={onToggleContextPanel}

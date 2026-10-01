@@ -7,6 +7,7 @@ package agent
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -15,155 +16,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Integration entry point
-// ---------------------------------------------------------------------------
-// handleQueryResult processes the result from seedAgent.Run(), handling fleet
-// budget exceeded, general errors, and the success path. It syncs state back
-// to sprout, commits tracked changes, and runs post-loop hooks.
-func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error) (string, error) {
-	if err != nil {
-		// Check if the fleet budget was exceeded mid-run
-		if errors.Is(err, FleetBudgetExceededError) {
-			// Extract the last assistant response as the truncated result
-			rebase := a.syncSeedStateToSprout(qc.seedAgent)
-			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
-
-			var truncatedResult string
-			messages := a.state.GetMessages()
-			for i := len(messages) - 1; i >= 0; i-- {
-				if messages[i].Role == "assistant" && messages[i].Content != "" {
-					truncatedResult = messages[i].Content
-					break
-				}
-			}
-			if truncatedResult == "" {
-				truncatedResult = result
-			}
-
-			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
-			a.journalSeedState(qc.seedAgent.State())
-			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
-
-			return truncatedResult, nil
-		}
-
-		// Classify the error to provide a user-friendly message.
-		// For permanent errors (auth, client error, context overflow), return
-		// the error directly so both CLI and webui display it properly.
-		classifiedErr := core.ClassifyError(err, a.GetModel())
-
-		// Build a user-friendly message for the event and response
-		wrapped := wrapError(classifiedErr)
-		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
-
-		// Sync whatever state we can before returning
-		rebase := a.syncSeedStateToSprout(qc.seedAgent)
-		qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
-		a.journalSeedState(qc.seedAgent.State())
-		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
-
-		// Return the classified error so CLI/webui display it properly.
-		// The wrapped message is published via events above for display.
-		return wrapped, classifiedErr
-	}
-
-	// Sync state back to sprout's agent manager
-	rebase := a.syncSeedStateToSprout(qc.seedAgent)
-	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
-	a.journalSeedState(qc.seedAgent.State())
-
-	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
-
-	// Commit tracked changes. Subagents are EXEMPT: their writes are
-	// merged into the parent's tracker via MergeChild, and the PARENT's
-	// Commit persists them (tagged "subagent:<persona>"). If a subagent
-	// committed its own history entry it would (a) double-persist every
-	// subagent-touched file, and (b) litter history with useless revision
-	// dirs whose instructions field is just "subagent run". The subagent's
-	// in-memory tracker still captures its FilesModified manifest for the
-	// SubagentResult handoff — it just never flushes to disk itself.
-	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
-		if commitErr := a.CommitChanges("Task completed"); commitErr != nil {
-			a.Logger().Debug("Warning: Failed to commit changes: %v\n", commitErr)
-		}
-	}
-
-	// Finalize post-loop tasks
-	a.finalizeConversationPostHooks(result, qc.processedQuery, qc.preSeedMsgCount)
-
-	// If streaming was enabled and content was streamed, return empty string
-	// to avoid duplicate display in the top-level CLI console.
-	// Subagents are exempt: their streaming callback writes prefixed lines to
-	// stderr for the human, but the orchestrator LLM only sees what we return
-	// here via SubagentResult.Output — returning "" would make the orchestrator
-	// think the subagent did nothing and re-attempt the task.
-	if !a.IsSubagent() && a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
-		return "", nil
-	}
-
-	return result, nil
-}
-
-// ---------------------------------------------------------------------------
 // Post-hooks and state sync
 // ---------------------------------------------------------------------------
-
-// finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
-func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
-	// The stored conversation carries the timestamp envelope from
-	// injection-time stamping; downstream consumers (turn checkpoint
-	// summaries, embedding signatures, transcript events) want clean text.
-	cleanQuery := StripUserMessageTimestamp(processedQuery)
-
-	// Maybe checkpoint completed turn
-	a.maybeCheckpointCompletedTurn(cleanQuery, preSeedMsgCount, len(a.state.GetMessages()))
-
-	// Publish query completed event
-	var finalContent string
-	messages := a.state.GetMessages()
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "assistant" {
-			finalContent = messages[i].Content
-			break
-		}
-	}
-	// Fallback to the result string
-	if finalContent == "" {
-		finalContent = result
-	}
-
-	duration := time.Since(a.conversationStartTime)
-	completedEvent := events.QueryCompletedEvent(
-		cleanQuery,
-		finalContent,
-		a.GetTotalTokens(),
-		a.GetTotalCost(),
-		duration,
-	)
-	if reason := a.GetLastRunTerminationReason(); reason != "" {
-		completedEvent["status"] = reason
-	}
-	a.publishEvent(events.EventTypeQueryCompleted, completedEvent)
-
-	// Turn-end metrics push: the WebUI status bar's cost/context segments
-	// only refresh on metrics_update events, which otherwise fire solely on
-	// errors, chat switches, and reconnects — so spend tracking appeared
-	// frozen between turns. Publishing the fresh totals here gives the
-	// footer a per-turn update cadence (SP-113/SP-053-3 follow-up).
-	a.publishEvent(
-		events.EventTypeMetricsUpdate,
-		events.MetricsUpdateEventWithCategory(
-			a.GetProvider(),
-			a.GetModel(),
-			a.GetTotalTokens(),
-			a.GetCurrentContextTokens(),
-			a.getModelContextLimit(),
-			a.state.GetCurrentIteration(),
-			a.GetTotalCost(),
-			"",
-		),
-	)
-}
 
 // maybeCheckpointCompletedTurn checks if a turn checkpoint should be recorded
 // for a completed or max-iterations conversation turn.
@@ -300,4 +154,166 @@ func rebaseQueryStart(idx int, survivorOf map[int]int, newLen int) int {
 		best = newLen
 	}
 	return best
+}
+
+// publishTurnMetrics pushes the fresh totals at the end of a turn. The WebUI
+// status bar's cost/context segments only refresh on metrics_update events,
+// which otherwise fire solely on errors, chat switches, and reconnects — so
+// spend tracking appeared frozen between turns (SP-113/SP-053-3 follow-up).
+func (a *Agent) publishTurnMetrics() {
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.GetProvider(),
+			a.GetModel(),
+			a.GetTotalTokens(),
+			a.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.GetTotalCost(),
+			"",
+		),
+	)
+}
+
+// handleQueryResult processes the result from seedAgent.Run(), handling fleet
+// budget exceeded, general errors, and the success path. It syncs state back
+// to sprout, commits tracked changes, and runs post-loop hooks.
+func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error) (string, error) {
+	if err != nil {
+		// Check if the fleet budget was exceeded mid-run
+		if errors.Is(err, FleetBudgetExceededError) {
+			// Extract the last assistant response as the truncated result
+			rebase := a.syncSeedStateToSprout(qc.seedAgent)
+			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+
+			var truncatedResult string
+			messages := a.state.GetMessages()
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "assistant" && messages[i].Content != "" {
+					truncatedResult = messages[i].Content
+					break
+				}
+			}
+			if truncatedResult == "" {
+				truncatedResult = result
+			}
+
+			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
+			a.journalSeedState(qc.seedAgent.State())
+			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
+
+			return truncatedResult, nil
+		}
+
+		// A stop (the interrupt context was cancelled) is not a failure: keep
+		// what the run produced and report it as interrupted. Classifying it
+		// turned the cancelled request into a "temporary error … could not
+		// recover" answer plus a failed-query event.
+		if qc.runCtx.Err() != nil || errors.Is(err, core.ErrInterrupted) {
+			rebase := a.syncSeedStateToSprout(qc.seedAgent)
+			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+			a.state.SetLastRunTerminationReason(RunTerminationInterrupted)
+			a.journalSeedState(qc.seedAgent.State())
+			// The steps that finished before the stop were spent; the
+			// footer shows them rather than waiting for the next turn.
+			a.publishTurnMetrics()
+			return "", fmt.Errorf("%w: %w", ErrRunInterrupted, err)
+		}
+
+		// Classify the error to provide a user-friendly message.
+		// For permanent errors (auth, client error, context overflow), return
+		// the error directly so both CLI and webui display it properly.
+		classifiedErr := core.ClassifyError(err, a.GetModel())
+
+		// Build a user-friendly message for the event and response
+		wrapped := wrapError(classifiedErr)
+		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
+
+		// Sync whatever state we can before returning
+		rebase := a.syncSeedStateToSprout(qc.seedAgent)
+		qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+		a.journalSeedState(qc.seedAgent.State())
+		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
+
+		// Return the classified error so CLI/webui display it properly.
+		// The wrapped message is published via events above for display.
+		return wrapped, classifiedErr
+	}
+
+	// Sync state back to sprout's agent manager
+	rebase := a.syncSeedStateToSprout(qc.seedAgent)
+	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+	a.journalSeedState(qc.seedAgent.State())
+
+	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
+
+	// Commit tracked changes. Subagents are EXEMPT: their writes are
+	// merged into the parent's tracker via MergeChild, and the PARENT's
+	// Commit persists them (tagged "subagent:<persona>"). If a subagent
+	// committed its own history entry it would (a) double-persist every
+	// subagent-touched file, and (b) litter history with useless revision
+	// dirs whose instructions field is just "subagent run". The subagent's
+	// in-memory tracker still captures its FilesModified manifest for the
+	// SubagentResult handoff — it just never flushes to disk itself.
+	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+		if commitErr := a.CommitChanges("Task completed"); commitErr != nil {
+			a.Logger().Debug("Warning: Failed to commit changes: %v\n", commitErr)
+		}
+	}
+
+	// Finalize post-loop tasks
+	a.finalizeConversationPostHooks(result, qc.processedQuery, qc.preSeedMsgCount)
+
+	// If streaming was enabled and content was streamed, return empty string
+	// to avoid duplicate display in the top-level CLI console.
+	// Subagents are exempt: their streaming callback writes prefixed lines to
+	// stderr for the human, but the orchestrator LLM only sees what we return
+	// here via SubagentResult.Output — returning "" would make the orchestrator
+	// think the subagent did nothing and re-attempt the task.
+	if !a.IsSubagent() && a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
+		return "", nil
+	}
+
+	return result, nil
+}
+
+// finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
+func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
+	// The stored conversation carries the timestamp envelope from
+	// injection-time stamping; downstream consumers (turn checkpoint
+	// summaries, embedding signatures, transcript events) want clean text.
+	cleanQuery := StripUserMessageTimestamp(processedQuery)
+
+	// Maybe checkpoint completed turn
+	a.maybeCheckpointCompletedTurn(cleanQuery, preSeedMsgCount, len(a.state.GetMessages()))
+
+	// Publish query completed event
+	var finalContent string
+	messages := a.state.GetMessages()
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" {
+			finalContent = messages[i].Content
+			break
+		}
+	}
+	// Fallback to the result string
+	if finalContent == "" {
+		finalContent = result
+	}
+
+	duration := time.Since(a.conversationStartTime)
+	completedEvent := events.QueryCompletedEvent(
+		cleanQuery,
+		finalContent,
+		a.GetTotalTokens(),
+		a.GetTotalCost(),
+		duration,
+	)
+	if reason := a.GetLastRunTerminationReason(); reason != "" {
+		completedEvent["status"] = reason
+	}
+	a.publishEvent(events.EventTypeQueryCompleted, completedEvent)
+
+	a.publishTurnMetrics()
 }

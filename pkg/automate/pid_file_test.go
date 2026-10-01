@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -72,8 +73,8 @@ func TestWriteSessionFile_AllFields(t *testing.T) {
 		t.Fatalf("file not created: %v", err)
 	}
 
-	// Verify permissions (0600)
-	if fi.Mode().Perm() != 0o600 {
+	// Windows has no POSIX permission bits; os.Stat reports 0666.
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("expected permissions 0600, got %o", fi.Mode().Perm())
 	}
 

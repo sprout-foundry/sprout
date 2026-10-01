@@ -575,6 +575,18 @@ function syncClientIdFromResponse(response: Response): void {
  * is always cached into sessionStorage, so subsequent calls to
  * getWebUIClientId() (synchronous) will find it there.
  */
+/**
+ * An id another path stored while recovery awaited the server. The event
+ * WebSocket connects during boot and, finding no id, mints and stores one
+ * synchronously; it is already registered under that id. Replacing it here
+ * split the tab in two: HTTP (queries) under one client, the event socket
+ * under another, so a chat's live events never reached the page.
+ */
+function adoptedDuringRecovery(): string | null {
+  const id = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
+  return id && id !== 'default' ? id : null;
+}
+
 let _resolvedClientId: Promise<string> | null = null;
 export function resolveWebUIClientId(): Promise<string> {
   if (_resolvedClientId) return _resolvedClientId;
@@ -622,6 +634,8 @@ export function resolveWebUIClientId(): Promise<string> {
         credentials: 'include',
         headers: { 'Cache-Control': 'no-store' },
       });
+      const adoptedMeanwhile = adoptedDuringRecovery();
+      if (adoptedMeanwhile) return adoptedMeanwhile;
       const echoedId = resp.headers.get(WEBUI_CLIENT_ID_HEADER);
       if (echoedId && echoedId !== 'default') {
         const claimed = claimOrGenerateClientId(echoedId);
@@ -633,6 +647,9 @@ export function resolveWebUIClientId(): Promise<string> {
       // Network error — fall through to generate a new ID below.
       debugLog('[resolveWebUIClientId] cross-origin recovery fetch failed');
     }
+
+    const adoptedMeanwhile = adoptedDuringRecovery();
+    if (adoptedMeanwhile) return adoptedMeanwhile;
 
     // No existing session — generate a new client ID.
     const generated = generateClientId();

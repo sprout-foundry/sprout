@@ -1,14 +1,7 @@
 package wasmshell
 
-// shell.go — the WASM shell core: command history, the entry point
-// (ParseAndExecute), and the pipeline / chain execution layer (SplitPipeline,
-// SplitChains, executeChain, executePipeline). The tokenizer, glob expansion,
-// and redirect parsing / execution live in shell_tokenize.go.
-
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"strings"
 )
 
@@ -16,11 +9,6 @@ import (
 var commandHistory []string
 
 const maxHistorySize = 1000
-
-// devNullPath is the WASM shell's discard sink — writes are dropped, reads
-// return empty. Agents habitually redirect noise here ("2>/dev/null"), so
-// the shell must understand it without touching the MEMFS tree.
-const devNullPath = "/dev/null"
 
 // mergeErrIntoOutSentinel is what ParseRedirects records for a 2>&1 that
 // has no real file target — a merge, not a redirect.
@@ -44,50 +32,6 @@ func addToHistory(cmd string) {
 	if len(commandHistory) > maxHistorySize {
 		commandHistory = commandHistory[len(commandHistory)-maxHistorySize:]
 	}
-}
-
-// ParseAndExecute is the main entry point for executing a command string.
-// It handles chains (&&, ||, ;), pipes, redirects, and dispatches to the
-// appropriate command.
-func ParseAndExecute(input string) CmdResult {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return CmdResult{"", "", 0}
-	}
-
-	// Handle comments
-	if strings.HasPrefix(input, "#") {
-		return CmdResult{"", "", 0}
-	}
-
-	addToHistory(input)
-
-	// Expand environment variables in the input.
-	input = os.ExpandEnv(input)
-
-	// Handle tilde expansion in the input.
-	if strings.HasPrefix(input, "~/") {
-		input = ShellEnv.Get("HOME") + input[1:]
-	} else if input == "~" {
-		return CmdResult{ShellEnv.Get("HOME") + "\n", "", 0}
-	}
-
-	// Split by chain operators (&&, ||, ;) — the top grammar level.
-	chains := SplitChains(input)
-	if len(chains) > 1 {
-		return executeChain(chains)
-	}
-
-	// Split by pipes, respecting quotes.
-	pipeline := SplitPipeline(input)
-
-	if len(pipeline) == 1 {
-		// No pipes — check for redirects only.
-		return executeWithRedirects(pipeline[0], "")
-	}
-
-	// Execute pipeline.
-	return executePipeline(pipeline)
 }
 
 // SplitPipeline splits a command line by unquoted pipe characters.
@@ -206,82 +150,185 @@ func SplitChains(input string) []chainSegment {
 	return segments
 }
 
-// executeChain runs a sequence of pipeline segments joined by && / || / ;.
-// Semantics match POSIX: && runs when the previous exit code is 0, || runs
-// when it is non-zero, ; always runs. Empty segments are skipped. stdout
-// and stderr accumulate; the exit code is the last executed command's.
-func executeChain(chains []chainSegment) CmdResult {
-	var stdout, stderr strings.Builder
-	var lastExit int
-	executed := false
-
-	for _, seg := range chains {
-		if seg.op == "&&" && lastExit != 0 {
-			continue
-		}
-		if seg.op == "||" && lastExit == 0 {
-			continue
-		}
-		if seg.text == "" {
-			continue
-		}
-
-		result := parseAndExecutePipeline(seg.text)
-		executed = true
-		stdout.WriteString(result.Stdout)
-		stderr.WriteString(result.Stderr)
-		lastExit = result.ExitCode
-	}
-
-	if !executed {
-		return CmdResult{"", "", 0}
-	}
-	return CmdResult{stdout.String(), stderr.String(), lastExit}
-}
-
-// parseAndExecutePipeline handles the pipeline-with-redirects layer under
-// the chain layer: split by pipes, run each stage, honor redirects.
-func parseAndExecutePipeline(segment string) CmdResult {
-	pipeline := SplitPipeline(segment)
-	if len(pipeline) == 1 {
-		return executeWithRedirects(pipeline[0], "")
-	}
-	return executePipeline(pipeline)
-}
-
 // chainSegment is one pipeline element of a && / || / ; chain.
 type chainSegment struct {
 	op   string // "", "&&", "||", ";"
 	text string
 }
 
-// executePipeline runs commands connected by pipes.
-func executePipeline(segments []string) CmdResult {
-	// The last segment may have redirects.
-	lastIdx := len(segments) - 1
-	pipeSegments := segments[:lastIdx]
-	lastSegment := segments[lastIdx]
+// ParseRedirects extracts command name, args, and redirect operators from a line.
+// Returns: name, args, stdinFile, stdoutFile, stderrFile, appendStdout, appendStderr
+func ParseRedirects(line string) (string, []string, string, string, string, bool, bool) {
+	tokens := Tokenize(line, false)
 
-	var stdin string
+	name := ""
+	var args []string
+	var stdinFile, stdoutFile, stderrFile string
+	appendStdout := false
+	appendStderr := false
+	expectStdin := false
+	expectStdout := false
+	expectStderr := false
+	bothRedirect := false // &> means same file for stdout and stderr
+	mergeErrIntoOut := false
 
-	for _, seg := range pipeSegments {
-		name, args, _, _, _, _, _ := ParseRedirects(seg)
-		name = strings.TrimSpace(name)
-		args = ExpandGlobs(args)
-
-		if fn, ok := CmdRegistry[name]; ok {
-			result := fn(args, stdin)
-			if result.ExitCode != 0 {
-				return result
+	// splitCompound peels a redirect operator fused to its target
+	// ("2>/dev/null", ">>out", "2>&1") into the operator and remainder.
+	splitCompound := func(tok string) (op, rest string, fused bool) {
+		for _, cand := range []string{"2>>", "2>", "&>>", "&>", ">>", ">", "<"} {
+			if strings.HasPrefix(tok, cand) {
+				return cand, tok[len(cand):], true
 			}
-			stdin = result.Stdout
+		}
+		return "", tok, false
+	}
+
+	for i, tok := range tokens {
+		if !expectStdin && !expectStdout && !expectStderr {
+			if op, rest, fused := splitCompound(tok); fused && rest != "" && rest != "&1" {
+				switch op {
+				case "<":
+					stdinFile = rest
+				case "2>>":
+					stderrFile, appendStderr = rest, true
+				case "2>":
+					stderrFile = rest
+				case "&>>":
+					stdoutFile, stderrFile, appendStdout, bothRedirect = rest, rest, true, true
+				case "&>":
+					stdoutFile, stderrFile, bothRedirect = rest, rest, true
+				case ">>":
+					stdoutFile, appendStdout = rest, true
+				case ">":
+					stdoutFile = rest
+				}
+				continue
+			}
+		}
+
+		switch tok {
+		case "<":
+			expectStdin = true
+			continue
+		case ">", "1>":
+			expectStdout = true
+			appendStdout = false
+			continue
+		case ">>", "1>>":
+			expectStdout = true
+			appendStdout = true
+			continue
+		case "2>":
+			expectStderr = true
+			appendStderr = false
+			continue
+		case "2>>":
+			expectStderr = true
+			appendStderr = true
+			continue
+		case "2>&1":
+			mergeErrIntoOut = true
+			continue
+		case "&>":
+			expectStdout = true
+			expectStderr = true
+			bothRedirect = true
+			appendStdout = false
+			appendStderr = false
+			continue
+		}
+
+		if expectStdin && stdinFile == "" {
+			stdinFile = tok
+			expectStdin = false
+			continue
+		}
+		if expectStdout && stdoutFile == "" {
+			stdoutFile = tok
+			expectStdout = false
+			if bothRedirect {
+				stderrFile = tok
+				expectStderr = false
+				bothRedirect = false
+			}
+			continue
+		}
+		if expectStderr && stderrFile == "" {
+			stderrFile = tok
+			expectStderr = false
+			continue
+		}
+
+		if i == 0 && !strings.HasPrefix(tok, "-") {
+			name = tok
 		} else {
-			return CmdResult{"", fmt.Sprintf("command not found: %s\n", name), 127}
+			args = append(args, tok)
 		}
 	}
 
-	// Last segment gets redirect handling, passing piped stdin.
-	return executeWithRedirects(lastSegment, stdin)
+	if mergeErrIntoOut {
+		// 2>&1 — signal the caller through the stderrFile slot: a merge,
+		// not a real file redirect.
+		stderrFile = mergeErrIntoOutSentinel
+	}
+
+	return name, args, stdinFile, stdoutFile, stderrFile, appendStdout, appendStderr
+}
+
+// Tokenize splits a command line into tokens, respecting quotes and escapes.
+func Tokenize(line string, keepQuotes bool) []string {
+	var tokens []string
+	var current strings.Builder
+	inSingle := false
+	inDouble := false
+	escaped := false
+
+	for _, ch := range line {
+		if escaped {
+			current.WriteRune(ch)
+			escaped = false
+			continue
+		}
+		if ch == '\\' && !inSingle {
+			escaped = true
+			if keepQuotes {
+				current.WriteRune(ch)
+			}
+			continue
+		}
+		if ch == '\'' && !inDouble {
+			if keepQuotes {
+				current.WriteRune(ch)
+				inSingle = !inSingle
+			} else {
+				inSingle = !inSingle
+			}
+			continue
+		}
+		if ch == '"' && !inSingle {
+			if keepQuotes {
+				current.WriteRune(ch)
+				inDouble = !inDouble
+			} else {
+				inDouble = !inDouble
+			}
+			continue
+		}
+		if (ch == ' ' || ch == '\t') && !inSingle && !inDouble {
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+			continue
+		}
+		current.WriteRune(ch)
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
 }
 
 // HistorySearch searches command history for a prefix.
@@ -297,6 +344,6 @@ func HistorySearch(prefix string) []string {
 
 // JSONResult marshals a CmdResult to JSON string.
 func JSONResult(r CmdResult) string {
-	data, _ := json.Marshal(r)
+	data, _ := json.Marshal(r.ordered())
 	return string(data)
 }

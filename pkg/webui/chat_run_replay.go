@@ -97,3 +97,39 @@ func (ws *ReactWebServer) deliverChatRunReplay(safeConn *SafeConn, clientID, cha
 		}
 	}
 }
+
+// currentRunEvents returns the buffered events of the run in progress, from
+// its query_started on, or nil when that start was already evicted — a
+// partial run can't be rebuilt faithfully.
+func currentRunEvents(buf *chatRunRingBuffer) []map[string]interface{} {
+	replay, _ := buf.After(0)
+	start := -1
+	for i := len(replay) - 1; i >= 0; i-- {
+		if replay[i].Type != events.EventTypeQueryStarted {
+			continue
+		}
+		if data, ok := replay[i].Data.(map[string]interface{}); ok && isSubagentEvent(data) {
+			continue
+		}
+		start = i
+		break
+	}
+	if start < 0 {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(replay)-start)
+	for _, ev := range replay[start:] {
+		out = append(out, map[string]interface{}{"type": ev.Type, "data": ev.Data})
+	}
+	return out
+}
+
+func isSubagentEvent(data map[string]interface{}) bool {
+	switch depth := data["subagent_depth"].(type) {
+	case int:
+		return depth > 0
+	case float64:
+		return depth > 0
+	}
+	return false
+}

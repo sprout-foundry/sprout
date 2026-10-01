@@ -5,8 +5,12 @@ import type { ChangeEvent } from 'react';
 import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
+import { onPlatformLinkClick } from '../services/homeView';
+import { usesPlatformGitHub } from '../services/platformGitHub';
+import { platformHref } from '../utils/platformUrl';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
 import { getStoredUser } from '../services/githubService';
@@ -198,6 +202,34 @@ function CloudProviderModelSection({
   );
 }
 
+/**
+ * Browser workspaces served by the platform run the agent in WASM against
+ * the platform's managed model (cloudWasmHandlers always starts it on the
+ * "platform" provider), so provider, model and key pickers would change
+ * nothing. Studio's native build keeps them: its shell serves BYOK providers.
+ */
+const PLATFORM_MANAGED_MODEL = isCloud && !NATIVE_FS_ENABLED;
+
+function ManagedModelSection(): JSX.Element {
+  return (
+    <div className="config-item" data-testid="managed-model-section">
+      <p className="settings-section-desc">
+        The agent runs on Sprout Foundry&apos;s managed model, which picks a model for each request. Usage is billed in
+        platform credits.
+      </p>
+      <a
+        className="settings-link-btn"
+        href={platformHref('/#/account/billing')}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onPlatformLinkClick('/account/billing')}
+      >
+        View usage and billing
+      </a>
+    </div>
+  );
+}
+
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
   availableThemePacks: { id: string; name: string }[];
@@ -383,67 +415,85 @@ export default function SidebarSettingsSection({
             <option value="xlarge">Extra Large</option>
           </select>
         </div>
-        <div className="config-item">
-          <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
-          <select
-            id="hotkey-preset-select"
-            defaultValue=""
-            onChange={handleHotkeyPresetChange}
-            className="styled-select"
-          >
-            <option value="" disabled>
-              Choose a preset…
-            </option>
-            <option value="vscode">VS Code</option>
-            <option value="webstorm">WebStorm</option>
-            <option value="sprout">Sprout (Legacy)</option>
-          </select>
-        </div>
-        <div className="config-item settings-help-spaced-top">
-          <button
-            type="button"
-            className="settings-link-btn settings-link-btn--hotkeys"
-            onClick={() => {
-              // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
-              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
-            }}
-          >
-            <Keyboard size={14} />
-            Edit Keyboard Shortcuts (JSON)
-          </button>
-        </div>
+        {/* Presets and custom bindings are stored by the daemon; browser
+            mode uses the built-in shortcuts only. */}
+        {!isCloud && (
+          <>
+            <div className="config-item">
+              <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
+              <select
+                id="hotkey-preset-select"
+                defaultValue=""
+                onChange={handleHotkeyPresetChange}
+                className="styled-select"
+              >
+                <option value="" disabled>
+                  Choose a preset…
+                </option>
+                <option value="vscode">VS Code</option>
+                <option value="webstorm">WebStorm</option>
+                <option value="sprout">Sprout (Legacy)</option>
+              </select>
+            </div>
+            <div className="config-item settings-help-spaced-top">
+              <button
+                type="button"
+                className="settings-link-btn settings-link-btn--hotkeys"
+                onClick={() => {
+                  // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
+                  window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
+                }}
+              >
+                <Keyboard size={14} />
+                Edit Keyboard Shortcuts (JSON)
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── Cloud mode: simplified settings ──────────────────── */}
       {isCloud ? (
         <>
-          <div className="section">
-            <h4>Provider &amp; Model</h4>
-            <CloudProviderModelSection
-              selectedProvider={selectedProvider}
-              selectedModel={selectedModel}
-              providers={providers}
-              availableModels={availableModels}
-              isLoadingProviders={isLoadingProviders}
-              isConnected={isConnected}
-              onProviderChange={onProviderChange}
-              onModelChange={onModelChange}
-            />
-          </div>
-          <div className="section">
-            <h4>API Key</h4>
-            <p className="settings-section-desc">
-              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely
-              on the server.
-            </p>
-            <CredentialsSettingsTab />
-          </div>
+          {PLATFORM_MANAGED_MODEL ? (
+            <div className="section">
+              <h4>Model</h4>
+              <ManagedModelSection />
+            </div>
+          ) : (
+            <>
+              <div className="section">
+                <h4>Provider &amp; Model</h4>
+                <CloudProviderModelSection
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  providers={providers}
+                  availableModels={availableModels}
+                  isLoadingProviders={isLoadingProviders}
+                  isConnected={isConnected}
+                  onProviderChange={onProviderChange}
+                  onModelChange={onModelChange}
+                />
+              </div>
+              <div className="section">
+                <h4>API Key</h4>
+                <p className="settings-section-desc">
+                  Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored
+                  securely on the server.
+                </p>
+                <CredentialsSettingsTab />
+              </div>
+            </>
+          )}
           <div className="section">
             <h4>GitHub</h4>
-            <p className="settings-section-desc">
-              Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
-              agent push and pull on your behalf.
-            </p>
+            {/* Hosted, the account card below says it all. */}
+            {!usesPlatformGitHub() && (
+              <p className="settings-section-desc">
+                Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
+                agent push and pull on your behalf.
+              </p>
+            )}
             <GitHubAccountPanel user={gitHubUser} onSignedIn={setGitHubUser} onSignedOut={() => setGitHubUser(null)} />
           </div>
         </>

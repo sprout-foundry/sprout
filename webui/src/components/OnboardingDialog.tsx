@@ -2,6 +2,7 @@ import { Check, Download, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
 import type { OnboardingProviderOption } from '../services/api';
+import { useWorkspaceGateOpen } from '../services/workspaceGate';
 import type { OnboardingState } from '../types/app';
 
 export interface OnboardingDialogProps {
@@ -36,6 +37,8 @@ function OnboardingDialog({
   onInstallGitBash,
   updateOnboarding,
 }: OnboardingDialogProps): ReactElement | null {
+  // Choosing a workspace comes first; setup follows once the gate closes.
+  const workspaceGateOpen = useWorkspaceGateOpen();
   // Model combobox state
   const [modelListOpen, setModelListOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -180,7 +183,7 @@ function OnboardingDialog({
     return sortedModels.filter((model) => model.toLowerCase().includes(filterText));
   }, [selectedProvider, onboarding.model]);
 
-  if (!onboarding.open) {
+  if (!onboarding.open || workspaceGateOpen) {
     return null;
   }
 

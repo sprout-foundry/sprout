@@ -1,0 +1,74 @@
+/**
+ * Remaining platform credits in the hosted editor's header, matching the
+ * platform header's credits pill and linking to Usage & billing. Credits are
+ * the one usage unit shown to hosted users; renders nothing in local mode or
+ * on a platform still on the legacy ledger.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { isCloud } from '../config/mode';
+import { onPlatformLinkClick, useHomeView } from '../services/homeView';
+import { platformHref } from '../utils/platformUrl';
+
+const REFRESH_MS = 60_000;
+
+const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+async function fetchRemainingCredits(): Promise<number | null> {
+  const res = await fetch(platformHref('/billing/status'), { credentials: 'include' });
+  if (!res.ok) return null;
+  const status = (await res.json()) as { ledger?: string; total_remaining?: number };
+  return status.ledger === 'v2' && typeof status.total_remaining === 'number' ? status.total_remaining : null;
+}
+
+export function CreditsChip(): JSX.Element | null {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isCloud) return;
+    let active = true;
+    const load = () => {
+      fetchRemainingCredits()
+        .then((value) => active && setRemaining(value))
+        .catch(() => active && setRemaining(null));
+    };
+    load();
+    window.addEventListener('focus', load);
+    // Usage moves while the agent works; keep the figure current while the
+    // tab is visible.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, REFRESH_MS);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', load);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  // Leaving Home (where plans and credit packs are bought) refreshes too.
+  const homeOpen = useHomeView().open;
+  const wasHomeOpen = useRef(homeOpen);
+  useEffect(() => {
+    if (wasHomeOpen.current && !homeOpen) {
+      fetchRemainingCredits()
+        .then(setRemaining)
+        .catch(() => undefined);
+    }
+    wasHomeOpen.current = homeOpen;
+  }, [homeOpen]);
+
+  if (!isCloud || remaining == null) return null;
+
+  return (
+    <a
+      href={platformHref('/?from=editor#/account/billing')}
+      className={`header-credits-chip${remaining <= 0 ? ' is-empty' : ''}`}
+      title={`${remaining.toLocaleString('en-US')} credits remaining — usage and billing`}
+      data-testid="header-credits-chip"
+      onClick={onPlatformLinkClick('/account/billing')}
+    >
+      {compact.format(Math.max(remaining, 0))} credits
+    </a>
+  );
+}

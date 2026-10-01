@@ -378,7 +378,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		console.GlyphDim.Print("Shutting down web server...")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
-			console.GlyphWarning.Fprintf(os.Stderr, "Error shutting down web server: %v", webErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Web server did not shut down cleanly: %v", webErr)
 		} else {
 			console.GlyphSuccess.Print("Web server shut down successfully")
 		}

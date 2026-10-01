@@ -75,6 +75,7 @@ vi.mock('../config/mode', () => ({
   supportsLocalTerminal: false,
   supportsGit: true,
   supportsWorkspaceSwitching: false,
+  supportsAutomations: true,
 }));
 
 // Mock ApiService — never load the real ../services/api index (it re-exports
@@ -106,7 +107,10 @@ vi.mock('../utils/log', () => ({
 // Mock heavy child panels (avoid the lazy SettingsPanel graph entirely).
 vi.mock('./SettingsPanel', () => ({ default: () => createElement('div', { className: 'mock-settings' }) }));
 vi.mock('./FileTree', () => ({ default: () => createElement('div', { className: 'mock-filetree' }) }));
-vi.mock('./SearchView', () => ({ default: () => createElement('div', { className: 'mock-search' }) }));
+vi.mock('./SearchView', () => ({
+  default: ({ onFileClick }: { onFileClick?: (path: string) => void }) =>
+    createElement('button', { className: 'mock-search', onClick: () => onFileClick?.('src/a.go') }, 'result'),
+}));
 vi.mock('./GitSidebarPanel', () => ({ default: () => createElement('div', { className: 'mock-git' }) }));
 vi.mock('./AgentChangesPanel', () => ({ default: () => createElement('div', { className: 'mock-changes' }) }));
 vi.mock('./SproutLogo', () => ({ default: () => createElement('svg', { className: 'mock-logo' }) }));
@@ -151,6 +155,13 @@ vi.mock('../hooks/useSidebarModel', () => ({
 
 import Sidebar from './Sidebar';
 import { useSidebarModel as useSidebarModelMock } from '../hooks/useSidebarModel';
+
+// These cover the classic layout, still available as ?layout=classic.
+vi.mock('../config/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../config/layout')>()),
+  shellLayout: 'classic',
+  isLayeredLayout: false,
+}));
 
 function makeModelState(overrides = {}) {
   return {
@@ -239,6 +250,37 @@ describe('Sidebar provider selection', () => {
 
     expect(setSelectedProvider).toHaveBeenCalledWith('anthropic');
     expect(onProviderChange).toHaveBeenCalledWith('anthropic');
+  });
+
+  it.each([
+    [true, 1],
+    [false, 0],
+  ])('opening a file with isMobile=%s closes the drawer %i time(s)', async (isMobile, closes) => {
+    const onFileClick = vi.fn();
+    const onMobileMenuToggle = vi.fn();
+    vi.mocked(useSidebarModelMock).mockReturnValue(makeModelState());
+
+    await act(async () => {
+      root.render(
+        <Sidebar
+          isConnected={true}
+          isOpen={true}
+          isMobile={isMobile}
+          isMobileMenuOpen={true}
+          onMobileMenuToggle={onMobileMenuToggle}
+          selectedSection="search"
+          provider="openai"
+          model="gpt-4o-mini"
+          onFileClick={onFileClick}
+        />,
+      );
+    });
+    await act(async () => {
+      (container.querySelector('.mock-search') as HTMLButtonElement).click();
+    });
+
+    expect(onFileClick).toHaveBeenCalledWith('src/a.go', undefined);
+    expect(onMobileMenuToggle).toHaveBeenCalledTimes(closes);
   });
 
   it('propagates a settings tab click to onSectionChange', async () => {

@@ -362,6 +362,15 @@ jobs:
       shell: bash
       run: bash scripts/wasm-tool-roster-smoke.sh
 
+    - name: Set up Node.js
+      # Go's js/wasm test runner (lib/wasm/go_js_wasm_exec) executes under Node.
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+
+    - name: Run WASM bridge tests
+      run: make test-wasm
+
   build:
     name: Build Binaries
     needs: test

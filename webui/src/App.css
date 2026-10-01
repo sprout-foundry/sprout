@@ -7,6 +7,10 @@
 :root {
   color-scheme: dark;
   --sprout-terminal-reserved-height: 42px;
+  /* The phone tab bar sits under the terminal; bottom-anchored surfaces
+   * clear both. */
+  --sprout-bottom-nav-height: 0px;
+  --sprout-bottom-reserved-height: calc(var(--sprout-terminal-reserved-height) + var(--sprout-bottom-nav-height));
   /* Row height for the unified diff renderer (DiffSurface). Kept as a token
    * so CSS and the virtualization math in DiffSurface.tsx stay in sync. */
   --diff-row-height: 20px;
@@ -336,7 +340,7 @@ body {
      Android WebViews resolve viewport units to 0 for height (see
      index.html seed script). */
   height: 100%;
-  padding-bottom: var(--sprout-terminal-reserved-height);
+  padding-bottom: var(--sprout-bottom-reserved-height);
   box-sizing: border-box;
   background: var(--app-shell-bg);
   overflow: hidden;
@@ -425,9 +429,17 @@ body {
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
+  max-width: 260px;
+  gap: 4px;
   transition:
     background 0.15s var(--ease-out),
     color 0.15s var(--ease-out);
+}
+
+.header-back-to-dashboard-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-back-to-dashboard:hover {
@@ -444,6 +456,38 @@ body {
  * Account-surface identity + exits, right side of the header bar.
  * Matches the header aesthetic: 24px control height, 12px type,
  * token-driven colors. */
+/* Remaining platform credits (cloud mode), matching the platform header's
+ * credits pill. */
+.header-credits-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.header-credits-chip:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.header-credits-chip.is-empty {
+  color: var(--accent-warning);
+  border-color: var(--accent-warning);
+}
+
+.header-credits-chip:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
 .user-menu {
   position: relative;
   display: inline-flex;
@@ -875,7 +919,7 @@ body {
     position: fixed !important;
     top: 35px; /* Below header bar */
     right: 0;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     width: 50%;
     z-index: 800;
     border-left: 1px solid var(--border-strong);
@@ -891,7 +935,7 @@ body {
     position: fixed;
     inset: 0;
     top: 35px;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     background: rgba(0, 0, 0, 0.3);
     z-index: 750;
   }
@@ -1280,10 +1324,33 @@ select option {
   gap: 0;
 }
 
+/* A row, so the panel's resizer stretches to the panel's full height (as a
+ * block child it collapsed to its borders, a 2px target). */
+.context-panel-container {
+  display: flex;
+}
+
 .split-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+
+/* Pane actions sit in the tab strip: quiet icon buttons that the strip's
+ * flat tabs don't have to compete with. */
+.split-controls .pane-control-btn.compact {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-tertiary);
+}
+
+.split-controls .pane-control-btn.compact:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
 }
 
 /* Inactive pane's split controls are dimmed so the active pane stays
@@ -2516,6 +2583,19 @@ button.primary.success {
   cursor: not-allowed;
 }
 
+.workspace-add-repo-btn--labeled {
+  width: auto;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: 12px;
+}
+
+.workspace-add-repo-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 /* Touch: raise BOTH controls to a comfortable target — the select gets a
  * taller hit area too, not just the button. */
 @media (hover: none) {
@@ -2527,6 +2607,10 @@ button.primary.success {
   .workspace-add-repo-btn {
     width: 32px;
     height: 32px;
+  }
+
+  .workspace-add-repo-btn--labeled {
+    width: auto;
   }
 }
 

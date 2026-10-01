@@ -1,13 +1,18 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { BrainCircuit, Bot, GitFork } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Bot, GitFork, Square } from 'lucide-react';
 import { memo } from 'react';
+import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
+import './MessageItem.css';
+import type { ContextSubagentRun } from '../contextPanel/types';
 import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {
   message: Message;
   /** The tool whose inline detail is open (at most one per transcript). */
   activeToolDetail?: ToolExecution | null;
+  /** The delegated run behind activeToolDetail, when it is a subagent call. */
+  activeSubagentRun?: ContextSubagentRun;
   /** Toggle the inline detail (re-press collapses; another pill swaps). */
   onToolDetailToggle?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
@@ -52,9 +57,19 @@ interface MessageItemProps {
   isForking?: boolean;
 }
 
+function StoppedMarker() {
+  return (
+    <div className="message-stopped">
+      <Square size={10} aria-hidden="true" />
+      Stopped
+    </div>
+  );
+}
+
 export const MessageItem = memo(function MessageItem({
   message,
   activeToolDetail,
+  activeSubagentRun,
   onToolDetailToggle,
   findMatchingToolExecution,
   getToolStatus,
@@ -100,7 +115,11 @@ export const MessageItem = memo(function MessageItem({
           depth={message.subagentDepth}
           dataMessageIndex={messageIndex}
         >
-          <span className="empty-assistant-placeholder">(no response text)</span>
+          {message.stopped ? (
+            <StoppedMarker />
+          ) : (
+            <span className="empty-assistant-placeholder">(no response text)</span>
+          )}
         </MessageBubble>
       );
     }
@@ -190,22 +209,34 @@ export const MessageItem = memo(function MessageItem({
               </div>
             </Collapsible>
           )}
-          <MessageSegments
-            content={message.content}
-            toolRefs={message.toolRefs}
-            onToolRefClick={onToolDetailToggle}
-            activeToolDetailId={activeToolDetail?.id}
-            onToolClick={(toolName) => {
-              const matchingTool = findMatchingToolExecution(toolName);
-              if (matchingTool) {
-                onToolDetailToggle?.(matchingTool.id);
-              }
-            }}
-            getToolStatus={getToolStatus}
-          />
-          {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
-            <ToolDetailInline tool={activeToolDetail} onToggle={onToolDetailToggle ?? (() => undefined)} />
+          {chatErrorText(message.content) !== null ? (
+            <div className="chat-error-message" role="alert">
+              <AlertTriangle size={14} aria-hidden="true" />
+              <span>{chatErrorText(message.content)}</span>
+            </div>
+          ) : (
+            <MessageSegments
+              content={message.content}
+              toolRefs={message.toolRefs}
+              onToolRefClick={onToolDetailToggle}
+              activeToolDetailId={activeToolDetail?.id}
+              onToolClick={(toolName) => {
+                const matchingTool = findMatchingToolExecution(toolName);
+                if (matchingTool) {
+                  onToolDetailToggle?.(matchingTool.id);
+                }
+              }}
+              getToolStatus={getToolStatus}
+            />
           )}
+          {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
+            <ToolDetailInline
+              tool={activeToolDetail}
+              subagentRun={activeSubagentRun}
+              onToggle={onToolDetailToggle ?? (() => undefined)}
+            />
+          )}
+          {message.stopped && <StoppedMarker />}
         </>
       ) : (
         <MessageContent content={message.content} />

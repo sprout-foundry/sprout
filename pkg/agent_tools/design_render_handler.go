@@ -224,17 +224,21 @@ func buildRenderAttachment(ctx context.Context, pngPath string) (ToolResult, boo
 		return ToolResult{}, false
 	}
 	info, err := os.Stat(cleanPath)
-	if err != nil || info.IsDir() || info.Size() > maxInlineImageBytes {
+	if err != nil || info.IsDir() || info.Size() > inlineImageMaxReadBytes {
 		return ToolResult{}, false
 	}
 	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return ToolResult{}, false
 	}
+	payload, payloadMime, prepErr := prepareInlineAttachmentPayload(cleanPath, data, "image/png")
+	if prepErr != nil {
+		return ToolResult{}, false
+	}
 	return ToolResult{
 		Images: []ImageData{{
-			URI:      "data:image/png;base64," + base64.StdEncoding.EncodeToString(data),
-			MIMEType: "image/png",
+			URI:      "data:" + payloadMime + ";base64," + base64.StdEncoding.EncodeToString(payload),
+			MIMEType: payloadMime,
 		}},
 	}, true
 }

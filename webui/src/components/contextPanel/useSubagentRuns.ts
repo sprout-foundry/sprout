@@ -16,7 +16,9 @@ export interface UseSubagentRunsResult {
  * it). The previous ±500ms timestamp-window matching against raw logs —
  * racy under parallel runs and coupled to backend log copy — is gone.
  */
-export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
+export function useSubagentRuns(
+  chatProps: Pick<ChatContextPanelProps, 'toolExecutions' | 'subagentActivities'> | null,
+) {
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
 

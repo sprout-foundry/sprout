@@ -164,8 +164,10 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	// Generate session name from first user message
 	sessionName := a.generateSessionName()
 
+	messages := a.state.GetMessages()
 	state := ConversationState{
-		Messages:                a.state.GetMessages(),
+		Messages:                messages,
+		QueryDisplays:           a.queryDisplaysFor(messages),
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		TaskActions:             a.GetTaskActions(),
 		TotalCost:               a.state.GetTotalCost(),
@@ -281,6 +283,8 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
 	a.state.SetImageTokens(state.ImageTokens)
+	a.markUsageBooked()
+	a.restoreQueryDisplays(state.QueryDisplays)
 
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.state.SetCurrentIteration(0)

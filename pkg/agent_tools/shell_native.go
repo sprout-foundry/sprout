@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // syncBuffer is a bytes.Buffer guarded by a Mutex. Used as the early-
@@ -64,11 +65,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	if streamOutput {
 		// STREAMING MODE: Use pipes for real-time output
 		// Use exec.CommandContext to respect context cancellation
-		shell := os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/sh"
-		}
-		cmd := exec.CommandContext(ctx, shell, "-c", command)
+		cmd := shellexec.CommandContext(ctx, command)
 
 		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 			cmd.Dir = wd
@@ -149,11 +146,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	}
 
 	// Fallback: no BPM available, use standard CommandContext (kills on cancel)
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-	cmd := exec.CommandContext(ctx, shell, "-c", command)
+	cmd := shellexec.CommandContext(ctx, command)
 
 	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 		cmd.Dir = wd
@@ -185,11 +178,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 func runShellCommandAdoptable(ctx context.Context, command string, bpm *BackgroundProcessManager) (string, error) {
 	pp := PasswordPrompterFromContext(ctx)
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-	cmd := exec.Command(shell, "-c", command) // NOT CommandContext — we control lifecycle
+	cmd := shellexec.Command(command) // NOT CommandContext — we control lifecycle
 
 	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 		cmd.Dir = wd

@@ -12,6 +12,7 @@ import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { QueryProgress } from '../types/app';
 import { useCommandOutput } from '../hooks/useCommandOutput';
+import { useComposerFocusRequest } from '../hooks/useComposerFocusRequest';
 import CommandOutputPanel from './CommandOutputPanel';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
@@ -20,11 +21,14 @@ import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
 import { ToolTimelineBar } from './chat/ToolTimelineBar';
 import { TurnChangesStrip } from './chat/TurnChangesStrip';
+import { isLayeredLayout } from '../config/layout';
+import { useSubagentRuns } from './contextPanel/useSubagentRuns';
 import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
 import ChatMetricsStrip from './chat/ChatMetricsStrip';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import './Chat.css';
+import { chatErrorText } from './chat/chatError';
 
 function Chat(props: ChatProps): JSX.Element {
   const {
@@ -47,7 +51,7 @@ function Chat(props: ChatProps): JSX.Element {
     toolExecutions = [],
     queryProgress = null,
     currentTodos = [],
-    subagentActivities: _subagentActivities = [],
+    subagentActivities = [],
     activeToolDetail,
     onToolDetailToggle,
     onStopProcessing,
@@ -78,6 +82,7 @@ function Chat(props: ChatProps): JSX.Element {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
+  useComposerFocusRequest(inputContainerRef, chatId);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
@@ -176,6 +181,11 @@ function Chat(props: ChatProps): JSX.Element {
   // recreate the callback on every streaming chunk and defeat
   // MessageItem's memo, re-running markdown + MessageSegments for
   // every visible row).
+  // A failed turn is already shown inline as the transcript's last entry;
+  // repeating it in the footer card would show the same error twice.
+  const lastMessage = messages[messages.length - 1];
+  const footerError = lastError && lastMessage && chatErrorText(lastMessage.content) === lastError ? null : lastError;
+
   const messagesRef = useRef<Message[]>(messages);
   messagesRef.current = messages;
 
@@ -189,6 +199,11 @@ function Chat(props: ChatProps): JSX.Element {
   // An inline arrow recreates the function on every parent render,
   // and Virtuoso then treats every row as new and re-runs all the
   // MessageItem renders even though props are identical.
+  const { subagentRuns } = useSubagentRuns(
+    useMemo(() => ({ toolExecutions, subagentActivities }), [toolExecutions, subagentActivities]),
+  );
+  const activeSubagentRun = activeToolDetail ? subagentRuns.find((r) => r.tool.id === activeToolDetail.id) : undefined;
+
   const renderMessageItem = useCallback(
     (index: number, message: Message) => {
       // SP-076: the next message in the visible list. If it's another
@@ -214,6 +229,7 @@ function Chat(props: ChatProps): JSX.Element {
         <MessageItem
           message={message}
           activeToolDetail={activeToolDetail}
+          activeSubagentRun={activeSubagentRun}
           onToolDetailToggle={onToolDetailToggle}
           findMatchingToolExecution={findMatchingToolExecution}
           getToolStatus={getToolStatusForMessage}
@@ -229,6 +245,7 @@ function Chat(props: ChatProps): JSX.Element {
     },
     [
       activeToolDetail,
+      activeSubagentRun,
       onToolDetailToggle,
       findMatchingToolExecution,
       getToolStatusForMessage,
@@ -276,7 +293,7 @@ function Chat(props: ChatProps): JSX.Element {
           queryProgress={queryProgress as QueryProgress | null}
           isProcessing={isProcessing}
           filteredToolExecutions={filteredToolExecutions}
-          lastError={lastError}
+          lastError={footerError}
           workspaceBusy={workspaceBusy}
           onSendAnyway={onSendAnyway}
           onDismissBusy={onDismissBusy}
@@ -296,7 +313,7 @@ function Chat(props: ChatProps): JSX.Element {
       latestTurnEdits,
       queryProgress,
       filteredToolExecutions,
-      lastError,
+      footerError,
       showExpiredSessionRecovery,
       handleReloadWithoutSSHPath,
       currentTodos,
@@ -482,10 +499,13 @@ function Chat(props: ChatProps): JSX.Element {
                 chat is exactly when restoring a past conversation is most
                 useful — and outside Virtuoso so popover anchors don't
                 scroll with the transcript. */}
-            <div className="chat-header-row">
-              <ChatHistorySwitcher chatId={chatId} onRestoreSession={onRestoreSession} />
-              {worktreePath && <ChatHeader worktreePath={worktreePath} />}
-            </div>
+            {/* The layered layout keeps history with the sidebar's conversation list. */}
+            {(!isLayeredLayout || worktreePath) && (
+              <div className="chat-header-row">
+                {!isLayeredLayout && <ChatHistorySwitcher chatId={chatId} onRestoreSession={onRestoreSession} />}
+                {worktreePath && <ChatHeader worktreePath={worktreePath} />}
+              </div>
+            )}
             {showOffline ? (
               <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
             ) : messages.length === 0 ? (

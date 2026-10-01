@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -89,21 +88,20 @@ func runStartupPermissionCheck() error {
 	return nil
 }
 
-// resolveGlobalConfigDir returns the global config directory regardless of
-// SPROUT_CONFIG override. This is used when layering workspace config
-// on top of the global config so API keys are always resolved from the
-// user's home directory.
+// resolveGlobalConfigDir returns the global config directory for layering a
+// workspace config on top. SPROUT_CONFIG is not consulted: isolated-config
+// mode repoints it at the workspace's own .sprout directory. An explicit
+// SPROUT_CONFIG_DIR still wins, and otherwise $XDG_CONFIG_HOME/sprout or
+// ~/.config/sprout — the same place the isolated config was seeded from.
 func resolveGlobalConfigDir() string {
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
-		if h := os.Getenv("HOME"); h != "" {
-			homeDir = h
-		}
+	if dir := strings.TrimSpace(os.Getenv("SPROUT_CONFIG_DIR")); dir != "" {
+		return dir
 	}
-	if homeDir == "" {
+	dir, err := configuration.DefaultConfigDir()
+	if err != nil {
 		return ""
 	}
-	return filepath.Join(homeDir, ".config", "sprout")
+	return dir
 }
 
 // shouldPreloadLocalModel reports whether createChatAgent should eagerly
@@ -240,25 +238,12 @@ func createChatAgent() (*agent.Agent, error) {
 	if autoDetectedWorkspaceDir != "" {
 		globalDir := resolveGlobalConfigDir()
 		if globalDir != "" {
-			if agentProvider != "" && agentModel != "" {
-				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, fmt.Sprintf("%s:%s", agentProvider, agentModel))
-			} else if agentProvider != "" {
-				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentProvider)
-			} else if agentModel != "" {
-				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentModel)
-			} else {
-				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, "")
-			}
+			chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, providerModelSpec(agentProvider, agentModel))
 		}
 	}
 	if chatAgent == nil {
-		if agentProvider != "" && agentModel != "" {
-			modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
-			chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-		} else if agentProvider != "" {
-			chatAgent, err = agent.NewAgentWithModel(agentProvider)
-		} else if agentModel != "" {
-			chatAgent, err = agent.NewAgentWithModel(agentModel)
+		if spec := providerModelSpec(agentProvider, agentModel); spec != "" {
+			chatAgent, err = agent.NewAgentWithModel(spec)
 		} else {
 			chatAgent, err = agent.NewAgent()
 		}
@@ -314,7 +299,8 @@ func createChatAgent() (*agent.Agent, error) {
 }
 
 func init() {
-	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
+	agentCmd.Flags().BoolVarP(&agentSkipPrompt, "yes", "y", false, "Run without interactive prompts: auto-approve confirmations and skip pickers")
+	boolFlagAlias(agentCmd.Flags(), &agentSkipPrompt, "skip-prompt", "yes", aliasSilent)
 	agentCmd.Flags().BoolVar(&agentNoConnectionCheck, "no-connection-check", false, "Skip provider connection check at startup (saves 1-3 seconds)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, mistral, ollama, ollama-local, ollama-cloud, lmstudio, or custom providers)")
@@ -337,6 +323,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	agentCmd.Flags().StringVar(&agentAutomateSessionFile, "automate-session-file", "", "Session record JSON path to finalize when this run exits (set by 'automate run --detach'; empty = no finalization)")
+	_ = agentCmd.Flags().MarkHidden("automate-session-file")
 	agentCmd.Flags().Float64Var(&agentBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
 	agentCmd.Flags().StringVar(&agentBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")

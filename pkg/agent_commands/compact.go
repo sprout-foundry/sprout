@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/seed/core"
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // compactSummaryHeader is the canonical wrapper that flags a message as
@@ -85,7 +87,7 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	messages := chatAgent.GetMessages()
 	if len(messages) < compactMinMessagesToCompact {
-		fmt.Printf("\n[info] Need at least %d messages to compact (have %d).\n",
+		console.GlyphInfo.Fprintf(os.Stdout, "Need at least %d messages to compact (have %d).",
 			compactMinMessagesToCompact, len(messages))
 		return nil
 	}
@@ -94,12 +96,12 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	anchorEnd := compactAnchorEnd(messages)
 	recentStart := len(messages) - compactRecentToKeep
 	if recentStart <= anchorEnd {
-		fmt.Println("\n[info] Not enough distinct history beyond anchor + recent window to compact.")
+		console.GlyphInfo.Fprintln(os.Stdout, "Not enough distinct history beyond anchor + recent window to compact.")
 		return nil
 	}
 	recentStart = adjustRecentBoundary(messages, recentStart, anchorEnd)
 	if recentStart-anchorEnd < compactMinMiddleMessages {
-		fmt.Println("\n[info] Middle segment too small to be worth summarizing.")
+		console.GlyphInfo.Fprintln(os.Stdout, "Middle segment too small to be worth summarizing.")
 		return nil
 	}
 
@@ -109,12 +111,12 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	// Pre-compact snapshot for diagnostics (best-effort).
 	if path, err := chatAgent.CaptureTranscriptSnapshot("pre-compact-manual", true); err == nil {
-		fmt.Printf("[transcript] pre-compact snapshot: %s\n", path)
+		console.GlyphDim.Fprintf(os.Stdout, "pre-compact snapshot: %s", path)
 	}
 
 	chatAgent.PublishCompactStarted("manual", len(messages), 0)
 
-	fmt.Printf("\n[compact] Summarizing %d middle messages via LLM...\n", len(middle))
+	console.GlyphAction.Fprintf(os.Stdout, "Summarizing %d middle messages…", len(middle))
 
 	ctx := c.getContext(chatAgent)
 	hint := core.SummarizerHint{
@@ -155,18 +157,18 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	chatAgent.ReplaceTurnCheckpoints(nil)
 
 	if path, err := chatAgent.CaptureTranscriptSnapshot("post-compact-manual", false); err == nil {
-		fmt.Printf("[transcript] post-compact snapshot: %s\n", path)
+		console.GlyphDim.Fprintf(os.Stdout, "post-compact snapshot: %s", path)
 	}
 	chatAgent.PublishCompactCompleted("manual", len(messages), len(newMessages), len(body), nil)
 
-	fmt.Println("\n[compact] LLM-driven compaction complete:")
-	fmt.Printf("       Anchor preserved: %d messages (original task framing)\n", len(anchor))
-	fmt.Printf("       Middle summarized: %d messages\n", len(middle))
-	fmt.Printf("       Recent preserved: %d messages (causal chain)\n", len(tail))
-	fmt.Printf("       New total: %d messages\n", len(newMessages))
-	fmt.Printf("       Summary length: %d chars\n", len(body))
+	console.GlyphSuccess.Fprintln(os.Stdout, "Compaction complete")
+	fmt.Printf("  Anchor preserved: %d messages (original task framing)\n", len(anchor))
+	fmt.Printf("  Middle summarized: %d messages\n", len(middle))
+	fmt.Printf("  Recent preserved: %d messages (causal chain)\n", len(tail))
+	fmt.Printf("  New total: %d messages\n", len(newMessages))
+	fmt.Printf("  Summary length: %d chars\n", len(body))
 	if len(manifest) > 0 {
-		fmt.Printf("       File changes carried forward: %d entries\n", len(manifest))
+		fmt.Printf("  File changes carried forward: %d entries\n", len(manifest))
 	}
 
 	return nil

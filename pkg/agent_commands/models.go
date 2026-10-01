@@ -20,7 +20,9 @@ import (
 )
 
 // ModelsCommand implements the /model slash command
-type ModelsCommand struct{}
+type ModelsCommand struct {
+	outputSink
+}
 
 // Name returns the command name
 func (m *ModelsCommand) Name() string {

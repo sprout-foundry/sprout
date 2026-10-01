@@ -90,12 +90,23 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 }
 
 // resolveBillingType returns the billing model for the current provider.
+// Explicit config billing_type always wins; local model-serving clients
+// (ollama-local, lmstudio, sprout-local) have zero marginal cost and
+// resolve to free regardless of endpoint (a LAN-hosted server is still
+// free); everything else falls through to the endpoint heuristic.
 func (a *Agent) resolveBillingType() string {
 	if a == nil {
 		return BillingPayPerToken
 	}
 	provider := a.GetProvider()
 	cfg, err := providers.GlobalFactory().GetProviderConfig(provider)
+	if err == nil && cfg != nil && cfg.BillingType != "" {
+		return cfg.BillingType
+	}
+	switch a.getClientType() {
+	case api.OllamaLocalClientType, api.LMStudioClientType, api.SproutLocalClientType:
+		return BillingFree
+	}
 	if err == nil && cfg != nil {
 		return cfg.BillingTypeResolved()
 	}

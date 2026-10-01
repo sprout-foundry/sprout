@@ -9,9 +9,10 @@
  * The .git directory is stored alongside the working tree.
  */
 
+import LightningFS from '@isomorphic-git/lightning-fs';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
-import LightningFS from '@isomorphic-git/lightning-fs';
+import { gitCorsProxy } from './gitCorsProxy';
 
 type GitAuthor = { name: string; email: string };
 type GitAuth = { username?: string; password?: string; token?: string };
@@ -67,7 +68,8 @@ export interface CommitOptions {
 }
 
 export interface PushOptions {
-  token: string;
+  /** Omitted when the git proxy supplies the account's credentials. */
+  token?: string;
   branch?: string;
   remote?: string;
   force?: boolean;
@@ -78,6 +80,12 @@ export interface PullOptions {
   remote?: string;
   branch?: string;
   author?: GitAuthor;
+}
+
+// isomorphic-git reads username/password (sent as Basic auth); GitHub takes
+// a token as the password with any username.
+function tokenAuth(token: string | undefined): GitAuth {
+  return { username: 'x-access-token', password: token ?? '' };
 }
 
 class GitClient {
@@ -130,8 +138,8 @@ class GitClient {
         depth: opts.depth ?? 1,
         singleBranch: opts.singleBranch ?? true,
         ref: opts.branch ?? 'main',
-        corsProxy: undefined,
-        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
+        corsProxy: gitCorsProxy(),
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
         onProgress: opts.onProgress
           ? ({ phase, loaded, total }) => opts.onProgress!({ phase, loaded, total })
           : undefined,
@@ -145,26 +153,28 @@ class GitClient {
       await git.pull({
         fs: this.fs,
         http,
+        corsProxy: gitCorsProxy(),
         dir,
         ref: opts.branch,
         singleBranch: true,
         author: opts.author,
-        onAuth: opts.token ? () => Promise.resolve({ token: opts.token } as GitAuth) : undefined,
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
   }
 
-  /** Push to remote. Requires token. */
+  /** Push to remote. */
   async push(dir: string, opts: PushOptions): Promise<void> {
     return this.withLock(dir, async () => {
       await git.push({
         fs: this.fs,
         http,
+        corsProxy: gitCorsProxy(),
         dir,
         remote: opts.remote ?? 'origin',
         ref: opts.branch,
         force: opts.force ?? false,
-        onAuth: () => Promise.resolve({ token: opts.token } as GitAuth),
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
   }

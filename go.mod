@@ -24,14 +24,16 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.5.2
+require github.com/sprout-foundry/seed v1.5.7
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/coder/hnsw v0.6.1
+	github.com/ebitengine/purego v0.11.1
 	github.com/google/uuid v1.6.0
+	github.com/jezek/xgb v1.3.1
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/sprout-foundry/sinter v0.6.1
@@ -123,7 +125,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/spf13/pflag v1.0.9
 	github.com/ysmood/fetchup v0.2.3 // indirect
 	github.com/ysmood/goob v0.4.0 // indirect
 	github.com/ysmood/got v0.40.0 // indirect

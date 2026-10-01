@@ -63,10 +63,7 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
 // boot-time default for the session.
 export function visibleCommands(): CommandDef[] {
   return COMMAND_DEFINITIONS.filter((cmd) => {
-    if (
-      !supportsLocalTerminal &&
-      (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')
-    ) {
+    if (!supportsLocalTerminal && (cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
       return false;
     }
     return true;

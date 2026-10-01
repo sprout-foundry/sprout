@@ -109,6 +109,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	var gitCmd string
 	useCommitMessage := false
 	commitMsg := ""
+	remainingCommitArgs := ""
 	switch operation {
 	case "commit":
 		// Check if args contain -m with a message. If so, extract the message
@@ -118,6 +119,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 			if found {
 				useCommitMessage = true
 				commitMsg = extractedMsg
+				remainingCommitArgs = remainingArgs
 				gitCmd = "git commit -F %s"
 				if remainingArgs != "" {
 					gitCmd += " " + remainingArgs
@@ -173,7 +175,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// For commit with -m message, use the temp-file approach shared with
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
-		result, err := commitMessage(ctx, commitMsg, effectiveDir)
+		result, err := commitMessage(ctx, commitMsg, effectiveDir, remainingCommitArgs)
 		if err != nil {
 			return result, err
 		}

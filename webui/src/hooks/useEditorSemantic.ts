@@ -13,7 +13,7 @@
  * Target: ~300 lines
  */
 
-import type { EditorView } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 import { useState, useRef, useCallback } from 'react';
 import type { ReferenceInfo } from '../components/FindAllReferencesOverlay';
 import { resolveLanguageId } from '../extensions/languageRegistry';
@@ -110,9 +110,10 @@ export function useEditorSemantic(
     const line = Math.min(Math.max(lineNum - 1, 0), doc.lines - 1);
     const pos = doc.line(line + 1).from;
 
+    // A jump lands mid-screen, not on the viewport's edge.
     dispatch.dispatch({
       selection: { anchor: pos, head: pos },
-      scrollIntoView: true,
+      effects: EditorView.scrollIntoView(pos, { y: 'center' }),
     });
 
     dispatch.focus();

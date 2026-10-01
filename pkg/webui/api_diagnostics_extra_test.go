@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -72,8 +73,8 @@ func TestHandleAPIDiagnostics_WhitespaceOnlyPath(t *testing.T) {
 func TestHandleAPIDiagnostics_PathOutsideWorkspace(t *testing.T) {
 	ws, _ := newTestWebServer(t)
 
-	// Path tries to escape workspace with ../
-	body := `{"path":"/etc/passwd","content":"package main"}`
+	outside := filepath.Join(t.TempDir(), "passwd")
+	body := `{"path":` + jsonQuote(outside) + `,"content":"package main"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics", strings.NewReader(body))
 	req.Header.Set(webClientIDHeader, "test-client")
 	rec := httptest.NewRecorder()

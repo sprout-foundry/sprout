@@ -176,6 +176,39 @@ func TestSelectList_DismissOnAnyKey_PrintableChar(t *testing.T) {
 	}
 }
 
+// A fast burst (typing ahead, pasting) arrives in one read; everything
+// printable in that read must be forwarded, not just its first byte.
+func TestSelectList_DismissOnAnyKey_ForwardsBurst(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items:           []SelectItem{{Label: "alpha", Value: "A"}},
+		DismissOnAnyKey: true,
+	})
+	var buf [8]byte
+	n := copy(buf[:], "/nosuchc")
+	done, _, _ := s.processKey(buf[0], n, buf[:])
+	if !done {
+		t.Fatalf("expected done=true on printable burst")
+	}
+	if got := s.DismissKey(); got != "/nosuchc" {
+		t.Fatalf("DismissKey()=%q want %q", got, "/nosuchc")
+	}
+}
+
+func TestPrintableRun(t *testing.T) {
+	cases := map[string]string{
+		"abc":    "abc",
+		"ab\rcd": "ab",
+		"héllo":  "héllo",
+		"\x1b[A": "",
+		"x\xc3":  "x",
+	}
+	for in, want := range cases {
+		if got := printableRun([]byte(in)); got != want {
+			t.Errorf("printableRun(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
 func TestSelectList_DismissOnAnyKey_UTF8LeadByte(t *testing.T) {
 	s := NewSelectList(SelectListOptions{
 		Items: []SelectItem{

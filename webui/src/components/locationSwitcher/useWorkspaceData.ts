@@ -29,11 +29,6 @@ export interface UseWorkspaceDataResult {
   showExpiredSessionRecovery: boolean;
   isOpeningSshHost: string | null;
   isClosingSshSession: string | null;
-  showSSHWorkspacePicker: boolean;
-  sshPickerHostAlias: string;
-  sshPickerPath: string;
-  setSshPickerPath: (v: string) => void;
-  setShowSSHWorkspacePicker: (v: boolean) => void;
   recentWorkspaces: string[];
   remoteRecentWorkspaces: Record<string, string[]>;
   sshFavoriteWorkspaces: Record<string, string[]>;
@@ -66,9 +61,6 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
   const [sshHomePaths, setSshHomePaths] = useState<Record<string, string>>({});
   const [isOpeningSshHost, setIsOpeningSshHost] = useState<string | null>(null);
   const [isClosingSshSession, setIsClosingSshSession] = useState<string | null>(null);
-  const [showSSHWorkspacePicker, setShowSSHWorkspacePicker] = useState(false);
-  const [sshPickerHostAlias, setSshPickerHostAlias] = useState('');
-  const [sshPickerPath, setSshPickerPath] = useState('');
   const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
   const [remoteRecentWorkspaces, setRemoteRecentWorkspaces] = useState<Record<string, string[]>>(() =>
     readRemoteRecentWorkspaces(),
@@ -193,21 +185,21 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     };
   }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, setSshHomePaths]);
 
-  // Post-SSH-connect workspace picker
+  // After an SSH connect to a specific remote folder, open it. Otherwise the
+  // remote daemon sits in its home, and the workspace gate asks for a folder —
+  // one chooser, not a second SSH-only picker on top of it.
   useEffect(() => {
     const hostAlias = window.sessionStorage.getItem('sprout:ssh-just-connected');
     if (!hostAlias) return;
     window.sessionStorage.removeItem('sprout:ssh-just-connected');
-    setSshPickerHostAlias(hostAlias);
     const initialWorkspace = window.SPROUT_INITIAL_WORKSPACE;
     const isSpecificPath =
       initialWorkspace &&
       initialWorkspace !== '$HOME' &&
       !initialWorkspace.startsWith('$HOME/') &&
       !initialWorkspace.startsWith('${HOME}');
-    if (isSpecificPath) {
-      submitWorkspaceChange(initialWorkspace).catch(() => setShowSSHWorkspacePicker(true));
-    } else setShowSSHWorkspacePicker(true);
+    // A failed switch leaves the gate to ask.
+    if (isSpecificPath) submitWorkspaceChange(initialWorkspace).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -345,11 +337,6 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     showExpiredSessionRecovery,
     isOpeningSshHost,
     isClosingSshSession,
-    showSSHWorkspacePicker,
-    sshPickerHostAlias,
-    sshPickerPath,
-    setSshPickerPath,
-    setShowSSHWorkspacePicker,
     recentWorkspaces,
     remoteRecentWorkspaces,
     sshFavoriteWorkspaces,

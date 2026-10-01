@@ -1,12 +1,13 @@
-//go:build !js
-
-package workflow
-
 // runtime_allowed_paths.go — per-step allowed-paths allowlist management,
 // split out of runtime.go. ApplyWorkflowRuntimeAllowedPaths snapshots the
 // agent's session allowed-folder state and adds the step's declared paths;
 // RestoreWorkflowRuntimeAllowedPaths undoes exactly the net-new additions on
 // step exit so paths never leak into the next step.
+
+//go:build !js
+
+package workflow
+
 import (
 	"errors"
 	"fmt"
@@ -49,31 +50,32 @@ func ApplyWorkflowRuntimeAllowedPaths(chatAgent *agent.Agent, paths []AllowedPat
 	snapshotModes = chatAgent.SnapshotSessionAllowedFolderModes()
 
 	// Track what we actually added so the restore path can remove only the
-	// net-new entries without disturbing pre-existing ones.
-	currentSet := make(map[string]bool)
-	for _, f := range snapshotPaths {
-		currentSet[f] = true
-	}
-
+	// net-new entries without disturbing pre-existing ones. The agent
+	// canonicalizes entries (symlinks resolved; case-folded on Windows), so
+	// "already present" is judged by whether the allowlist grew rather than
+	// by comparing the declared spelling against stored entries, and the
+	// stored form is what restore must remove.
 	addedPaths = nil
+	current := snapshotPaths
 	for _, ap := range paths {
-		normalized := ap.Path
-		if normalized == "" {
+		if ap.Path == "" {
 			continue
 		}
-		if currentSet[normalized] {
+		chatAgent.AddSessionAllowedFolder(ap.Path)
+		after := chatAgent.SnapshotSessionAllowedFolders()
+		stored := newEntry(current, after)
+		current = after
+		if stored == "" {
 			// Already on the allowlist: nothing to do. Not added to
 			// addedPaths so restore won't touch it.
 			continue
 		}
-		chatAgent.AddSessionAllowedFolder(normalized)
 		mode := strings.TrimSpace(ap.Mode)
 		if mode == "" {
 			mode = PathModeReadWrite // default
 		}
-		chatAgent.SetSessionAllowedFolderMode(normalized, mode)
-		currentSet[normalized] = true // prevent dup in same step
-		addedPaths = append(addedPaths, normalized)
+		chatAgent.SetSessionAllowedFolderMode(stored, mode)
+		addedPaths = append(addedPaths, stored)
 	}
 
 	return snapshotPaths, snapshotModes, addedPaths, nil
@@ -141,4 +143,19 @@ func RestoreWorkflowRuntimeAllowedPaths(chatAgent *agent.Agent, snapshotPaths []
 	}
 
 	return nil
+}
+
+// newEntry returns the entry of after that is absent from before, or ""
+// when the allowlist did not grow.
+func newEntry(before, after []string) string {
+	seen := make(map[string]bool, len(before))
+	for _, f := range before {
+		seen[f] = true
+	}
+	for _, f := range after {
+		if !seen[f] {
+			return f
+		}
+	}
+	return ""
 }

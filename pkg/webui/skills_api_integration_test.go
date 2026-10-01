@@ -26,7 +26,7 @@ func writeSkillMDForWebui(t *testing.T, dir, name, description string) {
 func TestSkillsAPI_Integration_InstallListRemoveFlow(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SPROUT_SKILLS_DIR", tmpDir)
-	t.Setenv("HOME", tmpDir)
+	setTestHome(t, tmpDir)
 
 	// Create a local "registry repo" with one skill.
 	repoDir := t.TempDir()

@@ -33,7 +33,6 @@ import { updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import { detectIndentation } from '../extensions/indentDetect';
 import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
 import { clearDiagnostics } from '../extensions/lintDiagnostics';
-import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { readFileWithConsent } from '../services/fileAccess';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
@@ -278,7 +277,6 @@ export function useEditorFileIO(
               cmViewApiRef.current?.dispatch({
                 changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: content },
                 annotations: suppressHistoryAnnotations,
-                effects: setOriginalContent.of(content),
               });
             });
             clearDiffGutter(cmViewApiRef.current?.view);
@@ -320,7 +318,6 @@ export function useEditorFileIO(
             cmViewApiRef.current?.dispatch({
               changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: content },
               annotations: suppressHistoryAnnotations,
-              effects: setOriginalContent.of(content),
             });
           });
         }
@@ -465,7 +462,6 @@ export function useEditorFileIO(
                   insert: formattedContent,
                 },
                 annotations: suppressHistoryAnnotations,
-                effects: setOriginalContent.of(formattedContent),
               });
               setLocalContent(formattedContent);
               updateBufferContent(buf.id, formattedContent);
@@ -535,7 +531,6 @@ export function useEditorFileIO(
         cmViewApiRef.current?.dispatch({
           changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: '' },
           annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(''),
         });
       }
       setSelectionInfo(null);
@@ -593,7 +588,6 @@ export function useEditorFileIO(
         cmViewApiRef.current?.dispatch({
           changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: nextContent },
           annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(nextContent),
         });
         clearDiffGutter(cmViewApiRef.current?.view);
         clearDiagnostics(cmViewApiRef.current?.view);
@@ -611,7 +605,6 @@ export function useEditorFileIO(
         cmViewApiRef.current?.dispatch({
           changes: { from: 0, to: cmViewApiRef.current?.view.state.doc.length, insert: nextContent },
           annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(nextContent),
         });
         clearDiffGutter(cmViewApiRef.current?.view);
         clearDiagnostics(cmViewApiRef.current?.view);
@@ -652,7 +645,6 @@ export function useEditorFileIO(
           cmViewApiRef.current?.dispatch({
             changes: { from: 0, to: cmViewApiRef.current?.view?.state.doc.length ?? 0, insert: nextContent },
             annotations: suppressHistoryAnnotations,
-            effects: setOriginalContent.of(nextContent),
           });
         });
         clearDiffGutter(cmViewApiRef.current?.view);
@@ -983,15 +975,6 @@ export function useEditorFileIO(
     setBufferExternallyModified,
     openWorkspaceBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Sync original content to unsaved-line highlight extension ──
-  useEffect(() => {
-    if (cmViewApiRef.current?.view && buffer?.originalContent !== undefined) {
-      cmViewApiRef.current?.dispatch({
-        effects: setOriginalContent.of(buffer.originalContent),
-      });
-    }
-  }, [buffer?.originalContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     loadFile,

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -195,7 +196,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		}
 
 		for _, line := range pending {
-			_, _ = os.Stderr.Write([]byte(line))
+			console.PrintLine(line)
 		}
 		// Publish each complete line as a subagent_activity event for the WebUI feed.
 		if subEventBus != nil {
@@ -231,7 +232,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		outputMu.Unlock()
 
 		for _, line := range pending {
-			_, _ = os.Stderr.Write([]byte(line))
+			console.PrintLine(line)
 		}
 	})
 

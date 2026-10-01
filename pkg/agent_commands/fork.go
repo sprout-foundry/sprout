@@ -2,9 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ForkCommand handles forking the conversation at a user message breakpoint.
@@ -48,7 +50,7 @@ func (c *ForkCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return err
 	}
 
-	fmt.Printf("[fork] Forked session: %s\n", newID)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Forked session: %s", newID)
 	return nil
 }
 

@@ -29,7 +29,7 @@ func testSearchIndexPath(root string) string {
 // makeTestIndex builds a SessionIndex with three entries for testing.
 func makeTestIndex() *search.SessionIndex {
 	return &search.SessionIndex{
-		Version: 1,
+		Version: search.IndexFormatVersion,
 		BuiltAt: time.Now(),
 		Sessions: map[string]search.SessionIndexEntry{
 			"sess-embed": {
@@ -77,7 +77,7 @@ func setupSearchTest(t *testing.T) (*ReactWebServer, string) {
 	// Set HOME and SPROUT_STATE_DIR BEFORE creating the web server so that
 	// any initialization that resolves search.DefaultIndexPath() uses the
 	// temp directory. SPROUT_STATE_DIR overrides the TestMain global.
-	t.Setenv("HOME", root)
+	setTestHome(t, root)
 	t.Setenv("SPROUT_STATE_DIR", root)
 
 	// Write the test index before creating the server (server init may read it).
@@ -581,7 +581,7 @@ func TestParseSearchDateWebUI_Invalid(t *testing.T) {
 
 func TestHandleAPISessionsSearch_CorruptIndex(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", root)
+	setTestHome(t, root)
 	t.Setenv("SPROUT_STATE_DIR", root)
 
 	// Create session files on disk so BuildIndex can rebuild from them.

@@ -20,27 +20,40 @@
  * same way.
  */
 
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { isCloud } from '../config/mode';
 import { getBootstrapUser, getPlatformURL } from '../bootstrapAdapter';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { notificationBus } from '../services/notificationBus';
+import { isLayeredLayout } from '../config/layout';
+import { openHome } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
 
-/** Account-surface exit items. Paths carry ?from=editor (SP-016 P0.7).
- *  Team/Runners are flat API routes on the platform (GET /team, GET /runners),
- *  so their SPA views live at hash deep links — a plain /team would return
- *  the API's JSON, not the page. */
+/** Account-surface exit items, the same account area the platform header's
+ *  menu offers. Paths carry ?from=editor (SP-016 P0.7) and put the SPA route
+ *  in the hash: Team/Runners are also flat API routes on the platform
+ *  (GET /team, GET /runners), so a plain /team would return the API's JSON,
+ *  not the page. */
 const MENU_ITEMS: readonly { label: string; path: string }[] = [
   { label: 'Dashboard', path: '/?from=editor' },
-  { label: 'Tasks', path: '/tasks?from=editor' },
-  { label: 'Billing', path: '/account/billing?from=editor' },
-  { label: 'Manage Team', path: '/#/team?from=editor' },
+  { label: 'Tasks', path: '/?from=editor#/tasks' },
+  { label: 'Usage & billing', path: '/?from=editor#/account/billing' },
+  { label: 'Team', path: '/?from=editor#/team' },
+  { label: 'Runners', path: '/?from=editor#/runners' },
+  { label: 'Settings', path: '/?from=editor#/settings' },
 ];
+
+const ADMIN_ITEM = { label: 'Admin', path: '/?from=editor#/admin' };
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;
 
-export function UserMenu(): JSX.Element | null {
+interface UserMenuProps {
+  /** Shown under the avatar (the phone tab bar's "You"). */
+  label?: string;
+}
+
+export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
   // Identity is captured once at bootstrap (adapter install); re-read it
   // on the install event so a late bootstrap still populates the menu —
   // the same seam PlatformNavContext uses.
@@ -89,6 +102,34 @@ export function UserMenu(): JSX.Element | null {
     window.location.href = platformHref('/login');
   };
 
+  // The header bar clips overflow, so the list is fixed-positioned under the
+  // trigger instead of absolutely inside it.
+  const listPosition = (): CSSProperties | undefined => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return undefined;
+    // A trigger in the left half (the layered layout's rail) opens to the
+    // right and upward; the header trigger opens down and right-aligned.
+    if (rect.left < window.innerWidth / 2) {
+      return {
+        position: 'fixed',
+        left: rect.right + 8,
+        right: 'auto',
+        top: 'auto',
+        bottom: Math.max(8, window.innerHeight - rect.bottom),
+      };
+    }
+    // A trigger at the bottom (the phone tab bar) opens upward.
+    if (rect.top > window.innerHeight / 2) {
+      return {
+        position: 'fixed',
+        top: 'auto',
+        bottom: window.innerHeight - rect.top + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      };
+    }
+    return { position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) };
+  };
+
   return (
     <div className="user-menu">
       <button
@@ -108,24 +149,33 @@ export function UserMenu(): JSX.Element | null {
         <span className="user-menu-avatar" aria-hidden="true">
           {initial}
         </span>
+        {label && <span className="user-menu-trigger-label">{label}</span>}
       </button>
       {open && (
         <>
           <div className="user-menu-backdrop" onClick={close} aria-hidden="true" />
-          <div className="user-menu-list" role="menu" aria-label="Account">
+          <div className="user-menu-list" role="menu" aria-label="Account" style={listPosition()}>
             <div className="user-menu-identity">
               <span className="user-menu-identity-email" title={user.email}>
                 {user.email}
               </span>
               {user.tier ? <span className="user-menu-tier">{user.tier}</span> : null}
             </div>
-            {MENU_ITEMS.map((item) => (
+            {(user.admin ? [...MENU_ITEMS, ADMIN_ITEM] : MENU_ITEMS).map((item) => (
               <a
                 key={item.label}
                 role="menuitem"
                 className="user-menu-item"
                 href={platformHref(item.path)}
-                onClick={() => setOpen(false)}
+                onClick={(e) => {
+                  setOpen(false);
+                  // Layered layout: platform pages open inside the shell
+                  // (Home) instead of leaving the editor.
+                  if (isLayeredLayout && isCloud && !e.metaKey && !e.ctrlKey) {
+                    e.preventDefault();
+                    openHome(item.path);
+                  }
+                }}
               >
                 {item.label}
               </a>

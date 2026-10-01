@@ -71,6 +71,13 @@ describe('SyncStatusBanner', () => {
     expect(container.textContent).toBe('');
   });
 
+  it('stays out of the way for local work: uncommitted files and unpushed commits', async () => {
+    clientFetchMock.mockResolvedValue(okBody({ ...DIRTY_REPORT, behind: 0 }));
+    renderBanner();
+    await act(async () => {});
+    expect(container.querySelector('.sync-status-banner')).toBeNull();
+  });
+
   it('shows dirty/ahead/behind counts from the live GET /api/sync report', async () => {
     clientFetchMock.mockResolvedValue(okBody(DIRTY_REPORT));
     renderBanner();

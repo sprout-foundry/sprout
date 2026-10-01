@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -102,7 +103,7 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 			if !currentWorktree.IsZero() {
 				worktrees = append(worktrees, currentWorktree)
 			}
-			currentWorktree = WorktreeInfo{Path: value}
+			currentWorktree = WorktreeInfo{Path: filepath.FromSlash(value)}
 		case "HEAD":
 			// HEAD <hash> (detached) or HEAD <hash>
 			// We don't need the hash for our purposes
@@ -129,7 +130,7 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 
 	// Mark whichever worktree matches the active workspace as current.
 	for i := range worktrees {
-		if worktrees[i].Path == workspaceRoot {
+		if sameWorktreePath(worktrees[i].Path, workspaceRoot) {
 			worktrees[i].IsCurrent = true
 			break
 		}
@@ -232,7 +233,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_create", absPath))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_worktree_create", absPath))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree created successfully",
@@ -294,7 +295,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_worktree_remove", absPath))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_worktree_remove", absPath))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Worktree removed successfully",
@@ -346,7 +347,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	for _, line := range strings.Split(string(checkOutput), "\n") {
 		if strings.HasPrefix(line, "worktree ") {
 			path := strings.TrimPrefix(line, "worktree ")
-			if path == absPath {
+			if sameWorktreePath(path, absPath) {
 				worktreeExists = true
 				break
 			}
@@ -432,4 +433,17 @@ func worktreePathAllowed(absPath, daemonRoot, workspaceRoot string) bool {
 	}
 	parent := filepath.Dir(workspaceRoot)
 	return absPath == parent || isWithinWorkspace(absPath, parent)
+}
+
+// sameWorktreePath reports whether a path from `git worktree list` names
+// absPath. Git for Windows prints forward-slash paths whose case may differ
+// from the request, so an identity check on the directory backs up the
+// string comparison.
+func sameWorktreePath(gitPath, absPath string) bool {
+	if filepath.Clean(gitPath) == filepath.Clean(absPath) {
+		return true
+	}
+	a, errA := os.Stat(gitPath)
+	b, errB := os.Stat(absPath)
+	return errA == nil && errB == nil && os.SameFile(a, b)
 }

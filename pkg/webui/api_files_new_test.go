@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"path/filepath"
 	"testing"
 
 	ignore "github.com/sabhiram/go-gitignore"
@@ -26,6 +27,17 @@ func TestGetGitStatusForEntry_ModifiedFile(t *testing.T) {
 	got := getGitStatusForEntry("src/main.go", false, modified, untracked, nil, "/ws")
 	if got != "modified" {
 		t.Errorf("got %q, want %q", got, "modified")
+	}
+}
+
+func TestGetGitStatusForEntry_NativeSeparators(t *testing.T) {
+	modified := map[string]bool{"src/main.go": true}
+	untracked := map[string]bool{"docs/new.md": true}
+	if got := getGitStatusForEntry(filepath.Join("src", "main.go"), false, modified, untracked, nil, "/ws"); got != "modified" {
+		t.Errorf("file: got %q, want modified", got)
+	}
+	if got := getGitStatusForEntry("docs", true, modified, untracked, nil, "/ws"); got != "untracked" {
+		t.Errorf("dir: got %q, want untracked", got)
 	}
 }
 

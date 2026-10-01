@@ -428,12 +428,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
                 WASM shell failed: {wasmError}
               </div>
             )}
-            {wasmActive && (
-              <div className="terminal-status-inline terminal-status-inline--success">
-                <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
-                Shell ready
-              </div>
-            )}
           </>
         )}
         {(wasmProvidedByShell || terminalProvidedByShell) && !nativeConsoleActive && (

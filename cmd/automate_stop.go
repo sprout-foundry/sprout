@@ -63,7 +63,7 @@ func runAutomateStop(sessionID string) error {
 
 	ok, err := automate.StopProcess(info.PID)
 	if err != nil {
-		console.GlyphWarning.Printf("Error stopping process %d: %v", info.PID, err)
+		console.GlyphWarning.Printf("Could not stop process %d: %v", info.PID, err)
 	}
 
 	// Remove PID file regardless
@@ -115,7 +115,7 @@ func runAutomateStopAll() error {
 		console.GlyphAction.Printf("Stopping session %s (PID %d)...", s.SessionID, s.PID)
 		ok, err := automate.StopProcess(s.PID)
 		if err != nil {
-			console.GlyphWarning.Printf("Error stopping PID %d: %v", s.PID, err)
+			console.GlyphWarning.Printf("Could not stop process %d: %v", s.PID, err)
 		}
 		_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
 		if ok {

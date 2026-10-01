@@ -64,6 +64,57 @@ func CaptureStdout(t *testing.T, fn func()) string {
 	return <-done
 }
 
+// CaptureStdoutAndStderr runs fn with both os.Stdout and os.Stderr
+// redirected to a single in-memory pipe and returns their combined
+// output, interleaved in write order.
+//
+// Use this for commands whose output conventions split streams (results
+// on stdout, outcome/status/hint lines on stderr) and the test asserts
+// on the full visible output regardless of stream.
+//
+// os.Stdout and os.Stderr are restored before this function returns.
+// t.Cleanup is registered as a safety net so the restoration also
+// happens if fn panics.
+func CaptureStdoutAndStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("CaptureStdoutAndStderr: pipe: %v", err)
+	}
+	os.Stdout = w
+	os.Stderr = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	})
+
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
+	}()
+
+	defer func() { _ = w.Close() }()
+	fn()
+	_ = w.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	return <-done
+}
+
 // CaptureStdoutPanicking is like CaptureStdout but for callers that
 // cannot supply a *testing.T (legacy helpers, helpers used from
 // non-test contexts). On os.Pipe failure it panics with a descriptive

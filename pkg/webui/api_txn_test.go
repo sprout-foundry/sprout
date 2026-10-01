@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -202,8 +203,13 @@ func TestHandleAPITxnPush_AppliesDelta(t *testing.T) {
 	if got := readFileOf(t, dir, "src/main.go"); got != "package main\n" {
 		t.Fatalf("src/main.go = %q", got)
 	}
-	if info, err := os.Stat(filepath.Join(dir, "run.sh")); err != nil || info.Mode().Perm() != 0o755 {
-		t.Fatalf("run.sh mode: %v %v", info, err)
+	info, err := os.Stat(filepath.Join(dir, "run.sh"))
+	if err != nil {
+		t.Fatalf("stat run.sh: %v", err)
+	}
+	// Windows has no exec bit; os.Chmod only toggles read-only there.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
+		t.Fatalf("run.sh mode: %v", info.Mode())
 	}
 }
 

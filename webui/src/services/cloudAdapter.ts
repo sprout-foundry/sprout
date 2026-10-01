@@ -12,6 +12,7 @@
  *   cloudWasmHandlers.ts — WASM-local file operation handlers
  */
 
+import { setActiveRepoURL } from './activeRepo';
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
@@ -22,6 +23,7 @@ import {
   proxySettingsRequest,
   handleFoundryAuthError,
 } from './cloudProxyRoutes';
+import { handleCloudChatSessionsEndpoint } from './cloudChatSessions';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
 import {
   handleWasmLocal,
@@ -29,9 +31,11 @@ import {
   handleWasmShellApprovalDecision,
   trackFileWrite,
 } from './cloudWasmHandlers';
+import { gitCorsProxy } from './gitCorsProxy';
 import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
+import { loadRepoImport, saveRepoImport } from './repoImportCache';
 import { initWasmShell, type WasmShell } from './wasmShell';
-import { loadRepoImport, saveRepoImport, setLastRepo } from './repoImportCache';
+import { GIT_REPO_CHANGED_EVENT } from './workspaceClone';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -40,6 +44,45 @@ export interface CloudAdapterConfig {
   wsUrl: string;
   /** Platform nav items (tasks, billing, etc.) injected at runtime */
   navItems?: PlatformNavItem[];
+}
+
+/**
+ * Write imported files into the VFS, skipping any path that already exists.
+ * The VFS persists across reloads, so a file that's already there may hold
+ * the user's edits — the import (or its cache) only fills in what's missing.
+ */
+function seedFilesIfAbsent(shell: WasmShell, files: Array<{ path: string; content: string }>, verb: string): void {
+  for (const file of files) {
+    try {
+      if (!shell.readFile(file.path).error) {
+        trackFileWrite(file.path);
+        continue;
+      }
+      shell.writeFile(file.path, file.content);
+      // Track in the manifest so the file browser can list it.
+      trackFileWrite(file.path);
+    } catch (err) {
+      console.warn(`[CloudAdapter] failed to ${verb} file ${file.path}:`, err);
+    }
+  }
+}
+
+/**
+ * Limit the WASM agent's outbound HTTP to this page and the platform API.
+ * Everything the agent needs goes through the platform; direct calls to
+ * provider APIs (model catalogs, backend probes) would expose the user's
+ * activity to third parties and fail on CORS regardless.
+ */
+function restrictAgentNetwork(apiBase: string): void {
+  const wasm = (globalThis as { SproutWasm?: { setAllowedOrigins?: (origins: string[]) => unknown } }).SproutWasm;
+  if (typeof wasm?.setAllowedOrigins !== 'function' || typeof window === 'undefined') return;
+  const origins = new Set([window.location.origin]);
+  try {
+    origins.add(new URL(apiBase, window.location.href).origin);
+  } catch {
+    // apiBase is relative or empty: same-origin only.
+  }
+  wasm.setAllowedOrigins([...origins]);
 }
 
 export class CloudAdapter implements APIAdapter {
@@ -114,6 +157,7 @@ export class CloudAdapter implements APIAdapter {
     if (!this.wasmInitPromise) {
       this.wasmInitPromise = initWasmShell()
         .then((shell) => {
+          restrictAgentNetwork(this.config.apiBase);
           this.wasmShell = shell;
           return shell;
         })
@@ -165,25 +209,16 @@ export class CloudAdapter implements APIAdapter {
       // /api/create and /api/file back to this adapter's handleWasmLocal(),
       // creating a circular dependency. Going through the shell avoids that.
       const shell = await this.ensureWasmShell();
-      for (const file of files) {
-        try {
-          shell.writeFile(file.path, file.content);
-          // Track in the manifest so the file browser can list it
-          // (the old WASM binary has a broken listDir).
-          trackFileWrite(file.path);
-        } catch (writeErr) {
-          console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
-        }
-      }
+      seedFilesIfAbsent(shell, files, 'write');
 
       // Persist the manifest so a page reload can re-seed the in-memory VFS
       // from the cache instead of re-cloning. Fire-and-forget: a
       // persistence failure must never fail the import itself.
       const repo = data.repo ?? repoURL;
+      setActiveRepoURL(repoURL);
       void (async () => {
         try {
           await saveRepoImport(repoURL, { repo, files, importedAt: new Date().toISOString() });
-          await setLastRepo(repoURL);
         } catch (err) {
           console.warn('[CloudAdapter] repo import cache persist failed:', err);
         }
@@ -196,7 +231,9 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
-   * Re-seed the workspace for a repo, preferring the local import cache.
+   * Re-seed the workspace for a repo. The hosted IDE opens it as a git
+   * checkout (restoreRepoWithGit); otherwise, or if that fails, the local
+   * import cache is preferred.
    *
    * Cache hit: writes the persisted manifest straight into the WASM VFS —
    * no network, no server clone. Cache miss: falls back to the network
@@ -205,6 +242,8 @@ export class CloudAdapter implements APIAdapter {
   async restoreRepo(
     repoURL: string,
   ): Promise<{ success: boolean; repo?: string; error?: string; fromCache?: boolean }> {
+    const cloned = await this.restoreRepoWithGit(repoURL);
+    if (cloned) return cloned;
     const cached = await loadRepoImport(repoURL);
     if (!cached || !cached.files || cached.files.length === 0) {
       const result = await this.importRepo(repoURL);
@@ -212,17 +251,46 @@ export class CloudAdapter implements APIAdapter {
     }
     try {
       const shell = await this.ensureWasmShell();
-      for (const file of cached.files) {
-        try {
-          shell.writeFile(file.path, file.content);
-          trackFileWrite(file.path);
-        } catch (writeErr) {
-          console.warn(`[CloudAdapter] failed to restore file ${file.path}:`, writeErr);
-        }
-      }
+      seedFilesIfAbsent(shell, cached.files, 'restore');
       return { success: true, repo: cached.repo, fromCache: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Open a repository as a real git checkout (history, remote, branches) in
+   * the hosted IDE: a reload of the repo already cloned only restores missing
+   * files, anything else clones through the platform's git proxy. Returns
+   * null when git isn't available here or the clone fails (a private repo
+   * without a connected GitHub account), so the caller falls back to the
+   * plain file import.
+   */
+  private async restoreRepoWithGit(
+    repoURL: string,
+  ): Promise<{ success: boolean; repo?: string; fromCache?: boolean } | null> {
+    if (!gitCorsProxy()) return null;
+    try {
+      const { parseRepoRef } = await import('./workspaceFs/workspaceGit');
+      const want = parseRepoRef(repoURL);
+      const repo = `${want.owner}/${want.name}`;
+      const browserGit = await import('./browserGit');
+      await this.ensureWasmShell();
+      await browserGit.whenBrowserGitConfigured();
+
+      const origin = await browserGit.gitOriginUrl();
+      const sameRepo = origin !== null && sameRepoRef(origin, want.owner, want.name);
+      if (sameRepo) {
+        await browserGit.restoreGitWorkingTree();
+      } else {
+        await browserGit.gitClone(want.url);
+      }
+      setActiveRepoURL(repoURL);
+      window.dispatchEvent(new Event(GIT_REPO_CHANGED_EVENT));
+      return { success: true, repo, fromCache: sameRepo };
+    } catch (err) {
+      console.warn('[CloudAdapter] git clone failed; falling back to file import:', err);
+      return null;
     }
   }
 
@@ -333,6 +401,17 @@ export class CloudAdapter implements APIAdapter {
       const handled = handleCloudSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
       if (handled) return handled;
       // Unknown sub-path — fall through to synthetic / standard proxy below.
+    }
+
+    // ── Chat sessions (localStorage-backed) ────────────────────────
+    // The agent runs in the page, so the chat list lives here too: each
+    // chat owns a browser-local transcript and its own in-page agent. The
+    // worktree/compaction sub-paths fall through to the synthetic stubs.
+    if (urlPath === '/api/chat-sessions' || urlPath.startsWith('/api/chat-sessions/')) {
+      // The chat client calls fetch(url, { body }), so the body is on init.
+      const bodyStr = typeof init?.body === 'string' ? init.body : await this.extractRequestBody(input);
+      const handled = handleCloudChatSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
+      if (handled) return handled;
     }
 
     // ── Synthetic response interception ────────────────────────────
@@ -491,4 +570,10 @@ export class CloudAdapter implements APIAdapter {
   getWebSocketURL(): string | null {
     return this.config.wsUrl;
   }
+}
+
+/** Whether a remote URL points at owner/name (case-insensitive, .git optional). */
+function sameRepoRef(remoteURL: string, owner: string, name: string): boolean {
+  const m = remoteURL.replace(/\.git$/, '').match(/[/:]([^/:]+)\/([^/]+)$/);
+  return !!m && m[1].toLowerCase() === owner.toLowerCase() && m[2].toLowerCase() === name.toLowerCase();
 }

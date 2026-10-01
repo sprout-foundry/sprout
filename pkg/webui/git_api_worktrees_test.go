@@ -62,7 +62,7 @@ root /home/user/project/.git
 	if len(result) != 1 {
 		t.Fatalf("expected 1 worktree, got %d", len(result))
 	}
-	if result[0].Path != "/home/user/project" {
+	if result[0].Path != filepath.FromSlash("/home/user/project") {
 		t.Errorf("expected path /home/user/project, got %q", result[0].Path)
 	}
 	if result[0].Branch != "main" {
@@ -106,7 +106,7 @@ root /home/user/project/.git
 	if result[1].Branch != "feature-branch" {
 		t.Errorf("expected second branch feature-branch, got %q", result[1].Branch)
 	}
-	if result[1].ParentPath != "/home/user/project" {
+	if result[1].ParentPath != filepath.FromSlash("/home/user/project") {
 		t.Errorf("expected parent path /home/user/project, got %q", result[1].ParentPath)
 	}
 	if result[1].ParentBranch != "main" {
@@ -380,7 +380,7 @@ func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 	// check would have rejected worktreePath (a sibling to mainPath).
 	ws.daemonRoot = mainPath
 
-	body := fmt.Sprintf(`{"path":"%s"}`, worktreePath)
+	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCheckout(rec, req)
@@ -407,7 +407,7 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesWorkspaceRootUnconditionally(t *test
 	ws := newWorktreeTestWebServer(t, mainPath)
 
 	// Use a non-default client ID via the header.
-	body := fmt.Sprintf(`{"path":"%s"}`, worktreePath)
+	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
 	req.Header.Set(webClientIDHeader, "non-default-client")
 	rec := httptest.NewRecorder()
@@ -458,7 +458,7 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath(t *testing.T
 	ctx.DefaultChatID = defaultChatID
 	ws.mutex.Unlock()
 
-	body := fmt.Sprintf(`{"path":"%s"}`, worktreePath)
+	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCheckout(rec, req)
@@ -509,7 +509,7 @@ func TestHandleAPIGitWorktreeCheckoutDoesNotClobberBoundWorktree(t *testing.T) {
 	ctx.DefaultChatID = defaultChatID
 	ws.mutex.Unlock()
 
-	body := fmt.Sprintf(`{"path":"%s"}`, worktreePath)
+	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCheckout(rec, req)

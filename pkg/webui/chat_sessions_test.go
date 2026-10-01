@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestNewChatSessionWorktree(t *testing.T) {
@@ -166,6 +167,27 @@ func TestChatSessionWithMessagesStripsUserTimestamp(t *testing.T) {
 	}
 	if got := messages[1]["reasoning_content"]; got != "reasoning" {
 		t.Fatalf("reasoning content changed: %q", got)
+	}
+}
+
+func TestChatSessionWithMessagesShowsQueryDisplay(t *testing.T) {
+	cs := newChatSession("test-id", "Test Chat")
+	batch := "[wakeup] Background command completed\nBackground session bg-1 finished"
+	state := agent.AgentState{
+		Messages: []api.Message{
+			{Role: "user", Content: batch},
+			{Role: "assistant", Content: "Done."},
+		},
+		QueryDisplays: map[string]string{batch: "Looking into 'make build'…"},
+	}
+	var err error
+	cs.AgentState, err = json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := cs.chatSessionWithMessages()["messages"].([]map[string]interface{})
+	if got := messages[0]["content"]; got != "Looking into 'make build'…" {
+		t.Fatalf("wakeup turn shows %q, want its display text", got)
 	}
 }
 
@@ -340,5 +362,96 @@ func TestChatSession_SummaryAndInfoCarryID(t *testing.T) {
 	summary := cs.chatSessionSummary(false)
 	if got, _ := summary["provider"].(string); got != "ollama-local" {
 		t.Errorf("chatSessionSummary provider = %q, want %q", got, "ollama-local")
+	}
+}
+
+func TestSetChatSessionStateKeepsTopLevelOnActiveChat(t *testing.T) {
+	active := newDefaultChatSession()
+	background := newChatSession("chat-b", "Chat B")
+	cc := &webClientContext{
+		DefaultChatID: active.ID,
+		ChatSessions:  map[string]*chatSession{active.ID: active, background.ID: background},
+	}
+
+	cc.setChatSessionState(active.ID, []byte(`{"session_id":"s-active","messages":[]}`))
+	cc.setChatSessionState(background.ID, []byte(`{"session_id":"s-background","messages":[]}`))
+
+	if cc.CurrentSessionID != "s-active" {
+		t.Errorf("top-level session = %q, want the active chat's s-active", cc.CurrentSessionID)
+	}
+	if !strings.Contains(string(cc.AgentState), "s-active") {
+		t.Errorf("top-level state = %s, want the active chat's", cc.AgentState)
+	}
+	if background.CurrentSessionID != "s-background" {
+		t.Errorf("background chat session = %q, want s-background", background.CurrentSessionID)
+	}
+}
+
+func TestChatWithoutWorktreeUsesProjectRoot(t *testing.T) {
+	main := newDefaultChatSession()
+	wtChat := newChatSession("chat-wt", "Worktree chat")
+	wtChat.setWorktreePath("/repo-wt")
+	cc := &webClientContext{
+		WorkspaceRoot: "/repo-wt", // following the active worktree chat
+		ProjectRoot:   "/repo",
+		DefaultChatID: wtChat.ID,
+		ChatSessions:  map[string]*chatSession{main.ID: main, wtChat.ID: wtChat},
+	}
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
+		t.Errorf("root while a worktree chat is active = %q, want the project root /repo", got)
+	}
+
+	cc.WorkspaceRoot = "/repo"
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
+		t.Errorf("root on the project = %q, want /repo", got)
+	}
+
+	cc.WorkspaceRoot, cc.ProjectRoot = "/repo-wt", ""
+	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/daemon" {
+		t.Errorf("root with no recorded project = %q, want the fallback /daemon", got)
+	}
+}
+
+func TestClientStaysActiveWhileAnyChatRuns(t *testing.T) {
+	a, b := newDefaultChatSession(), newChatSession("chat-b", "Chat B")
+	cc := &webClientContext{DefaultChatID: a.ID, ChatSessions: map[string]*chatSession{a.ID: a, b.ID: b}}
+
+	cc.setChatQueryActive(a.ID, true, "long task")
+	cc.setChatQueryActive(b.ID, true, "short task")
+	cc.setChatQueryActive(b.ID, false, "")
+	if !cc.ActiveQuery || cc.CurrentQuery != "long task" {
+		t.Fatalf("after chat B finished: active=%v query=%q, want chat A's run still reported", cc.ActiveQuery, cc.CurrentQuery)
+	}
+
+	cc.setChatQueryActive(a.ID, false, "")
+	if cc.ActiveQuery {
+		t.Fatal("client still active after every chat finished")
+	}
+}
+
+func TestChatSessionWithMessagesIncludesRunInProgress(t *testing.T) {
+	cs := newChatSession("test-id", "Test Chat")
+	cs.runBuffer = newChatRunRingBuffer()
+	for _, ev := range []events.UIEvent{
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "earlier run"}},
+		{Type: events.EventTypeQueryCompleted, Data: map[string]interface{}{}},
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "run the build"}},
+		{Type: events.EventTypeQueryStarted, Data: map[string]interface{}{"query": "delegated", "subagent_depth": 1}},
+		{Type: events.EventTypeStreamChunk, Data: map[string]interface{}{"chunk": "Building"}},
+	} {
+		cs.runBuffer.Append(ev)
+	}
+
+	if _, ok := cs.chatSessionWithMessages()["run_events"]; ok {
+		t.Fatal("run_events sent for a chat with no run in progress")
+	}
+
+	cs.ActiveQuery = true
+	run, _ := cs.chatSessionWithMessages()["run_events"].([]map[string]interface{})
+	if len(run) != 3 {
+		t.Fatalf("run_events has %d events, want the 3 from the current run's start", len(run))
+	}
+	if data, _ := run[0]["data"].(map[string]interface{}); data["query"] != "run the build" {
+		t.Fatalf("run_events starts at %v, want the current run's query_started", run[0])
 	}
 }

@@ -58,6 +58,9 @@ func automateSessionRoot() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("resolve --dir: %w", err)
 		}
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			return "", fmt.Errorf("--dir %s is not a directory", automateSessionDir)
+		}
 		return abs, nil
 	}
 	cwd, err := os.Getwd()

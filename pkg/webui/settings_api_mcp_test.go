@@ -28,7 +28,7 @@ func setupMCPCredTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
-	t.Setenv("HOME", tmpDir)
+	setTestHome(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")

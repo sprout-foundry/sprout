@@ -367,6 +367,29 @@ describe('CommandInput', () => {
     expect(callArg).toContain('\t');
   });
 
+  it('lets Tab leave an empty input and Shift+Tab always leave', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, { ...baseProps, value: '', onChange }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    act(() => {
+      textarea.dispatchEvent(tab);
+    });
+    expect(tab.defaultPrevented).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(createElement(CommandInput, { ...baseProps, value: 'hello', onChange }));
+    });
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      textarea.dispatchEvent(shiftTab);
+    });
+    expect(shiftTab.defaultPrevented).toBe(false);
+  });
+
   it('shows new session button', () => {
     act(() => {
       root.render(createElement(CommandInput, {

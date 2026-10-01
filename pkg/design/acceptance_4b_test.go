@@ -118,7 +118,7 @@ func TestAcceptance4bSeededFixturesSeverityMatrix(t *testing.T) {
 	wantFile := map[string]string{
 		ruleConsistencyScreenOrphan: "design/screens/billing.html",
 		ruleScreenNavTarget:         "design/screens/checkout.html",
-		ruleManifestLinkDangling:    filepath.Join(DirName, ManifestName),
+		ruleManifestLinkDangling:    DirName + "/" + ManifestName,
 	}
 	seen := map[string]bool{}
 	for _, f := range findings {

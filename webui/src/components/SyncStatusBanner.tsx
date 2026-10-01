@@ -84,10 +84,11 @@ const SyncStatusBanner: React.FC = () => {
   const dirtyCount = report?.dirty_files.length ?? 0;
   const ahead = report?.ahead ?? 0;
   const behind = report?.behind ?? 0;
-  // Hide entirely when there is nothing to reconcile: clean repo, or the
-  // workspace is not a git repository at all.
-  const clean = report !== null && (!report.in_git_repo || (dirtyCount === 0 && ahead === 0 && behind === 0));
-  if (clean && !error) return null;
+  // Only a remote that has moved past the workspace needs reconciling (Pull).
+  // Uncommitted files and unpushed commits are ordinary work — Source control
+  // shows them — and a banner for them would sit over the sidebar all day.
+  const needsPull = report !== null && report.in_git_repo && behind > 0;
+  if (!needsPull && !error) return null;
 
   const parts: string[] = [];
   if (dirtyCount > 0) parts.push(`${dirtyCount} uncommitted file${dirtyCount === 1 ? '' : 's'}`);

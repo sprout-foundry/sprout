@@ -27,6 +27,11 @@ import './EditorTabs.css';
 
 interface EditorTabsProps {
   paneId?: string;
+  /**
+   * Whether this pane is the one being worked in. Its shown tab is
+   * highlighted only then; otherwise it is marked as shown but muted.
+   */
+  paneFocused?: boolean;
   actions?: ReactNode;
   compact?: boolean;
 
@@ -50,6 +55,7 @@ interface EditorTabsProps {
 
 function EditorTabs({
   paneId,
+  paneFocused = true,
   actions,
   compact = false,
   onActiveChatChange,
@@ -123,6 +129,8 @@ function EditorTabs({
     });
     return order;
   }, [panes]);
+
+  const shownBufferId = paneId ? (panes.find((pane) => pane.id === paneId)?.bufferId ?? null) : activeBufferId;
 
   // Preserve insertion order, filter by paneId.
   // Uses `buffers` directly — Array.from + filter is trivially cheap.
@@ -218,18 +226,11 @@ function EditorTabs({
   };
 
   // ── Inline rename handlers ────────────────────────────────────
-  const startRename = useCallback(
-    (buffer: EditorBuffer) => {
-      // Only allow renaming chat tabs that are not default sessions
-      const chatId = getChatId(buffer);
-      if (!chatId) return;
-      const session = chatSessions?.find((s) => s.id === chatId);
-      if (session?.is_default) return;
-      setRenamingBufferId(buffer.id);
-      setRenameValue(buffer.file.name);
-    },
-    [chatSessions],
-  );
+  const startRename = useCallback((buffer: EditorBuffer) => {
+    if (!getChatId(buffer)) return;
+    setRenamingBufferId(buffer.id);
+    setRenameValue(buffer.file.name);
+  }, []);
 
   const commitRename = useCallback(() => {
     if (!renamingBufferId || !renameValue.trim()) {
@@ -470,7 +471,8 @@ function EditorTabs({
           >
             {bufferList.map((buffer) => {
               const chatId = getChatId(buffer);
-              const isActive = buffer.id === activeBufferId;
+              // The tab shown in this pane — each pane has its own.
+              const isActive = buffer.id === shownBufferId;
               const isRenaming = buffer.id === renamingBufferId;
 
               // Chat-specific data lookups (all O(1))
@@ -481,7 +483,7 @@ function EditorTabs({
               return (
                 <div
                   key={buffer.id}
-                  className={`tab ${isActive ? 'active' : ''} ${buffer.isPinned ? 'pinned' : ''} ${buffer.kind === 'chat' ? 'chat-tab' : ''}`}
+                  className={`tab ${isActive ? 'active' : ''} ${isActive && paneFocused ? 'focused' : ''} ${buffer.isPinned ? 'pinned' : ''} ${buffer.kind === 'chat' ? 'chat-tab' : ''}`}
                   ref={(el) => {
                     tabRefs.current[buffer.id] = el;
                   }}
@@ -563,9 +565,7 @@ function EditorTabs({
                         <RefreshCw size={11} aria-hidden="true" />
                       </button>
                     )}
-                    {/* Pin button hidden on chat tabs — pin/unpin a chat
-                     * isn't a typical workflow, and the pinned-default-chat
-                     * gets a forced pinned state via context anyway. */}
+                    {/* No pin button on chat tabs; see the context menu note. */}
                     {buffer.kind !== 'chat' && (
                       <button
                         className="pin-indicator"
@@ -696,9 +696,8 @@ function EditorTabs({
                 <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
               </button>
             ))}
-            {/* Pin is meaningless for chat tabs (defaults are forced
-             * pinned by the context). Only surface the action on real
-             * file tabs. */}
+            {/* Chat tabs aren't pinnable: every chat already stays in the
+             * tab row until closed or deleted. Only file tabs pin. */}
             {activeContextBuffer.kind !== 'chat' && (
               <button
                 className="context-menu-item"
@@ -711,7 +710,7 @@ function EditorTabs({
             )}
 
             {/* ── Chat-specific context menu items ───────────────── */}
-            {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onRenameChat && (
+            {activeContextBuffer.kind === 'chat' && onRenameChat && (
               <button
                 className="context-menu-item"
                 onClick={() =>
@@ -752,63 +751,60 @@ function EditorTabs({
             </button>
             {activeContextBuffer.isClosable !== false &&
             (activeContextBuffer.kind === 'chat' || !activeContextBuffer.isPinned) ? (
-              <>
-                <button
-                  className="context-menu-item danger"
-                  onClick={() => handleContextAction(() => closeBuffer(activeContextBuffer.id))}
-                >
-                  <Trash2 size={14} />
-                  <span>Close</span>
-                </button>
-                {/* Delete Chat — every non-default chat */}
-                {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onDeleteChat && contextChatId && (
-                  <button
-                    className="context-menu-item danger"
-                    onClick={() =>
-                      handleContextAction(async () => {
-                        const hasWorktree = contextHasWorktree === true;
-                        const confirmed = await showThemedConfirm(
-                          hasWorktree
-                            ? 'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?'
-                            : 'This will permanently delete the chat session and its messages. Are you sure?',
-                          { type: 'danger' },
-                        );
-                        if (!confirmed) return;
-                        onDeleteChat(contextChatId, { removeWorktree: hasWorktree });
-                      })
-                    }
-                  >
-                    <Trash2 size={14} />
-                    <span>{contextHasWorktree ? 'Delete Chat and Worktree' : 'Delete Chat'}</span>
-                  </button>
-                )}
-                {/* Delete Chat and Worktree — legacy callback shape, for
-                    callers that only support the worktree variant */}
-                {activeContextBuffer.kind === 'chat' &&
-                  contextHasWorktree &&
-                  !onDeleteChat &&
-                  onDeleteChatWithWorktree && (
-                    <button
-                      className="context-menu-item danger"
-                      onClick={() =>
-                        handleContextAction(async () => {
-                          const confirmed = await showThemedConfirm(
-                            'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
-                            { type: 'danger' },
-                          );
-                          if (!confirmed) return;
-                          if (contextChatId) {
-                            onDeleteChatWithWorktree(contextChatId);
-                          }
-                        })
-                      }
-                    >
-                      <Trash2 size={14} />
-                      <span>Delete Chat and Worktree</span>
-                    </button>
-                  )}
-              </>
+              <button
+                className="context-menu-item danger"
+                onClick={() => handleContextAction(() => closeBuffer(activeContextBuffer.id))}
+              >
+                <Trash2 size={14} />
+                <span>Close</span>
+              </button>
             ) : null}
+            {/* Deleting stays available on the chat you're in, whose tab can't be
+                closed; the chat list moves to another chat afterwards. */}
+            {/* Delete Chat — every non-default chat */}
+            {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onDeleteChat && contextChatId && (
+              <button
+                className="context-menu-item danger"
+                onClick={() =>
+                  handleContextAction(async () => {
+                    const hasWorktree = contextHasWorktree === true;
+                    const confirmed = await showThemedConfirm(
+                      hasWorktree
+                        ? 'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?'
+                        : 'This will permanently delete the chat session and its messages. Are you sure?',
+                      { type: 'danger' },
+                    );
+                    if (!confirmed) return;
+                    onDeleteChat(contextChatId, { removeWorktree: hasWorktree });
+                  })
+                }
+              >
+                <Trash2 size={14} />
+                <span>{contextHasWorktree ? 'Delete Chat and Worktree' : 'Delete Chat'}</span>
+              </button>
+            )}
+            {/* Delete Chat and Worktree — legacy callback shape, for
+                    callers that only support the worktree variant */}
+            {activeContextBuffer.kind === 'chat' && contextHasWorktree && !onDeleteChat && onDeleteChatWithWorktree && (
+              <button
+                className="context-menu-item danger"
+                onClick={() =>
+                  handleContextAction(async () => {
+                    const confirmed = await showThemedConfirm(
+                      'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
+                      { type: 'danger' },
+                    );
+                    if (!confirmed) return;
+                    if (contextChatId) {
+                      onDeleteChatWithWorktree(contextChatId);
+                    }
+                  })
+                }
+              >
+                <Trash2 size={14} />
+                <span>Delete Chat and Worktree</span>
+              </button>
+            )}
           </>
         )}
       </ContextMenu>

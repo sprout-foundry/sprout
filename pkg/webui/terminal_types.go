@@ -154,6 +154,10 @@ type TerminalSession struct {
 	// instead. Terminal resize and raw terminal features are degraded.
 	NoPTY bool `json:"-"`
 
+	// pipeLine is the line being typed into a NoPTY session, held back until
+	// Enter (see writeInputLocked). Guarded by mutex.
+	pipeLine []byte
+
 	// History for shell command navigation.
 	History      []string
 	HistoryIndex int

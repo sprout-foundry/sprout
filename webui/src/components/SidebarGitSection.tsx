@@ -1,6 +1,7 @@
 import { GitBranch, GitFork, History } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { isCloud } from '../config/mode';
 import { type SectionTab } from '../hooks/useSidebarState';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import GitHistoryPanel from './GitHistoryPanel';
@@ -117,20 +118,25 @@ export default function SidebarGitSection({
           <History size={14} />
           <span>History</span>
         </button>
-        <button
-          type="button"
-          role="tab"
-          data-tab="worktrees"
-          id="git-tab-worktrees"
-          aria-controls="git-panel-worktrees"
-          aria-selected={gitSubTab === 'worktrees'}
-          tabIndex={gitSubTab === 'worktrees' ? 0 : -1}
-          className={`git-sidebar-tab ${gitSubTab === 'worktrees' ? 'active' : ''}`}
-          onClick={() => setGitSubTab('worktrees')}
-        >
-          <GitFork size={14} />
-          <span>Worktrees</span>
-        </button>
+        {/* Worktrees are extra checkouts on the host's disk; the browser's
+            in-memory git has no such disk and the platform serves no
+            worktree API, so cloud builds don't offer the tab. */}
+        {!isCloud && (
+          <button
+            type="button"
+            role="tab"
+            data-tab="worktrees"
+            id="git-tab-worktrees"
+            aria-controls="git-panel-worktrees"
+            aria-selected={gitSubTab === 'worktrees'}
+            tabIndex={gitSubTab === 'worktrees' ? 0 : -1}
+            className={`git-sidebar-tab ${gitSubTab === 'worktrees' ? 'active' : ''}`}
+            onClick={() => setGitSubTab('worktrees')}
+          >
+            <GitFork size={14} />
+            <span>Worktrees</span>
+          </button>
+        )}
       </div>
 
       {/* Changes sub-tab: working tree panel */}
@@ -166,7 +172,7 @@ export default function SidebarGitSection({
       )}
 
       {/* Worktrees sub-tab: WorktreePanel */}
-      {gitSubTab === 'worktrees' && (
+      {!isCloud && gitSubTab === 'worktrees' && (
         <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees" className="git-subtab-panel">
           <WorktreePanel onClose={() => setGitSubTab('changes')} />
         </div>

@@ -36,6 +36,7 @@ export interface CMViewSettings {
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
+  compactGutters?: boolean;
 }
 
 export interface CMViewKeymaps {

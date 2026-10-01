@@ -2,21 +2,18 @@
  * codeLens.ts — CodeMirror 6 extension for inline code lens reference counts.
  *
  * Displays reference counts above function/method/class/interface definitions.
- * Uses Decoration.widget with block: true to place inline widgets above lines.
- *
- * Implementation approach:
- * - ViewPlugin manages decorations for code lenses.
- * - On document/viewport changes, debounces recomputation (300ms).
+ * Block widgets sit above definition lines. They live in a StateField (block
+ * decorations may not come from a ViewPlugin); a ViewPlugin debounces the
+ * recompute (300ms) after document changes and publishes via an effect.
  * - Extracts symbols using extractSymbols() from symbolUtils.
  * - Counts references using word-boundary regex.
- * - Only renders lenses for lines in current viewport for performance.
  *
  * Theming:
  * - Uses CSS variables via EditorView.baseTheme().
  * - Falls back to dark/light mode defaults when variables absent.
  */
 
-import { type Extension, Annotation } from '@codemirror/state';
+import { type Extension, StateEffect, StateField, type Text } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { extractSymbols, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
@@ -24,9 +21,6 @@ import { extractSymbols, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbo
 // ── Constants ────────────────────────────────────────────────────────
 
 const DEBOUNCE_MS = 300;
-
-/** Internal annotation used to trigger a view re-render after async decoration computation. */
-const codeLensAnnotation = Annotation.define<boolean>();
 
 // ── Widget Type ───────────────────────────────────────────────────
 
@@ -207,138 +201,100 @@ export function computeCodeLenses(
   return lenses.sort((a, b) => a.line - b.line);
 }
 
+// ── State ──────────────────────────────────────────────────────────
+
+/**
+ * Block widgets must come from state, not a ViewPlugin — CodeMirror throws
+ * when a plugin supplies them. The field maps the set through every edit so
+ * positions stay valid during the recompute debounce.
+ */
+const setCodeLensDecorations = StateEffect.define<DecorationSet>();
+
+const codeLensField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, tr) {
+    let next = decorations.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setCodeLensDecorations)) next = effect.value;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+/** Build the block-widget set for every lens; out-of-range lines are skipped. */
+export function buildCodeLensDecorations(doc: Text, lenses: Array<{ line: number; refCount: number }>): DecorationSet {
+  const ranges = [];
+  for (const lens of lenses) {
+    if (lens.line < 1 || lens.line > doc.lines) continue;
+    const widget = Decoration.widget({
+      widget: new CodeLensWidget(formatRefText(lens.refCount)),
+      block: true,
+      side: -1,
+    });
+    ranges.push(widget.range(doc.line(lens.line).from));
+  }
+  return Decoration.set(ranges, true);
+}
+
 // ── ViewPlugin ─────────────────────────────────────────────────────
 
 /**
- * The code lens ViewPlugin class.
- *
- * Manages inline widgets showing reference counts above function/method/
- * class/interface definition lines.
+ * Debounces lens recomputation after document changes and publishes the
+ * result to codeLensField.
  */
 class CodeLensPlugin {
-  decorations: DecorationSet = Decoration.none;
   private view: EditorView;
   private getFileExtension: () => string | undefined;
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
-  private cachedContent: string = '';
-  private cachedLenses: Array<{ line: number; name: string; kind: string; refCount: number }> = [];
+  private cachedContent: string | null = null;
+  private cachedLanguage: string | undefined;
   private destroyed = false;
 
   constructor(view: EditorView, getFileExtension: () => string | undefined) {
     this.view = view;
     this.getFileExtension = getFileExtension;
-    this.cachedContent = view.state.doc.toString();
     this.scheduleUpdate();
   }
 
   update(update: ViewUpdate): void {
-    // Skip re-scheduling when this plugin itself triggered the transaction
-    // (to avoid an infinite schedule → dispatch → update → schedule loop).
-    if (update.transactions.some((t) => t.annotation(codeLensAnnotation))) {
-      return;
-    }
-    if (update.docChanged || update.viewportChanged || update.transactions.some((t) => t.reconfigured)) {
+    if (update.docChanged || update.transactions.some((t) => t.reconfigured)) {
       this.scheduleUpdate();
     }
   }
 
-  /**
-   * Schedule a debounced update of decorations.
-   *
-   * After the debounce fires and decorations are recomputed, dispatches a
-   * no-op transaction (annotated to not add to history) so that CodeMirror
-   * re-reads the `decorations` field and re-renders the widgets. Without
-   * this, asynchronously set decorations would not appear until the next
-   * user-triggered update.
-   */
   private scheduleUpdate(): void {
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
     }
-
     this.timeoutId = setTimeout(() => {
+      this.timeoutId = null;
       if (this.destroyed) return;
-      this.decorations = this.buildDecorations(this.view);
-      // Trigger a view re-render so the new decorations are picked up.
-      // The annotation prevents this from entering history or being treated
-      // as a doc change — it only causes view.update() to run, which reads
-      // the fresh decorations value.
-      this.view.dispatch({
-        annotations: [codeLensAnnotation.of(true)],
-      });
+      this.publish();
     }, DEBOUNCE_MS);
   }
 
-  /**
-   * Build decorations for code lenses in the current viewport.
-   *
-   * Caches the computed lenses array and only re-parses symbols when the
-   * document content actually changes. Viewport-only changes reuse the
-   * cached lenses and just re-filter for visibility.
-   */
-  private buildDecorations(view: EditorView): DecorationSet {
+  private publish(): void {
     try {
-      const content = view.state.doc.toString();
+      const { doc } = this.view.state;
+      const content = doc.toString();
       const languageId = this.getFileExtension();
-
-      // Only recompute lenses when the document has changed.
-      // Viewport-only changes reuse the cached results.
-      if (content !== this.cachedContent) {
-        this.cachedLenses = computeCodeLenses(content, languageId);
-        this.cachedContent = content;
-      }
-
-      const lenses = this.cachedLenses;
-      if (lenses.length === 0) {
-        return Decoration.none;
-      }
-
-      const { from: viewFrom, to: viewTo } = view.viewport;
-      const decorations: Array<{ from: number; value: ReturnType<typeof Decoration.widget> }> = [];
-
-      for (const lens of lenses) {
-        // Only render lenses for lines in the current viewport.
-        // Compare line's character range (from/to) against viewport character range.
-        try {
-          const lineInfo = view.state.doc.line(lens.line);
-          if (lineInfo.from > viewTo || lineInfo.to < viewFrom) continue;
-
-          const widget = Decoration.widget({
-            widget: new CodeLensWidget(formatRefText(lens.refCount)),
-            block: true,
-          });
-          decorations.push({
-            from: lineInfo.from,
-            value: widget,
-          });
-        } catch (err) {
-          debugLog('[codeLens] Error creating widget for line', lens.line, err);
-        }
-      }
-
-      // Sort by position (required by Decoration.set)
-      decorations.sort((a, b) => a.from - b.from);
-
-      return Decoration.set(
-        decorations.map((d) => d.value.range(d.from)),
-        true, // already sorted
-      );
+      if (content === this.cachedContent && languageId === this.cachedLanguage) return;
+      this.cachedContent = content;
+      this.cachedLanguage = languageId;
+      const decorations = buildCodeLensDecorations(doc, computeCodeLenses(content, languageId));
+      this.view.dispatch({ effects: setCodeLensDecorations.of(decorations) });
     } catch (err) {
-      debugLog('[codeLens] buildDecorations error:', err);
-      return Decoration.none;
+      debugLog('[codeLens] update error:', err);
     }
   }
 
-  /**
-   * Destroy the plugin: clear any pending timeout and mark as destroyed.
-   */
   destroy(): void {
     this.destroyed = true;
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
-    this.cachedLenses = [];
   }
 }
 
@@ -396,14 +352,12 @@ const codeLensBaseTheme = EditorView.baseTheme({
 export function codeLensPlugin(getFileExtension: () => string | undefined): Extension {
   return [
     codeLensBaseTheme,
+    codeLensField,
     ViewPlugin.fromClass(
       class extends CodeLensPlugin {
         constructor(view: EditorView) {
           super(view, getFileExtension);
         }
-      },
-      {
-        decorations: (v) => v.decorations,
       },
     ),
   ];

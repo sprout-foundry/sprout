@@ -1,6 +1,8 @@
 import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import { supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { supportsAutomations, supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { useActiveRepoURL } from '../services/activeRepo';
+import { githubRepoSlug } from '../utils/platformUrl';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlugins } from '../contexts/PluginContext';
@@ -56,6 +58,9 @@ import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
 import DesignAssetsPane from './design/DesignAssetsPane';
+import { isLayeredLayout, LEFT_INSET_VAR } from '../config/layout';
+import LayeredSidebar from './layered/LayeredSidebar';
+import type { ProjectNavConversations } from './layered/ProjectNav';
 interface SidebarProps {
   isConnected: boolean;
   instances?: SproutInstance[];
@@ -89,6 +94,8 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
+  /** Conversations listed in the layered layout's project sidebar. */
+  conversations?: ProjectNavConversations;
   /** Workspace modes offered for the current workspace, in switcher order. */
   modes?: WorkspaceMode[];
   /** The active mode's id. */
@@ -186,6 +193,7 @@ function Sidebar({
   sidebarCollapsed,
   onSidebarToggle,
   modes = [],
+  conversations,
   activeModeId = 'code',
   onSelectMode,
   modeRail,
@@ -210,6 +218,7 @@ function Sidebar({
   onRequestProviderSetup,
   onViewChange,
 }: SidebarProps): JSX.Element {
+  const staticWorkspaceLabel = githubRepoSlug(useActiveRepoURL()) ?? 'No repository open';
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.
@@ -374,10 +383,40 @@ function Sidebar({
     onSidebarToggle?.();
   }, [finalOnMobileMenuToggle, isMobile, onSidebarToggle]);
 
+  // Layered layout: publish the sidebars' width so the viewport-fixed
+  // terminal can sit beside them instead of under them.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = wrapperRef.current;
+    if (!isLayeredLayout || isMobile || !el || typeof ResizeObserver === 'undefined') {
+      root.style.removeProperty(LEFT_INSET_VAR);
+      return;
+    }
+    const publish = () => root.style.setProperty(LEFT_INSET_VAR, `${el.offsetWidth}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(LEFT_INSET_VAR);
+    };
+  }, [isMobile]);
+
+  // On phones the sidebar is a drawer over the editor: opening a file from it
+  // must reveal the file, or the tap looks like it did nothing.
+  const handleFileClick = useCallback(
+    (filePath: string, lineNumber?: number) => {
+      onFileClick?.(filePath, lineNumber);
+      if (isMobile && finalIsMobileMenuOpen) finalOnMobileMenuToggle?.();
+    },
+    [onFileClick, isMobile, finalIsMobileMenuOpen, finalOnMobileMenuToggle],
+  );
+
   /** Render the content pane based on selected section */
   /** Search section: find and replace panel */
   const renderSearchSection = () => {
-    return <SearchView onFileClick={onFileClick} />;
+    return <SearchView onFileClick={handleFileClick} />;
   };
 
   const renderContentPane = () => {
@@ -409,7 +448,11 @@ function Sidebar({
         return <SidebarLogsPane logs={normalizedRecentLogs} />;
       case 'files':
         return (
-          <SidebarFilesSection ref={fileTreeRef} onFileClick={onFileClick} workspaceRoot={gitPanel?.workspaceRoot} />
+          <SidebarFilesSection
+            ref={fileTreeRef}
+            onFileClick={handleFileClick}
+            workspaceRoot={gitPanel?.workspaceRoot}
+          />
         );
       case 'search':
         return renderSearchSection();
@@ -481,190 +524,234 @@ function Sidebar({
   };
 
   return (
-    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container">
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container" ref={wrapperRef}>
       <div
-        className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
+        className={`sidebar ${isLayeredLayout ? 'layered' : ''} ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={
           isMobile
             ? undefined
             : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }
         }
       >
-        {/* Pinned global header: mode switcher (top-left) + location selector */}
-        <div className="sidebar-pinned-header">
-          <ModeSwitcher
+        {isLayeredLayout ? (
+          <LayeredSidebar
+            conversations={conversations}
+            currentView={currentView}
+            onViewChange={onViewChange}
             modes={modes}
-            activeId={activeModeId}
-            onSelect={selectMode}
-            triggerLabel="Switch mode"
-            trigger={({ open }) => (
-              <span className={`sidebar-brand-mark${open ? ' is-open' : ''}`}>
-                <SproutLogo showWordmark={false} compact />
-              </span>
-            )}
-          />
-          {!effectiveSidebarCollapsed ? (
-            <>
-              {supportsWorkspaceSwitching ? (
+            activeModeId={activeModeId}
+            onSelectMode={onSelectMode}
+            modeSection={modeSection}
+            onModeSectionChange={handleModeSectionChange}
+            onSectionChange={onSectionChange}
+            workspaceRoot={gitPanel?.workspaceRoot}
+            instances={instances}
+            onInstanceChange={onInstanceChange}
+            // Standalone: the title opens other folders and SSH hosts, as the
+            // classic sidebar's location switcher does.
+            projectSwitcher={
+              supportsWorkspaceSwitching ? (
                 <LocationSwitcher
                   isConnected={isConnected}
                   instances={instances}
                   selectedInstancePID={selectedInstancePID}
                   isSwitchingInstance={isSwitchingInstance}
                   onInstanceChange={onInstanceChange}
-                  sidebarCollapsed={effectiveSidebarCollapsed}
+                  nameOnly
                 />
-              ) : (
-                <div className="sidebar-static-workspace" title="Browser Workspace">
-                  <FolderOpen size={14} className="sidebar-static-workspace-icon" />
-                  <span className="sidebar-static-workspace-label">Browser Workspace</span>
-                </div>
-              )}
-            </>
-          ) : null}
-          {/* Collapse/expand now lives beside the switcher: the logo's click
+              ) : undefined
+            }
+            renderSection={renderContentPane}
+            collapsed={effectiveSidebarCollapsed}
+            onToggleCollapsed={handleLogoToggle}
+            isMobile={isMobile}
+            onCloseDrawer={isMobile ? () => finalOnMobileMenuToggle?.() : undefined}
+          />
+        ) : (
+          <>
+            {/* Pinned global header: mode switcher (top-left) + location selector */}
+            <div className="sidebar-pinned-header">
+              <ModeSwitcher
+                modes={modes}
+                activeId={activeModeId}
+                onSelect={selectMode}
+                triggerLabel="Switch mode"
+                trigger={({ open }) => (
+                  <span className={`sidebar-brand-mark${open ? ' is-open' : ''}`}>
+                    <SproutLogo showWordmark={false} compact />
+                  </span>
+                )}
+              />
+              {!effectiveSidebarCollapsed ? (
+                <>
+                  {supportsWorkspaceSwitching ? (
+                    <LocationSwitcher
+                      isConnected={isConnected}
+                      instances={instances}
+                      selectedInstancePID={selectedInstancePID}
+                      isSwitchingInstance={isSwitchingInstance}
+                      onInstanceChange={onInstanceChange}
+                      sidebarCollapsed={effectiveSidebarCollapsed}
+                    />
+                  ) : (
+                    <div className="sidebar-static-workspace" title={staticWorkspaceLabel}>
+                      <FolderOpen size={14} className="sidebar-static-workspace-icon" />
+                      <span className="sidebar-static-workspace-label">{staticWorkspaceLabel}</span>
+                    </div>
+                  )}
+                </>
+              ) : null}
+              {/* Collapse/expand now lives beside the switcher: the logo's click
               moved to opening the mode menu, and a control that vanishes when
               the rail is collapsed would strand a collapsed user. */}
-          <button
-            type="button"
-            className="sidebar-collapse-button"
-            onClick={handleLogoToggle}
-            aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            data-testid="sidebar-collapse-toggle"
-          >
-            <PanelLeft size={16} aria-hidden="true" />
-          </button>
-        </div>
+              <button
+                type="button"
+                className="sidebar-collapse-button"
+                onClick={handleLogoToggle}
+                aria-label={
+                  isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+                }
+                title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                data-testid="sidebar-collapse-toggle"
+              >
+                <PanelLeft size={16} aria-hidden="true" />
+              </button>
+            </div>
 
-        {/* Icon rail (always visible) + Content pane (only when expanded) */}
-        <div className="sidebar-body">
-          {/* Icon Rail */}
-          <div
-            className="sidebar-icon-rail"
-            role="navigation"
-            aria-label="Sidebar navigation"
-            data-testid="sidebar-icon-rail"
-          >
-            {/* Main section tabs: the active mode's rail, or the Code
+            {/* Icon rail (always visible) + Content pane (only when expanded) */}
+            <div className="sidebar-body">
+              {/* Icon Rail */}
+              <div
+                className="sidebar-icon-rail"
+                role="navigation"
+                aria-label="Sidebar navigation"
+                data-testid="sidebar-icon-rail"
+              >
+                {/* Main section tabs: the active mode's rail, or the Code
                 defaults filtered by capability flags (SP-140-5). Global
                 chrome below (platform nav, plugins, settings, logs)
                 is shared by every mode. */}
-            {ModeRailComponent ? (
-              <div
-                className={`sidebar-mode-rail ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
-                data-testid="sidebar-mode-rail"
-                data-section={modeSection ?? ''}
-              >
-                <ModeRailComponent
-                  activeId={modeSection ?? ''}
-                  onSelect={handleModeSectionChange}
-                  collapsed={effectiveSidebarCollapsed}
-                />
-              </div>
-            ) : (
-              <div role="tablist" aria-orientation="vertical">
-                {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
-                  <button
-                    key={tab.id}
-                    role="tab"
-                    aria-selected={effectiveSelectedSection === tab.id}
-                    aria-controls="sidebar-tabpanel"
-                    className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
-                    onClick={() => handleSectionTabClick(tab.id)}
-                    title={tab.label}
-                    aria-label={tab.label}
-                    data-testid={`sidebar-${tab.id}-tab`}
+                {ModeRailComponent ? (
+                  <div
+                    className={`sidebar-mode-rail ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
+                    data-testid="sidebar-mode-rail"
+                    data-section={modeSection ?? ''}
                   >
-                    <tab.icon size={18} strokeWidth={1.5} />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Plugin Panels (in the icon rail, below the main sections) */}
-            {pluginPanels.length > 0 && (
-              <>
-                <div className="sidebar-icon-rail-divider" role="separator" />
-                <nav aria-label="Plugin panels">
-                  {pluginPanels.map((panel) => {
-                    const IconComponent = panel.icon ? (PLATFORM_ICON_MAP[panel.icon] ?? ExternalLink) : ExternalLink;
-                    const isActive = effectiveSelectedSection === panel.id;
-                    return (
+                    <ModeRailComponent
+                      activeId={modeSection ?? ''}
+                      onSelect={handleModeSectionChange}
+                      collapsed={effectiveSidebarCollapsed}
+                    />
+                  </div>
+                ) : (
+                  <div role="tablist" aria-orientation="vertical">
+                    {ALL_SECTION_TABS.filter(
+                      (tab) => (tab.id !== 'git' || supportsGit) && (tab.id !== 'automations' || supportsAutomations),
+                    ).map((tab) => (
                       <button
-                        key={panel.id}
+                        key={tab.id}
                         role="tab"
-                        aria-selected={isActive}
+                        aria-selected={effectiveSelectedSection === tab.id}
                         aria-controls="sidebar-tabpanel"
-                        className={`rail-icon ${isActive ? 'active' : ''}`}
-                        onClick={() => handleSectionTabClick(panel.id)}
-                        title={panel.label}
-                        aria-label={panel.label}
+                        className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
+                        onClick={() => handleSectionTabClick(tab.id)}
+                        title={tab.label}
+                        aria-label={tab.label}
+                        data-testid={`sidebar-${tab.id}-tab`}
                       >
-                        <IconComponent size={18} strokeWidth={1.5} />
+                        <tab.icon size={18} strokeWidth={1.5} />
                       </button>
-                    );
-                  })}
-                </nav>
-              </>
-            )}
+                    ))}
+                  </div>
+                )}
 
-            {/* Design — always offered; an empty tree gets the onboarding surface */}
-            <div role="tablist" aria-orientation="vertical">
-              <button
-                role="tab"
-                aria-selected={currentView === 'design'}
-                className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
-                onClick={() => onViewChange?.('design')}
-                title="Design"
-                aria-label="Design"
-                data-testid="sidebar-design-button"
+                {/* Plugin Panels (in the icon rail, below the main sections) */}
+                {pluginPanels.length > 0 && (
+                  <>
+                    <div className="sidebar-icon-rail-divider" role="separator" />
+                    <nav aria-label="Plugin panels">
+                      {pluginPanels.map((panel) => {
+                        const IconComponent = panel.icon
+                          ? (PLATFORM_ICON_MAP[panel.icon] ?? ExternalLink)
+                          : ExternalLink;
+                        const isActive = effectiveSelectedSection === panel.id;
+                        return (
+                          <button
+                            key={panel.id}
+                            role="tab"
+                            aria-selected={isActive}
+                            aria-controls="sidebar-tabpanel"
+                            className={`rail-icon ${isActive ? 'active' : ''}`}
+                            onClick={() => handleSectionTabClick(panel.id)}
+                            title={panel.label}
+                            aria-label={panel.label}
+                          >
+                            <IconComponent size={18} strokeWidth={1.5} />
+                          </button>
+                        );
+                      })}
+                    </nav>
+                  </>
+                )}
+
+                {/* Design — always offered; an empty tree gets the onboarding surface */}
+                <div role="tablist" aria-orientation="vertical">
+                  <button
+                    role="tab"
+                    aria-selected={currentView === 'design'}
+                    className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
+                    onClick={() => onViewChange?.('design')}
+                    title="Design"
+                    aria-label="Design"
+                    data-testid="sidebar-design-button"
+                  >
+                    <Palette size={18} strokeWidth={1.5} />
+                  </button>
+                </div>
+
+                {/* Settings & Logs tabs */}
+                <div role="tablist" aria-orientation="vertical">
+                  {supportsSettings && (
+                    <button
+                      role="tab"
+                      aria-selected={effectiveSelectedSection === 'settings'}
+                      aria-controls="sidebar-tabpanel"
+                      className={`rail-icon ${effectiveSelectedSection === 'settings' ? 'active' : ''}`}
+                      onClick={() => handleSectionTabClick('settings')}
+                      title="Settings"
+                      aria-label="Settings"
+                      data-testid="sidebar-settings-toggle"
+                    >
+                      <Settings size={18} strokeWidth={1.5} />
+                    </button>
+                  )}
+                  <button
+                    role="tab"
+                    aria-selected={effectiveSelectedSection === 'logs'}
+                    aria-controls="sidebar-tabpanel"
+                    className={`rail-icon ${effectiveSelectedSection === 'logs' ? 'active' : ''}`}
+                    onClick={() => handleSectionTabClick('logs')}
+                    title="Logs"
+                    aria-label="Logs"
+                    data-testid="sidebar-logs-tab"
+                  >
+                    <ScrollText size={18} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content Pane — always rendered; CSS handles fade-out on collapse */}
+              <div
+                className="sidebar-content-pane"
+                role="tabpanel"
+                id="sidebar-tabpanel"
+                {...(effectiveSidebarCollapsed ? { inert: true, 'aria-hidden': true } : {})}
               >
-                <Palette size={18} strokeWidth={1.5} />
-              </button>
+                <div className="content-pane-scroll">{renderContentPane()}</div>
+              </div>
             </div>
-
-            {/* Settings & Logs tabs */}
-            <div role="tablist" aria-orientation="vertical">
-              {supportsSettings && (
-                <button
-                  role="tab"
-                  aria-selected={effectiveSelectedSection === 'settings'}
-                  aria-controls="sidebar-tabpanel"
-                  className={`rail-icon ${effectiveSelectedSection === 'settings' ? 'active' : ''}`}
-                  onClick={() => handleSectionTabClick('settings')}
-                  title="Settings"
-                  aria-label="Settings"
-                  data-testid="sidebar-settings-toggle"
-                >
-                  <Settings size={18} strokeWidth={1.5} />
-                </button>
-              )}
-              <button
-                role="tab"
-                aria-selected={effectiveSelectedSection === 'logs'}
-                aria-controls="sidebar-tabpanel"
-                className={`rail-icon ${effectiveSelectedSection === 'logs' ? 'active' : ''}`}
-                onClick={() => handleSectionTabClick('logs')}
-                title="Logs"
-                aria-label="Logs"
-                data-testid="sidebar-logs-tab"
-              >
-                <ScrollText size={18} strokeWidth={1.5} />
-              </button>
-            </div>
-          </div>
-
-          {/* Content Pane — always rendered; CSS handles fade-out on collapse */}
-          <div
-            className="sidebar-content-pane"
-            role="tabpanel"
-            id="sidebar-tabpanel"
-            {...(effectiveSidebarCollapsed ? { inert: true, 'aria-hidden': true } : {})}
-          >
-            <div className="content-pane-scroll">{renderContentPane()}</div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
       {!isMobile && (
         <ResizeHandle
@@ -674,6 +761,7 @@ function Sidebar({
           onResizeEnd={handleSidebarResizeEnd}
           onDoubleClick={handleSidebarResizeReset}
           className="sidebar-resize-handle"
+          ariaLabel="Resize sidebar"
         />
       )}
     </div>

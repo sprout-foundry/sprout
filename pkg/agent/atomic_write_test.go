@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -81,6 +82,9 @@ func TestWriteFileAtomic_CreatesMissingDirectories(t *testing.T) {
 }
 
 func TestWriteFileAtomic_FailureLeavesPriorFileIntact(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory mode bits do not restrict file creation on Windows")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 	if err := os.WriteFile(path, []byte("good"), 0o600); err != nil {

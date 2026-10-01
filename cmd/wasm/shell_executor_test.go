@@ -254,15 +254,11 @@ func TestSetToolExecutionHook_NonFunctionArg(t *testing.T) {
 	// should return {ok: false} and not change the hook.
 	result := setToolExecutionHookFunc(js.Undefined(), []js.Value{js.ValueOf("not a function")})
 
-	resultStr, ok := result.(string)
-	if !ok {
-		t.Fatalf("setToolExecutionHookFunc returned non-string: %T", result)
+	res, ok := result.(js.Value)
+	if !ok || res.Type() != js.TypeObject {
+		t.Fatalf("setToolExecutionHookFunc returned %T, want a JS object", result)
 	}
-	var resMap map[string]bool
-	if err := json.Unmarshal([]byte(resultStr), &resMap); err != nil {
-		t.Fatalf("failed to parse JSON result: %v", err)
-	}
-	if resMap["ok"] {
+	if res.Get("ok").Bool() {
 		t.Error("expected ok: false when setting hook with non-function argument")
 	}
 }

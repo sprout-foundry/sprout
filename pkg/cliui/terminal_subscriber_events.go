@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -46,6 +47,16 @@ func (s *TerminalSubscriberState) HandleQueryStartedEvent(indicator *console.Act
 	s.thinkingActive = true
 }
 
+// replOwnsTurnSummary is set while the interactive REPL runs: it prints its
+// own per-turn line (PrintPerTurnSummary) from REPL-measured deltas, so the
+// event-driven line would duplicate it — and the event's cost is the session
+// total, not the turn's.
+var replOwnsTurnSummary atomic.Bool
+
+// SetREPLOwnsTurnSummary marks whether the interactive REPL prints the
+// turn-end summary itself.
+func SetREPLOwnsTurnSummary(owned bool) { replOwnsTurnSummary.Store(owned) }
+
 // HandleQueryCompletedEvent processes a QueryCompleted event (CLI-UX-7).
 //
 // Prints a dim one-line turn summary so the user sees how long the turn
@@ -64,23 +75,24 @@ func (s *TerminalSubscriberState) HandleQueryCompletedEvent(data map[string]inte
 	// only tools then stopped).
 	indicator.Stop()
 	s.thinkingActive = false
+	if replOwnsTurnSummary.Load() {
+		return
+	}
 
 	durationMs := ReadEventInt64(data, "duration_ms")
 	cost, _ := data["cost"].(float64)
 
-	parts := []string{
-		fmt.Sprintf("%.1fs", float64(durationMs)/1000.0),
-	}
+	parts := []string{CompactDuration(time.Duration(durationMs) * time.Millisecond)}
 	if cost > 0 {
-		parts = append(parts, formatCostSummary(cost))
+		parts = append(parts, CompactCost(cost))
 	}
 
 	s.flushExternalWrite()
-	line := fmt.Sprintf("%s %sturn complete · %s%s",
+	line := fmt.Sprintf("%s%sturn complete · %s%s",
 		console.GlyphSuccess.Prefix(),
-		console.ColorDim,
+		console.Esc(console.ColorDim),
 		strings.Join(parts, " · "),
-		console.ColorReset)
+		console.Esc(console.ColorReset))
 	fmt.Fprintln(os.Stderr, line)
 }
 

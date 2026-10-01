@@ -96,7 +96,7 @@ Examples:
 		case "all":
 			return runAllExport(start, excludePaths)
 		default:
-			return fmt.Errorf("unsupported --source %q: must be one of conversations, file-changes, all", source)
+			return usageErrorf(cmd, "unsupported --source %q: must be one of conversations, file-changes, all", source)
 		}
 	},
 }

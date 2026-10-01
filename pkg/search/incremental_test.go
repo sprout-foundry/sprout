@@ -72,14 +72,9 @@ func TestIncrementalUpdater_Debounce(t *testing.T) {
 		time.Sleep(1 * time.Millisecond) // minimal delay between marks
 	}
 
-	// Wait for debounce to fire (100ms debounce + 50ms buffer)
-	time.Sleep(150 * time.Millisecond)
-
-	// Verify the index file was written
-	idx, err := LoadIndex(indexPath)
-	if err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
+	// Wait for debounce to fire; poll rather than sleep a fixed buffer so a
+	// loaded machine doesn't miss the write.
+	idx := waitForIndexSessions(t, indexPath, 10, 5*time.Second)
 
 	// All 10 sessions should be present
 	if len(idx.Sessions) != 10 {
@@ -821,4 +816,22 @@ func TestIncrementalUpdater_InitGlobalUpdaterOnce(t *testing.T) {
 	}
 
 	GlobalUpdater.Stop()
+}
+
+func waitForIndexSessions(t *testing.T, indexPath string, want int, timeout time.Duration) *SessionIndex {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		idx, err := LoadIndex(indexPath)
+		if err == nil && len(idx.Sessions) >= want {
+			return idx
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				t.Fatalf("LoadIndex: %v", err)
+			}
+			return idx
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -635,4 +636,20 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 			t.Logf("WS read returned (may be normal close): %v", err)
 		}
 	})
+}
+
+// A workspace in a subfolder has a slash in its session key; it arrives
+// escaped (%2F) and must not be cut there.
+func TestSSHProxyFindsSessionsInSubfolders(t *testing.T) {
+	key := "mac-mini::$HOME/projects/app"
+	srv := newProxyServer(1, key)
+
+	// The same escaping launchSSHWorkspace uses for the proxy base.
+	req := httptest.NewRequest(http.MethodGet, "/ssh/"+url.PathEscape(key)+"/", nil)
+	rec := httptest.NewRecorder()
+	srv.handleSSHProxy(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected the subfolder session's index, got %d; body: %s", rec.Code, rec.Body.String())
+	}
 }

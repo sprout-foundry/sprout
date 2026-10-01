@@ -89,8 +89,6 @@ const mockSignatureHelpExtension = vi.fn((fp, gc, id) => `mock-signatureHelp(${i
 const mockTabExpandSnippets = vi.fn(() => 'mock-tabExpandSnippets');
 const mockStickyScrollPlugin = vi.fn(() => 'mock-stickyScroll');
 const mockTrailingWhitespacePlugin = vi.fn(() => 'mock-trailingWhitespace');
-const mockUnsavedLineHighlight = vi.fn(() => 'mock-unsavedLineHighlight');
-const mockSetOriginalContentOf = vi.fn((v) => `mock-setOriginalContent(${v})`);
 const mockWhitespaceRenderingPlugin = vi.fn((m) => `mock-whitespaceRendering(${m})`);
 const mockWordHighlightsExtension = vi.fn(() => 'mock-wordHighlights');
 
@@ -171,6 +169,7 @@ vi.mock('../extensions/bracketColorization', () => ({
 }));
 vi.mock('../extensions/codeActions', () => ({
   createCodeActionsExtension: (...a) => mockCreateCodeActionsExtension(...a),
+  codeActionsGutter: () => 'mock-codeActionsGutter',
 }));
 vi.mock('../extensions/codeLens', () => ({
   codeLensPlugin: (...a) => mockCodeLensPlugin(...a),
@@ -211,6 +210,7 @@ vi.mock('../extensions/linkedScroll', () => ({
 }));
 vi.mock('../extensions/lintDiagnostics', () => ({
   lintDiagnostics: (...a) => mockLintDiagnostics(...a),
+  lintDiagnosticsGutter: () => 'mock-lintGutter',
   clearDiagnostics: vi.fn(),
   createDebouncedDiagnosticsUpdater: vi.fn(() => ({ cancel: vi.fn(), update: vi.fn() })),
 }));
@@ -237,10 +237,6 @@ vi.mock('../extensions/stickyScroll', () => ({
 }));
 vi.mock('../extensions/trailingWhitespace', () => ({
   trailingWhitespacePlugin: (...a) => mockTrailingWhitespacePlugin(...a),
-}));
-vi.mock('../extensions/unsavedLineHighlight', () => ({
-  unsavedLineHighlight: (...a) => mockUnsavedLineHighlight(...a),
-  setOriginalContent: { of: (...a) => mockSetOriginalContentOf(...a) },
 }));
 vi.mock('../extensions/whitespaceRendering', () => ({
   whitespaceRenderingPlugin: (...a) => mockWhitespaceRenderingPlugin(...a),
@@ -304,6 +300,7 @@ function buildOpts(opts = {}) {
     inlayHintsEnabled: false,
     signatureHelpEnabled: false,
     aiCompletionsEnabled: false,
+    compactGutters: false,
     languageId: 'typescript',
     themePack: { mode: 'dark', editorSyntaxStyle: 'default' },
     customHighlightStyle: null,
@@ -324,6 +321,7 @@ function buildOpts(opts = {}) {
       inlayHintsEnabled: o.inlayHintsEnabled,
       signatureHelpEnabled: o.signatureHelpEnabled,
       aiCompletionsEnabled: o.aiCompletionsEnabled,
+      compactGutters: o.compactGutters,
     },
     theme: { themePack: o.themePack, customHighlightStyle: o.customHighlightStyle },
     buffer: {
@@ -374,9 +372,9 @@ describe('compartment creation', () => {
     expect(compartments.history).toBeDefined();
   });
 
-  it('returns exactly 15 compartment properties', () => {
+  it('returns exactly 17 compartment properties', () => {
     const { compartments } = renderHook();
-    expect(Object.keys(compartments).length).toBe(15);
+    expect(Object.keys(compartments).length).toBe(17);
   });
 
   it('uses createEmmetCompartment and createAutoCloseTagCompartment helpers', () => {
@@ -417,7 +415,6 @@ describe('buildExtensions — array structure', () => {
     expect(ext).toContain('mock-lintDiagnostics');
     expect(ext).toContain('mock-searchExtension');
     expect(ext).toContain('mock-trailingWhitespace');
-    expect(ext).toContain('mock-unsavedLineHighlight');
     expect(ext).toContain('mock-wordHighlights');
   });
 
@@ -496,6 +493,20 @@ describe('minimap', () => {
   it('excludes minimap when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ minimapEnabled: false }));
     expect(ext.some((e) => typeof e === 'string' && e.includes('mock-minimap'))).toBe(false);
+  });
+});
+
+describe('compact gutters', () => {
+  it('keeps the lint, quick-fix and fold columns by default', () => {
+    const ext = renderHook().buildExtensions(buildOpts());
+    expect(ext).toContain('compartment-of(mock-lintGutter)');
+    expect(ext).toContain('compartment-of(cm-foldGutter)');
+  });
+
+  it('leaves them out in the compact layout', () => {
+    const ext = renderHook().buildExtensions(buildOpts({ compactGutters: true }));
+    expect(ext).not.toContain('compartment-of(mock-lintGutter)');
+    expect(ext).not.toContain('compartment-of(cm-foldGutter)');
   });
 });
 

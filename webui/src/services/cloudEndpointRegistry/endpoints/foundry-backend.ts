@@ -49,43 +49,10 @@ const terminalEndpoints: CloudEndpoint[] = [
 const diagnosticsEndpoints: CloudEndpoint[] = [];
 
 // --- Chat Sessions ---
-// The worktree-only chat-session sub-endpoints (create-in-worktree, compact,
-// pin, unpin, worktree-mappings, delete-all, chat-session/ prefix) are
-// intercepted as synthetic in browser mode (see synthetic.ts). The core CRUD
-// operations remain foundry-backend so the platform can manage session
-// lifecycle.
-const chatSessionEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/chat-sessions',
-    methods: ['GET', 'POST'],
-    category: 'foundry-backend',
-    description: 'Chat session management',
-  },
-  {
-    path: '/api/chat-sessions/create',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Create chat session',
-  },
-  {
-    path: '/api/chat-sessions/delete',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Delete chat session',
-  },
-  {
-    path: '/api/chat-sessions/rename',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Rename chat session',
-  },
-  {
-    path: '/api/chat-sessions/switch',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Switch chat session',
-  },
-];
+// Not listed: the chat list is browser-local in cloud mode (each chat owns an
+// in-page agent and a localStorage transcript). CloudAdapter serves
+// /api/chat-sessions* from cloudChatSessions before this registry is
+// consulted; the worktree-only sub-endpoints stay synthetic (synthetic.ts).
 
 // --- History ---
 // Intentionally empty: these endpoints are not available in browser mode and
@@ -210,7 +177,6 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...terminalEndpoints,
   ...gitEndpoints,
   ...diagnosticsEndpoints,
-  ...chatSessionEndpoints,
   ...historyEndpoints,
   ...sessionEndpoints,
   ...taskEndpoints,

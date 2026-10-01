@@ -1,4 +1,5 @@
 import type { CloudEndpoint } from '../types';
+import { BROWSER_DEFAULT_HOTKEYS } from '../../../config/browserHotkeys';
 
 /**
  * Category (c) — synthetic: Should return pre-defined synthetic responses.
@@ -108,7 +109,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     // toWorkspaceResponse) defaults these to false/[] via nullish coalescing.
     // In cloud mode, workspace selection is not needed — the WASM shell owns the
     // virtual filesystem root, so needs_workspace_selection is effectively false.
-    syntheticResponse: { message: 'ok', workspace_root: '/home/user', daemon_root: '/home/user' },
+    syntheticResponse: { message: 'ok', workspace_root: '/workspace', daemon_root: '/workspace' },
     description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
   },
 
@@ -189,8 +190,9 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/lsp/status',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { running: false, error: 'LSP not available in browser mode' },
-    description: 'LSP server status (not available in browser mode)',
+    // No servers is a status, not a failure: the client reads `servers`.
+    syntheticResponse: { running: false, servers: [] },
+    description: 'LSP server status (none in browser mode)',
   },
   {
     path: '/api/lsp/ws',
@@ -254,8 +256,10 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/hotkeys',
     methods: ['GET', 'PUT'],
     category: 'synthetic',
-    syntheticResponse: { hotkeys: {} },
-    description: 'Hotkey configuration (not available in browser mode)',
+    // HotkeyConfig shape: the built-in shortcuts (presets and custom
+    // bindings need the daemon).
+    syntheticResponse: { version: 'browser', hotkeys: BROWSER_DEFAULT_HOTKEYS },
+    description: 'Built-in hotkeys (custom bindings need the desktop app)',
   },
   {
     path: '/api/hotkeys/validate',

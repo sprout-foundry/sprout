@@ -110,7 +110,7 @@ export default function WorkspaceCwdBar({
       {onAddRepo && (
         <button
           type="button"
-          className="workspace-add-repo-btn"
+          className={`workspace-add-repo-btn${showSelector ? '' : ' workspace-add-repo-btn--labeled'}`}
           data-testid="workspace-add-repo-btn"
           onClick={onAddRepo}
           disabled={addRepoDisabled}
@@ -118,6 +118,8 @@ export default function WorkspaceCwdBar({
           title="Add workspace from repository"
         >
           <Plus size={13} aria-hidden="true" />
+          {/* Alone on the row, a bare "+" reads as a stray control. */}
+          {!showSelector && <span>Add repository</span>}
         </button>
       )}
     </div>

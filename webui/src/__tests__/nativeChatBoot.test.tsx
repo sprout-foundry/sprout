@@ -304,6 +304,7 @@ vi.mock('../config/mode', () => ({
 
 // bootstrapAdapter: return a safe default config.
 vi.mock('../bootstrapAdapter', () => ({
+  getPlatformURL: () => undefined,
   getBootstrapConfig: () => ({
     appMode: 'cloud',
     user: { id: 'test-user', tier: 'pro' },

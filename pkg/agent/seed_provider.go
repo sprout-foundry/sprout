@@ -209,3 +209,9 @@ func (sp *sproutProvider) computeMaxTokensHint(req *core.ChatRequest) {
 	maxOutput, _ := api.CalculateOutputBudgetAnchored(contextLimit, total-heuristic, heuristic)
 	sp.setMaxTokensHint(maxOutput)
 }
+
+func (sp *sproutProvider) clearPastedImages() {
+	sp.pastedImagesMu.Lock()
+	defer sp.pastedImagesMu.Unlock()
+	sp.pastedImages = nil
+}

@@ -4,7 +4,6 @@ package configuration
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,7 +45,7 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 
 	// Populate from individual environment variables — these take priority over JSON blob
 	if !apiKeys.PopulateFromEnvironment() {
-		log.Printf("[debug] no API keys found in environment variables")
+		logNoEnvKeys()
 	}
 
 	// Check if we need to set a default provider
@@ -237,7 +236,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 	// Populate from environment (always do this for any manager)
 	apiKeys.PopulateFromJSONEnv()
 	if !apiKeys.PopulateFromEnvironment() {
-		log.Printf("[debug] no API keys found in environment variables")
+		logNoEnvKeys()
 	}
 
 	return &Manager{

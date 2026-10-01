@@ -17,6 +17,8 @@ export interface WasmShellResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** stdout and stderr in the order they were written, for display. */
+  output?: Array<{ err?: boolean; text: string }>;
 }
 
 export interface WasmCompletionResult {
@@ -55,11 +57,18 @@ export interface SproutStore {
 export interface WasmShell {
   /** Execute a shell command string. */
   executeCommand(input: string): WasmShellResult;
+  /**
+   * Execute off the JS event loop. Required for commands backed by JS
+   * Promises (git): the synchronous call deadlocks on them.
+   */
+  executeCommandAsync?(input: string): Promise<WasmShellResult>;
   /** Tab-complete a partial command. */
   autoComplete(input: string): WasmCompletionResult;
-  /** Get the current working directory. */
+  /** Get the current working directory (the terminal's; `cd` moves it). */
   getCwd(): string;
-  /** Change directory. */
+  /** The project directory: relative paths given to the shell resolve here. */
+  getWorkspaceRoot(): string;
+  /** Make a directory the workspace. */
   changeDir(dir: string): WasmChangeDirResult;
   /** Write content to a file (synced to IndexedDB). */
   writeFile(path: string, content: string): string; // error or ""
@@ -76,13 +85,16 @@ export interface WasmShell {
     model: string,
     query: string,
     onEvent?: (eventJson: string) => void,
+    chatId?: string,
+    /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
+    history?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
-  /** Clear the WASM agent's conversation history (start fresh chat). */
-  clearConversation(): void;
-  /** Interrupt the currently running agent loop. */
-  stopAgent(): void;
-  /** Steer the running agent (inject a follow-up message). */
-  steerAgent?(message: string): Record<string, unknown>;
+  /** Clear a chat's agent history (every chat's when no id is given). */
+  clearConversation(chatId?: string): void;
+  /** Interrupt a chat's running agent loop (every chat's when no id is given). */
+  stopAgent(chatId?: string): void;
+  /** Steer a chat's running agent (the most recent chat's when no id is given). */
+  steerAgent?(message: string, chatId?: string): Record<string, unknown>;
   /** Deliver a response to a pending ask_user request. */
   respondToAskUser?(requestId: string, response: string): { delivered: boolean };
   /** Deliver an edit approval decision to a pending edit approval request. */
@@ -215,8 +227,12 @@ const debug = (...args: unknown[]) => {
 export interface SproutWasmAPI {
   init(config?: string): string;
   executeCommand(input: string): string;
+  /** Absent in binaries built before the async export existed. */
+  executeCommandAsync?(input: string): Promise<string>;
   autoComplete(input: string): string;
   getCwd(): string;
+  /** Absent in binaries built before the workspace root existed. */
+  getWorkspaceRoot?(): string;
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
   readFile(path: string): string;
@@ -233,10 +249,12 @@ export interface SproutWasmAPI {
     model: string,
     query: string,
     onEvent?: (eventJson: string) => void,
+    chatId?: string,
+    history?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
-  clearConversation?(): void;
-  stopAgent?(): void;
-  steerAgent?(message: string): Record<string, unknown>;
+  clearConversation?(chatId?: string): void;
+  stopAgent?(chatId?: string): void;
+  steerAgent?(message: string, chatId?: string): Record<string, unknown>;
   respondToAskUser?(requestId: string, response: string): { delivered: boolean };
   respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
   respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
@@ -402,6 +420,16 @@ export async function initWasmShell(config?: {
         });
       },
 
+      async executeCommandAsync(input: string): Promise<WasmShellResult> {
+        if (!wasm.executeCommandAsync) return shell.executeCommand(input);
+        const json = await wasm.executeCommandAsync(input);
+        return safeJsonParse<WasmShellResult>(json, {
+          stdout: '',
+          stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
+          exitCode: 1,
+        });
+      },
+
       autoComplete(input: string): WasmCompletionResult {
         const json = wasm.autoComplete(input);
         return safeJsonParse<WasmCompletionResult>(json, { completions: [] });
@@ -409,6 +437,10 @@ export async function initWasmShell(config?: {
 
       getCwd(): string {
         return wasm.getCwd();
+      },
+
+      getWorkspaceRoot(): string {
+        return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
       },
 
       changeDir(dir: string): WasmChangeDirResult {
@@ -430,8 +462,13 @@ export async function initWasmShell(config?: {
 
       listDir(path: string): WasmListDirResult {
         const json = wasm.listDir(path);
-        const parsed = safeJsonParse<WasmListDirResult | null>(json, null);
-        return parsed ?? { entries: [], error: json };
+        // The WASM export returns a bare array of entries (JSON null for an
+        // empty directory) on success and {"error": "..."} on failure.
+        const parsed = safeJsonParse<WasmDirEntry[] | WasmListDirResult | null | undefined>(json, undefined);
+        if (parsed === undefined) return { entries: [], error: json };
+        if (parsed === null) return { entries: [] };
+        if (Array.isArray(parsed)) return { entries: parsed };
+        return { entries: parsed.entries ?? [], error: parsed.error };
       },
 
       deleteFile(path: string): string {
@@ -443,32 +480,36 @@ export async function initWasmShell(config?: {
         model: string,
         query: string,
         onEvent?: (eventJson: string) => void,
+        chatId?: string,
+        history?: string,
       ): Promise<{ response: string; provider: string; model: string }> {
         const api = wasm as SproutWasmAPI;
         if (!api.runAgent) {
           return Promise.reject(new Error('WASM binary does not expose runAgent'));
         }
-        return api.runAgent(provider, model, query, onEvent);
+        return api.runAgent(provider, model, query, onEvent, chatId, history);
       },
 
-      clearConversation(): void {
+      clearConversation(chatId?: string): void {
         const api = wasm as SproutWasmAPI;
         if (api.clearConversation) {
-          api.clearConversation();
+          if (chatId === undefined) api.clearConversation();
+          else api.clearConversation(chatId);
         }
       },
 
-      stopAgent(): void {
+      stopAgent(chatId?: string): void {
         const api = wasm as SproutWasmAPI;
         if (api.stopAgent) {
-          api.stopAgent();
+          if (chatId === undefined) api.stopAgent();
+          else api.stopAgent(chatId);
         }
       },
 
-      steerAgent(message: string): Record<string, unknown> {
+      steerAgent(message: string, chatId?: string): Record<string, unknown> {
         const api = wasm as SproutWasmAPI;
         if (api.steerAgent) {
-          return api.steerAgent(message);
+          return chatId === undefined ? api.steerAgent(message) : api.steerAgent(message, chatId);
         }
         return { steered: false, error: 'steerAgent not available' };
       },

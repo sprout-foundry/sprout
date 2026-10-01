@@ -233,6 +233,8 @@ export function saveSession(
     name?: string;
     totalTokens?: number;
     workingDirectory?: string;
+    /** Save a chat that is not on screen: leave the current transcript as is. */
+    inBackground?: boolean;
   },
 ): string | null {
   const ls = storage();
@@ -283,8 +285,15 @@ export function saveSession(
     total_tokens: record.total_tokens,
   };
   index.sessions = [meta, ...index.sessions.filter((s) => s.session_id !== sessionId)].slice(0, MAX_SESSIONS);
+  if (options?.inBackground) {
+    writeIndex(index);
+    return sessionId;
+  }
   index.current_session_id = sessionId;
   writeIndex(index);
+  // A freshly generated id must become the active one, or every later save
+  // of the same conversation forks another history entry.
+  activeSessionId = sessionId;
 
   return sessionId;
 }
@@ -436,4 +445,28 @@ export function startNewCloudSession(): string {
   index.current_session_id = id;
   writeIndex(index);
   return id;
+}
+
+/**
+ * Make an existing (or not yet saved) transcript the current one: later saves
+ * update it and restore-on-mount returns it. Used when the user switches
+ * between chats, each of which owns one transcript.
+ */
+export function activateCloudSession(id: string): void {
+  activeSessionId = id;
+  const index = readIndex();
+  if (index.current_session_id !== id) {
+    index.current_session_id = id;
+    writeIndex(index);
+  }
+}
+
+/** The persisted current transcript id (survives reloads), or ''. */
+export function getCurrentCloudSessionId(): string {
+  return readIndex().current_session_id;
+}
+
+/** A fresh transcript id that is not yet current (nothing is persisted). */
+export function newCloudSessionId(): string {
+  return generateSessionId();
 }

@@ -80,6 +80,7 @@ vi.mock('../config/mode', () => ({
   supportsLocalTerminal: false,
   supportsGit: true,
   supportsWorkspaceSwitching: false,
+  supportsAutomations: true,
 }));
 
 // Mock leaf components to keep the render cheap.
@@ -160,6 +161,13 @@ vi.mock('../utils/log', () => ({
 
 import DesignRail from './design/DesignRail';
 import Sidebar from './Sidebar';
+
+// These cover the classic layout, still available as ?layout=classic.
+vi.mock('../config/layout', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../config/layout')>()),
+  shellLayout: 'classic',
+  isLayeredLayout: false,
+}));
 
 // ---------------------------------------------------------------------------
 // Test setup

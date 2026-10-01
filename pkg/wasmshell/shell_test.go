@@ -3,6 +3,7 @@ package wasmshell
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -42,11 +43,25 @@ func resetToHome(t *testing.T) {
 	t.Helper()
 	home := filepath.Join(os.TempDir(), "wasmshell-home")
 	os.MkdirAll(home, 0755)
-	if err := os.Chdir(home); err != nil {
-		t.Fatalf("failed to chdir to home: %v", err)
-	}
+	t.Chdir(home)
 	ShellEnv.Set("HOME", home)
 	ShellEnv.Set("PWD", home)
+}
+
+// shArg renders a host path as a shell word. The shell treats `\` as an
+// escape character, so Windows paths are passed with forward slashes.
+func shArg(p string) string {
+	return filepath.ToSlash(p)
+}
+
+// skipOnWindowsPOSIXPaths skips assertions about /-rooted paths: this shell
+// ships only in js/wasm, where "/tmp" is absolute, but on native Windows it
+// is drive-relative.
+func skipOnWindowsPOSIXPaths(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("js/wasm-only shell: /-rooted paths are not absolute on native Windows")
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -439,8 +454,9 @@ func TestParseAndExecute_Dirname(t *testing.T) {
 	setupTestDir(t)
 	resetToHome(t)
 	r := ParseAndExecute("dirname /foo/bar/baz.txt")
-	if r.Stdout != "/foo/bar\n" {
-		t.Errorf("stdout = %q, want %q", r.Stdout, "/foo/bar\n")
+	want := filepath.FromSlash("/foo/bar") + "\n"
+	if r.Stdout != want {
+		t.Errorf("stdout = %q, want %q", r.Stdout, want)
 	}
 }
 
@@ -489,10 +505,10 @@ func TestFileOperation_TouchAndLs(t *testing.T) {
 	resetToHome(t)
 	// Create a file
 	touchPath := filepath.Join(testDir, "testfile.txt")
-	ParseAndExecute("touch " + touchPath)
+	ParseAndExecute("touch " + shArg(touchPath))
 
 	// Verify it exists via ls
-	r := ParseAndExecute("ls " + testDir)
+	r := ParseAndExecute("ls " + shArg(testDir))
 	if r.ExitCode != 0 {
 		t.Fatalf("ls failed: %s", r.Stderr)
 	}
@@ -506,8 +522,8 @@ func TestFileOperation_EchoRedirectAndCat(t *testing.T) {
 	resetToHome(t)
 	catPath := filepath.Join(testDir, "cattest.txt")
 
-	ParseAndExecute("echo hello > " + catPath)
-	r := ParseAndExecute("cat " + catPath)
+	ParseAndExecute("echo hello > " + shArg(catPath))
+	r := ParseAndExecute("cat " + shArg(catPath))
 	if r.ExitCode != 0 {
 		t.Fatalf("cat failed: %s", r.Stderr)
 	}
@@ -521,9 +537,9 @@ func TestFileOperation_AppendRedirect(t *testing.T) {
 	resetToHome(t)
 	appPath := filepath.Join(testDir, "appendtest.txt")
 
-	ParseAndExecute("echo line1 > " + appPath)
-	ParseAndExecute("echo line2 >> " + appPath)
-	r := ParseAndExecute("cat " + appPath)
+	ParseAndExecute("echo line1 > " + shArg(appPath))
+	ParseAndExecute("echo line2 >> " + shArg(appPath))
+	r := ParseAndExecute("cat " + shArg(appPath))
 	if r.ExitCode != 0 {
 		t.Fatalf("cat failed: %s", r.Stderr)
 	}
@@ -536,7 +552,7 @@ func TestFileOperation_MkdirP(t *testing.T) {
 	setupTestDir(t)
 	resetToHome(t)
 	deepDir := filepath.Join(testDir, "a", "b", "c")
-	r := ParseAndExecute("mkdir -p " + deepDir)
+	r := ParseAndExecute("mkdir -p " + shArg(deepDir))
 	if r.ExitCode != 0 {
 		t.Fatalf("mkdir -p failed: %s", r.Stderr)
 	}
@@ -552,12 +568,12 @@ func TestFileOperation_CopyAndCat(t *testing.T) {
 	srcPath := filepath.Join(testDir, "src.txt")
 	dstPath := filepath.Join(testDir, "dst.txt")
 
-	ParseAndExecute("echo hello > " + srcPath)
-	r := ParseAndExecute("cp " + srcPath + " " + dstPath)
+	ParseAndExecute("echo hello > " + shArg(srcPath))
+	r := ParseAndExecute("cp " + shArg(srcPath) + " " + shArg(dstPath))
 	if r.ExitCode != 0 {
 		t.Fatalf("cp failed: %s", r.Stderr)
 	}
-	catR := ParseAndExecute("cat " + dstPath)
+	catR := ParseAndExecute("cat " + shArg(dstPath))
 	if catR.Stdout != "hello\n" {
 		t.Errorf("copied content = %q, want %q", catR.Stdout, "hello\n")
 	}
@@ -569,11 +585,11 @@ func TestFileOperation_MoveAndVerify(t *testing.T) {
 	srcPath := filepath.Join(testDir, "move_src.txt")
 	dstPath := filepath.Join(testDir, "move_dst.txt")
 
-	ParseAndExecute("echo moved > " + srcPath)
-	ParseAndExecute("mv " + srcPath + " " + dstPath)
+	ParseAndExecute("echo moved > " + shArg(srcPath))
+	ParseAndExecute("mv " + shArg(srcPath) + " " + shArg(dstPath))
 
 	// Dst should exist
-	catR := ParseAndExecute("cat " + dstPath)
+	catR := ParseAndExecute("cat " + shArg(dstPath))
 	if catR.Stdout != "moved\n" {
 		t.Errorf("moved content = %q, want %q", catR.Stdout, "moved\n")
 	}
@@ -589,8 +605,8 @@ func TestFileOperation_Remove(t *testing.T) {
 	resetToHome(t)
 	rmPath := filepath.Join(testDir, "rmtest.txt")
 
-	ParseAndExecute("touch " + rmPath)
-	ParseAndExecute("rm " + rmPath)
+	ParseAndExecute("touch " + shArg(rmPath))
+	ParseAndExecute("rm " + shArg(rmPath))
 
 	if _, err := os.Stat(rmPath); !os.IsNotExist(err) {
 		t.Error("file still exists after rm")
@@ -607,7 +623,7 @@ func TestFileOperation_Find(t *testing.T) {
 	SyncWriteFile(filepath.Join(testDir, "b.go"), "")
 	SyncWriteFile(filepath.Join(testDir, "sub", "c.txt"), "")
 
-	r := ParseAndExecute("find " + testDir + " -name '*.txt'")
+	r := ParseAndExecute("find " + shArg(testDir) + " -name '*.txt'")
 	if r.ExitCode != 0 {
 		t.Fatalf("find failed: %s", r.Stderr)
 	}
@@ -631,7 +647,7 @@ func TestTextProcessing_Grep(t *testing.T) {
 	resetToHome(t)
 	grepFile := filepath.Join(testDir, "grepinput.txt")
 	SyncWriteFile(grepFile, "hello\nworld\nfoo\n")
-	r := ParseAndExecute("grep hello " + grepFile)
+	r := ParseAndExecute("grep hello " + shArg(grepFile))
 	if r.ExitCode != 0 {
 		t.Fatalf("grep failed: %s", r.Stderr)
 	}
@@ -645,7 +661,7 @@ func TestTextProcessing_GrepInvert(t *testing.T) {
 	resetToHome(t)
 	grepFile := filepath.Join(testDir, "grepvinv.txt")
 	SyncWriteFile(grepFile, "hello\nworld\nfoo\n")
-	r := ParseAndExecute("grep -v hello " + grepFile)
+	r := ParseAndExecute("grep -v hello " + shArg(grepFile))
 	if r.ExitCode != 0 {
 		t.Fatalf("grep -v failed: %s", r.Stderr)
 	}
@@ -662,7 +678,7 @@ func TestTextProcessing_Sort(t *testing.T) {
 	resetToHome(t)
 	sortFile := filepath.Join(testDir, "sortinput.txt")
 	SyncWriteFile(sortFile, "c\na\nb\n")
-	r := ParseAndExecute("sort " + sortFile)
+	r := ParseAndExecute("sort " + shArg(sortFile))
 	if r.ExitCode != 0 {
 		t.Fatalf("sort failed: %s", r.Stderr)
 	}
@@ -676,7 +692,7 @@ func TestTextProcessing_Uniq(t *testing.T) {
 	resetToHome(t)
 	uniqFile := filepath.Join(testDir, "uniqinput.txt")
 	SyncWriteFile(uniqFile, "a\nb\nb\nc\n")
-	r := ParseAndExecute("sort " + uniqFile + " | uniq")
+	r := ParseAndExecute("sort " + shArg(uniqFile) + " | uniq")
 	if r.ExitCode != 0 {
 		t.Fatalf("sort|uniq failed: %s", r.Stderr)
 	}
@@ -728,7 +744,7 @@ func TestTextProcessing_Head(t *testing.T) {
 	resetToHome(t)
 	headFile := filepath.Join(testDir, "headinput.txt")
 	SyncWriteFile(headFile, "a\nb\nc\nd\n")
-	r := ParseAndExecute("head -n 2 " + headFile)
+	r := ParseAndExecute("head -n 2 " + shArg(headFile))
 	if r.ExitCode != 0 {
 		t.Fatalf("head failed: %s", r.Stderr)
 	}
@@ -743,7 +759,7 @@ func TestTextProcessing_Tail(t *testing.T) {
 	tailFile := filepath.Join(testDir, "tailinput.txt")
 	// Write without trailing newline to avoid Split edge case
 	SyncWriteFile(tailFile, "a\nb\nc\nd")
-	r := ParseAndExecute("tail -n 2 " + tailFile)
+	r := ParseAndExecute("tail -n 2 " + shArg(tailFile))
 	if r.ExitCode != 0 {
 		t.Fatalf("tail failed: %s", r.Stderr)
 	}
@@ -756,7 +772,7 @@ func TestTextProcessing_Tee(t *testing.T) {
 	setupTestDir(t)
 	resetToHome(t)
 	teePath := filepath.Join(testDir, "teeout.txt")
-	r := ParseAndExecute("echo teedata | tee " + teePath)
+	r := ParseAndExecute("echo teedata | tee " + shArg(teePath))
 	if r.ExitCode != 0 {
 		t.Fatalf("tee failed: %s", r.Stderr)
 	}
@@ -899,13 +915,13 @@ func TestResolvePath(t *testing.T) {
 	home := ShellEnv.Get("HOME")
 
 	// Absolute path stays absolute
-	p := ResolvePath("/tmp/foo")
-	if p != "/tmp/foo" {
-		t.Errorf("absolute path: got %q, want /tmp/foo", p)
+	abs := filepath.Join(testDir, "foo")
+	if p := ResolvePath(abs); p != abs {
+		t.Errorf("absolute path: got %q, want %s", p, abs)
 	}
 
 	// Relative path made absolute
-	p = ResolvePath("relative")
+	p := ResolvePath("relative")
 	if !filepath.IsAbs(p) {
 		t.Errorf("relative path should become absolute, got %q", p)
 	}
@@ -1045,7 +1061,7 @@ func TestCdHome(t *testing.T) {
 	tmpDir := filepath.Join(testDir, "cdtest")
 	os.MkdirAll(tmpDir, 0755)
 
-	r := ParseAndExecute("cd " + tmpDir)
+	r := ParseAndExecute("cd " + shArg(tmpDir))
 	if r.ExitCode != 0 {
 		t.Fatalf("cd failed: %s", r.Stderr)
 	}
@@ -1076,6 +1092,7 @@ func TestCdTilde(t *testing.T) {
 func TestRealpath(t *testing.T) {
 	setupTestDir(t)
 	resetToHome(t)
+	skipOnWindowsPOSIXPaths(t)
 	r := ParseAndExecute("realpath /tmp/../tmp/foo.txt")
 	if r.ExitCode != 0 {
 		t.Fatalf("realpath failed: %s", r.Stderr)

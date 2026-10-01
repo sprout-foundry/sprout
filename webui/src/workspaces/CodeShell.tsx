@@ -13,10 +13,16 @@ import React from 'react';
 import ContextSidebar from '../components/ContextSidebar';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
+import Chat from '../components/ChatView';
+import { isLayeredLayout } from '../config/layout';
+import { isCloud, supportsAgentChanges } from '../config/mode';
+import { useActiveRepoURL } from '../services/activeRepo';
+import { githubRepoSlug } from '../utils/platformUrl';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -59,6 +65,19 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     diffState,
   } = chat;
 
+  // Layered layout: while the main view holds other work, the active
+  // conversation moves into the contextual sidebar.
+  const threadContent = isLayeredLayout && !showContextSidebar ? <Chat {...chatProps} /> : undefined;
+  // The panel holds the conversation (while other work has the main view)
+  // and, on a local daemon, the agent's change history.
+  const hasContextPanel = !!threadContent || supportsAgentChanges;
+  // On phones the project sidebar lives in the drawer, so name the project
+  // on the toolbar; tapping it opens the drawer.
+  const activeRepoSlug = githubRepoSlug(useActiveRepoURL());
+  const projectTitle = isCloud
+    ? (activeRepoSlug ?? 'No repository open')
+    : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');
+
   return (
     <main
       className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
@@ -70,6 +89,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         isConnected={isConnected}
         onToggleSidebar={onToggleSidebar}
         onToggleContextPanel={onToggleContextPanel}
+        hasContextPanel={hasContextPanel}
       />
       <div className="main-view-content">
         <div className="editor-view">
@@ -83,6 +103,13 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
               >
                 <Menu size={16} />
               </button>
+              {isLayeredLayout && (
+                <button className="top-mobile-project" onClick={onToggleSidebar} title={projectTitle}>
+                  {projectTitle}
+                </button>
+              )}
+              {/* The phone header row gives way to the tab bar; the balance moves here. */}
+              {isLayeredLayout && isCloud && <CreditsChip />}
               {currentView !== 'chat' && (
                 <button
                   className="top-mobile-chat-btn"
@@ -103,7 +130,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
                   <SquareTerminal size={16} />
                 </button>
               )}
-              {showContextSidebar && (
+              {showContextSidebar && hasContextPanel && (
                 <button
                   className="top-mobile-context-btn"
                   onClick={onToggleContextPanel}
@@ -139,7 +166,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           <ContextSidebar
             isMobile={isMobile}
             isTablet={isTablet}
-            showContextSidebar={showContextSidebar}
+            showContextSidebar={showContextSidebar || !!threadContent}
+            threadContent={threadContent}
             contextPanelRef={contextPanelRef}
             toolExecutions={toolExecutions}
             logs={logs}
@@ -169,7 +197,14 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       />
       {!supportsLocalTerminal && (
         <ErrorBoundary panelName="Terminal">
-          <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          <Terminal
+            isExpanded={isTerminalExpanded}
+            onToggleExpand={onTerminalExpandedChange}
+            isConnected={false}
+            // The in-browser shell is occasional: out of the way until opened
+            // (the Terminal sidebar entry, the palette, or Ctrl+`).
+            hideWhenCollapsed
+          />
         </ErrorBoundary>
       )}
     </main>

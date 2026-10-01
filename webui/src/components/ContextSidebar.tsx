@@ -16,6 +16,7 @@ export interface ContextSidebarProps {
   isProcessing: boolean;
   lastError: string | null;
   queryProgress: QueryProgress | null;
+  threadContent?: React.ReactNode;
 }
 
 /**
@@ -42,6 +43,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   isProcessing,
   lastError,
   queryProgress,
+  threadContent,
 }) => {
   const overlayHidden = !showContextSidebar;
   const panelProps = {
@@ -53,6 +55,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
     isProcessing,
     lastError,
     queryProgress,
+    threadContent,
   };
 
   // Desktop keeps the panel mounted (idle when no chat is focused);

@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { supportsLocalTerminal } from '../config/mode';
 import type { EditorBuffer } from '../types/editor';
 import type { ViewType } from '../types/app';
 
@@ -93,9 +92,7 @@ export const useAppContentHotkeys = ({
           onSidebarToggle();
           break;
         case 'toggle_terminal':
-          if (supportsLocalTerminal) {
-            onTerminalExpandedChange(!isTerminalExpanded);
-          }
+          onTerminalExpandedChange(!isTerminalExpanded);
           break;
         case 'toggle_explorer': {
           const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : null;

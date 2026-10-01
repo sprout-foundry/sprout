@@ -217,7 +217,11 @@ func (m *Manager) saveConfigLocked() error {
 
 // saveConfigDirectLocked performs the actual config write without retry logic.
 func (m *Manager) saveConfigDirectLocked() error {
-	if m.configDir != "" {
+	if m.configDir != "" && m.configFileName == WorkspaceConfigFileName {
+		if err := m.config.SaveWorkspaceOverlay(m.configDir, m.configFileName, m.lastSaved); err != nil {
+			return fmt.Errorf("save workspace config: %w", err)
+		}
+	} else if m.configDir != "" {
 		if err := m.config.SaveToDirAs(m.configDir, m.configFileName); err != nil {
 			return fmt.Errorf("save config: %w", err)
 		}

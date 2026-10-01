@@ -2,6 +2,7 @@ package tools
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -270,7 +271,7 @@ func TestShellCommandHandler_Execute_CatFile(t *testing.T) {
 	path := createTestFile(dir, "readme.txt", "file content here")
 
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
-		"command": "cat " + path,
+		"command": "cat '" + filepath.ToSlash(path) + "'",
 	})
 	require.NoError(t, err)
 	require.False(t, res.IsError)

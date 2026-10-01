@@ -56,7 +56,8 @@ func TestPolicyList_Empty(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	assert.Contains(t, out, "=== Shell Permission Policy ===")
+	assert.Contains(t, out, "Shell Permission Policy")
+	assert.NotContains(t, out, "===")
 	assert.Contains(t, out, "User Safe Patterns (0):")
 	assert.Contains(t, out, "User Dangerous Patterns (0):")
 	assert.Contains(t, out, "Workspace Overlay Mode: tighten_only")

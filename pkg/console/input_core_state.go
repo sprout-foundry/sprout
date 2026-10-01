@@ -183,9 +183,9 @@ func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh cha
 	// the process (pane closed, SSH timeout, parent exited).
 	if errors.Is(err, io.EOF) {
 		if term.IsTerminal(ir.termFd) {
-			fmt.Fprintf(os.Stderr, "[console] stdin EOF received on attached terminal (fd=%d); exiting REPL\n", ir.termFd)
+			GlyphDim.Fprintf(os.Stderr, "stdin EOF on attached terminal (fd=%d) — exiting", ir.termFd)
 		} else {
-			fmt.Fprintf(os.Stderr, "[console] stdin EOF: terminal no longer attached (fd=%d); this typically means the controlling TTY was closed (terminal pane closed, SSH timeout, parent process exited). Exiting REPL.\n", ir.termFd)
+			GlyphDim.Fprintf(os.Stderr, "stdin EOF: terminal no longer attached (fd=%d) — the controlling TTY closed; exiting", ir.termFd)
 		}
 	}
 	return false, fmt.Errorf("stdin read error: %w", err)

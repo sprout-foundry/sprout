@@ -10,6 +10,7 @@
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { terminalText } from '../services/terminalText';
 import { initWasmShell, type WasmShell, type WasmShellResult } from '../services/wasmShell';
 import { debugLog } from '../utils/log';
 
@@ -106,12 +107,41 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     }
   }, [xtermRef]);
 
+  /**
+   * Run one command, write its output, then a fresh prompt. Goes through the
+   * async shell path so Promise-backed commands (git) can finish; keystrokes
+   * are dropped until the command completes.
+   */
+  const wasmBusyRef = useRef(false);
+  const runWasmCommand = useCallback(
+    async (command: string): Promise<void> => {
+      const term = xtermRef.current;
+      const shell = wasmShellRef.current;
+      if (!term || !shell) return;
+      wasmBusyRef.current = true;
+      try {
+        const res: WasmShellResult = shell.executeCommandAsync
+          ? await shell.executeCommandAsync(command)
+          : shell.executeCommand(command);
+        const text = terminalText(res);
+        if (text) term.write(text);
+        notifyCommandUnavailable(command, res.exitCode);
+      } catch (err) {
+        term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
+      } finally {
+        wasmBusyRef.current = false;
+      }
+      writeWasmPrompt();
+    },
+    [xtermRef, notifyCommandUnavailable, writeWasmPrompt],
+  );
+
   /** Handle a single character/data event from xterm when in WASM mode. */
   const handleWasmInput = useCallback(
     (data: string) => {
       const term = xtermRef.current;
       const shell = wasmShellRef.current;
-      if (!term || !shell) return;
+      if (!term || !shell || wasmBusyRef.current) return;
 
       // ── Reverse-i-search mode handling helpers ─────────────────────
 
@@ -215,20 +245,10 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
             wasmCursorRef.current = result.length;
             wasmReverseSearchResultRef.current = '';
             wasmHistoryIdxRef.current = wasmHistoryRef.current.length;
-            try {
-              const shellResult: WasmShellResult = shell.executeCommand(result);
-              if (shellResult.stdout) {
-                term.write(shellResult.stdout.replace(/\r?\n/g, '\r\n'));
-              }
-              if (shellResult.stderr) {
-                term.write('\x1b[31m' + shellResult.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
-              }
-              notifyCommandUnavailable(result, shellResult.exitCode);
-            } catch (err) {
-              term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
-            }
             wasmLineRef.current = '';
             wasmCursorRef.current = 0;
+            void runWasmCommand(result);
+            return;
           } else {
             wasmLineRef.current = '';
             wasmCursorRef.current = 0;
@@ -344,18 +364,10 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
         if (cmd) {
           wasmHistoryRef.current.push(cmd);
           wasmHistoryIdxRef.current = wasmHistoryRef.current.length;
-          try {
-            const res: WasmShellResult = shell.executeCommand(cmd);
-            if (res.stdout) {
-              term.write(res.stdout.replace(/\r?\n/g, '\r\n'));
-            }
-            if (res.stderr) {
-              term.write('\x1b[31m' + res.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
-            }
-            notifyCommandUnavailable(cmd, res.exitCode);
-          } catch (err) {
-            term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
-          }
+          wasmLineRef.current = '';
+          wasmCursorRef.current = 0;
+          void runWasmCommand(cmd);
+          return;
         }
         wasmLineRef.current = '';
         wasmCursorRef.current = 0;
@@ -524,7 +536,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
         }
       }
     },
-    [xtermRef, rewriteWasmLine, writeWasmPrompt, notifyCommandUnavailable],
+    [xtermRef, rewriteWasmLine, writeWasmPrompt, runWasmCommand],
   );
 
   // ── WASM shell lifecycle ──────────────────────────────────────────

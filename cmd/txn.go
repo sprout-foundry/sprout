@@ -190,5 +190,6 @@ func init() {
 	txnPushCmd.Flags().StringVar(&txnPushRepoDir, "dir", "", "Directory to apply the manifest to (defaults to the current working directory)")
 	txnPushCmd.Flags().StringVar(&txnPushIn, "in", "-", "Manifest input path, or - for stdin")
 	txnPullCmd.Flags().StringVar(&txnPullRepoDir, "dir", "", "Directory to read the working tree from (defaults to the current working directory)")
-	txnPullCmd.Flags().StringVar(&txnPullOut, "out", "-", "Manifest output path, or - for stdout")
+	txnPullCmd.Flags().StringVarP(&txnPullOut, "output", "o", "-", "Manifest output path, or - for stdout")
+	stringFlagAlias(txnPullCmd.Flags(), &txnPullOut, "out", "output", aliasSilent)
 }

@@ -1,9 +1,10 @@
 /**
  * REST backend for the workspaceFs seam (daemon / cloud mode).
  *
- * Maps the seam onto the existing daemon endpoints (`/api/files`,
- * `/api/create`, `/api/write`, `/api/read`, `/api/delete`, `/api/rename`).
- * Binary payloads ride as base64 in JSON, same as the native channel.
+ * Maps the seam onto the daemon endpoints the hosted editor also serves:
+ * `/api/files` (list), `/api/file` (read/write), `/api/create`,
+ * `/api/delete`, `/api/rename`. Binary files read back as base64; binary
+ * writes are unsupported (the file endpoint stores text).
  *
  * The daemon routes are served by the local `sprout` web server; this
  * backend is what runs on desktop/web where the shell bridge is absent.
@@ -40,47 +41,75 @@ async function toResult(
   return { ok: false, error: code };
 }
 
+function isTextType(contentType: string): boolean {
+  const type = contentType.split(';')[0].trim().toLowerCase();
+  return type === '' || type.startsWith('text/') || type === 'application/json' || type === 'application/javascript';
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
 function json(init: BodyInit): RequestInit {
   return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init };
 }
 
 export function createRestFs(fetchFn: FetchFn = fetch): WorkspaceFs {
   return {
+    // The file endpoint answers a read with the raw bytes: text types come
+    // back as content, anything else as base64.
     async read(path) {
-      const resp = await fetchFn('/api/read', json(JSON.stringify({ path: normalizeFsPath(path) })));
-      const r = await toResult(resp);
-      if (!r.ok) return { ok: false, error: r.error } as ReadResult;
-      const d = r.data;
-      return {
-        ok: true,
-        path: String(d.path ?? path),
-        content: d.content as string | undefined,
-        contentBase64: d.contentBase64 as string | undefined,
-      };
+      const p = normalizeFsPath(path);
+      const resp = await fetchFn(`/api/file?path=${encodeURIComponent(p)}`);
+      if (!resp.ok) {
+        const r = await toResult(resp);
+        return { ok: false, error: r.ok ? 'ioFailed' : r.error } as ReadResult;
+      }
+      const type = resp.headers.get('Content-Type') ?? '';
+      if (isTextType(type)) return { ok: true, path: p, content: await resp.text() };
+      return { ok: true, path: p, contentBase64: toBase64(new Uint8Array(await resp.arrayBuffer())) };
     },
 
     async write(path, payload) {
       const entry: WriteEntry = typeof payload === 'string' ? { path, content: payload } : { ...payload, path };
-      const body: Record<string, unknown> = { path: normalizeFsPath(entry.path) };
-      if (entry.contentBase64 !== undefined) body.contentBase64 = entry.contentBase64;
-      else body.content = entry.content ?? '';
-      const resp = await fetchFn('/api/write', json(JSON.stringify(body)));
+      // The endpoint stores text; there is no binary write over REST.
+      if (entry.contentBase64 !== undefined) return { ok: false, error: 'unsupported' };
+      const p = normalizeFsPath(entry.path);
+      const resp = await fetchFn(
+        `/api/file?path=${encodeURIComponent(p)}`,
+        json(JSON.stringify({ content: entry.content ?? '' })),
+      );
       const r = await toResult(resp);
       return r.ok ? { ok: true } : { ok: false, error: r.error };
     },
 
+    // The files endpoint lists one directory per call (GET, workspace-relative
+    // `relative` paths), so deeper levels are walked here. Only the requested
+    // directory's own failure fails the listing.
     async list(path = '', maxDepth = 3) {
-      const resp = await fetchFn('/api/files', { method: 'POST', body: JSON.stringify({ maxDepth }) });
-      const r = await toResult(resp);
-      if (!r.ok) return { ok: false, error: r.error } as ListResult;
-      const files = Array.isArray((r.data as { files?: unknown }).files)
-        ? (r.data as { files: Array<Record<string, unknown>> }).files
-        : [];
       const prefix = normalizeFsPath(path);
-      const mapped: FsEntry[] = files
-        .map((f) => ({ path: String(f.path ?? ''), size: Number(f.size ?? 0), isDir: Boolean(f.isDir) }))
-        .filter((f) => f.path !== '' && (prefix === '' || f.path === prefix || f.path.startsWith(prefix + '/')));
-      return { ok: true, files: mapped };
+      const inside = (p: string) => p !== '' && p !== '.' && (prefix === '' || p.startsWith(prefix + '/'));
+      const files: FsEntry[] = [];
+      const walk = async (dir: string, depth: number): Promise<string | null> => {
+        const resp = await fetchFn(dir === '' ? '/api/files' : `/api/files?path=${encodeURIComponent(dir)}`);
+        const r = await toResult(resp);
+        if (!r.ok) return r.error;
+        const raw = (r.data as { files?: unknown }).files;
+        for (const e of Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : []) {
+          const entryPath = normalizeFsPath(String(e.relative ?? ''));
+          if (!inside(entryPath)) continue;
+          const isDir = Boolean(e.is_dir);
+          files.push({ path: entryPath, size: Number(e.size ?? 0), isDir });
+          if (isDir && depth > 1) await walk(entryPath, depth - 1);
+        }
+        return null;
+      };
+      const error = await walk(prefix, maxDepth);
+      return error ? ({ ok: false, error } as ListResult) : { ok: true, files };
     },
 
     async stat(path) {

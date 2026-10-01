@@ -90,10 +90,22 @@ func TestAutomateSessionRoot_ExplicitDirIsAbsolutized(t *testing.T) {
 	mustMkdirAll(t, wd)
 	t.Chdir(wd)
 
+	mustMkdirAll(t, filepath.Join(wd, "explicit-root"))
 	automateSessionDir = "explicit-root"
 	got, err := automateSessionRoot()
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(wd, "explicit-root"), got)
+}
+
+func TestAutomateSessionRoot_ExplicitDirMustExist(t *testing.T) {
+	defer resetAutomateGlobals()()
+	isolateStateDir(t)
+	t.Chdir(t.TempDir())
+
+	automateSessionDir = "no-such-root"
+	_, err := automateSessionRoot()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a directory")
 }
 
 func TestAutomateSessionRoot_DiscoveryFromSubdirectory(t *testing.T) {

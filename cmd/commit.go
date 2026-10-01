@@ -16,6 +16,7 @@ import (
 var (
 	commitSkipPrompt   bool
 	commitModel        string
+	commitProvider     string
 	commitAllowSecrets bool
 	commitDryRun       bool
 )
@@ -34,8 +35,8 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 		}
 
 		var chatAgent *agent.Agent
-		if commitModel != "" {
-			chatAgent, err = agent.NewAgentWithModel(commitModel)
+		if spec := providerModelSpec(commitProvider, commitModel); spec != "" {
+			chatAgent, err = agent.NewAgentWithModel(spec)
 		} else {
 			chatAgent, err = agent.NewAgent()
 		}
@@ -52,7 +53,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 
 		var cmdArgs []string
 		if commitSkipPrompt {
-			cmdArgs = append(cmdArgs, "--skip-prompt")
+			cmdArgs = append(cmdArgs, "--yes")
 		}
 		if commitDryRun {
 			cmdArgs = append(cmdArgs, "--dry-run")
@@ -71,8 +72,10 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 }
 
 func init() {
-	commitCmd.Flags().BoolVar(&commitSkipPrompt, "skip-prompt", false, "Skip confirmation prompts and automatically commit")
-	commitCmd.Flags().StringVar(&commitModel, "model", "", "Specify LLM model to use for commit message generation (e.g., 'ollama:llama3')")
+	commitCmd.Flags().BoolVarP(&commitSkipPrompt, "yes", "y", false, "Skip confirmation prompts and commit automatically")
+	boolFlagAlias(commitCmd.Flags(), &commitSkipPrompt, "skip-prompt", "yes", aliasSilent)
+	commitCmd.Flags().StringVarP(&commitModel, "model", "m", "", "Model for commit message generation (e.g. 'ollama:llama3')")
+	commitCmd.Flags().StringVarP(&commitProvider, "provider", "p", "", "Provider for commit message generation")
 	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing files flagged as potentially containing secrets")
 	commitCmd.Flags().BoolVar(&commitDryRun, "dry-run", false, "Generate and display commit message without executing commit")
 }

@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"syscall/js"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -28,11 +27,7 @@ func walkFilesFunc(walkFn func(context.Context, string) ([]string, error)) func(
 		return asPromise(func(ctx context.Context) (interface{}, error) {
 			root := argString(args, 0, "")
 			if root == "" {
-				var err error
-				root, err = os.Getwd()
-				if err != nil {
-					return nil, err
-				}
+				root = workspaceRoot
 			}
 			files, err := walkFn(ctx, root)
 			if err != nil {

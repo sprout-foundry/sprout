@@ -93,8 +93,7 @@ func runLSPInstall(language string) error {
 		return fmt.Errorf("language '%s' not supported", language)
 	}
 
-	fmt.Println("Language Server Installation")
-	fmt.Println("=============================")
+	console.Heading(os.Stdout, "Language Server Installation")
 	fmt.Printf("Language: %s\n", strings.Join(server.LanguageIDs, ", "))
 	fmt.Printf("Binary:   %s\n", server.Binary)
 	fmt.Printf("Args:     %v\n", server.Args)
@@ -117,8 +116,7 @@ func runLSPInstall(language string) error {
 func runLSPStatus() error {
 	servers := loadLanguageServers()
 
-	fmt.Println("Language Server Status")
-	fmt.Println("======================")
+	console.Heading(os.Stdout, "Language Server Status")
 	fmt.Println()
 
 	for _, s := range servers {

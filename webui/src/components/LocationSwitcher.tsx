@@ -5,7 +5,6 @@ import { supportsSSH } from '../config/mode';
 import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
-import { SSHWorkspacePickerDialog } from './locationSwitcher/SSHWorkspacePickerDialog';
 import { useSSHData } from './locationSwitcher/useSSHData';
 import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
 import { useWorkspaceSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
@@ -18,6 +17,8 @@ export interface LocationSwitcherProps {
   isSwitchingInstance?: boolean;
   onInstanceChange?: (pid: number) => void;
   sidebarCollapsed?: boolean;
+  /** Label the trigger with the folder's own name only, for a narrow header. */
+  nameOnly?: boolean;
 }
 
 const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
@@ -27,6 +28,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   isSwitchingInstance = false,
   onInstanceChange,
   sidebarCollapsed = false,
+  nameOnly = false,
 }) => {
   // ─── Main component owns panel toggle state ───
   const [isOpen, setIsOpen] = useState(false);
@@ -71,10 +73,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
   // ─── Derived values ───
   const triggerWorkspaceName = useMemo(() => {
+    if (nameOnly) return ws.workspaceRoot?.split('/').filter(Boolean).pop() || ws.workspaceRoot || '';
     const display = getPathDisplayName(ws.workspaceRoot);
     if (!ws.remoteContext?.homePath) return display;
     return collapseHomePath(ws.workspaceRoot, ws.remoteContext.homePath);
-  }, [ws.remoteContext?.homePath, ws.workspaceRoot]);
+  }, [nameOnly, ws.remoteContext?.homePath, ws.workspaceRoot]);
 
   // ─── Render ───
   return (
@@ -189,20 +192,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           selectedInstancePID={selectedInstancePID}
           isSwitchingInstance={isSwitchingInstance}
           onInstanceChange={onInstanceChange}
-        />
-      )}
-
-      {supportsSSH && ws.showSSHWorkspacePicker && (
-        <SSHWorkspacePickerDialog
-          show={ws.showSSHWorkspacePicker}
-          sshPickerHostAlias={ws.sshPickerHostAlias}
-          sshPickerPath={ws.sshPickerPath}
-          remoteRecentWorkspaces={ws.remoteRecentWorkspaces}
-          sshFavoriteWorkspaces={ws.sshFavoriteWorkspaces}
-          sshHomePaths={ws.sshHomePaths}
-          submitWorkspaceChange={ws.submitWorkspaceChange}
-          setShow={ws.setShowSSHWorkspacePicker}
-          setSshPickerPath={ws.setSshPickerPath}
         />
       )}
     </div>

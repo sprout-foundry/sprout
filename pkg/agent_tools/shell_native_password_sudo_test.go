@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,9 @@ import (
 //
 // Skipped if sudo isn't on PATH or the test environment can't run sudo at all.
 func TestRunShellCommandWithPasswordSupport_RealSudo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows sudo.exe elevates via UAC; it has no -k/-p/-S password-on-stdin mode to exercise")
+	}
 	if _, err := exec.LookPath("sudo"); err != nil {
 		t.Skip("sudo not available; skipping real-sudo integration test")
 	}

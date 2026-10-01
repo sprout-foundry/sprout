@@ -35,7 +35,7 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	if env.ConfigManager != nil {
 		config = env.ConfigManager.GetConfig()
 	} else {
-		manager, err := configuration.NewManager()
+		manager, err := configuration.NewManagerSilent()
 		if err != nil {
 			return ToolResult{
 				Output:  fmt.Sprintf("Error getting configuration: %v", err),

@@ -5,8 +5,11 @@
  * by the WASM shell rather than being proxied to a backend.
  */
 
-import type { WasmDirEntry, WasmShell } from './wasmShell';
+import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
+import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
+import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
+import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
@@ -15,6 +18,22 @@ let agentEventDispatcher: ((event: unknown) => void) | null = null;
 
 export function setAgentEventDispatcher(fn: ((event: unknown) => void) | null): void {
   agentEventDispatcher = fn;
+}
+
+/**
+ * The daemon announces file writes, creates and deletes as file_changed
+ * events; the git panel refreshes on them. Delivered after the request
+ * returns, as a server event would be.
+ */
+function announceFileChange(filePath: string, action: 'write' | 'created' | 'deleted'): void {
+  const dispatchEvent = agentEventDispatcher;
+  if (!dispatchEvent) return;
+  // The user's own change (a save, a tree operation), not the agent's.
+  const event = {
+    type: 'file_changed',
+    data: { file_path: filePath, action, ts: new Date().toISOString(), source: 'user' },
+  };
+  queueMicrotask(() => dispatchEvent(event));
 }
 
 /**
@@ -85,13 +104,16 @@ export function handleWasmLocal(
         return handleWasmAgentQuery(shell, bodyStr);
 
       // ── Agent stop (interrupts in-browser agent loop) ───────
-      case '/api/query/stop':
+      case '/api/query/stop': {
         // Compile-time short-circuit (R-4): no in-browser agent loop to stop.
         if (NATIVE_CHAT_ENABLED) {
           return jsonError('Chat provided by the native shell', 501);
         }
-        shell.stopAgent();
+        const stopChatId = new URL(fullUrl, 'http://local').searchParams.get('chat_id') || chatIdFromBody(bodyStr);
+        stopRequested.add(stopChatId ?? '');
+        shell.stopAgent(stopChatId);
         return jsonOk({ status: 'ok', stopped: true });
+      }
 
       // ── Agent steer (injects into persistent agent) ─────────
       case '/api/query/steer':
@@ -142,13 +164,19 @@ export function handleWasmLocal(
  */
 const vfsManifest = new Set<string>();
 
-/** Normalize a path to absolute form. Uses the WASM shell's CWD as base
- *  for relative paths — NOT a hardcoded /home/user, because the actual
- *  CWD depends on the WASM binary's init (can be / or /home/user). */
+// The project directory. Binaries built before the bridge exposed it kept
+// everything at the (unmovable) cwd.
+function workspaceRootOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
+  if (!wasm) return '/workspace';
+  return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
+}
+
+/** Normalize a path to absolute form; relative paths are relative to the
+ *  workspace (never the terminal's cwd, which `cd` moves). */
 function normalizePath(p: string): string {
   if (!p.startsWith('/')) {
-    const cwd = typeof window !== 'undefined' && window.SproutWasm?.getCwd ? window.SproutWasm.getCwd() : '/home/user';
-    p = p === '.' ? cwd : `${cwd}/${p}`;
+    const root = workspaceRootOf(typeof window !== 'undefined' ? window.SproutWasm : undefined);
+    p = p === '.' ? root : `${root}/${p}`;
   }
   // Collapse ./ and resolve ../
   const parts = p.split('/');
@@ -179,36 +207,80 @@ export function getVfsManifestSnapshot(): Set<string> {
 }
 
 /**
+ * Writes the agent's platform provider, with the managed model's context
+ * window, at the path Go's GetConfigDir() resolves ($HOME/.config/sprout,
+ * HOME being /home/user in the VFS). Best-effort: a config written earlier
+ * still serves if this write fails.
+ */
+function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
+  try {
+    shell.writeFile(
+      '/home/user/.config/sprout/providers/platform.json',
+      JSON.stringify(platformProviderConfig(apiOrigin, reportedManagedContextWindow())),
+    );
+  } catch {
+    // Keep the previously written config.
+  }
+}
+
+/** Chats (by id, '' for the default) whose run the user asked to stop. */
+const stopRequested = new Set<string>();
+
+/** HOME inside the WASM shell's virtual filesystem. */
+const AGENT_HOME = '/home/user';
+
+/**
+ * Directories the runtime keeps in the browser's filesystem: the agent's home
+ * (its settings and sessions) and its scratch space. They share the
+ * filesystem with the workspace but aren't workspace content.
+ */
+const RUNTIME_DIRS = [AGENT_HOME, '/tmp'];
+
+const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
+
+/** Whether `p` is runtime state rather than content of the workspace at `root`. */
+const isRuntimePath = (p: string, root: string) => RUNTIME_DIRS.some((dir) => within(p, dir) && !within(root, dir));
+
+/**
+ * Hidden from the workspace's listings: runtime state, and a directory that
+ * only holds it (/home).
+ */
+function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
+  if (isRuntimePath(absPath, root)) return true;
+  const prefix = absPath === '/' ? '/' : `${absPath}/`;
+  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !within(root, dir))) return false;
+  const listing = shell.listDir(absPath);
+  return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
+}
+
+/**
  * Read all files from the WASM VFS, returning {path, content} pairs.
  * Used by browserGit to sync the working tree before git operations.
  */
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
-  const cwd = shell.getCwd();
+  const cwd = workspaceRootOf(shell);
   // Try to get all file paths via the flattenEntries/listFilesTracked logic
   const files: Array<{ path: string; content: string }> = [];
 
-  // Get paths from the manifest + listDir
+  // Every file in the tree: a one-level listing left out everything in
+  // subfolders, and git then reported those files as deleted.
   let paths: string[] = [];
   try {
-    paths = listFilesTracked(shell, cwd);
+    paths = listAllFilesTracked(shell, cwd);
   } catch {
     // Fall back to manifest
     paths = Array.from(vfsManifest);
   }
 
   for (const absPath of paths) {
+    if (isRuntimePath(absPath, cwd)) continue;
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
-        // Make path relative to CWD
-        let relPath = absPath;
+        // Only the workspace's own files, relative to it.
         const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
-        if (absPath.startsWith(normalizedCwd)) {
-          relPath = absPath.slice(normalizedCwd.length);
-        } else if (absPath.startsWith('/home/user/')) {
-          relPath = absPath.slice('/home/user/'.length);
-        }
-        files.push({ path: relPath, content: result.content });
+        if (!absPath.startsWith(normalizedCwd)) continue;
+        files.push({ path: absPath.slice(normalizedCwd.length), content: result.content });
       }
     } catch {
       // best-effort: skip unreadable entries.
@@ -220,8 +292,6 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
 /**
  * Get all known files from the manifest that are descendants of dir.
  * Tries listDir first; falls back to manifest on error.
- * When dir listing fails and the manifest has entries under a different
- * base (e.g. /home/user while CWD is /), returns ALL manifest entries.
  */
 function listFilesTracked(shell: WasmShell, dir: string): string[] {
   // Try the WASM binary's listDir first — works on newer binaries.
@@ -242,19 +312,10 @@ function listFilesTracked(shell: WasmShell, dir: string): string[] {
 
   // Fall back to the manifest.
   const normalizedDir = normalizePath(dir);
-  let files = Array.from(vfsManifest).filter((path) => {
+  const files = Array.from(vfsManifest).filter((path) => {
     if (normalizedDir === '/') return path.startsWith('/'); // root: match everything
     return path.startsWith(normalizedDir + '/') || path === normalizedDir;
   });
-
-  // If nothing matched under the requested dir, and the dir is / or /home/user,
-  // return the entire manifest — the WASM binary's CWD may not match
-  // where files were written (importRepo writes to /home/user/... but
-  // getCwd() may return /).
-  if (files.length === 0 && vfsManifest.size > 0) {
-    files = Array.from(vfsManifest);
-  }
-
   return files.sort();
 }
 
@@ -295,9 +356,15 @@ function vfsRelative(absPath: string, rootDir: string): string {
  * fetches a directory's children when it is expanded). The daemon
  * excludes .git from listings.
  */
-function singleLevelFileEntries(entries: WasmDirEntry[], dir: string, rootDir: string): Array<Record<string, unknown>> {
+function singleLevelFileEntries(
+  shell: WasmShell,
+  entries: WasmDirEntry[],
+  dir: string,
+  rootDir: string,
+): Array<Record<string, unknown>> {
   return entries
     .filter((e) => !(e.type === 'dir' && e.name === '.git'))
+    .filter((e) => !hiddenFromWorkspace(shell, joinVfsPath(dir, e.name), rootDir))
     .map((e) => {
       const absPath = joinVfsPath(dir, e.name);
       return {
@@ -317,13 +384,14 @@ function singleLevelFileEntries(entries: WasmDirEntry[], dir: string, rootDir: s
  * nothing lives under dir, the CWD may not match where importRepo wrote
  * the files — in that case group the whole manifest under '/' instead.
  */
-function groupManifestChildren(dir: string): Array<{ name: string; path: string; isDir: boolean }> {
+function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: string; path: string; isDir: boolean }> {
   const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
+  const workspacePaths = Array.from(vfsManifest).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
   let base = dir;
-  let paths = Array.from(vfsManifest).filter(underDir);
-  if (paths.length === 0 && vfsManifest.size > 0) {
+  let paths = workspacePaths.filter(underDir);
+  if (paths.length === 0 && workspacePaths.length > 0) {
     base = '/';
-    paths = Array.from(vfsManifest);
+    paths = workspacePaths;
   }
   if (paths.length === 0) return [];
 
@@ -355,20 +423,21 @@ function groupManifestChildren(dir: string): Array<{ name: string; path: string;
  * the top level — folders vanished.
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
-  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
+  const root = workspaceRootOf(shell);
+  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || root : root;
   const dir = normalizePath(cwd);
-  const rootDir = normalizePath(shell.getCwd());
+  const rootDir = normalizePath(root);
 
   // Try listDir first; fall back to the manifest.
   const dirResult = shell.listDir(dir);
   if (!dirResult.error && dirResult.entries && dirResult.entries.length > 0) {
-    const files = singleLevelFileEntries(dirResult.entries, dir, rootDir);
+    const files = singleLevelFileEntries(shell, dirResult.entries, dir, rootDir);
     return jsonOk({ message: 'success', files });
   }
 
   // listDir failed or the directory is empty in the VFS — derive a
   // single-level listing from the tracked-file manifest.
-  const children = groupManifestChildren(dir);
+  const children = groupManifestChildren(dir, rootDir);
   const files = children.map((c) => ({
     name: c.name,
     path: c.path,
@@ -392,6 +461,7 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
   for (const entry of listResult.entries) {
     const fullPath = dir === '/' ? `/${entry.name}` : `${dir}/${entry.name}`;
     if (entry.type === 'dir') {
+      if (entry.name === '.git') continue;
       result.push(...flattenEntries(shell, fullPath));
     } else {
       result.push({ path: fullPath, modified: false, name: entry.name });
@@ -472,7 +542,10 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
     return jsonError(err, 500);
   }
   trackFileWrite(safePath);
-  return jsonOk({ message: 'ok' });
+  announceFileChange(safePath, 'write');
+  // Same success contract as the daemon's write endpoint: the buffer manager
+  // clears the unsaved flag only on this shape.
+  return jsonOk({ message: 'File saved successfully', success: true });
 }
 
 /**
@@ -501,6 +574,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
     }
     trackFileWrite(safePath);
   }
+  announceFileChange(safePath, 'created');
   return jsonOk({ message: 'ok', path: safePath });
 }
 
@@ -523,6 +597,7 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
       return jsonError(result.stderr || err, 500);
     }
   }
+  announceFileChange(safePath, 'deleted');
   return jsonOk({ message: 'ok', path: safePath });
 }
 
@@ -543,6 +618,8 @@ function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
   if (result.exitCode !== 0) {
     return jsonError(result.stderr || 'rename failed', 500);
   }
+  announceFileChange(safeOld, 'deleted');
+  announceFileChange(safeNew, 'created');
   return jsonOk({ message: 'ok', old_path: safeOld, new_path: safeNew });
 }
 
@@ -558,7 +635,7 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
 
   if (!query) return jsonOk({ results: [], total_matches: 0, total_files: 0, truncated: false, query: '' });
 
-  const cwd = shell.getCwd();
+  const cwd = workspaceRootOf(shell);
   // Build grep command
   let grepCmd = 'grep';
   if (!caseSensitive) grepCmd += ' -i';
@@ -571,8 +648,13 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
     return jsonError(result.stderr || 'search failed', 500);
   }
 
-  // Parse grep output into structured results
-  const results = parseGrepOutput(result.stdout);
+  // Parse grep output into structured results, with workspace-relative
+  // paths like the daemon's search returns.
+  const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  const results = parseGrepOutput(result.stdout).map((r) => ({
+    ...r,
+    file: r.file.startsWith(prefix) ? r.file.slice(prefix.length) : r.file,
+  }));
   const totalMatches = results.reduce((sum, r) => sum + r.match_count, 0);
   return jsonOk({
     results,
@@ -832,6 +914,17 @@ export function jsonError(message: string, status: number): Response {
  * Events are dispatched in the WsEvent shape: { type, data: {...} }
  * This matches what useEventHandler expects (it reads event.data).
  */
+/** The chat a request targets, when its JSON body names one. */
+function chatIdFromBody(bodyStr?: string): string | undefined {
+  if (!bodyStr) return undefined;
+  try {
+    const parsed = JSON.parse(bodyStr) as { chat_id?: unknown };
+    return typeof parsed.chat_id === 'string' && parsed.chat_id ? parsed.chat_id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Handle POST /api/query/steer — injects a steering message into the
  * persistent WASM agent. If the agent is mid-turn, the message is
@@ -840,7 +933,7 @@ export function jsonError(message: string, status: number): Response {
  */
 function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) return jsonError('Missing request body', 400);
-  let parsed: { query?: string };
+  let parsed: { query?: string; chat_id?: string };
   try {
     parsed = JSON.parse(bodyStr);
   } catch {
@@ -849,11 +942,10 @@ function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
   const query = parsed.query || '';
   if (!query) return jsonError('Query is required', 400);
 
-  // Call the WASM steerAgent function which injects into the
-  // persistent agent's steering channel.
-  const api = shell as unknown as { steerAgent?: (msg: string) => Record<string, unknown> };
-  if (api.steerAgent) {
-    const result = api.steerAgent(query);
+  // Call the WASM steerAgent function which injects into the chat's
+  // agent steering channel.
+  if (shell.steerAgent) {
+    const result = parsed.chat_id ? shell.steerAgent(query, parsed.chat_id) : shell.steerAgent(query);
     return jsonOk(result);
   }
   return jsonOk({ steered: false, error: 'steerAgent not available' });
@@ -1004,7 +1096,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // In local mode the backend handles this; in cloud mode we reset the
   // WASM agent so the next query starts fresh.
   if (query.trim().toLowerCase() === '/clear') {
-    shell.clearConversation();
+    shell.clearConversation(chatId || undefined);
     dispatch('query_completed', { query: '/clear', response: '' });
     return jsonOk({ status: 'ok', message: 'Conversation cleared' });
   }
@@ -1015,73 +1107,77 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // own message never renders.
   dispatch('query_started', { query });
 
-  // Write a sprout config with an OpenAI-compatible custom provider that
-  // routes to the platform proxy. Must be an absolute URL because the
-  // provider config normalizer rejects relative URLs.
-  //
-  // We use window.location.origin as the base so this works in both local
-  // dev (http://localhost:808) and production (https://api.sproutfoundry.dev).
+  // The agent's provider routes to the platform proxy, on this origin in
+  // both local dev and production.
   const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
-  const platformProviderConfig = {
-    name: 'platform',
-    endpoint: `${apiOrigin}/proxy/chat`,
-    model_name: 'managed',
-    context_size: 131072,
-    requires_api_key: false,
-    message_conversion: {
-      include_tool_call_id: true,
-      convert_tool_role_to_user: false,
-    },
-  };
-
-  // Write the provider config to the virtual filesystem.
-  // Must use the absolute path that matches Go's GetConfigDir()
-  // resolution: $HOME/.config/sprout/providers/platform.json
-  // In the WASM VFS, HOME is /home/user.
-  try {
-    shell.writeFile('/home/user/.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
-  } catch {
-    // best-effort: a config that already exists is fine — the agent falls
-    // back to the previously-written platform config.
-  }
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
+  // The chat's transcript records the turn itself, so switching away mid-turn
+  // loses neither the question nor the answer.
+  stopRequested.delete(chatId ?? '');
+  setChatRunning(chatId, true);
+  recordTurn(chatId, query);
+  // A chat is named after its first question: have the list pick it up, as
+  // the daemon's session_changed does.
+  if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
+  writePlatformProviderConfig(shell, apiOrigin);
   shell
-    .runAgent('platform', '', agentQuery, (eventJson: string) => {
-      try {
-        const event = JSON.parse(eventJson);
-        // Events from Go's wireAgentEventForwarding are already in
-        // { type, data } shape (UIEvent serializes to this format).
-        // Skip query_started — it's already dispatched above (optimistic)
-        // and the agent's own query_started from the streaming callback
-        // would duplicate the user message + isProcessing flip.
-        if (event.type === 'query_started') return;
-        // query_completed is handled by the .then() below which carries
-        // the final response from the resolved promise. Skipping the
-        // streaming version avoids a double decrement of
-        // activeRequestsRef and potential message duplication.
-        if (event.type === 'query_completed') return;
-        // Stamp chat_id if missing.
-        if (event.data && chatId && !event.data.chat_id) {
-          event.data.chat_id = chatId;
+    .runAgent(
+      'platform',
+      '',
+      agentQuery,
+      (eventJson: string) => {
+        try {
+          const event = JSON.parse(eventJson);
+          // Events from Go's wireAgentEventForwarding are already in
+          // { type, data } shape (UIEvent serializes to this format).
+          // Skip query_started — it's already dispatched above (optimistic)
+          // and the agent's own query_started from the streaming callback
+          // would duplicate the user message + isProcessing flip.
+          if (event.type === 'query_started') return;
+          // query_completed is handled by the .then() below which carries
+          // the final response from the resolved promise. Skipping the
+          // streaming version avoids a double decrement of
+          // activeRequestsRef and potential message duplication.
+          if (event.type === 'query_completed') return;
+          // Stamp chat_id if missing.
+          if (event.data && chatId && !event.data.chat_id) {
+            event.data.chat_id = chatId;
+          }
+          if (agentEventDispatcher) {
+            agentEventDispatcher(event);
+          }
+        } catch {
+          // best-effort: unparseable agent events are dropped; the loop continues.
         }
-        if (agentEventDispatcher) {
-          agentEventDispatcher(event);
-        }
-      } catch {
-        // best-effort: unparseable agent events are dropped; the loop continues.
-      }
-    })
+      },
+      chatId || undefined,
+      // Seeds the chat's agent if it has none yet (e.g. after a reload), so
+      // the conversation on screen is also the one the agent remembers.
+      JSON.stringify(historyForChat(chatId, query)),
+    )
     .then((result) => {
+      stopRequested.delete(chatId ?? '');
+      setChatRunning(chatId, false);
+      recordTurn(chatId, query, result.response);
       dispatch('query_completed', {
         response: result.response,
         provider: result.provider,
         model: result.model,
       });
+      if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
     })
     .catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      dispatch('error', { message: `Agent error: ${message}` });
+      setChatRunning(chatId, false);
+      // Stopped, not failed: end the turn without an error, as the daemon does.
+      if (stopRequested.delete(chatId ?? '')) {
+        dispatch('query_completed', { query, response: '', status: 'interrupted' });
+        if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
+        return;
+      }
+      const { message, creditsBlocked } = describeAgentError(err instanceof Error ? err.message : String(err));
+      dispatch('error', { message });
+      if (creditsBlocked) notifyCreditsBlocked(message);
     });
 
   // Return immediately — the webui picks up events via the dispatcher

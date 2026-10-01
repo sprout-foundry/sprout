@@ -16,14 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
-// ensureLocalModelDownloaded resolves modelID against the local RAM-tier
-// catalog and, if it's a real catalog/installed entry that isn't on disk
-// yet, downloads it with visible progress before the caller persists the
-// selection. Refuses outright (no download attempted) for a RAM-tier-blocked
-// pick, matching LocalProvider.SetModel's own gate — no point spending
-// minutes downloading something that will then be rejected, unless the user
-// has explicitly opted into SPROUT_ALLOW_OVERWEIGHT.
-func ensureLocalModelDownloaded(modelID string) error {
+func ensureLocalModelDownloaded(out *outputSink, modelID string) error {
 	status, err := localmodel.ResolveModelID(modelID)
 	if err != nil {
 		// Not a catalog/installed name we recognize — let SetModelPersisted's
@@ -41,14 +34,14 @@ func ensureLocalModelDownloaded(modelID string) error {
 			return fmt.Errorf("%s needs more RAM than this machine has (%.0f GB) — set SPROUT_ALLOW_OVERWEIGHT=1 to force it anyway",
 				status.Name, float64(ram)/(1024*1024*1024))
 		case tier == catalog.TierStretch:
-			console.GlyphWarning.Printf("%s risks running out of memory on this machine — downloading anyway since you selected it explicitly.", status.Name)
+			console.GlyphWarning.Fprintf(out.out(), "%s risks running out of memory on this machine — downloading anyway since you selected it explicitly.", status.Name)
 		}
 	}
 
-	fmt.Println()
-	fmt.Printf("Downloading %s from %s...\n", status.Name, status.HFRepo)
-	fmt.Println("This is a one-time download.")
-	fmt.Println()
+	out.println()
+	out.printf("Downloading %s from %s...\n", status.Name, status.HFRepo)
+	out.println("This is a one-time download.")
+	out.println()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -64,30 +57,27 @@ func ensureLocalModelDownloaded(modelID string) error {
 		if total <= 0 {
 			if downloaded != lastBytes {
 				lastBytes = downloaded
-				fmt.Printf("\r  %s downloaded...", formatDownloadBytes(downloaded))
+				out.printf("\r  %s downloaded...", formatDownloadBytes(downloaded))
 			}
 			return
 		}
 		pct := downloaded * 100 / total
 		if pct != lastPct {
 			lastPct = pct
-			fmt.Printf("\r  %d%%", pct)
+			out.printf("\r  %d%%", pct)
 			if pct >= 100 {
-				fmt.Println()
+				out.println()
 			}
 		}
 	}); err != nil {
-		fmt.Println()
+		out.println()
 		return fmt.Errorf("download failed: %w", err)
 	}
-	fmt.Println()
-	console.GlyphSuccess.Printf("Download complete!")
+	out.println()
+	console.GlyphSuccess.Fprintf(out.out(), "Download complete!")
 	return nil
 }
 
-// formatDownloadBytes renders a byte count for the download progress line —
-// GB-scale by the time any real model finishes, but scales down cleanly
-// for small files early in a download.
 func formatDownloadBytes(n int64) string {
 	const unit = 1024
 	switch {

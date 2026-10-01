@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -52,7 +53,7 @@ func TestLoadSessionInfo(t *testing.T) {
 		content := `{
 			"messages": [],
 			"session_id": "test-session",
-			"working_directory": "` + cwd + `"
+			"working_directory": ` + strconv.Quote(cwd) + `
 		}`
 		if err := os.WriteFile(sessionFile, []byte(content), 0600); err != nil {
 			t.Fatal(err)

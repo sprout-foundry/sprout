@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // BackgroundProcess represents a tracked background process for CLI mode.
@@ -153,11 +154,7 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		ttl = opts.TTL
 	}
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-	cmd := exec.Command(shell, "-c", command)
+	cmd := shellexec.Command(command)
 
 	if dir != "" {
 		cmd.Dir = dir
@@ -393,8 +390,7 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 	// this degrades to a per-process kill — see the helper's comment.
 	_ = interruptProcessGroup(process)
 
-	// Wait for grace period
-	time.Sleep(grace)
+	proc.waitDone(grace)
 
 	// Check if still alive
 	proc.mu.Lock()
@@ -405,8 +401,7 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 		// Send SIGTERM to the process group
 		_ = terminateProcessGroup(process)
 
-		// Wait for SIGTERM grace
-		time.Sleep(5 * time.Second)
+		proc.waitDone(5 * time.Second)
 
 		// Check if still alive
 		proc.mu.Lock()
@@ -429,6 +424,18 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 	}
 
 	return nil
+}
+
+// waitDone blocks until the process has been reaped or d elapses, so Stop
+// returns as soon as a signal takes effect instead of sleeping the full
+// grace period.
+func (p *BackgroundProcess) waitDone(d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-p.done:
+	case <-timer.C:
+	}
 }
 
 // IsActive checks whether a session is still running.

@@ -6,6 +6,7 @@ import { emitAutomate, type AutomateEventType, type AutomateEventPayload } from 
 import { fetchChatSessionMessages } from '../services/chatSessions';
 import { getServerErrorCode } from '../services/errorCodes';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
+import { onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { trimMessages } from '../utils/messageWindow';
@@ -47,6 +48,7 @@ import {
 } from './wsHandlers/session';
 import {
   handleQueryCompleted,
+  handleSteerDelivered,
   handleQueryProgress,
   handleQueryStarted,
   handleStreamChunk,
@@ -54,6 +56,7 @@ import {
   type PendingStreamChunks,
 } from './wsHandlers/streaming';
 import { handleSubagentActivity, handleToolEnd, handleToolStart } from './wsHandlers/tools';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
 
 // ── Hook Interface ───────────────────────────────────────────────────────
 
@@ -155,11 +158,34 @@ export function useWebSocketEventHandler({
         return;
       }
 
+      // Another chat's metrics belong to that chat's cache, not the chat on
+      // screen (its tokens and cost were showing under the active chat).
+      if (
+        event.type === 'metrics_update' &&
+        eventData.chat_id &&
+        activeChatIdRef.current &&
+        String(eventData.chat_id) !== activeChatIdRef.current
+      ) {
+        const metricsChatId = String(eventData.chat_id);
+        setState((prev) => {
+          const cached = prev.perChatCache[metricsChatId];
+          if (!cached) return {};
+          return {
+            perChatCache: {
+              ...prev.perChatCache,
+              [metricsChatId]: { ...cached, stats: { ...(cached.stats ?? {}), ...eventData } },
+            },
+          };
+        });
+        return;
+      }
+
       const perChatEvents = new Set([
         'query_started',
         'stream_chunk',
         'query_completed',
         'query_progress',
+        'steer_delivered',
         'tool_start',
         'tool_end',
         'todo_update',
@@ -179,9 +205,17 @@ export function useWebSocketEventHandler({
         // signal that the cache is stale. Pending events also prevent the
         // stale-cache heuristic (Fix 3) from preferring shorter local state.
         const eventChatId = String(eventData.chat_id);
+        const bgSubagentDepth = Number(eventData.subagent_depth ?? 0);
+        const endsBackgroundRun =
+          (event.type === 'query_completed' || event.type === 'error') &&
+          !(Number.isFinite(bgSubagentDepth) && bgSubagentDepth > 0);
         setState((prev) => {
+          // The chat holding the workspace finished: release the chat whose
+          // send was held back behind it (its queue drains next).
+          const releaseBusy =
+            endsBackgroundRun && prev.workspaceBusy?.runningChatId === eventChatId ? { workspaceBusy: null } : {};
           const existingCache = prev.perChatCache[eventChatId];
-          if (!existingCache) return {};
+          if (!existingCache) return releaseBusy;
           const pendingEvents = existingCache.pendingEvents ?? [];
           // Mirror the active-chat error lifecycle into the cached entry.
           // The active handlers clear lastError on primary run boundaries
@@ -207,11 +241,14 @@ export function useWebSocketEventHandler({
             }
           }
           return {
+            ...releaseBusy,
             perChatCache: {
               ...prev.perChatCache,
               [eventChatId]: {
                 ...existingCache,
-                pendingEvents: [...pendingEvents, event].slice(-200),
+                pendingEvents: [...pendingEvents, event].slice(-PENDING_EVENTS_CAP),
+                pendingEventsTruncated:
+                  existingCache.pendingEventsTruncated || pendingEvents.length >= PENDING_EVENTS_CAP || undefined,
                 lastError: cachedLastError,
               },
             },
@@ -252,6 +289,8 @@ export function useWebSocketEventHandler({
           return handleStreamChunk(ctx, streamFlusher);
         case 'query_completed':
           return handleQueryCompleted(ctx);
+        case 'steer_delivered':
+          return handleSteerDelivered(ctx);
         case 'tool_start':
           return handleToolStart(ctx);
         case 'tool_end':
@@ -394,15 +433,7 @@ export function useWebSocketEventHandler({
               .then((response) => {
                 // Bail if user switched chats while we were loading.
                 if (activeChatIdRef.current !== chatId) return;
-                const backendMessages: Message[] = (response.chat_session.messages ?? [])
-                  .filter((m) => m.role === 'user' || m.role === 'assistant')
-                  .map((m, i) => ({
-                    id: `chat-${chatId}-${i}`,
-                    type: m.role as 'user' | 'assistant',
-                    content: typeof m.content === 'string' ? m.content : '',
-                    timestamp: new Date(),
-                    ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-                  }));
+                const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
                 setState((prev) => {
                   // Backend is authoritative when it has caught up or the
                   // query is no longer active. The old length-only heuristic
@@ -426,6 +457,17 @@ export function useWebSocketEventHandler({
         setState((prev) => ({ ...prev, lastError: null }));
       });
   }, [apiService, activeRequestsRef, setState]);
+
+  // Events a chat received in the background, replayed when it comes back on
+  // screen: the cached state plus these is exactly its current state.
+  useEffect(
+    () =>
+      onChatReplay((chatId, events) => {
+        if (activeChatIdRef.current !== chatId) return;
+        for (const event of events) handleEvent(event);
+      }),
+    [handleEvent, activeChatIdRef],
+  );
 
   return { handleEvent, handleReconnect };
 }

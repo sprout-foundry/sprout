@@ -31,3 +31,21 @@ export function platformHref(platformPath: string): string {
   const normalizedPath = platformPath.startsWith('/') ? platformPath : `/${platformPath}`;
   return cleanBase + normalizedPath;
 }
+
+/**
+ * Platform path of a GitHub repository's hub page, or the dashboard when the
+ * repo is unknown or not on GitHub. The route lives in the SPA's hash so the
+ * platform's bare-"/" bounce back into the editor never fires; ?from=editor
+ * stays in the query where the platform counts editor exits.
+ */
+export function repoHubPath(repoURL: string | null | undefined): string {
+  const slug = githubRepoSlug(repoURL);
+  return slug ? `/?from=editor#/repos/${slug}` : '/?from=editor';
+}
+
+/** "owner/name" for a github.com repository URL, otherwise null. */
+export function githubRepoSlug(repoURL: string | null | undefined): string | null {
+  if (!repoURL) return null;
+  const match = /^(?:https?:\/\/|git@)github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(repoURL.trim());
+  return match ? `${match[1]}/${match[2]}` : null;
+}

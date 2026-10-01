@@ -179,6 +179,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
 	resetSpawnTracking := cliui.StartTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	cliui.SetREPLOwnsTurnSummary(true)
+	defer cliui.SetREPLOwnsTurnSummary(false)
 
 	// SP-108: Start a wakeup poller for CLI mode. This mirrors the WebUI
 	// poller (pkg/webui/wakeup_poller.go), checking for pending background-

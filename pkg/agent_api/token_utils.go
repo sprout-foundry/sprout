@@ -33,6 +33,20 @@ const (
 	ToolCallIDOverheadTokens = 8
 	// ImageMessageOverheadTokens conservatively accounts for multimodal image parts
 	ImageMessageOverheadTokens = 256
+	// InlineImageTokenEstimate is the flat token cost for inline image
+	// payloads (base64 in the Base64 field or embedded in a data: URL).
+	// Vision providers bill images by pixel area, not payload bytes: a
+	// typical 1080p screenshot costs ~1-2K tokens (OpenAI high-detail
+	// ~1105, Anthropic 1585, Gemini ~516), while running the payload's
+	// base64 through the text heuristic charges ~0.25 tokens per base64
+	// character — tens of thousands per screenshot, 20-100x the real
+	// cost. That inflation pushed the context estimate past the window
+	// on image-heavy turns, tripped the compaction trigger on healthy
+	// sessions, and starved the output budget. The flat cost sits ~2x
+	// above the typical screenshot charge; if it ever undershoots a very
+	// large image the provider rejects the request and seed's
+	// overflow-recovery compaction fires — the safe direction to err in.
+	InlineImageTokenEstimate = 2048
 	// EstimationErrorPercent is how much EstimateTokens can underestimate the
 	// true token count on tool-heavy prompts (observed 25-34% in practice).
 	// CalculateOutputBudget inflates the input estimate by this percent to
@@ -370,6 +384,14 @@ func CalculateOutputBudgetAnchored(contextLimit, anchoredInput, heuristicInput i
 }
 
 func estimateImageTokens(img ImageData) int {
+	if isInlineImagePayload(img) {
+		// Inline base64 payloads are billed by the provider as image
+		// tokens (pixel area), never as text: running the payload itself
+		// through the text heuristic overstates a 300KB screenshot by
+		// ~100K tokens against the ~1-2K the provider actually counts.
+		return ImageMessageOverheadTokens + InlineImageTokenEstimate
+	}
+
 	tokens := ImageMessageOverheadTokens
 
 	if img.URL != "" {
@@ -380,9 +402,15 @@ func estimateImageTokens(img ImageData) int {
 		tokens += EstimateTokens(img.Type)
 	}
 
-	if img.Base64 != "" {
-		tokens += EstimateTokens(img.Base64)
-	}
-
 	return tokens
+}
+
+// isInlineImagePayload reports whether the image carries its pixel data
+// inline — base64 in Base64, or a data: URI in URL — as opposed to a
+// fetchable http(s) URL.
+func isInlineImagePayload(img ImageData) bool {
+	if img.Base64 != "" {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(img.URL), "data:")
 }

@@ -98,6 +98,7 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 
 	state := &ConversationState{
 		Messages:                append([]api.Message(nil), messages...),
+		QueryDisplays:           a.queryDisplaysFor(messages),
 		TurnCheckpoints:         checkpoints,
 		TaskActions:             a.GetTaskActions(),
 		TotalCost:               a.state.GetTotalCost(),

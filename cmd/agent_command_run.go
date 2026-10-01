@@ -19,6 +19,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
@@ -48,7 +49,7 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 	case "", "hidden", "fold", "full":
 		// valid
 	default:
-		return fmt.Errorf("invalid --reasoning value %q: must be 'hidden', 'fold', or 'full'", agentReasoningMode)
+		return usageErrorf(cmd, "invalid --reasoning value %q: must be 'hidden', 'fold', or 'full'", agentReasoningMode)
 	}
 
 	// Propagate --no-project-skills to env so config loading skips discovery
@@ -137,7 +138,7 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 		if configuration.IsValidRiskProfile(agentRiskProfile) || hasUserOverride {
 			chatAgent.SetRiskProfileOverride(configuration.RiskProfile(agentRiskProfile))
 		} else {
-			fmt.Fprintf(os.Stderr, "Warning: unknown --risk-profile %q. Built-in: readonly, cautious, default, permissive, unrestricted. Define custom profiles in config.risk_profiles. Falling back to default for this session.\n", agentRiskProfile)
+			console.GlyphWarning.Printf("Unknown --risk-profile %q. Built-in: readonly, cautious, default, permissive, unrestricted. Define custom profiles in config.risk_profiles. Falling back to default for this session.", agentRiskProfile)
 		}
 	}
 
@@ -162,7 +163,7 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 				return fmt.Errorf("failed to save subagent config: %w", err)
 			}
 		} else {
-			_, _ = os.Stderr.Write([]byte("Warning: could not persist subagent config: config manager unavailable\n"))
+			console.GlyphWarning.Print("Could not persist subagent config: config manager unavailable")
 		}
 	}
 

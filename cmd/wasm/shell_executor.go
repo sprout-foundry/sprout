@@ -74,7 +74,10 @@ func init() {
 			}
 		}
 
-		r := wasmshell.ParseAndExecute(command)
+		r := fromWorkspace(func() wasmshell.CmdResult { return wasmshell.ParseAndExecute(command) })
+		if r.ExitCode == wasmshell.ExitCommandNotFound {
+			return escalateUnavailableCommand(command, r)
+		}
 		return r.Stdout, r.Stderr, r.ExitCode
 	})
 
@@ -229,3 +232,72 @@ func callGitToolJS(command string) (stdout, stderr string, exitCode int) {
 		return "", "git tool timeout (30s)", 1
 	}
 }
+
+// escalationTimeout bounds one escalated command end to end: starting the
+// workspace, pushing files, the run itself (up to 10 minutes), and pulling
+// results back.
+const escalationTimeout = 15 * time.Minute
+
+// escalateUnavailableCommand handles an agent shell command the browser shell
+// can't run (exit 127). When the webui has installed the escalation bridge
+// (globalThis.__sproutEscalate, cloud mode) it may run the command in the
+// user's cloud workspace — subject to the user's escalation policy — and the
+// real result is returned. Otherwise the 127 stands, with an explanation the
+// model can act on instead of a bare "command not found".
+//
+// Only the agent loop reaches this: runAgent runs in its own goroutine, so
+// blocking on the bridge's Promise doesn't stall the JS event loop.
+func escalateUnavailableCommand(command string, local wasmshell.CmdResult) (stdout, stderr string, exitCode int) {
+	bridge := js.Global().Get("__sproutEscalate")
+	if !bridge.Truthy() {
+		return local.Stdout, local.Stderr + browserShellNote, local.ExitCode
+	}
+
+	resultCh := make(chan js.Value, 1)
+	errCh := make(chan string, 1)
+	then := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		if len(args) > 0 {
+			resultCh <- args[0]
+		} else {
+			resultCh <- js.Undefined()
+		}
+		return nil
+	})
+	catch := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		if len(args) > 0 {
+			errCh <- args[0].String()
+		} else {
+			errCh <- "unknown error"
+		}
+		return nil
+	})
+	defer then.Release()
+	defer catch.Release()
+	bridge.Call("run", command).Call("then", then, catch)
+
+	select {
+	case res := <-resultCh:
+		if res.Type() != js.TypeObject {
+			return local.Stdout, local.Stderr + browserShellNote, local.ExitCode
+		}
+		if ran := res.Get("ran"); ran.Type() == js.TypeBoolean && ran.Bool() {
+			r := shellGitResultFromJS(res)
+			return r.Stdout, r.Stderr, r.ExitCode
+		}
+		// Not run (declined, no workspace, no repository): say why.
+		note := browserShellNote
+		if m := res.Get("message"); m.Type() == js.TypeString && m.String() != "" {
+			note = "\n[sprout] " + m.String() + "\n"
+		}
+		return local.Stdout, local.Stderr + note, local.ExitCode
+	case errMsg := <-errCh:
+		return local.Stdout, local.Stderr + "\n[sprout] Running this in the cloud workspace failed: " + errMsg + "\n", local.ExitCode
+	case <-time.After(escalationTimeout):
+		return local.Stdout, local.Stderr + "\n[sprout] The cloud workspace run timed out.\n", 124
+	}
+}
+
+// browserShellNote explains a 127 from the in-browser shell to the model.
+const browserShellNote = "\n[sprout] This command isn't available in the in-browser shell, which runs " +
+	"shell scripts and built-in file and text tools but no compilers, package managers, interpreters or " +
+	"network tools. It needs a cloud workspace to run.\n"

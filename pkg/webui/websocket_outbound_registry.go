@@ -66,6 +66,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeQueryStarted:   {},
 	events.EventTypeQueryProgress:  {},
 	events.EventTypeQueryCompleted: {},
+	events.EventTypeSteerDelivered: {},
 	events.EventTypeError:          {},
 	// tool_execution and validation were dropped from the registry:
 	// tool_execution had no publisher left (superseded by

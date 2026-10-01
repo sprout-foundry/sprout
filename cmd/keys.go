@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"regexp"
 	"syscall"
@@ -16,6 +15,7 @@ import (
 
 	"filippo.io/age"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"golang.org/x/term"
 )
@@ -183,9 +183,8 @@ Examples:
 				return err
 			}
 
-			fmt.Println("API keys encrypted with passphrase successfully.")
-			fmt.Println("Note: You will need to enter the passphrase each time you use sprout.")
-			fmt.Println("      Consider using machine key mode for convenience, or use SPROUT_KEY_PASSPHRASE env var.")
+			console.GlyphSuccess.Print("API keys encrypted with a passphrase")
+			console.Hintln(os.Stderr, "You'll enter the passphrase each time sprout starts; set SPROUT_KEY_PASSPHRASE or use machine-key mode to avoid that.")
 		} else {
 			// Machine key mode - just ensure the key exists
 			_, err := credentials.LoadOrCreateMachineKey()
@@ -208,7 +207,7 @@ Examples:
 				return fmt.Errorf("failed to save encrypted API keys: %w", err)
 			}
 
-			fmt.Println("API keys encrypted with machine key successfully.")
+			console.GlyphSuccess.Print("API keys encrypted with the machine key")
 		}
 
 		return nil
@@ -245,9 +244,8 @@ Only use this for migration or export purposes.`,
 			return err
 		}
 
-		fmt.Println("API keys decrypted to plaintext successfully.")
-		fmt.Println("WARNING: Your API keys are now stored in unencrypted format.")
-		fmt.Println("Run 'sprout keys encrypt' to re-enable encryption when done.")
+		console.GlyphWarning.Print("API keys are now stored unencrypted")
+		console.Hintln(os.Stderr, "Run 'sprout keys encrypt' to re-enable encryption.")
 		return nil
 	},
 }
@@ -282,7 +280,7 @@ This command will:
 		}
 
 		if status.Encrypted {
-			fmt.Println("API keys are already encrypted. No migration needed.")
+			console.GlyphInfo.Print("API keys are already encrypted — nothing to migrate.")
 			return nil
 		}
 
@@ -291,7 +289,7 @@ This command will:
 			return fmt.Errorf("failed to save encrypted API keys: %w", err)
 		}
 
-		fmt.Println("API keys migrated to encrypted format successfully.")
+		console.GlyphSuccess.Print("API keys migrated to encrypted format")
 		return nil
 	},
 }
@@ -357,22 +355,21 @@ you have a backup of the old key or have exported your keys.`,
 		if err := os.Rename(oldKeyPath, backupPath); err != nil {
 			return fmt.Errorf("failed to back up old machine key: %w", err)
 		}
-		fmt.Printf("Old machine key backed up to: %s\n", backupPath)
+		console.GlyphInfo.Printf("Old machine key backed up to %s", backupPath)
 
 		// Generate new key and re-encrypt (Save() will generate new key since key.age is gone)
 		if err := credentials.Save(store); err != nil {
 			// Try to restore old key on failure
 			if restoreErr := os.Rename(backupPath, oldKeyPath); restoreErr != nil {
-				log.Printf("[ERROR] failed to restore old key after failed save: %v", restoreErr)
+				console.GlyphError.Printf("Could not restore the old key from %s: %v", backupPath, restoreErr)
 			}
 			return fmt.Errorf("failed to save with new key: %w", err)
 		}
 
 		// Old key already renamed to backup — no need to delete
 		// Note: Delete the backup at %s when you no longer need the old key.
-		fmt.Println("Machine key rotated successfully.")
-		fmt.Println("Your API keys have been re-encrypted with the new key.")
-		fmt.Printf("Note: Delete the backup at %s when you no longer need the old key.\n", backupPath)
+		console.GlyphSuccess.Print("Machine key rotated; API keys re-encrypted with the new key")
+		console.Hintln(os.Stderr, fmt.Sprintf("Delete the backup at %s once you no longer need the old key.", backupPath))
 		return nil
 	},
 }

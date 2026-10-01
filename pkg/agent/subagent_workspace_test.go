@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -57,8 +58,8 @@ func TestCommonParent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := commonParent(tt.paths)
-			if result != tt.expected {
+			result := commonParent(fromSlashAll(tt.paths))
+			if result != filepath.FromSlash(tt.expected) {
 				t.Errorf("commonParent(%v) = %q, want %q", tt.paths, result, tt.expected)
 			}
 		})
@@ -127,7 +128,7 @@ func TestIsPathInWorkspace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isPathInWorkspace(tt.path, tt.workspace)
+			result := isPathInWorkspace(filepath.FromSlash(tt.path), filepath.FromSlash(tt.workspace))
 			if result != tt.expected {
 				t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", tt.path, tt.workspace, result, tt.expected)
 			}
@@ -230,8 +231,8 @@ func TestCommonParentWithMixedPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := commonParent(tt.paths)
-			if result != tt.expected {
+			result := commonParent(fromSlashAll(tt.paths))
+			if result != filepath.FromSlash(tt.expected) {
 				t.Errorf("commonParent(%v) = %q, want %q", tt.paths, result, tt.expected)
 			}
 		})
@@ -252,13 +253,35 @@ func TestCommonParentBehavior(t *testing.T) {
 	// Clean all paths first (as handleRunSubagent does)
 	cleanedPaths := make([]string, len(paths))
 	for i, path := range paths {
-		cleanedPaths[i] = filepath.Clean(path)
+		cleanedPaths[i] = filepath.Clean(filepath.FromSlash(path))
 	}
 
 	result := commonParent(cleanedPaths)
-	expected := "/home/user/project"
+	expected := filepath.FromSlash("/home/user/project")
 
 	if result != expected {
 		t.Errorf("commonParent(cleaned paths) = %q, want %q", result, expected)
+	}
+}
+
+func fromSlashAll(paths []string) []string {
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = filepath.FromSlash(p)
+	}
+	return out
+}
+
+func TestIsPathInWorkspace_VolumeRootAndOSTemp(t *testing.T) {
+	root := filepath.VolumeName(os.TempDir()) + string(filepath.Separator)
+	inside := filepath.Join(os.TempDir(), "sprout", "file.go")
+	if !isPathInWorkspace(inside, root) {
+		t.Errorf("isPathInWorkspace(%q, %q) = false, want true", inside, root)
+	}
+	if !isPathInTmp(inside) {
+		t.Errorf("isPathInTmp(%q) = false, want true", inside)
+	}
+	if got := commonParent([]string{inside, filepath.Join(root, "other", "x.go")}); got != root {
+		t.Errorf("commonParent at volume root = %q, want %q", got, root)
 	}
 }

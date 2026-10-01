@@ -75,6 +75,8 @@ log file itself.`,
 	},
 }
 
+var auditClearYes bool
+
 var auditClearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "Wipe the security audit log file",
@@ -83,8 +85,7 @@ var auditClearCmd = &cobra.Command{
 This removes ~/.local/state/sprout/shell-audit.jsonl and any rotated file (.jsonl.1).
 This action cannot be undone.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
+		if !auditClearYes {
 			fmt.Fprint(cmd.OutOrStdout(), "This will permanently delete the audit log. Continue? [y/N] ")
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
@@ -216,7 +217,8 @@ func formatAuditEntry(e tools.AuditEntry) string {
 
 func init() {
 	auditTailCmd.Flags().IntP("lines", "n", 20, "number of recent entries to show")
-	auditClearCmd.Flags().BoolP("force", "f", false, "skip confirmation prompt")
+	auditClearCmd.Flags().BoolVarP(&auditClearYes, "yes", "y", false, "Skip the confirmation prompt")
+	boolFlagAliasP(auditClearCmd.Flags(), &auditClearYes, "force", "f", "yes", aliasDeprecated)
 
 	auditCmd.AddCommand(auditTailCmd)
 	auditCmd.AddCommand(auditClearCmd)

@@ -13,6 +13,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v5
 
+    # The one-line installer (curl … | sh) is served from this tag; a syntax
+    # error there breaks every install, so a release must not ship one.
+    - name: Check install.sh parses under POSIX sh
+      run: |
+        sh -n scripts/install.sh
+        dash -n scripts/install.sh
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:

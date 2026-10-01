@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"syscall/js"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/ast"
@@ -24,56 +25,38 @@ import (
 
 // ─── Supported Languages ────────────────────────────────────────
 
-// TestSupportedLanguagesReturnsExpected verifies that the SupportedLanguages
-// map contains the expected set of languages and that all values are true.
+// TestSupportedLanguagesReturnsExpected pins the core languages and that
+// every listed language is enabled; the list itself grows with pkg/ast.
 func TestSupportedLanguagesReturnsExpected(t *testing.T) {
-	required := []string{"go", "typescript", "tsx", "javascript", "python"}
-
-	for _, lang := range required {
+	for _, lang := range []string{"go", "typescript", "tsx", "javascript", "python"} {
 		if !ast.SupportedLanguages[lang] {
 			t.Errorf("SupportedLanguages[%q] = false, want true", lang)
 		}
 	}
-
-	// No unexpected languages should be present.
-	for lang := range ast.SupportedLanguages {
-		found := false
-		for _, want := range required {
-			if lang == want {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("unexpected language in SupportedLanguages: %q", lang)
+	for lang, ok := range ast.SupportedLanguages {
+		if !ok {
+			t.Errorf("SupportedLanguages[%q] = false; listed languages must be enabled", lang)
 		}
 	}
 }
 
-// TestSupportedLanguagesSort verifies that the sorted list produced by
-// supportedLanguagesFunc would be in correct alphabetical order.
+// TestSupportedLanguagesSort checks what the bridge returns to JS: every
+// supported language, once, in alphabetical order.
 func TestSupportedLanguagesSort(t *testing.T) {
-	names := make([]string, 0, len(ast.SupportedLanguages))
-	for lang := range ast.SupportedLanguages {
-		names = append(names, lang)
+	arr := supportedLanguagesFunc(js.Undefined(), nil).(js.Value)
+	names := make([]string, arr.Length())
+	for i := range names {
+		names[i] = arr.Index(i).String()
 	}
-	sort.Strings(names)
-
-	// Verify the list is actually sorted.
-	for i := 1; i < len(names); i++ {
-		if names[i] < names[i-1] {
-			t.Errorf("names not sorted: %q < %q at index %d", names[i], names[i-1], i)
-		}
+	if len(names) != len(ast.SupportedLanguages) {
+		t.Fatalf("got %d languages, want %d", len(names), len(ast.SupportedLanguages))
 	}
-
-	// Verify the sorted order matches expected alphabetical order.
-	expected := []string{"go", "javascript", "python", "tsx", "typescript"}
-	if len(names) != len(expected) {
-		t.Fatalf("got %d languages, want %d", len(names), len(expected))
+	if !sort.StringsAreSorted(names) {
+		t.Errorf("languages not sorted: %v", names)
 	}
-	for i, want := range expected {
-		if names[i] != want {
-			t.Errorf("names[%d] = %q, want %q", i, names[i], want)
+	for _, name := range names {
+		if !ast.SupportedLanguages[name] {
+			t.Errorf("returned unsupported language %q", name)
 		}
 	}
 }

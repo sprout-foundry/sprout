@@ -12,7 +12,9 @@ import (
 
 // VerboseCommand implements /verbose for inspecting or cycling the
 // output_verbosity setting (compact / default / verbose).
-type VerboseCommand struct{}
+type VerboseCommand struct {
+	outputSink
+}
 
 func (c *VerboseCommand) Name() string { return "verbose" }
 
@@ -66,8 +68,8 @@ func (c *VerboseCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		if current == "" {
 			current = configuration.OutputVerbosityDefault
 		}
-		console.GlyphInfo.Printf("Output verbosity: %q", current)
-		fmt.Printf("  Valid values: %s\n", strings.Join(verbosityOrder, ", "))
+		console.GlyphInfo.Fprintf(c.out(), "Output verbosity: %q", current)
+		c.printf("  Valid values: %s\n", strings.Join(verbosityOrder, ", "))
 		return nil
 	}
 
@@ -106,7 +108,7 @@ func (c *VerboseCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("updating config: %w", err)
 	}
 
-	console.GlyphSuccess.Printf("Output verbosity set to %q (persisted to config)", newValue)
+	console.GlyphSuccess.Fprintf(c.out(), "Output verbosity set to %q (persisted to config)", newValue)
 	return nil
 }
 

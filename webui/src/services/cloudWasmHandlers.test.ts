@@ -368,3 +368,215 @@ describe('handleWasmFileList — /api/files returns single-level listings', () =
     expect(mflb?.path).toBe('/mfl-b');
   });
 });
+
+describe('handleWasmFile — POST /api/file (save)', () => {
+  // BufferManagerContext clears a tab's unsaved flag only when the save
+  // response is {message: 'File saved successfully'} or {success: true} —
+  // the daemon's contract. Anything else leaves the tab dirty and the 30s
+  // autosave rewrites it forever.
+  it('answers with the save contract the buffer manager checks for', async () => {
+    const writes: Array<[string, string]> = [];
+    const shell = createMockShell({
+      writeFile: (p: string, c: string) => {
+        writes.push([p, c]);
+        return '';
+      },
+    });
+    const res = handleWasmLocal(
+      shell,
+      '/api/file',
+      'POST',
+      '/api/file?path=/src/main.go',
+      JSON.stringify({ content: 'package main\n' }),
+    );
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('File saved successfully');
+    expect(writes).toEqual([['/src/main.go', 'package main\n']]);
+  });
+
+  it('reports a failed write as an error', async () => {
+    const shell = createMockShell({ writeFile: () => 'disk full' });
+    const res = handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/a.txt', JSON.stringify({ content: 'x' }));
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('listAllVfsFiles', () => {
+  it('lists files in subfolders and leaves .git out', async () => {
+    const { listAllVfsFiles } = await import('./cloudWasmHandlers');
+    const tree: Record<string, WasmDirEntry[]> = {
+      '/home/user': [
+        { name: 'README.md', type: 'file', size: 1 },
+        { name: 'api', type: 'dir', size: 0 },
+        { name: '.git', type: 'dir', size: 0 },
+      ],
+      '/home/user/api': [{ name: 'form.go', type: 'file', size: 1 }],
+      '/home/user/.git': [{ name: 'HEAD', type: 'file', size: 1 }],
+    };
+    const shell = createMockShell({
+      listDir: (dir: string) => ({ entries: tree[dir] ?? [] }),
+      readFile: (path: string) => ({ content: `content of ${path}` }),
+    });
+
+    const files = await listAllVfsFiles(shell);
+
+    expect(files.map((f) => f.path).sort()).toEqual(['README.md', 'api/form.go']);
+    expect(files.find((f) => f.path === 'api/form.go')?.content).toBe('content of /home/user/api/form.go');
+  });
+});
+
+describe('listAllVfsFiles with the workspace at the filesystem root', () => {
+  it('leaves the agent home and scratch space out of the repository files', async () => {
+    const { listAllVfsFiles } = await import('./cloudWasmHandlers');
+    const tree: Record<string, WasmDirEntry[]> = {
+      '/': [
+        { name: 'go.mod', type: 'file', size: 1 },
+        { name: 'home', type: 'dir', size: 0 },
+        { name: 'tmp', type: 'dir', size: 0 },
+      ],
+      '/tmp': [{ name: 'scratch.txt', type: 'file', size: 1 }],
+      '/home': [{ name: 'user', type: 'dir', size: 0 }],
+      '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
+      '/home/user/.config': [{ name: 'platform.json', type: 'file', size: 1 }],
+    };
+    const shell = createMockShell({
+      getCwd: () => '/',
+      listDir: (dir: string) => ({ entries: tree[dir] ?? [] }),
+      readFile: () => ({ content: 'x' }),
+    });
+
+    const files = await listAllVfsFiles(shell);
+
+    expect(files.map((f) => f.path)).toEqual(['go.mod']);
+  });
+});
+
+describe('handleWasmFileList with the workspace at the filesystem root', () => {
+  const tree: Record<string, WasmDirEntry[]> = {
+    '/': [
+      { name: 'go.mod', type: 'file', size: 1 },
+      { name: 'home', type: 'dir', size: 0 },
+      { name: 'tmp', type: 'dir', size: 0 },
+    ],
+    '/tmp': [{ name: 'sprout', type: 'dir', size: 0 }],
+    '/home': [{ name: 'user', type: 'dir', size: 0 }],
+    '/home/user': [{ name: '.config', type: 'dir', size: 0 }],
+  };
+  const listing = async (cwd: string, path: string) => {
+    const shell = createMockShell({ getCwd: () => cwd, listDir: (dir: string) => ({ entries: tree[dir] ?? [] }) });
+    const res = handleWasmLocal(shell, '/api/files', 'GET', `/api/files?path=${encodeURIComponent(path)}`);
+    return (JSON.parse(await res.text()).files as Array<{ name: string }>).map((f) => f.name);
+  };
+
+  it('leaves the agent home and scratch space out of the tree', async () => {
+    expect(await listing('/', '/')).toEqual(['go.mod']);
+  });
+
+  it('keeps a folder that holds more than the agent home', async () => {
+    tree['/home'] = [
+      { name: 'user', type: 'dir', size: 0 },
+      { name: 'shared', type: 'dir', size: 0 },
+    ];
+    expect(await listing('/', '/')).toEqual(['go.mod', 'home']);
+    expect(await listing('/', '/home')).toEqual(['shared']);
+    tree['/home'] = [{ name: 'user', type: 'dir', size: 0 }];
+  });
+
+  it('shows it when the workspace is inside it', async () => {
+    expect(await listing('/home/user', '/home/user')).toEqual(['.config']);
+  });
+});
+
+describe('file mutations announce file_changed like the daemon', () => {
+  it('reports writes, creates, deletes and renames', async () => {
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    const events: Array<{ type: string; data: { file_path: string; action: string } }> = [];
+    setAgentEventDispatcher((e) => events.push(e as (typeof events)[number]));
+    const shell = createMockShell();
+
+    handleWasmLocal(shell, '/api/file', 'POST', '/api/file?path=/w/a.ts', JSON.stringify({ content: 'x' }));
+    handleWasmLocal(shell, '/api/create', 'POST', '/api/create', JSON.stringify({ path: '/w/b.ts' }));
+    handleWasmLocal(shell, '/api/delete', 'POST', '/api/delete', JSON.stringify({ path: '/w/c.ts' }));
+    handleWasmLocal(
+      shell,
+      '/api/rename',
+      'POST',
+      '/api/rename',
+      JSON.stringify({ old_path: '/w/d.ts', new_path: '/w/e.ts' }),
+    );
+    handleWasmLocal(shell, '/api/file', 'GET', '/api/file?path=/w/a.ts');
+    await Promise.resolve();
+    setAgentEventDispatcher(null);
+
+    expect(events.map((e) => `${e.type} ${e.data.action} ${e.data.file_path}`)).toEqual([
+      'file_changed write /w/a.ts',
+      'file_changed created /w/b.ts',
+      'file_changed deleted /w/c.ts',
+      'file_changed deleted /w/d.ts',
+      'file_changed created /w/e.ts',
+    ]);
+  });
+});
+
+describe('/api/query in the browser — a stop is not a failure', () => {
+  function runningShell() {
+    let reject: (err: Error) => void = () => {};
+    const shell = createMockShell({
+      runAgent: () =>
+        new Promise((_, r) => {
+          reject = r;
+        }),
+      stopAgent: () => reject(new Error('process query: query interrupted: context canceled')),
+    });
+    return { shell, fail: (msg: string) => reject(new Error(msg)) };
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  async function eventsFor(run: (shell: WasmShell, fail: (msg: string) => void) => void) {
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    setAgentEventDispatcher((e) => events.push(e as (typeof events)[number]));
+    const { shell, fail } = runningShell();
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', JSON.stringify({ query: 'hi', chat_id: 'c1' }));
+    await settle();
+    run(shell, fail);
+    await settle();
+    setAgentEventDispatcher(null);
+    return events.filter((e) => e.type === 'query_completed' || e.type === 'error');
+  }
+
+  it('ends a stopped run as interrupted, with no error', async () => {
+    const events = await eventsFor((shell) => {
+      handleWasmLocal(shell, '/api/query/stop', 'POST', '/api/query/stop?chat_id=c1');
+    });
+    expect(events).toEqual([
+      { type: 'query_completed', data: { query: 'hi', response: '', status: 'interrupted', chat_id: 'c1' } },
+    ]);
+  });
+
+  it('still reports a run that fails on its own', async () => {
+    const events = await eventsFor((_shell, fail) => fail('upstream exploded'));
+    expect(events.map((e) => e.type)).toEqual(['error']);
+  });
+});
+
+describe('handleWasmLocal — /api/search', () => {
+  it('reports matches with workspace-relative paths', async () => {
+    let ran = '';
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      executeCommand: (cmd: string) => {
+        ran = cmd;
+        return { stdout: '/workspace/src/a.go:3:func Device() {}\n', stderr: '', exitCode: 0 };
+      },
+    });
+
+    const res = handleWasmLocal(shell, '/api/search', 'GET', 'http://x/api/search?query=Device', undefined);
+    const body = await res.json();
+
+    expect(ran).toContain("'/workspace'");
+    expect(body.results.map((r: { file: string }) => r.file)).toEqual(['src/a.go']);
+  });
+});

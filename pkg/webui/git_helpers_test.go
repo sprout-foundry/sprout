@@ -146,14 +146,14 @@ func TestNormalizeGitPath_NestedParentDir(t *testing.T) {
 // ====================================================================
 
 func TestMakeGitRelativePath_DeeplyNested(t *testing.T) {
-	got := makeGitRelativePath("/ws/a/b/c/d/e.go", "/ws")
+	got := makeGitRelativePath(osAbs("/ws/a/b/c/d/e.go"), osAbs("/ws"))
 	if got != "a/b/c/d/e.go" {
 		t.Errorf("got %q, want a/b/c/d/e.go", got)
 	}
 }
 
 func TestMakeGitRelativePath_WorkspaceRootTrailingSlash(t *testing.T) {
-	got := makeGitRelativePath("/ws/file.go", "/ws/")
+	got := makeGitRelativePath(osAbs("/ws/file.go"), osAbs("/ws/"))
 	if got != "file.go" {
 		t.Errorf("got %q, want file.go", got)
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/agent_tools"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 

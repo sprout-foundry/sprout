@@ -1,10 +1,5 @@
 package wasmshell
 
-// commands_find.go — the WASM shell's find / sort / tree commands:
-// cmdFind (with its predicate parsing, matchFindGroups / matchPred /
-// matchPathGlob / findDepth helpers), cmdSort, and cmdTree. Split out of
-// commands_search.go.
-
 import (
 	"fmt"
 	"os"
@@ -14,250 +9,140 @@ import (
 	"strings"
 )
 
-func cmdSort(args []string, stdin string) CmdResult {
-	numeric := false
-	reverse := false
-	unique := false
-	paths := []string{}
-
-	for _, a := range args {
-		switch a {
-		case "-n", "--numeric-sort":
-			numeric = true
-		case "-r", "--reverse":
-			reverse = true
-		case "-u", "--unique":
-			unique = true
-		default:
-			paths = append(paths, a)
-		}
-	}
-
-	var input string
-	if len(paths) > 0 {
-		data, err := os.ReadFile(ResolvePath(paths[0]))
-		if err != nil {
-			return CmdResult{"", fmt.Sprintf("sort: %s: %s\n", paths[0], err.Error()), 1}
-		}
-		input = string(data)
-	} else {
-		input = stdin
-	}
-
-	lines := strings.Split(strings.TrimSpace(input), "\n")
-
-	if numeric {
-		sort.Slice(lines, func(i, j int) bool {
-			a, _ := strconv.ParseFloat(strings.TrimSpace(lines[i]), 64)
-			b, _ := strconv.ParseFloat(strings.TrimSpace(lines[j]), 64)
-			if reverse {
-				return a >= b
-			}
-			return a <= b
-		})
-	} else {
-		if reverse {
-			sort.Sort(sort.Reverse(sort.StringSlice(lines)))
-		} else {
-			sort.Strings(lines)
-		}
-	}
-
-	if unique {
-		seen := map[string]bool{}
-		filtered := []string{}
-		for _, l := range lines {
-			key := l
-			if numeric {
-				key = strings.TrimSpace(l)
-			}
-			if !seen[key] {
-				seen[key] = true
-				filtered = append(filtered, l)
-			}
-		}
-		lines = filtered
-	}
-
-	return CmdResult{strings.Join(lines, "\n") + "\n", "", 0}
+// findEntry is one visited path.
+type findEntry struct {
+	display string
+	rel     string
+	abs     string
+	info    os.FileInfo
+	depth   int
+	prune   bool
 }
 
-// cmdFind implements the find(1) subset the agent audit showed: -name,
-// -path, -type, -maxdepth, -not, and -o (top-level alternation between
-// predicate groups). Implicit AND joins predicates within a group.
-func cmdFind(args []string, stdin string) CmdResult {
-	if len(args) == 0 {
-		args = []string{"."}
+type findExpr func(e *findEntry) bool
+
+type findRun struct {
+	sh        *interp
+	args      []string
+	pos       int
+	out       strings.Builder
+	errs      strings.Builder
+	hasAction bool
+	quit      bool
+	deletes   []string
+	batches   []*findBatch
+	code      int
+	err       error
+}
+
+type findBatch struct {
+	argv  []string
+	paths []string
+}
+
+func biFind(sh *interp, args []string, _ *ioIn) CmdResult {
+	var roots []string
+	i := 0
+	for i < len(args) && !strings.HasPrefix(args[i], "-") && args[i] != "(" && args[i] != "!" {
+		roots = append(roots, args[i])
+		i++
+	}
+	if len(roots) == 0 {
+		roots = []string{"."}
+	}
+	f := &findRun{sh: sh, args: args[i:]}
+	var maxDepth, minDepth int
+	f.args, maxDepth, minDepth = extractDepthOptions(f.args)
+
+	expr := f.or()
+	if f.err == nil && f.pos < len(f.args) {
+		f.err = fmt.Errorf("unexpected argument: %s", f.args[f.pos])
+	}
+	if f.err != nil {
+		code := 1
+		if strings.Contains(f.err.Error(), "not supported") {
+			code = ExitCommandNotFound
+		}
+		return CmdResult{Stdout: "", Stderr: "find: " + f.err.Error() + "\n", ExitCode: code}
+	}
+	if expr == nil {
+		expr = func(*findEntry) bool { return true }
 	}
 
-	startDir := ResolvePath(args[0])
-	maxDepth := -1
-
-	// Tokenize the predicate tail into groups separated by -o.
-	var groups [][]string
-	var current []string
-	expectValue := "" // "", "-name", "-path", "-type"
-	negateNext := false
-
-	for i := 1; i < len(args); i++ {
-		a := args[i]
-
-		if expectValue != "" {
-			current = append(current, expectValue+":"+a)
-			if negateNext {
-				current[len(current)-1] = "!" + current[len(current)-1]
-				negateNext = false
-			}
-			expectValue = ""
+	for _, root := range roots {
+		abs := ResolvePath(root)
+		if _, err := os.Lstat(abs); err != nil { //nolint:gosec // G703: shell commands act on the paths the user names
+			fmt.Fprintf(&f.errs, "find: '%s': %s\n", root, describeErr(err))
+			f.code = 1
 			continue
 		}
-
-		switch a {
-		case "-name", "-path", "-type":
-			expectValue = a
-		case "-o", "-or":
-			groups = append(groups, current)
-			current = nil
-		case "-not", "!":
-			negateNext = true
-		case "-maxdepth":
-			if i+1 < len(args) {
-				if n, err := strconv.Atoi(args[i+1]); err == nil {
-					maxDepth = n
-					i++
+		_ = WalkCompat(abs, func(path string, info os.FileInfo, err error) error {
+			if f.quit {
+				return filepath.SkipAll
+			}
+			if err != nil {
+				return nil
+			}
+			rel, _ := filepath.Rel(abs, path)
+			e := &findEntry{abs: path, info: info, rel: rel, depth: findDepth(abs, path)}
+			e.display = joinFindPath(root, rel)
+			if maxDepth >= 0 && e.depth > maxDepth {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if e.depth >= minDepth {
+				if expr(e) && !f.hasAction {
+					f.out.WriteString(e.display + "\n")
 				}
 			}
-		default:
-			// Unmodeled predicates (-exec, -newer, -size, -prune, …) make
-			// the query unanswerable in-browser; 127 lets the escalation
-			// surface take it to a container rather than answer wrongly.
-			return CmdResult{"", fmt.Sprintf("find: unsupported predicate: %s (read-only predicates only in browser shell)\n", a), 127}
-		}
-	}
-	if expectValue != "" {
-		return CmdResult{"", fmt.Sprintf("find: missing argument to %s\n", expectValue), 1}
-	}
-	groups = append(groups, current)
-
-	parsed := make([][]pred, 0, len(groups))
-	for _, g := range groups {
-		preds, err := parseFindGroup(g)
-		if err != nil {
-			return CmdResult{"", fmt.Sprintf("find: %s\n", err.Error()), 1}
-		}
-		parsed = append(parsed, preds)
-	}
-
-	var out strings.Builder
-	walkErr := WalkCompat(startDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		depth := findDepth(startDir, path)
-		if maxDepth >= 0 && depth > maxDepth {
-			if info.IsDir() {
+			if f.quit {
+				return filepath.SkipAll
+			}
+			if info.IsDir() && (e.prune || (maxDepth >= 0 && e.depth == maxDepth)) && e.depth > 0 {
 				return filepath.SkipDir
 			}
 			return nil
-		}
-
-		if !matchFindGroups(parsed, info) {
-			return nil
-		}
-
-		out.WriteString(path)
-		out.WriteString("\n")
-		return nil
-	})
-
-	if walkErr != nil {
-		return CmdResult{"", fmt.Sprintf("find: %s\n", walkErr.Error()), 1}
+		})
 	}
-
-	return CmdResult{out.String(), "", 0}
-}
-
-// pred is a single parsed find predicate.
-type pred struct {
-	kind    string // "name", "path", "type"
-	pattern string
-	negate  bool
-}
-
-func parseFindGroup(tokens []string) ([]pred, error) {
-	var preds []pred
-	for _, tok := range tokens {
-		negate := strings.HasPrefix(tok, "!")
-		tok = strings.TrimPrefix(tok, "!")
-		switch {
-		case strings.HasPrefix(tok, "-name:"):
-			preds = append(preds, pred{kind: "name", pattern: strings.TrimPrefix(tok, "-name:"), negate: negate})
-		case strings.HasPrefix(tok, "-path:"):
-			preds = append(preds, pred{kind: "findpath", pattern: strings.TrimPrefix(tok, "-path:"), negate: negate})
-		case strings.HasPrefix(tok, "-type:"):
-			preds = append(preds, pred{kind: "type", pattern: strings.TrimPrefix(tok, "-type:"), negate: negate})
-		default:
-			return nil, fmt.Errorf("unknown predicate: %s", tok)
+	for _, b := range f.batches {
+		if len(b.paths) == 0 {
+			continue
 		}
-	}
-	return preds, nil
-}
-
-// matchFindGroups returns whether the entry matches ANY group (find -o
-// semantics) — each group is an AND of its predicates. No groups means
-// no predicates: everything matches.
-func matchFindGroups(groups [][]pred, info os.FileInfo) bool {
-	if len(groups) == 0 {
-		return true
-	}
-	for _, g := range groups {
-		all := true
-		for _, p := range g {
-			if !matchPred(p, info) {
-				all = false
-				break
+		var argv []string
+		for _, a := range b.argv {
+			if a == "{}" {
+				argv = append(argv, b.paths...)
+			} else {
+				argv = append(argv, a)
 			}
 		}
-		if all {
-			return true
+		r := f.sh.runArgv(argv, "")
+		f.out.WriteString(r.Stdout)
+		f.errs.WriteString(r.Stderr)
+		if r.ExitCode != 0 {
+			f.code = r.ExitCode
 		}
 	}
-	return false
-}
-
-func matchPred(p pred, info os.FileInfo) bool {
-	var matched bool
-	switch p.kind {
-	case "name":
-		m, err := filepath.Match(p.pattern, info.Name())
-		matched = err == nil && m
-	case "findpath":
-		matched = matchPathGlob(p.pattern, info.Name())
-	case "type":
-		switch p.pattern {
-		case "f":
-			matched = !info.IsDir()
-		case "d":
-			matched = info.IsDir()
-		default:
-			matched = false
+	for k := len(f.deletes) - 1; k >= 0; k-- {
+		if err := removePath(f.deletes[k]); err != nil {
+			fmt.Fprintf(&f.errs, "find: cannot delete '%s': %s\n", f.deletes[k], describeErr(err))
+			f.code = 1
 		}
-	default:
-		matched = false
 	}
-	if p.negate {
-		return !matched
-	}
-	return matched
+	return CmdResult{Stdout: f.out.String(), Stderr: f.errs.String(), ExitCode: f.code}
 }
 
-// matchPathGlob matches a -path glob against the entry name — find(1)'s
-// -path matches the whole path string; the wasmshell walk feeds relative
-// names so basename matching keeps parity for the audit's usage.
-func matchPathGlob(pattern, path string) bool {
-	m, err := filepath.Match(pattern, path)
-	return err == nil && m
+func joinFindPath(root, rel string) string {
+	if rel == "." {
+		return root
+	}
+	sep := string(filepath.Separator)
+	if strings.HasSuffix(root, sep) || strings.HasSuffix(root, "/") {
+		return root + rel
+	}
+	return root + sep + rel
 }
 
 func findDepth(root, path string) int {
@@ -268,87 +153,55 @@ func findDepth(root, path string) int {
 	return strings.Count(rel, string(os.PathSeparator)) + 1
 }
 
-func cmdTree(args []string, stdin string) CmdResult {
-	showHidden := false
-	maxDepth := -1
-	path := "."
-	targets := []string{}
-
-	for i, a := range args {
-		if a == "-a" {
-			showHidden = true
-		} else if strings.HasPrefix(a, "-L") {
-			val := strings.TrimPrefix(a, "-L")
-			if val == "" && i+1 < len(args) {
-				val = args[i+1]
-			}
-			if parsed, err := strconv.Atoi(val); err == nil {
-				maxDepth = parsed
-			}
-		} else if !strings.HasPrefix(a, "-") {
-			targets = append(targets, a)
-		}
-	}
-
-	if len(targets) > 0 {
-		path = targets[0]
-	}
-
-	root := ResolvePath(path)
-	var out strings.Builder
-	fmt.Fprintf(&out, "%s\n", root)
-
-	counts := []int{0, 0} // [dirs, files]
-
-	err := WalkCompat(root, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		rel, _ := filepath.Rel(root, p)
-		if rel == "." {
-			return nil
-		}
-
-		if !showHidden && strings.HasPrefix(filepath.Base(p), ".") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if maxDepth > 0 {
-			depth := strings.Count(rel, string(os.PathSeparator))
-			if depth > maxDepth {
-				if info.IsDir() {
-					return filepath.SkipDir
+// extractDepthOptions pulls the position-independent -maxdepth/-mindepth
+// options (and no-op global options) out of the expression.
+func extractDepthOptions(args []string) ([]string, int, int) {
+	maxDepth, minDepth := -1, 0
+	var rest []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-maxdepth", "-mindepth":
+			if i+1 < len(args) {
+				n, err := strconv.Atoi(args[i+1])
+				if err == nil {
+					if args[i] == "-maxdepth" {
+						maxDepth = n
+					} else {
+						minDepth = n
+					}
+					i++
+					continue
 				}
-				return nil
 			}
+			rest = append(rest, args[i])
+		case "-depth", "-follow", "-xdev", "-mount", "-noleaf", "-ignore_readdir_race", "-L", "-P", "-H":
+		default:
+			rest = append(rest, args[i])
 		}
+	}
+	return rest, maxDepth, minDepth
+}
 
-		depth := strings.Count(rel, string(os.PathSeparator))
-		prefix := ""
-		for j := 0; j < depth; j++ {
-			prefix += "│   "
+// removePath deletes a file or a whole tree, keeping the persistent
+// store in step.
+func removePath(path string) error {
+	info, err := os.Lstat(path) //nolint:gosec // G703: shell commands act on the paths the user names
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return SyncDeleteFile(path)
+	}
+	var files []string
+	_ = WalkCompat(path, func(p string, fi os.FileInfo, err error) error {
+		if err == nil && !fi.IsDir() {
+			files = append(files, p)
 		}
-
-		branch := "├── "
-		if info.IsDir() {
-			branch = "├── "
-			counts[0]++
-		} else {
-			counts[1]++
-		}
-
-		fmt.Fprintf(&out, "%s%s%s\n", prefix, branch, info.Name())
 		return nil
 	})
-
-	if err != nil {
-		return CmdResult{"", fmt.Sprintf("tree: %s\n", err.Error()), 1}
+	sort.Strings(files)
+	for _, p := range files {
+		storeWriter.DeleteFile(p)
 	}
-
-	fmt.Fprintf(&out, "\n%d directories, %d files\n", counts[0], counts[1])
-	return CmdResult{out.String(), "", 0}
+	return os.RemoveAll(path) //nolint:gosec // G703: shell commands act on the paths the user names
 }

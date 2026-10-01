@@ -16,7 +16,9 @@ import (
 // `sprout custom {add,remove,list}` so users don't have to leave the
 // chat to manage custom providers (e.g. after `/provider <name>` fails
 // with a not-registered error).
-type CustomCommand struct{}
+type CustomCommand struct {
+	outputSink
+}
 
 // Name returns the command name.
 func (c *CustomCommand) Name() string {
@@ -42,8 +44,8 @@ func (c *CustomCommand) Usage() string {
 		"/custom remove [name]",
 		"                     Remove a custom provider (prompts if name omitted).",
 		"",
-		"The wizard prompts for endpoint URL, API key env var, and preferred model.",
-		"It will offer to set the API key via the credential backend when saved.",
+		"The wizard prompts for endpoint URL, how to supply the API key, and preferred model.",
+		"A pasted API key (the default) is kept in the credential store; an env var or no key are also options.",
 	}, "\n")
 }
 
@@ -64,7 +66,7 @@ func (c *CustomCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	case "remove", "rm", "delete":
 		return c.runSubcommand("remove", args[1:])
 	case "help", "--help", "-h":
-		fmt.Println(c.Usage())
+		c.println(c.Usage())
 		return nil
 	default:
 		return fmt.Errorf("unknown action %q. Use: list, add, remove", args[0])

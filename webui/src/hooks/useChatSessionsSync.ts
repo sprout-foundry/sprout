@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ChatSession } from '../services/chatSessions';
+import { loadChatPanePlacement } from '../services/layoutPersistence';
 import type { EditorBuffer } from '../types/editor';
 
 export interface UseChatSessionsSyncParams {
@@ -9,7 +10,6 @@ export interface UseChatSessionsSyncParams {
   mode?: string;
   buffersRef: React.RefObject<Map<string, EditorBuffer>>;
   updateBufferTitle: (id: string, title: string) => void;
-  updateBufferMetadata: (id: string, metadata: Record<string, unknown>) => void;
   setBufferPinned: (id: string, isPinned: boolean) => void;
   setBufferClosable: (id: string, isClosable: boolean) => void;
   /** Close a buffer (the editor manager's path, so close events fire). Used to drop the other lane's chat tabs on a lane switch (SP-142). */
@@ -23,6 +23,8 @@ export interface UseChatSessionsSyncParams {
     isPinned?: boolean;
     isClosable?: boolean;
     activate?: boolean;
+    /** Pane to open a new buffer in, when it exists (restoring a saved layout). */
+    paneId?: string;
     metadata?: Record<string, unknown>;
   }) => string;
 }
@@ -30,8 +32,10 @@ export interface UseChatSessionsSyncParams {
 /**
  * Mirrors chat sessions into workspace chat tabs.
  *
- * Exactly one chat tab is ever pinned: the ACTIVE chat's tab. Other sessions
- * open as unpinned, closable, non-activating background tabs so they don't
+ * Chat tabs are never pinned: a pinned tab collapses to an icon and carries
+ * the selected-tab accent, so pinning the active chat made several chats look
+ * focused at once with no names. The ACTIVE chat's tab is unclosable; other
+ * sessions open as closable, non-activating background tabs so they don't
  * hijack the active chat (an unwanted activation would switch the server-side
  * active chat and, via its session_changed("switch") echo, re-trigger every
  * client — the infinite refresh loop behind "two tabs fighting over one
@@ -57,7 +61,6 @@ export const useChatSessionsSync = ({
   mode,
   buffersRef,
   updateBufferTitle,
-  updateBufferMetadata,
   setBufferPinned,
   setBufferClosable,
   closeBuffer,
@@ -81,17 +84,25 @@ export const useChatSessionsSync = ({
   const closeRef = useRef(closeBuffer);
   closeRef.current = closeBuffer;
   const prevLaneRef = useRef<string | null>(null);
+  // The next active-chat change after a lane switch is that lane restoring its
+  // own conversation (useChatModePinning) — a background switch that must not
+  // pull focus off a file, e.g. a design's source opened into Code.
+  const laneRestorePendingRef = useRef(false);
   useEffect(() => {
     const prev = prevLaneRef.current;
     prevLaneRef.current = mode ?? 'code';
     if (prev === null || prev === (mode ?? 'code')) return;
+    laneRestorePendingRef.current = true;
     const close = closeRef.current;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
     for (const buffer of Array.from(currentBuffers.values())) {
       if (buffer.kind !== 'chat') continue;
-      if (close) close(buffer.id);
-      else currentBuffers.delete(buffer.id);
+      // The lane's active chat tab is unclosable, and close skips those.
+      if (close) {
+        setBufferClosable(buffer.id, true);
+        close(buffer.id);
+      } else currentBuffers.delete(buffer.id);
     }
     closedChatIdsRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +112,13 @@ export const useChatSessionsSync = ({
   // when the active chat changes (which deliberately reopens a closed tab
   // for the now-active chat).
   useEffect(() => {
+    // A switch from one chat to another focuses the new chat's tab. The
+    // active chat first becoming known at startup does not, when a restored
+    // file already has focus.
+    const switchedFromChat = !!prevActiveChatIdRef.current && activeChatId !== prevActiveChatIdRef.current;
+    const laneRestore = switchedFromChat && laneRestorePendingRef.current;
     if (activeChatId !== prevActiveChatIdRef.current) {
+      laneRestorePendingRef.current = false;
       if (activeChatId && closedChatIdsRef.current.has(activeChatId)) {
         closedChatIdsRef.current.delete(activeChatId);
       }
@@ -112,7 +129,12 @@ export const useChatSessionsSync = ({
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
 
-    laneSessions.forEach((session) => {
+    // Open in creation order: the list arrives most-recently-active first, so
+    // following it reshuffled the tab strip on every reload.
+    const byCreation = [...laneSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    const savedPlacement = loadChatPanePlacement();
+    const fileFocused = Array.from(currentBuffers.values()).some((b) => b.kind !== 'chat' && b.isActive);
+    byCreation.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );
@@ -124,51 +146,93 @@ export const useChatSessionsSync = ({
       }
       if (closedChatIdsRef.current.has(session.id)) return;
 
+      // Every chat gets its own path-keyed tab; the active chat's opens
+      // focused, the rest in the background. openWorkspaceBuffer dedupes by
+      // path, so a tab another handler (New chat) opened moments ago is
+      // reused rather than doubled.
       const isActive = session.id === activeChatId;
-      // The active chat claims the initial pinned chat buffer if it's still
-      // unclaimed; otherwise open its tab (pinned, activating — landing the
-      // user on the chat they're actually viewing).
-      const initialBuf = currentBuffers.get('buffer-chat');
-      if (isActive && initialBuf && !initialBuf.metadata?.chatId) {
-        updateBufferMetadata('buffer-chat', { chatId: session.id });
-        updateBufferTitle('buffer-chat', session.name || 'Chat');
-      } else {
+      openWorkspaceBuffer({
+        kind: 'chat',
+        path: `__workspace/chat/${session.id}`,
+        title: session.name || 'Chat',
+        isPinned: false,
+        isClosable: !isActive,
+        activate: isActive && ((switchedFromChat && !laneRestore) || !fileFocused),
+        paneId: savedPlacement[session.id],
+        metadata: { chatId: session.id },
+      });
+    });
+
+    // The initial chat buffer stands in for "the active chat" until the chat
+    // list and active chat are known. Handing it to a chat instead raced the
+    // first list load: when the active chat was still unknown, the next
+    // active chat (often a just-created one) claimed it and the chat it had
+    // been showing got a second tab, whose focus switched the conversation
+    // back. Once the active chat has its own tab, retire the stand-in.
+    const standIn = buffersRef.current?.get('buffer-chat');
+    const activeHasSession = !!activeChatId && laneSessions.some((session) => session.id === activeChatId);
+    if (standIn && !standIn.metadata?.chatId && activeHasSession && closeRef.current) {
+      if (standIn.isActive) {
+        const activeSession = laneSessions.find((session) => session.id === activeChatId);
         openWorkspaceBuffer({
           kind: 'chat',
-          path: `__workspace/chat/${session.id}`,
-          title: session.name || 'Chat',
-          isPinned: isActive,
-          isClosable: !isActive,
-          activate: isActive,
-          metadata: { chatId: session.id },
+          path: `__workspace/chat/${activeChatId}`,
+          title: activeSession?.name || 'Chat',
+          isPinned: false,
+          isClosable: false,
+          activate: true,
+          paneId: savedPlacement[activeChatId!],
+          metadata: { chatId: activeChatId },
         });
       }
-    });
+      setBufferClosable('buffer-chat', true);
+      closeRef.current('buffer-chat');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [laneSessions, activeChatId]);
 
-  // Keep pin state canonical. The ACTIVE chat's tab is the one pinned tab;
-  // every other chat tab must be unpinned and closable. This repairs tabs
-  // created under the old bug that permanently pinned every formerly-active
-  // session (is_default == active), so previously stuck tabs become closable.
-  // Idempotent: setBufferPinned/setBufferClosable only fire when state is
+  // A chat that left the list was deleted (here or in another tab): close its
+  // tab, which otherwise stayed open on a conversation that no longer exists.
+  // Only chats seen in the previous list count — a tab opened for a chat
+  // the list hasn't caught up with yet must survive.
+  const knownChatIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!chatSessions || chatSessions.length === 0) return;
+    const now = new Set(chatSessions.map((session) => session.id));
+    const before = knownChatIdsRef.current;
+    knownChatIdsRef.current = now;
+    const close = closeRef.current;
+    const currentBuffers = buffersRef.current;
+    if (!close || !currentBuffers) return;
+    for (const buffer of Array.from(currentBuffers.values())) {
+      const chatId = buffer.kind === 'chat' ? (buffer.metadata?.chatId as string | null | undefined) : undefined;
+      if (!chatId || now.has(chatId) || !before.has(chatId)) continue;
+      setBufferClosable(buffer.id, true);
+      close(buffer.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSessions]);
+
+  // Keep tab state canonical: no chat tab is pinned, and only the ACTIVE
+  // chat's tab is unclosable. Idempotent: the setters only fire when state is
   // actually wrong, so steady-state is a no-op (no render loop).
   useEffect(() => {
     if (!laneSessions) return;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
 
+    for (const buffer of Array.from(currentBuffers.values())) {
+      if (buffer.kind === 'chat' && buffer.isPinned) setBufferPinned(buffer.id, false);
+    }
     for (const session of laneSessions) {
       const buffer = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );
       if (!buffer) continue;
       const isActive = session.id === activeChatId;
-      if (isActive && (!buffer.isPinned || buffer.isClosable !== false)) {
-        setBufferPinned(buffer.id, true);
+      if (isActive && buffer.isClosable !== false) {
         setBufferClosable(buffer.id, false);
-      } else if (!isActive && (buffer.isPinned || buffer.isClosable === false)) {
-        setBufferPinned(buffer.id, false);
+      } else if (!isActive && buffer.isClosable === false) {
         setBufferClosable(buffer.id, true);
       }
     }

@@ -38,16 +38,12 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Short:         "Agent for code analysis and editing (interactive mode when run without arguments)",
-	Long: `Sprout is a command-line tool that leverages Large Language Models (LLMs)
-to automate and assist in software development tasks. It features a modern CLI
-with automatic web UI startup for rich interactive experiences.
+	Long: `Sprout is an LLM-powered coding agent for your terminal and browser.
 
-For autonomous operation, try: sprout agent "your intent here"
-
-Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.
-
-See "Available Commands" below for the full list.`,
+  sprout                      start an interactive session (opens the web UI too)
+  sprout agent "your intent"  run one task non-interactively and exit`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		routeGoLogForTerminal()
 		// CLI-E: color-blind palette swap. CLI flag wins over env var;
 		// ApplyColorBlindFromEnv only sets true (never false) so the
 		// flag's explicit `false` isn't clobbered by a stale env.
@@ -98,16 +94,14 @@ See "Available Commands" below for the full list.`,
 			}
 			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {
 				if autoDetected {
-					fmt.Fprintf(os.Stderr, "Warning: auto-detected git repo but failed to bootstrap config: %v\n", err)
+					console.GlyphWarning.Printf("Auto-detected a git repo but could not set up its .sprout config: %v", err)
 					isolatedConfig = false
 				} else {
 					return fmt.Errorf("failed to bootstrap isolated config: %w", err)
 				}
 			}
 		}
-		// Initialize API keys and configuration
-		initializeSystem()
-		return nil
+		return initializeSystem()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default to interactive mode when no arguments provided
@@ -128,49 +122,44 @@ See "Available Commands" below for the full list.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
+	applyCommandGroups(rootCmd)
+	installUsageErrorHooks(rootCmd)
 	if err := rootCmd.Execute(); err != nil {
 		// Render exactly one clean line (already-reported errors render
-		// nothing — the command showed them while running), then exit
-		// non-zero so shells and CI see the failure.
+		// nothing — the command showed them while running), then exit with
+		// a code scripts can branch on: 2 usage, 130 interrupted, 1 other.
 		renderExecuteError(err)
-		os.Exit(1)
+		os.Exit(exitCodeFor(err))
 	}
 	return nil
 }
 
 // initializeSystem initializes configuration and API keys with first-run setup
-func initializeSystem() {
+func initializeSystem() error {
 	// Run SP-133 migration if a legacy ~/.sprout directory exists.
 	if configuration.NeedsMigration() {
 		_ = configuration.RunMigration()
 	}
-	// Check if we're in a CI environment or non-interactive mode
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 
 	if isCI {
-		// In CI environments, just load what we can and continue
 		_, err := configuration.LoadAPIKeys()
 		if err != nil && configuration.GetEnvSimple("DEBUG") != "" {
-			println("API key initialization warning:", err.Error())
+			console.GlyphWarning.Printf("API key initialization: %v", err)
 		}
-		return
+		return nil
 	}
 
 	// WebUI-first bootstrap: initialize silently without terminal prompts.
 	// First-run setup is completed through the WebUI onboarding flow.
-	_, err := configuration.NewManagerSilent()
-	if err != nil {
-		// If initialization fails, print helpful error and exit
-		fmt.Fprintf(os.Stderr, "Failed to initialize sprout: %v\n", err)
-		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
-		fmt.Fprintln(os.Stderr, "   Try `sprout keys set <provider>` to configure an API key, or open the Web UI onboarding.")
-		os.Exit(1)
+	if _, err := configuration.NewManagerSilent(); err != nil {
+		return withHint(fmt.Errorf("initializing configuration: %w", err),
+			"Run 'sprout keys set <provider>' to configure an API key, or open the Web UI onboarding.")
 	}
 
-	// Apply training data collection config from CLI flags and env vars.
 	applyTrainingConfig()
-
 	runStartupChecks()
+	return nil
 }
 
 // applyTrainingConfig resolves training settings from CLI flags and env
@@ -197,7 +186,7 @@ func applyTrainingConfig() {
 		return
 	}
 
-	mgr, err := configuration.NewManager()
+	mgr, err := configuration.NewManagerSilent()
 	if err != nil {
 		return
 	}
@@ -217,18 +206,18 @@ func applyTrainingConfig() {
 	// Print the warning message showing the effective endpoint.
 	cfg := mgr.GetConfig()
 	if cfg != nil && cfg.Training.Enabled {
-		fmt.Fprintf(os.Stderr, "[TRAINING] Session recording enabled. Conversations will be sent to: %s\n", cfg.Training.Endpoint)
+		console.GlyphWarning.Printf("Session recording enabled — conversations are sent to %s", cfg.Training.Endpoint)
 	}
 }
 
 func runStartupChecks() {
 	startupChecksOnce.Do(func() {
 		if _, err := pythonruntime.FindPython3Interpreter(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Python-based diff features are unavailable: %v\n", err)
+			console.GlyphWarning.Printf("Python-based diff features are unavailable: %v", err)
 			return
 		}
 		if err := tools.CheckPDFPython3Available(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: PDF extraction features are unavailable: %v\n", err)
+			console.GlyphWarning.Printf("PDF extraction features are unavailable: %v", err)
 		}
 	})
 }

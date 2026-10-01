@@ -70,6 +70,17 @@ func (s *Store) initStore() string {
 		return "failed to parse stored files: " + err.Error()
 	}
 
+	// Files from before the workspace directory existed move into it, in
+	// IndexedDB too, so a user's unsynced edits stay part of the project.
+	moves := legacyRelocations(files, workspaceRoot, wasmshell.ShellEnv.Get("HOME"))
+	for i, f := range files {
+		if dst, ok := moves[f.Path]; ok {
+			s.saveFileSync(dst, f.Content)
+			s.deleteFileSync(f.Path)
+			files[i].Path = dst
+		}
+	}
+
 	for _, f := range files {
 		// Ensure parent directories exist.
 		dir := filepath.Dir(f.Path)

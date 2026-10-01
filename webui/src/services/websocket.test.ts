@@ -1207,3 +1207,19 @@ describe('WebSocketService - DOM bridge suppression', () => {
     expect(dispatched).not.toContain('query_progress');
   });
 });
+
+describe('WebSocketService - deliverLocal', () => {
+  it('hands an in-page event to every listener, like a server event', () => {
+    const ws = WebSocketService.getInstance();
+    const first = vi.fn();
+    const second = vi.fn();
+    ws.onEvent(first);
+    ws.onEvent(second);
+    const event = { type: 'tool_end', data: { tool_name: 'edit_file', status: 'completed' } };
+    ws.deliverLocal(event as never);
+    expect(first).toHaveBeenCalledWith(event);
+    expect(second).toHaveBeenCalledWith(event);
+    ws.removeEvent(first);
+    ws.removeEvent(second);
+  });
+});

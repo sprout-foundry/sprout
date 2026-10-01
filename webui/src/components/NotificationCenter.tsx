@@ -9,17 +9,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './NotificationCenter.css';
 
 /**
- * @deprecated Props kept for backward compatibility with StatusBar.tsx.
- * The NotificationCenter is now a self-contained toast stack that
- * subscribes to notificationBus directly; these props are ignored.
- */
-interface NotificationCenterLegacyProps {
-  isOpen?: boolean;
-  onClose?: () => void;
-  positionRef?: React.RefObject<HTMLDivElement>;
-}
-
-/**
  * NotificationCenter — top-right toast stack.
  *
  * Subscribes to the singleton notificationBus and renders NotificationStack
@@ -31,7 +20,7 @@ interface NotificationCenterLegacyProps {
  *   2. Locally clears every visible toast (with its pending auto-dismiss
  *      timer) so the stack empties immediately.
  */
-function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Element | null {
+function NotificationCenter(): JSX.Element | null {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 

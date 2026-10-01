@@ -1,5 +1,6 @@
 import { Monitor, Server } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
+import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { getSSHProxyContext } from '../services/clientSession';
 import { debugLog } from '../utils/log';
@@ -79,6 +80,8 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
 
   // Hide on mobile when the sidebar menu is covering the content
   if (isMobile && isMobileMenuOpen) return null;
+  // The hosted editor has no host to name unless it is attached to a remote one.
+  if (isCloud && !bar.isRemote) return null;
 
   return (
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>

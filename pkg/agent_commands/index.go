@@ -3,9 +3,11 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // IndexCommand implements the /index slash command for toggling workspace indexing.
@@ -69,7 +71,7 @@ func (c *IndexCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 func (c *IndexCommand) enableIndex(chatAgent *agent.Agent) error {
 	if chatAgent.IsEmbeddingIndexEnabled() {
-		fmt.Println("\n[index] Indexing is already enabled for this workspace.")
+		console.GlyphInfo.Fprintln(os.Stdout, "Indexing is already enabled for this workspace.")
 		return nil
 	}
 
@@ -77,34 +79,33 @@ func (c *IndexCommand) enableIndex(chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to enable indexing: %w", err)
 	}
 
-	fmt.Println("\n[index] Workspace indexing enabled.")
-	fmt.Println("       Building index in the background...")
-	fmt.Println("       Semantic search and duplicate detection are now available.")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Workspace indexing enabled")
+	console.Hintln(os.Stdout, "Building the index in the background; semantic search and duplicate detection are available now.")
 	return nil
 }
 
 func (c *IndexCommand) disableIndex(chatAgent *agent.Agent) error {
 	if !chatAgent.IsEmbeddingIndexEnabled() {
-		fmt.Println("\n[index] Indexing is not currently enabled for this workspace.")
+		console.GlyphInfo.Fprintln(os.Stdout, "Indexing is not enabled for this workspace.")
 		return nil
 	}
 
 	chatAgent.DisableEmbeddingIndex()
-	fmt.Println("\n[index] Workspace indexing disabled.")
-	fmt.Println("       The index has been stopped. Existing index data is preserved.")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Workspace indexing disabled")
+	console.Hintln(os.Stdout, "Existing index data is preserved.")
 	return nil
 }
 
 func (c *IndexCommand) showStatus(chatAgent *agent.Agent) error {
 	enabled := chatAgent.IsEmbeddingIndexEnabled()
-	fmt.Printf("\n[index] Status: %s\n", map[bool]string{true: "ENABLED", false: "DISABLED"}[enabled])
+	console.Heading(os.Stdout, "Workspace index: "+map[bool]string{true: "enabled", false: "disabled"}[enabled])
 
 	em := chatAgent.GetEmbeddingManager()
 	if em != nil {
-		fmt.Printf("       Index records: %d\n", em.IndexSize())
-		fmt.Printf("       Initialized: %v\n", em.IsInitialized())
+		fmt.Printf("  Records: %d\n", em.IndexSize())
+		fmt.Printf("  Initialized: %v\n", em.IsInitialized())
 	} else {
-		fmt.Println("       No index data.")
+		fmt.Println("  No index data.")
 	}
 	return nil
 }

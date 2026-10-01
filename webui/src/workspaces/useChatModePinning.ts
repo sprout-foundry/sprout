@@ -206,6 +206,17 @@ export function useChatModePinning({
     prevModeRef.current = mode;
     if (previous === mode) return;
 
+    // The chat the user leaves is the outgoing mode's own until it has a pin:
+    // a Code chat that was never switched to or sent from had none, and the
+    // return to Code then kept Design's chat. One that is already another
+    // mode's pin is not (a fresh Design chat still being created leaves the
+    // Code chat active).
+    const leaving = activeChatIdRef.current;
+    const pins = readChatModePins();
+    if (leaving && !readPinFor(previous) && !Object.values(pins).includes(leaving)) {
+      writeChatModePin(previous, leaving);
+    }
+
     const pin = readPinFor(mode);
     if (pin && pin !== activeChatIdRef.current) {
       // That mode's own conversation.

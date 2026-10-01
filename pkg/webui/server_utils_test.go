@@ -9,7 +9,7 @@ import (
 )
 
 func TestExpandHomeVar(t *testing.T) {
-	t.Setenv("HOME", "/home/testuser")
+	setTestHome(t, "/home/testuser")
 
 	tests := []struct {
 		name     string
@@ -31,7 +31,7 @@ func TestExpandHomeVar(t *testing.T) {
 }
 
 func TestExpandHomeVar_NoHome(t *testing.T) {
-	t.Setenv("HOME", "")
+	setTestHome(t, "")
 	result := expandHomeVar("$HOME/test")
 	assert.Equal(t, "$HOME/test", result, "should return unchanged if HOME is empty")
 }

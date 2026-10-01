@@ -75,10 +75,13 @@ function openRepo(url: string): void {
 }
 
 async function promptForRepo(): Promise<void> {
-  const input = await showThemedPrompt('Repository to open (GitHub owner/name, or a GitHub, GitLab or Bitbucket URL):', {
-    title: 'Open a repository',
-    placeholder: 'owner/repo',
-  });
+  const input = await showThemedPrompt(
+    'Repository to open (GitHub owner/name, or a GitHub, GitLab or Bitbucket URL):',
+    {
+      title: 'Open a repository',
+      placeholder: 'owner/repo',
+    },
+  );
   if (!input?.trim()) return;
   try {
     openRepo(parseRepoRef(input.trim()).url.replace(/\.git$/, ''));

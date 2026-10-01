@@ -574,6 +574,12 @@ export class CloudAdapter implements APIAdapter {
 
 /** Whether a remote URL points at owner/name (case-insensitive, .git optional). */
 function sameRepoRef(remoteURL: string, owner: string, name: string): boolean {
-  const m = remoteURL.replace(/\.git$/, '').match(/[/:]([^/:]+)\/([^/]+)$/);
-  return !!m && m[1].toLowerCase() === owner.toLowerCase() && m[2].toLowerCase() === name.toLowerCase();
+  // owner may span several segments (GitLab subgroups), so compare the whole
+  // repo path at the end of the remote.
+  const remote = remoteURL
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+  const path = `${owner}/${name}`.toLowerCase();
+  return remote.endsWith(`/${path}`) || remote.endsWith(`:${path}`);
 }

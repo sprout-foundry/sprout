@@ -75,7 +75,7 @@ function openRepo(url: string): void {
 }
 
 async function promptForRepo(): Promise<void> {
-  const input = await showThemedPrompt('GitHub repository to open (owner/name or URL):', {
+  const input = await showThemedPrompt('Repository to open (GitHub owner/name, or a GitHub, GitLab or Bitbucket URL):', {
     title: 'Open a repository',
     placeholder: 'owner/repo',
   });

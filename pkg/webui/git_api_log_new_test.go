@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/codereview"
 	"testing"
 )
 
@@ -50,9 +51,9 @@ func TestGitReviewShouldSkipFileForContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := gitReviewShouldSkipFileForContext(tt.path)
+			got := codereview.ShouldSkipFileForContext(tt.path)
 			if got != tt.want {
-				t.Errorf("gitReviewShouldSkipFileForContext(%q) = %v, want %v", tt.path, got, tt.want)
+				t.Errorf("ShouldSkipFileForContext(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}

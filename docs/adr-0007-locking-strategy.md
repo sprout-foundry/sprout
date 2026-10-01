@@ -63,7 +63,7 @@ Representative examples (most-used files):
 | `pkg/embedding/manager.go` | `mu`, `cacheMu` | StateGuard / CacheLock | Two mutexes; `cacheMu` keeps the disambiguating prefix. |
 | `pkg/embedding/shared_runtime.go` | `sharedONNXMu` | OwnerQualified | Multi-mutex candidate; prefix conveys shared-runtime ownership. |
 | `pkg/mcp/manager.go` | `mutex`, `errMu` | ExternalSystem / StateGuard | MCP SDK + error-channel bookkeeping. |
-| `pkg/providerregistry/registry.go` | `mu` | CacheLock | RWMutex around the provider cache map. |
+| `pkg/providerregistry/registry_providers.go` | `mu` | CacheLock | RWMutex around the provider cache map. |
 | `pkg/validation/validation.go` | `metadataMu` | PackageCache | Renamed *out* of scope: domain prefix conveys "metadata cache". |
 
 The catalog is sampled, not exhaustive. To re-classify, run the grep and

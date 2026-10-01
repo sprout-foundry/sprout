@@ -2,6 +2,7 @@ package wasmshell
 
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"strconv"
 	"strings"
 )
@@ -90,7 +91,7 @@ func cmdJq(args []string, stdin string) CmdResult {
 	case nullIn:
 		inputs = []any{nil}
 	case rawIn:
-		for _, l := range splitLines(input) {
+		for _, l := range utils.SplitLines(input) {
 			inputs = append(inputs, l)
 		}
 		if slurp {

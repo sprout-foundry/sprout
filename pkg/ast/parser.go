@@ -1,10 +1,13 @@
 // Package ast provides a unified AST parser using gotreesitter (pure Go
 // tree-sitter) for Go, TypeScript, JavaScript, and Python source files.
 //
-// The parser pre-warms grammar blobs at init time (unless
-// SPROUT_SKIP_GRAMMAR_PREWARM=1) so that the first call to ParseFile does
-// not pay the grammar-loading cost.  It is safe for concurrent use: each
-// call to ParseFile creates its own parser instance.
+// Grammars load on first use per language (see registerEmbeddedGrammar).
+// They are deliberately not pre-warmed: a decoded grammar stays resident
+// for the life of the process, and pre-warming every supported language
+// cost ~435 MB and ~1.2 s at each startup — ~340 MB of it the Swift grammar
+// alone — whether or not the workspace contained those languages. The
+// parser is safe for concurrent use: each call to ParseFile creates its own
+// parser instance.
 //
 // Usage:
 //
@@ -17,9 +20,7 @@ package ast
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -1228,32 +1229,6 @@ func childText(node *gotreesitter.Node, bt *gotreesitter.BoundTree, field string
 		return ""
 	}
 	return bt.NodeText(child)
-}
-
-// init pre-warms the grammar cache for every supported language so the
-// first parse is fast. Skipped when SPROUT_SKIP_GRAMMAR_PREWARM=1 — used by
-// test helpers that spawn the test binary as a subprocess (e.g. the daemon
-// helper). Under `go test -race`, gob-decoding every embedded grammar blob
-// at init can take tens of seconds, which makes a spawned helper unable to
-// become healthy within any reasonable startup window. The helper never
-// parses code, so skipping the pre-warm is safe.
-//
-// Also skipped in the browser (GOOS=js): there the Go runtime shares the
-// page's only thread, so decoding every grammar at startup (seconds of work)
-// freezes the editor before it can draw. Each grammar loads on its first
-// parse instead.
-func init() {
-	if runtime.GOOS == "js" || os.Getenv("SPROUT_SKIP_GRAMMAR_PREWARM") == "1" {
-		return
-	}
-	for lang := range SupportedLanguages {
-		// Best-effort: if a grammar is not available (e.g. trimmed build),
-		// silently skip it.
-		_, err := getLanguage(lang)
-		if err != nil {
-			continue
-		}
-	}
 }
 
 // WalkFn is the callback type for Walk.  Return false to stop walking.

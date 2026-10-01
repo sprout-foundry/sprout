@@ -97,8 +97,11 @@ type VectorRecord struct {
 	// Language is the programming language (e.g., "go", "python").
 	Language string `json:"language"`
 
-	// Embedding is the vector embedding of the record's content.
-	Embedding []float32 `json:"embedding"`
+	// Embedding is the vector embedding of the record's content. The HNSW
+	// store keeps vectors only in its graph and fills this in on the records
+	// it returns; treat it as read-only there (it may share the graph's
+	// storage).
+	Embedding []float32 `json:"embedding,omitempty"`
 
 	// Hash is a content hash for duplicate detection.
 	Hash string `json:"hash"`

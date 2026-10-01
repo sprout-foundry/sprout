@@ -254,7 +254,49 @@ func (s *HNSWStore) loadRecords() error {
 	if len(data) == 0 {
 		return nil
 	}
-	return json.Unmarshal(data, &s.records)
+	if err := json.Unmarshal(data, &s.records); err != nil {
+		return err
+	}
+	// Records files written before vectors lived only in the graph carry a
+	// duplicate copy of every embedding (~3 KB per record). Move each into
+	// the graph if missing, drop the record's copy, and mark the store dirty
+	// so the next save writes the slim file. This recovers the legacy format
+	// only: a records file written in the slim format carries no vector to
+	// restore, so a crash between the records write and the graph write in
+	// Store/Delete/ReplaceAll leaves that record unsearchable until a later
+	// build re-embeds it (the incremental hash diff sees the intact hash and
+	// skips it). That window is microseconds wide and degrades gracefully, so
+	// it is accepted rather than guarded with an interface-level self-heal.
+	for id, rec := range s.records {
+		if len(rec.Embedding) == 0 {
+			continue
+		}
+		if _, ok := s.graph.Lookup(id); !ok {
+			s.graph.Add(hnsw.MakeNode(id, rec.Embedding))
+		}
+		rec.Embedding = nil
+		s.records[id] = rec
+		s.dirty = true
+	}
+	return nil
+}
+
+// withEmbedding returns rec with its vector filled in from the graph, the
+// only place vectors are kept in memory.
+func (s *HNSWStore) withEmbedding(rec VectorRecord) VectorRecord {
+	if len(rec.Embedding) == 0 {
+		if vec, ok := s.graph.Lookup(rec.ID); ok {
+			rec.Embedding = vec
+		}
+	}
+	return rec
+}
+
+// withoutEmbedding returns rec without its vector, for the records map:
+// the graph already holds it.
+func withoutEmbedding(rec VectorRecord) VectorRecord {
+	rec.Embedding = nil
+	return rec
 }
 
 // NewHNSWStore creates or loads an HNSW-backed vector store.
@@ -381,13 +423,11 @@ func (s *HNSWStore) Store(records []VectorRecord) error {
 		// safer to ensure clean graph state.)
 		s.graph.Graph.Delete(rec.ID)
 
-		// Update the records map.
-		s.records[rec.ID] = *rec
-
-		// Add new node to graph.
+		// Add new node to graph; the records map keeps metadata only.
 		if len(rec.Embedding) > 0 {
 			s.graph.Graph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
 		}
+		s.records[rec.ID] = withoutEmbedding(*rec)
 	}
 	s.dirty = true
 
@@ -408,7 +448,7 @@ func (s *HNSWStore) LoadAll() ([]VectorRecord, error) {
 
 	result := make([]VectorRecord, 0, len(s.records))
 	for _, rec := range s.records {
-		result = append(result, rec)
+		result = append(result, s.withEmbedding(rec))
 	}
 	return result, nil
 }
@@ -441,6 +481,7 @@ func (s *HNSWStore) Query(vec []float32, topK int, threshold float32) ([]QueryRe
 			if !ok {
 				continue // orphan in graph, skip
 			}
+			rec.Embedding = nodes[i].Value
 			results = append(results, QueryResult{
 				Record:     rec,
 				Similarity: float32(sim),
@@ -551,10 +592,11 @@ func (s *HNSWStore) ReplaceAll(records []VectorRecord) error {
 	}
 
 	newGraph := newConfiguredGraph()
-	for _, rec := range newRecords {
+	for id, rec := range newRecords {
 		if len(rec.Embedding) > 0 {
 			newGraph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
 		}
+		newRecords[id] = withoutEmbedding(rec)
 	}
 
 	s.graph = &hnsw.SavedGraph[string]{

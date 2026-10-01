@@ -1,0 +1,201 @@
+//go:build !js
+
+package webui
+
+// settings_api_credentials_verify.go — the webui settings credentials
+// credential-test (verify) flow: the test response type, the per-provider
+// test cooldown / last-called state, the error sanitizer, and
+// handleAPISettingsCredentialsTest. Split out of settings_api_credentials.go.
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"path"
+	"strings"
+	"sync"
+	"time"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+)
+
+// ---------------------------------------------------------------------------
+// Method router — Credentials settings
+// ---------------------------------------------------------------------------
+// testCredentialResponse is the response for POST /api/settings/credentials/{provider}/test.
+type testCredentialResponse struct {
+	Success      bool     `json:"success"`
+	Provider     string   `json:"provider"`
+	ModelCount   int      `json:"model_count,omitempty"`
+	SampleModels []string `json:"sample_models,omitempty"`
+	Error        string   `json:"error,omitempty"`
+}
+
+// Per-provider rate limiter for the test-connection endpoint.
+var testLastCalledAt sync.Map // map[string]time.Time
+
+const testCooldown = 5 * time.Second
+
+// sanitizeTestError maps internal API errors to user-friendly messages.
+// Raw error strings may contain server-internal details (filesystem paths,
+// stack traces) that should not be exposed to the browser.
+func sanitizeTestError(err error) string {
+	lower := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(lower, "status 401") || strings.Contains(lower, "unauthorized"):
+		return "API key is invalid or expired"
+	case strings.Contains(lower, "status 403") || strings.Contains(lower, "forbidden"):
+		return "API key does not have permission to list models"
+	case strings.Contains(lower, "status 429") || strings.Contains(lower, "rate limit"):
+		return "Rate limited — please wait a moment and try again"
+	case strings.Contains(lower, "no such host") || strings.Contains(lower, "connection refused") || strings.Contains(lower, "network is unreachable"):
+		return "Unable to reach provider API. Check your network connection"
+	case strings.Contains(lower, "tls") || strings.Contains(lower, "certificate"):
+		return "TLS/SSL error connecting to provider API"
+	case strings.Contains(lower, "context canceled"):
+		return "Connection test was canceled"
+	default:
+		return "Connection test failed. Check your API key and network connection."
+	}
+}
+
+func (ws *ReactWebServer) handleAPISettingsCredentialsTest(w http.ResponseWriter, r *http.Request) {
+	// Only handle paths ending with /test
+	if !strings.HasSuffix(r.URL.Path, "/test") {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Extract provider name from URL path: /api/settings/credentials/{provider}/test
+	provider := extractPathSegment(r.URL.Path, "/api/settings/credentials/")
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	// Trim trailing /test from the extracted segment
+	provider = strings.TrimSuffix(provider, "/test")
+
+	// Sanitize: take only the base name to prevent path traversal
+	provider = path.Base(provider)
+
+	if provider == "" || provider == "." {
+		writeJSONError(w, http.StatusBadRequest, "provider name is required in URL path")
+		return
+	}
+
+	cm := ws.getConfigManager(r, w)
+	if cm == nil {
+		return
+	}
+
+	// Validate provider is known
+	knownProviders := cm.GetAvailableProviders()
+	validProvider := false
+	for _, p := range knownProviders {
+		if string(p) == provider {
+			validProvider = true
+			break
+		}
+	}
+	// Also accept "test" as a valid provider (mock provider for testing)
+	if provider == "test" {
+		validProvider = true
+	}
+	if !validProvider {
+		writeJSONError(w, http.StatusBadRequest, "provider not found")
+		return
+	}
+
+	// Rate limiting: allow at most one test per provider every 5 seconds.
+	if last, ok := testLastCalledAt.Load(provider); ok {
+		if t, ok := last.(time.Time); ok {
+			if time.Since(t) < testCooldown {
+				writeJSON(w, http.StatusTooManyRequests, testCredentialResponse{
+					Success:  false,
+					Provider: provider,
+					Error:    "Please wait before testing again",
+				})
+				return
+			}
+		}
+	}
+	testLastCalledAt.Store(provider, time.Now())
+
+	// For the "test" mock provider, return success immediately
+	if provider == "test" {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:      true,
+			Provider:     provider,
+			ModelCount:   1,
+			SampleModels: []string{"test-model"},
+		})
+		return
+	}
+
+	// Check if credentials exist before making API call
+	if !configuration.HasProviderAuth(provider) {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    "No credential configured. Save an API key first.",
+		})
+		return
+	}
+
+	// Parse provider name to ClientType
+	clientType, err := api.ParseProviderName(provider)
+	if err != nil {
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    fmt.Sprintf("unsupported provider: %s", provider),
+		})
+		return
+	}
+
+	// Use ListModels (GET /models) to validate the credential — free, no tokens consumed.
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	models, err := api.GetModelsForProviderCtx(ctx, clientType)
+	if err != nil {
+		// Check if this was a timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			writeJSON(w, http.StatusGatewayTimeout, testCredentialResponse{
+				Success:  false,
+				Provider: provider,
+				Error:    "connection test timed out (20s)",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, testCredentialResponse{
+			Success:  false,
+			Provider: provider,
+			Error:    sanitizeTestError(err),
+		})
+		return
+	}
+
+	// Build sample model list (first 5)
+	sampleModels := make([]string, 0, 5)
+	for i, m := range models {
+		if i >= 5 {
+			break
+		}
+		sampleModels = append(sampleModels, m.ID)
+	}
+
+	writeJSON(w, http.StatusOK, testCredentialResponse{
+		Success:      true,
+		Provider:     provider,
+		ModelCount:   len(models),
+		SampleModels: sampleModels,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/settings/credentials/{provider}
+// ---------------------------------------------------------------------------

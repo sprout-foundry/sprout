@@ -1,21 +1,14 @@
-// Package embedding — HNSW-backed vector store for fast approximate nearest
-// neighbor search. Uses github.com/coder/hnsw for the graph index.
 package embedding
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
-	"time"
 
 	"github.com/coder/hnsw"
-	"github.com/gofrs/flock"
 )
 
 // ErrStoreClosed is returned by mutating operations (Store, ReplaceAll,
@@ -23,113 +16,6 @@ import (
 // pre-existing nil-map panic into a recoverable error when a background
 // goroutine races with a Disable/Close call from the foreground.
 var ErrStoreClosed = errors.New("embedding: hnsw store is closed")
-
-// metaFile holds the model hash in a sidecar JSON file.
-//
-// Note for anyone changing internal/hnsw: Add() picks a node's neighbours using
-// the same layer search that queries use, so a change to that search alters the
-// STRUCTURE of graphs built afterwards, not just how they are read. A graph
-// built by the old code stays degraded when queried by fixed code — measured at
-// 5/14 against 10/14 for the identical records reinserted. Any such change
-// therefore has to invalidate existing graphs, which today happens for free
-// only because ModelHash changes at the same time.
-type metaFile struct {
-	ModelHash string `json:"modelHash"`
-}
-
-// hashPrefix returns the first 16 characters of s, or the full string if shorter.
-func hashPrefix(s string) string {
-	if len(s) > 16 {
-		return s[:16]
-	}
-	return s
-}
-
-// buildLockFileName is the cross-process lock file placed in the index dir.
-const buildLockFileName = ".build.lock"
-
-// errBuildLocked is returned when another process holds the index build lock.
-var errBuildLocked = errors.New("embedding: index build lock held by another process")
-
-// isFlockUnavailable checks whether an error from flock indicates that
-// file locking is not supported on this platform (WASM, restricted sandbox).
-// In those cases we fall back to no locking rather than failing the build.
-func isFlockUnavailable(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, errors.ErrUnsupported) {
-		return true
-	}
-	if pe, ok := err.(*os.PathError); ok {
-		if errors.Is(pe.Err, errors.ErrUnsupported) {
-			return true
-		}
-		switch pe.Err {
-		case syscall.ENOSYS, syscall.EOPNOTSUPP, syscall.EACCES, syscall.EPERM:
-			return true
-		}
-	}
-	return false
-}
-
-// acquireBuildLock takes an exclusive flock on indexDir/.build.lock with a short
-// timeout. Returns a release func and nil error to proceed (release may be nil
-// when flock is unavailable — proceed WITHOUT locking as a fallback). Returns
-// errBuildLocked when another process holds the lock (caller should SKIP the
-// build). Read-only operations must not call this.
-//
-// NOTE: This function is NOT re-entrant. If the same process acquires the lock
-// twice (e.g. UpdateFromGitDiff → UpdateFile), the second acquisition will
-// conflict with the first via flock(2) and block. Callers with re-entrant paths
-// must use IndexManager.lockForBuild instead.
-func acquireBuildLock(indexDir string) (release func(), err error) {
-	// Empty indexDir means locking is disabled (keeps tests and direct callers working).
-	if indexDir == "" {
-		return nil, nil
-	}
-
-	// Ensure the directory exists; if it can't be created, fall back to no locking.
-	if err := os.MkdirAll(indexDir, 0o755); err != nil {
-		debugLogf("embedding: create lock dir %s failed (proceeding without lock): %v", indexDir, err)
-		return nil, nil
-	}
-
-	f := flock.New(filepath.Join(indexDir, buildLockFileName))
-
-	// Try non-blocking first.
-	ok, err := f.TryLock()
-	if ok {
-		return func() { f.Unlock() }, nil
-	}
-	if err != nil {
-		if isFlockUnavailable(err) {
-			debugLogf("embedding: flock unavailable (proceeding without lock): %v", err)
-			return nil, nil
-		}
-		// Unexpected error — fall back to no locking to avoid blocking the build.
-		debugLogf("embedding: flock try-lock failed (proceeding without lock): %v", err)
-		return nil, nil
-	}
-
-	// Lock is held by another process. Wait up to BuildLockTimeout with 50ms retry delay.
-	ctx, cancel := context.WithTimeout(context.Background(), BuildLockTimeout)
-	defer cancel()
-	ok, err = f.TryLockContext(ctx, 50*time.Millisecond)
-	if err != nil {
-		if isFlockUnavailable(err) {
-			debugLogf("embedding: flock unavailable (proceeding without lock): %v", err)
-			return nil, nil
-		}
-		// Context expired or other error — still locked by another process.
-		return nil, errBuildLocked
-	}
-	if ok {
-		return func() { f.Unlock() }, nil
-	}
-	// Still not acquired.
-	return nil, errBuildLocked
-}
 
 // HNSWStore is a thread-safe VectorStore backed by an HNSW index.
 // The graph stores vectors keyed by record ID; a separate map holds
@@ -157,104 +43,6 @@ func (s *HNSWStore) metaPath() string {
 // recordsPath returns the path to the records metadata sidecar file.
 func (s *HNSWStore) recordsPath() string {
 	return s.path + ".records.json"
-}
-
-// loadMeta reads the stored model hash. Returns "" if no meta file exists.
-func (s *HNSWStore) loadMeta() (string, error) {
-	data, err := os.ReadFile(s.metaPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("hnsw: read meta %s: %w", s.metaPath(), err)
-	}
-	var m metaFile
-	if err := json.Unmarshal(data, &m); err != nil {
-		return "", fmt.Errorf("hnsw: unmarshal meta %s: %w", s.metaPath(), err)
-	}
-	return m.ModelHash, nil
-}
-
-// saveMeta writes the model hash to the sidecar file atomically.
-func (s *HNSWStore) saveMeta(modelHash string) error {
-	dir := filepath.Dir(s.metaPath())
-	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("hnsw: create meta directory %s: %w", dir, err)
-		}
-	}
-
-	metaData := metaFile{ModelHash: modelHash}
-	b, err := json.Marshal(metaData)
-	if err != nil {
-		return fmt.Errorf("hnsw: marshal meta: %w", err)
-	}
-
-	tmp, err := os.CreateTemp(dir, ".meta-tmp-*")
-	if err != nil {
-		return fmt.Errorf("hnsw: create meta temp: %w", err)
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: write meta: %w", err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: close meta temp: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, s.metaPath()); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: rename meta: %w", err)
-	}
-	return nil
-}
-
-// saveRecords persists the metadata records map to disk.
-func (s *HNSWStore) saveRecords() error {
-	b, err := json.Marshal(s.records)
-	if err != nil {
-		return fmt.Errorf("hnsw: marshal records: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), "*.records.tmp")
-	if err != nil {
-		return fmt.Errorf("hnsw: create records temp: %w", err)
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: write records: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: close records temp: %w", err)
-	}
-	if err := os.Rename(tmpPath, s.recordsPath()); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("hnsw: rename records: %w", err)
-	}
-	return nil
-}
-
-// loadRecords reads the metadata records from disk.
-func (s *HNSWStore) loadRecords() error {
-	data, err := os.ReadFile(s.recordsPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // no records file yet
-		}
-		return fmt.Errorf("hnsw: read records %s: %w", s.recordsPath(), err)
-	}
-	if len(data) == 0 {
-		return nil
-	}
-	return json.Unmarshal(data, &s.records)
 }
 
 // NewHNSWStore creates or loads an HNSW-backed vector store.

@@ -1,3 +1,9 @@
+// runtime_allowed_paths.go — per-step allowed-paths allowlist management,
+// split out of runtime.go. ApplyWorkflowRuntimeAllowedPaths snapshots the
+// agent's session allowed-folder state and adds the step's declared paths;
+// RestoreWorkflowRuntimeAllowedPaths undoes exactly the net-new additions on
+// step exit so paths never leak into the next step.
+
 //go:build !js
 
 package workflow

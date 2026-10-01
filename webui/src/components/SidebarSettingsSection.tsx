@@ -8,9 +8,8 @@ import { ApiService } from '../services/api';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
-import { onPlatformLinkClick } from '../services/homeView';
 import { usesPlatformGitHub } from '../services/platformGitHub';
-import { platformHref } from '../utils/platformUrl';
+import EditorModelSection from './EditorModelSection';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
 import { getStoredUser } from '../services/githubService';
@@ -203,32 +202,12 @@ function CloudProviderModelSection({
 }
 
 /**
- * Browser workspaces served by the platform run the agent in WASM against
- * the platform's managed model (cloudWasmHandlers always starts it on the
- * "platform" provider), so provider, model and key pickers would change
- * nothing. Studio's native build keeps them: its shell serves BYOK providers.
+ * Browser workspaces served by the platform run the agent in WASM through the
+ * platform proxy, which routes by the account's editor model (managed, or the
+ * user's own key — EditorModelSection). Studio's native build keeps the local
+ * provider pickers: its shell serves BYOK providers itself.
  */
 const PLATFORM_MANAGED_MODEL = isCloud && !NATIVE_FS_ENABLED;
-
-function ManagedModelSection(): JSX.Element {
-  return (
-    <div className="config-item" data-testid="managed-model-section">
-      <p className="settings-section-desc">
-        The agent runs on Sprout Foundry&apos;s managed model, which picks a model for each request. Usage is billed in
-        platform credits.
-      </p>
-      <a
-        className="settings-link-btn"
-        href={platformHref('/#/account/billing')}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={onPlatformLinkClick('/account/billing')}
-      >
-        View usage and billing
-      </a>
-    </div>
-  );
-}
 
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
@@ -458,7 +437,7 @@ export default function SidebarSettingsSection({
           {PLATFORM_MANAGED_MODEL ? (
             <div className="section">
               <h4>Model</h4>
-              <ManagedModelSection />
+              <EditorModelSection />
             </div>
           ) : (
             <>

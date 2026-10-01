@@ -35,14 +35,18 @@ func TestIsBodyTooLargeError(t *testing.T) {
 	}
 }
 
-// bodyLimitClient fails its first fail413 streaming calls with an HTTP 413
-// and records the image count of every request it sees.
+// bodyLimitClient fails its first fail413 chat calls with an HTTP 413 and
+// records the image count of every request it sees. It reports
+// vision-capable so attachPastedImages actually attaches (a non-vision
+// client would early-return and mask the paste-clear behavior under test).
 type bodyLimitClient struct {
 	*MockClient
 	fail413    int
 	calls      int
 	seenImages []int
 }
+
+func (c *bodyLimitClient) SupportsVision() bool { return true }
 
 func (c *bodyLimitClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	c.calls++
@@ -143,8 +147,12 @@ func TestStreaming413ExhaustsToTextOnly(t *testing.T) {
 // after a 413 the retry sheds images AND clears registered pasted images —
 // otherwise doChatOnce's prep pipeline re-attaches them on the next
 // attempt and the shed is undone.
+//
+// The client must be vision-capable: attachPastedImages early-returns for
+// non-vision clients, which would make the paste never attach and the test
+// pass with or without clearPastedImages.
 func TestChat413ShedsImagesAndClearsPasted(t *testing.T) {
-	client := &bodyLimitClient{MockClient: &MockClient{model: "m"}, fail413: 1}
+	client := &bodyLimitClient{MockClient: &MockClient{model: "m"}, fail413: 2}
 	agent := newBudgetTestAgent(t)
 	provider, err := NewSproutProvider(agent, client)
 	if err != nil {
@@ -165,17 +173,20 @@ func TestChat413ShedsImagesAndClearsPasted(t *testing.T) {
 		t.Fatalf("doChatWithRetry: %v", err)
 	}
 
-	// Attempt 0 sends 4 request images + 1 pasted = 5, trimmed to the live
-	// budget of 3 -> 413. The retry sheds req.Messages to 2 and clears the
-	// paste; if the paste had re-attached the retry would carry 3.
-	if len(client.seenImages) != 2 {
-		t.Fatalf("client saw %d requests (%v), want 2", len(client.seenImages), client.seenImages)
+	// Attempt 0: 4 request images + 1 pasted = 5, live-trimmed to the
+	// budget of 3 -> 413. Shed against the wire view: min(4,3)/2 = 1, and
+	// the paste is cleared. Attempt 1 carries 1 image -> 413. Shed:
+	// min(1,3)/2 = 0. Attempt 2 is text-only and succeeds.
+	// Without clearPastedImages the sequences would read [3, 2, 1] — the
+	// paste re-attaching one image per attempt.
+	want := []int{3, 1, 0}
+	if len(client.seenImages) != len(want) {
+		t.Fatalf("client saw %d requests (%v), want %d (%v)", len(client.seenImages), client.seenImages, len(want), want)
 	}
-	if client.seenImages[0] != 3 {
-		t.Errorf("first request carried %d images, want 3 (budget trim) — sequence %v", client.seenImages[0], client.seenImages)
-	}
-	if client.seenImages[1] != 2 {
-		t.Errorf("retry carried %d images, want 2 (pasted image must not re-attach) — sequence %v", client.seenImages[1], client.seenImages)
+	for i, w := range want {
+		if client.seenImages[i] != w {
+			t.Errorf("request %d carried %d images, want %d (sequence %v)", i, client.seenImages[i], w, client.seenImages)
+		}
 	}
 	if n := len(sp.pastedImages); n != 0 {
 		t.Errorf("pasted images not cleared after 413: %d remain", n)

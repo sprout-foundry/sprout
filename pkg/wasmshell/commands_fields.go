@@ -3,6 +3,7 @@ package wasmshell
 import (
 	"errors"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"os"
 	"strconv"
 	"strings"
@@ -226,7 +227,7 @@ func cmdUniq(args []string, stdin string) CmdResult {
 		}
 		return l
 	}
-	lines := splitLines(input)
+	lines := utils.SplitLines(input)
 	var out strings.Builder
 	for i := 0; i < len(lines); {
 		j := i + 1
@@ -357,7 +358,7 @@ func cmdCut(args []string, stdin string) CmdResult {
 		}
 	}
 	var out strings.Builder
-	for _, line := range splitLines(input) {
+	for _, line := range utils.SplitLines(input) {
 		if mode == "-f" {
 			if !strings.Contains(line, delim) {
 				if !onlyDelimited {

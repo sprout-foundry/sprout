@@ -2,6 +2,7 @@ package wasmshell
 
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"strconv"
 	"strings"
 )
@@ -37,7 +38,7 @@ func cmdPaste(args []string, stdin string) CmdResult {
 				return CmdResult{Stdout: "", Stderr: fmt.Sprintf("paste: %s: %s\n", f, describeErr(err)), ExitCode: 1}
 			}
 		}
-		cols = append(cols, splitLines(data))
+		cols = append(cols, utils.SplitLines(data))
 	}
 	join := func(items []string) string {
 		var b strings.Builder
@@ -84,7 +85,7 @@ func linesFromArgs(cmd string, args []string, stdin string) ([]string, *CmdResul
 		errRes.ExitCode = 1
 		return nil, errRes
 	}
-	return splitLines(input), nil
+	return utils.SplitLines(input), nil
 }
 
 func cmdRev(args []string, stdin string) CmdResult {
@@ -152,7 +153,7 @@ func cmdNl(args []string, stdin string) CmdResult {
 	}
 	var out strings.Builder
 	n := start
-	for _, l := range splitLines(input) {
+	for _, l := range utils.SplitLines(input) {
 		if style == "t" && strings.TrimSpace(l) == "" || style == "n" {
 			out.WriteString(strings.Repeat(" ", width+len(sep)) + l + "\n")
 			continue
@@ -204,7 +205,7 @@ func cmdColumn(args []string, stdin string) CmdResult {
 	}
 	var rows [][]string
 	var widths []int
-	for _, l := range splitLines(input) {
+	for _, l := range utils.SplitLines(input) {
 		var cells []string
 		if sepChars == "" {
 			cells = strings.Fields(l)
@@ -261,7 +262,7 @@ func cmdFold(args []string, stdin string) CmdResult {
 		return *errRes
 	}
 	var out strings.Builder
-	for _, l := range splitLines(input) {
+	for _, l := range utils.SplitLines(input) {
 		rs := []rune(l)
 		for len(rs) > width {
 			cut := width

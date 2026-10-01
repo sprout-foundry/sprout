@@ -165,6 +165,8 @@ func defaultSubagentTypes() map[string]SubagentType {
 			LocalOnly:              definition.LocalOnly,
 			Delegatable:            definition.Delegatable,
 			AutoApproveRules:       autoApprove,
+			IterationBudget:        definition.IterationBudget,
+			TimeBudgetSeconds:      definition.TimeBudgetSeconds,
 			Capabilities:           append([]string{}, definition.Capabilities...),
 			CanSpawnNonDelegatable: append([]string{}, definition.CanSpawnNonDelegatable...),
 		}

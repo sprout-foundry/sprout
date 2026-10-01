@@ -147,14 +147,14 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		// If review needs revision and not in skip-prompt mode, offer agentic review
 		if !reviewStagedSkipPrompt && (reviewResponse.Status == "needs_revision" || reviewResponse.Status == "rejected") {
 			logger.LogUserInteraction("\n")
-			prompt := "The review identified issues that need attention. Would you like to run a deeper agentic review (with file reading tools) for more accurate analysis? This may take longer but can provide better context. (yes/no): "
+			prompt := "The review identified issues that need attention. Would you like to run a stricter evidence-focused review pass to filter out false positives? For a review that opens files to verify findings, use /review-deep in an interactive session. (yes/no): "
 
 			if logger.AskForConfirmation(prompt, false, false) {
 				agenticResponse, err := service.PerformAgenticReview(ctx, opts)
 				if err != nil {
-					logger.LogUserInteraction("Note: Agentic review mode is not yet implemented. Using initial review results.")
+					logger.LogUserInteraction(fmt.Sprintf("Note: evidence-focused review failed (%v). Using initial review results.", err))
 				} else {
-					logger.LogUserInteraction("\n--- Agentic Review Results ---")
+					logger.LogUserInteraction("\n--- Evidence-Focused Review Results ---")
 					logger.LogUserInteraction(fmt.Sprintf("Status: %s", strings.ToUpper(agenticResponse.Status)))
 					logger.LogUserInteraction(fmt.Sprintf("Feedback:\n%s", agenticResponse.Feedback))
 

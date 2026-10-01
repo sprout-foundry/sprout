@@ -109,8 +109,10 @@ func (c *ReviewDeepCommand) Usage() string {
 	return strings.Join([]string{
 		"/review-deep   Deep evidence-based code review on staged Git changes.",
 		"",
-		"Runs an agentic review that cross-references source code for each",
-		"finding. More thorough (and slower) than /review.",
+		"Runs the reviewer persona as a subagent: it starts from the staged",
+		"diff and opens source files to verify each finding before reporting.",
+		"More thorough (and slower) than /review. Optional text after the",
+		"command is passed to the reviewer as a focus.",
 	}, "\n")
 }
 
@@ -264,7 +266,10 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 
 	var reviewResponse *types.CodeReviewResult
-	if deepReview {
+	if deepReview && chatAgent != nil {
+		logger.LogProcessStep("Starting reviewer subagent for deep review...")
+		reviewResponse, err = runDeepReviewSubagent(goCtx, chatAgent, cfg, strings.Join(args, " "))
+	} else if deepReview {
 		logger.LogProcessStep("Sending staged changes to LLM for deep review...")
 		reviewResponse, err = service.PerformAgenticReview(reviewCtx, opts)
 	} else {
@@ -328,7 +333,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		statusGlyph = console.GlyphSuccess
 	case "rejected", "failed":
 		statusGlyph = console.GlyphError
-	case "needs_changes", "warning":
+	case "needs_changes", "needs_revision", "warning":
 		statusGlyph = console.GlyphWarning
 	}
 	fmt.Printf("%sStatus: %s\r\n\r\n", statusGlyph.Prefix(), strings.ToUpper(reviewResponse.Status))
@@ -375,4 +380,22 @@ func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []st
 		prefix = args[len(args)-1]
 	}
 	return PathCompleter(prefix)
+}
+
+// runDeepReviewSubagent runs the reviewer subagent over the staged change. An
+// explicitly configured review provider/model takes precedence over the
+// persona's subagent resolution, matching /review.
+func runDeepReviewSubagent(ctx context.Context, chatAgent *agent.Agent, cfg *configuration.Config, focus string) (*types.CodeReviewResult, error) {
+	provider, model := "", ""
+	if p := strings.TrimSpace(cfg.GetReviewProvider()); p != "" {
+		provider, model = p, cfg.GetReviewModel()
+	}
+	review, err := chatAgent.RunStagedReview(ctx, focus, provider, model)
+	if err != nil {
+		return nil, err
+	}
+	return &types.CodeReviewResult{
+		Status:   review.Verdict,
+		Feedback: review.Report,
+	}, nil
 }

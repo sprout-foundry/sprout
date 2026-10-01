@@ -124,9 +124,10 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		}
 	}
 
-	// Persona tool filter skipped in LCM mode (allowlist is final).
+	// The root agent's LCM allowlist is final. Subagents narrow it further by
+	// their persona so a low-context reviewer doesn't gain write/commit tools.
 	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
-		len(a.contextProfile.ToolAllowlist) == 0 {
+		(len(a.contextProfile.ToolAllowlist) == 0 || a.IsSubagent()) {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 

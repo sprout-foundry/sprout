@@ -40,11 +40,11 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 		Description: "Execute 2+ INDEPENDENT subagent tasks CONCURRENTLY. " +
 			"Use when tasks have no dependencies on each other (e.g. researching different code areas, code + tests, analyzing multiple files). " +
 			"Waits for ALL to complete; returns per-ID `{stdout, stderr, exit_code, completed, timed_out}`.\n\n" +
-			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?}. " +
+			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?}. " +
 			"IDs auto-generate as task-1, task-2, etc. when omitted.\n\n" +
-			"Personas are NOT supported here (use `run_subagent` for per-task personas) " +
-			"— parallel subagents use the default subagent config. " +
-			"Provider/model from `subagent_provider` / `subagent_model`.\n\n" +
+			"`persona` is optional per task (same IDs as `run_subagent`) and applies that persona's system prompt, tools, and provider/model. " +
+			"Tasks without a persona use the default subagent config (`subagent_provider` / `subagent_model`). " +
+			"For a large diff review, split it across `reviewer` tasks by file group so each reviewer judges a slice concurrently.\n\n" +
 			"**Result contract**: each subagent's `files_modified` (also mirrored as " +
 			"`[subagent files modified] … [/subagent files modified]` at the top of its `stdout`) " +
 			"is the AUTHORITATIVE record of what it edited. " +
@@ -56,12 +56,13 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 				Name:        "subagents",
 				Type:        "array",
 				Required:    true,
-				Description: "Array of subagent tasks: [{id?, prompt}]. `prompt` is the task description; `id` is optional and auto-generated as task-1, task-2, etc. when omitted. Example: [{\"prompt\": \"Research X\"}, {\"id\": \"impl-y\", \"prompt\": \"Implement Y\"}]",
+				Description: "Array of subagent tasks: [{id?, prompt, persona?}]. `prompt` is the task description; `id` is optional and auto-generated as task-1, task-2, etc. when omitted; `persona` is optional. Example: [{\"prompt\": \"Research X\", \"persona\": \"researcher\"}, {\"id\": \"impl-y\", \"prompt\": \"Implement Y\"}]",
 				Items: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"id":     map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
-						"prompt": map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
+						"id":      map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
+						"prompt":  map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
+						"persona": map[string]any{"type": "string", "description": "Optional persona ID or alias (see /persona list)"},
 					},
 					"required": []any{"prompt"},
 				},

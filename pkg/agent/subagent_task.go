@@ -30,8 +30,9 @@ const orchestratorSubagentTimeout = time.Hour
 
 // resolveSubagentTimeout returns the effective execution timeout for a
 // subagent run: an explicit caller-set timeout always wins; otherwise the
-// orchestrator persona (by canonical ID or alias) gets a full hour and every
-// other persona gets the 30-minute default. Alias resolution goes through
+// orchestrator persona (by canonical ID or alias) gets a full hour, a persona
+// with a time budget gets that budget plus the wrap-up grace, and every other
+// persona gets the 30-minute default. Alias resolution goes through
 // the config catalog so it stays in sync with the persona definitions.
 //
 // Automation workflows can raise both defaults via
@@ -44,19 +45,17 @@ func (r *SubagentRunner) resolveSubagentTimeout(opts SubagentOptions) time.Durat
 	if opts.Timeout > 0 {
 		return opts.Timeout
 	}
-	if t := envSubagentTimeout(); t > 0 {
-		if r.isOrchestratorPersona(opts.Persona) {
-			if t > orchestratorSubagentTimeout {
-				return t
-			}
-		} else if t > defaultSubagentTimeout {
-			return t
-		}
-	}
+	base := defaultSubagentTimeout
 	if r.isOrchestratorPersona(opts.Persona) {
-		return orchestratorSubagentTimeout
+		base = orchestratorSubagentTimeout
 	}
-	return defaultSubagentTimeout
+	if b := r.personaBudget(opts.Persona); b.duration > 0 {
+		base = b.duration + subagentWrapUpGrace
+	}
+	if t := envSubagentTimeout(); t > base {
+		return t
+	}
+	return base
 }
 
 // envSubagentTimeout reads SPROUT_TOOL_TIMEOUT (seconds). Returns 0 when
@@ -327,6 +326,7 @@ func (r *SubagentRunner) setupSubagentRun(
 
 	// Per-subagent progress monitoring: emit periodic activity events.
 	go r.monitorProgress(runCtx, subAgent, taskID, opts.Persona)
+	go monitorWrapUp(runCtx, subAgent, r.personaBudget(opts.Persona), startTime)
 
 	rc := &subagentRunContext{
 		runCtx:          runCtx,

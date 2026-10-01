@@ -119,6 +119,9 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 	if err != nil {
 		return nil, err
 	}
+	if isReviewerPersona(a, spec.persona) {
+		spec.enhancedPrompt = buildReviewerChangeContext(ctx, spec.subagentWorkspaceRoot) + spec.enhancedPrompt
+	}
 
 	// --- Resolve provider/model ---
 	spec.provider, spec.model, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)

@@ -72,7 +72,7 @@ export function WasmLoadingOverlay({ isLoading, error }: WasmLoadingOverlayProps
         ) : (
           <>
             <div className="wasm-loading-spinner" />
-            <h2 className="wasm-loading-title">Starting Browser IDE</h2>
+            <h2 className="wasm-loading-title">Starting the editor</h2>
             <p className="wasm-loading-message">{LOADING_MESSAGES[messageIdx]}</p>
             {elapsed > 3 && <p className="wasm-loading-hint">Downloading runtime ({elapsed}s)</p>}
           </>

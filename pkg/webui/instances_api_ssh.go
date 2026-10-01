@@ -10,6 +10,7 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -75,6 +76,14 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	}
 	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
 	sessionKey := hostAlias + "::" + remoteWorkspacePath
+
+	// The remote daemon works with the provider this client is using here.
+	provider, model := ws.activeProviderModel(ws.resolveClientID(r))
+	if fwd, err := forwardedProviderFor(provider, model); err != nil {
+		ws.log().Warn("SSH launch: not forwarding this machine's provider", slog.Any("err", err))
+	} else {
+		req.forward = fwd
+	}
 
 	// Fire-and-forget: the launch runs in the background.  The caller polls
 	// /api/instances/ssh-launch-status for progress and the final proxy URL.

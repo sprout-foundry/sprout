@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -100,6 +101,9 @@ func TestHandleAPISync_NotARepoStill200(t *testing.T) {
 }
 
 func TestHandleAPISync_Catastrophic500(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores POSIX mode bits; a 0000-mode dir stays readable")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root — 0000-mode dir would still be readable")
 	}

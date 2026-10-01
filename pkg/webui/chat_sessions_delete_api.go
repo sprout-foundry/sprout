@@ -246,8 +246,12 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 	// leaves each agent running its own background work indefinitely.
 	deletedCount := 0
 	var releasing []*agent.Agent
+	rootWasDeletedWorktree := false
 	for _, chatID := range chatIDsToDelete {
 		if cs := ctx.ChatSessions[chatID]; cs != nil {
+			if wt := cs.getWorktreePath(); wt != "" && wt == ctx.WorkspaceRoot {
+				rootWasDeletedWorktree = true
+			}
 			cs.mu.Lock()
 			if cs.Agent != nil {
 				releasing = append(releasing, cs.Agent)
@@ -282,7 +286,14 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 		ctx.AgentState = append([]byte(nil), snapshot...)
 		ctx.CurrentSessionID = currentSessionID
 
-		// Switch workspace root to the default chat's worktree if it has one
+		// Switch workspace root to the default chat's worktree if it has one;
+		// if the root was a deleted chat's worktree, return it to the project.
+		if wtPath == "" && rootWasDeletedWorktree {
+			wtPath = ctx.ProjectRoot
+			if wtPath == "" {
+				wtPath = ws.daemonRoot
+			}
+		}
 		if wtPath != "" {
 			ctx.WorkspaceRoot = wtPath
 			if clientID == defaultWebClientID {

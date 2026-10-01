@@ -134,11 +134,16 @@ func getOPFSReplicaStatusFunc(_ js.Value, args []js.Value) interface{} {
 		totalSize += e.Size
 	}
 
+	// A replica that has never synced has no timestamp, not year 1.
+	lastSync := ""
+	if !opfsReplicaLastSync.IsZero() {
+		lastSync = opfsReplicaLastSync.Format(time.RFC3339)
+	}
 	return map[string]interface{}{
 		"ok":                true,
 		"fileCount":         len(opfsReplicaFiles),
 		"totalSize":         totalSize,
-		"lastSyncTimestamp": opfsReplicaLastSync.Format(time.RFC3339),
+		"lastSyncTimestamp": lastSync,
 	}
 }
 

@@ -1,4 +1,4 @@
-import { platformHref } from './platformUrl';
+import { githubRepoSlug, platformHref, repoHubPath } from './platformUrl';
 import { getPlatformURL } from '../bootstrapAdapter';
 
 // Mock the bootstrap-adapter surface the helper reads — the real module
@@ -40,5 +40,19 @@ describe('platformHref (SP-016 P0.3)', () => {
   it('normalizes a path without a leading slash', () => {
     mockedGetPlatformURL.mockReturnValue('https://platform.sprout.dev');
     expect(platformHref('tasks/abc-123')).toBe('https://platform.sprout.dev/tasks/abc-123');
+  });
+});
+
+describe('repoHubPath', () => {
+  it('links a GitHub repo to its hub page in the SPA hash', () => {
+    expect(repoHubPath('https://github.com/acme/widgets')).toBe('/?from=editor#/repos/acme/widgets');
+    expect(repoHubPath('https://github.com/acme/widgets.git')).toBe('/?from=editor#/repos/acme/widgets');
+    expect(repoHubPath('git@github.com:acme/my.repo.git')).toBe('/?from=editor#/repos/acme/my.repo');
+  });
+
+  it('falls back to the dashboard for unknown or non-GitHub repos', () => {
+    expect(repoHubPath(undefined)).toBe('/?from=editor');
+    expect(repoHubPath('https://gitlab.com/acme/widgets')).toBe('/?from=editor');
+    expect(githubRepoSlug('https://github.com/acme')).toBeNull();
   });
 });

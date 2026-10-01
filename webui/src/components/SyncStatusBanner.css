@@ -5,14 +5,17 @@
 
 .sync-status-banner {
   position: fixed;
-  bottom: 44px; /* above the status bar */
-  left: 50%;
-  transform: translateX(-50%);
+  /* Bottom-left over the sidebar, clear of the status bar and terminal
+     strip. Centred or wide, it covered the chat composer's model/cost
+     line; kept to about the sidebar's width, the actions wrap below. */
+  bottom: 64px;
+  left: 16px;
   z-index: 1500;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  max-width: min(720px, calc(100vw - 32px));
+  gap: 8px 10px;
+  max-width: min(300px, calc(100vw - 32px));
   padding: 8px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -25,11 +28,11 @@
 @keyframes sync-banner-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(8px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -40,6 +43,7 @@
 
 .sync-status-banner-text {
   display: flex;
+  flex: 1 1 180px;
   flex-direction: column;
   min-width: 0;
 }
@@ -125,5 +129,27 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Without the sidebar (tablet, phone) the bottom-left corner is the chat
+   composer; sit below the menu bar and the tab row / phone toolbar instead,
+   which are the navigation there. */
+@media (max-width: 1024px) {
+  .sync-status-banner {
+    top: 76px;
+    bottom: auto;
+  }
+}
+
+/* Phones: the top holds the toolbar and chat picker (and its open list),
+   so sit at the very bottom over the status row and terminal strip. */
+@media (max-width: 768px) {
+  .sync-status-banner {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
   }
 }

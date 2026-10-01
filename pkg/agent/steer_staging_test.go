@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func TestStageAndRetractRoundtrip(t *testing.T) {
@@ -244,5 +246,46 @@ func TestStageAndRetractConcurrent(t *testing.T) {
 	a.ClearInputInjectionContext()
 	if got := a.PendingSteerCount(); got != 0 {
 		t.Fatalf("clear must wipe staging, got %d", got)
+	}
+}
+
+func TestDeliverOnePublishesSteerDelivered(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	bus := events.NewEventBus()
+	a.SetEventBus(bus)
+	a.SetEventMetadata(map[string]interface{}{"chat_id": "chat-b"})
+	ch := bus.Subscribe("steer-test")
+	defer bus.Unsubscribe("steer-test")
+
+	if err := a.StageSteerInput("also check the tests"); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	fake := &fakeSeedInjector{injectNext: []bool{false, true}}
+	d := newDelivererWithFake(t, a, fake)
+
+	d.deliverOne()
+	select {
+	case ev := <-ch:
+		t.Fatalf("rejected delivery published %q", ev.Type)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	d.deliverOne()
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != events.EventTypeSteerDelivered {
+				continue
+			}
+			data, _ := ev.Data.(map[string]interface{})
+			if data["content"] != "also check the tests" || data["chat_id"] != "chat-b" {
+				t.Fatalf("steer_delivered data = %v", data)
+			}
+			return
+		case <-deadline:
+			t.Fatal("no steer_delivered event after an accepted delivery")
+		}
 	}
 }

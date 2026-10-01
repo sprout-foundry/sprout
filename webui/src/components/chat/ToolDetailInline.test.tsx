@@ -67,7 +67,46 @@ describe('ToolDetailInline', () => {
     expect(region).not.toBeNull();
     expect(region!.getAttribute('role')).toBe('region');
     expect(region!.getAttribute('aria-label')).toContain('read_file');
-    expect(container.querySelector('.tool-name')?.textContent).toBe('read_file');
+    expect(container.querySelector('.tool-name')?.textContent).toBe('Read');
+    expect(container.querySelector('.tool-target')?.textContent).toBe('src/foo.ts');
+    expect(container.querySelector('.tool-detail-output')?.textContent).toBe('line 1\nline 2');
+    // The path was the only argument; there is nothing left to disclose.
+    expect(container.querySelector('.tool-detail-args')).toBeNull();
+  });
+
+  it('shows a shell call as its command line, with other arguments tucked away', () => {
+    const shell = {
+      ...tool,
+      tool: 'shell_command',
+      arguments: '{"command":"ls -la && wc -l go.mod","timeout":30}',
+      result: 'total 8',
+    };
+    act(() => {
+      root.render(createElement(ToolDetailInline, { tool: shell, onToggle: vi.fn() }));
+    });
+    expect(container.querySelector('.tool-name')?.textContent).toBe('Shell');
+    expect(container.querySelector('.tool-detail-command')?.textContent).toBe('ls -la && wc -l go.mod');
+    expect(container.querySelector('.tool-target')).toBeNull();
+    expect(container.querySelector('.tool-detail-args pre')?.textContent).toContain('"timeout": 30');
+  });
+
+  it('marks a failed call and says when a call had no output', () => {
+    act(() => {
+      root.render(
+        createElement(ToolDetailInline, { tool: { ...tool, status: 'error', result: undefined }, onToggle: vi.fn() }),
+      );
+    });
+    expect(container.querySelector('.tool-detail-inline--error')).not.toBeNull();
+    expect(container.querySelector('.tool-detail-empty')?.textContent).toBe('No output.');
+  });
+
+  it('closes from its own close button', () => {
+    const onToggle = vi.fn();
+    act(() => {
+      root.render(createElement(ToolDetailInline, { tool, onToggle }));
+    });
+    act(() => (container.querySelector('.tool-detail-close') as HTMLButtonElement).click());
+    expect(onToggle).toHaveBeenCalledWith('t1');
   });
 
   it('collapses on Escape and returns focus to the controlling pill', () => {

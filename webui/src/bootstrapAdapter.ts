@@ -15,6 +15,15 @@ import type { PlatformNavItem } from './services/apiAdapter';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
 
 /** Shape of the JSON returned by /api/bootstrap (all fields optional). */
+/** Authenticated identity the platform injects into the bootstrap. */
+export interface BootstrapUser {
+  id: string;
+  email: string;
+  tier: string;
+  /** Platform administrator; older platforms omit it. */
+  admin?: boolean;
+}
+
 interface BootstrapResponse {
   apiBaseURL?: string;
   wsURL?: string;
@@ -24,11 +33,7 @@ interface BootstrapResponse {
   sharedMode?: boolean;
   navItems?: PlatformNavItem[];
   /** Authenticated user identity, injected by the platform in cloud mode. */
-  user?: {
-    id: string;
-    email: string;
-    tier: string;
-  };
+  user?: BootstrapUser;
   /** URLs of external plugin script bundles (IIFE) to load after adapter installation. */
   pluginScripts?: string[];
   /** Absolute base URL of the platform web UI (SP-016). Served by the
@@ -91,13 +96,13 @@ function loadPluginScripts(urls: string[]): void {
  * Components that need the authenticated identity read this via getBootstrapUser()
  * instead of re-fetching /user/me.
  */
-let currentUserIdentity: { id: string; email: string; tier: string } | undefined;
+let currentUserIdentity: BootstrapUser | undefined;
 
 /**
  * Return the authenticated user identity resolved from the bootstrap response,
  * or undefined when there is no session. Safe to call before bootstrap resolves.
  */
-export function getBootstrapUser(): { id: string; email: string; tier: string } | undefined {
+export function getBootstrapUser(): BootstrapUser | undefined {
   return currentUserIdentity;
 }
 

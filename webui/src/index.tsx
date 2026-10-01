@@ -36,7 +36,30 @@ import { resolveClientIdentity } from './services/clientSession';
 applyShellAttribute(isStudioShellSync() ? 'studio' : 'webui');
 void resolveShellIdentity();
 
+// An editor never renders inside another editor. Its Home frame shows
+// platform pages; if one of them navigates into the editor anyway, the frame
+// hands the destination to the editor around it (PlatformHome handles
+// sprout:open-editor) and stays empty instead of nesting a second editor.
+(window as unknown as Record<string, unknown>).__sproutEditor = true;
+
+function insideAnotherEditor(): boolean {
+  if (window.parent === window) return false;
+  try {
+    return (window.parent as unknown as Record<string, unknown>).__sproutEditor === true;
+  } catch {
+    // A cross-origin parent can't be an editor of ours.
+    return false;
+  }
+}
+
 (async () => {
+  if (insideAnotherEditor()) {
+    window.parent.postMessage(
+      { type: 'sprout:open-editor', href: window.location.pathname + window.location.search },
+      window.location.origin,
+    );
+    return;
+  }
   await resolveClientIdentity();
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
   root.render(<App />);

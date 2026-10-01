@@ -24,8 +24,8 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	clientType := chatAgent.GetProviderType()
 	providerName := api.GetProviderName(clientType)
 
-	fmt.Println()
-	console.GlyphInfo.Printf("Available Models (%s):", providerName)
+	m.println()
+	console.GlyphInfo.Fprintf(m.out(), "Available Models (%s):", providerName)
 
 	models, err := api.GetModelsForProvider(clientType)
 	if err != nil {
@@ -33,9 +33,9 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	}
 
 	if len(models) == 0 {
-		fmt.Printf("No models available for %s.\n", providerName)
-		fmt.Println()
-		console.GlyphInfo.Print("Tip: Use '/provider select' to switch to a different provider")
+		m.printf("No models available for %s.\n", providerName)
+		m.println()
+		console.GlyphInfo.Fprintln(m.out(), "Tip: Use '/provider select' to switch to a different provider")
 		return nil
 	}
 
@@ -49,37 +49,37 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 
 	// Display all models
 	for i, model := range models {
-		fmt.Printf("%d. %s\n", i+1, model.ID)
+		m.printf("%d. %s\n", i+1, model.ID)
 		if model.Description != "" {
-			fmt.Printf("   Description: %s\n", model.Description)
+			m.printf("   Description: %s\n", model.Description)
 		}
 		if model.Size != "" {
-			fmt.Printf("   Size: %s\n", model.Size)
+			m.printf("   Size: %s\n", model.Size)
 		}
 		if model.InputCost > 0 || model.OutputCost > 0 {
 			if model.InputCost > 0 && model.OutputCost > 0 {
-				fmt.Printf("   Cost: $%.3f/M input, $%.3f/M output tokens\n", model.InputCost, model.OutputCost)
+				m.printf("   Cost: $%.3f/M input, $%.3f/M output tokens\n", model.InputCost, model.OutputCost)
 			} else if model.Cost > 0 {
 				// Fallback to legacy format
-				fmt.Printf("   Cost: ~$%.2f/M tokens\n", model.Cost)
+				m.printf("   Cost: ~$%.2f/M tokens\n", model.Cost)
 			}
 		} else if freeLocalRuntimeDisplay(model.Provider) {
-			fmt.Printf("   Cost: FREE (local)\n")
+			m.printf("   Cost: FREE (local)\n")
 		} else {
-			fmt.Printf("   Cost: N/A\n")
+			m.printf("   Cost: N/A\n")
 		}
 		if model.ContextLength > 0 {
-			fmt.Printf("   Context: %d tokens\n", model.ContextLength)
+			m.printf("   Context: %d tokens\n", model.ContextLength)
 		}
 		if len(model.EligibleRoles) > 0 {
-			fmt.Printf("   Eligible for: %s\n", strings.Join(model.EligibleRoles, ", "))
+			m.printf("   Eligible for: %s\n", strings.Join(model.EligibleRoles, ", "))
 		}
 		if len(model.RecommendedRoles) > 0 {
-			fmt.Printf("   %sRecommended for: %s (passed capability probe)\n",
+			m.printf("   %sRecommended for: %s (passed capability probe)\n",
 				console.GlyphSuccess.Prefix(), strings.Join(model.RecommendedRoles, ", "))
 		}
 		for _, w := range model.Warnings {
-			fmt.Printf("   %s%s\n", console.GlyphWarning.Prefix(), w)
+			m.printf("   %s%s\n", console.GlyphWarning.Prefix(), w)
 		}
 		if len(model.Tags) > 0 {
 			// Highlight tool support
@@ -91,42 +91,42 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 				}
 			}
 			if hasTools {
-				fmt.Printf("   %sSupports tools: %s\n", console.GlyphSuccess.Prefix(), strings.Join(model.Tags, ", "))
+				m.printf("   %sSupports tools: %s\n", console.GlyphSuccess.Prefix(), strings.Join(model.Tags, ", "))
 			} else {
-				fmt.Printf("   Features: %s\n", strings.Join(model.Tags, ", "))
+				m.printf("   Features: %s\n", strings.Join(model.Tags, ", "))
 			}
 		}
-		fmt.Println()
+		m.println()
 	}
 
 	// Display featured models section
 	if len(featuredIndices) > 0 {
-		console.GlyphAction.Print("Featured Models (Popular & High Performance):")
+		console.GlyphAction.Fprintln(m.out(), "Featured Models (Popular & High Performance):")
 		for _, idx := range featuredIndices {
 			model := models[idx]
-			fmt.Printf("%d. %s", idx+1, model.ID)
+			m.printf("%d. %s", idx+1, model.ID)
 			if model.InputCost > 0 && model.OutputCost > 0 {
-				fmt.Printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
+				m.printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
 			} else if model.Cost > 0 {
-				fmt.Printf(" - ~$%.2f/M tokens", model.Cost)
+				m.printf(" - ~$%.2f/M tokens", model.Cost)
 			} else if freeLocalRuntimeDisplay(model.Provider) {
-				fmt.Printf(" - FREE")
+				m.printf(" - FREE")
 			} else {
-				fmt.Printf(" - N/A")
+				m.printf(" - N/A")
 			}
 			if model.ContextLength > 0 {
-				fmt.Printf(" - %dK context", model.ContextLength/1000)
+				m.printf(" - %dK context", model.ContextLength/1000)
 			}
-			fmt.Println()
+			m.println()
 		}
-		fmt.Println()
+		m.println()
 	}
 
-	fmt.Println("Usage:")
-	fmt.Println("  /model select          - Interactive model selection (current provider)")
-	fmt.Println("  /model <model_id>      - Set model directly")
-	fmt.Println("  /model                 - Show this list")
-	fmt.Println("  /provider select        - Switch providers first, then select models")
+	m.println("Usage:")
+	m.println("  /model select          - Interactive model selection (current provider)")
+	m.println("  /model <model_id>      - Set model directly")
+	m.println("  /model                 - Show this list")
+	m.println("  /provider select        - Switch providers first, then select models")
 
 	return nil
 }
@@ -153,9 +153,9 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	}
 
 	if len(models) == 0 {
-		fmt.Printf("No models available for %s.\n", providerName)
-		fmt.Println()
-		console.GlyphInfo.Print("Tip: Use '/provider select' to switch to a different provider with available models")
+		m.printf("No models available for %s.\n", providerName)
+		m.println()
+		console.GlyphInfo.Fprintln(m.out(), "Tip: Use '/provider select' to switch to a different provider with available models")
 		return nil
 	}
 
@@ -190,7 +190,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 		return fmt.Errorf("model picker: %w", err)
 	}
 	if !ok || chosen == "" {
-		fmt.Println("Model selection cancelled.")
+		m.println("Model selection cancelled.")
 		return nil
 	}
 	return m.setModel(chosen, chatAgent)
@@ -403,7 +403,7 @@ func (m *ModelsCommand) findCommonPrefix(matches []api.ModelInfo, input string) 
 // download has to happen here, before that call.
 func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	if chatAgent.GetProviderType() == api.SproutLocalClientType {
-		if err := ensureLocalModelDownloaded(modelID); err != nil {
+		if err := ensureLocalModelDownloaded(&m.outputSink, modelID); err != nil {
 			return err
 		}
 	}
@@ -418,10 +418,10 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	finalProvider := chatAgent.GetProviderType()
 	finalModel := chatAgent.GetModel()
 
-	fmt.Printf("Model set to: %s\n", finalModel)
-	fmt.Printf("Provider: %s\n", api.GetProviderName(finalProvider))
+	m.printf("Model set to: %s\n", finalModel)
+	m.printf("Provider: %s\n", api.GetProviderName(finalProvider))
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Printf("\n%s\n", note)
+		m.printf("\n%s\n", note)
 	}
 
 	// Publish model info event for UI

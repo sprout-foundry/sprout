@@ -10,8 +10,9 @@ import (
 // offWorkspacePathPattern lexically extracts absolute and ~-rooted path
 // tokens from a shell command line. Shell separators and quotes act as
 // token boundaries so "cat /etc/passwd|wc", ">/home/x", "--flag=/etc/y"
-// all yield their path arguments.
-var offWorkspacePathPattern = regexp.MustCompile(`(?:^|[\s|&;()<>'"=])(/[^\s|&;<>\"']*|~/?[^\s|&;<>\"']*)`)
+// all yield their path arguments. Drive-letter (C:\x, C:/x) and UNC
+// (\\host\share) tokens are matched too so Windows paths are not skipped.
+var offWorkspacePathPattern = regexp.MustCompile(`(?:^|[\s|&;()<>'"=])(/[^\s|&;<>\"']*|~/?[^\s|&;<>\"']*|[A-Za-z]:[\\/][^\s|&;<>\"']*|\\\\[^\s|&;<>\"']+)`)
 
 var shellPathAlwaysAllowed = map[string]bool{
 	"/dev/null":    true,
@@ -77,6 +78,12 @@ func ClassifyToolCallWithWorkspace(toolName string, args map[string]interface{},
 // check and execution (the approval dialog itself names the raw paths).
 func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string) bool {
 	wsAbs := absPathLexical(workspaceRoot)
+	allowed := make([]string, 0, len(extraAllowed))
+	for _, ex := range extraAllowed {
+		if ex != "" {
+			allowed = append(allowed, absPathLexical(ex))
+		}
+	}
 	for _, tok := range offWorkspacePathPattern.FindAllStringSubmatch(cmd, -1) {
 		raw := strings.Trim(tok[1], `"'`)
 		if raw == "" {
@@ -92,27 +99,26 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 		if isSystemBinLibPath(resolved) {
 			continue
 		}
-		if isUnderAny(resolved, wsAbs, extraAllowed) {
-			continue
-		}
-		// Relative ../ escapes: resolve against the workspace root.
-		if !filepath.IsAbs(resolved) {
-			if isUnderAny(filepath.Join(wsAbs, resolved), wsAbs, extraAllowed) {
-				continue
+		if !isRootedPath(resolved) {
+			if wsAbs == "" {
+				return true
 			}
+			resolved = filepath.Join(wsAbs, resolved)
 		}
-		return true
+		if !isUnderAny(absPathLexical(resolved), wsAbs, allowed) {
+			return true
+		}
 	}
 	// ../ escapes anywhere in a relative token (leading or mid-path, e.g.
 	// "sub/../../other"), resolved lexically against the workspace root.
 	if wsAbs != "" {
 		for _, field := range strings.Fields(cmd) {
 			clean := strings.Trim(field, `"'`)
-			if !strings.Contains(clean, "../") {
+			if !strings.Contains(clean, "../") && !strings.Contains(clean, `..\`) {
 				continue
 			}
 			resolvedField := filepath.Clean(filepath.Join(wsAbs, clean))
-			if !isUnderAny(resolvedField, wsAbs, extraAllowed) {
+			if !isUnderAny(resolvedField, wsAbs, allowed) {
 				return true
 			}
 		}
@@ -129,42 +135,25 @@ func expandShellPathLexical(p string) string {
 		}
 		return p
 	}
-	if strings.HasPrefix(p, "~/") {
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~`+string(filepath.Separator)) {
 		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, strings.TrimPrefix(p, "~/"))
+			return filepath.Join(home, p[2:])
 		}
 	}
 	return p
 }
 
 func isTmpPath(p string) bool {
-	return p == "/tmp" || strings.HasPrefix(p, "/tmp/")
+	return p == "/tmp" || strings.HasPrefix(p, "/tmp/") || (isRootedPath(p) && isOSTempPath(p))
 }
 
-// absPathLexical cleans a path and makes it absolute relative to the
-// process cwd when relative. Returns "" for empty input.
-func absPathLexical(p string) string {
-	if p == "" {
-		return ""
-	}
-	if !filepath.IsAbs(p) {
-		if cwd, err := os.Getwd(); err == nil {
-			p = filepath.Join(cwd, p)
-		}
-	}
-	return filepath.Clean(p)
-}
-
-// isUnderAny reports whether path equals or sits under any of the roots.
+// isUnderAny reports whether path equals or sits under root or any of extra.
 func isUnderAny(path string, root string, extra []string) bool {
-	if root != "" && (path == root || strings.HasPrefix(path, root+string(filepath.Separator))) {
+	if pathWithin(path, root) {
 		return true
 	}
 	for _, ex := range extra {
-		if ex == "" {
-			continue
-		}
-		if path == ex || strings.HasPrefix(path, ex+string(filepath.Separator)) {
+		if pathWithin(path, ex) {
 			return true
 		}
 	}

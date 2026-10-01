@@ -11,22 +11,27 @@
 import type { EventsProvider } from '@sprout/events';
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { fetchRuntimeConfig } from '../bootstrapAdapter';
+import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
 import { isCloud, supportsWorkspaceSwitching } from '../config/mode';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
+import { polledStatsPatch } from '../utils/polledStats';
 import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
+import { listChatSessions } from '../services/chatSessions';
 import { getTabWorkspacePath } from '../services/clientSession';
 import type { CloudAdapter } from '../services/cloudAdapter';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
+import type { WsEvent } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
+import { WebSocketService } from '../services/websocket';
 import { debugLog, useLog } from '../utils/log';
 import { decideBootRestore, writeChatModePin } from '../workspaces/useChatModePinning';
+import { canAutoRestoreLatestSession, clearedByUser } from './bootSessionRestore';
 
 interface RecentFile {
   path: string;
@@ -87,9 +92,13 @@ export function useAppInitialization({
         .then((config) => {
           if (config.appMode === 'cloud' && !config.user) {
             // No session — redirect to platform login with return_to so the
-            // user comes back to the browser IDE after authenticating, not
-            // stranded on the dashboard.
-            window.location.href = '/login?return_to=' + encodeURIComponent('/webui/');
+            // user comes back to the browser IDE (on the same project and
+            // page) after authenticating, not stranded on the dashboard.
+            // The query is re-encoded: the platform refuses a return path
+            // containing "://", which a hand-typed ?repo=https://… has.
+            const params = new URLSearchParams(window.location.search).toString();
+            window.location.href =
+              '/login?return_to=' + encodeURIComponent(window.location.pathname + (params ? `?${params}` : ''));
             return;
           }
           initApp();
@@ -152,9 +161,12 @@ export function useAppInitialization({
                   import('../services/browserGit').then(({ configureBrowserGit }) => {
                     const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
                     if (shell) {
+                      // Commits are authored as the signed-in account, so
+                      // pushed history is attributed to the user on GitHub.
+                      const user = getBootstrapUser();
                       configureBrowserGit({
-                        name: 'Browser IDE',
-                        email: 'browser-ide@sprout.dev',
+                        name: user?.email ? user.email.split('@')[0] : 'Browser IDE',
+                        email: user?.email || 'browser-ide@sprout.dev',
                         readVfsFiles: async () => {
                           return listAllVfsFiles(shell);
                         },
@@ -233,10 +245,17 @@ export function useAppInitialization({
       // events use. This makes agent responses render in the chat UI.
       if (isCloud) {
         import('../services/cloudWasmHandlers').then(({ setAgentEventDispatcher }) => {
+          // Through the event bus, not straight to handleEvent: other
+          // listeners (the git panel's refresh after an agent edit) missed
+          // every hosted event.
           setAgentEventDispatcher((event) => {
-            handleEvent(event as SproutEvent);
+            WebSocketService.getInstance().deliverLocal(event as WsEvent);
           });
         });
+        // The managed model's context window decides the agent's context mode.
+        void import('../services/platformProvider').then(({ loadManagedContextWindow }) =>
+          loadManagedContextWindow(window.location.origin),
+        );
       }
 
       // Load initial stats
@@ -244,20 +263,24 @@ export function useAppInitialization({
         apiService
           .getStats()
           .then((stats: StatsResponse) => {
-            setState((prev) => ({
-              // Only update provider/model from stats when the backend
-              // has a real value.  An empty string means the agent hasn't
-              // been lazily created yet — we should keep whatever the
-              // frontend already knows (persisted state, WS event…).
-              provider: stats.provider || prev.provider,
-              model: stats.model || prev.model,
-              // Merge, not replace: a poll response without cost/token
-              // fields (nil-agent window during lazy recreation) must not
-              // erase the last-known values — that was the status bar's
-              // "flashes to $0.00 then back" flicker. Absent keys keep the
-              // previous value; present keys are authoritative.
-              stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : { ...prev.stats, ...stats },
-            }));
+            const patch = polledStatsPatch(stats, isCloud);
+            setState((prev) => {
+              const merged = { ...prev.stats, ...patch };
+              return {
+                // Only update provider/model from stats when the backend
+                // has a real value.  An empty string means the agent hasn't
+                // been lazily created yet — we should keep whatever the
+                // frontend already knows (persisted state, WS event…).
+                provider: stats.provider || prev.provider,
+                model: stats.model || prev.model,
+                // Merge, not replace: a poll response without cost/token
+                // fields (nil-agent window during lazy recreation) must not
+                // erase the last-known values — that was the status bar's
+                // "flashes to $0.00 then back" flicker. Absent keys keep the
+                // previous value; present keys are authoritative.
+                stats: JSON.stringify(prev.stats) === JSON.stringify(merged) ? prev.stats : merged,
+              };
+            });
           })
           .catch((err) =>
             log.error(`Failed to initialize connection: ${err instanceof Error ? err.message : String(err)}`, {
@@ -278,11 +301,14 @@ export function useAppInitialization({
               setRecentFiles(files);
             }
           })
-          .catch((err) =>
+          .catch((err) => {
+            // Before a workspace is chosen the server refuses the listing;
+            // the workspace gate is already asking for one.
+            if ((err as { code?: string })?.code === 'workspace_not_selected') return;
             log.error(`Failed to load initial data: ${err instanceof Error ? err.message : String(err)}`, {
               title: 'Initialization Error',
-            }),
-          );
+            });
+          });
       };
 
       // Load initial stats & files
@@ -417,11 +443,17 @@ export function useAppInitialization({
               // just-cleared conversation. In local mode the backend supplies
               // the current id, so this only fires when there genuinely is none.
               const hasExplicitCurrent = !!currentSessionId && !!currentSession;
-              const allowFallback = !isCloud || !hasExplicitCurrent;
+              const chats = await listChatSessions()
+                .then((resp) => resp.chat_sessions ?? [])
+                .catch(() => []);
+              const allowFallback = (!isCloud || !hasExplicitCurrent) && canAutoRestoreLatestSession(chats);
               if (allowFallback) {
+                // Never a conversation the user cleared: that was "start fresh".
                 const restorable = sessions.find(
                   (item: SessionEntry) =>
-                    String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+                    String(item?.session_id || '') !== currentSessionId &&
+                    Number(item?.message_count || 0) > 0 &&
+                    !clearedByUser(item?.last_updated),
                 );
                 if (restorable?.session_id) {
                   const restored = await apiService.restoreSession(String(restorable.session_id));
@@ -454,9 +486,11 @@ export function useAppInitialization({
                   }),
                 );
               }
-              // Clean the URL so refresh doesn't re-trigger
-              const cleanUrl = window.location.pathname + window.location.hash;
-              window.history.replaceState({}, '', cleanUrl);
+              // Drop ?chat= so a refresh doesn't re-trigger; the rest of the
+              // query (?repo=, ?home=) still describes where the editor is.
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('chat');
+              window.history.replaceState(window.history.state, '', cleanUrl);
             }
           }
         } catch (error) {
@@ -484,9 +518,10 @@ export function useAppInitialization({
                   }),
                 );
               }, 300);
-              // Clean the URL so refresh doesn't re-trigger
-              const cleanUrl = window.location.pathname + window.location.hash;
-              window.history.replaceState({}, '', cleanUrl);
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('file');
+              cleanUrl.searchParams.delete('line');
+              window.history.replaceState(window.history.state, '', cleanUrl);
             }
           }
         } catch (error) {

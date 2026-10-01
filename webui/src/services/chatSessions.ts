@@ -1,3 +1,4 @@
+import type { WsEvent } from '@sprout/events';
 import type { WorktreeInfo } from '../types/app';
 import type { ChatSession as CanonicalChatSession } from '../types/generated';
 import { clientFetch } from './clientSession';
@@ -46,6 +47,11 @@ export interface ChatSessionSwitchResponseChatSession {
   current_session_id: string;
   /** Workspace-mode lane ("design"); absent = code/legacy (SP-142). */
   mode?: string;
+  /**
+   * While a run is in progress: its events so far, from its query_started.
+   * `messages` is stored at run end, so it stops before this turn.
+   */
+  run_events?: WsEvent[];
 }
 
 export interface ChatSessionSwitchResponse {

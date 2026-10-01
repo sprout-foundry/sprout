@@ -37,6 +37,12 @@ func normalizePath(p string) string {
 	return approvals.NormalizePath(p)
 }
 
+// canonicalPath returns the case-preserving clean form (the form to show
+// a user); normalizePath is its case-folded Windows comparison form.
+func canonicalPath(p string) string {
+	return approvals.CanonicalPath(p)
+}
+
 // isUnderPrefix reports whether path equals or sits under prefix (component-aware).
 func isUnderPrefix(path, prefix string) bool {
 	return approvals.IsUnderPrefix(path, prefix)

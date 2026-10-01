@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
 import './ResizeHandle.css';
 
 interface ResizeHandleProps {
@@ -11,7 +16,12 @@ interface ResizeHandleProps {
   className?: string;
   position?: 'relative' | 'absolute'; // CSS position of the handle (default: 'relative')
   style?: CSSProperties; // Optional inline styles
+  ariaLabel?: string; // Accessible name for the separator (e.g. "Resize sidebar")
 }
+
+/** Keyboard resize step in px; Shift moves a larger step. */
+const KEY_STEP = 10;
+const KEY_STEP_LARGE = 50;
 
 /**
  * ResizeHandle component for resizable split panes
@@ -45,6 +55,7 @@ function ResizeHandle({
   className = '',
   position = 'relative',
   style,
+  ariaLabel,
 }: ResizeHandleProps): JSX.Element {
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
@@ -187,6 +198,26 @@ function ResizeHandle({
     };
   }, [handleMove, handleDragEnd, supportsPointer]);
 
+  // Arrow keys along the drag axis resize by a fixed step, so the split is
+  // adjustable without a pointer; Enter runs the handle's reset action.
+  const handleKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      const [back, forward] = direction === 'horizontal' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+      if (e.key === 'Enter' && onDoubleClick) {
+        e.preventDefault();
+        onDoubleClick();
+        return;
+      }
+      if (e.key !== back && e.key !== forward) return;
+      e.preventDefault();
+      const step = (e.shiftKey ? KEY_STEP_LARGE : KEY_STEP) * (e.key === forward ? 1 : -1);
+      onResizeStartRef.current?.();
+      onResizeRef.current(step, step);
+      onResizeEndRef.current?.();
+    },
+    [direction, onDoubleClick],
+  );
+
   const dragProps = supportsPointer ? { onPointerDown: handlePointerDown } : { onMouseDown: handleMouseDown };
 
   return (
@@ -194,6 +225,11 @@ function ResizeHandle({
       ref={handleRef}
       className={`resize-handle resize-handle-${direction} ${isDragging ? 'resizing' : ''} ${className}`}
       onDoubleClick={onDoubleClick}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="separator"
+      aria-orientation={direction === 'horizontal' ? 'vertical' : 'horizontal'}
+      aria-label={ariaLabel ?? 'Resize'}
       style={{
         cursor: direction === 'horizontal' ? 'col-resize' : 'row-resize',
         position,

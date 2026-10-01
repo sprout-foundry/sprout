@@ -19,7 +19,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // are created via vi.hoisted (also hoisted) and referenced from the
 // factories by the same variable name.
 
-const { mockGitAdd, mockGitCommit, mockGitStatusMatrix, mockGitInit, mockGitLog, mockGitPush } = vi.hoisted(() => ({
+const {
+  mockGitAdd,
+  mockGitCommit,
+  mockGitStatusMatrix,
+  mockGitInit,
+  mockGitLog,
+  mockGitPush,
+  mockReadBlob,
+  mockFsReadFile,
+  mockCurrentBranch,
+  mockListRemotes,
+  mockGitBranch,
+  mockFastForward,
+  mockReaddir,
+  mockStat,
+} = vi.hoisted(() => ({
+  mockReaddir: vi.fn(),
+  mockStat: vi.fn(),
+  mockFastForward: vi.fn(),
+  mockGitBranch: vi.fn(),
+  mockCurrentBranch: vi.fn(),
+  mockListRemotes: vi.fn(),
+  mockReadBlob: vi.fn(),
+  mockFsReadFile: vi.fn(),
   mockGitAdd: vi.fn(),
   mockGitCommit: vi.fn(),
   mockGitStatusMatrix: vi.fn(),
@@ -31,9 +54,9 @@ const { mockGitAdd, mockGitCommit, mockGitStatusMatrix, mockGitInit, mockGitLog,
 vi.mock('@isomorphic-git/lightning-fs', () => {
   const promises = {
     mkdir: vi.fn().mockResolvedValue(undefined),
-    stat: vi.fn().mockRejectedValue(new Error('not found')),
-    readdir: vi.fn().mockResolvedValue([]),
-    readFile: vi.fn().mockResolvedValue(''),
+    stat: (...args: unknown[]) => mockStat(...args),
+    readdir: (...args: unknown[]) => mockReaddir(...args),
+    readFile: (...args: unknown[]) => mockFsReadFile(...args),
     writeFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
   };
@@ -53,20 +76,36 @@ vi.mock('isomorphic-git', () => ({
   push: mockGitPush,
   setConfig: vi.fn(),
   listBranches: vi.fn().mockResolvedValue([]),
-  currentBranch: vi.fn().mockResolvedValue(null),
+  currentBranch: (...args: unknown[]) => mockCurrentBranch(...args),
+  listRemotes: (...args: unknown[]) => mockListRemotes(...args),
+  branch: (...args: unknown[]) => mockGitBranch(...args),
+  fastForward: (...args: unknown[]) => mockFastForward(...args),
   checkout: vi.fn(),
   clone: vi.fn(),
+  resolveRef: vi.fn().mockResolvedValue('head-oid'),
+  readBlob: mockReadBlob,
 }));
 
 vi.mock('isomorphic-git/http/web', () => ({ default: {} }));
 
 // ── Imports ──────────────────────────────────────────────────────────
 
-import { configureBrowserGit, executeGitOp, __resetBrowserGitForTest } from './browserGit';
+import {
+  configureBrowserGit,
+  executeGitOp,
+  gitClone,
+  restoreGitWorkingTree,
+  whenBrowserGitConfigured,
+  __resetBrowserGitForTest,
+} from './browserGit';
 
 describe('executeGitOp dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReaddir.mockResolvedValue([]);
+    mockStat.mockRejectedValue(new Error('not found'));
+    mockCurrentBranch.mockResolvedValue(null);
+    mockListRemotes.mockResolvedValue([{ remote: 'origin', url: 'https://github.com/o/n.git' }]);
     // Provide a no-op VFS bridge so ensureInitialized/syncVfsToGitFs succeed.
     configureBrowserGit({
       name: 'Test',
@@ -123,15 +162,84 @@ describe('executeGitOp dispatch', () => {
       expect(result).toEqual(expect.objectContaining({ sha: 'deadbeef' }));
     });
 
-    it('log delegates to gitLog', async () => {
-      const result = await executeGitOp('log', { count: 5 });
-      expect(mockGitLog).toHaveBeenCalled();
-      expect(Array.isArray(result)).toBe(true);
+    it('log answers the GitLogResponse page the history panel reads', async () => {
+      mockGitLog.mockResolvedValueOnce(
+        ['c3', 'c2', 'c1'].map((oid, i) => ({
+          oid: `${oid}0000000000`,
+          commit: { message: `m${i}`, author: { name: 'A', timestamp: 1_790_000_000 + i } },
+        })),
+      );
+      const result = (await executeGitOp('log', undefined, { limit: '2', offset: '0' })) as {
+        commits: Array<{ hash: string; short_hash: string }>;
+        limit: number;
+        offset: number;
+        total: number;
+      };
+      expect(result.commits.map((c) => c.short_hash)).toEqual(['c300000', 'c200000']);
+      expect(result).toMatchObject({ limit: 2, offset: 0, total: 3 });
+    });
+
+    it('diff for a path answers a GitDiffResponse with both versions', async () => {
+      mockGitStatusMatrix.mockResolvedValue([]);
+      mockReadBlob.mockResolvedValueOnce({ blob: new TextEncoder().encode('Hello World!\n') });
+      mockFsReadFile.mockResolvedValue('Hello World!\nmore\n');
+      const result = (await executeGitOp('diff', undefined, { path: '/README' })) as {
+        path: string;
+        diff: string;
+        has_unstaged: boolean;
+        original_content: string;
+        modified_content: string;
+      };
+      expect(result.path).toBe('README');
+      expect(result.has_unstaged).toBe(true);
+      expect(result.original_content).toBe('Hello World!\n');
+      expect(result.modified_content).toBe('Hello World!\nmore\n');
+      expect(result.diff).toContain('diff --git a/README b/README');
+      expect(result.diff).toContain('@@ ');
+      expect(result.diff).toContain('+more');
     });
 
     it('push delegates to gitPush', async () => {
       await executeGitOp('push', { remote: 'origin', branch: 'main' });
       expect(mockGitPush).toHaveBeenCalled();
+    });
+
+    it('push defaults to the current branch, not "main"', async () => {
+      mockCurrentBranch.mockResolvedValue('master');
+      await executeGitOp('push', {});
+      expect(mockGitPush).toHaveBeenCalledWith(expect.objectContaining({ remote: 'origin', ref: 'master' }));
+    });
+
+    it('push explains a missing remote instead of failing inside git', async () => {
+      mockListRemotes.mockResolvedValue([]);
+      await expect(executeGitOp('push', {})).rejects.toThrow(/no "origin" remote/);
+      expect(mockGitPush).not.toHaveBeenCalled();
+    });
+
+    it('branch/create creates and checks out the branch', async () => {
+      await expect(executeGitOp('branch/create', { name: ' feature/x ' })).resolves.toEqual({
+        message: 'ok',
+        branch: 'feature/x',
+      });
+      expect(mockGitBranch).toHaveBeenCalledWith(expect.objectContaining({ ref: 'feature/x', checkout: true }));
+    });
+
+    it('pull fast-forwards a clean working tree through the proxy-aware client', async () => {
+      mockGitStatusMatrix.mockResolvedValue([]);
+      mockCurrentBranch.mockResolvedValue('master');
+      await expect(executeGitOp('pull', {})).resolves.toEqual({ message: 'ok', pulled: true });
+      expect(mockFastForward).toHaveBeenCalledWith(expect.objectContaining({ ref: 'master', singleBranch: true }));
+    });
+
+    it('pull refuses to run over uncommitted changes', async () => {
+      mockGitStatusMatrix.mockResolvedValue([['a.txt', 1, 2, 1]]);
+      await expect(executeGitOp('pull', {})).rejects.toThrow(/Commit or undo your changes/);
+      expect(mockFastForward).not.toHaveBeenCalled();
+    });
+
+    it('push explains a GitHub auth rejection', async () => {
+      mockGitPush.mockRejectedValueOnce(Object.assign(new Error('HTTP Error: 403'), { data: { statusCode: 403 } }));
+      await expect(executeGitOp('push', {})).rejects.toThrow(/GitHub rejected the push/);
     });
   });
 
@@ -144,7 +252,6 @@ describe('executeGitOp dispatch', () => {
       'unstage-all',
       'reset',
       'discard',
-      'pull',
       'revert',
       'commit-message',
       'pull-request',
@@ -185,15 +292,9 @@ describe('executeGitOp dispatch', () => {
 // (a throw surfaces as a 500 → the git panel's "Failed to fetch git
 // status" banner).
 
-import LightningFS from '@isomorphic-git/lightning-fs';
-
 describe('git status with no commits (unborn HEAD)', () => {
-  const fs = new LightningFS();
-  const readdirMock = fs.promises.readdir as unknown as { mockResolvedValue(v: unknown[]): void };
-  const statMock = fs.promises.stat as unknown as {
-    mockResolvedValue(v: unknown): void;
-    mockRejectedValue(e: unknown): void;
-  };
+  const readdirMock = mockReaddir;
+  const statMock = mockStat;
 
   afterEach(() => {
     // Restore the factory defaults so other suites are unaffected.
@@ -269,5 +370,41 @@ describe('executeGitOp before configureBrowserGit (boot state)', () => {
     expect(result.message).toBe('success');
     expect(result.current).toBe('');
     expect(result.branches).toEqual([]);
+  });
+});
+
+describe('repository restore and replacement', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetBrowserGitForTest();
+    mockStat.mockResolvedValue({ isDirectory: () => false });
+    mockReaddir.mockImplementation((dir: string) => Promise.resolve(dir === '/repo' ? ['a.txt', 'b.txt'] : []));
+    mockFsReadFile.mockImplementation((path: string) => Promise.resolve(`content of ${path}`));
+  });
+
+  it('waits for configuration before boot-time git work', async () => {
+    let done = false;
+    const waiting = whenBrowserGitConfigured(1000).then(() => {
+      done = true;
+    });
+    await Promise.resolve();
+    expect(done).toBe(false);
+    configureBrowserGit({ readVfsFiles: async () => [], writeVfsFiles: async () => undefined });
+    await waiting;
+    expect(done).toBe(true);
+  });
+
+  it('restores only files missing from the workspace', async () => {
+    const writeVfsFiles = vi.fn();
+    configureBrowserGit({ readVfsFiles: async () => [{ path: 'a.txt', content: 'my edit' }], writeVfsFiles });
+    await expect(restoreGitWorkingTree()).resolves.toBe(1);
+    expect(writeVfsFiles).toHaveBeenCalledWith([{ path: 'b.txt', content: 'content of /repo/b.txt' }]);
+  });
+
+  it('removes the previous repository files from the workspace before cloning another', async () => {
+    const deleteVfsFiles = vi.fn();
+    configureBrowserGit({ readVfsFiles: async () => [], writeVfsFiles: vi.fn(), deleteVfsFiles });
+    await gitClone('https://github.com/acme/other.git');
+    expect(deleteVfsFiles).toHaveBeenCalledWith(['a.txt', 'b.txt']);
   });
 });

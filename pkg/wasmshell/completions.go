@@ -36,7 +36,7 @@ func AutoComplete(input string) AutoCompleteResult {
 
 	if isFirstToken && !strings.Contains(lastToken, "/") && !strings.Contains(lastToken, ".") {
 		// Complete command names.
-		for name := range CmdRegistry {
+		for _, name := range commandNames() {
 			if strings.HasPrefix(name, lastToken) {
 				// For commands that don't take arguments (pwd, clear, history), no trailing space.
 				switch name {

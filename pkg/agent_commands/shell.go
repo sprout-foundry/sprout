@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // ShellCommand handles the /shell slash command
@@ -85,7 +86,7 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Get a unified client wrapper using the current configuration
-	configManager, err := configuration.NewManager()
+	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
 		return fmt.Errorf("failed to initialize configuration: %v", err)
 	}
@@ -216,15 +217,9 @@ func (c *ShellCommand) gatherEnvironmentalContext() (string, error) {
 	}
 
 	// Shell information
-	shell := os.Getenv("SHELL")
+	shell := shellexec.Path()
 	if shell == "" {
-		if runtime.GOOS == "windows" {
-			shell = "cmd.exe"
-		} else if shellPath, err := exec.LookPath("sh"); err == nil {
-			shell = shellPath
-		} else {
-			shell = "/bin/sh"
-		}
+		shell = "cmd.exe"
 	}
 	context.WriteString(fmt.Sprintf("Shell: %s\n", shell))
 

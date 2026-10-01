@@ -45,8 +45,13 @@ import { Skeleton } from './Skeleton';
 import type { FileInfo } from '../types/file-tree';
 export type { FileInfo };
 
+export interface FileTreeRefreshOptions {
+  /** Reload in place: no loading skeleton, and a failed reload keeps the tree shown. */
+  quiet?: boolean;
+}
+
 export interface FileTreeHandle {
-  refresh: () => void;
+  refresh: (options?: FileTreeRefreshOptions) => void;
   revealFile: (filePath: string) => void;
 }
 
@@ -205,10 +210,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       [onFetchFiles],
     );
 
-    const refreshTree = useCallback(async () => {
-      setMoreMenu(null);
-      setLoading(true);
-      setError(null);
+    const refreshTree = useCallback(async (options?: FileTreeRefreshOptions) => {
+      const quiet = options?.quiet === true;
+      if (!quiet) {
+        setMoreMenu(null);
+        setLoading(true);
+        setError(null);
+      }
 
       try {
         let nextFiles = filesPropRef.current;
@@ -235,10 +243,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         onRefresh?.();
       } catch (err) {
         debugLog('[refreshTree] Failed to refresh file tree:', err);
+        if (quiet) return;
         setError(err instanceof Error ? err.message : 'Unknown error');
         setFiles([]);
       } finally {
-        setLoading(false);
+        if (!quiet) setLoading(false);
       }
     }, [expandedDirs, fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
 

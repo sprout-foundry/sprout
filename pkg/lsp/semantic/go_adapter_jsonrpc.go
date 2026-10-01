@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -46,4 +48,18 @@ func readJSONRPC(r *bufio.Reader) (map[string]interface{}, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// fileURI converts a filesystem path to an LSP file:// URI. Windows paths
+// need the slash-separated, drive-rooted form (file:///C:/src/main.go);
+// url.URL also percent-encodes spaces and other reserved characters.
+func fileURI(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	p = filepath.ToSlash(p)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p}).String()
 }

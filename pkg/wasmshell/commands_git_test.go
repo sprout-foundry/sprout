@@ -163,7 +163,7 @@ func TestGrep_Recursive(t *testing.T) {
 	if r.ExitCode != 0 {
 		t.Fatalf("exit = %d stderr = %q", r.ExitCode, r.Stderr)
 	}
-	if !strings.Contains(r.Stdout, "a.go") || !strings.Contains(r.Stdout, "sub/c.go") {
+	if !strings.Contains(r.Stdout, "a.go") || !strings.Contains(r.Stdout, filepath.FromSlash("sub/c.go")) {
 		t.Errorf("stdout = %q — recursive hits must carry file prefixes", r.Stdout)
 	}
 }
@@ -261,7 +261,7 @@ func TestFind_Not(t *testing.T) {
 }
 
 func TestFind_UnsupportedPredicateEscalates(t *testing.T) {
-	r := ParseAndExecute("find . -exec wc -l {} \\;")
+	r := ParseAndExecute("find . -fstype nfs")
 	if r.ExitCode != 127 {
 		t.Errorf("exit = %d, want 127 (escalate to container)", r.ExitCode)
 	}
@@ -391,7 +391,7 @@ func TestGit_ReadOnlySubcommandWithExecutor(t *testing.T) {
 	called := ""
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
 		called = subcommand
-		return CmdResult{"M file.txt\n", "", 0}
+		return CmdResult{Stdout: "M file.txt\n", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 
@@ -413,7 +413,7 @@ func TestGit_GlobalFlagC(t *testing.T) {
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
 		seenSub = subcommand
 		seenArgs = args
-		return CmdResult{"", "", 0}
+		return CmdResult{Stdout: "", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 
@@ -428,7 +428,7 @@ func TestGit_GlobalFlagC(t *testing.T) {
 
 func TestGit_InChain(t *testing.T) {
 	RegisterGitExecutor(func(subcommand string, args []string) CmdResult {
-		return CmdResult{"ok\n", "", 0}
+		return CmdResult{Stdout: "ok\n", Stderr: "", ExitCode: 0}
 	})
 	defer RegisterGitExecutor(nil)
 

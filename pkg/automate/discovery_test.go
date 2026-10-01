@@ -807,7 +807,7 @@ func TestSummarize_RoundTripsThroughJSONShape(t *testing.T) {
 		"requires_approval": false,
 		"subagent_timeout_seconds": 1200,
 		"allowed_paths": [
-			{"path": "/srv/datasets", "mode": "read_write", "reason": "Test data"}
+			{"path": `+fixtureJSONPath("/srv/datasets")+`, "mode": "read_write", "reason": "Test data"}
 		],
 		"initial": {"persona": "main", "provider": "anthropic", "model": "claude-opus-4", "max_iterations": 3}
 	}`)
@@ -839,7 +839,7 @@ func TestSummarize_RoundTripsThroughJSONShape(t *testing.T) {
 		t.Fatalf("allowed_paths: got %v (want 1 entry)", decoded["allowed_paths"])
 	}
 	first := ap[0].(map[string]interface{})
-	if first["path"] != "/srv/datasets" || first["mode"] != "read_write" || first["reason"] != "Test data" {
+	if first["path"] != fixtureAbs("/srv/datasets") || first["mode"] != "read_write" || first["reason"] != "Test data" {
 		t.Errorf("allowed_paths[0]: got %+v", first)
 	}
 }
@@ -910,8 +910,8 @@ func TestSummarize_StepAllowedPaths_SurfacesPaths(t *testing.T) {
 				"name": "process",
 				"prompt": "process data",
 				"allowed_paths": [
-					{"path": "/srv/datasets", "mode": "read_only", "reason": "Training data"},
-					{"path": "/tmp/output", "mode": "read_write"}
+					{"path": `+fixtureJSONPath("/srv/datasets")+`, "mode": "read_only", "reason": "Training data"},
+					{"path": `+fixtureJSONPath("/tmp/output")+`, "mode": "read_write"}
 				]
 			}
 		]
@@ -932,7 +932,7 @@ func TestSummarize_StepAllowedPaths_SurfacesPaths(t *testing.T) {
 		t.Fatalf("expected 2 allowed_paths on step, got %d", len(step.AllowedPaths))
 	}
 	// Entries should be sorted by path.
-	if step.AllowedPaths[0].Path != "/srv/datasets" {
+	if step.AllowedPaths[0].Path != fixtureAbs("/srv/datasets") {
 		t.Errorf("step allowed_paths[0]: got %q, want /srv/datasets", step.AllowedPaths[0].Path)
 	}
 	if step.AllowedPaths[0].Mode != "read_only" {
@@ -941,7 +941,7 @@ func TestSummarize_StepAllowedPaths_SurfacesPaths(t *testing.T) {
 	if step.AllowedPaths[0].Reason != "Training data" {
 		t.Errorf("step allowed_paths[0].Reason: got %q, want 'Training data'", step.AllowedPaths[0].Reason)
 	}
-	if step.AllowedPaths[1].Path != "/tmp/output" {
+	if step.AllowedPaths[1].Path != fixtureAbs("/tmp/output") {
 		t.Errorf("step allowed_paths[1]: got %q, want /tmp/output", step.AllowedPaths[1].Path)
 	}
 }
@@ -956,7 +956,7 @@ func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
 		"initial": {
 			"prompt": "do the thing",
 			"allowed_paths": [
-				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp workspace"}
+				{"path": `+fixtureJSONPath("/tmp/work")+`, "mode": "read_write", "reason": "Temp workspace"}
 			]
 		}
 	}`)
@@ -971,7 +971,7 @@ func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
 	if len(s.Initial.AllowedPaths) != 1 {
 		t.Fatalf("expected 1 allowed_path on initial, got %d", len(s.Initial.AllowedPaths))
 	}
-	if s.Initial.AllowedPaths[0].Path != "/tmp/work" {
+	if s.Initial.AllowedPaths[0].Path != fixtureAbs("/tmp/work") {
 		t.Errorf("initial allowed_paths[0].Path: got %q, want /tmp/work", s.Initial.AllowedPaths[0].Path)
 	}
 	if s.Initial.AllowedPaths[0].Mode != "read_write" {
@@ -1056,7 +1056,7 @@ func TestSummarize_StepAllowedPaths_SystemPrefixWarning(t *testing.T) {
 			{
 				"prompt": "process data",
 				"allowed_paths": [
-					{"path": "/etc/sprout-stuff", "mode": "read_only"}
+					{"path": `+fixtureJSONPath("/etc/sprout-stuff")+`, "mode": "read_only"}
 				]
 			}
 		]
@@ -1071,7 +1071,7 @@ func TestSummarize_StepAllowedPaths_SystemPrefixWarning(t *testing.T) {
 	}
 	found := false
 	for _, w := range s.Warnings {
-		if strings.Contains(w, "step") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+		if strings.Contains(w, "step") && strings.Contains(w, "sprout-stuff") && strings.Contains(w, "system prefix") {
 			found = true
 			break
 		}
@@ -1090,7 +1090,7 @@ func TestSummarize_InitialAllowedPaths_SystemPrefixWarning(t *testing.T) {
 		"initial": {
 			"prompt": "do the thing",
 			"allowed_paths": [
-				{"path": "/etc/sprout-stuff", "mode": "read_only"}
+				{"path": `+fixtureJSONPath("/etc/sprout-stuff")+`, "mode": "read_only"}
 			]
 		}
 	}`)
@@ -1104,7 +1104,7 @@ func TestSummarize_InitialAllowedPaths_SystemPrefixWarning(t *testing.T) {
 	}
 	found := false
 	for _, w := range s.Warnings {
-		if strings.Contains(w, "initial") && strings.Contains(w, "/etc/sprout-stuff") && strings.Contains(w, "system prefix") {
+		if strings.Contains(w, "initial") && strings.Contains(w, "sprout-stuff") && strings.Contains(w, "system prefix") {
 			found = true
 			break
 		}
@@ -1126,14 +1126,14 @@ func TestSummarize_StepAllowedPaths_MultipleSteps(t *testing.T) {
 				"name": "step1",
 				"prompt": "first step",
 				"allowed_paths": [
-					{"path": "/tmp/step1", "mode": "read_write"}
+					{"path": `+fixtureJSONPath("/tmp/step1")+`, "mode": "read_write"}
 				]
 			},
 			{
 				"name": "step2",
 				"prompt": "second step",
 				"allowed_paths": [
-					{"path": "/tmp/step2", "mode": "read_only"}
+					{"path": `+fixtureJSONPath("/tmp/step2")+`, "mode": "read_only"}
 				]
 			}
 		]
@@ -1149,13 +1149,13 @@ func TestSummarize_StepAllowedPaths_MultipleSteps(t *testing.T) {
 	if len(s.Steps[0].AllowedPaths) != 1 {
 		t.Errorf("step 0 expected 1 allowed_path, got %d", len(s.Steps[0].AllowedPaths))
 	}
-	if s.Steps[0].AllowedPaths[0].Path != "/tmp/step1" {
+	if s.Steps[0].AllowedPaths[0].Path != fixtureAbs("/tmp/step1") {
 		t.Errorf("step 0 allowed_path: got %q, want /tmp/step1", s.Steps[0].AllowedPaths[0].Path)
 	}
 	if len(s.Steps[1].AllowedPaths) != 1 {
 		t.Errorf("step 1 expected 1 allowed_path, got %d", len(s.Steps[1].AllowedPaths))
 	}
-	if s.Steps[1].AllowedPaths[0].Path != "/tmp/step2" {
+	if s.Steps[1].AllowedPaths[0].Path != fixtureAbs("/tmp/step2") {
 		t.Errorf("step 1 allowed_path: got %q, want /tmp/step2", s.Steps[1].AllowedPaths[0].Path)
 	}
 }

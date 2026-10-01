@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // moveFile copies src → dst then removes src. Used instead of os.Rename
@@ -69,6 +70,15 @@ func requireWritableInstallDir(execPath string) error {
 // install dir can't be written to. The binary path is embedded so the
 // message works no matter how the binary was installed.
 func upgradeNotWritableHelp(execPath string) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf(`The current user can't replace the binary in place.
+Pick one:
+  Re-run sprout upgrade from an elevated (Run as Administrator) terminal
+  Take ownership of %s, then retry
+  $env:SPROUT_INSTALL_DIR="$env:LOCALAPPDATA\Programs\sprout"; irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
+                          reinstall to a user-writable dir
+`, execPath)
+	}
 	return fmt.Sprintf(`The current user can't replace the binary in place.
 Pick one:
   sudo sprout upgrade     re-run with elevated privileges

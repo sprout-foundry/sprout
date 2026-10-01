@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -98,7 +97,7 @@ func (ws *ReactWebServer) handleAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contentType := mime.TypeByExtension(path.Ext(filePath)); contentType != "" {
+	if contentType := assetContentType(path.Ext(filePath)); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
 	// Vite hashes filenames, so these are immutable — cache aggressively
@@ -125,7 +124,7 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if contentType := mime.TypeByExtension(path.Ext(filePath)); contentType != "" {
+	if contentType := assetContentType(path.Ext(filePath)); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")

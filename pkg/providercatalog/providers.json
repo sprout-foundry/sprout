@@ -805,20 +805,20 @@
     {
       "id": "cerebras",
       "name": "Cerebras",
-      "description": "High-performance provider with fast inference and GLM model support.",
-      "setup_hint": "Create a Cerebras API key and start with zai-glm-4.7.",
+      "description": "High-performance provider with fast inference.",
+      "setup_hint": "Create a Cerebras API key and start with qwen-3.8-27b.",
       "docs_url": "https://inference-docs.cerebras.ai/",
       "signup_url": "https://cloud.cerebras.ai/",
       "api_key_label": "Cerebras API Key",
       "api_key_help": "Cerebras offers high-performance inference with fast token generation.",
-      "default_model": "zai-glm-4.7",
-      "recommended_model": "zai-glm-4.7",
+      "default_model": "qwen-3.8-27b",
+      "recommended_model": "qwen-3.8-27b",
       "recommended_model_why": "Good default for high-performance inference use.",
       "models": [
         {
-          "id": "zai-glm-4.7",
-          "name": "Zai GLM 4.7",
-          "description": "High-performance GLM model",
+          "id": "qwen-3.8-27b",
+          "name": "Qwen 3.8 27B",
+          "description": "Qwen coding model",
           "context_length": 65536,
           "tags": [
             "coding",

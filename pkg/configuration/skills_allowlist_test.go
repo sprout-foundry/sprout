@@ -55,7 +55,7 @@ func TestWriteAllowedSkills(t *testing.T) {
 
 func TestAllowedSkillsPath(t *testing.T) {
 	got := AllowedSkillsPath("/home/user/project")
-	want := "/home/user/project/.sprout/allowed_skills"
+	want := filepath.Join("/home/user/project", ".sprout", "allowed_skills")
 	if got != want {
 		t.Errorf("AllowedSkillsPath() = %q, want %q", got, want)
 	}

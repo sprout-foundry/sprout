@@ -172,7 +172,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Build the command — filename is validated by the shared automate
 	// package (IsValidFilename), preventing shell injection.
-	cmdStr := execPath + " agent --workflow-config " + wfPath + " --skip-prompt --no-web-ui"
+	cmdStr := execPath + " agent --workflow-config " + wfPath + " --yes --no-web-ui"
 
 	result := map[string]interface{}{
 		"workflow":    filepath.Base(wfPath),

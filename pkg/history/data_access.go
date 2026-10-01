@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -230,8 +229,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 	}
 
 	// Sanitize filename to avoid creating subdirectories within the change dir
-	safeFilename := strings.ReplaceAll(filename, "/", "_")
-	safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+	safeFilename := SafeChangeFilename(filename)
 
 	// Encode file contents in base64 to avoid grep conflicts
 	originalEncoded := base64.StdEncoding.EncodeToString([]byte(originalCode))

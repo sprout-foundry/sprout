@@ -7,12 +7,14 @@ import { useEditorContextMenu } from '../hooks/useEditorContextMenu';
 import { useEditorCursor } from '../hooks/useEditorCursor';
 import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
 import { useEditorEvents } from '../hooks/useEditorEvents';
-import { useEditorExtensions } from '../hooks/useEditorExtensions';
+import { foldMarkerGutter, markerGutters, useEditorExtensions } from '../hooks/useEditorExtensions';
 import { useEditorFileIO } from '../hooks/useEditorFileIO';
 import { useEditorFileType } from '../hooks/useEditorFileType';
 import { useEditorKeymaps } from '../hooks/useEditorKeymaps';
 import { useEditorLSP } from '../hooks/useEditorLSP';
 import { useEditorScrollSync } from '../hooks/useEditorScrollSync';
+import { useIsMobileViewport } from '../hooks/useMobileSheets';
+import { useIsNarrow } from '../hooks/useIsNarrow';
 import { useEditorSemantic } from '../hooks/useEditorSemantic';
 import { useEditorSettings } from '../hooks/useEditorSettings';
 import { useEditorSymbols } from '../hooks/useEditorSymbols';
@@ -50,6 +52,8 @@ import {
   type OpenWorkspaceBufferFn,
 } from '../hooks/useCMView';
 
+const NARROW_EDITOR_WIDTH = 560;
+
 interface EditorPaneProps {
   paneId: string;
   onOpenCommandPalette?: () => void;
@@ -66,6 +70,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<CMEditorView | null>(null);
   const markdownPreviewBodyRef = useRef<HTMLDivElement>(null);
+  const isMobileViewport = useIsMobileViewport();
+  // Narrow editors (phones, tablet portrait beside the file tree, tight
+  // splits) keep only line numbers and the diff bar.
+  const isNarrowEditor = useIsNarrow(editorRef, NARROW_EDITOR_WIDTH);
+  const compactGutters = isMobileViewport || isNarrowEditor;
 
   const { compartments, buildExtensions } = useEditorExtensions();
 
@@ -250,6 +259,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     inlayHintsEnabled: settings.inlayHintsEnabled,
     signatureHelpEnabled: settings.signatureHelpEnabled,
     aiCompletionsEnabled: settings.aiCompletionsEnabled,
+    compactGutters,
   };
 
   // Resolve language for the current buffer. The CM extensions builder
@@ -367,6 +377,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // the ref indirection. Writes are safe during render — the ref object
   // is stable, only its `.current` changes.
   cmViewApiRef.current = cmViewApi;
+
+  // The lint, quick-fix and fold columns come back when the editor widens.
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: [
+        compartments.markerGutters.reconfigure(compactGutters ? [] : markerGutters()),
+        compartments.foldGutter.reconfigure(compactGutters ? [] : foldMarkerGutter()),
+      ],
+    });
+  }, [compartments, compactGutters]);
 
   // Tracks whether this pane is the active one. Updated on every render so
   // useEditorEvents' stable handler can read the latest value via the ref
@@ -557,6 +577,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,
+          workspaceRoot: contextMenu.workspaceRoot,
+          // Phones have no tab strip to name the file or mark it unsaved.
+          showFileName: isMobileViewport,
+          modified: isMobileViewport && buffer.isModified,
           onNavigate: (path) => {
             window.dispatchEvent(
               new CustomEvent('sprout:reveal-in-explorer', {

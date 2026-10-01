@@ -14,7 +14,18 @@
  */
 
 import type { TxnPullIO, TxnPushInput, TxnRunResult } from './cloudTxn';
-import { CloudTxnError } from './cloudTxn';
+import {
+  applyPullManifest,
+  buildPushManifest,
+  CloudTxnError,
+  createTxn,
+  resolveTxnWorkspace,
+  txnFinish,
+  txnPull,
+  txnPush,
+  txnRun,
+  TXN_RUN_TIMEOUT_SECONDS,
+} from './cloudTxn';
 
 /** Inline view state while an ETH-2 transaction runs. */
 export interface TxnProgress {
@@ -49,13 +60,24 @@ export function describeTxnError(err: unknown, phase: string): string {
   const detail = err instanceof Error && err.message ? err.message : err ? String(err) : 'unknown error';
   const action = phase === 'error' ? 'Cloud container run' : `${txnPhaseLabel(phase)} failed`;
   if (err instanceof CloudTxnError) {
-    if (err.status === 409) return 'another transaction is running, try again shortly';
+    // The platform says so when the workspace runs an outdated sprout
+    // (409 workspace_outdated) or the deployment has no workspace compute
+    // (503) — both need action, not a retry, so pass its wording through.
+    if (err.status === 409 && /older version/i.test(detail)) return capitalize(detail);
+    if (err.status === 409) return 'Another command is already running in the cloud workspace — try again shortly.';
     if (err.status === 402) return `Not enough credits: ${detail}`;
+    if (err.status === 503 && /not available on this deployment/i.test(detail)) {
+      return "Cloud workspaces aren't enabled on this deployment.";
+    }
     if (err.status === 502 || err.status === 503) {
       return 'Cloud workspace is unavailable right now — try again shortly.';
     }
   }
   return `${action}: ${detail}`;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
@@ -119,4 +141,79 @@ export async function txnPullIO(): Promise<TxnPullIO> {
     },
     deleteFiles: bridge.deleteVfsFiles,
   };
+}
+
+/** Outcome of one command run transactionally in the cloud workspace. */
+export interface TxnCommandOutcome {
+  result: TxnRunResult;
+  pulledFiles: number;
+  skippedFiles: number;
+  /** Non-fatal follow-up problem (e.g. the machine-stop call failed). */
+  warning?: string;
+}
+
+/**
+ * Run one command in the user's cloud workspace container for repoURL:
+ * open → push browser deltas → run → pull container deltas back into the
+ * VFS → finish. `finish` always runs once a txn is open (success, failure or
+ * timeout) so the pay-per-run machine is never left running. Throws with a
+ * phase-aware message (describeTxnError) on failure.
+ */
+export async function runTxnCommand(
+  repoURL: string,
+  command: string,
+  onPhase?: (phase: string) => void,
+): Promise<TxnCommandOutcome> {
+  let workspaceId = '';
+  let txnId = '';
+  let finished = false;
+  let phase = 'opening';
+  onPhase?.(phase);
+  try {
+    const resolved = await resolveTxnWorkspace(repoURL);
+    workspaceId = resolved.workspaceId;
+    const opened = await createTxn(workspaceId);
+    txnId = opened.txn_id;
+
+    phase = 'pushing';
+    onPhase?.(phase);
+    const { inputs, deletes } = await collectTxnPushFiles();
+    const manifest = await buildPushManifest(() => inputs, { deletes });
+    await txnPush(workspaceId, txnId, manifest);
+
+    phase = 'running';
+    onPhase?.(phase);
+    const result = await txnRun(workspaceId, txnId, command, TXN_RUN_TIMEOUT_SECONDS);
+
+    phase = 'pulling';
+    onPhase?.(phase);
+    const pulled = await txnPull(workspaceId, txnId);
+    const applied = await applyPullManifest(pulled, await txnPullIO());
+
+    let warning: string | undefined;
+    try {
+      await txnFinish(workspaceId, txnId);
+      finished = true;
+    } catch (err) {
+      warning = `Cloud container stop failed — it will idle out on its own. ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    }
+    return {
+      result,
+      pulledFiles: applied.applied,
+      skippedFiles: applied.skipped.length + pulled.skipped.length,
+      warning,
+    };
+  } catch (err) {
+    throw new Error(describeTxnError(err, phase));
+  } finally {
+    if (txnId !== '' && !finished) {
+      try {
+        await txnFinish(workspaceId, txnId);
+      } catch {
+        // The thrown error already names the side that failed.
+      }
+    }
+  }
 }

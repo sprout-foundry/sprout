@@ -229,3 +229,43 @@ func TestAssertNoStateLeak_StaleHeartbeatStillFails(t *testing.T) {
 		t.Fatal("expected leak detection with only a stale heartbeat, got 0")
 	}
 }
+
+// TestAssertNoStateLeak_LiveInstanceAfterStateDirOverride covers the
+// TestMain shape: the real dir is snapshotted, then SPROUT_STATE_DIR is
+// pointed at a temp dir for the run and still is when the check runs. A
+// live instance's writes into the real dir must still read as its own.
+func TestAssertNoStateLeak_LiveInstanceAfterStateDirOverride(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv("SPROUT_STATE_DIR", stateRoot)
+	t.Setenv("SPROUT_CONFIG_DIR", t.TempDir())
+	prev := snapshottedRealStateDir
+	t.Cleanup(func() { snapshottedRealStateDir = prev })
+
+	heartbeat := map[string]struct {
+		PID      int       `json:"pid"`
+		LastPing time.Time `json:"last_ping"`
+	}{
+		"instance_test": {PID: os.Getpid(), LastPing: time.Now()},
+	}
+	b, err := json.Marshal(heartbeat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(instancesConfigDir(), "instances.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	realDir, before := SnapshotRealStateDir()
+	if realDir == "" {
+		t.Fatal("precondition: real state dir should resolve")
+	}
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(realDir, "live-autosave.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := AssertNoStateLeak(realDir, before); code != 0 {
+		t.Fatal("a live instance's writes were reported as a leak after the state dir was overridden")
+	}
+}

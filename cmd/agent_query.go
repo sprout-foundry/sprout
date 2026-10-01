@@ -86,7 +86,7 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	_, err = ExecuteCommand(query)
 
 	if err != nil {
-		console.GlyphError.Fprintf(os.Stdout, "Error: %v", err)
+		console.GlyphError.Fprintln(os.Stderr, err.Error())
 		// Command execution failed - ask user if they want to send to LLM instead
 		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? " + console.FormatYesNoPromptStdout(true) + " "))
 
@@ -131,10 +131,9 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 	registry := agent_commands.NewCommandRegistry()
 	if registry.IsSlashCommand(query) {
 		if err := registry.Execute(query, chatAgent); err != nil {
-			// For slash commands, show error and exit immediately
-			console.GlyphError.Fprintf(os.Stderr, "Slash command error: %v", err)
-			console.GlyphInfo.Fprintf(os.Stderr, "Use '/help' to see available commands")
-			return fmt.Errorf("slash command failed: %w", err)
+			console.GlyphError.Fprintln(os.Stderr, err.Error())
+			console.Hintln(os.Stderr, "Type /help to see available commands.")
+			return markReported(fmt.Errorf("slash command failed: %w", err))
 		}
 		return nil
 	}

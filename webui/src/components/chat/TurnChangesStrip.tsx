@@ -144,9 +144,14 @@ function TurnChangesStripInner({ fileEdits, queryId, isLatestTurn, onReviewChang
       <button
         type="button"
         className="tcs-summary"
-        onClick={() => setExpanded((v) => !v)}
+        // One changed file opens its diff straight away (and shows revert);
+        // several list first.
+        onClick={() => {
+          if (turnEdits.length === 1 && !expanded) void handleReview(turnEdits[0].path);
+          setExpanded((v) => !v);
+        }}
         aria-expanded={expanded}
-        title="Files the agent changed this turn"
+        title={turnEdits.length === 1 ? `Review diff for ${turnEdits[0].path}` : 'Files the agent changed this turn'}
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <FileDiff size={12} />

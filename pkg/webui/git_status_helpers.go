@@ -4,6 +4,7 @@ package webui
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	ignore "github.com/sabhiram/go-gitignore"
@@ -57,6 +58,8 @@ func getGitFileStatusMap(workspaceRoot string) (modified, untracked map[string]b
 
 // getGitStatusForEntry determines the git status for a single file or directory entry.
 func getGitStatusForEntry(relPath string, isDir bool, modified, untracked map[string]bool, ignoreRules *ignore.GitIgnore, workspaceRoot string) string {
+	// The status maps are keyed by git's slash paths; relPath is OS-native.
+	relPath = filepath.ToSlash(relPath)
 	// Special case: .git directory is always gitignored
 	if isDir && relPath == ".git" {
 		return "ignored"

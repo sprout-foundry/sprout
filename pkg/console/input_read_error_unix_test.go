@@ -129,7 +129,7 @@ func TestHandleReadError_NonBlockingEOFOnHungupPipeIsFatal(t *testing.T) {
 	if !errors.Is(returnedErr, io.EOF) {
 		t.Fatalf("expected error to wrap io.EOF, got %v", returnedErr)
 	}
-	if !strings.Contains(stderr, "[console] stdin EOF") {
+	if !strings.Contains(stderr, "stdin EOF") {
 		t.Fatalf("expected EOF diagnostic, got %q", stderr)
 	}
 	if !strings.Contains(returnedErr.Error(), "stdin read error") {

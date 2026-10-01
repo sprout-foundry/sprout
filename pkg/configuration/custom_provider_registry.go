@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 const ProvidersDirName = "providers"
@@ -225,7 +227,17 @@ func DeleteCustomProvider(name string) error {
 	return nil
 }
 
+// DiscoverCustomProviderModels lists the provider's models, authenticating
+// with its configured env var or, failing that, the key stored for it in the
+// credential store.
 func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscoveryModel, error) {
+	return DiscoverCustomProviderModelsWithKey(cfg, "")
+}
+
+// DiscoverCustomProviderModelsWithKey is DiscoverCustomProviderModels with an
+// explicit API key, for setup flows that discover models before the pasted
+// key has been saved. An empty apiKey falls back to the configured sources.
+func DiscoverCustomProviderModelsWithKey(cfg CustomProviderConfig, apiKey string) ([]ProviderDiscoveryModel, error) {
 	normalized, err := NormalizeCustomProviderConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("normalize custom provider config: %w", err)
@@ -241,10 +253,8 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 	if err != nil {
 		return nil, fmt.Errorf("build discovery request: %w", err)
 	}
-	if normalized.EnvVar != "" {
-		if key := strings.TrimSpace(os.Getenv(normalized.EnvVar)); key != "" {
-			req.Header.Set("Authorization", "Bearer "+key)
-		}
+	if key := discoveryAPIKey(normalized, apiKey); key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -294,4 +304,22 @@ func DiscoverCustomProviderModels(cfg CustomProviderConfig) ([]ProviderDiscovery
 	})
 
 	return models, nil
+}
+
+func discoveryAPIKey(cfg CustomProviderConfig, explicit string) string {
+	if key := strings.TrimSpace(explicit); key != "" {
+		return key
+	}
+	if cfg.EnvVar != "" {
+		if key := strings.TrimSpace(os.Getenv(cfg.EnvVar)); key != "" {
+			return key
+		}
+	}
+	if !cfg.RequiresAPIKey {
+		return ""
+	}
+	if value, _, err := credentials.GetFromActiveBackend(cfg.Name); err == nil {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }

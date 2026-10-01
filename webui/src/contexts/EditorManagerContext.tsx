@@ -26,6 +26,8 @@ export { useBufferManager, type PaneBridge, BufferManagerProvider } from './Buff
 
 interface EditorManagerContextValue {
   buffers: Map<string, EditorBuffer>;
+  /** Live buffer map, updated as soon as a buffer is opened/changed/closed (ahead of the React commit). */
+  buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   panes: EditorPane[];
   paneLayout: PaneLayout;
   activePaneId: string | null;
@@ -56,6 +58,8 @@ interface EditorManagerContextValue {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
+    activate?: boolean;
+    paneId?: string;
     metadata?: Record<string, unknown>;
   }) => string;
   openCompareBuffer: (options: {
@@ -171,10 +175,14 @@ const PaneToBufferBridge: React.FC<{
   const activePaneIdRef = React.useRef(pane.activePaneId);
   const activeBufferIdRef = React.useRef(pane.activeBufferId);
   const panesRef = React.useRef(pane.panes);
+  const paneLayoutRef = React.useRef(pane.paneLayout);
+  const paneSizesRef = React.useRef(pane.paneSizes);
 
   activePaneIdRef.current = pane.activePaneId;
   activeBufferIdRef.current = pane.activeBufferId;
   panesRef.current = pane.panes;
+  paneLayoutRef.current = pane.paneLayout;
+  paneSizesRef.current = pane.paneSizes;
 
   const paneBridge: PaneBridge = React.useMemo(
     () => ({
@@ -187,14 +195,30 @@ const PaneToBufferBridge: React.FC<{
       get panes() {
         return panesRef.current;
       },
+      get paneLayout() {
+        return paneLayoutRef.current;
+      },
+      get paneSizes() {
+        return paneSizesRef.current;
+      },
       setActiveBufferId: pane.setActiveBufferId,
       setActivePaneId: pane.setActivePaneId,
       setPanes: pane.setPanes,
       switchPane: pane.switchPane,
       closeBuffer: (id: string) => closeBufferRef.current?.(id),
       moveBufferToPane: pane.moveBufferToPane,
+      setPaneLayout: pane.setPaneLayoutState,
+      setPaneSizes: pane.setPaneSizes,
     }),
-    [pane.setActiveBufferId, pane.setActivePaneId, pane.setPanes, pane.switchPane, pane.moveBufferToPane],
+    [
+      pane.setActiveBufferId,
+      pane.setActivePaneId,
+      pane.setPanes,
+      pane.switchPane,
+      pane.moveBufferToPane,
+      pane.setPaneLayoutState,
+      pane.setPaneSizes,
+    ],
   );
 
   return (
@@ -237,6 +261,7 @@ const CombinedContextProvider: React.FC<{
     () => ({
       // From BufferManager
       buffers: buffer.buffers,
+      buffersRef: buffer.buffersRef,
       openFile: buffer.openFile,
       openWorkspaceBuffer: buffer.openWorkspaceBuffer,
       openCompareBuffer: buffer.openCompareBuffer,

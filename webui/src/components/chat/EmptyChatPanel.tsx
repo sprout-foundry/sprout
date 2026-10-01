@@ -1,6 +1,9 @@
 import { Settings, CloudOff } from 'lucide-react';
 import { forwardRef } from 'react';
+import { isCloud } from '../../config/mode';
+import { useActiveRepoURL } from '../../services/activeRepo';
 import SproutLogo from '../SproutLogo';
+import { OpenRepositoryPanel } from './OpenRepositoryPanel';
 
 interface EmptyChatPanelProps {
   /** Show offline panel when backend requires health check and is unreachable */
@@ -15,6 +18,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   { showOffline = false, providerAvailable, onRetryConnection, onRequestProviderSetup },
   ref,
 ) {
+  const activeRepo = useActiveRepoURL();
   if (showOffline) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
@@ -63,6 +67,14 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (isCloud && !activeRepo) {
+    return (
+      <div className="chat-container chat-container--empty" ref={ref}>
+        <OpenRepositoryPanel />
       </div>
     );
   }

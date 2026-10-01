@@ -548,7 +548,7 @@ func TestBoost_IndexCommand_Status(t *testing.T) {
 		err := c.Execute([]string{"status"}, a)
 		assert.NoError(t, err)
 	})
-	assert.Contains(t, output, "Status")
+	assert.Contains(t, output, "Workspace index")
 }
 
 // =====================================================================
@@ -717,17 +717,23 @@ func TestHelpCommand_Execute_Output(t *testing.T) {
 	h := &HelpCommand{registry: registry}
 
 	// Capture stdout
+	// Drain concurrently: the help text exceeds the 4 KB Windows pipe
+	// buffer, so a read-after-Execute would deadlock on the write.
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
+	var buf bytes.Buffer
+	drained := make(chan struct{})
+	go func() {
+		_, _ = buf.ReadFrom(r)
+		close(drained)
+	}()
 
 	err := h.Execute(nil, nil)
 
 	w.Close()
 	os.Stdout = old
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	<-drained
 	output := buf.String()
 
 	assert.NoError(t, err)

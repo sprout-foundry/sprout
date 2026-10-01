@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -552,6 +553,9 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 // the write. Before the fix, the write hardcoded 0644 and silently
 // stripped the execute bit.
 func TestPatchStructuredFile_PreservesExistingFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no executable permission bit to preserve; os.Chmod only toggles read-only")
+	}
 	tmpDir := t.TempDir()
 	target := filepath.Join(tmpDir, "script.json")
 	if err := os.WriteFile(target, []byte(`{"mode":"script"}`), 0o644); err != nil {

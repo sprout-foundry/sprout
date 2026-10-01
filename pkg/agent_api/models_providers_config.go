@@ -170,7 +170,7 @@ func customProviderFilePath(providerName string) string {
 		// Fallback to env-based resolution if GetConfigDir fails
 		configRoot := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
 		if configRoot == "" {
-			if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+			if homeDir, homeErr := envutil.HomeDir(); homeErr == nil {
 				configRoot = filepath.Join(homeDir, ".config", "sprout")
 			}
 		}
@@ -185,7 +185,7 @@ func customProviderFilePath(providerName string) string {
 // SPROUT_CONFIG) doesn't find the file — e.g. when running inside a
 // workspace with isolated config but the provider was registered globally.
 func globalCustomProviderFilePath(providerName string) string {
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := envutil.HomeDir()
 	if err != nil {
 		return ""
 	}

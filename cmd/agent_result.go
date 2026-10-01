@@ -57,8 +57,10 @@ var outputPath string
 const maxDiffBytes = 1 << 20 // 1MB
 
 func init() {
-	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
-	agentCmd.Flags().StringVar(&outputPath, "output-path", "", "Write the structured JSON result to this file instead of stdout (requires --output-json)")
+	agentCmd.Flags().BoolVar(&outputFormatJSON, "json", false, "Print a structured JSON result to stdout after execution (for CI/SaaS integration)")
+	agentCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Write the structured JSON result to this file instead of stdout (requires --json)")
+	boolFlagAlias(agentCmd.Flags(), &outputFormatJSON, "output-json", "json", aliasSilent)
+	stringFlagAlias(agentCmd.Flags(), &outputPath, "output-path", "output", aliasSilent)
 	agentCmd.Flags().StringVar(&progressEventsTarget, "progress-events", "", "Emit one-line progress milestones to stderr, stdout, or a file path (e.g. --progress-events stderr)")
 }
 
@@ -142,7 +144,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
 			if f = strings.TrimSpace(f); f != "" {
 				untrackedFiles = append(untrackedFiles, f)
-				cmd := exec.Command("git", "diff", "--no-index", "/dev/null", f)
+				cmd := exec.Command("git", "diff", "--no-index", os.DevNull, f) //nolint:gosec // G204: f is a repo-relative path from git ls-files --others
 				d, err := cmd.Output()
 				if err != nil {
 					// Exit code 1 = files differ (normal); accept output.

@@ -240,7 +240,9 @@ func startDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger)
 		}
 	}
 
-	if err := cmd.Start(); err != nil {
+	err := cmd.Start()
+	closeParentStdio(cmd)
+	if err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
 
@@ -259,7 +261,7 @@ func startDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger)
 
 		healthy, _ := DetectDaemon(ctx, spec)
 		if healthy {
-			logger.Info("daemon started and healthy", slog.String("url", spec.DaemonURL))
+			logger.Debug("daemon started and healthy", slog.String("url", spec.DaemonURL))
 			return nil
 		}
 
@@ -310,7 +312,7 @@ func ensureDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger
 	// Fast path: daemon already reachable → just connect.
 	already, _ := DetectDaemon(ctx, spec)
 	if already {
-		logger.Info("daemon already running", slog.String("url", spec.DaemonURL))
+		logger.Debug("daemon already running", slog.String("url", spec.DaemonURL))
 		return true, nil
 	}
 
@@ -327,7 +329,7 @@ func ensureDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger
 	// This is NOT TryLockContext which retries until it wins or context
 	// expires — that would let a late-arriving process steal the lock
 	// after the winner releases it and spawn a second daemon.
-	f := flock.New(spec.PIDFilePath)
+	f := flock.New(electionLockPath(spec.PIDFilePath))
 	ok, err := f.TryLock()
 	if err != nil {
 		return false, fmt.Errorf("acquire PID-file lock on %s: %w", spec.PIDFilePath, err)
@@ -372,10 +374,24 @@ func ensureDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger
 
 	defer f.Unlock() // Release after daemon is healthy.
 
-	logger.Info("starting daemon (elected leader)", slog.String("url", spec.DaemonURL))
+	logger.Debug("starting daemon (elected leader)", slog.String("url", spec.DaemonURL))
 	if err := startDaemonInner(ctx, spec, logger); err != nil {
 		return false, err
 	}
 
 	return false, nil
+}
+
+// closeParentStdio closes this process's copies of the files handed to the
+// daemon as stdio; the daemon holds its own inherited handles. Keeping them
+// open leaks a descriptor per spawn and, on Windows, keeps the log file
+// locked against deletion after the daemon exits.
+func closeParentStdio(cmd *exec.Cmd) {
+	var closed *os.File
+	for _, w := range []any{cmd.Stdout, cmd.Stderr} {
+		if f, ok := w.(*os.File); ok && f != closed {
+			_ = f.Close()
+			closed = f
+		}
+	}
 }

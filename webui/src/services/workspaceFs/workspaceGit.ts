@@ -16,6 +16,7 @@
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
+import { gitCorsProxy } from '../gitCorsProxy';
 import { createGitFs } from './gitFs';
 import { normalizeFsPath } from './types';
 import type { WorkspaceFs } from './types';
@@ -83,6 +84,7 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
     await git.clone({
       fs: gitFs as unknown as Parameters<typeof git.clone>[0]['fs'],
       http,
+      corsProxy: gitCorsProxy(),
       dir,
       url,
       depth: opts.depth ?? 1,

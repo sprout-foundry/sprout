@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
@@ -38,7 +39,7 @@ var prCmd = &cobra.Command{
 	Short: "Create a GitHub pull request for the current branch",
 	Long: `Create a pull request on GitHub for the current working branch.
 
-If --title or --body are omitted and --skip-prompt is not set, a pre-filled
+If --title or --body are omitted and --yes is not set, a pre-filled
 editor will open for you to review and adjust before submission.
 
 Resolution order (handled by the backend):
@@ -50,20 +51,18 @@ Examples:
   sprout pr --title "Fix login bug" --body "Resolved the OAuth redirect issue"
   sprout pr --base develop --draft
   sprout pr --web                       # Open gh's web UI for PR creation
-  sprout pr --skip-prompt               # Use synthesised title/body without editor`,
-	Run: func(cmd *cobra.Command, args []string) {
+  sprout pr --yes                       # Use synthesised title/body without editor`,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
 		repoDir, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to get working directory: %v\n", err)
-			return
+			return fmt.Errorf("get working directory: %w", err)
 		}
 
 		// --- Web mode: delegate to gh pr create --web ---
 		if prWeb {
-			runWebMode(ctx, repoDir)
-			return
+			return runWebMode(ctx, repoDir)
 		}
 
 		// --- Resolve base branch (needed for title synthesis) ---
@@ -71,8 +70,7 @@ Examples:
 		if base == "" {
 			base, err = git.GetDefaultBranch(ctx, repoDir)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: failed to determine default branch: %v\n", err)
-				return
+				return fmt.Errorf("determine default branch: %w", err)
 			}
 		}
 
@@ -83,8 +81,7 @@ Examples:
 		if !prSkipPrompt && (title == "" || body == "") {
 			title, body, err = promptWithEditor(ctx, repoDir, base, title, body)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				return
+				return err
 			}
 		}
 
@@ -92,8 +89,7 @@ Examples:
 		if title == "" {
 			title, err = synthesizeTitle(ctx, repoDir, base)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: failed to synthesise title: %v\n", err)
-				return
+				return fmt.Errorf("synthesise title: %w", err)
 			}
 		}
 
@@ -106,20 +102,28 @@ Examples:
 		})
 		if err != nil {
 			if errors.Is(err, git.ErrNoGitHubAuth) {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			} else {
-				fmt.Fprintf(os.Stderr, "Error creating PR: %v\n", err)
+				return err
 			}
-			return
+			return fmt.Errorf("creating PR: %w", err)
 		}
 
-		// --- Success output ---
-		fmt.Printf("PR created: %s\n", result.URL)
-		if result.Number > 0 {
-			fmt.Printf("Number: #%d\n", result.Number)
-		}
-		fmt.Printf("State: %s\n", result.State)
+		reportPRCreated(result)
+		return nil
 	},
+}
+
+// reportPRCreated prints the PR URL alone on stdout (so `url=$(sprout pr …)`
+// works) and the human summary on stderr.
+func reportPRCreated(result *git.PullRequestResult) {
+	summary := "Created PR"
+	if result.Number > 0 {
+		summary += fmt.Sprintf(" #%d", result.Number)
+	}
+	if result.State != "" {
+		summary += " · " + result.State
+	}
+	console.GlyphSuccess.Print(summary)
+	fmt.Println(result.URL)
 }
 
 func init() {
@@ -128,19 +132,19 @@ func init() {
 	prCmd.Flags().StringVar(&prBase, "base", "", "Target branch (defaults to repo default)")
 	prCmd.Flags().BoolVar(&prDraft, "draft", false, "Create as a draft PR")
 	prCmd.Flags().BoolVar(&prWeb, "web", false, "Open PR creation in browser via gh CLI")
-	prCmd.Flags().BoolVar(&prSkipPrompt, "skip-prompt", false, "Skip editor prompt; use synthesised title/body")
+	prCmd.Flags().BoolVarP(&prSkipPrompt, "yes", "y", false, "Skip the editor; use the synthesised title/body")
+	boolFlagAlias(prCmd.Flags(), &prSkipPrompt, "skip-prompt", "yes", aliasDeprecated)
 }
 
 // ---------------------------------------------------------------------------
 // Web mode
 // ---------------------------------------------------------------------------
 
-func runWebMode(ctx context.Context, repoDir string) {
+func runWebMode(ctx context.Context, repoDir string) error {
 	// Resolve head branch
 	head, err := getCurrentBranch(ctx, repoDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return
+		return err
 	}
 
 	// Resolve base branch
@@ -148,8 +152,7 @@ func runWebMode(ctx context.Context, repoDir string) {
 	if base == "" {
 		base, err = git.GetDefaultBranch(ctx, repoDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to determine default branch: %v\n", err)
-			return
+			return fmt.Errorf("determine default branch: %w", err)
 		}
 	}
 
@@ -167,8 +170,7 @@ func runWebMode(ctx context.Context, repoDir string) {
 
 	_, err = git.RunGhCommand(ctx, repoDir, args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gh not available, trying to open browser directly...\n")
-		fmt.Fprintf(os.Stderr, "gh error: %v\n", err)
+		console.GlyphWarning.Printf("gh couldn't open the PR form (%v) — creating the PR directly", err)
 
 		// Fallback: create via API/CLI then open the URL
 		result, err := git.CreatePullRequest(ctx, repoDir, git.PullRequestRequest{
@@ -178,18 +180,18 @@ func runWebMode(ctx context.Context, repoDir string) {
 			Draft: prDraft,
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			return
+			return err
 		}
 
-		fmt.Printf("PR created: %s\n", result.URL)
+		reportPRCreated(result)
 		if err := openURL(result.URL); err != nil {
-			fmt.Fprintf(os.Stderr, "Tip: open %s in your browser\n", result.URL)
+			console.Hintln(os.Stderr, "Open the URL above in your browser.")
 		}
-		return
+		return nil
 	}
 
-	fmt.Println("Opened PR creation in browser.")
+	console.GlyphSuccess.Print("Opened PR creation in browser.")
+	return nil
 }
 
 // openURL launches the given URL in the user's default browser.
@@ -202,7 +204,7 @@ func runWebMode(ctx context.Context, repoDir string) {
 func openURL(url string) error {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("cmd", "/c", "start", url).Start()
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start() //nolint:gosec // G204: trusted PR URL opened in the browser
 	case "darwin":
 		return exec.Command("open", url).Start()
 	default:

@@ -49,8 +49,9 @@ if (typeof Response === 'undefined') {
 describe('cloudEndpointRegistry', () => {
   describe('CLOUD_ENDPOINTS', () => {
     it('should have all required endpoints defined', () => {
-      // Verify we have approximately 109 endpoints (19 wasm-local + 27 browser-git + 19 foundry-backend + 40 synthetic + 4 no-op)
-      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(109);
+      // Verify we have approximately 103 endpoints (19 wasm-local + 27 browser-git + 14 foundry-backend + 40 synthetic + 3 no-op);
+      // the chat-session list is served browser-local, outside the registry.
+      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(103);
     });
 
     it('should have unique path+method combinations', () => {
@@ -489,9 +490,9 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of no-op endpoints', () => {
       const noOp = getEndpointsByCategory('no-op');
-      // /api/open-in-file-browser plus the chat-sessions pin/unpin/delete-all
-      // endpoints that succeed silently in cloud mode.
-      expect(noOp.length).toBe(4);
+      // /api/open-in-file-browser plus the chat-sessions pin/unpin endpoints
+      // that succeed silently in cloud mode.
+      expect(noOp.length).toBe(3);
     });
 
     it('should have most endpoints as foundry-backend', () => {
@@ -563,21 +564,22 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
-    it('should correctly classify core chat session endpoints', () => {
-      // Core CRUD operations (GET/POST) remain foundry-backend so the
-      // platform can manage session lifecycle.
+    it('leaves the core chat session endpoints out of the registry', () => {
+      // The chat list is browser-local in cloud mode: CloudAdapter serves
+      // these from cloudChatSessions before the registry is consulted, so
+      // none may be classified (a classification would shadow nothing but
+      // would misdescribe where the data lives).
       const coreChatEndpoints = [
         '/api/chat-sessions',
         '/api/chat-sessions/create',
         '/api/chat-sessions/delete',
+        '/api/chat-sessions/delete-all',
         '/api/chat-sessions/rename',
         '/api/chat-sessions/switch',
       ];
 
       for (const path of coreChatEndpoints) {
-        const result = classifyEndpoint(path, 'POST');
-        expect(result).not.toBeNull();
-        expect(result?.category).toBe('foundry-backend');
+        expect(classifyEndpoint(path, 'POST')).toBeNull();
       }
     });
 
@@ -612,14 +614,13 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
-    it('should classify pin/unpin/delete-all chat session endpoints as no-op', () => {
+    it('should classify pin/unpin chat session endpoints as no-op', () => {
       // These succeed silently in cloud mode because sessions are managed
       // client-side. Returning 200/ok avoids error toasts when the UI
       // calls them (e.g. delete-all from a confirmation dialog).
       const noopEndpoints: Array<[string, 'POST']> = [
         ['/api/chat-sessions/pin', 'POST'],
         ['/api/chat-sessions/unpin', 'POST'],
-        ['/api/chat-sessions/delete-all', 'POST'],
       ];
 
       for (const [path, method] of noopEndpoints) {
@@ -714,8 +715,8 @@ describe('cloudEndpointRegistry', () => {
       expect(getResult?.category).toBe('synthetic');
       expect(getResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/home/user',
-        daemon_root: '/home/user',
+        workspace_root: '/workspace',
+        daemon_root: '/workspace',
       });
 
       const postResult = classifyEndpoint('/api/workspace', 'POST');
@@ -723,8 +724,8 @@ describe('cloudEndpointRegistry', () => {
       expect(postResult?.category).toBe('synthetic');
       expect(postResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/home/user',
-        daemon_root: '/home/user',
+        workspace_root: '/workspace',
+        daemon_root: '/workspace',
       });
     });
 

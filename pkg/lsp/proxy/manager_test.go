@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -22,13 +23,13 @@ func TestServerKey(t *testing.T) {
 			name:          "simple absolute path",
 			workspacePath: "/foo/bar",
 			languageID:    "go",
-			wantContains:  []string{"/foo/bar", "go"},
+			wantContains:  []string{filepath.FromSlash("/foo/bar"), "go"},
 		},
 		{
 			name:          "simple absolute path with typescript",
 			workspacePath: "/workspace",
 			languageID:    "typescript",
-			wantContains:  []string{"/workspace", "typescript"},
+			wantContains:  []string{filepath.FromSlash("/workspace"), "typescript"},
 		},
 		{
 			name:          "relative path (gets normalized to absolute)",
@@ -666,6 +667,7 @@ func TestManagerGetOrCreateReleasesRefCount(t *testing.T) {
 		release()
 
 		// Now evict with tiny timeout - should remove the idle process
+		backdateLastUsed(m)
 		m.EvictIdle(1 * time.Nanosecond)
 		assert.Equal(t, 0, m.Count())
 	})
@@ -691,6 +693,7 @@ func TestManagerEvictIdleActuallyEvicts(t *testing.T) {
 		release()
 
 		// Evict with tiny timeout - lastUsed is in the past relative to any timeout
+		backdateLastUsed(m)
 		m.EvictIdle(1 * time.Nanosecond)
 
 		// Process should have been evicted
@@ -716,6 +719,7 @@ func TestManagerEvictIdleKeepsActiveProcesses(t *testing.T) {
 
 		// Do NOT release - refCount is 1
 		// Evict with tiny timeout
+		backdateLastUsed(m)
 		m.EvictIdle(1 * time.Nanosecond)
 
 		// Process should NOT have been evicted because refCount > 0
@@ -723,6 +727,7 @@ func TestManagerEvictIdleKeepsActiveProcesses(t *testing.T) {
 
 		// Now release and evict again
 		release()
+		backdateLastUsed(m)
 		m.EvictIdle(1 * time.Nanosecond)
 		assert.Equal(t, 0, m.Count())
 	})
@@ -907,6 +912,7 @@ func TestManagerConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 10; j++ {
+				backdateLastUsed(m)
 				m.EvictIdle(1 * time.Nanosecond)
 			}
 		}()
@@ -925,4 +931,15 @@ func TestManagerConcurrentAccess(t *testing.T) {
 		// After all goroutines complete, manager should be in a consistent state
 		assert.GreaterOrEqual(t, m.Count(), 0)
 	})
+}
+
+// backdateLastUsed ages every entry so a nanosecond idle timeout is exceeded
+// even on clocks whose resolution is coarser than the test's runtime
+// (Windows' monotonic clock ticks every ~0.5-15ms).
+func backdateLastUsed(m *Manager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, e := range m.servers {
+		e.lastUsed = e.lastUsed.Add(-time.Second)
+	}
 }

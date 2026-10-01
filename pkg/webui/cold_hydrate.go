@@ -177,7 +177,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		// Skip directories
 		if fi.IsDir() {
 			rel, relErr := filepath.Rel(workspaceRoot, path)
-			if relErr == nil && isExcludedDir(rel) {
+			if relErr == nil && isExcludedDir(filepath.ToSlash(rel)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -193,6 +193,8 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		if relErr != nil {
 			return nil
 		}
+		// The browser replica is keyed by slash paths on every platform.
+		rel = filepath.ToSlash(rel)
 
 		// Skip excluded directories (belt and suspenders)
 		if isExcludedDir(rel) {

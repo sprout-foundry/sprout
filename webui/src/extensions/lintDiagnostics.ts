@@ -44,12 +44,18 @@ export { openLintPanel, nextDiagnostic, previousDiagnostic, forceLinting };
  * infrastructure without any active linting source.
  *
  * Diagnostics are pushed in imperatively via `updateDiagnostics()` /
- * `clearDiagnostics()`. The gutter shows severity-colored markers, and
- * the default keybindings are registered (Ctrl+Shift+m to open the
- * lint panel, F8 to jump to the next diagnostic).
+ * `clearDiagnostics()`, and the default keybindings are registered
+ * (Ctrl+Shift+m to open the lint panel, F8 to jump to the next
+ * diagnostic). The severity-marker gutter is separate
+ * (`lintDiagnosticsGutter`), so a layout can go without it.
  */
 export function lintDiagnostics() {
-  return [linter(null), lintGutter(), keymap.of(lintKeymap)];
+  return [linter(null), keymap.of(lintKeymap)];
+}
+
+/** The gutter of severity-colored diagnostic markers. */
+export function lintDiagnosticsGutter() {
+  return lintGutter();
 }
 
 /**

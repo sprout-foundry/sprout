@@ -29,7 +29,7 @@ var diagCmd = &cobra.Command{
 }
 
 func runDiag() {
-	fmt.Println("=== Sprout Configuration Diagnostics ===")
+	console.Heading(os.Stdout, "Sprout Configuration Diagnostics")
 	fmt.Println()
 
 	// Check global config — report the canonical config dir, not a
@@ -69,7 +69,7 @@ func runDiag() {
 	// Load and show custom providers
 	config, err := configuration.Load()
 	if err != nil {
-		console.GlyphError.Fprintf(os.Stdout, "Error loading config: %v", err)
+		console.GlyphError.Printf("Loading config: %v", err)
 		return
 	}
 
@@ -87,8 +87,7 @@ func runDiag() {
 	fmt.Println()
 
 	// MCP diagnostics
-	fmt.Println("MCP Configuration")
-	fmt.Println("=================")
+	console.Heading(os.Stdout, "MCP Configuration")
 	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		console.GlyphError.Fprintf(os.Stdout, "  Error loading MCP config: %v", err)
@@ -100,7 +99,7 @@ func runDiag() {
 		fmt.Println()
 
 		if len(mcpConfig.Servers) == 0 {
-			fmt.Println("  ⓘ No MCP servers configured")
+			fmt.Printf("  %sNo MCP servers configured\n", console.GlyphInfo.Prefix())
 		} else {
 			fmt.Println("  Configured Servers:")
 			redactedConfig := mcp.RedactMCPConfig(mcpConfig)

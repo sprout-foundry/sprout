@@ -5,6 +5,8 @@ import type { AppStoreSetState } from '../contexts/AppStore';
 import type { PerChatState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
+import { chatTranscriptToMessages } from '../utils/chatTranscript';
+import { endsRun } from '../utils/chatReplay';
 
 /** Debounce for background refreshes. Streaming emits many events; one fetch
  * per burst is enough — the response is the whole transcript. */
@@ -40,6 +42,11 @@ export const useBackgroundChatSync = (params: {
     for (const [chatId, cache] of Object.entries(perChatCache)) {
       if (chatId === activeChatIdRef.current) continue;
       if (!cache.pendingEvents?.length) continue;
+      // The stored transcript is written when a run ends; mid-run it lacks
+      // the turn in progress, and adopting it blanked the pane (and, on
+      // switch-back, the chat). Until then the pane keeps its last state and
+      // the queued events wait for the switch to replay them.
+      if (!endsRun(cache.pendingEvents)) continue;
 
       if (timersRef.current.has(chatId) || inFlightRef.current.has(chatId)) continue;
 
@@ -57,21 +64,16 @@ export const useBackgroundChatSync = (params: {
         void (async () => {
           try {
             const response = await fetchChatSessionMessages(chatId);
-            const fetched: Message[] = (response.chat_session.messages ?? [])
-              .filter((m) => m.role === 'user' || m.role === 'assistant')
-              .map((m, i) => ({
-                id: `chat-${chatId}-${i}`,
-                type: m.role as 'user' | 'assistant',
-                content: typeof m.content === 'string' ? m.content : '',
-                timestamp: new Date(),
-                ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-              }));
+            const fetched: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
             // Bail if the user switched to this chat while we fetched — the
             // switch path already installed authoritative state.
             if (activeChatIdRef.current === chatId) return;
             setState((prev) => {
               const existing = prev.perChatCache[chatId];
               if (!existing) return {};
+              // The run-end save can land a moment after query_completed; a
+              // copy with fewer messages than the pane is from before it.
+              if (fetched.length < existing.messages.length) return {};
               const remaining = (existing.pendingEvents ?? []).filter((e) => !seenEvents.has(e));
               return {
                 perChatCache: {
@@ -81,6 +83,7 @@ export const useBackgroundChatSync = (params: {
                     messages: trimMessages(fetched),
                     isProcessing: response.chat_session.active_query ?? false,
                     pendingEvents: remaining.length > 0 ? remaining : undefined,
+                    pendingEventsTruncated: undefined,
                   },
                 },
               };

@@ -992,6 +992,33 @@ describe('session_changed', () => {
     expect(messages[1].content).toBe('hi there');
   });
 
+  it('switch echo for a running chat keeps text the server has not saved yet', async () => {
+    const { stateHolder } = setup('chat-1');
+    stateHolder.current = {
+      ...stateHolder.current,
+      messages: [
+        { id: 'u', type: 'user', content: 'count to ten', timestamp: new Date() },
+        { id: 'a', type: 'assistant', content: '1 2 3 4', timestamp: new Date() },
+      ],
+    };
+    chatSessionsDouble.fetchChatSessionMessages.mockResolvedValueOnce({
+      active_chat_id: 'chat-1',
+      chat_session: { active_query: true, messages: [{ role: 'user', content: 'count to ten' }] },
+    });
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-sc-run',
+        type: 'session_changed',
+        data: { change: 'switch', summary: { id: 'chat-1' } },
+      });
+    });
+    await act(async () => {});
+
+    const messages = stateHolder.current.messages as Array<{ content: string }>;
+    expect(messages.map((m) => m.content)).toEqual(['count to ten', '1 2 3 4']);
+  });
+
   it('switch for a non-active chat does not touch the transcript', async () => {
     const { stateHolder } = setup('chat-1');
 

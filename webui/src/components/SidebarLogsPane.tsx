@@ -16,7 +16,6 @@ interface SidebarLogsPaneProps {
 
 export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Element {
   const logsContainerRef = useRef<HTMLDivElement>(null);
-  const logsEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollLogsRef = useRef(true);
 
   // Terminal-style log formatting helper
@@ -50,6 +49,8 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
         return d?.connected ? 'Connected' : 'Disconnected';
       case 'query_completed':
         return 'Query completed';
+      case 'session_changed':
+        return `Chat ${String(d?.change || 'updated')}`;
       case 'query_progress':
         return `Step: ${d?.step ?? '?'}`;
       case 'todo_update': {
@@ -112,10 +113,13 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
     [buildLogTimestamp],
   );
 
-  // Auto-scroll to bottom when logs change
+  // Auto-scroll to bottom when logs change. Scroll the list itself:
+  // scrollIntoView also scrolls every scrollable ancestor, which shifted the
+  // whole page up and cut off the top bar.
   useEffect(() => {
-    if (shouldAutoScrollLogsRef.current && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const container = logsContainerRef.current;
+    if (shouldAutoScrollLogsRef.current && container) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [logs.length]);
 
@@ -193,7 +197,6 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
             </div>
           );
         })}
-        <div ref={logsEndRef} />
       </div>
     </div>
   );

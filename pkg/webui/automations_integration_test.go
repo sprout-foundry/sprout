@@ -111,11 +111,12 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Errorf("expected empty session list, got %d items", len(sessionsEnvelope.Sessions))
 	}
 
-	// 4. Create a session file with PID 1 (init, always alive on Unix) to
-	// simulate a "running" session without risking the test process itself.
+	// 4. Create a session file owned by a live throwaway child to simulate
+	// a "running" session without risking the test process itself.
+	livePID := startSleeper(t)
 	sproutDir := createSessionFile(daemonRoot, "integ-sess-1", &automate.AutomateSessionInfo{
 		Workflow:       "build-check",
-		PID:            1,
+		PID:            livePID,
 		StartedAt:      time.Now(),
 		Kind:           "automate",
 		OutputFilePath: "",
@@ -171,8 +172,8 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 	if single.Status != "running" {
 		t.Errorf("expected status 'running', got %q", single.Status)
 	}
-	if single.PID != 1 {
-		t.Errorf("expected PID 1, got %d", single.PID)
+	if single.PID != livePID {
+		t.Errorf("expected PID %d, got %d", livePID, single.PID)
 	}
 
 	// 7. Stop the session via mux.

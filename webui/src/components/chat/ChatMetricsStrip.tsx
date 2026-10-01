@@ -1,5 +1,6 @@
 import { getPersonaColor } from '@sprout/ui';
 import { Cloud, Cpu, Server } from 'lucide-react';
+import { isCloud } from '../../config/mode';
 import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import './ChatMetricsStrip.css';
 
@@ -176,7 +177,9 @@ export function ChatMetricsStrip({ stats, isConnected, onModelClick }: ChatMetri
     );
   }
 
-  if (Number.isFinite(totalCost)) {
+  // Hosted usage is metered in credits, which the header shows; a dollar
+  // estimate here would disagree with the bill.
+  if (!isCloud && Number.isFinite(totalCost)) {
     segments.push(
       <span
         key="cost"

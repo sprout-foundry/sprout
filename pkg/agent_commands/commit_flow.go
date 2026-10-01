@@ -19,6 +19,7 @@ import (
 
 // CommitFlow manages the interactive commit workflow
 type CommitFlow struct {
+	agentError       error
 	agent            *agent.Agent
 	optimizer        *utils.DiffOptimizer
 	skipPrompt       bool
@@ -237,6 +238,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		skipPrompt:   cf.skipPrompt,
 		dryRun:       cf.dryRun,
 		allowSecrets: cf.allowSecrets,
+		agentError:   cf.agentError,
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -339,6 +341,7 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 		dryRun:           cf.dryRun,
 		allowSecrets:     cf.allowSecrets,
 		userInstructions: cf.userInstructions,
+		agentError:       cf.agentError,
 	}
 	return commitCmd.generateAndCommit(cf.agent, nil)
 }
@@ -357,6 +360,7 @@ func (cf *CommitFlow) executeNonInteractive() error {
 		dryRun:           cf.dryRun,
 		allowSecrets:     cf.allowSecrets,
 		userInstructions: cf.userInstructions,
+		agentError:       cf.agentError,
 	}
 	return commitCmd.executeMultiFileCommit(cf.agent)
 }

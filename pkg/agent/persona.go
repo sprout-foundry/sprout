@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
@@ -100,7 +101,7 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	if personaID == personas.IDComputerUser {
 		SetActiveComputerUseAgent(a)
 
-		a.PublishAgentMessage("warning", "⚠  COMPUTER USE ACTIVE — The agent can now control your mouse, keyboard, and screen. Watch the screen. Stop the agent (Ctrl+C) if it does something unexpected. Per-session opt-in, panic key, and destructive-app blocking are NOT yet implemented.", nil)
+		a.PublishAgentMessage("warning", computerUseWarning(), nil)
 	} else {
 		if prev := a.state.GetActivePersona(); prev == personas.IDComputerUser || personaID != personas.IDComputerUser {
 			SetActiveComputerUseAgent(nil)
@@ -285,4 +286,13 @@ func (a *Agent) canSpawnNonDelegatable(target string) bool {
 		}
 	}
 	return false
+}
+
+func computerUseWarning() string {
+	panicKey := "The panic key is off or unavailable (see the startup log)."
+	if chord := computer_use.ArmedPanicChord(); chord != "" {
+		panicKey = fmt.Sprintf("Press %s to halt computer-use actions.", strings.ToUpper(chord))
+	}
+	return "⚠  COMPUTER USE ACTIVE — The agent can now control your mouse, keyboard, and screen. Watch the screen. Stop the agent (Ctrl+C) if it does something unexpected. " +
+		panicKey + " Per-session opt-in and destructive-app blocking are NOT yet implemented."
 }

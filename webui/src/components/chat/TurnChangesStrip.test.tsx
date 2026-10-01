@@ -109,6 +109,17 @@ describe('TurnChangesStrip', () => {
     await waitFor(() => expect(onReviewChange).toHaveBeenCalledWith('a.go', { stats: '+10 -2', diff: 'diff text' }));
   });
 
+  it('opens a single changed file\u2019s diff straight from the summary', async () => {
+    getChangeDiff.mockResolvedValue({ found: true, stats: '+1 -0', diff: 'd' });
+    renderStrip({ fileEdits: [mkEdit({ path: 'only.go' })] });
+    await act(async () => {
+      fireEvent.click(container.querySelector('.tcs-summary')!);
+    });
+    await waitFor(() => expect(onReviewChange).toHaveBeenCalledWith('only.go', { stats: '+1 -0', diff: 'd' }));
+    // Revert stays one click away.
+    expect(container.querySelector('.tcs-revert')).not.toBeNull();
+  });
+
   it('Revert posts since = first serverTs minus margin', async () => {
     revertChanges.mockResolvedValue({ restored: 1, failed: 0, summary: '1 restored, 0 failed (scope=all)' });
     renderStrip({

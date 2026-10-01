@@ -19,8 +19,7 @@ import (
 func runMCPAdd() error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("MCP Server Setup")
-	fmt.Println("==================")
+	console.Heading(os.Stdout, "MCP Server Setup")
 	fmt.Println()
 
 	// Load existing config

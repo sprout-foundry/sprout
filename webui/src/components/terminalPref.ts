@@ -22,14 +22,22 @@ export const TERMINAL_HEIGHT_MIN = 120;
 export const TERMINAL_HEIGHT_DEFAULT = 400;
 /** Pixel reservation from the bottom of the viewport so the terminal never fully covers it. */
 export const TERMINAL_HEIGHT_MAX_FACTOR = 100;
+/**
+ * Default height for a first visit: 400px, but at most 30% of the window,
+ * so on a laptop-height screen the chat and editor keep most of the room.
+ */
+export const defaultTerminalHeight = (): number => {
+  if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
+  return Math.max(TERMINAL_HEIGHT_MIN, Math.min(TERMINAL_HEIGHT_DEFAULT, Math.round(window.innerHeight * 0.3)));
+};
 /** localStorage key for the terminal height pref. */
 export const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
 
 /** Parses a stored terminal height; falls back to default on any non-finite value. */
 export const parseTerminalHeight = (raw: string | null): number => {
-  if (!raw) return TERMINAL_HEIGHT_DEFAULT;
+  if (!raw) return defaultTerminalHeight();
   const n = Number(raw);
-  return Number.isFinite(n) ? n : TERMINAL_HEIGHT_DEFAULT;
+  return Number.isFinite(n) ? n : defaultTerminalHeight();
 };
 
 /** Clamps to [MIN, viewport_innerHeight - MAX_FACTOR]; default for non-finite or SSR. */

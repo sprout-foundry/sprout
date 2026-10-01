@@ -31,6 +31,11 @@
 	// methods use the Node.js (err, value) callback convention so they slot
 	// directly into Go's fsCall wrapper.
 
+	// The process working directory, shared by the filesystem (relative paths
+	// resolve against it) and the process shim's cwd()/chdir().
+	let cwd = "/";
+	let chdirImpl = null;
+
 	if (!globalThis.fs) {
 		const encoder = new TextEncoder(); // utf-8 by default
 		const decoder = new TextDecoder(); // utf-8 by default
@@ -58,9 +63,12 @@
 		const now = () => Date.now();
 
 		const normalize = (p) => {
-			// Collapse "."/".." segments and repeated slashes. Every path is treated
-			// as absolute (relative to "/"); a leading slash is added if missing.
-			const isAbs = p.length > 0 && p[0] === "/";
+			// Collapse "."/".." segments and repeated slashes. Relative paths
+			// resolve against the working directory, as they would on a real OS.
+			if (p.length === 0 || p[0] !== "/") {
+				p = cwd + "/" + p;
+			}
+			const isAbs = true;
 			const parts = p.split("/");
 			const stack = [];
 			for (const part of parts) {
@@ -186,6 +194,17 @@
 		const EEXIST = () => errWithCode("EEXIST", "file already exists");
 		const EBADF = () => errWithCode("EBADF", "bad file descriptor");
 		const ENOTEMPTY = () => errWithCode("ENOTEMPTY", "directory not empty");
+
+		chdirImpl = (pathStr) => {
+			const p = normalize(pathStr);
+			if (files.has(p)) {
+				throw ENOTDIR();
+			}
+			if (!isDir(p)) {
+				throw ENOENT(p);
+			}
+			cwd = p;
+		};
 
 		// Console output buffering for stdout/stderr so partial lines are held
 		// until a newline is written (matches upstream behaviour).
@@ -605,8 +624,12 @@
 			pid: -1,
 			ppid: -1,
 			umask() { return 0; },
-			cwd() { return "/"; },
-			chdir() { },
+			cwd() { return cwd; },
+			chdir(p) {
+				if (chdirImpl) {
+					chdirImpl(p);
+				}
+			},
 			platform: "browser",
 		}
 	}

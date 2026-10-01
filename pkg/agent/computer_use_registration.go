@@ -101,9 +101,9 @@ func (a *Agent) checkComputerUseActivation() error {
 		return errors.NewPermission("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)", nil)
 	}
 	// Reject non-interactive activation. cfg.SkipPrompt is true for
-	// `sprout agent --skip-prompt`, automate workflows, and the daemon.
+	// `sprout agent --yes` (alias --skip-prompt), automate workflows, and the daemon.
 	if cfg.SkipPrompt {
-		return errors.NewPermission("the computer_user persona cannot run under --skip-prompt or in daemon mode (computer use requires explicit interactive consent)", nil)
+		return errors.NewPermission("the computer_user persona cannot run under --yes/--skip-prompt or in daemon mode (computer use requires explicit interactive consent)", nil)
 	}
 	if support := computer_use.CheckPlatformSupport(); !support.Supported {
 		return errors.NewTool("computer_use", fmt.Sprintf("computer use is unavailable on this machine: %s", support.Reason), nil)

@@ -39,7 +39,7 @@ export type { Notification } from './contexts/NotificationContext';
 export type { CursorPosition, StatusBarProps } from './components/StatusBar';
 export type { ContextMenuProps } from './components/ContextMenu';
 export type { FileInfo } from './types/file-tree';
-export type { FileTreeHandle, FileTreeProps } from './components/FileTree';
+export type { FileTreeHandle, FileTreeProps, FileTreeRefreshOptions } from './components/FileTree';
 export type { GitStatusData, GitFile, FileSection, GitCommitSummary, GitCommitDetail, GitCommitFileEntry, } from './types/git-types';
 export type { RevisionFile, Revision, RevisionDetailFile } from './types/revision';
 export { normalizeRevision, buildRevisionFileKey } from './types/revision';

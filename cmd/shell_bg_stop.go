@@ -88,7 +88,7 @@ func runShellBgStop(sessionID string) error {
 	// Use automate.StopProcess for the signal escalation
 	ok, err := automate.StopProcess(pid)
 	if err != nil {
-		console.GlyphWarning.Printf("Error stopping process %d: %v", pid, err)
+		console.GlyphWarning.Printf("Could not stop process %d: %v", pid, err)
 	}
 
 	// Clean up files
@@ -120,7 +120,7 @@ func stopFromBPM(bpm *tools.BackgroundProcessManager, proc *tools.BackgroundProc
 
 	// Use BPM's Stop method (it has process group awareness)
 	if err := bpm.Stop(sessionID, shellBgGrace); err != nil {
-		console.GlyphWarning.Printf("Error stopping session %s: %v", sessionID, err)
+		console.GlyphWarning.Printf("Could not stop session %s: %v", sessionID, err)
 	}
 
 	// Clean up files
@@ -238,7 +238,7 @@ func runShellBgStopAll() error {
 		console.GlyphAction.Printf("Stopping session %s (PID %d)...", sessionID, pid)
 		ok, err := automate.StopProcess(pid)
 		if err != nil {
-			console.GlyphWarning.Printf("Error stopping PID %d: %v", pid, err)
+			console.GlyphWarning.Printf("Could not stop process %d: %v", pid, err)
 		}
 		cleanupShellBgFiles(baseDir, sessionID)
 		if ok {

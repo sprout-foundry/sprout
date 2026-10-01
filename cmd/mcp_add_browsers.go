@@ -21,8 +21,7 @@ import (
 
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	console.GlyphInfo.Print("Playwright MCP Server Setup")
-	fmt.Println("=============================")
+	console.Heading(os.Stdout, "Playwright MCP Server Setup")
 	fmt.Println()
 
 	// Check if Playwright server already exists
@@ -118,8 +117,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 
 func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("ⓘ Chrome DevTools MCP Server Setup")
-	fmt.Println("====================================")
+	console.Heading(os.Stdout, "Chrome DevTools MCP Server Setup")
 	fmt.Println()
 
 	// Check if Chrome DevTools server already exists

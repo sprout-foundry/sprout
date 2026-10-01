@@ -9,7 +9,9 @@ import { useEffect, useState } from 'react';
  * AppContent's sidebar context in some test harnesses.
  */
 export function useIsMobileViewport(): boolean {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 768px)').matches,
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;

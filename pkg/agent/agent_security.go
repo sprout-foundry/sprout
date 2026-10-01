@@ -70,17 +70,18 @@ func (a *Agent) ListAllowedCdTargets() []string {
 	// Add the workspace root first.
 	workspaceRoot := a.currentWorkspaceRoot()
 	if workspaceRoot != "" {
-		result = append(result, normalizePath(workspaceRoot))
+		result = append(result, canonicalPath(workspaceRoot))
 	}
 
-	// Add session-allowlisted folders to the others list.
+	// Add session-allowlisted folders to the others list, deduplicated
+	// by the case-folded key but shown in their original spelling.
 	folders := a.SnapshotSessionAllowedFolders()
 	seen := make(map[string]bool)
 	for _, f := range folders {
-		cleaned := normalizePath(f)
-		if !seen[cleaned] {
-			seen[cleaned] = true
-			others = append(others, cleaned)
+		key := normalizePath(f)
+		if !seen[key] {
+			seen[key] = true
+			others = append(others, canonicalPath(f))
 		}
 	}
 

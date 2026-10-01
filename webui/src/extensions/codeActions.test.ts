@@ -125,6 +125,7 @@ import { ViewPlugin as MockViewPlugin } from '@codemirror/view';
 import { ApiService as MockApiService } from '../services/api';
 import { debugLog as mockDebugLog } from '../utils/log';
 import {
+  codeActionsGutter,
   createCodeActionsExtension,
   codeActionsKeybinding,
   codeActionsConfig,
@@ -241,12 +242,16 @@ describe('createCodeActionsExtension', () => {
     expect(Array.isArray(extension)).toBe(true);
   });
 
-  it('returns an array with exactly 4 items', () => {
+  it('returns an array with exactly 3 items (the gutter is separate)', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
       () => 'const x = 1;',
     );
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
+  });
+
+  it('provides the lightbulb gutter on its own', () => {
+    expect(codeActionsGutter()).toBeTruthy();
   });
 
   it.skip('first item is a facet configuration', () => {
@@ -274,14 +279,6 @@ describe('createCodeActionsExtension', () => {
     expect(extension[2]).toBeTruthy();
   });
 
-  it('fourth item is the gutter extension', () => {
-    const extension = createCodeActionsExtension(
-      () => 'test.ts',
-      () => 'const x = 1;',
-    );
-    expect(extension[3]).toBeTruthy();
-  });
-
   it('accepts optional onApplyEdits callback', () => {
     const onApplyEdits = vi.fn();
     const extension = createCodeActionsExtension(
@@ -290,7 +287,7 @@ describe('createCodeActionsExtension', () => {
       onApplyEdits,
     );
 
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
   });
 
   it('works with undefined file path', () => {
@@ -298,7 +295,7 @@ describe('createCodeActionsExtension', () => {
       () => undefined,
       () => 'const x = 1;',
     );
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
   });
 
   it('works with empty content', () => {
@@ -306,7 +303,7 @@ describe('createCodeActionsExtension', () => {
       () => 'test.ts',
       () => '',
     );
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
   });
 });
 
@@ -320,7 +317,7 @@ describe('CodeActionsPlugin static actions', () => {
     );
 
     // Verify array has the expected structure for CM6
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
     expect(Array.isArray(extension)).toBe(true);
     // Each item should be a valid CM6 extension object
     expect(extension[0]).toBeDefined();
@@ -341,7 +338,7 @@ describe('CodeActionsPlugin static actions', () => {
 
     // Extensions should be able to exist in an array together
     const allExtensions = [...ext1, ...ext2];
-    expect(allExtensions).toHaveLength(8);
+    expect(allExtensions).toHaveLength(6);
   });
 });
 
@@ -355,7 +352,7 @@ describe('Edge cases', () => {
       () => '__workspace/test.ts',
       () => 'const x = 1;',
     );
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
   });
 
   it('handles files without extensions', () => {
@@ -363,7 +360,7 @@ describe('Edge cases', () => {
       () => 'Makefile',
       () => 'all: build',
     );
-    expect(extension).toHaveLength(4);
+    expect(extension).toHaveLength(3);
   });
 
   it('handles various file extensions', () => {
@@ -374,7 +371,7 @@ describe('Edge cases', () => {
         () => `test${ext}`,
         () => '// content',
       );
-      expect(extension).toHaveLength(4);
+      expect(extension).toHaveLength(3);
     }
   });
 

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import DocumentOutlinePanel from './DocumentOutlinePanel';
 import ResizeHandle from './ResizeHandle';
+import { isLayeredLayout } from '../config/layout';
 import './EditorWithOutline.css';
 
 interface EditorWithOutlineProps {
@@ -35,7 +36,12 @@ function EditorWithOutline({
   // Persist collapsed state to localStorage
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem('sprout.outline-panel.collapsed') === '1';
+    const stored = window.localStorage.getItem('sprout.outline-panel.collapsed');
+    // The layered layout puts the conversation beside an open file; with the
+    // outline open too, the file itself got a narrow strip. Start collapsed
+    // there until the user opens it.
+    if (stored === null) return isLayeredLayout;
+    return stored === '1';
   });
 
   // Persist panel width to localStorage
@@ -84,7 +90,12 @@ function EditorWithOutline({
       {isFileOpen && (
         <>
           {!isCollapsed && (
-            <ResizeHandle direction="horizontal" onResize={handleResize} className="outline-resize-handle" />
+            <ResizeHandle
+              direction="horizontal"
+              onResize={handleResize}
+              className="outline-resize-handle"
+              ariaLabel="Resize outline"
+            />
           )}
           <div className="outline-panel-container" style={outlinePanelStyle}>
             <DocumentOutlinePanel

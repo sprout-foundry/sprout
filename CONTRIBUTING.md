@@ -184,7 +184,7 @@ schema. See any config in that directory for reference:
     "env_var": "CEREBRAS_API_KEY"
   },
   "defaults": {
-    "model": "zai-glm-4.7",
+    "model": "qwen-3.8-27b",
     "temperature": 1.0,
     "max_tokens": -1,
     "top_p": 0.95

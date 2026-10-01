@@ -56,7 +56,7 @@ func TestSettingsProvidersPutPersistenceFailureReturns500(t *testing.T) {
 	// existing provider, then make the provider file read-only so the
 	// overwrite WriteFile fails.
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	setTestHome(t, homeDir)
 	t.Setenv("SPROUT_CONFIG", t.TempDir()) // scoped dir differs from global
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -209,7 +209,7 @@ func TestManagerEnrichCustomProvidersIsIdempotent(t *testing.T) {
 func setupProviderHandlerEnv(t *testing.T) string {
 	t.Helper()
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	setTestHome(t, homeDir)
 	configDir := filepath.Join(homeDir, ".config", "sprout")
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		t.Fatalf("create global config directory: %v", err)

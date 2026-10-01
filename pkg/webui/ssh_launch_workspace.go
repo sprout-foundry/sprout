@@ -184,7 +184,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
-	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, binaryWasUploaded, logger)
+	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, binaryWasUploaded, req.forward, logger)
 	if err != nil {
 		return nil, fmt.Errorf("start remote SSH backend: %w", err)
 	}

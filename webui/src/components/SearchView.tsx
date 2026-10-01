@@ -31,6 +31,10 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [contextMenu, setContextMenu] = useState<SearchContextMenuState | null>(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
+  // Replace-all rewrites every matched file; the first click arms it and
+  // the second applies, so a stray click can't mass-edit the workspace.
+  const [replaceArmed, setReplaceArmed] = useState(false);
+
   const onRowContextMenu = useCallback((e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
     createRowContextMenuHandler(setContextMenu)(e, filePath, lineNumber, lineText);
   }, []);
@@ -135,6 +139,10 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     handleClear,
     handleFileClick,
   } = state;
+
+  useEffect(() => {
+    setReplaceArmed(false);
+  }, [searchQuery, replaceQuery]);
 
   // ── Render ───────────────────────────────────────────────────
   return (
@@ -266,15 +274,25 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
             <Replace className="search-input-icon" size={16} />
             <input
               type="text"
-              className="search-replace-input"
+              className="search-text-input"
               placeholder="Replace..."
+              aria-label="Replace with"
               value={replaceQuery}
               onChange={(e) => setReplaceQuery(e.target.value)}
             />
           </div>
           <button
-            className="search-replace-btn"
-            onClick={handleReplace}
+            type="button"
+            className={`search-replace-btn${replaceArmed ? ' armed' : ''}`}
+            onClick={() => {
+              if (!replaceArmed) {
+                setReplaceArmed(true);
+                return;
+              }
+              setReplaceArmed(false);
+              void handleReplace();
+            }}
+            onBlur={() => setReplaceArmed(false)}
             disabled={
               isSearching ||
               !searchQuery.trim() ||
@@ -282,9 +300,14 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
               !filteredResults ||
               filteredResults.length === 0
             }
-            title="Replace all in matched files"
+            title={
+              replaceArmed
+                ? `Click again to replace in ${filteredResults?.length ?? 0} file(s)`
+                : 'Replace all in matched files'
+            }
           >
-            {isSearching ? <Loader2 size={16} className="spinning" /> : <Replace size={16} />}
+            {isSearching ? <Loader2 size={14} className="spinning" /> : <Replace size={14} aria-hidden="true" />}
+            <span>{replaceArmed ? 'Confirm' : 'Replace all'}</span>
           </button>
         </div>
       )}

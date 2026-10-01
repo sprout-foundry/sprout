@@ -2,6 +2,7 @@ package agent
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -73,8 +74,13 @@ func TestConstrainToolResultForModel_FetchURLOverLimit_CustomDir(t *testing.T) {
 }
 
 func TestConstrainToolResultForModel_FetchURLOverLimit_BadDir(t *testing.T) {
-	// Point to a path that can't be written to, triggering the "unavailable" or error path
-	t.Setenv("SPROUT_FETCH_URL_ARCHIVE_DIR", "/proc/nonexistent/sprout")
+	// A directory beneath a regular file can't be created on any OS,
+	// triggering the "unavailable" or error path.
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SPROUT_FETCH_URL_ARCHIVE_DIR", filepath.Join(blocker, "sprout"))
 
 	result := strings.Repeat("e", defaultFetchURLResultMaxChars+1)
 	args := map[string]interface{}{"url": "https://example.com"}

@@ -87,8 +87,18 @@ func (w *Logger) LogUserInteraction(message string) {
 // LogProcessStep logs the current step in a process.
 func (w *Logger) LogProcessStep(step string) {
 	w.logger.Printf("Process Step: %s", step)
-	// Print process step to stdout
-	fmt.Printf("Step: %s\n", step)
+	processStepSink("Step: " + step + "\n")
+}
+
+// processStepSink prints process steps. pkg/console replaces it so steps
+// reported mid-turn go above the live prompt instead of over it.
+var processStepSink = func(line string) { fmt.Print(line) }
+
+// SetProcessStepSink installs the printer used by LogProcessStep.
+func SetProcessStepSink(fn func(line string)) {
+	if fn != nil {
+		processStepSink = fn
+	}
 }
 
 // Log logs a general message only to the log file.

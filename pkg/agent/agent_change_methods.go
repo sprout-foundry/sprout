@@ -58,9 +58,13 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	// that only read cost zero. The parent's own walk picks up any gap:
 	// its next shell command diffs the whole tree, capturing subagent
 	// mutations the subagent's tracker never observed.
+	//
+	// The primary re-baselines at every turn (EnableChangeTracking runs per
+	// query): edits the user made between turns must not be diffed as the
+	// agent's own at its next shell command.
 	if a.subagentDepth == 0 {
 		if root := a.currentWorkspaceRoot(); root != "" {
-			a.changeTracker.PrimeShellTracking(root)
+			a.changeTracker.RebaseShellTracking(root)
 		}
 	}
 
@@ -350,6 +354,19 @@ func (a *Agent) TrackFileWrite(filePath string, originalContent string, content 
 	return nil
 }
 
+// TrackFileWriteState is TrackFileWrite for callers that know whether the
+// file existed before the write (so an existing empty file isn't recorded as
+// a create, which revert would delete).
+func (a *Agent) TrackFileWriteState(filePath string, originalContent string, content string, existed bool) error {
+	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
+		err := a.changeTracker.TrackFileWriteState(filePath, originalContent, content, existed)
+		a.changeTracker.SyncShellCacheForPath(filePath)
+		return err
+	}
+	a.AddTaskAction("file_created", fmt.Sprintf("Created/updated file: %s", filePath), filePath)
+	return nil
+}
+
 // TrackFileEdit is called by the EditFile tool to track file edits
 func (a *Agent) TrackFileEdit(filePath string, originalContent string, newContent string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
@@ -382,7 +399,7 @@ func (a *Agent) TrackShellCommand(command string) error {
 	// post-cd shell command discard the primed baseline and pay a full
 	// cold re-walk (with the triggering command's diff silently
 	// dropped). Workspace root is stable for the agent's lifetime.
-	tracker.TrackShellTurn(a.currentWorkspaceRoot(), "shell_command", shellIsDestructive(command))
+	tracker.TrackShellCommandTurn(a.currentWorkspaceRoot(), command, shellIsDestructive(command))
 	return nil
 }
 

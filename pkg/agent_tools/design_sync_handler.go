@@ -411,8 +411,8 @@ func writeSyncPlan(ctx context.Context, env ToolEnv, plan *design.SyncApplyPlan)
 		}
 		undos = append(undos, undo{abs: abs, created: created, original: original})
 		// Session change tracking (best-effort), mirroring write_file.
-		if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
-			if trackErr := fn(abs, string(original), string(w.Content)); trackErr != nil {
+		if funcs := env.ResolveToolFuncs(); funcs.TracksWrites() {
+			if trackErr := funcs.TrackWrite(abs, string(original), string(w.Content), !created); trackErr != nil {
 				log.Printf("[design_sync] change tracking failed for %q: %v", w.Path, trackErr)
 			}
 		}

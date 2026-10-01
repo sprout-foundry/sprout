@@ -439,3 +439,189 @@ func TestProbe_WriteExistingEmptyFile(t *testing.T) {
 		t.Errorf("DATA LOSS: revert deleted the pre-existing empty .gitkeep (%v)\n%.300s", err, out)
 	}
 }
+
+// ---- audit claims (step 4) ----
+
+func probeAgentCfg(t *testing.T, dir string, mutate func(*configuration.Config), responses ...*ScriptedResponse) *Agent {
+	t.Helper()
+	ag, _ := probeAgent(t, dir, responses...)
+	_ = ag.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
+		mutate(c)
+		return nil
+	})
+	return ag
+}
+
+// Known limitation, kept as a probe: shell-mutation tracking diffs bounded
+// workspace walks (max_files / max_duration_ms), so when a walk is cut short
+// a file created outside the walked portion is not recorded (and not
+// reverted). Fixing it needs change detection that isn't bounded by the walk
+// (e.g. git status for tracked repos).
+func TestProbe_KnownLimitation_TruncatedWalkMissesChanges(t *testing.T) {
+	dir := probeRepo(t)
+	for i := 0; i < 400; i++ {
+		writeFile(t, dir, filepath.Join("", "f"+strings.Repeat("x", i%7)+string(rune('a'+i%26))+".txt"), "content\n")
+	}
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-qm", "many")
+	ag := probeAgentCfg(t, dir, func(c *configuration.Config) {
+		if c.ChangeTracking == nil {
+			c.ChangeTracking = &configuration.ChangeTrackingConfig{}
+		}
+		c.ChangeTracking.MaxFiles = 50 // force truncated walks
+	},
+		tc("s1", "shell_command", map[string]any{"command": "printf 'n\\n' > new_from_shell.txt"}),
+		tc("s2", "shell_command", map[string]any{"command": "printf 'm\\n' > another.txt"}),
+		NewScriptedTextResponse("done"),
+	)
+	if _, err := ag.ProcessQuery("shell"); err != nil {
+		t.Fatal(err)
+	}
+	probeReport(t, dir, ag)
+	revertAll(t, dir, ag)
+}
+
+func TestProbe_Audit5_BulkRollupRevert(t *testing.T) {
+	dir := probeRepo(t)
+	var calls []*ScriptedResponse
+	for i := 0; i < 12; i++ {
+		calls = append(calls, tc("w"+string(rune('a'+i)), "write_file", map[string]any{"path": "d" + string(rune('a'+i)) + ".txt", "content": "agent\n"}))
+	}
+	for i := 0; i < 12; i++ {
+		writeFile(t, dir, "d"+string(rune('a'+i))+".txt", "orig\n")
+	}
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-qm", "d files")
+	calls = append(calls, tc("gc", "shell_command", map[string]any{"command": "git checkout -- ."}), NewScriptedTextResponse("done"))
+	ag, _ := probeAgent(t, dir, calls...)
+	if _, err := ag.ProcessQuery("write then checkout"); err != nil {
+		t.Fatal(err)
+	}
+	l := listChanges(t, ag, map[string]any{"group_by": "change"})
+	_, raw := relPaths(t, dir, l)
+	t.Logf("per-change: %v", raw)
+	// The agent's 12 writes were discarded by git checkout; revert should
+	// restore the agent's work that checkout destroyed, or at least not fail
+	// on the bulk row.
+	out, err := handleRevertMyChanges(context.Background(), ag, map[string]any{"scope": "all"})
+	t.Logf("revert: err=%v out=%s", err, out)
+	t.Logf("git after revert: %v", gitChanged(t, dir))
+	for i := 0; i < 3; i++ {
+		b, _ := os.ReadFile(filepath.Join(dir, "d"+string(rune('a'+i))+".txt"))
+		t.Logf("d%c.txt = %q", rune('a'+i), b)
+	}
+}
+
+func TestProbe_Audit8_PatchStructuredUntracked(t *testing.T) {
+	dir := probeRepo(t)
+	writeFile(t, dir, "pkg.json", "{\"name\":\"x\"}\n")
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-qm", "json")
+	ag, _ := probeAgent(t, dir,
+		tc("p1", "patch_structured_file", map[string]any{"path": "pkg.json", "patch_ops": []any{map[string]any{"op": "replace", "path": "/name", "value": "y"}}}),
+		NewScriptedTextResponse("done"),
+	)
+	if _, err := ag.ProcessQuery("patch"); err != nil {
+		t.Fatal(err)
+	}
+	probeReport(t, dir, ag)
+	revertAll(t, dir, ag)
+}
+
+func TestProbe_Audit12_RevertTraceAndMode(t *testing.T) {
+	dir := probeRepo(t)
+	writeFile(t, dir, "run.sh", "#!/bin/sh\necho hi\n")
+	if err := os.Chmod(filepath.Join(dir, "run.sh"), 0o755); err != nil { //nolint:gosec // G302: the probe needs an executable script to check revert keeps the mode
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-qm", "script")
+	ag, _ := probeAgent(t, dir,
+		tc("e1", "edit_file", map[string]any{"path": "run.sh", "old_str": "hi", "new_str": "bye"}),
+		NewScriptedTextResponse("done"),
+	)
+	if _, err := ag.ProcessQuery("edit"); err != nil {
+		t.Fatal(err)
+	}
+	revertAll(t, dir, ag)
+	if info, err := os.Stat(filepath.Join(dir, "run.sh")); err == nil && info.Mode().Perm()&0o100 == 0 {
+		t.Errorf("revert dropped the executable bit: %v", info.Mode())
+	}
+	l := listChanges(t, ag, nil)
+	_, raw := relPaths(t, dir, l)
+	t.Logf("list_changes after revert: %v", raw)
+	if len(l.Files) != 0 {
+		t.Errorf("list_changes still reports reverted changes: %v", raw)
+	}
+	out, _ := handleRevertMyChanges(context.Background(), ag, map[string]any{"scope": "all"})
+	t.Logf("second revert: %.300s", out)
+	if strings.Contains(out, "stale") {
+		t.Errorf("second revert reports stale failures for already-reverted files")
+	}
+}
+
+func TestProbe_Audit7_Filters(t *testing.T) {
+	dir := probeRepo(t)
+	if err := os.MkdirAll(filepath.Join(dir, "pkg", "auth"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ag, _ := probeAgent(t, dir,
+		tc("w1", "write_file", map[string]any{"path": "pkg/auth/x.go", "content": "package auth\n"}),
+		tc("e1", "edit_file", map[string]any{"path": "a.txt", "old_str": "alpha", "new_str": "A"}),
+		NewScriptedTextResponse("done"),
+	)
+	if _, err := ag.ProcessQuery("edits"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tcase := range []struct {
+		args map[string]any
+		want string
+	}{
+		{map[string]any{"path_pattern": "pkg/auth/*.go"}, "x.go"},
+		{map[string]any{"tool": "edit_file"}, "a.txt"},
+		{map[string]any{"tool": "write_file"}, "x.go"},
+	} {
+		l := listChanges(t, ag, tcase.args)
+		_, raw := relPaths(t, dir, l)
+		if len(l.Files) != 1 || filepath.Base(l.Files[0].Path) != tcase.want {
+			t.Errorf("filter %v: want only %s, got %v", tcase.args, tcase.want, raw)
+		}
+	}
+}
+
+func TestProbe_Audit9_AutoSkipAfterBigFormat(t *testing.T) {
+	dir := probeRepo(t)
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 220; i++ {
+		writeFile(t, dir, filepath.Join("src", "f"+strings.Repeat("y", i/26)+string(rune('a'+i%26))+".go"), "package src\n")
+	}
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-qm", "src")
+	ag, _ := probeAgent(t, dir,
+		tc("s1", "shell_command", map[string]any{"command": "for f in src/*.go; do printf '// formatted\\n' >> \"$f\"; done"}),
+		NewScriptedTextResponse("turn 1"),
+		tc("s2", "shell_command", map[string]any{"command": "printf 'later edit\\n' >> src/fa.go"}),
+		NewScriptedTextResponse("turn 2"),
+	)
+	if _, err := ag.ProcessQuery("format everything"); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "checkout", "--", ".") // user discards the formatting
+	if _, err := ag.ProcessQuery("small edit"); err != nil {
+		t.Fatal(err)
+	}
+	l := listChanges(t, ag, map[string]any{"group_by": "change"})
+	found := false
+	for _, f := range l.Files {
+		if strings.HasSuffix(f.Path, "src/fa.go") && f.Tool != "" {
+			found = true
+		}
+	}
+	_, raw := relPaths(t, dir, l)
+	t.Logf("per-change: %.600v", raw)
+	if !found {
+		t.Errorf("after a 200+ file rollup, a later edit under src/ is no longer tracked")
+	}
+}

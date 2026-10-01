@@ -96,8 +96,9 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		// ChangeTracker hooks: keep session file-mutation tracking working
 		// now that write/edit execution lives in pkg/agent_tools. Without
 		// these the Agent Changes panel and revert tooling see nothing.
-		TrackFileWrite: agent.TrackFileWrite,
-		TrackFileEdit:  agent.TrackFileEdit,
+		TrackFileWrite:      agent.TrackFileWrite,
+		TrackFileWriteState: agent.TrackFileWriteState,
+		TrackFileEdit:       agent.TrackFileEdit,
 		TrackShellCommand: func(command string) error {
 			return agent.TrackShellCommand(command)
 		},

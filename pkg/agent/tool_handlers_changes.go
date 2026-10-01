@@ -65,13 +65,13 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		return `{"revision_id":"","enabled":false,"count":0,"files":[]}`, nil
 	}
 
-	changes := applyChangeFilters(tracker.GetChanges(), args)
+	changes := applyChangeFilters(tracker.GetChanges(), args, a.currentWorkspaceRoot())
 
 	if groupBy == "block" {
 		return buildBlockSummary(tracker.GetRevisionID(), changes)
 	}
 
-	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args)
+	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args, a.currentWorkspaceRoot())
 }
 
 // handleListChangesPersistedOnly is the include_persisted path when no
@@ -128,7 +128,7 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 
 // buildFileList renders the per-file shape for list_changes. Used both
 // for session-only and session+persisted output.
-func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}) (string, error) {
+func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}, workspaceRoot string) (string, error) {
 	type bulkItemEntry struct {
 		Path string `json:"path"`
 		Op   string `json:"op"`
@@ -144,7 +144,10 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		Recoverable bool            `json:"recoverable"`
 		BulkCount   int             `json:"bulk_count,omitempty"`
 		BulkItems   []bulkItemEntry `json:"bulk_items,omitempty"`
-		Diff        string          `json:"diff,omitempty"`
+		// Changes is how many recorded changes the entry folds together
+		// (per-file grouping); omitted for a single change.
+		Changes int    `json:"changes,omitempty"`
+		Diff    string `json:"diff,omitempty"`
 	}
 
 	// Hoist the snapshot out of the loop: GetChanges() copies the full
@@ -154,6 +157,23 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 	if includeDiff && len(changes) > 0 {
 		allChanges = tracker.GetChanges()
 	}
+	// The session view shows one entry per file with its net effect; a
+	// file changed several times (or created and deleted again) is one
+	// fact for the reader, not several. group_by="change" and the
+	// cross-session timeline keep one entry per recorded change.
+	groupByFile := asString(args["group_by"]) != "change" && !includeCrossSession
+	// Every path the session buffer knows about — including ones grouping
+	// drops as net-zero or a filter excluded — so the persisted merge below
+	// doesn't re-add them from history.
+	inMemoryPaths := make(map[string]bool)
+	for _, ch := range tracker.GetChanges() {
+		inMemoryPaths[ch.FilePath] = true
+	}
+	var grouped map[string]netFileChange
+	if groupByFile {
+		changes, grouped = groupChangesByFile(changes)
+	}
+
 	files := make([]fileEntry, 0, len(changes))
 	for _, ch := range changes {
 		entry := fileEntry{
@@ -164,6 +184,12 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 			Source:      ch.Source,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
 			BulkCount:   ch.BulkCount,
+		}
+		if g, ok := grouped[ch.FilePath]; ok && g.count > 1 {
+			// Several changes fold into one entry: report their net effect.
+			entry.Op = g.op
+			entry.Recoverable = g.recoverable
+			entry.Changes = g.count
 		}
 		if ch.Operation == "bulk" {
 			entry.Recoverable = len(ch.BulkItems) > 0
@@ -205,7 +231,8 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		// is BOTH committed (persisted) and re-edited this turn isn't
 		// listed twice. The in-memory entry wins because it carries
 		// the latest, possibly uncommitted, state.
-		seenInMemory := make(map[string]bool, len(files))
+		seenInMemory := inMemoryPaths
+		persistedIndex := map[string]int{}
 		for _, f := range files {
 			seenInMemory[f.Path] = true
 		}
@@ -231,7 +258,16 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 				if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 					continue
 				}
-				files = append(files, fileEntry{
+				// Apply the same filters as the session buffer. Persisted
+				// records carry no tool label, so a tool filter excludes
+				// them rather than letting every path through.
+				if asString(args["tool"]) != "" {
+					continue
+				}
+				if pat := asString(args["path_pattern"]); pat != "" && !pathPatternMatches(pat, ch.Filename, workspaceRoot) {
+					continue
+				}
+				entry := fileEntry{
 					Path:        ch.Filename,
 					Op:          deriveOpFromChangeLog(ch),
 					Tool:        "(persisted)",
@@ -240,7 +276,19 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 					RevisionID:  ch.RequestHash,
 					Tier:        ch.Tier,
 					Recoverable: ch.OriginalCode != "",
-				})
+				}
+				// Per-file view: keep only the latest persisted record of
+				// each path.
+				if groupByFile {
+					if i, ok := persistedIndex[ch.Filename]; ok {
+						if ch.Timestamp.After(files[i].Timestamp) {
+							files[i] = entry
+						}
+						continue
+					}
+					persistedIndex[ch.Filename] = len(files)
+				}
+				files = append(files, entry)
 			}
 		}
 		sort.Slice(files, func(i, j int) bool {
@@ -344,7 +392,7 @@ func buildBlockSummary(revisionID string, changes []TrackedFileChange) (string, 
 // since=<ISO8601 OR duration>, tool=<name>, path_pattern=<glob> args.
 // Returns a copy of the matched subset so callers don't mutate the
 // tracker's internal slice.
-func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}) []TrackedFileChange {
+func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}, workspaceRoot string) []TrackedFileChange {
 	cutoff, _ := parseRecentSince(asString(args["since"]))
 	toolFilter, _ := args["tool"].(string)
 	pattern, _ := args["path_pattern"].(string)
@@ -357,18 +405,131 @@ func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}
 		if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 			continue
 		}
-		if toolFilter != "" && ch.ToolCall != toolFilter {
+		if toolFilter != "" && !toolNameMatches(toolFilter, ch.ToolCall) {
 			continue
 		}
-		if pattern != "" {
-			match, _ := filepath.Match(pattern, ch.FilePath)
-			if !match {
-				continue
-			}
+		if pattern != "" && !pathPatternMatches(pattern, ch.FilePath, workspaceRoot) {
+			continue
 		}
 		out = append(out, ch)
 	}
 	return out
+}
+
+// toolNameMatches compares a tool filter with a recorded ToolCall label,
+// accepting both the tool name the model knows (write_file, edit_file) and
+// the tracker's label (WriteFile, EditFile).
+func toolNameMatches(filter, toolCall string) bool {
+	norm := func(s string) string { return strings.ToLower(strings.ReplaceAll(s, "_", "")) }
+	return norm(filter) == norm(toolCall)
+}
+
+// pathPatternMatches matches a glob against a tracked (absolute) path. A
+// pattern with a separator matches the workspace-relative path (e.g.
+// "pkg/auth/*.go"); one without matches the base name (e.g. "*.go"); a
+// pattern ending in "/" matches everything under that directory.
+func pathPatternMatches(pattern, path, workspaceRoot string) bool {
+	rel := path
+	if workspaceRoot != "" {
+		if r, err := filepath.Rel(workspaceRoot, path); err == nil && !strings.HasPrefix(r, "..") {
+			rel = r
+		}
+	}
+	rel = filepath.ToSlash(rel)
+	pattern = filepath.ToSlash(pattern)
+	if strings.HasSuffix(pattern, "/") {
+		return strings.HasPrefix(rel, pattern) || strings.HasPrefix(filepath.ToSlash(path), pattern)
+	}
+	if !strings.Contains(pattern, "/") {
+		ok, _ := filepath.Match(pattern, filepath.Base(path))
+		return ok
+	}
+	for _, candidate := range []string{rel, filepath.ToSlash(path)} {
+		if ok, _ := filepath.Match(pattern, candidate); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// netFileChange is the net effect of all recorded changes to one file.
+type netFileChange struct {
+	op          string // "create" | "delete" | "edit"
+	count       int
+	recoverable bool
+}
+
+// groupChangesByFile collapses changes to one entry per file (the latest
+// change, positioned at its latest occurrence) and computes each file's net
+// effect from whether it existed before the first change and after the last.
+// Files whose changes net out to nothing — created then deleted, or edited
+// back to their original content — are dropped. Bulk rollup entries pass
+// through unchanged.
+func groupChangesByFile(changes []TrackedFileChange) ([]TrackedFileChange, map[string]netFileChange) {
+	type span struct {
+		first, last TrackedFileChange
+		count       int
+	}
+	spans := map[string]*span{}
+	for _, ch := range changes {
+		if ch.Operation == "bulk" {
+			continue
+		}
+		sp := spans[ch.FilePath]
+		if sp == nil {
+			spans[ch.FilePath] = &span{first: ch, last: ch, count: 1}
+			continue
+		}
+		sp.last = ch
+		sp.count++
+	}
+
+	net := make(map[string]netFileChange, len(spans))
+	for path, sp := range spans {
+		existedBefore := sp.first.Operation != "create"
+		existsAfter := sp.last.Operation != "delete"
+		var op string
+		switch {
+		case !existedBefore && !existsAfter:
+			continue // created and deleted again: no net change
+		case !existedBefore:
+			op = "create"
+		case !existsAfter:
+			op = "delete"
+		case isRecoverableOriginal(sp.first.OriginalCode) && sp.first.OriginalCode == sp.last.NewCode:
+			continue // edited back to the original: no net change
+		default:
+			op = "edit"
+		}
+		net[path] = netFileChange{
+			op:          op,
+			count:       sp.count,
+			recoverable: op == "create" || sp.first.OriginalCode == "" || isRecoverableOriginal(sp.first.OriginalCode),
+		}
+	}
+
+	out := make([]TrackedFileChange, 0, len(net))
+	for i, ch := range changes {
+		if ch.Operation == "bulk" {
+			out = append(out, ch)
+			continue
+		}
+		if _, keep := net[ch.FilePath]; !keep {
+			continue
+		}
+		// Emit each file once, at its latest change.
+		latest := true
+		for _, later := range changes[i+1:] {
+			if later.FilePath == ch.FilePath && later.Operation != "bulk" {
+				latest = false
+				break
+			}
+		}
+		if latest {
+			out = append(out, ch)
+		}
+	}
+	return out, net
 }
 
 // ---------------------------------------------------------------------------
@@ -567,6 +728,24 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 		if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 			continue
 		}
+		// A bulk rollup (e.g. `git checkout .` over many files) carries
+		// per-file before/after content in BulkItems; revert those files
+		// individually. The rollup row's own FilePath is a label, not a
+		// file, and count-only rollups (no items) have nothing to restore.
+		if ch.Operation == "bulk" {
+			for _, item := range ch.BulkItems {
+				filtered = append(filtered, TrackedFileChange{
+					FilePath:     item.FilePath,
+					OriginalCode: item.OriginalCode,
+					NewCode:      item.NewCode,
+					Operation:    item.Operation,
+					Timestamp:    ch.Timestamp,
+					ToolCall:     ch.ToolCall,
+					Source:       ch.Source,
+				})
+			}
+			continue
+		}
 		filtered = append(filtered, ch)
 	}
 
@@ -618,11 +797,24 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 		return "", false, "path is outside the workspace — skipped"
 	}
 
+	// Already at its pre-session state (e.g. a later `git checkout`
+	// discarded the agent's edit, or an earlier revert already ran):
+	// nothing to restore, and reporting it as stale would be wrong.
+	current, readErr := os.ReadFile(abs)
+	exists := readErr == nil
+	if ch.Operation == "create" && !exists {
+		return "none", true, "already absent (the created file no longer exists)"
+	}
+	if ch.Operation != "create" && exists && string(current) == ch.OriginalCode &&
+		(ch.OriginalCode == "" || isRecoverableOriginal(ch.OriginalCode)) {
+		return "none", true, "already at its original content"
+	}
+
 	// Staleness guard: if the file on disk no longer matches what the
 	// agent wrote (NewCode), it was modified intentionally after the
 	// snapshot — by a git commit, another session, or manual edit.
 	// Reverting would silently clobber that newer work.
-	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode) {
+	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode, ch.Timestamp) {
 		history.AuditRevertSkip("revertOne", abs, "stale or committed")
 		return "", false, "file modified since snapshot (stale — skipped)"
 	}
@@ -634,12 +826,15 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 			return "delete", false, fmt.Sprintf("remove created file: %v", err)
 		}
 		if tracker != nil {
+			tracker.RecordRevert(abs, string(current), "", false, "revert_my_changes")
 			tracker.SyncShellCacheForPath(abs)
 		}
 		return "delete", true, "removed file created during session"
 	}
 
-	if !isRecoverableOriginal(ch.OriginalCode) {
+	// Past the create branch, an empty original is a genuinely empty file
+	// (existence is recorded explicitly), so it restores as empty.
+	if ch.OriginalCode != "" && !isRecoverableOriginal(ch.OriginalCode) {
 		return "", false, "original content was not captured (binary, oversized, or outside workspace)"
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -657,6 +852,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}
 	if tracker != nil {
+		tracker.RecordRevert(abs, string(current), ch.OriginalCode, true, "revert_my_changes")
 		tracker.SyncShellCacheForPath(abs)
 	}
 	return "restore", true, "wrote original content back to disk"
@@ -800,6 +996,6 @@ func isStaleForRevert(absPath, newCode string) bool {
 // recovery paths that have the snapshot's OriginalCode. This allows
 // recovery of uncommitted work destroyed by a destructive git command
 // (git checkout, git reset, git clean) that aligned the file to HEAD.
-func isStaleForRevertWithOriginal(absPath, newCode, originalCode string) bool {
-	return !history.IsRevertSafeWithOriginal(absPath, newCode, originalCode)
+func isStaleForRevertWithOriginal(absPath, newCode, originalCode string, changedAt time.Time) bool {
+	return !history.IsRevertSafeAt(absPath, newCode, originalCode, changedAt)
 }

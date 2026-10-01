@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func gitIn(t *testing.T, dir string, args ...string) {
@@ -68,7 +69,7 @@ func TestRunStagedReview_RunsReviewerSubagentOnStagedDiff(t *testing.T) {
 		return client, nil
 	}
 
-	res, err := parent.RunStagedReview(context.Background(), "debug output", "", "")
+	res, err := parent.RunStagedReview(context.Background(), "debug output")
 	if err != nil {
 		t.Fatalf("RunStagedReview: %v", err)
 	}
@@ -99,7 +100,58 @@ func TestRunStagedReview_ErrorsWithoutStagedChanges(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	parent.workspaceRoot = initReviewRepo(t)
 
-	if _, err := parent.RunStagedReview(context.Background(), "", "", ""); err == nil {
+	if _, err := parent.RunStagedReview(context.Background(), ""); err == nil {
 		t.Fatal("expected error when nothing is staged")
+	}
+}
+
+func TestResolveSubagentProviderModel_ReviewerUsesReviewSettings(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	if err := parent.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
+		c.SubagentProvider = "subagent-prov"
+		c.SubagentModel = "subagent-model"
+		c.ReviewProvider = "review-prov"
+		c.ReviewModel = "review-model"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+
+	provider, model, _, err := resolveSubagentProviderModel(parent, "code_reviewer", true, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "review-prov" || model != "review-model" {
+		t.Errorf("reviewer resolved to %s/%s, want review-prov/review-model", provider, model)
+	}
+
+	provider, model, _, err = resolveSubagentProviderModel(parent, "coder", true, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "subagent-prov" || model != "subagent-model" {
+		t.Errorf("coder resolved to %s/%s, want subagent settings", provider, model)
+	}
+}
+
+func TestResolveSubagentProviderModel_ReviewerWithoutReviewSettings(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	if err := parent.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
+		c.SubagentProvider = "subagent-prov"
+		c.SubagentModel = "subagent-model"
+		c.ReviewProvider = ""
+		c.ReviewModel = ""
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	provider, model, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "subagent-prov" || model != "subagent-model" {
+		t.Errorf("reviewer resolved to %s/%s, want subagent settings when review_* unset", provider, model)
 	}
 }

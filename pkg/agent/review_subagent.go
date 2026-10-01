@@ -24,9 +24,9 @@ var reviewVerdictPattern = regexp.MustCompile(`(?i)VERDICT:\s*\**\s*(APPROVE|CHA
 
 // RunStagedReview runs the reviewer persona as a subagent over the staged
 // change: it starts with the staged diff and repo conventions pre-loaded and
-// can open files to check its findings. provider/model override the persona's
-// resolution when non-empty.
-func (a *Agent) RunStagedReview(ctx context.Context, focus, provider, model string) (*StagedReviewResult, error) {
+// can open files to check its findings. The model follows the reviewer
+// persona's resolution, which honors review_provider/review_model.
+func (a *Agent) RunStagedReview(ctx context.Context, focus string) (*StagedReviewResult, error) {
 	root, err := filepath.Abs(a.currentWorkspaceRoot())
 	if err != nil {
 		return nil, agenterrors.NewConfig("failed to resolve absolute workspace path", err)
@@ -40,9 +40,6 @@ func (a *Agent) RunStagedReview(ctx context.Context, focus, provider, model stri
 	resolvedProvider, resolvedModel, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, root)
 	if err != nil {
 		return nil, err
-	}
-	if provider != "" {
-		resolvedProvider, resolvedModel = provider, model
 	}
 
 	task := "Review the staged change above for real problems before it is committed."

@@ -102,6 +102,17 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 
+		// Reviews share one model setting: an explicit review_provider covers
+		// the reviewer persona too, ahead of the generic subagent settings.
+		if reviewProvider := strings.TrimSpace(config.GetReviewProvider()); reviewProvider != "" &&
+			!personaProviderExplicit && isReviewerPersona(a, persona) {
+			provider = reviewProvider
+			if !personaModelExplicit {
+				model = config.GetReviewModel()
+			}
+			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
+		}
+
 		// Log no-persona spawn resolution for observability. persona is defaulted
 		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
 		// so we check the explicit-provided flag rather than the empty string —

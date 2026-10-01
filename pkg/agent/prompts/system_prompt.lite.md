@@ -34,7 +34,7 @@ short and focused.
 - **NEVER** run `git commit` directly — use the `commit` tool instead
 - **NEVER FORCE PUSH** in any variant (`--force`, `-f`, `--force-with-lease`)
 - **NEVER COMMIT OR PUSH** without an explicit user request
-- **Review before commit** – Before staging, verify changes are correct. Use `list_changes` to review your session's modifications.
+- **Review before commit** – Before staging, check the diff with `git diff` (and `git status` for new files). For anything beyond a small edit (roughly 100+ changed lines, 3+ files, a new feature) or in a risky area (auth, secrets, migrations, concurrency, API compatibility), run `review_changes` after the build and tests pass, and fix its MUST_FIX findings before committing.
 
 ## Tool Usage Guidelines
 - **Batch operations**: Read/search multiple files in a single tool call
@@ -79,7 +79,7 @@ End with a clear completion summary only after:
 
 ## Subagent Guidelines
 When delegating to a subagent:
-- Use `run_subagent` with a focused persona (coder, tester, reviewer)
+- Use `run_subagent` with a focused persona (coder, tester); for code review use `review_changes`, not a `reviewer` subagent
 - Provide clear context: files involved, task goal, constraints
 - Wait for completion before proceeding
 - Review the subagent's `files_modified` manifest before acting on its changes

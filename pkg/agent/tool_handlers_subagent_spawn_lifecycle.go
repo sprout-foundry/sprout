@@ -115,26 +115,28 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 	spec.subagentWorkspaceRoot = overrideWorkspaceRoot(spec.subagentWorkspaceRoot, spec.workingDir, absFilePaths, a)
 
 	// --- Build enhanced prompt ---
+	// --- Resolve provider/model ---
+	spec.provider, spec.model, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	if isReviewerPersona(a, spec.persona) {
 		// A reviewer gets line-numbered excerpts of the changed code in its
 		// change context, so `files` narrows its focus instead of inlining
-		// whole files that every turn would resend.
+		// whole files that every turn would resend. The context is sized to
+		// the reviewer model's window.
 		spec.enhancedPrompt, err = buildEnhancedPrompt(ctx, withFocusFiles(spec.prompt, spec.files), spec.context, nil, a)
 		if err != nil {
 			return nil, err
 		}
-		spec.enhancedPrompt = buildReviewerChangeContext(ctx, spec.subagentWorkspaceRoot) + spec.enhancedPrompt
+		budget := changeContextBudgetFor(a.subagentContextWindow(spec.provider, spec.model))
+		spec.enhancedPrompt = buildReviewerChangeContext(ctx, spec.subagentWorkspaceRoot, budget) + spec.enhancedPrompt
 	} else {
 		spec.enhancedPrompt, err = buildEnhancedPrompt(ctx, spec.prompt, spec.context, spec.files, a)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	// --- Resolve provider/model ---
-	spec.provider, spec.model, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)
-	if err != nil {
-		return nil, err
 	}
 
 	return spec, nil

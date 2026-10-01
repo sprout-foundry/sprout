@@ -143,6 +143,7 @@ func Load() (*Config, error) {
 
 	// Migrate legacy approved_shell_commands to unified command_policies
 	MigrateCommandPolicies(config)
+	upgradeLegacyWakeupBudget(config)
 
 	return config, nil
 }

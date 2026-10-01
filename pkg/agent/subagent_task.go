@@ -266,8 +266,10 @@ func (r *SubagentRunner) setupSubagentRun(
 			outputMu.Unlock()
 		}
 
-		for _, line := range pending {
-			console.PrintLine(line)
+		if !opts.Quiet {
+			for _, line := range pending {
+				console.PrintLine(line)
+			}
 		}
 		// Publish each complete line as a subagent_activity event for the WebUI feed.
 		if subEventBus != nil {
@@ -302,20 +304,24 @@ func (r *SubagentRunner) setupSubagentRun(
 		}
 		outputMu.Unlock()
 
-		for _, line := range pending {
-			console.PrintLine(line)
+		if !opts.Quiet {
+			for _, line := range pending {
+				console.PrintLine(line)
+			}
 		}
 	})
 
 	// Track the running subagent
 	running := &runningSubagent{
-		ID:        taskID,
-		Persona:   opts.Persona,
-		Prompt:    prompt,
-		StartedAt: startTime,
-		Ctx:       runCtx,
-		Cancel:    cancel,
-		Agent:     subAgent,
+		ID:          taskID,
+		Persona:     opts.Persona,
+		Prompt:      prompt,
+		StartedAt:   startTime,
+		Ctx:         runCtx,
+		Cancel:      cancel,
+		Agent:       subAgent,
+		progressMu:  &progressMu,
+		progressLog: &progressLog,
 	}
 	r.active.Store(taskID, running)
 

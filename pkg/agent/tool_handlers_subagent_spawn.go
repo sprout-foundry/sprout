@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -19,6 +20,13 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	spec, err := prepareSubagentLaunch(ctx, a, args)
 	if err != nil {
 		return "", err
+	}
+	background, isolate, err := resolveSubagentBackground(a, spec.persona, args)
+	if err != nil {
+		return "", err
+	}
+	if background {
+		return startBackgroundSubagent(a, spec, isolate)
 	}
 
 	// Print the provider/model being used for this subagent
@@ -39,16 +47,27 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	printSubagentStart(spec.persona, displayProvider, displayModel)
 
 	// Phase 2: Run the subagent
-	runner := a.GetSubagentRunner()
-	result := runner.Run(ctx, spec.enhancedPrompt, SubagentOptions{
-		Persona:      spec.persona,
-		Model:        spec.model,
-		Provider:     spec.provider,
-		SystemPrompt: spec.systemPromptText,
-		WorkingDir:   spec.workingDir,
-	})
+	var result *SubagentResult
+	if isolate {
+		result = runIsolatedSubagent(ctx, a, spec, fmt.Sprintf("subagent-%d", time.Now().UnixNano()), false)
+	} else {
+		result = a.GetSubagentRunner().Run(ctx, spec.enhancedPrompt, SubagentOptions{
+			Persona:      spec.persona,
+			Model:        spec.model,
+			Provider:     spec.provider,
+			SystemPrompt: spec.systemPromptText,
+			WorkingDir:   spec.workingDir,
+		})
+	}
 	printSubagentDone(spec.persona, result)
+	return finishSubagentRun(ctx, a, spec, result)
+}
 
+// finishSubagentRun turns a completed subagent run into the tool result the
+// primary sees: merges its file changes, tracks cost, applies the security
+// and failure handling, and marshals the result envelope. Shared by the
+// blocking and background paths.
+func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, result *SubagentResult) (string, error) {
 	// Merge the subagent's tracked changes into the primary's ChangeTracker
 	// so list_changes, recover_file, and revert_my_changes see subagent edits.
 	a.MergeSubagentChanges(result.FileChanges, spec.persona)

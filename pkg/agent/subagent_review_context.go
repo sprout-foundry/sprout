@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,22 +14,66 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
-// Bounds for the change context pre-loaded into a reviewer subagent's task.
-// The diff budget keeps a typical multi-file review inline while leaving the
-// reviewer's context window for the files it chooses to open; anything larger
-// degrades to a stat summary and the reviewer fetches hunks per file.
+// Upper bounds for the change context pre-loaded into a reviewer subagent's
+// task, reached on large-window models. The diff bound keeps a typical
+// multi-file review inline; anything larger degrades to a stat summary and the
+// reviewer fetches hunks per file. The excerpt bound covers line-numbered code
+// around each hunk plus new-file content: with it inline a reviewer can judge
+// most hunks without reading files, and since every turn resends the whole
+// context, a bigger first prompt buys far fewer turns.
 const (
 	reviewContextMaxDiffBytes     = 96 * 1024
 	reviewContextMaxStatBytes     = 16 * 1024
+	reviewContextMaxExcerptBytes  = 96 * 1024
 	repoConventionsMaxBytes       = 16 * 1024
 	reviewContextMaxUntracked     = 50
 	reviewContextGitCommandBudget = 10 * time.Second
-	// reviewContextMaxExcerptBytes bounds the line-numbered code around each
-	// hunk plus new-file content. With it inline a reviewer can judge most
-	// hunks without reading files, and every turn resends the whole context,
-	// so the budget trades a bigger first prompt for far fewer turns.
-	reviewContextMaxExcerptBytes = 96 * 1024
+	// reviewContextWindowShare is the share of the reviewer model's context
+	// window the change context may take, leaving the rest for the system
+	// prompt, tool schemas, and the review's own turns.
+	reviewContextWindowShare = 0.35
+	approxBytesPerToken      = 4
 )
+
+// changeContextBudget sizes a reviewer's pre-loaded change context.
+type changeContextBudget struct {
+	total    int // diff + stat + excerpts
+	diff     int
+	stat     int
+	excerpts int
+}
+
+var defaultChangeContextBudget = changeContextBudget{
+	total:    reviewContextMaxDiffBytes + reviewContextMaxStatBytes + reviewContextMaxExcerptBytes,
+	diff:     reviewContextMaxDiffBytes,
+	stat:     reviewContextMaxStatBytes,
+	excerpts: reviewContextMaxExcerptBytes,
+}
+
+// changeContextBudgetFor scales the change context to a reviewer whose
+// context window is windowTokens, so a small local model isn't overflowed by
+// its starting prompt. An unknown window (<= 0) gets the default bounds.
+func changeContextBudgetFor(windowTokens int) changeContextBudget {
+	if windowTokens <= 0 {
+		return defaultChangeContextBudget
+	}
+	total := int(float64(windowTokens)*reviewContextWindowShare) * approxBytesPerToken
+	if total >= defaultChangeContextBudget.total {
+		return defaultChangeContextBudget
+	}
+	return changeContextBudget{
+		total:    total,
+		diff:     total * 45 / 100,
+		stat:     total * 8 / 100,
+		excerpts: total * 47 / 100,
+	}
+}
+
+// linesPerReviewer is how many changed lines one reviewer slice should hold
+// so its diff fits the budget (~80 bytes per diff line with context).
+func (b changeContextBudget) linesPerReviewer() int {
+	return max(150, min(1200, b.diff/80))
+}
 
 // repoConventionFiles are checked in order at the workspace root; the first
 // one found is inlined into every subagent's system prompt so it does not
@@ -56,28 +101,94 @@ func canonicalPersonaID(a *Agent, persona string) string {
 	return normalized
 }
 
-// buildReviewerChangeContext snapshots the uncommitted change in workspaceRoot
-// (staged + unstaged vs HEAD, plus untracked file names) as a prompt section.
-// A reviewer otherwise spends its first turns running git diff; each turn is a
-// full LLM round trip. Returns "" when the directory is not a git work tree or
-// has no uncommitted changes.
-func buildReviewerChangeContext(ctx context.Context, workspaceRoot string) string {
-	return buildReviewerChangeContextForScope(ctx, workspaceRoot, reviewScopeWorkingTree)
+// reviewTarget selects which change a reviewer is pre-loaded with.
+type reviewTarget struct {
+	kind reviewTargetKind
+	// rangeSpec is a git revision range for reviewTargetRange, e.g.
+	// "main...HEAD", "abc123^!", or a single revision (diffed against the
+	// working tree).
+	rangeSpec string
 }
 
-// reviewScope selects which uncommitted change a reviewer is pre-loaded with.
-type reviewScope int
+type reviewTargetKind int
 
 const (
-	reviewScopeWorkingTree reviewScope = iota // staged + unstaged vs HEAD, plus untracked names
-	reviewScopeStaged                         // the index only (what the next commit would contain)
+	reviewTargetWorkingTree reviewTargetKind = iota // staged + unstaged vs HEAD, plus untracked files
+	reviewTargetStaged                              // the index only (what the next commit would contain)
+	reviewTargetRange                               // a commit or branch range
 )
 
-func buildReviewerChangeContextForScope(ctx context.Context, workspaceRoot string, scope reviewScope) string {
-	if strings.TrimSpace(workspaceRoot) == "" {
+var (
+	workingTreeTarget = reviewTarget{kind: reviewTargetWorkingTree}
+	stagedTarget      = reviewTarget{kind: reviewTargetStaged}
+)
+
+// rangeSpecPattern admits git revision syntax (names, SHAs, ~ ^ @{}, ..,
+// ...) and nothing that git could read as an option or a pathspec.
+var rangeSpecPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_./~^@{}+!-]*$`)
+
+func validateRangeSpec(spec string) error {
+	if !rangeSpecPattern.MatchString(spec) {
+		return fmt.Errorf("invalid revision range %q: use a branch, tag, or SHA range (e.g. main...HEAD, or abc123^! for one commit)", spec)
+	}
+	return nil
+}
+
+// diffBase returns the git diff arguments selecting the target's change.
+func (t reviewTarget) diffBase() []string {
+	switch t.kind {
+	case reviewTargetStaged:
+		return []string{"--cached"}
+	case reviewTargetRange:
+		return []string{t.rangeSpec}
+	default:
+		return []string{"HEAD"}
+	}
+}
+
+// postImageRev is the revision whose content a hunk excerpt should show:
+// ":" for the index, a commit for a range ending at one, or "" for the
+// working tree.
+func (t reviewTarget) postImageRev() string {
+	switch t.kind {
+	case reviewTargetStaged:
+		return ":"
+	case reviewTargetRange:
+		spec := t.rangeSpec
+		if base, ok := strings.CutSuffix(spec, "^!"); ok {
+			return base
+		}
+		for _, sep := range []string{"...", ".."} {
+			if i := strings.Index(spec, sep); i >= 0 {
+				if end := spec[i+len(sep):]; end != "" {
+					return end
+				}
+				return "HEAD"
+			}
+		}
+		return "" // a single revision is diffed against the working tree
+	default:
 		return ""
 	}
-	return buildChangeSection(ctx, workspaceRoot, scope)
+}
+
+func (t reviewTarget) description() string {
+	switch t.kind {
+	case reviewTargetStaged:
+		return "Staged change (`git diff --cached`)"
+	case reviewTargetRange:
+		return fmt.Sprintf("Change in range `%s`", t.rangeSpec)
+	default:
+		return "Working-tree change vs HEAD (staged + unstaged)"
+	}
+}
+
+// buildReviewerChangeContext snapshots the uncommitted change in workspaceRoot
+// as a prompt section. A reviewer otherwise spends its first turns running
+// git diff and reading files; each turn is a full LLM round trip. Returns ""
+// when the directory is not a git work tree or has no uncommitted changes.
+func buildReviewerChangeContext(ctx context.Context, workspaceRoot string, budget changeContextBudget) string {
+	return buildChangeContext(ctx, workspaceRoot, workingTreeTarget, nil, budget)
 }
 
 // subagentConventionsSection formats the workspace's conventions file for a
@@ -93,31 +204,53 @@ func subagentConventionsSection(workspaceRoot string) string {
 	return fmt.Sprintf("\n\n## Repo Conventions (from %s — already loaded, do not re-read)\n\n%s\n", name, conventions)
 }
 
-func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewScope) string {
-	base := []string{"HEAD"}
-	description := "Working-tree change vs HEAD (staged + unstaged)"
-	if scope == reviewScopeStaged {
-		base = []string{"--cached"}
-		description = "Staged change (`git diff --cached`)"
-		if _, err := runReviewGit(ctx, workspaceRoot, "rev-parse", "--is-inside-work-tree"); err != nil {
-			return ""
-		}
-	} else if _, err := runReviewGit(ctx, workspaceRoot, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+// reviewRepoRoot returns the git top level containing dir, or "" when dir is
+// not in a work tree. All review git commands run there so diff paths,
+// pathspecs, and untracked listings share one base.
+func reviewRepoRoot(ctx context.Context, dir string) string {
+	if strings.TrimSpace(dir) == "" {
 		return ""
 	}
-
-	stat, _ := runReviewGit(ctx, workspaceRoot, append([]string{"diff", "--stat"}, base...)...)
-	diff, diffErr := runReviewGit(ctx, workspaceRoot, append([]string{"diff", "--no-ext-diff"}, base...)...)
-	untrackedRaw := ""
-	if scope == reviewScopeWorkingTree {
-		untrackedRaw, _ = runReviewGit(ctx, workspaceRoot, "ls-files", "--others", "--exclude-standard")
+	top, err := runReviewGit(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return ""
 	}
+	return strings.TrimSpace(top)
+}
 
+// listUntracked returns untracked, non-ignored files (repo-root relative),
+// limited to paths when paths is non-empty.
+func listUntracked(ctx context.Context, repoRoot string, paths []string) []string {
+	raw, _ := runReviewGit(ctx, repoRoot, append([]string{"ls-files", "--others", "--exclude-standard", "--"}, paths...)...)
 	var untracked []string
-	for _, line := range strings.Split(untrackedRaw, "\n") {
+	for _, line := range strings.Split(raw, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			untracked = append(untracked, line)
 		}
+	}
+	return untracked
+}
+
+// buildChangeContext formats target's change in the repo containing
+// workspaceRoot — limited to paths when non-empty — with the diff, code
+// around each hunk, and new-file content, within the excerpt budget.
+func buildChangeContext(ctx context.Context, workspaceRoot string, target reviewTarget, paths []string, budget changeContextBudget) string {
+	repoRoot := reviewRepoRoot(ctx, workspaceRoot)
+	if repoRoot == "" {
+		return ""
+	}
+	if target.kind == reviewTargetWorkingTree {
+		if _, err := runReviewGit(ctx, repoRoot, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+			return ""
+		}
+	}
+
+	pathspec := append([]string{"--"}, paths...)
+	stat, _ := runReviewGit(ctx, repoRoot, append(append([]string{"diff", "--stat"}, target.diffBase()...), pathspec...)...)
+	diff, diffErr := runReviewGit(ctx, repoRoot, append(append([]string{"diff", "--no-ext-diff"}, target.diffBase()...), pathspec...)...)
+	var untracked []string
+	if target.kind == reviewTargetWorkingTree {
+		untracked = listUntracked(ctx, repoRoot, paths)
 	}
 
 	if strings.TrimSpace(diff) == "" && len(untracked) == 0 {
@@ -126,28 +259,31 @@ func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewS
 
 	var b strings.Builder
 	b.WriteString("# Change Under Review (pre-loaded)\n\n")
-	b.WriteString(description + ", captured when this review was spawned. ")
+	b.WriteString(target.description() + ", captured when this review was spawned. ")
 	b.WriteString("Review this directly — do not re-run `git diff` for it. ")
-	b.WriteString("If your task names a different range (a commit, a branch, specific paths), review that instead and ignore the parts of this section outside it.\n\n")
+	if len(paths) > 0 {
+		b.WriteString("This review covers only the files below; other files in the change are reviewed separately.\n\n")
+	} else {
+		b.WriteString("If your task names a different range (a commit, a branch, specific paths), review that instead and ignore the parts of this section outside it.\n\n")
+	}
 
+	used := 0
 	if s := strings.TrimSpace(stat); s != "" {
-		fmt.Fprintf(&b, "## Diff stat\n\n```\n%s\n```\n\n", truncateReviewSection(s, reviewContextMaxStatBytes))
+		s = truncateReviewSection(s, budget.stat)
+		used += len(s)
+		fmt.Fprintf(&b, "## Diff stat\n\n```\n%s\n```\n\n", s)
 	}
 
 	diffInlined := false
 	switch {
 	case diffErr != nil || strings.TrimSpace(diff) == "":
 		// Only untracked files changed; nothing to inline.
-	case len(diff) > reviewContextMaxDiffBytes:
-		fmt.Fprintf(&b, "## Diff\n\nThe full diff is %d KB, too large to inline. Fetch hunks per file with `git diff %s -- <path>`, prioritizing the files with the largest or riskiest changes in the stat above.\n\n", len(diff)/1024, base[0])
+	case len(diff) > budget.diff:
+		fmt.Fprintf(&b, "## Diff\n\nThe full diff is %d KB, too large to inline. Fetch hunks per file with `git diff %s -- <path>`, prioritizing the files with the largest or riskiest changes in the stat above.\n\n", len(diff)/1024, target.diffBase()[0])
 	default:
 		fmt.Fprintf(&b, "## Diff\n\n```diff\n%s\n```\n\n", strings.TrimRight(diff, "\n"))
 		diffInlined = true
-	}
-
-	repoRoot := workspaceRoot
-	if top, err := runReviewGit(ctx, workspaceRoot, "rev-parse", "--show-toplevel"); err == nil && strings.TrimSpace(top) != "" {
-		repoRoot = strings.TrimSpace(top)
+		used += len(diff)
 	}
 
 	// New files go first: they aren't in the diff, so without an excerpt the
@@ -164,30 +300,39 @@ func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewS
 		}
 	}
 
-	budget := reviewContextMaxExcerptBytes
-	included := writeExcerpts(&b, "## New untracked files (part of the change; not in the diff)", newCode, &budget, false)
+	// Excerpts get what the diff and stat left of the total, up to their cap.
+	excerptBudget := max(0, min(budget.excerpts, budget.total-used))
+	included := writeExcerpts(&b, "## New untracked files (part of the change; not in the diff)", newCode, &excerptBudget, false)
 
 	if diffInlined {
 		var hunks []codereview.FileExcerpt
-		heading := "## Code around each change (current working-tree content, line-numbered)"
-		if scope == reviewScopeStaged {
-			// Excerpt the staged (index) content, not the working tree, so the
-			// reviewer never sees unstaged edits that won't be committed.
-			heading = "## Code around each change (staged content, line-numbered)"
+		switch rev := target.postImageRev(); rev {
+		case "":
+			hunks = codereview.HunkExcerpts(repoRoot, diff)
+			writeExcerpts(&b, "## Code around each change (current working-tree content, line-numbered)", hunks, &excerptBudget, true)
+		default:
+			// Excerpt the content the diff ends at (the index for a staged
+			// review, a commit for a range), never unrelated working-tree edits.
 			hunks = codereview.HunkExcerptsFrom(diff, func(rel string) ([]string, bool) {
-				content, err := runReviewGit(ctx, repoRoot, "show", ":"+rel)
+				ref := rev + ":" + rel
+				if rev == ":" {
+					ref = ":" + rel
+				}
+				content, err := runReviewGit(ctx, repoRoot, "show", ref)
 				if err != nil {
 					return nil, false
 				}
 				return codereview.SplitContextLines(content)
 			})
-		} else {
-			hunks = codereview.HunkExcerpts(repoRoot, diff)
+			label := "staged content"
+			if target.kind == reviewTargetRange {
+				label = "content at " + rev
+			}
+			writeExcerpts(&b, "## Code around each change ("+label+", line-numbered)", hunks, &excerptBudget, true)
 		}
-		writeExcerpts(&b, heading, hunks, &budget, true)
 	}
 
-	for path := range writeExcerpts(&b, "## New untracked test files", newTests, &budget, false) {
+	for path := range writeExcerpts(&b, "## New untracked test files", newTests, &excerptBudget, false) {
 		included[path] = true
 	}
 

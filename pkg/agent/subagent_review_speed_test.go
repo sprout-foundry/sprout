@@ -133,7 +133,7 @@ func TestBuildReviewerChangeContext_InlinesDiffAndUntracked(t *testing.T) {
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"changed\") }\n")
 	writeFile(t, dir, "new.go", "package main\n\nfunc helper() int { return 42 }\n")
-	got := buildReviewerChangeContext(context.Background(), dir)
+	got := buildReviewerChangeContext(context.Background(), dir, defaultChangeContextBudget)
 
 	for _, want := range []string{
 		"# Change Under Review",
@@ -156,7 +156,7 @@ func TestBuildReviewerChangeContext_LargeDiffFallsBackToStat(t *testing.T) {
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n// "+strings.Repeat("x", reviewContextMaxDiffBytes+1024)+"\n")
 
-	got := buildReviewerChangeContext(context.Background(), dir)
+	got := buildReviewerChangeContext(context.Background(), dir, defaultChangeContextBudget)
 
 	if strings.Contains(got, "```diff") {
 		t.Error("oversized diff was inlined")
@@ -168,10 +168,10 @@ func TestBuildReviewerChangeContext_LargeDiffFallsBackToStat(t *testing.T) {
 
 func TestBuildReviewerChangeContext_EmptyWhenNothingToShow(t *testing.T) {
 	clean := initReviewRepo(t)
-	if got := buildReviewerChangeContext(context.Background(), clean); got != "" {
+	if got := buildReviewerChangeContext(context.Background(), clean, defaultChangeContextBudget); got != "" {
 		t.Errorf("clean repo: got %q, want empty", got)
 	}
-	if got := buildReviewerChangeContext(context.Background(), t.TempDir()); got != "" {
+	if got := buildReviewerChangeContext(context.Background(), t.TempDir(), defaultChangeContextBudget); got != "" {
 		t.Errorf("non-git dir: got %q, want empty", got)
 	}
 }
@@ -364,7 +364,7 @@ func TestBuildReviewerChangeContext_ExcerptBudget(t *testing.T) {
 		writeFile(t, dir, fmt.Sprintf("new%d.go", i), "package main\n"+big)
 	}
 
-	got := buildReviewerChangeContext(context.Background(), dir)
+	got := buildReviewerChangeContext(context.Background(), dir, defaultChangeContextBudget)
 
 	if len(got) > reviewContextMaxExcerptBytes+reviewContextMaxStatBytes+8*1024 {
 		t.Errorf("change context %d bytes exceeds the excerpt budget", len(got))

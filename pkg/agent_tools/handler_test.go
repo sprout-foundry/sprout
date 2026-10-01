@@ -780,8 +780,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 51 {
-		t.Fatalf("AllTools() returned %d tools, want 51", len(tools))
+	if len(tools) != 54 {
+		t.Fatalf("AllTools() returned %d tools, want 54", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -824,6 +824,9 @@ func TestAllToolsRegistration(t *testing.T) {
 		// SP-109 Phase 3 Batch B — subagent function-pointer tools
 		"run_subagent":           "run_subagent",
 		"run_parallel_subagents": "run_parallel_subagents",
+		"review_changes":         "review_changes",
+		"check_subagent":         "check_subagent",
+		"stop_subagent":          "stop_subagent",
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		"request_clarification": "request_clarification",
 		"respond_clarification": "respond_clarification",

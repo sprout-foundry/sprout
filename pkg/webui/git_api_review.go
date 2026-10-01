@@ -11,16 +11,12 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/codereview"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/factory"
-	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// handleAPIGitDeepReview runs a single-call, evidence-focused review of the
-// staged change and returns structured MUST_FIX/VERIFY guidance for the review
-// tab's fix picker. It does not use the reviewer subagent that /review-deep
-// runs. It bypasses /api/query so the review doesn't enter chat history.
+// handleAPIGitDeepReview reviews the staged change with reviewer subagents
+// (the same review_changes pipeline as /review-deep) and returns structured
+// MUST_FIX/VERIFY guidance for the review tab's fix picker. It bypasses
+// /api/query so the review doesn't enter chat history.
 func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -41,98 +37,24 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 		return
 	}
 
-	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached")
-	stagedDiffBytes, err := diffCmd.Output()
-	if err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_diff", fmt.Sprintf("Failed to get staged diff: %v", err))
-		return
-	}
-
-	stagedDiff := string(stagedDiffBytes)
-	stagedDiff = truncateDiffOutput(stagedDiff, 200000)
-	if strings.TrimSpace(stagedDiff) == "" {
-		writeJSONErr(w, http.StatusBadRequest, "no_diff_content_found", "No actual diff content found in staged changes")
-		return
-	}
-
-	cfg, err := configuration.LoadOrInitConfig(true)
-	if err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "failed_to_load_config", fmt.Sprintf("Failed to load config: %v", err))
-		return
-	}
-
-	logger := utils.GetLogger(true)
-	optimizer := utils.NewDiffOptimizerForReview()
-	optimizer.WorkingDir = workspaceRoot
-	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
-
-	service := codereview.NewCodeReviewService(cfg, logger)
-	agentClient := service.GetDefaultAgentClient()
-
-	activeProvider := strings.TrimSpace(agentInst.GetProvider())
-	activeModel := strings.TrimSpace(agentInst.GetModel())
-	if activeProvider != "" {
-		if sessionClient, err := factory.CreateProviderClient(api.ClientType(activeProvider), activeModel); err == nil {
-			agentClient = sessionClient
-		}
-	}
-
-	if agentClient == nil {
-		writeJSONErr(w, http.StatusInternalServerError, "failed_to_initialize_review_client", "Failed to initialize review client")
-		return
-	}
-
-	reviewCtx := &codereview.ReviewContext{
-		Diff:        optimizedDiff.OptimizedContent,
-		Config:      cfg,
-		Logger:      logger,
-		AgentClient: agentClient,
-	}
-	codereview.BuildStagedContext(r.Context(), workspaceRoot, stagedDiff).Apply(reviewCtx)
-
-	if len(optimizedDiff.FileSummaries) > 0 {
-		var summaryInfo strings.Builder
-		summaryInfo.WriteString("\n\nLarge files optimized for review:\n")
-		for file, summary := range optimizedDiff.FileSummaries {
-			summaryInfo.WriteString(fmt.Sprintf("- %s: %s\n", file, summary))
-		}
-		reviewCtx.Diff += summaryInfo.String()
-	}
-
-	opts := &codereview.ReviewOptions{
-		Type:       codereview.StagedReview,
-		SkipPrompt: true,
-	}
-
-	reviewResponse, err := service.PerformAgenticReview(reviewCtx, opts)
+	review, err := agentInst.ReviewChanges(r.Context(), agent.ReviewChangesOptions{Scope: "staged", Dir: workspaceRoot})
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "deep_review_failed", fmt.Sprintf("Review failed: %v", err))
 		return
 	}
 
-	reviewOutput := fmt.Sprintf("%s\n%s\n\nStatus: %s\n\nFeedback:\n%s",
-		"[list] AI CODE REVIEW",
-		strings.Repeat("═", 50),
-		strings.ToUpper(reviewResponse.Status),
-		reviewResponse.Feedback)
-
-	if strings.TrimSpace(reviewResponse.DetailedGuidance) != "" {
-		reviewOutput += fmt.Sprintf("\n\nDetailed Guidance:\n%s", reviewResponse.DetailedGuidance)
+	status := map[string]string{"APPROVE": "approved", "CHANGES_REQUIRED": "needs_revision"}[review.Verdict]
+	if status == "" {
+		status = "inconclusive"
 	}
-	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
-		reviewOutput += fmt.Sprintf("\n\nSuggested New Prompt:\n%s", reviewResponse.NewPrompt)
-	}
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":              "Review completed",
-		"status":               reviewResponse.Status,
-		"feedback":             reviewResponse.Feedback,
-		"detailed_guidance":    reviewResponse.DetailedGuidance,
-		"suggested_new_prompt": reviewResponse.NewPrompt,
-		"review_output":        reviewOutput,
-		"provider":             agentInst.GetProvider(),
-		"model":                agentInst.GetModel(),
-		"warnings":             optimizedDiff.Warnings,
+		"message":           "Review completed",
+		"status":            status,
+		"feedback":          review.Summary(),
+		"detailed_guidance": review.GuidanceJSON(),
+		"review_output":     review.Markdown(),
+		"provider":          agentInst.GetProvider(),
+		"model":             agentInst.GetModel(),
 	})
 }
 

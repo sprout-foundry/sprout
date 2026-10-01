@@ -224,10 +224,48 @@ the repo. This spec plans the split; it does not schedule it.
     TestConfigUnifiedRiskResolver_DefaultFalse) stay in
     `pkg/agent/risk_assessment_test.go` and exercise the forwarders.
   - **Still `*Agent`-coupled (next increment, interface-seam work):**
-    `approval_broker.go` (RequestApproval) + the `ResolveToolRisk`
-    orchestrator + `agent_risk.go`/`risk_prompt.go` persona/risk-profile
-    methods. These follow the `changes.AgentView`-style narrow-interface
-    seam (a `RiskAgent` interface over the ~10 exported-method surface).
+    the `ResolveToolRisk` orchestrator + `agent_risk.go`/`risk_prompt.go`
+    persona/risk-profile methods. These follow the
+    `changes.AgentView`-style narrow-interface seam (a `RiskAgent`
+    interface over the ~10 exported-method surface).
+- **Phase 3 (2026-09-28): `pkg/agent/approvals` increment 5 — the
+  approval broker landed behind the `ApprovalAgent` seam.** The broker
+  body (`RequestApproval`, ~420 lines: command-policy → allowlist →
+  unsafe/elevated bypasses → optional LLM security analysis → WebUI/CLI
+  interactive surfaces → permissive fallback) moved to
+  `pkg/agent/approvals/broker.go` as a package function operating on the
+  new `ApprovalAgent` interface (`approvals/approval_agent.go`, 23
+  members), with `BrokerDecision` moved alongside. The `*Agent` method
+  `RequestApproval` is now a one-line forwarder in
+  `pkg/agent/approval_broker.go` (with `BrokerDecision` aliased). Two
+  pure companions moved too: `EvaluateCommandPolicy` (from
+  `pkg/agent/command_policy.go` → `approvals/command_policy.go`, the
+  whole file + its tests) and `approvalDecisionFromCLIChoice` →
+  `approvals/cli_choice.go` (`ApprovalDecisionFromCLIChoice`; a
+  2-line forwarder stays in `risk_prompt.go` for the other callers).
+  - **Seam design (the `changes.AgentView` pattern, applied to
+    approvals):** most interface members are existing exported
+    accessors (`GetConfig`, `IsShellCommandAllowlisted`, `GetUnsafeMode`,
+    `IsSessionElevated`, `GetSecurityApprovalMgr`, `GetEventBus`, …);
+    8 new seam accessors in `pkg/agent/approval_seam_accessors.go`
+    expose the private surface — `Client` (getClient), `EffectiveCwd`
+    (effectiveCwd), `DebugEnabled`/`DebugLogf` (debug/debugLog),
+    `IsNonInteractive`, `GetSecurityAnalysisCache`, `LogSecurityDecision`
+    (logSecurityDecision), `ApplyApprovalDecision`
+    (applyApprovalDecision), and `ApproveShellCommandParts` (wraps
+    NewShellProposal + RequestShellApproval, returning
+    decisions/partIDs so the broker's all-parts-approved check stays
+    faithful). `InterruptCtx` and `GetModel` were already exported. The
+    import arrow is one-way: `pkg/agent → approvals`.
+  - **The one non-mechanical edit:** the shell-per-part picker block now
+    calls `a.ApproveShellCommandParts(pickerCtx, cmd)` (returns
+    decisions + part IDs) instead of constructing the `ShellProposal`
+    locally and walking `proposal.Parts` — the all-approved loop walks
+    the returned part IDs, same semantics.
+  - **Verification:** content-identity confirmed (normalized-diff of the
+    moved body vs. the original = only the package/import lines + the
+    mechanical renames). Content-identity + go build + go vet clean;
+    approvals suite + the broker/allowlist/adapter test batteries green.
 - Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem

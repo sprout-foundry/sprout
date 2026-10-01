@@ -320,15 +320,27 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		}, fmt.Errorf("unrecognized image format: %s", path)
 	}
 
-	// Compress oversized payloads (dimension + JPEG quality cascade) so a
-	// bulk screenshot turn cannot grow an HTTP body past the provider's
-	// body limit (413).
-	payload, payloadMime, prepErr := prepareInlineAttachmentPayload(cleanPath, data, mimeType)
-	if prepErr != nil {
-		return ToolResult{
-			Output:  fmt.Sprintf("[image %s: %v — no pixels attached; re-encode it smaller or analyze via a vision model]", filepath.Base(path), prepErr),
-			IsError: true,
-		}, prepErr
+	// The primary's pixel acceptance decides the wire: for a vision
+	// primary the payload is compressed (dimension + JPEG quality cascade)
+	// so a bulk screenshot turn cannot grow an HTTP body past the
+	// provider's body limit (413). A non-vision primary never sees the
+	// pixels — seed strips Images per model — so attach raw (no wire
+	// cost) and let the OCR text below carry the analysis.
+	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
+
+	var payload []byte
+	var payloadMime string
+	if primarySees {
+		var prepErr error
+		payload, payloadMime, prepErr = prepareInlineAttachmentPayload(cleanPath, data, mimeType)
+		if prepErr != nil {
+			return ToolResult{
+				Output:  fmt.Sprintf("[image %s: %v — no pixels attached; re-encode it smaller or analyze via a vision model]", filepath.Base(path), prepErr),
+				IsError: true,
+			}, prepErr
+		}
+	} else {
+		payload, payloadMime = data, mimeType
 	}
 
 	// Vision-capable primary: pixels are the analysis — no OCR text needed
@@ -341,7 +353,6 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		MIMEType: payloadMime,
 	}}
 
-	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
 	if !primarySees && nativeOCRAvailable() {
 		if ocrText, ocrErr := nativeOCR(ctx, cleanPath); ocrErr == nil {
 			trimmed, truncated, _ := limitVisionOutputText(strings.TrimSpace(ocrText))

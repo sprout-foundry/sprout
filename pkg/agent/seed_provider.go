@@ -254,7 +254,15 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 		// request that actually fits.
 		if isBodyTooLargeError(err) {
 			if n := api.CountImages(req.Messages); n > 0 && attempt < maxRetries {
-				req.Messages = api.TrimImagesBeyondLatest(req.Messages, n/2)
+				// Shed against the WIRE view: doChatOnce live-trims each
+				// attempt to maxLiveRequestImages, so counting req.Messages
+				// raw would let a large n keep shrinking to a value the
+				// live trim re-inflates the wire back up (wasted retry).
+				wire := n
+				if wire > maxLiveRequestImages {
+					wire = maxLiveRequestImages
+				}
+				req.Messages = api.TrimImagesBeyondLatest(req.Messages, wire/2)
 				sp.clearPastedImages()
 			} else {
 				// Nothing left to shed, or out of attempts.

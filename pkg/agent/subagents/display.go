@@ -1,4 +1,4 @@
-package agent
+package subagents
 
 import (
 	"fmt"
@@ -10,19 +10,19 @@ import (
 
 // printSubagentStart announces a delegated subagent run with a consistent
 // action glyph instead of the old literal "[~] Spawning subagent" prefix.
-func printSubagentStart(persona, provider, model string) {
+func PrintSubagentStart(persona, provider, model string) {
 	console.GlyphAction.Printf("subagent [%s] starting · %s/%s", persona, provider, model)
 }
 
 // printParallelSubagentStart announces a batch of parallel subagents.
-func printParallelSubagentStart(count int, provider, model string) {
+func PrintParallelSubagentStart(count int, provider, model string) {
 	console.GlyphAction.Printf("%d parallel subagents starting · %s/%s", count, provider, model)
 }
 
 // printSubagentDone announces completion with a compact stat summary so the
 // user gets closure on a delegation (files touched, tokens, cost, tools, time)
 // rather than the run finishing silently. Severity glyph reflects outcome.
-func printSubagentDone(persona string, res *SubagentResult) {
+func PrintSubagentDone(persona string, res *SubagentResult) {
 	if res == nil {
 		return
 	}

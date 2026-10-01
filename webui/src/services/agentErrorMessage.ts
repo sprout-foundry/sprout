@@ -14,11 +14,20 @@ export function describeAgentError(raw: string): { message: string; creditsBlock
   return { message: `Agent error: ${raw}`, creditsBlocked: false };
 }
 
-/** Offer the way out of a credit block: the platform's billing page. */
+/**
+ * Offer the way out of a credit block. When the platform suggests your own
+ * key (free tier, managed credits used up), the action opens the editor's
+ * model setting; otherwise it opens billing.
+ */
 export function notifyCreditsBlocked(message: string): void {
+  const ownKey = /own API key/i.test(message);
   notificationBus.notify('warning', 'Out of platform credits', message, undefined, {
-    label: 'Buy credits',
+    label: ownKey ? 'Use your own key' : 'Buy credits',
     onClick: () => {
+      if (ownKey) {
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
+        return;
+      }
       if (!openPlatformPage('/account/billing')) window.open(platformHref('/#/account/billing'), '_blank', 'noopener');
     },
   });

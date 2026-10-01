@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../hooks/useUnreadNotificationCount', () => ({ useUnreadNotificationCount: () => 0 }));
 vi.mock('../../config/mode', () => ({
   isCloud: false,
   supportsGit: true,

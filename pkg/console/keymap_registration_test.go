@@ -4,21 +4,36 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// TestComputeVerbosityToggle verifies the pure cycle logic.
+// fakeVerbosityConfig is an in-test OutputVerbosityToggler. It stands
+// in for a *configuration.Manager — which the console package must not
+// name, because pkg/configuration imports console (the Glyph surface)
+// and a console test file importing configuration would close a cycle.
+// The real Manager satisfies the same interface at the cmd call site
+// (compile-checked there).
+type fakeVerbosityConfig struct {
+	verbosity string
+}
+
+func (f *fakeVerbosityConfig) CurrentOutputVerbosity() string { return f.verbosity }
+
+func (f *fakeVerbosityConfig) SetOutputVerbosity(v string) error {
+	f.verbosity = v
+	return nil
+}
+
+// TestComputeVerbosityToggle verifies the pure toggle logic.
 func TestComputeVerbosityToggle(t *testing.T) {
 	cases := []struct {
 		current string
 		want    string
 	}{
-		{configuration.OutputVerbosityDefault, configuration.OutputVerbosityVerbose},
-		{"", configuration.OutputVerbosityVerbose},
-		{configuration.OutputVerbosityCompact, configuration.OutputVerbosityVerbose},
-		{configuration.OutputVerbosityVerbose, configuration.OutputVerbosityDefault},
-		{"unknown", configuration.OutputVerbosityVerbose},
+		{"default", "verbose"},
+		{"", "verbose"},
+		{"compact", "verbose"},
+		{"verbose", "default"},
+		{"unknown", "verbose"},
 	}
 	for _, c := range cases {
 		got := computeVerbosityToggle(c.current)
@@ -31,7 +46,7 @@ func TestComputeVerbosityToggle(t *testing.T) {
 // TestVerbosityToggleLabel verifies the confirmation messages contain
 // the expected text.
 func TestVerbosityToggleLabel(t *testing.T) {
-	verbose := verbosityToggleLabel(configuration.OutputVerbosityVerbose)
+	verbose := verbosityToggleLabel("verbose")
 	if !strings.Contains(verbose, "verbose") {
 		t.Errorf("verbose label missing 'verbose': %q", verbose)
 	}
@@ -39,7 +54,7 @@ func TestVerbosityToggleLabel(t *testing.T) {
 		t.Errorf("verbose label missing 'Alt+V': %q", verbose)
 	}
 
-	def := verbosityToggleLabel(configuration.OutputVerbosityDefault)
+	def := verbosityToggleLabel("default")
 	if !strings.Contains(def, "default") {
 		t.Errorf("default label missing 'default': %q", def)
 	}
@@ -54,11 +69,7 @@ func TestVerbosityToggleLabel(t *testing.T) {
 // that the rest of this test exercises; the second Register call is a
 // no-op (Once-protected).
 func TestOutputVerbosityToggleRoundTrip(t *testing.T) {
-	configDir := t.TempDir() + "/.sprout"
-	cfg, err := configuration.NewManagerWithDir(configDir)
-	if err != nil {
-		t.Fatalf("NewManagerWithDir: %v", err)
-	}
+	cfg := &fakeVerbosityConfig{}
 
 	// Register the keymap entry (idempotent via sync.Once).
 	RegisterKeymapForFooter(nil, cfg)
@@ -82,13 +93,13 @@ func TestOutputVerbosityToggleRoundTrip(t *testing.T) {
 
 	// First press: default → verbose
 	entry.Handler()
-	if got := cfg.GetConfig().OutputVerbosity; got != configuration.OutputVerbosityVerbose {
+	if got := cfg.verbosity; got != "verbose" {
 		t.Errorf("after 1st toggle: %q, want verbose", got)
 	}
 
 	// Second press: verbose → default
 	entry.Handler()
-	if got := cfg.GetConfig().OutputVerbosity; got != configuration.OutputVerbosityDefault {
+	if got := cfg.verbosity; got != "default" {
 		t.Errorf("after 2nd toggle: %q, want default", got)
 	}
 }
@@ -105,7 +116,7 @@ func TestOutputVerbosityToggleNilConfig(t *testing.T) {
 	// safely (which is what a nil-managed handler effectively does
 	// after the early return).
 	got := computeVerbosityToggle("")
-	if got != configuration.OutputVerbosityVerbose {
+	if got != "verbose" {
 		t.Errorf("computeVerbosityToggle(\"\") = %q, want verbose (any non-verbose → verbose)", got)
 	}
 }

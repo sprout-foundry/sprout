@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–4 landed 2026-09-27/28); phases 4–5 pending
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–6 landed 2026-09-27/28/29 — broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phases 4–5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -266,6 +266,42 @@ the repo. This spec plans the split; it does not schedule it.
     moved body vs. the original = only the package/import lines + the
     mechanical renames). Content-identity + go build + go vet clean;
     approvals suite + the broker/allowlist/adapter test batteries green.
+- **Phase 3 (2026-09-29): `pkg/agent/approvals` increment 6 — the
+  `ResolveToolRisk` orchestrator landed behind the `RiskAgent` seam.**
+  The risk resolver (classifier → persona cascade → git gates →
+  workspace security policy → filesystem path tiers) moved to
+  `pkg/agent/approvals/risk_resolver.go` as a package function operating
+  on the new `RiskAgent` interface (`approvals/risk_agent.go`, 11
+  members): `GetWorkspaceRoot`, `HasPasswordPrompter`,
+  `IsFolderSessionAllowed`, `GetConfig`, `EvaluateOperationRisk`
+  (all pre-existing exported methods) plus the seam accessors
+  `IsGitWriteAllowed`, `EffectiveCwd`, `HomeDir`, `DebugEnabled`,
+  `DebugLogf`. `pkg/agent/risk_assessment.go` is now a thin forwarder
+  file (the `*Agent` method delegates to `approvals.ResolveToolRisk`);
+  `agent_risk.go` and `risk_prompt.go` stay — they own the state the
+  seam reads (persona/risk-profile/subagent fields, the elevation
+  flag), and the seam pattern keeps state on the owner.
+  - **Seam accessors (new file `pkg/agent/risk_seam_accessors.go`):**
+    `IsGitWriteAllowed()` delegates to the existing private
+    `isGitWriteAllowed()` (persona git-write capability); `HomeDir()`
+    routes through the existing `detectHomeDir` test-override hook (a
+    package-level `var = approvals.DetectHomeDir`) so pre-move test
+    overrides keep working. `EffectiveCwd`/`DebugEnabled`/`DebugLogf`
+    come from `approval_seam_accessors.go` (increment 5). A
+    `var _ approvals.RiskAgent = (*Agent)(nil)` compile-time assertion
+    guards the seam.
+  - **Nil-agent preservation:** the pre-move body was nil-`*Agent`-safe
+    (skipped every agent-coupled input, returned the classifier-only
+    assessment). A nil `*Agent` boxed into the `RiskAgent` interface is
+    non-nil, so the guard lives in the forwarder: `a == nil` →
+    `assessmentFromClassifier(ClassifyToolCallWithWorkspace(tool, args,
+    ""))`, byte-identical to the pre-move nil path.
+    `TestResolveToolRisk_NilAgent` passes unchanged.
+  - **Verification:** content-identity confirmed (normalized-diff of
+    the moved body vs. the original = 0 lines beyond the renames);
+    build + vet + gofmt clean; approvals suite ok; the 37-test risk
+    battery (ResolveToolRisk incl. nil-agent, git gates, path tiers,
+    workspace policy, shadow-mode parity) all green.
 - Phases 4–5 pending (`subagents`, `tools`).
 
 ## Problem

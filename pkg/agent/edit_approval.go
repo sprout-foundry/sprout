@@ -329,11 +329,3 @@ func rejectedHunkList(hunks []Hunk, acceptedIDs []string) string {
 	}
 	return strings.Join(rejected, ", ")
 }
-
-// splitLines splits content into lines, preserving trailing empty elements.
-func splitLines(content string) []string {
-	if content == "" {
-		return []string{""}
-	}
-	return strings.Split(content, "\n")
-}

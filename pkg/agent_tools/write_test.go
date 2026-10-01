@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"strings"
 	"testing"
 )
@@ -37,7 +38,7 @@ func TestSplitLines(t *testing.T) {
 		content  string
 		expected []string
 	}{
-		{"empty", "", nil},
+		{"empty", "", []string{""}},
 		{"single line", "hello", []string{"hello"}},
 		{"two lines", "hello\nworld", []string{"hello", "world"}},
 		{"three lines", "a\nb\nc", []string{"a", "b", "c"}},
@@ -49,9 +50,9 @@ func TestSplitLines(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := splitLines([]byte(tt.content))
+			got := utils.SplitLinesKeepEmpty(tt.content)
 			if !sliceEqual(got, tt.expected) {
-				t.Errorf("splitLines(%q) = %v, want %v", tt.content, got, tt.expected)
+				t.Errorf("SplitLinesKeepEmpty(%q) = %v, want %v", tt.content, got, tt.expected)
 			}
 		})
 	}

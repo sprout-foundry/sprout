@@ -2,6 +2,7 @@ package wasmshell
 
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"math"
 	"sort"
 	"strconv"
@@ -94,7 +95,7 @@ func cmdSort(args []string, stdin string) CmdResult {
 	if errRes != nil {
 		return *errRes
 	}
-	lines := splitLines(input)
+	lines := utils.SplitLines(input)
 	cmp := sp.compare
 	if sp.check {
 		for k := 1; k < len(lines); k++ {
@@ -149,19 +150,6 @@ func readInputs(cmd string, files []string, stdin string) (string, *CmdResult) {
 		}
 	}
 	return b.String(), nil
-}
-
-// splitLines splits text into lines, dropping the empty element a final
-// newline produces.
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	lines := strings.Split(s, "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
 }
 
 func parseSortKey(spec string) (sortKey, error) {

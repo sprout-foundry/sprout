@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/git"
@@ -176,6 +177,17 @@ func IsRevertSafe(filename, newCode string) bool {
 // allows recovery when the file on disk matches HEAD but the OriginalCode
 // is NOT the HEAD content — meaning the original was uncommitted work.
 func IsRevertSafeWithOriginal(filename, newCode, originalCode string) bool {
+	return IsRevertSafeAt(filename, newCode, originalCode, time.Time{})
+}
+
+// IsRevertSafeAt is IsRevertSafeWithOriginal for a change recorded at
+// changedAt. When the file matches HEAD, git history decides what that
+// means: a commit touching the file at or after the change means the agent's
+// work was committed — reverting would undo it, so refuse. With no such
+// commit, HEAD predates the change, so a match means a destructive git
+// command (checkout, reset) rewound the file — restoring OriginalCode brings
+// back destroyed uncommitted work. A zero changedAt skips the timing check.
+func IsRevertSafeAt(filename, newCode, originalCode string, changedAt time.Time) bool {
 	// 1. Empty or redacted newCode: no baseline to compare against.
 	//    Allow (matches the historical isFileStale behaviour).
 	if newCode == "" || newCode == RedactedContentMarker {
@@ -199,14 +211,19 @@ func IsRevertSafeWithOriginal(filename, newCode, originalCode string) bool {
 	//    command (checkout, reset, clean) aligned to HEAD. Restoring
 	//    originalCode does NOT undo committed work — it restores
 	//    destroyed uncommitted work. Allow it.
-	committed, gitErr := git.IsFileContentCommitted(filename)
+	state, gitErr := git.FileCommitState(filename)
 	if gitErr != nil {
 		// git check failed (e.g. transient error) — fall back to the
 		// conservative content-only behaviour so we don't block a
 		// revert the user may genuinely want.
 		return true
 	}
-	if committed {
+	if state.CommittedClean {
+		// Commit timestamps have second resolution; compare at that grain
+		// so a commit made in the same second as the change still counts.
+		if !changedAt.IsZero() && !state.LastCommit.IsZero() && !state.LastCommit.Before(changedAt.Truncate(time.Second)) {
+			return false
+		}
 		// File matches HEAD → committed work. But if the originalCode
 		// is different from what's on disk (HEAD), restoring it would
 		// bring back uncommitted work that git destroyed — not undo a
@@ -298,7 +315,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// Staleness guard: if the file on disk no longer matches what the
 		// agent wrote (NewCode), it was modified after this snapshot.
 		// IsRevertSafe additionally applies git-awareness.
-		if !IsRevertSafeWithOriginal(change.Filename, change.NewCode, change.OriginalCode) {
+		if !IsRevertSafeAt(change.Filename, change.NewCode, change.OriginalCode, change.Timestamp) {
 			AuditRevertSkip("handleRevisionRollback", change.Filename, "stale or committed")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue

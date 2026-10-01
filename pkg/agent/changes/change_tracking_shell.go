@@ -83,11 +83,52 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 	}
 }
 
+// RebaseShellTracking re-captures the workspace as the shell-diff baseline
+// (priming it if needed). Called at the start of each primary-agent turn so
+// the user's own edits between turns — files they create, change, or delete
+// in their editor — become part of the baseline instead of being reported as
+// the agent's mutations at its next shell command (where revert would then
+// undo or delete the user's work).
+func (ct *ChangeTracker) RebaseShellTracking(workDir string) {
+	if ct == nil || !ct.IsEnabled() || !ct.shellWalkEnabled {
+		return
+	}
+	ct.shellCacheMu.Lock()
+	primed := ct.shellCache != nil
+	ct.shellCacheMu.Unlock()
+	if !primed {
+		ct.PrimeShellTracking(workDir)
+		return
+	}
+	ct.shellCacheMu.Lock()
+	defer ct.shellCacheMu.Unlock()
+	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+	if snap == nil {
+		return
+	}
+	ct.shellCache = snap
+	if absRoot, err := filepath.Abs(workDir); err == nil {
+		ct.shellCacheRoot = absRoot
+	}
+}
+
 // TrackShellTurn diffs the workspace against the primed baseline,
 // records mutations, and rebases the baseline to the new state.
 // Auto-primes if the cache hasn't been primed yet (no changes recorded first time).
 // `destructive` enables the safer mode that bypasses autoSkipDirs.
 func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bool) {
+	ct.trackShellTurn(workDir, toolCall, toolCall, destructive)
+}
+
+// TrackShellCommandTurn is TrackShellTurn for a shell_command run: entries
+// keep the stable "shell_command" tool label, while the command text drives
+// git-stash detection and names destructive rollup rows (so each rollup is
+// distinguishable and individually recoverable).
+func (ct *ChangeTracker) TrackShellCommandTurn(workDir, command string, destructive bool) {
+	ct.trackShellTurn(workDir, "shell_command", command, destructive)
+}
+
+func (ct *ChangeTracker) trackShellTurn(workDir, toolCall, command string, destructive bool) {
 	if ct == nil || !ct.IsEnabled() {
 		return
 	}
@@ -143,14 +184,14 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// git stash is uniquely dangerous: the stash pop's 3-way merge can
 	// silently revert files to a state the agent never wrote. Re-prime
 	// the cache instead of diffing against a stale pre-stash baseline.
-	if destructive && isGitStashOperation(toolCall) {
+	if destructive && isGitStashOperation(command) {
 		snap, _, _ := ct.walkWorkspace(workDir, nil, true)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
 		}
 		ct.shellCache = snap
 		ct.shellCacheRoot = absWorkDir
-		ct.logf("git stash operation detected (%s), re-primed shell cache (no diff against stale baseline)", toolCall)
+		ct.logf("git stash operation detected (%s), re-primed shell cache (no diff against stale baseline)", command)
 		return
 	}
 
@@ -168,7 +209,7 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// Surface truncation as a manifest entry on destructive walks.
 	if truncated && destructive {
 		ct.appendChange(TrackedFileChange{
-			FilePath:  toolCall,
+			FilePath:  shellRowLabel(command, toolCall),
 			Operation: "warning",
 			NewCode:   "walk truncated during destructive command — coverage is partial. Re-run sprout in a smaller subdirectory or increase the walker budget if recovery completeness matters.",
 			Timestamp: time.Now(),
@@ -179,7 +220,7 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// Destructive commands above the bulk threshold collapse into a single
 	// recoverable entry. Below the threshold we keep per-file shape.
 	if destructive && len(pending) >= shellDestructiveBulkThreshold {
-		ct.appendDestructiveBulkRollup(pending, toolCall)
+		ct.appendDestructiveBulkRollup(pending, shellRowLabel(command, toolCall), toolCall)
 	} else if !destructive && len(pending) >= shellBulkThreshold {
 		// Build-style non-destructive commands (npm run build, cargo
 		// build, go build with many outputs) emit one rollup row per
@@ -379,4 +420,18 @@ func splitForGitRevertCheck(cmd string) []string {
 		}
 	}
 	return out
+}
+
+// shellRowLabel names a manifest row produced by a whole command (bulk
+// rollups, truncation warnings): the command itself, shortened, so rows from
+// different commands stay distinguishable.
+func shellRowLabel(command, fallback string) string {
+	label := strings.Join(strings.Fields(command), " ")
+	if label == "" {
+		return fallback
+	}
+	if r := []rune(label); len(r) > 120 {
+		label = string(r[:120]) + "…"
+	}
+	return label
 }

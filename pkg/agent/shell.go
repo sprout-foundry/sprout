@@ -107,7 +107,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 			// Pass the workspace root, NOT effectiveCwd: the shell cwd
 			// follows cd, and a cwd-keyed cache re-primes (cold walk +
 			// dropped diff) on every command after a cd.
-			tracker.TrackShellTurn(a.currentWorkspaceRoot(), "shell_command", shellIsDestructive(command))
+			tracker.TrackShellCommandTurn(a.currentWorkspaceRoot(), command, shellIsDestructive(command))
 		}
 	}
 

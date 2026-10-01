@@ -22,11 +22,15 @@ const isolationGitBudget = 2 * time.Minute
 // edits colliding with the primary's. Its changes come back as a patch
 // against the seeded baseline.
 type isolatedWorkspace struct {
-	repoRoot  string // primary repository top level
-	path      string // worktree top level
-	subdir    string // workspace root relative to repoRoot ("" at top level)
-	baseline  string // commit in the worktree holding the seeded state
-	patchPath string // where an unapplied patch is kept
+	repoRoot string // primary repository top level, as git reports it (symlinks resolved)
+	// displayRoot is repoRoot in the form the primary workspace path uses
+	// (e.g. macOS /var/... rather than /private/var/...), so remapped change
+	// paths match the primary tracker's own entries for the same files.
+	displayRoot string
+	path        string // worktree top level
+	subdir      string // workspace root relative to repoRoot ("" at top level)
+	baseline    string // commit in the worktree holding the seeded state
+	patchPath   string // where an unapplied patch is kept
 }
 
 func runGitIn(ctx context.Context, dir string, args ...string) (string, error) {
@@ -76,8 +80,21 @@ func createIsolatedWorkspace(ctx context.Context, workspaceRoot, id string) (*is
 		path:      filepath.Join(base, name),
 		patchPath: filepath.Join(base, name+".patch"),
 	}
-	if rel, err := filepath.Rel(repoRoot, workspaceRoot); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-		ws.subdir = rel
+	// Compare in resolved form (git resolves symlinks), but keep the
+	// workspace's own form for paths recorded in change history.
+	ws.displayRoot = repoRoot
+	realWorkspace := workspaceRoot
+	if r, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
+		realWorkspace = r
+	}
+	if rel, err := filepath.Rel(repoRoot, realWorkspace); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel != "." {
+			ws.subdir = rel
+		}
+		ws.displayRoot = filepath.Clean(strings.TrimSuffix(filepath.Clean(workspaceRoot), string(filepath.Separator)+rel))
+		if rel == "." {
+			ws.displayRoot = filepath.Clean(workspaceRoot)
+		}
 	}
 
 	if _, err := runGitIn(ctx, repoRoot, "worktree", "add", "--detach", ws.path, "HEAD"); err != nil {
@@ -171,9 +188,18 @@ func (w *isolatedWorkspace) remove(ctx context.Context) {
 // remapChanges rewrites tracked change paths from the worktree to the
 // primary repository, so the primary's change history names its own files.
 func (w *isolatedWorkspace) remapChanges(changes []TrackedFileChange) []TrackedFileChange {
+	roots := []string{w.path}
+	if real, err := filepath.EvalSymlinks(w.path); err == nil && real != w.path {
+		roots = append(roots, real)
+	}
 	remap := func(p string) string {
-		if rel, err := filepath.Rel(w.path, p); err == nil && filepath.IsAbs(p) && !strings.HasPrefix(rel, "..") {
-			return filepath.Join(w.repoRoot, rel)
+		if !filepath.IsAbs(p) {
+			return p
+		}
+		for _, root := range roots {
+			if rel, err := filepath.Rel(root, p); err == nil && !strings.HasPrefix(rel, "..") {
+				return filepath.Join(w.displayRoot, rel)
+			}
 		}
 		return p
 	}

@@ -118,9 +118,12 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	if !strings.HasPrefix(result.Output, "[isolated run] Changes applied") {
 		t.Errorf("outcome not reported: %q", result.Output)
 	}
+	if len(result.FileChanges) == 0 {
+		t.Fatal("subagent's change not tracked")
+	}
 	for _, c := range result.FileChanges {
-		if !strings.HasPrefix(c.FilePath, dir) && filepath.IsAbs(c.FilePath) {
-			t.Errorf("tracked change not remapped to the workspace: %s", c.FilePath)
+		if c.FilePath != filepath.Join(dir, "main.go") {
+			t.Errorf("tracked change not remapped to the workspace in its own path form: %s (want %s)", c.FilePath, filepath.Join(dir, "main.go"))
 		}
 	}
 	if left := worktreesLeft(t, home); len(left) != 0 {

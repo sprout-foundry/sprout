@@ -45,7 +45,7 @@ func (h *listChangesHandler) Definition() ToolDefinition {
 			{Name: "tool", Type: "string", Description: "Tool name filter (e.g. write_file, edit_file)"},
 			{Name: "path_pattern", Type: "string", Description: "Path glob filter (e.g. pkg/auth/*.go)"},
 			{Name: "include_diff", Type: "boolean", Description: "Add per-file unified diff to results"},
-			{Name: "group_by", Type: "string", Description: "Set to 'block' for activity-block summary"},
+			{Name: "group_by", Type: "string", Description: "Default: one entry per file with its net effect (changes that net out to nothing are omitted). 'change' for one entry per recorded change; 'block' for an activity-block summary"},
 			{Name: "include_persisted", Type: "boolean", Description: "Merge in persistent history records"},
 		},
 	}

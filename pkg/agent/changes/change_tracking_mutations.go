@@ -360,11 +360,11 @@ const shellDestructiveBulkMaxPayloadBytes = shellSnapshotMaxTotalBytes
 // is out of reach. This is the same upper bound the walker applies, so
 // hitting it means we ran into a workspace that's outside the change
 // tracker's overall budget regardless of bulk shape.
-func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChange, toolCall string) {
+func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChange, label, toolCall string) {
 	items, overBudget := ct.packBulkItems(pending)
 
 	entry := TrackedFileChange{
-		FilePath:  toolCall, // command label — the UI renders this as the bulk row's heading
+		FilePath:  label, // command label — the UI renders this as the bulk row's heading
 		Operation: "bulk",
 		Timestamp: time.Now(),
 		ToolCall:  toolCall,
@@ -384,7 +384,7 @@ func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChang
 	if ct.view != nil {
 		ct.view.PublishRawFileChanged(
 			events.EventTypeFileChanged,
-			events.FileChangedEvent(toolCall, "shell_bulk", toolCall),
+			events.FileChangedEvent(label, "shell_bulk", toolCall),
 		)
 	}
 }

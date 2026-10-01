@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -2139,7 +2140,7 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "empty content",
 			input: []byte{},
-			want:  []string{},
+			want:  []string{""},
 		},
 		{
 			name:  "single line no newline",
@@ -2174,15 +2175,15 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "nil content",
 			input: nil,
-			want:  []string{},
+			want:  []string{""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := splitLines(tt.input)
+			got := utils.SplitLinesKeepEmpty(string(tt.input))
 			if len(got) != len(tt.want) {
-				t.Errorf("splitLines(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
+				t.Errorf("SplitLinesKeepEmpty(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
 				return
 			}
 			for i := range got {

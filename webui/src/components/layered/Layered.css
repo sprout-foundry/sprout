@@ -146,6 +146,14 @@
   gap: 2px;
 }
 
+/* One line; a long owner/name is cut with an ellipsis (full name in the tooltip). */
+.project-nav-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-nav-sibling {
   display: inline-flex;
   align-items: center;

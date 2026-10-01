@@ -10,10 +10,10 @@ import "os"
 //   - FORCE_COLOR set to any non-empty value → colors ON (unless NO_COLOR)
 //   - otherwise → caller's want value
 //
-// Lives in pkg/envutil because pkg/console depends on pkg/configuration
-// (transitively pkg/utils) so pkg/utils can't import pkg/console without
-// creating a cycle. pkg/envutil is the existing zero-dependency leaf used
-// for env-var helpers.
+// Lives in pkg/envutil because pkg/console directly imports pkg/utils
+// (terminal/string helpers), so pkg/utils importing pkg/console would be
+// a direct two-package cycle. pkg/envutil is the existing zero-
+// dependency leaf used for env-var helpers.
 func ResolveColorPreference(want bool) bool {
 	if os.Getenv("NO_COLOR") != "" {
 		return false

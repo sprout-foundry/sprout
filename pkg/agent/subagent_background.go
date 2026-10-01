@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -396,7 +397,7 @@ func describeRunningTask(r *SubagentRunner, t *backgroundTask) string {
 			tokens = sub.Agent.state.GetTotalTokens()
 			tools = sub.Agent.state.GetTotalToolCalls()
 		}
-		fmt.Fprintf(&b, "- %s: %s · step %d · %d tool calls · %s tokens\n", sub.ID, state, iterations, tools, compactCount(tokens))
+		fmt.Fprintf(&b, "- %s: %s · step %d · %d tool calls · %s tokens\n", sub.ID, state, iterations, tools, subagents.CompactCount(tokens))
 		for _, line := range sub.recentOutput(backgroundRecentOutput) {
 			fmt.Fprintf(&b, "    | %s\n", line)
 		}

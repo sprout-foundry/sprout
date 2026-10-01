@@ -26,22 +26,22 @@ const imageWithholdNote = "\n\n[image withheld from this request to stay within 
 // per-image inline cap plus prompt text must stay under a conservative
 // server limit.
 //
-// The input slice and its messages are not modified. When the budget is not
-// binding the input is returned unchanged — a stable wire prefix keeps the
-// provider's prompt cache and sprout's token anchor valid. maxImages <= 0
-// strips every image (StripImagesWithNote semantics).
+// The input slice and its messages are not modified (kept image parts are
+// copied, never aliased). When the budget is not binding the input is
+// returned unchanged — a stable wire prefix keeps the provider's prompt
+// cache and sprout's token anchor valid. maxImages <= 0 strips every image.
 func TrimImagesBeyondLatest(messages []Message, maxImages int) []Message {
-	if maxImages <= 0 {
-		return StripImagesWithNote(messages)
+	budget := maxImages
+	if budget < 0 {
+		budget = 0
 	}
-	if CountImages(messages) <= maxImages {
+	if CountImages(messages) <= budget {
 		return messages
 	}
 
 	out := make([]Message, len(messages))
 	copy(out, messages)
 
-	budget := maxImages
 	for i := len(out) - 1; i >= 0; i-- {
 		if budget == 0 {
 			// Budget already spent by newer messages: shed this one too.
@@ -57,7 +57,11 @@ func TrimImagesBeyondLatest(messages []Message, maxImages int) []Message {
 			budget -= len(out[i].Images)
 			continue
 		}
-		out[i].Images = out[i].Images[len(out[i].Images)-budget:]
+		// Copy the kept tail so the result never aliases the input's
+		// backing array (a later append must not write into it).
+		keep := make([]ImageData, budget)
+		copy(keep, out[i].Images[len(out[i].Images)-budget:])
+		out[i].Images = keep
 		if !strings.Contains(out[i].Content, imageWithholdNote) {
 			out[i].Content += imageWithholdNote
 		}

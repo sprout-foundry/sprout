@@ -1,12 +1,392 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress (phases 1–2 shipped 2026-09-26; 3–5 pending)
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) complete (increments 1–6 landed 2026-09-27/29 — security-analyzer, path-tier, allowlist, risk vocabulary, broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phase 4 (`subagents`) complete (increment 1 — data foundation — and increment 2 — runner leaf logic — landed 2026-09-29; the `SubagentRunner` orchestration core is documented as rooted in `pkg/agent`, see the rootedness finding); phase 5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
 the repo. This spec plans the split; it does not schedule it.
 
-## Problem
+## Progress
+
+- **Phase 1 (2026-09-27): `pkg/agent/workflow` landed.** The in-process
+  TODO-loop runner (loop driver, config parsing, gate/triage types +
+  parsers, outcome classification, TODO-file ops, session ID, budget
+  heartbeat) moved to a new `pkg/agent/workflow` subpackage behind a narrow
+  `Agent`/`Budget`/`HeartbeatReporter` interface, so the subpackage does not
+  import `pkg/agent` (no cycle). `RunWorkflowLoopInProcess` stays in
+  `pkg/agent` as the construction entry point (it needs unexported `Agent`
+  fields) and now forwards to `workflow.RunLoop`; `WorkflowResult` is a type
+  alias to `workflow.Result`; `handleRunAutomate` calls
+  `workflow.ParseFile`/`NewSessionID`. Pure move, no behavior change.
+- **Dead-code warm-up (2026-09-27):** removed zero-reference `pkg/agent`
+  code: the `tool_call_format.go` island (`formatToolCall` +
+  `formatTruncateString` + `summarizeTodoWriteArgs` +
+  `maxToolArgDisplayLength` — entry `formatToolCall` had no callers, its
+  helpers were reachable only through it) and the single-arg
+  `isSystemPath` (zero refs; the live variant is
+  `isSystemPathWithOriginal`). Verified zero references repo-wide before
+  deletion; the `find_dead_code` graph's high-confidence list was
+  over-flagging (several entries had live test-only or cross-package
+  callers), so deletion used repo-wide grep as ground truth.
+- **Phase 2 (2026-09-27): `pkg/agent/changes` landed.** The change-tracking
+  cluster (the 12 `change_tracking*.go` production files) moved to a new
+  `pkg/agent/changes` subpackage. Unlike the workflow phase, this cluster was
+  **not** self-contained: `ChangeTracker` holds an `agent *Agent` field and
+  reaches into three unexported spots (`ct.agent.workspaceRoot`,
+  `ct.agent.eventBus.Publish` ×2, `ct.agent.Logger()`), and its white-box test
+  suite constructs `&Agent{...}`. So the phase landed in two verifiable
+  increments, per the spec's "narrow interface seam" prerequisite:
+  - **Step A (in-package, zero moves):** introduced a `ChangeAgent` interface
+    + `DebugLogger` sub-interface the tracker now depends on instead of the
+    concrete `*Agent`. `*Agent` satisfies it structurally, so the 3.9K-line
+    white-box suite compiled unchanged. `ct.agent.workspaceRoot` →
+    `GetWorkspaceRoot()` (equivalent: the field is only written via the
+    trimming setter); the two `eventBus.Publish` sites now route through a new
+    nil-guarded, undecorated `Agent.PublishRawEvent` (preserves the exact
+    pre-seam publish semantics); `ct.agent.Logger()` → a `DebugLogger()` seam
+    (the concrete `*AgentLogger` return type can't cross a package boundary).
+  - **Step B (the physical move):** relocated the 12 files into
+    `pkg/agent/changes/` behind type aliases in `pkg/agent`
+    (`ChangeTracker`, `TrackedFileChange`, `TrackedBulkItem`,
+    `CheckpointFileChange`) + a `NewChangeTracker` forwarder, so
+    `webui`/`agent_tools`/`cmd` and all in-package callers are untouched.
+    `CheckpointFileChange` traveled with the cluster (its only in-cluster user
+    is `CollectFileChangesForCheckpoint`; `turn_checkpoints`/`rollup` resolve
+    it via the alias). The white-box test files moved to `changes` with a
+    minimal `fakeAgent` double in place of the unreferenceable `*Agent`
+    (import cycle); the genuinely agent-integration tests (agent handler +
+    `NewTestAgent` + `agent.changeTracker`) stayed in `pkg/agent` behind
+    exported testutil seams. Pure move, no behavior change.
+  - **Scope:** the `transcript_snapshot*.go` trio and `atomic_write.go`
+    stayed in `pkg/agent` this phase — the snapshot trio carries `*Agent`
+    methods (`BuildTranscriptSnapshot`/`CaptureTranscriptSnapshot`) and
+    `writeFileAtomic` serves `persistence_message.go`; both can follow in a
+    later increment if the cluster's remaining entanglement warrants it.
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 1 — the LLM
+  security-analyzer cluster landed.** The `security_analyzer*.go` trio
+  (`security_analyzer.go`, `security_analyzer_chain.go`,
+  `security_analyzer_cache.go`) moved into the new `pkg/agent/approvals`
+  subpackage. The cluster was nearly self-contained: the LLM entrypoints
+  (`AnalyzeChain`, `AnalyzeChainFallback`, `AnalyzeShellCommand`) took a
+  concrete `*Agent` and reached in only two places (`agent.getClient()`,
+  `agent.GetModel()`). The seam: the three entrypoints now take
+  `(client api.ClientInterface, model string, …)` — the caller resolves the
+  client + model (including the session-model override). A
+  `pkg/agent/security_analyzer_forwarders.go` keeps the original
+  `*Agent`-based signatures for every in-package call site
+  (`approval_broker.go`, `agent_accessors.go`), so no caller changed.
+  `SecurityAnalysis`, `SecurityAnalysisCache`, `Chain`, `ParseChain`,
+  `ChainCacheKey`, `NormalizeChain`, `NewSecurityAnalysisCache`, and
+  `MaxChainSubcommandsForBatchPrompt` are type aliases/forwarders into
+  `approvals`; the chain/cache files moved as pure moves (only the
+  `package` line + file-reference comment changed).
+  - **Behavior-preservation detail:** the original `AnalyzeChain` ran the
+    long-chain dispatch *before* the client-nil check, so a long chain with
+    no client still returned a synthesized (best-effort) entry. The moved
+    version preserves that ordering exactly (dispatch → then `client==nil`
+    check). The `*Agent`-based nil guard (`agent == nil`) was dropped since
+    the entrypoints are now client-injected; a `nil` client is still
+    handled.
+  - **Test split:** `security_analyzer_test.go` was 1873 lines and mixed the
+    analyzer tests (lines 1–1397: 41 tests + 4 mock clients) with the
+    file-access conformance tests (lines 1399–1873: `NonTmpTempDir`/
+    `externalTempDir` + `TestClassifyFileAccess_Conformance` + the
+    `TestClassifyFileAccess_*` / `TestStaticGateAutoApprove_*` battery). The
+    analyzer half moved to `approvals/security_analyzer_test.go` (the mock
+    clients implement `api.ClientInterface` directly, so the
+    `&Agent{}`/`setClient` setup became `client.GetModel()` — no `*Agent`
+    needed); the conformance half stayed in `pkg/agent/security_analyzer_test.go`.
+    One deliberate, documented nuance (reviewed): the pre-move "nil agent"
+    fast error is gone — a nil `*Agent` degrades to a nil client, so the
+    fallback/long-chain path now synthesizes instead of erroring (unreachable
+    in production; pinned by `TestAnalyzeChainFallback_NilClient_ReturnsSynthesized`).
+  - **Verification:** `go build ./...` + `go vet` + `gofmt` clean;
+    content-identity on all 4 moved production files (only the seam lines
+    differ); `pkg/agent/approvals` suite green (41 tests); `pkg/agent`
+    suite green in isolation (the `[state-leak]` failure is the
+    documented environmental false positive — my own live orchestrator
+    session journals into the real state dir during the run);
+    `agent_tools`/`webui`/`console`/`utils` suites green. The WebUI JS
+    `build-all` step OOMs on this machine (JavaScript heap limit),
+    unrelated to this Go-only change.
+  - **Remaining approvals work (future increments):** the
+    approval-broker/risk-orchestrator files
+    (`approval_broker.go`, `risk_assessment.go`,
+    `agent_security.go`, `agent_risk.go`, `risk_prompt.go`,
+    `shell_approval*.go`, `tool_security*.go`, `edit_approval.go`,
+    `security_circuit_breaker.go`, `seed_tool_security.go`,
+    `submanager_*_security.go`) still carry `*Agent` methods and reach into
+    `Agent` fields — they follow the `ChangeAgent`-seam pattern (define a
+    narrow `ApprovalAgent` interface, move, forward) in a later increment.
+    (`approval_allowlist.go` landed in increment 3 below.)
+    (The `path_tier.go`/`access_mode.go` "risk input" foundation landed in
+    increment 2 above; `path_tier_integration_test.go`/
+    `path_tier_gate_test.go` stayed as `applyFilesystemDecision` integration
+    tests.)
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 2 — the path-tier
+  + access-mode foundation landed.** `path_tier.go` (the `PathTier`
+  classifier: `ClassifyPathAccess`, the four `PathTier*` tiers,
+  `NormalizePath`, `IsUnderPrefix`, `DetectHomeDir`) and `access_mode.go`
+  (`AccessModeForTool`) moved into `pkg/agent/approvals`. Pure, agent-free:
+  the two files had zero `*Agent` coupling (the classifier takes explicit
+  `workspaceRoot`/`homeDir`/`cwd` args; `DetectHomeDir` is a test-override
+  hook). They are the "risk inputs" named in the spec's `approvals`
+  target. The forwarder `pkg/agent/path_tier_forwarders.go` keeps every
+  in-package call site working via aliases + one-line forwarders:
+  `PathTier` (type alias), `PathTierUnknown`/`Workspace`/`External`/
+  `Sensitive` (const aliases), `ClassifyPathAccess`, lowercase
+  `normalizePath`/`isUnderPrefix`/`accessModeForTool` (forwarded to the
+  exported `approvals.NormalizePath`/`IsUnderPrefix`/`AccessModeForTool`),
+  and `detectHomeDir` (a delegating `var` so the test-override hook keeps
+  working for `risk_assessment.go`/`tool_security_paths.go`).
+  - **Test split:** `path_tier_test.go` interleaved pure classifier tests
+    (5, lines 1–143 ∪ 205–236) with two `AgentSecurityManager` tests
+    (144–204, `NewAgentSecurityManager` — an `*Agent`-adjacent type that
+    stays in `pkg/agent`). The 5 pure tests moved to
+    `approvals/path_tier_test.go`; the 2 manager tests stay in
+    `pkg/agent/path_tier_test.go`. (`path_tier_gate_test.go` +
+    `path_tier_integration_test.go` are `applyFilesystemDecision`
+    integration tests — they stayed.)
+  - **Verification:** `go build ./...` + `go vet` + `gofmt` clean;
+    content-identity on both moved production files (every line maps 1:1
+    except the `package` line + the 4 intentional lowercase→exported
+    renames); `pkg/agent/approvals` suite green.
+- **Phase 3 (2026-09-27): `pkg/agent/approvals` increment 3 — the
+  shell-command allowlist + persistence landed.** The four pure allowlist
+  functions from `pkg/agent/approval_allowlist.go` moved to
+  `pkg/agent/approvals/allowlist.go`, parameterized on
+  `*configuration.Config` (lookup) / `*configuration.Manager` (persistence)
+  instead of `*Agent`: `IsShellCommandAllowlisted`,
+  `PersistShellCommandAllowlist`, `PersistShellCommandPattern`,
+  `PersistShellCommandAskPolicy`. `pkg/agent/approval_allowlist.go` is now
+  a thin forwarder file: the four `*Agent` methods keep their exact
+  signatures (the broker, the tool-security gates, and the seed-time
+  security checks call them) and resolve the config/manager via
+  `a.GetConfig()`/`a.GetConfigManager()`, preserving the pre-move
+  `agent == nil` guard (the persist forwarders return
+  `approvals.ErrNilAgent`, the pre-move "nil agent" Permission error).
+  `ElevateSessionToPermissive` did NOT move — it mutates agent-local
+  risk-profile state (`a.SetRiskProfileOverride`), which is out of scope
+  for the config/manager seam.
+  - **Import-safety note:** `pkg/agent/approvals` now imports
+    `pkg/configuration` (for the `Config`/`Manager`/`CommandPolicies`
+    types). This is cycle-free: `pkg/configuration` does not import the
+    `pkg/agent` parent (the `pkg/agent → approvals` edge stays one-way).
+  - **Tests:** new `approvals/allowlist_test.go` covers the moved logic on
+    bare configs + a real isolated `configuration.NewTestManager`
+    (persist→lookup round trips, idempotency, ask-policy rule shape,
+    validation ordering: empty-input check precedes the nil-manager check).
+    The existing `pkg/agent/approval_allowlist_test.go` now exercises the
+    forwarders unchanged.
+  - **Still `*Agent`-coupled (next increments, interface-seam work):**
+    `approval_broker.go` (RequestApproval — 15+ surface items: config,
+    event bus, security-approval mgr, unsafe flags, debug logger,
+    interrupt ctx, webui-client check, workflow-approval marking).
+    These follow the `changes.AgentView`-style narrow-interface seam.
+- **Phase 3 (2026-09-28): `pkg/agent/approvals` increment 4 — the
+  risk-assessment vocabulary + pure decision helpers landed.** The
+  canonical risk vocabulary moved from `pkg/agent/risk_assessment.go` to
+  `pkg/agent/approvals/risk_assessment.go`: `RiskSource` + the 10
+  `RiskSource*` consts, the `RiskAssessment` struct, `AssessmentFromClassifier`,
+  `AssessmentFromPersonaCascade`, `RiskAssessment.Combine` (was
+  unexported `combine`), `MergeRiskSources` (was `mergeRiskSources`),
+  `RiskAssessment.Explain`, `ResolveOldDecision` / `ResolveUnifiedDecision`
+  (shadow-mode comparators), and `IsGitRebaseCommand`. The git-command
+  gate detectors (`IsGitWriteCommand`, `IsGitStashCommand` — pure
+  strings/shelltext classifiers) moved from `pkg/agent/tool_handlers.go`
+  to `pkg/agent/approvals/git_command_gates.go`. `pkg/agent` keeps the
+  `*Agent` orchestrator `ResolveToolRisk` (it reaches into
+  `a.EvaluateOperationRisk`, `a.effectiveCwd`, `a.debug`,
+  `a.isGitWriteAllowed`, `a.GetWorkspaceRoot` — interface-seam work for a
+  later increment) plus `agent_risk.go` / `risk_prompt.go` (persona
+  resolution, active risk profile, request-approval side effects).
+  `pkg/agent/risk_assessment_forwarders.go` aliases the moved types/consts
+  (`type RiskSource = approvals.RiskSource`, etc.) and forwards the
+  unexported helper names, so every call site in `pkg/agent` (the
+  tool-handler gates, the seed/tool-security shadow-mode comparisons) is
+  unchanged.
+  - **Method rename (the one non-pure-move edit):** `combine` → `Combine`
+    (Go methods cannot be re-declared across packages); the 8 call sites
+    in `ResolveToolRisk` and the pure tests update from `.combine(` to
+    `.Combine(`.
+  - **Import-safety note:** `approvals → agent_tools` for
+    `SecurityResult` (the classifier input) is cycle-free —
+    `pkg/agent_tools` does not import the `pkg/agent` parent (it already
+    holds this edge from the security-analyzer files); `configuration`,
+    `security`, `shelltext`, and `utils` likewise don't import the agent
+    parent.
+  - **Tests:** the 15 pure tests moved to
+    `approvals/risk_assessment_test.go` (AssessmentFromClassifier/
+    PersonaCascade mapping, Combine edge cases, Explain, MergeRiskSources,
+    ResolveOldDecision/ResolveUnifiedDecision, the golden Phase-1 mapping
+    block); the 30 `*Agent`-based tests (ResolveToolRisk battery,
+    shadow-mode parity, TestRiskLevelRank, TestAccessModeForTool,
+    TestConfigUnifiedRiskResolver_DefaultFalse) stay in
+    `pkg/agent/risk_assessment_test.go` and exercise the forwarders.
+  - **Still `*Agent`-coupled (next increment, interface-seam work):**
+    the `ResolveToolRisk` orchestrator + `agent_risk.go`/`risk_prompt.go`
+    persona/risk-profile methods. These follow the
+    `changes.AgentView`-style narrow-interface seam (a `RiskAgent`
+    interface over the ~10 exported-method surface).
+- **Phase 3 (2026-09-28): `pkg/agent/approvals` increment 5 — the
+  approval broker landed behind the `ApprovalAgent` seam.** The broker
+  body (`RequestApproval`, ~420 lines: command-policy → allowlist →
+  unsafe/elevated bypasses → optional LLM security analysis → WebUI/CLI
+  interactive surfaces → permissive fallback) moved to
+  `pkg/agent/approvals/broker.go` as a package function operating on the
+  new `ApprovalAgent` interface (`approvals/approval_agent.go`, 23
+  members), with `BrokerDecision` moved alongside. The `*Agent` method
+  `RequestApproval` is now a one-line forwarder in
+  `pkg/agent/approval_broker.go` (with `BrokerDecision` aliased). Two
+  pure companions moved too: `EvaluateCommandPolicy` (from
+  `pkg/agent/command_policy.go` → `approvals/command_policy.go`, the
+  whole file + its tests) and `approvalDecisionFromCLIChoice` →
+  `approvals/cli_choice.go` (`ApprovalDecisionFromCLIChoice`; a
+  2-line forwarder stays in `risk_prompt.go` for the other callers).
+  - **Seam design (the `changes.AgentView` pattern, applied to
+    approvals):** most interface members are existing exported
+    accessors (`GetConfig`, `IsShellCommandAllowlisted`, `GetUnsafeMode`,
+    `IsSessionElevated`, `GetSecurityApprovalMgr`, `GetEventBus`, …);
+    8 new seam accessors in `pkg/agent/approval_seam_accessors.go`
+    expose the private surface — `Client` (getClient), `EffectiveCwd`
+    (effectiveCwd), `DebugEnabled`/`DebugLogf` (debug/debugLog),
+    `IsNonInteractive`, `GetSecurityAnalysisCache`, `LogSecurityDecision`
+    (logSecurityDecision), `ApplyApprovalDecision`
+    (applyApprovalDecision), and `ApproveShellCommandParts` (wraps
+    NewShellProposal + RequestShellApproval, returning
+    decisions/partIDs so the broker's all-parts-approved check stays
+    faithful). `InterruptCtx` and `GetModel` were already exported. The
+    import arrow is one-way: `pkg/agent → approvals`.
+  - **The one non-mechanical edit:** the shell-per-part picker block now
+    calls `a.ApproveShellCommandParts(pickerCtx, cmd)` (returns
+    decisions + part IDs) instead of constructing the `ShellProposal`
+    locally and walking `proposal.Parts` — the all-approved loop walks
+    the returned part IDs, same semantics.
+  - **Verification:** content-identity confirmed (normalized-diff of the
+    moved body vs. the original = only the package/import lines + the
+    mechanical renames). Content-identity + go build + go vet clean;
+    approvals suite + the broker/allowlist/adapter test batteries green.
+- **Phase 3 (2026-09-29): `pkg/agent/approvals` increment 6 — the
+  `ResolveToolRisk` orchestrator landed behind the `RiskAgent` seam.**
+  The risk resolver (classifier → persona cascade → git gates →
+  workspace security policy → filesystem path tiers) moved to
+  `pkg/agent/approvals/risk_resolver.go` as a package function operating
+  on the new `RiskAgent` interface (`approvals/risk_agent.go`, 11
+  members): `GetWorkspaceRoot`, `HasPasswordPrompter`,
+  `IsFolderSessionAllowed`, `GetConfig`, `EvaluateOperationRisk`
+  (all pre-existing exported methods) plus the seam accessors
+  `IsGitWriteAllowed`, `EffectiveCwd`, `HomeDir`, `DebugEnabled`,
+  `DebugLogf`. `pkg/agent/risk_assessment.go` is now a thin forwarder
+  file (the `*Agent` method delegates to `approvals.ResolveToolRisk`);
+  `agent_risk.go` and `risk_prompt.go` stay — they own the state the
+  seam reads (persona/risk-profile/subagent fields, the elevation
+  flag), and the seam pattern keeps state on the owner.
+  - **Seam accessors (new file `pkg/agent/risk_seam_accessors.go`):**
+    `IsGitWriteAllowed()` delegates to the existing private
+    `isGitWriteAllowed()` (persona git-write capability); `HomeDir()`
+    routes through the existing `detectHomeDir` test-override hook (a
+    package-level `var = approvals.DetectHomeDir`) so pre-move test
+    overrides keep working. `EffectiveCwd`/`DebugEnabled`/`DebugLogf`
+    come from `approval_seam_accessors.go` (increment 5). A
+    `var _ approvals.RiskAgent = (*Agent)(nil)` compile-time assertion
+    guards the seam.
+  - **Nil-agent preservation:** the pre-move body was nil-`*Agent`-safe
+    (skipped every agent-coupled input, returned the classifier-only
+    assessment). A nil `*Agent` boxed into the `RiskAgent` interface is
+    non-nil, so the guard lives in the forwarder: `a == nil` →
+    `assessmentFromClassifier(ClassifyToolCallWithWorkspace(tool, args,
+    ""))`, byte-identical to the pre-move nil path.
+    `TestResolveToolRisk_NilAgent` passes unchanged.
+  - **Verification:** content-identity confirmed (normalized-diff of
+    the moved body vs. the original = 0 lines beyond the renames);
+    build + vet + gofmt clean; approvals suite ok; the 37-test risk
+    battery (ResolveToolRisk incl. nil-agent, git gates, path tiers,
+    workspace policy, shadow-mode parity) all green.
+- **Phase 4 (2026-09-29): `pkg/agent/subagents` increment 1 — the
+  subagent data foundation landed.** The wire/result types
+  (`SubagentStatus` + the six status consts, `FileChange`,
+  `SubagentRunMetrics`, `SubagentReturn`, `ProgressEntry`,
+  `SubagentError`, `SubagentOptions`, `SharedState`, `SubagentResult`,
+  `SubagentProgressEntry`, `SubagentTask`, `SubagentMetrics`), the pure
+  helpers (`IsOutputComplete`, `ProgressLogCap`), the terminal display
+  (`PrintSubagentStart`/`PrintParallelSubagentStart`/
+  `PrintSubagentDone` + `compactCount`/`plural`/the stat suffix), the
+  spawn-time `AppendSubagentPreamble`, and the process-wide
+  active-subagent counter + `BuildSubagentPrefix` moved to
+  `pkg/agent/subagents` (types.go, display.go, preamble.go,
+  lifecycle.go). `pkg/agent/subagent_forwarders.go` re-exports the types
+  as aliases and forwards the six lowercase call-site names so the tool
+  handlers, the task runner, and the workflow wiring are unchanged.
+  `subagent_types.go` keeps only `SubagentRunner`/`runningSubagent`
+  (they hold `*Agent` fields directly — the runner seam is the next
+  increment); `subagent_lifecycle.go` keeps the runner construction,
+  `Metrics()`, and the lifecycle-event publishers. The three pure test
+  files moved with their code.
+  - **Import-safety note:** `subagents` imports `changes` (for
+    `changes.TrackedFileChange` on `SubagentResult.FileChanges`),
+    `console` (display glyphs), `agent_tools`, `configuration`,
+    `embedding`, `events` — none of which import the `pkg/agent` parent,
+    so the `pkg/agent → subagents` edge stays one-way (no cycle through
+    the forwarder).
+  - **Verification:** content-identity confirmed (normalized-diff of
+    every moved block and test file vs. the originals = 0 lines beyond
+    the rename set); build + vet + gofmt clean; the `subagents` suite
+    green;   the `pkg/agent` subagent batteries (display/prefix/output-
+    complete) still pass through the forwarders.
+- **Phase 4 (2026-09-29): `pkg/agent/subagents` increment 2 — the
+  runner leaf logic landed, and the runner's rootedness was established.**
+  The two pure leaves of the runner cluster moved to
+  `pkg/agent/subagents` (timeout.go, lifecycle_events.go): the
+  execution-timeout policy (`ResolveSubagentTimeout` /
+  `EnvSubagentTimeout` / `IsOrchestratorPersona` + the two tier consts)
+  and the lifecycle-event emission (`PublishLifecycleEvent` /
+  `PublishLifecycleEventWithCost` — the subagent_activity event + runlog
+  mirror). `pkg/agent` keeps thin `*SubagentRunner` method wrappers
+  (`subagent_task_timeout.go`, `subagent_lifecycle.go`) that resolve the
+  runner's shared ConfigManager/EventBus and delegate, so every
+  `*SubagentRunner`-typed call site and the whitebox tests are unchanged.
+  - **Verification:** content-identity confirmed (normalized-diff of both
+    moved bodies vs. the originals = 0 lines beyond the receiver→param
+    renames and the wrapper delegations); build + vet + gofmt clean; the
+    `subagents` suite green; the `pkg/agent` subagent batteries (timeout
+    incl. the nil-shared / nil-ConfigManager defensive paths, the
+    SPROUT_TOOL_TIMEOUT env-override matrix, the publishLifecycleEvent
+    runlog integration test) all green.
+- **Phase 4 (2026-09-29) — the SubagentRunner rootedness finding (scope
+  boundary, recorded so it isn't re-derived).** The `SubagentRunner`
+  struct and its methods are **rooted in `pkg/agent`** — unlike the
+  `workflow`/`changes`/`approvals` clusters, the orchestration core cannot
+  move to `pkg/agent/subagents`. Three airtight blockers:
+  1. **Import cycle.** The struct holds `parentAgent *Agent` and
+     `runningSubagent` holds `Agent *Agent`; increment 1's forwarder
+     already makes the import arrow `pkg/agent → subagents`. Moving the
+     struct into `subagents` would require `subagents → pkg/agent` to
+     name `*Agent` — a cycle.
+  2. **Unexported construction that no interface can express.**
+     `createSubagent` (subagent_creation.go) writes ~15 unexported `*Agent`
+     fields on the child and wires the pkg/agent-only managers
+     (`*ClarificationManager`, `*AgentOutputManager`, `*AgentStateManager`)
+     into it; `setupSubagentRun`/`finalizeSubagentResult`/the monitors read
+     the parent's unexported fields (`.clarificationManager`, `.output`,
+     `.debug`, `.subagentDepth`, `.riskProfileOverride`) and the child's
+     unexported `.state`. Expressing these through a seam interface would
+     require the interface (in `subagents`) to NAME pkg/agent types —
+     again a cycle. So the concrete `*Agent` must stay reachable, i.e. the
+     struct stays in `pkg/agent`.
+  3. **Whitebox test surface.** 47 assertions across 6 test files reach
+     into unexported runner fields (`runner.parentAgent`/`.shared`/
+     `.testClientFactory`), child unexported fields (`subAgent.
+     subagentDepth`, `child.clarificationManager`), and the unexported
+     `createSubagent`/`resolveSubagentTimeout`; the steering tests build
+     `&runningSubagent{...}` literals directly.
+  **Consequence:** the `SubagentRunner` orchestration (Run/RunParallel/
+  CancelAll/createSubagent/setupSubagentRun/runTask/finalizeSubagentResult/
+  the budget+progress monitors) is part of the "core lifecycle" cluster
+  that moves LAST in the SP-141 plan — and its only movable leaves (the
+  two above) have already been extracted. Increment 1's data foundation +
+  increment 2's leaves are the extent of the `subagents` extraction; the
+  runner struct stays put with the god package.
+- Phases 4–5 continue (phase 5 = the `tools` cluster, the largest).## Problem
 
 `pkg/agent` is a god package. Everything the in-process agent does lives in
 one Go namespace: query lifecycle, tool handlers, provider wiring, workflow

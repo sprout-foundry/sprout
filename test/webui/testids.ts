@@ -329,7 +329,7 @@ const TESTIDS = {
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
   // select is the single surface showing the cwd (no duplication).
   "workspace-cwd-bar": "workspace-cwd-bar",
-  "managed-model-section": "managed-model-section",
+  "editor-model-section": "editor-model-section",
   "workspace-cwd-select": "workspace-cwd-select",
   "workspace-add-repo-btn": "workspace-add-repo-btn",
 

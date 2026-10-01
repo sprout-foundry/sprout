@@ -7,6 +7,7 @@ vi.mock('../config/mode', () => ({ isCloud: true }));
 vi.mock('./CredentialsSettingsTab', () => ({ default: () => <div data-testid="credentials-tab" /> }));
 vi.mock('./GitHubAccountPanel', () => ({ default: () => null }));
 vi.mock('./SettingsPanel', () => ({ default: () => null }));
+vi.mock('./EditorModelSection', () => ({ default: () => <div data-testid="editor-model-section" /> }));
 vi.mock('../utils/log', async (importOriginal) => ({
   ...(await importOriginal()),
   useLog: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), success: vi.fn() }),
@@ -35,7 +36,7 @@ afterEach(() => {
 const noop = () => undefined;
 
 describe('SidebarSettingsSection on a platform-hosted browser workspace', () => {
-  it('explains the managed model instead of offering pickers that change nothing', async () => {
+  it('offers the account-level model choice instead of the local provider pickers', async () => {
     await act(async () => {
       root.render(
         <SidebarSettingsSection
@@ -64,7 +65,7 @@ describe('SidebarSettingsSection on a platform-hosted browser workspace', () => 
         />,
       );
     });
-    expect(container.querySelector('[data-testid="managed-model-section"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="editor-model-section"]')).not.toBeNull();
     expect(container.querySelector('#provider-select')).toBeNull();
     expect(container.querySelector('[data-testid="credentials-tab"]')).toBeNull();
   });

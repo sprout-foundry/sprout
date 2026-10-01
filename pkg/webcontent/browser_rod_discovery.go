@@ -47,14 +47,6 @@ func markGPUProbe(works bool) {
 	gpuStateWorks = works
 }
 
-// resetGPUProbe clears the cached GPU probe result. Used for testing.
-func resetGPUProbe() {
-	gpuStateMu.Lock()
-	defer gpuStateMu.Unlock()
-	gpuStateProbed = false
-	gpuStateWorks = false
-}
-
 // probeGPUSupport tests whether screenshot capture works on the given browser.
 // Returns true if the screenshot succeeded, false if it timed out (GPU unavailable).
 // The browser is not closed here — the caller decides what to do.

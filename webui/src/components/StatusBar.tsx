@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { supportsGit, isCloud } from '../config/mode';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { githubRepoSlug } from '../utils/platformUrl';
+import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../utils/platformUrl';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';
@@ -88,12 +88,13 @@ function StatusBar({
 
   // The hosted editor's workspace root is a fixed virtual folder, so the
   // open repository names it instead.
-  const repoSlug = githubRepoSlug(useActiveRepoURL());
+  const activeRepoURL = useActiveRepoURL();
+  const repoSlug = repoSlugFromURL(activeRepoURL);
   const workspaceLabel = isCloud ? repoSlug : workspacePath;
 
   // SP-022-W2.3: derive workspace basename from the full path
   const workspaceName = useMemo(() => {
-    if (isCloud) return repoSlug?.split('/')[1] ?? '';
+    if (isCloud) return repoNameFromURL(activeRepoURL) ?? '';
     if (!workspacePath || workspacePath.trim() === '') return '';
     // Handle trailing slashes and extract last non-empty segment
     const trimmed = workspacePath.replace(/\/+$/, '');

@@ -44,6 +44,7 @@ const (
 	designSketchHandlerFile      = "design_import_sketch_handler.go"
 	designSketchWasmStubFile     = "design_import_sketch_handler_js.go"
 	designCritiqueHandlerFile    = "design_critique_handler.go"
+	designCritiqueRenderFile     = "design_critique_render.go"
 	designCritiqueWasmStubFile   = "design_critique_handler_js.go"
 	designRenderRegistrar        = "registerDesignRenderTools"
 	designSketchRegistrar        = "registerDesignImportSketchTools"

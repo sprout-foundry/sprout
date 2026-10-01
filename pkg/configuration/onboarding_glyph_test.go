@@ -1,91 +1,68 @@
 package configuration
 
 import (
-	"bytes"
-	"fmt"
-	"io"
+	"os"
 	"strings"
 	"testing"
 )
 
-// TestOnboardingBrackets_VisibleStringPreserved is CLI-C-3's regression
-// lock: every migrated [OK] / [WARN] site in pkg/configuration/onboarding
-// must still emit exactly the same visible string in default (colored)
-// mode that it did before the migration.
+// This file is the post-migration conformance lock for the onboarding
+// status line. The earlier version of this test locked the
+// bracketOK / bracketWarn helpers in status_prefix.go, which existed
+// only because pkg/configuration could not import pkg/console (an
+// import cycle). That cycle is now broken: the onboarding call sites
+// in init.go and api_keys.go emit through the console.Glyph* surface
+// directly, and the bracket helpers were deleted. These tests assert
+// that the Glyph surface is in use and that the bracket helpers are
+// not reintroduced.
 //
-// pkg/configuration cannot import pkg/console (cycle via
-// console/ci_output_handler.go), so the "migration" here is the
-// bracketOK / bracketWarn helpers in status_prefix.go. These tests
-// assert that the helpers produce the same bracketed output the
-// original fmt.Printf literals emitted — so any future port to the
-// console.Glyph* surface, or any change to the helpers, will surface
-// a visible-string regression here.
-func TestOnboardingBrackets_VisibleStringPreserved(t *testing.T) {
-	cases := []struct {
-		name string
-		fn   func(io.Writer) // writes a single bracketed line
-		want string
-	}{
-		{
-			name: "bracketOK_simple",
-			fn: func(w io.Writer) {
-				bracketOK(w, "Using OpenRouter provider from environment")
-			},
-			want: "[OK] Using OpenRouter provider from environment\n",
-		},
-		{
-			name: "bracketWarn_simple",
-			fn: func(w io.Writer) {
-				bracketWarn(w, "Please configure a real provider")
-			},
-			want: "[WARN] Please configure a real provider\n",
-		},
-		{
-			name: "bracketOK_withFormatArgs",
-			fn: func(w io.Writer) {
-				// Mirrors the original fmt.Sprintf("[OK] API key saved for %s …", name) call.
-				w.Write([]byte("[OK] "))
-				fmt.Fprintf(w, "API key saved for %s (%d models available)", "OpenAI", 12)
-				w.Write([]byte("\n"))
-			},
-			want: "[OK] API key saved for OpenAI (12 models available)\n",
-		},
-	}
+// They read the onboarding source off disk (the assertion that
+// actually executes), matching the source-reading conformance pattern
+// used elsewhere in the repo. The Glyph prefix behavior itself (colored
+// glyph + reset, no-color fallback) is covered by pkg/console's
+// glyphs_test.go.
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			tc.fn(&buf)
-			if got := buf.String(); got != tc.want {
-				t.Errorf("visible-string mismatch\n  got:  %q\n  want: %q", got, tc.want)
-			}
-		})
+var onboardingSourceFiles = []string{
+	"init.go",
+	"init_providers.go",
+	"api_keys.go",
+}
+
+// TestOnboardingUsesGlyphSurface pins that every onboarding status line
+// is emitted through the console.Glyph* surface, and that the deleted
+// bracketOK / bracketWarn helpers are not referenced anywhere in the
+// package. A regression to a bracket helper (or a raw "[OK]" literal)
+// would mean the Glyph migration was undone.
+func TestOnboardingUsesGlyphSurface(t *testing.T) {
+	for _, name := range onboardingSourceFiles {
+		b, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		src := string(b)
+		if strings.Contains(src, "bracketOK(") || strings.Contains(src, "bracketWarn(") {
+			t.Errorf("%s references the deleted bracketOK/bracketWarn helpers", name)
+		}
+		if strings.Contains(src, `fmt.Printf("[OK]`) || strings.Contains(src, `fmt.Printf("[WARN]`) {
+			t.Errorf("%s emits a raw bracket literal; use the console.Glyph* surface", name)
+		}
 	}
 }
 
-// TestOnboardingBrackets_NoColorEscapes is the secondary lock: the
-// helpers in this package never emit ANSI escapes. Color is the
-// Glyph system job; the cycle-constrained helpers here intentionally
-// don't participate in NO_COLOR/FORCE_COLOR (they're a fallback while
-// the cycle exists). Tests should fail if a future change accidentally
-// introduces color codes — that would mean the cycle is gone and we
-// should be using console.Glyph* instead.
-func TestOnboardingBrackets_NoColorEscapes(t *testing.T) {
-	cases := []struct {
-		name string
-		fn   func(io.Writer)
-	}{
-		{"bracketOK", func(w io.Writer) { bracketOK(w, "ok") }},
-		{"bracketWarn", func(w io.Writer) { bracketWarn(w, "warn") }},
+// TestOnboardingEmitsStatusGlyphs pins that init.go, which owns the
+// onboarding provider setup, actually reaches for the success and
+// warning glyphs. If neither glyph is referenced the onboarding output
+// has silently dropped its status markers.
+func TestOnboardingEmitsStatusGlyphs(t *testing.T) {
+	b, err := os.ReadFile("init.go")
+	if err != nil {
+		t.Fatalf("reading init.go: %v", err)
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			tc.fn(&buf)
-			if strings.Contains(buf.String(), "\033[") {
-				t.Errorf("%s emitted ANSI escapes (%q); pkg/configuration helpers are intentionally color-free", tc.name, buf.String())
-			}
-		})
+	src := string(b)
+	if !strings.Contains(src, "console.GlyphSuccess.") {
+		t.Errorf("init.go does not emit a GlyphSuccess status line")
+	}
+	if !strings.Contains(src, "console.GlyphWarning.") {
+		t.Errorf("init.go does not emit a GlyphWarning status line")
 	}
 }

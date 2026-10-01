@@ -506,11 +506,7 @@ func handleParallelSubagentSecurityResult(resultMap map[string]map[string]string
 		exitCode := result["exit_code"]
 		stderr := result["stderr"]
 
-		if strings.Contains(stderr, "outside working directory") ||
-			strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "security warning") ||
-			exitCode != "0" {
+		if exitCode != "0" && isSubagentSecurityFailure(stderr, result["stdout"]) {
 
 			errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: A parallel subagent encountered a security-related error or requires user authorization.\n\n"+
 				"Task ID: %s\n"+
@@ -545,10 +541,7 @@ func handleParallelSubagentFailureResult(resultMap map[string]map[string]string,
 		stdout := result["stdout"]
 
 		if exitCode != "0" {
-			if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-				strings.Contains(stderr, "security") ||
-				strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+			if isSubagentSecurityFailure(stderr, stdout) {
 				securityErrors = append(securityErrors, fmt.Sprintf(
 					"Task %s: exit code %s, error: %s", taskID, exitCode, stderr))
 			} else {

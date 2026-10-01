@@ -73,6 +73,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	if opts.WorkingDir != "" {
 		effectiveWorkspaceRoot = opts.WorkingDir
 	}
+	systemPrompt += subagentConventionsSection(effectiveWorkspaceRoot)
 
 	// Create interrupt context derived from the parent's context so
 	// cancellation (Ctrl+C, timeout, runCtx cancel) propagates into the

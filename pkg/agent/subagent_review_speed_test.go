@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -128,21 +129,22 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestBuildReviewerChangeContext_InlinesDiffUntrackedAndConventions(t *testing.T) {
+func TestBuildReviewerChangeContext_InlinesDiffAndUntracked(t *testing.T) {
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"changed\") }\n")
-	writeFile(t, dir, "new.go", "package main\n")
-	writeFile(t, dir, "AGENTS.md", "Use tabs.\n")
-
+	writeFile(t, dir, "new.go", "package main\n\nfunc helper() int { return 42 }\n")
 	got := buildReviewerChangeContext(context.Background(), dir)
 
 	for _, want := range []string{
-		"# Repo Conventions (AGENTS.md",
-		"Use tabs.",
 		"# Change Under Review",
 		"```diff",
 		`+func main() { println("changed") }`,
-		"- new.go",
+		"## Code around each change",
+		"### main.go\n```go\n",
+		`    3  func main() { println("changed") }`,
+		"## New untracked files",
+		"### new.go\n```go\n",
+		"    3  func helper() int { return 42 }",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("change context missing %q\n---\n%s", want, got)
@@ -167,7 +169,7 @@ func TestBuildReviewerChangeContext_LargeDiffFallsBackToStat(t *testing.T) {
 func TestBuildReviewerChangeContext_EmptyWhenNothingToShow(t *testing.T) {
 	clean := initReviewRepo(t)
 	if got := buildReviewerChangeContext(context.Background(), clean); got != "" {
-		t.Errorf("clean repo without conventions: got %q, want empty", got)
+		t.Errorf("clean repo: got %q, want empty", got)
 	}
 	if got := buildReviewerChangeContext(context.Background(), t.TempDir()); got != "" {
 		t.Errorf("non-git dir: got %q, want empty", got)
@@ -221,8 +223,11 @@ func TestResolveParallelTaskPersonas(t *testing.T) {
 	if !strings.HasSuffix(tasks[0].Prompt, "# Your Task\n\nreview main.go") {
 		t.Errorf("r1 task text lost: %q", truncateString(tasks[0].Prompt, 80))
 	}
-	if tasks[2].Prompt != "do a thing" || tasks[2].SystemPrompt != "" {
-		t.Errorf("persona-less task modified: %+v", tasks[2])
+	if tasks[2].Prompt != "do a thing" {
+		t.Errorf("persona-less task prompt modified: %q", tasks[2].Prompt)
+	}
+	if tasks[2].Persona != "general" || tasks[2].SystemPrompt == "" {
+		t.Errorf("persona-less task did not get the default persona: persona=%q prompt=%q", tasks[2].Persona, truncateString(tasks[2].SystemPrompt, 60))
 	}
 
 	bad := []SubagentTask{{ID: "x", Prompt: "p", Persona: "no_such_persona"}}
@@ -270,5 +275,138 @@ func TestRunParallel_UsesPerTaskSystemPrompt(t *testing.T) {
 	}
 	if !seen["SYSTEM-PROMPT-A"] || !seen["SYSTEM-PROMPT-B"] {
 		t.Fatalf("per-task system prompts not used; saw %v", seen)
+	}
+}
+
+func TestCreateSubagent_SystemPromptIncludesRepoConventions(t *testing.T) {
+	parent, runner := newReviewTestRunner(t)
+	dir := t.TempDir()
+	writeFile(t, dir, "AGENTS.md", "Always wrap errors with context.\n")
+	runner.shared.WorkspaceRoot = dir
+	_ = parent
+
+	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Shutdown()
+	if !strings.Contains(sub.systemPrompt, "## Repo Conventions (from AGENTS.md") || !strings.Contains(sub.systemPrompt, "Always wrap errors with context.") {
+		t.Errorf("conventions missing from subagent system prompt:\n%s", truncateString(sub.systemPrompt, 300))
+	}
+
+	runner.shared.WorkspaceRoot = t.TempDir()
+	bare, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bare.Shutdown()
+	if strings.Contains(bare.systemPrompt, "Repo Conventions") {
+		t.Error("conventions section added for a workspace without a conventions file")
+	}
+}
+
+func TestIsSubagentSecurityFailure(t *testing.T) {
+	security := []string{
+		"write: ErrWriteOutsideWorkingDirectory",
+		"security rejected: shell_command — rm -rf. The user declined approval.",
+		"security hard block: x",
+		"SUBAGENT_SECURITY_ERROR: nested",
+	}
+	for _, msg := range security {
+		if !isSubagentSecurityFailure(msg, "") {
+			t.Errorf("not classified as security: %q", msg)
+		}
+	}
+	ordinary := []string{
+		"max iterations (38) reached",
+		"provider returned 500",
+		"failed to update security_test.go: compile error",
+		"",
+	}
+	for _, msg := range ordinary {
+		if isSubagentSecurityFailure(msg, "reviewed the security of the change") {
+			t.Errorf("ordinary failure classified as security: %q", msg)
+		}
+	}
+}
+
+func TestHandleSubagentSecurityError_OrdinaryFailureInNestedSubagent(t *testing.T) {
+	_, runner := newReviewTestRunner(t)
+	nested, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nested.Shutdown()
+
+	ordinary := map[string]string{"exit_code": "1", "stderr": "provider returned 500", "stdout": ""}
+	if msg := handleSubagentSecurityError(nested, ordinary); msg != "" {
+		t.Errorf("ordinary failure reported as security error:\n%s", msg)
+	}
+	blocked := map[string]string{"exit_code": "1", "stderr": "security hard block: rm", "stdout": ""}
+	if msg := handleSubagentSecurityError(nested, blocked); !strings.HasPrefix(msg, "SUBAGENT_SECURITY_ERROR") {
+		t.Errorf("security block not delegated: %q", msg)
+	}
+}
+
+func TestExtractSubagentSummary_RecordsWroteLines(t *testing.T) {
+	summary := extractSubagentSummary("Created: a.go\nWrote b.go\nWrote\nModified: c.go\n")
+	for _, want := range []string{"Created: a.go", "Created: b.go", "Modified: c.go"} {
+		if !strings.Contains(summary["files"], want) {
+			t.Errorf("files summary %q missing %q", summary["files"], want)
+		}
+	}
+}
+
+func TestBuildReviewerChangeContext_ExcerptBudget(t *testing.T) {
+	dir := initReviewRepo(t)
+	big := strings.Repeat("// filler line for budget testing ..............................\n", 350)
+	for i := 0; i < 6; i++ {
+		writeFile(t, dir, fmt.Sprintf("new%d.go", i), "package main\n"+big)
+	}
+
+	got := buildReviewerChangeContext(context.Background(), dir)
+
+	if len(got) > reviewContextMaxExcerptBytes+reviewContextMaxStatBytes+8*1024 {
+		t.Errorf("change context %d bytes exceeds the excerpt budget", len(got))
+	}
+	if !strings.Contains(got, "### new0.go") {
+		t.Error("first new file not pre-loaded")
+	}
+	if !strings.Contains(got, "## Other untracked files (not pre-loaded") || !strings.Contains(got, "- new5.go") {
+		t.Errorf("files over budget not listed:\n%s", got[max(0, len(got)-600):])
+	}
+}
+
+func TestPrepareSubagentLaunch_ReviewerFilesBecomeFocusList(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	dir := initReviewRepo(t)
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"changed\") }\n")
+	parent.workspaceRoot = dir
+
+	spec, err := prepareSubagentLaunch(context.Background(), parent, map[string]interface{}{
+		"prompt":  "review it",
+		"persona": "reviewer",
+		"files":   "main.go",
+	})
+	if err != nil {
+		t.Fatalf("prepareSubagentLaunch: %v", err)
+	}
+	if strings.Contains(spec.enhancedPrompt, "# Relevant Files") {
+		t.Error("reviewer prompt inlined whole files from `files`")
+	}
+	if !strings.Contains(spec.enhancedPrompt, "Focus files (excerpts of their changes are in the change context above): main.go") {
+		t.Errorf("focus list missing:\n%s", spec.enhancedPrompt)
+	}
+
+	coder, err := prepareSubagentLaunch(context.Background(), parent, map[string]interface{}{
+		"prompt":  "edit it",
+		"persona": "coder",
+		"files":   "main.go",
+	})
+	if err != nil {
+		t.Fatalf("prepareSubagentLaunch: %v", err)
+	}
+	if !strings.Contains(coder.enhancedPrompt, "# Relevant Files") {
+		t.Error("non-reviewer personas should still get whole files inlined")
 	}
 }

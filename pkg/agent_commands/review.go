@@ -236,17 +236,17 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 
 	reviewCtx := &codereview.ReviewContext{
-		Diff:             optimizedDiff.OptimizedContent,
-		Config:           cfg,
-		Logger:           logger,
-		AgentClient:      agentClient,
-		GoCtx:            goCtx, // cancellation context
-		ProjectType:      detectProjectType(),
-		CommitMessage:    extractStagedChangesSummary(),
-		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),
-		ChangeCategories: categorizeChanges(stagedDiff),
-		FullFileContext:  extractFileContextForChanges(stagedDiff),
+		Diff:        optimizedDiff.OptimizedContent,
+		Config:      cfg,
+		Logger:      logger,
+		AgentClient: agentClient,
+		GoCtx:       goCtx, // cancellation context
 	}
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	codereview.BuildStagedContext(goCtx, workspaceRoot, stagedDiff).Apply(reviewCtx)
 
 	// Add file summaries to context if available
 	if len(optimizedDiff.FileSummaries) > 0 {
@@ -260,9 +260,8 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 
 	// Create review options for staged review
 	opts := &codereview.ReviewOptions{
-		Type:             codereview.StagedReview,
-		SkipPrompt:       true,  // Skip prompts for slash command
-		RollbackOnReject: false, // Don't rollback for staged reviews
+		Type:       codereview.StagedReview,
+		SkipPrompt: true, // Skip prompts for slash command
 	}
 
 	var reviewResponse *types.CodeReviewResult

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/codereview"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
@@ -19,14 +20,20 @@ import (
 const (
 	reviewContextMaxDiffBytes     = 96 * 1024
 	reviewContextMaxStatBytes     = 16 * 1024
-	reviewContextMaxConventions   = 16 * 1024
+	repoConventionsMaxBytes       = 16 * 1024
 	reviewContextMaxUntracked     = 50
 	reviewContextGitCommandBudget = 10 * time.Second
+	// reviewContextMaxExcerptBytes bounds the line-numbered code around each
+	// hunk plus new-file content. With it inline a reviewer can judge most
+	// hunks without reading files, and every turn resends the whole context,
+	// so the budget trades a bigger first prompt for far fewer turns.
+	reviewContextMaxExcerptBytes = 96 * 1024
 )
 
-// reviewConventionFiles are checked in order at the workspace root; the first
-// one found is inlined so the reviewer does not spend a turn reading it.
-var reviewConventionFiles = []string{"AGENTS.md", "CLAUDE.md"}
+// repoConventionFiles are checked in order at the workspace root; the first
+// one found is inlined into every subagent's system prompt so it does not
+// spend a turn reading it (or skip it and miss the repo's rules).
+var repoConventionFiles = []string{"AGENTS.md", "CLAUDE.md"}
 
 // isReviewerPersona reports whether persona resolves (by ID or alias) to the
 // canonical reviewer persona.
@@ -50,11 +57,10 @@ func canonicalPersonaID(a *Agent, persona string) string {
 }
 
 // buildReviewerChangeContext snapshots the uncommitted change in workspaceRoot
-// (staged + unstaged vs HEAD, plus untracked file names) and the repo's
-// conventions file, formatted as a prompt section. A reviewer otherwise spends
-// its first turns running git diff and reading AGENTS.md; each turn is a full
-// LLM round trip. Returns "" when the directory is not a git work tree or has
-// no uncommitted changes and no conventions file.
+// (staged + unstaged vs HEAD, plus untracked file names) as a prompt section.
+// A reviewer otherwise spends its first turns running git diff; each turn is a
+// full LLM round trip. Returns "" when the directory is not a git work tree or
+// has no uncommitted changes.
 func buildReviewerChangeContext(ctx context.Context, workspaceRoot string) string {
 	return buildReviewerChangeContextForScope(ctx, workspaceRoot, reviewScopeWorkingTree)
 }
@@ -71,18 +77,20 @@ func buildReviewerChangeContextForScope(ctx context.Context, workspaceRoot strin
 	if strings.TrimSpace(workspaceRoot) == "" {
 		return ""
 	}
+	return buildChangeSection(ctx, workspaceRoot, scope)
+}
 
-	var b strings.Builder
-
-	if conventions, name := readReviewConventions(workspaceRoot); conventions != "" {
-		fmt.Fprintf(&b, "# Repo Conventions (%s, pre-loaded — do not re-read)\n\n%s\n\n---\n\n", name, conventions)
+// subagentConventionsSection formats the workspace's conventions file for a
+// subagent system prompt, or returns "" when there is none.
+func subagentConventionsSection(workspaceRoot string) string {
+	if strings.TrimSpace(workspaceRoot) == "" {
+		return ""
 	}
-
-	if change := buildChangeSection(ctx, workspaceRoot, scope); change != "" {
-		b.WriteString(change)
+	conventions, name := readRepoConventions(workspaceRoot)
+	if conventions == "" {
+		return ""
 	}
-
-	return b.String()
+	return fmt.Sprintf("\n\n## Repo Conventions (from %s — already loaded, do not re-read)\n\n%s\n", name, conventions)
 }
 
 func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewScope) string {
@@ -126,6 +134,7 @@ func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewS
 		fmt.Fprintf(&b, "## Diff stat\n\n```\n%s\n```\n\n", truncateReviewSection(s, reviewContextMaxStatBytes))
 	}
 
+	diffInlined := false
 	switch {
 	case diffErr != nil || strings.TrimSpace(diff) == "":
 		// Only untracked files changed; nothing to inline.
@@ -133,18 +142,68 @@ func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewS
 		fmt.Fprintf(&b, "## Diff\n\nThe full diff is %d KB, too large to inline. Fetch hunks per file with `git diff %s -- <path>`, prioritizing the files with the largest or riskiest changes in the stat above.\n\n", len(diff)/1024, base[0])
 	default:
 		fmt.Fprintf(&b, "## Diff\n\n```diff\n%s\n```\n\n", strings.TrimRight(diff, "\n"))
+		diffInlined = true
 	}
 
-	if len(untracked) > 0 {
-		b.WriteString("## Untracked files (new, not in the diff — read them if they are part of the change)\n\n")
-		shown := untracked
-		if len(shown) > reviewContextMaxUntracked {
-			shown = shown[:reviewContextMaxUntracked]
+	repoRoot := workspaceRoot
+	if top, err := runReviewGit(ctx, workspaceRoot, "rev-parse", "--show-toplevel"); err == nil && strings.TrimSpace(top) != "" {
+		repoRoot = strings.TrimSpace(top)
+	}
+
+	// New files go first: they aren't in the diff, so without an excerpt the
+	// reviewer has to read them in full. Tests come last — they matter less
+	// for judging the change than the code they exercise.
+	var newCode, newTests []codereview.FileExcerpt
+	for _, rel := range untracked {
+		if e, ok := codereview.NewFileExcerpt(repoRoot, rel); ok {
+			if isTestPath(rel) {
+				newTests = append(newTests, e)
+			} else {
+				newCode = append(newCode, e)
+			}
 		}
+	}
+
+	budget := reviewContextMaxExcerptBytes
+	included := writeExcerpts(&b, "## New untracked files (part of the change; not in the diff)", newCode, &budget, false)
+
+	if diffInlined {
+		var hunks []codereview.FileExcerpt
+		heading := "## Code around each change (current working-tree content, line-numbered)"
+		if scope == reviewScopeStaged {
+			// Excerpt the staged (index) content, not the working tree, so the
+			// reviewer never sees unstaged edits that won't be committed.
+			heading = "## Code around each change (staged content, line-numbered)"
+			hunks = codereview.HunkExcerptsFrom(diff, func(rel string) ([]string, bool) {
+				content, err := runReviewGit(ctx, repoRoot, "show", ":"+rel)
+				if err != nil {
+					return nil, false
+				}
+				return codereview.SplitContextLines(content)
+			})
+		} else {
+			hunks = codereview.HunkExcerpts(repoRoot, diff)
+		}
+		writeExcerpts(&b, heading, hunks, &budget, true)
+	}
+
+	for path := range writeExcerpts(&b, "## New untracked test files", newTests, &budget, false) {
+		included[path] = true
+	}
+
+	var rest []string
+	for _, rel := range untracked {
+		if !included[rel] {
+			rest = append(rest, rel)
+		}
+	}
+	if len(rest) > 0 {
+		b.WriteString("## Other untracked files (not pre-loaded — read with view_range if they are part of the change)\n\n")
+		shown := rest[:min(len(rest), reviewContextMaxUntracked)]
 		for _, f := range shown {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
-		if omitted := len(untracked) - len(shown); omitted > 0 {
+		if omitted := len(rest) - len(shown); omitted > 0 {
 			fmt.Fprintf(&b, "- ... (%d more)\n", omitted)
 		}
 		b.WriteString("\n")
@@ -154,8 +213,44 @@ func buildChangeSection(ctx context.Context, workspaceRoot string, scope reviewS
 	return b.String()
 }
 
-func readReviewConventions(workspaceRoot string) (string, string) {
-	for _, name := range reviewConventionFiles {
+// writeExcerpts writes as many excerpts as fit in *budget under heading and
+// returns the paths written. Excerpts that don't fit are named so the reviewer
+// knows to open them.
+func writeExcerpts(b *strings.Builder, heading string, excerpts []codereview.FileExcerpt, budget *int, listSkipped bool) map[string]bool {
+	written := map[string]bool{}
+	if len(excerpts) == 0 {
+		return written
+	}
+	var skipped []string
+	var body strings.Builder
+	for _, e := range excerpts {
+		if len(e.Body) > *budget {
+			skipped = append(skipped, e.Path)
+			continue
+		}
+		*budget -= len(e.Body)
+		body.WriteString(e.Body + "\n\n")
+		written[e.Path] = true
+	}
+	if body.Len() == 0 && (!listSkipped || len(skipped) == 0) {
+		return written
+	}
+	b.WriteString(heading + "\n\n")
+	b.WriteString(body.String())
+	if listSkipped && len(skipped) > 0 {
+		fmt.Fprintf(b, "Not pre-loaded (context budget reached), open with view_range if needed: %s\n\n", strings.Join(skipped, ", "))
+	}
+	return written
+}
+
+func isTestPath(rel string) bool {
+	base := filepath.Base(rel)
+	return strings.HasSuffix(base, "_test.go") || strings.Contains(base, ".test.") || strings.Contains(base, ".spec.") ||
+		strings.HasPrefix(base, "test_") || strings.Contains(filepath.ToSlash(rel), "/__tests__/")
+}
+
+func readRepoConventions(workspaceRoot string) (string, string) {
+	for _, name := range repoConventionFiles {
 		content, err := os.ReadFile(filepath.Join(workspaceRoot, name))
 		if err != nil {
 			continue
@@ -164,7 +259,7 @@ func readReviewConventions(workspaceRoot string) (string, string) {
 		if trimmed == "" {
 			continue
 		}
-		return truncateReviewSection(trimmed, reviewContextMaxConventions), name
+		return truncateReviewSection(trimmed, repoConventionsMaxBytes), name
 	}
 	return "", ""
 }

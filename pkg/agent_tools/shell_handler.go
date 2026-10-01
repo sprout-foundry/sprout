@@ -294,6 +294,10 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 			agenterrors.NewValidation("command parameter is required", nil)
 	}
 
+	// Establish the change-tracking baseline before the command can mutate
+	// anything (a no-op once primed, and for read-only commands).
+	prepareShellMutation(env, command)
+
 	// background mode
 	if background {
 		wakeupTimeout, _ := extractInt(args, "wakeup_timeout")
@@ -326,6 +330,20 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	// executeShellCommandWithTruncation behavior.
 	trackShellMutation(env, command)
 	return result, syncErr
+}
+
+// prepareShellMutation lets the agent's ChangeTracker snapshot the workspace
+// before a command runs, so the command's own mutations are diffable. Without
+// it, a tracker that skipped the eager snapshot (subagents) took its first
+// snapshot after the first mutating command — making that command's changes
+// part of the baseline, never recorded and never revertible.
+func prepareShellMutation(env ToolEnv, command string) {
+	if command == "" {
+		return
+	}
+	if fn := env.ResolveToolFuncs().PrepareShellCommand; fn != nil {
+		fn(command)
+	}
 }
 
 // trackShellMutation records shell-caused filesystem mutations with the

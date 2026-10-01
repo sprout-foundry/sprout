@@ -27,7 +27,39 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		return
 	}
 
-	set := &tools.ToolFuncSet{
+	set := buildAgentToolFuncs(agent)
+
+	tools.ToolFuncMu.Lock()
+	defer tools.ToolFuncMu.Unlock()
+
+	// Host-only tools (PR creation, automate workflows) require live
+	// infrastructure (git, filesystem, subprocess spawning) and are gated
+	// by both isProduction and the build target. wireHostOnlyToolFuncs
+	// populates set.RunAutomate/CreatePullRequest and their package vars —
+	// real handlers on native builds (when isProduction), clear-error stubs
+	// on WASM. See agent_tool_wiring_nonjs.go and agent_tool_wiring_js.go.
+	wireHostOnlyToolFuncs(agent, isProduction, set)
+
+	agent.toolFuncs = set
+
+	tools.RunSubagentFunc = set.RunSubagent
+	tools.RunParallelSubagentsFunc = set.RunParallelSubagents
+	tools.RequestClarificationFunc = set.RequestClarification
+	tools.RespondClarificationFunc = set.RespondClarification
+	tools.ListChangesFunc = set.ListChanges
+	tools.RecoverFileFunc = set.RecoverFile
+	tools.RevertMyChangesFunc = set.RevertMyChanges
+	tools.MCPRefreshFunc = set.MCPRefresh
+}
+
+// buildAgentToolFuncs returns the per-agent dispatch set for agent's
+// agent-dependent tools. Subagents get their own set (without touching the
+// package-level fallback): without it their tool calls fell back to the
+// package vars, which point at the most recently constructed agent — so a
+// subagent's writes went untracked and its list_changes / revert_my_changes /
+// recover_file acted on another agent's change history.
+func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
+	return &tools.ToolFuncSet{
 		RunSubagent: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleRunSubagent(ctx, agent, args)
 		},
@@ -69,27 +101,6 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		TrackShellCommand: func(command string) error {
 			return agent.TrackShellCommand(command)
 		},
+		PrepareShellCommand: agent.PrepareShellCommand,
 	}
-
-	tools.ToolFuncMu.Lock()
-	defer tools.ToolFuncMu.Unlock()
-
-	// Host-only tools (PR creation, automate workflows) require live
-	// infrastructure (git, filesystem, subprocess spawning) and are gated
-	// by both isProduction and the build target. wireHostOnlyToolFuncs
-	// populates set.RunAutomate/CreatePullRequest and their package vars —
-	// real handlers on native builds (when isProduction), clear-error stubs
-	// on WASM. See agent_tool_wiring_nonjs.go and agent_tool_wiring_js.go.
-	wireHostOnlyToolFuncs(agent, isProduction, set)
-
-	agent.toolFuncs = set
-
-	tools.RunSubagentFunc = set.RunSubagent
-	tools.RunParallelSubagentsFunc = set.RunParallelSubagents
-	tools.RequestClarificationFunc = set.RequestClarification
-	tools.RespondClarificationFunc = set.RespondClarification
-	tools.ListChangesFunc = set.ListChanges
-	tools.RecoverFileFunc = set.RecoverFile
-	tools.RevertMyChangesFunc = set.RevertMyChanges
-	tools.MCPRefreshFunc = set.MCPRefresh
 }

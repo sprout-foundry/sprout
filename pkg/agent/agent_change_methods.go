@@ -386,6 +386,18 @@ func (a *Agent) TrackShellCommand(command string) error {
 	return nil
 }
 
+// PrepareShellCommand primes the shell-mutation baseline before a command
+// that may change files runs. Agents that skip the eager prime (subagents,
+// so read-only ones never pay for a workspace walk) otherwise primed after
+// their first mutating command, losing that command's changes.
+func (a *Agent) PrepareShellCommand(command string) {
+	tracker := a.GetChangeTracker()
+	if tracker == nil || !tracker.IsEnabled() || shellLooksReadOnly(command) {
+		return
+	}
+	tracker.PrimeShellTracking(a.currentWorkspaceRoot())
+}
+
 // Standalone (no-agent) query functions.
 
 // ListChangesPersistedOnly returns a session manifest from the persisted history store.

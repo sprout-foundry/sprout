@@ -223,6 +223,10 @@ type ToolFuncSet struct {
 	// the file tools). The closure owns read-only classification, cwd
 	// resolution, and destructive detection. Nil when no tracker.
 	TrackShellCommand func(command string) error
+	// PrepareShellCommand runs before a shell command executes so the
+	// tracker has a pre-command baseline to diff TrackShellCommand against.
+	// Nil when no tracker.
+	PrepareShellCommand func(command string)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers

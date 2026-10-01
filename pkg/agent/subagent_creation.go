@@ -152,6 +152,11 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// is one entry per write.
 	agent.EnableChangeTracking("subagent run")
 
+	// Per-agent tool dispatch: the subagent's file tools must report to its
+	// own change tracker, and its list_changes / revert_my_changes /
+	// recover_file must act on its own history, not another agent's.
+	agent.toolFuncs = buildAgentToolFuncs(agent)
+
 	// Inherit the parent's TerminalManager. Without this, subagents (and
 	// recursively their own subagents) try to call shell_command with
 	// background=true / check_background / stop_background and fail because

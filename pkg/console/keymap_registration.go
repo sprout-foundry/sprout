@@ -17,9 +17,29 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
+
+// verbosity levels shared with the configuration layer (which owns the
+// same literals as configuration.OutputVerbosity*). Console keeps its
+// own copies so it stays a leaf package the core can import without an
+// import cycle.
+const (
+	verbosityCompact = "compact"
+	verbosityDefault = "default"
+	verbosityVerbose = "verbose"
+)
+
+// OutputVerbosityToggler is the narrow surface the Alt+V handler needs
+// from the configuration layer. pkg/console must not import
+// pkg/configuration: console is the leaf UI package that the core
+// imports (configuration and agent_api both use console.Glyph*), so a
+// console -> configuration edge would close an import cycle. Callers
+// pass a *configuration.Manager, which satisfies this interface; the
+// parameter is optional (nil disables the verbosity toggle).
+type OutputVerbosityToggler interface {
+	CurrentOutputVerbosity() string
+	SetOutputVerbosity(verbosity string) error
+}
 
 var (
 	keymapOnce     sync.Once
@@ -33,14 +53,16 @@ var (
 // The cfg parameter is optional (nil falls through to a no-op handler
 // for the verbosity toggle). Idempotent — calling twice doesn't double-
 // register because the keymap replaces by Action name.
-func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
+func RegisterKeymapForFooter(footer *StatusFooter, cfg OutputVerbosityToggler) {
 	keymapOnce.Do(func() {
 		// SP-115 Phase 4: set the initial hint visibility based on verbosity.
-		// Compact verbosity hides the hint; default and verbose show it.
+		// Compact verbosity hides the hint; default and verbose show it. An
+		// empty current value (no loaded config) leaves the footer default —
+		// matching the GetConfig()-nil early return the direct-Manager call
+		// used to make.
 		if footer != nil && cfg != nil {
-			current := cfg.GetConfig()
-			if current != nil {
-				footer.SetShowKeymapHint(current.OutputVerbosity != "compact")
+			if cur := cfg.CurrentOutputVerbosity(); cur != "" {
+				footer.SetShowKeymapHint(cur != verbosityCompact)
 			}
 		}
 
@@ -65,21 +87,14 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 				if cfg == nil {
 					return
 				}
-				current := cfg.GetConfig()
-				if current == nil {
-					return
-				}
-				newValue := computeVerbosityToggle(current.OutputVerbosity)
-				if err := cfg.UpdateConfigNoSave(func(c *configuration.Config) error {
-					c.OutputVerbosity = newValue
-					return nil
-				}); err != nil {
+				newValue := computeVerbosityToggle(cfg.CurrentOutputVerbosity())
+				if err := cfg.SetOutputVerbosity(newValue); err != nil {
 					return
 				}
 				// SP-115: update hint visibility when verbosity changes.
 				// Compact hides the hint; default and verbose show it.
 				if footer != nil {
-					footer.SetShowKeymapHint(newValue != "compact")
+					footer.SetShowKeymapHint(newValue != verbosityCompact)
 				}
 				label := verbosityToggleLabel(newValue)
 				fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+label)
@@ -93,11 +108,11 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 // verbose (not default) so power users always get more detail.
 func computeVerbosityToggle(current string) string {
 	switch current {
-	case configuration.OutputVerbosityVerbose:
-		return configuration.OutputVerbosityDefault
+	case verbosityVerbose:
+		return verbosityDefault
 	default:
 		// "default", "", "compact", or anything else → verbose
-		return configuration.OutputVerbosityVerbose
+		return verbosityVerbose
 	}
 }
 
@@ -105,7 +120,7 @@ func computeVerbosityToggle(current string) string {
 // the given verbosity mode, matching the existing badge style.
 func verbosityToggleLabel(verbosity string) string {
 	switch verbosity {
-	case configuration.OutputVerbosityVerbose:
+	case verbosityVerbose:
 		return "output verbosity: verbose (wider tool-arg previews · Alt+V to toggle)"
 	default:
 		return "output verbosity: default (Alt+V to toggle)"

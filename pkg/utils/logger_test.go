@@ -100,16 +100,19 @@ func TestAskForConfirmation_NonInteractiveMode(t *testing.T) {
 	}
 }
 
-// TestAskForConfirmation_RequiredExits tests that when confirmation is required
-// but user interaction is disabled, the function exits
-func TestAskForConfirmation_RequiredExits(t *testing.T) {
-	// We can't easily test os.Exit() in a unit test without subprocess testing,
-	// but we can verify the logic path exists in the code review.
-	// The important thing is that the code checks:
-	// if !w.userInteractionEnabled && required { os.Exit(1) }
-	//
-	// This test documents that behavior.
-	t.Log("When required=true and userInteractionEnabled=false, function calls os.Exit(1)")
+// TestAskForConfirmation_RequiredFailsClosed tests that when confirmation is
+// required but user interaction is disabled, the function fails closed
+// (returns false) instead of blocking or terminating the process.
+func TestAskForConfirmation_RequiredFailsClosed(t *testing.T) {
+	// required=true + userInteractionEnabled=false now returns false
+	// (fail-closed) rather than os.Exit(1). A required confirmation that
+	// cannot be shown to a human is a denial, and the process must keep
+	// running so the caller can handle the hard-stop.
+	l := GetLogger(true) // skipPrompts=true -> userInteractionEnabled=false
+	result := l.AskForConfirmation("Required prompt", false, true)
+	if result {
+		t.Error("required confirmation in non-interactive mode should fail closed (return false)")
+	}
 }
 
 func TestDefaultChoiceHint(t *testing.T) {

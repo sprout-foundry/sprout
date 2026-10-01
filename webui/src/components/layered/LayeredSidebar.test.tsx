@@ -19,7 +19,7 @@ vi.mock('../ThemedDialog', () => ({
 }));
 
 import LayeredSidebar, { type LayeredSidebarProps } from './LayeredSidebar';
-import { __resetHomeViewForTests, closeHome, openHome } from '../../services/homeView';
+import { __resetHomeViewForTests, closeHome, getHomeView, openHome } from '../../services/homeView';
 import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
 
 let container: HTMLDivElement;
@@ -163,6 +163,20 @@ describe('LayeredSidebar', () => {
     expect(onCloseDrawer).toHaveBeenCalledTimes(1);
     act(() => closeHome());
     expect(onCloseDrawer).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens Settings when asked from elsewhere, leaving Home', () => {
+    renderSidebar();
+    act(() => openHome('/tasks'));
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
+    });
+    expect(getHomeView().open).toBe(false);
+    const header = container.querySelector('.project-nav-drill-header');
+    expect(header).not.toBeNull();
+    expect(header!.querySelector('[aria-selected="true"], .project-nav-drill-title')?.textContent).toContain(
+      'Settings',
+    );
   });
 
   it('closes the phone drawer when a new conversation is created', () => {

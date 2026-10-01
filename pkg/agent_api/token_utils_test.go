@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -549,5 +550,74 @@ func TestCalculateOutputBudgetOverestimateNoFloorPin(t *testing.T) {
 	}
 	if anchoredResult != 0 {
 		t.Errorf("CalculateOutputBudgetAnchored(200000, 210000, 0) = %d, want 0", anchoredResult)
+	}
+}
+
+// TestEstimateImageTokensInlinePayload is a regression test for inline
+// (base64/data-URI) image estimation: vision providers bill images by
+// pixel area (~1-2K tokens for a typical screenshot), while running the
+// payload's base64 through the text heuristic charges ~0.25 tokens per
+// base64 character — ~100K for a 300KB screenshot, 20-100x the real
+// cost. The estimate now charges a flat InlineImageTokenEstimate
+// instead, so image-heavy turns can no longer push the context estimate
+// past the window (which tripped compaction early and starved the
+// output budget).
+func TestEstimateImageTokensInlinePayload(t *testing.T) {
+	payload := strings.Repeat("A", 1_000_000) // ~1MB base64 ≈ 750KB image
+	inline := ImageMessageOverheadTokens + InlineImageTokenEstimate
+
+	t.Run("data URI URL", func(t *testing.T) {
+		img := ImageData{URL: "data:image/png;base64," + payload, Type: "image/png"}
+		if got := estimateImageTokens(img); got != inline {
+			t.Errorf("estimateImageTokens(data URI) = %d, want %d (flat inline cost)", got, inline)
+		}
+		if naive := EstimateTokens(img.URL); inline > naive/4 {
+			t.Fatalf("flat inline cost (%d) is not a correction of the naive heuristic (%d)", inline, naive)
+		}
+	})
+
+	t.Run("base64 field", func(t *testing.T) {
+		img := ImageData{Base64: payload, Type: "image/png"}
+		if got := estimateImageTokens(img); got != inline {
+			t.Errorf("estimateImageTokens(base64 field) = %d, want %d (flat inline cost)", got, inline)
+		}
+	})
+
+	t.Run("http URL still uses heuristic", func(t *testing.T) {
+		img := ImageData{URL: "https://example.com/cat.png", Type: "image/png"}
+		want := ImageMessageOverheadTokens + EstimateTokens(img.URL) + EstimateTokens(img.Type)
+		if got := estimateImageTokens(img); got != want {
+			t.Errorf("estimateImageTokens(http URL) = %d, want %d (heuristic unchanged)", got, want)
+		}
+	})
+}
+
+// TestEstimateInputTokensImageHeavyTurn pins the end-to-end property: a
+// turn with several attached screenshots must stay far below the naive
+// base64-based estimate, so the context meter and compaction trigger see
+// real prompt pressure instead of payload mass.
+func TestEstimateInputTokensImageHeavyTurn(t *testing.T) {
+	screenshot := strings.Repeat("B", 400_000) // ~300KB PNG as base64
+	msgs := []Message{
+		{Role: "user", Content: "Take fresh screenshots of the signed-out pages."},
+	}
+	for i := 0; i < 4; i++ {
+		msgs = append(msgs, Message{
+			Role:    "tool",
+			Content: "[image attached inline: /tmp/shot.png — you are viewing the actual pixels]",
+			Images: []ImageData{
+				{URL: "data:image/png;base64," + screenshot, Type: "image/png"},
+			},
+		})
+	}
+	estimate := EstimateInputTokens(msgs, nil)
+	if estimate < 4*InlineImageTokenEstimate {
+		t.Fatalf("EstimateInputTokens() = %d, images no longer contribute (%d each)", estimate, InlineImageTokenEstimate)
+	}
+	// Pre-fix this turn estimated >400K tokens (one ~100K base64 mass
+	// per screenshot); the bounded estimate must stay an order of
+	// magnitude below the window.
+	if estimate > 100_000 {
+		t.Fatalf("EstimateInputTokens() = %d, want bounded estimate (flat inline image cost), not a base64 heuristic mass", estimate)
 	}
 }

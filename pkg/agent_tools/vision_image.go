@@ -185,8 +185,6 @@ func OptimizeImageData(imagePath string, data []byte) ([]byte, string, error) {
 		img = resized
 		width = newWidth
 		height = newHeight
-		fmt.Printf("[measure] Resized image from %dx%d to %dx%d (exceeded max dimension of %d)\n",
-			bounds.Dx(), bounds.Dy(), width, height, visionMaxDimension)
 	}
 
 	// Early return if no file size optimization needed

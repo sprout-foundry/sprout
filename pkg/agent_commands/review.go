@@ -268,7 +268,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	var reviewResponse *types.CodeReviewResult
 	if deepReview && chatAgent != nil {
 		logger.LogProcessStep("Starting reviewer subagent for deep review...")
-		reviewResponse, err = runDeepReviewSubagent(goCtx, chatAgent, cfg, strings.Join(args, " "))
+		reviewResponse, err = runDeepReviewSubagent(goCtx, chatAgent, strings.Join(args, " "))
 	} else if deepReview {
 		logger.LogProcessStep("Sending staged changes to LLM for deep review...")
 		reviewResponse, err = service.PerformAgenticReview(reviewCtx, opts)
@@ -382,15 +382,9 @@ func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []st
 	return PathCompleter(prefix)
 }
 
-// runDeepReviewSubagent runs the reviewer subagent over the staged change. An
-// explicitly configured review provider/model takes precedence over the
-// persona's subagent resolution, matching /review.
-func runDeepReviewSubagent(ctx context.Context, chatAgent *agent.Agent, cfg *configuration.Config, focus string) (*types.CodeReviewResult, error) {
-	provider, model := "", ""
-	if p := strings.TrimSpace(cfg.GetReviewProvider()); p != "" {
-		provider, model = p, cfg.GetReviewModel()
-	}
-	review, err := chatAgent.RunStagedReview(ctx, focus, provider, model)
+// runDeepReviewSubagent runs the reviewer subagent over the staged change.
+func runDeepReviewSubagent(ctx context.Context, chatAgent *agent.Agent, focus string) (*types.CodeReviewResult, error) {
+	review, err := chatAgent.RunStagedReview(ctx, focus)
 	if err != nil {
 		return nil, err
 	}

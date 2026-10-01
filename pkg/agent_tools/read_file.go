@@ -199,6 +199,12 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 			IsError: true,
 		}, fmt.Errorf("path is a directory, not a file: %s", cleanPath)
 	}
+	if info.Size() > inlinePDFMaxBytes {
+		return ToolResult{
+			Output:  fmt.Sprintf("[PDF %s is %d bytes, over the %d MB inline cap — extract pages or analyze via a vision model]", filepath.Base(path), info.Size(), inlinePDFMaxBytes/1024/1024),
+			IsError: true,
+		}, fmt.Errorf("PDF too large to read inline: %s", cleanPath)
+	}
 
 	data, err := os.ReadFile(cleanPath)
 	if err != nil {
@@ -252,9 +258,15 @@ func isImageExtension(path string) bool {
 	return ok
 }
 
-// maxInlineImageBytes caps read_file's inline image payload (10 MB,
-// matching the pasted-image budget).
+// maxInlineImageBytes caps read_file's inline image read (10 MB, matching
+// the pasted-image budget). Files in the 1-10 MB range are run through the
+// optimization cascade (prepareInlineAttachmentPayload) before attaching.
 const maxInlineImageBytes = 10 * 1024 * 1024
+
+// inlinePDFMaxBytes caps read_file's inline PDF read. PDFs are base64'd
+// verbatim (no compression path), so the cap keeps the encoded body under
+// a conservative 10 MB server body limit (5 MB -> ~6.7 MB base64).
+const inlinePDFMaxBytes = 5 * 1024 * 1024
 
 // handleImage serves an image file without dumping binary into the model
 // context. Vision-capable primary models receive the image inline (the
@@ -308,14 +320,25 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		}, fmt.Errorf("unrecognized image format: %s", path)
 	}
 
+	// Compress oversized payloads (dimension + JPEG quality cascade) so a
+	// bulk screenshot turn cannot grow an HTTP body past the provider's
+	// body limit (413).
+	payload, payloadMime, prepErr := prepareInlineAttachmentPayload(cleanPath, data, mimeType)
+	if prepErr != nil {
+		return ToolResult{
+			Output:  fmt.Sprintf("[image %s: %v — no pixels attached; re-encode it smaller or analyze via a vision model]", filepath.Base(path), prepErr),
+			IsError: true,
+		}, prepErr
+	}
+
 	// Vision-capable primary: pixels are the analysis — no OCR text needed
 	// (seed strips Images for non-vision models, which get OCR below).
 	// Native OCR runs only when the primary cannot see, keeping it a
 	// fallback rather than a default.
 	var textContent string
 	images := []ImageData{{
-		URI:      fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)),
-		MIMEType: mimeType,
+		URI:      fmt.Sprintf("data:%s;base64,%s", payloadMime, base64.StdEncoding.EncodeToString(payload)),
+		MIMEType: payloadMime,
 	}}
 
 	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()

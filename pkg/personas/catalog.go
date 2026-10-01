@@ -38,6 +38,10 @@ type Definition struct {
 	// stop exploring and report, with a short hard margin beyond. 0 = none.
 	IterationBudget   int `json:"iteration_budget,omitempty"`
 	TimeBudgetSeconds int `json:"time_budget_seconds,omitempty"`
+	// ReadOnly marks a persona whose work never modifies files. Its
+	// subagent runs default to the background, where they can't collide
+	// with the primary agent's edits.
+	ReadOnly bool `json:"read_only,omitempty"`
 	// Capabilities is an explicit list of agency grants this persona holds —
 	// e.g. CapabilityGitWrite. Replaces the previous practice of inferring
 	// capabilities by sniffing AutoApproveRules. AutoApproveRules now means
@@ -190,7 +194,7 @@ func fallbackDefinitions() map[string]Definition {
 			ID:           IDOrchestrator,
 			Name:         "Orchestrator",
 			Description:  "Primary orchestration persona",
-			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "view_history", "rollback_changes", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "manage_memory"},
+			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "review_changes", "check_subagent", "stop_subagent", "view_history", "rollback_changes", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "manage_memory"},
 			Enabled:      true,
 			Capabilities: []string{CapabilityGitWrite},
 		},

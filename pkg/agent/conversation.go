@@ -102,7 +102,7 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 				continue
 			}
 		}
-		if tool.Function.Name == "run_subagent" && !a.CanSpawnSubagents() {
+		if spawnsSubagentsAnyMode(tool.Function.Name) && !a.CanSpawnSubagents() {
 			continue
 		}
 		filtered = append(filtered, tool)

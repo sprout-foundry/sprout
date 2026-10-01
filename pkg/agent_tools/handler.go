@@ -197,6 +197,9 @@ type ToolEnv struct {
 type ToolFuncSet struct {
 	RunSubagent          func(ctx context.Context, args map[string]any) (string, error)
 	RunParallelSubagents func(ctx context.Context, args map[string]any) (string, error)
+	ReviewChanges        func(ctx context.Context, args map[string]any) (string, error)
+	CheckSubagent        func(ctx context.Context, args map[string]any) (string, error)
+	StopSubagent         func(ctx context.Context, args map[string]any) (string, error)
 	RequestClarification func(ctx context.Context, args map[string]any) (string, error)
 	RespondClarification func(ctx context.Context, args map[string]any) (string, error)
 	ListChanges          func(ctx context.Context, args map[string]any) (string, error)

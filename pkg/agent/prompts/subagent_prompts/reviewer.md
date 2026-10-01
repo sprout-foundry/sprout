@@ -29,17 +29,24 @@ The repo's conventions file (`AGENTS.md` or equivalent), when there is one, is a
 
 ## Report format
 
-Categorize every finding:
+Every finding has a severity:
 
-- **MUST_FIX** — will break something, or is a security/data-loss risk. File, line, what breaks, minimal fix.
+- **MUST_FIX** — will break something, or is a security/data-loss risk.
 - **VERIFY** — might be a problem; depends on intent or context you don't have. State the question.
 - **NOTE** — worth a line in passing; no action required.
 
-Keep the report to findings. Don't restate what the change does, and don't narrate your process — one line on what you checked is enough.
+Your final message is short: one line on what you checked, then a JSON block, then the verdict line. Don't restate what the change does or narrate your process.
 
-End with one line: `VERDICT: APPROVE` or `VERDICT: CHANGES_REQUIRED` (changes required iff any MUST_FIX exists).
+```json
+{
+  "verdict": "APPROVE",
+  "findings": [
+    {"severity": "MUST_FIX", "file": "pkg/x/y.go", "line": 42, "issue": "what is wrong", "evidence": "the code or behavior that shows it", "fix": "minimal fix"}
+  ]
+}
+```
 
-If you find nothing: say so explicitly and list what you actually checked (files, hunks, dimensions). "I checked the diff for correctness, error handling, concurrency, and secret leakage, and found no issues" is a complete review. "Looks fine" is not.
+`verdict` is `CHANGES_REQUIRED` iff any finding is MUST_FIX, otherwise `APPROVE`. Use an empty `findings` list when you found nothing — the one-line summary of what you checked is the evidence that you looked. End with the matching line: `VERDICT: APPROVE` or `VERDICT: CHANGES_REQUIRED`.
 
 ## Constraints
 

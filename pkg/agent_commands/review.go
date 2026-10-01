@@ -381,14 +381,18 @@ func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []st
 	return PathCompleter(prefix)
 }
 
-// runDeepReviewSubagent runs the reviewer subagent over the staged change.
+// runDeepReviewSubagent reviews the staged change with reviewer subagent(s).
 func runDeepReviewSubagent(ctx context.Context, chatAgent *agent.Agent, focus string) (*types.CodeReviewResult, error) {
-	review, err := chatAgent.RunStagedReview(ctx, focus)
+	review, err := chatAgent.ReviewChanges(ctx, agent.ReviewChangesOptions{Scope: "staged", Focus: focus})
 	if err != nil {
 		return nil, err
 	}
+	status := map[string]string{"APPROVE": "approved", "CHANGES_REQUIRED": "needs_revision"}[review.Verdict]
+	if status == "" {
+		status = "inconclusive"
+	}
 	return &types.CodeReviewResult{
-		Status:   review.Verdict,
-		Feedback: review.Report,
+		Status:   status,
+		Feedback: review.Markdown(),
 	}, nil
 }

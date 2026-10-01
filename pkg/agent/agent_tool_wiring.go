@@ -34,6 +34,15 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		RunParallelSubagents: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleRunParallelSubagents(ctx, agent, args)
 		},
+		ReviewChanges: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleReviewChanges(ctx, agent, args)
+		},
+		CheckSubagent: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleCheckSubagent(ctx, agent, args)
+		},
+		StopSubagent: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleStopSubagent(ctx, agent, args)
+		},
 		RequestClarification: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleRequestClarification(ctx, agent, args)
 		},

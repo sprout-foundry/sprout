@@ -171,15 +171,7 @@ func (r *richEventPublisher) enrichEventData(data any, eventType string) any {
 	isSubagent := isSubagentTool(toolName)
 	var subagentType string
 	if isSubagent {
-		subagentType = func() string {
-			if toolName == "run_subagent" {
-				return "single"
-			}
-			if toolName == "run_parallel_subagents" {
-				return "parallel"
-			}
-			return ""
-		}()
+		subagentType = subagentToolType(toolName)
 	}
 	persona := extractPersona(payload)
 

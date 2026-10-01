@@ -159,6 +159,10 @@ type SubagentOptions struct {
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
+	// Quiet suppresses streaming the subagent's output to the terminal. Used
+	// for background runs, whose output would otherwise interleave with the
+	// primary agent's. Activity events are still published.
+	Quiet bool
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -289,6 +293,12 @@ type SubagentRunner struct {
 	// When non-nil, it is called instead of factory.CreateProviderClient.
 	// This field is never set in production code.
 	testClientFactory func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error)
+
+	// Background tasks (subagent_background.go), keyed by task ID.
+	bgMu    sync.Mutex
+	bg      map[string]*backgroundTask
+	bgOrder []string
+	bgSeq   int
 }
 
 // runningSubagent tracks an active subagent execution
@@ -301,4 +311,23 @@ type runningSubagent struct {
 	Ctx       context.Context
 	Cancel    context.CancelFunc
 	Completed atomic.Bool
+
+	progressMu  *sync.Mutex
+	progressLog *[]SubagentProgressEntry
+}
+
+// recentOutput returns up to n of the subagent's most recent output lines.
+func (s *runningSubagent) recentOutput(n int) []string {
+	if s == nil || s.progressMu == nil || s.progressLog == nil {
+		return nil
+	}
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	var lines []string
+	for i := len(*s.progressLog) - 1; i >= 0 && len(lines) < n; i-- {
+		if e := (*s.progressLog)[i]; e.Phase == "output" && e.Message != "" {
+			lines = append([]string{e.Message}, lines...)
+		}
+	}
+	return lines
 }

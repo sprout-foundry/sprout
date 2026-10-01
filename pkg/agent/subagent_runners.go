@@ -190,6 +190,15 @@ func (r *SubagentRunner) CancelSubagent(id string) bool {
 // Stop on the primary — without this, the primary's TriggerInterrupt
 // returns but subagent work continues until self-completion.
 func (r *SubagentRunner) CancelAll() {
+	// Background tasks first: one may still be preparing (e.g. a review
+	// building its reviewers' context) with no subagent in r.active yet.
+	r.bgMu.Lock()
+	for _, t := range r.bg {
+		if t.cancel != nil && !t.isDone() {
+			t.cancel()
+		}
+	}
+	r.bgMu.Unlock()
 	r.active.Range(func(key, value interface{}) bool {
 		if sub, ok := value.(*runningSubagent); ok {
 			if !sub.Completed.Load() {

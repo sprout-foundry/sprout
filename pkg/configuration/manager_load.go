@@ -188,6 +188,7 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 
 	// Migrate legacy approved_shell_commands to unified command_policies
 	MigrateCommandPolicies(result)
+	upgradeLegacyWakeupBudget(result)
 
 	return result, nil
 }

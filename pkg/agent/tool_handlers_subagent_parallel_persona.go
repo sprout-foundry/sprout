@@ -40,7 +40,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 
 		if isReviewerPersona(a, persona) {
 			if reviewContext == nil {
-				rc := buildReviewerChangeContext(ctx, workspaceRoot)
+				rc := buildReviewerChangeContext(ctx, workspaceRoot, changeContextBudgetFor(a.subagentContextWindow(provider, model)))
 				reviewContext = &rc
 			}
 			if *reviewContext != "" {

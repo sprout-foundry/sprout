@@ -93,7 +93,7 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		"edit_file": true, "search": true, "repo_map": true,
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
-		"run_subagent": true, "ask_user": true,
+		"run_subagent": true, "review_changes": true, "ask_user": true,
 		// SP-140 design loop (pure Go, valid in every tier).
 		"design_assets": true, "design_validate": true,
 		"design_brief": true, "design_export_tokens": true, "design_sync": true,

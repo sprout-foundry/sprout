@@ -256,6 +256,9 @@ type SubagentTask struct {
 	Provider   string
 	Persona    string
 	WorkingDir string // optional: override workspace root
+	// SystemPrompt is the resolved persona system prompt; empty falls back to
+	// SubagentOptions.SystemPrompt.
+	SystemPrompt string
 }
 
 // SubagentMetrics tracks operational metrics for the subagent runner.

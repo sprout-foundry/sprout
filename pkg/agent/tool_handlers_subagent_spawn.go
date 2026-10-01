@@ -157,6 +157,10 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	a.Logger().Debug("Spawning %d parallel subagents\n", len(parallelTasks))
 
+	if err := resolveParallelTaskPersonas(ctx, a, parallelTasks); err != nil {
+		return "", err
+	}
+
 	// Resolve subagent provider/model configuration
 	subagentProvider, subagentModel := resolveParallelSubagentConfig(a)
 	applyParallelTaskConfig(parallelTasks, subagentProvider, subagentModel)
@@ -268,6 +272,9 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 				return nil, agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
 			}
 			task.Prompt = prompt
+			if persona, ok := taskMap["persona"].(string); ok {
+				task.Persona = strings.TrimSpace(persona)
+			}
 
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
@@ -447,18 +454,18 @@ func publishParallelSubagentStart(ctx context.Context, a *Agent, provider, model
 // ---------------------------------------------------------------------------
 
 // buildParallelSubagentTasks creates a copy of the task list with only the
-// fields that the subagent runner needs (ID, Prompt, Model, Provider).
-// Persona and WorkingDir are intentionally excluded because the parallel
-// runner resolves them from SubagentOptions, not from individual task
-// struct fields. This matches the original pre-refactor behavior exactly.
+// fields that the subagent runner needs. WorkingDir is excluded: parallel
+// tasks always run in the parent's workspace.
 func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 	result := make([]SubagentTask, len(tasks))
 	for i, pt := range tasks {
 		result[i] = SubagentTask{
-			ID:       pt.ID,
-			Prompt:   pt.Prompt,
-			Model:    pt.Model,
-			Provider: pt.Provider,
+			ID:           pt.ID,
+			Prompt:       pt.Prompt,
+			Model:        pt.Model,
+			Provider:     pt.Provider,
+			Persona:      pt.Persona,
+			SystemPrompt: pt.SystemPrompt,
 		}
 	}
 	return result

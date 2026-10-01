@@ -33,6 +33,11 @@ type Definition struct {
 	LocalOnly          bool              `json:"local_only,omitempty"`
 	Delegatable        bool              `json:"delegatable,omitempty"`
 	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`
+	// IterationBudget and TimeBudgetSeconds are soft run budgets for this
+	// persona as a subagent: when either is reached the subagent is told to
+	// stop exploring and report, with a short hard margin beyond. 0 = none.
+	IterationBudget   int `json:"iteration_budget,omitempty"`
+	TimeBudgetSeconds int `json:"time_budget_seconds,omitempty"`
 	// Capabilities is an explicit list of agency grants this persona holds —
 	// e.g. CapabilityGitWrite. Replaces the previous practice of inferring
 	// capabilities by sniffing AutoApproveRules. AutoApproveRules now means

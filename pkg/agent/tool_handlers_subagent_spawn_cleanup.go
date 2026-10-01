@@ -129,9 +129,17 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			absPromptPath = filepath.Join(subagentWorkspaceRoot, systemPromptPath)
 		}
 		promptBytes, err := os.ReadFile(absPromptPath)
+		if err != nil && os.IsNotExist(err) && !filepath.IsAbs(systemPromptPath) {
+			// Built-in persona prompts are repo-relative paths that only exist
+			// on disk when the workspace is the sprout source tree; everywhere
+			// else they come from the embedded copy.
+			if embedded, embeddedErr := readEmbeddedPromptFile(systemPromptPath); embeddedErr == nil {
+				promptBytes, err = embedded, nil
+			}
+		}
 		if err == nil {
 			systemPromptText = string(promptBytes)
-			a.Logger().Debug("Loaded system prompt from %s\n", absPromptPath)
+			a.Logger().Debug("Loaded system prompt for persona from %s\n", systemPromptPath)
 		} else {
 			a.Logger().Debug("Failed to load system prompt from %s: %v\n", absPromptPath, err)
 		}

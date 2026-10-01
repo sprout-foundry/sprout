@@ -113,6 +113,9 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.Persona != "" {
 				taskOpts.Persona = t.Persona
 			}
+			if t.SystemPrompt != "" {
+				taskOpts.SystemPrompt = t.SystemPrompt
+			}
 			if t.WorkingDir != "" {
 				taskOpts.WorkingDir = t.WorkingDir
 			}

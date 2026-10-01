@@ -49,7 +49,7 @@ export function OpenRepositoryPanel(): ReactElement {
             setValue(e.target.value);
             setError(null);
           }}
-          placeholder="owner/repo or a GitHub URL"
+          placeholder="owner/repo, or a GitHub, GitLab or Bitbucket URL"
           aria-label="Repository to open"
           aria-invalid={error ? true : undefined}
           data-testid="open-repo-input"

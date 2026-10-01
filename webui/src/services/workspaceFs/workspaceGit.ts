@@ -24,25 +24,54 @@ import type { WorkspaceFs } from './types';
 /** Standard repo directory for owner/name. */
 export function repoDir(repo: string): string {
   const parts = repo.split('/');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+  if (parts.length < 2 || parts.some((p) => !p || p === '.' || p === '..')) {
     throw new Error('repo must be in owner/name format');
   }
-  return `repos/${parts[0]}/${parts[1]}`;
+  return `repos/${parts.join('/')}`;
 }
 
-/** Parse `owner/name` from an https URL or shorthand. */
-export function parseRepoRef(input: string): { owner: string; name: string; url: string } {
-  let url = input.trim();
-  if (!/^https:\/\//.test(url)) {
-    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(url)) {
-      url = 'https://github.com/' + url;
+/**
+ * Hosts whose repositories are always owner/name; anything deeper in their
+ * URLs is a view inside the repo (…/tree/main). Other hosts (GitLab,
+ * self-managed instances) nest repos under groups and subgroups.
+ */
+const TWO_SEGMENT_HOSTS = new Set(['github.com', 'bitbucket.org']);
+
+const SEGMENT = /^[A-Za-z0-9_.-]+$/;
+
+/**
+ * Parse a repository from an https URL or `owner/name` shorthand (GitHub).
+ * `owner` is everything before the last path segment, so a GitLab subgroup
+ * repo gives owner "group/sub". `url` is the canonical clone URL.
+ */
+export function parseRepoRef(input: string): { owner: string; name: string; url: string; host: string } {
+  let raw = input.trim();
+  if (!/^https:\/\//.test(raw)) {
+    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(raw)) {
+      raw = 'https://github.com/' + raw;
     } else {
       throw new Error('Repository must be an https URL or owner/name');
     }
   }
-  const m = url.replace(/\.git$/, '').match(/\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
-  if (!m) throw new Error('Cannot parse owner/name from URL');
-  return { owner: m[1], name: m[2], url: url.replace(/\.git$/, '') + '.git' };
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('Cannot parse owner/name from URL');
+  }
+  const host = parsed.host.toLowerCase();
+  let path = parsed.pathname.replace(/^\/+|\/+$/g, '');
+  const viewAt = path.indexOf('/-/');
+  if (viewAt >= 0) path = path.slice(0, viewAt);
+  path = path.replace(/\.git$/, '');
+  let segments = path.split('/').filter(Boolean);
+  if (TWO_SEGMENT_HOSTS.has(host)) segments = segments.slice(0, 2);
+  if (segments.length < 2 || !segments.every((seg) => SEGMENT.test(seg) && seg !== '.' && seg !== '..')) {
+    throw new Error('Cannot parse owner/name from URL');
+  }
+  const name = segments[segments.length - 1];
+  const owner = segments.slice(0, -1).join('/');
+  return { owner, name, url: `${parsed.protocol}//${parsed.host}/${segments.join('/')}.git`, host };
 }
 
 export interface CloneProgress {
@@ -120,24 +149,32 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
   return { repo: `${owner}/${name}`, dir, entries, defaultBranch };
 }
 
-/** List cloned repos (immediate children of repos/ that contain .git). */
+/**
+ * List cloned repos: directories under repos/ that contain .git, as their
+ * path below repos/ ("owner/name", or "group/sub/name" for nested hosts).
+ */
 export async function listRepos(fs?: WorkspaceFs): Promise<string[]> {
   const seam = fs ?? (await import('./index')).getWorkspaceFs();
-  const rootListing = await seam.list('repos', 1);
-  if (!rootListing.ok) return [];
   const repos: string[] = [];
-  for (const ownerDir of rootListing.files.filter((f) => f.isDir)) {
-    const owner = ownerDir.path.split('/')[1];
-    const nameListing = await seam.list(ownerDir.path, 1);
-    if (!nameListing.ok) continue;
-    for (const nameDir of nameListing.files.filter((f) => f.isDir)) {
-      const name = nameDir.path.split('/').pop();
-      const dotGit = await seam.stat(`${ownerDir.path}/${name}/.git`);
-      if (dotGit.ok && dotGit.isDir) {
-        repos.push(`${owner}/${name}`);
+  // owner/name is depth 2; subgroups nest deeper. A repo's own directory is
+  // never searched further.
+  const MAX_DEPTH = 5;
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    if (depth > MAX_DEPTH) return;
+    const listing = await seam.list(dir, 1);
+    if (!listing.ok) return;
+    for (const child of listing.files.filter((f) => f.isDir)) {
+      if (depth >= 2) {
+        const dotGit = await seam.stat(`${child.path}/.git`);
+        if (dotGit.ok && dotGit.isDir) {
+          repos.push(child.path.replace(/^repos\//, ''));
+          continue;
+        }
       }
+      await walk(child.path, depth + 1);
     }
-  }
+  };
+  await walk('repos', 1);
   return repos.sort();
 }
 

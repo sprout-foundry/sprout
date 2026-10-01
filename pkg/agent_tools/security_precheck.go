@@ -146,3 +146,18 @@ func emitAllowedPathHit(ctx context.Context, toolName, filePath, mode string) {
 func isHTTPURL(path string) bool {
 	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
 }
+
+// trackingPath resolves a tool's path argument the way the write itself
+// resolves it — against the workspace root on ctx, not the process CWD — so
+// change tracking reads the true pre-edit content and records the file that
+// was actually modified. The two differ whenever the process runs outside the
+// workspace (daemon/WebUI): reading the raw relative path then missed the
+// file, which left edit_file changes untracked and recorded overwrites of
+// existing files as creates (so a revert deleted them). Symlinks are not
+// evaluated, matching the paths the tracker records elsewhere.
+func trackingPath(ctx context.Context, path string) string {
+	if abs, err := filesystem.SafeResolveAbs(ctx, path); err == nil {
+		return abs
+	}
+	return path
+}

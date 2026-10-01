@@ -156,9 +156,13 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	// Capture pre-write content for change tracking BEFORE WriteFile
 	// mutates the file (same contract as write_file). Empty = create.
+	// Resolve the path the way the write itself does (against the
+	// workspace root on ctx) so a daemon run outside the workspace
+	// records the true pre-state of the file it overwrites.
+	trackPath := trackingPath(ctx, path)
 	var preWriteOriginal string
 	if env.ResolveToolFuncs().TrackFileWrite != nil {
-		if data, readErr := os.ReadFile(path); readErr == nil {
+		if data, readErr := os.ReadFile(trackPath); readErr == nil {
 			preWriteOriginal = string(data)
 		}
 	}
@@ -173,7 +177,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	// Session change tracking (same contract as write_file). Best-effort.
 	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
-		if trackErr := fn(path, preWriteOriginal, content); trackErr != nil {
+		if trackErr := fn(trackPath, preWriteOriginal, content); trackErr != nil {
 			log.Printf("[write_structured_file] change tracking failed for %q: %v", path, trackErr)
 		}
 	}

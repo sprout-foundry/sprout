@@ -22,7 +22,7 @@ import Chat from '../components/ChatView';
 import { isLayeredLayout } from '../config/layout';
 import { isCloud, supportsAgentChanges } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { githubRepoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../utils/platformUrl';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -73,7 +73,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const hasContextPanel = !!threadContent || supportsAgentChanges;
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
-  const activeRepoSlug = githubRepoSlug(useActiveRepoURL());
+  const activeRepoSlug = repoSlug(useActiveRepoURL());
   const projectTitle = isCloud
     ? (activeRepoSlug ?? 'No repository open')
     : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');

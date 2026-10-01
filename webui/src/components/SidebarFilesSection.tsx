@@ -18,6 +18,7 @@ import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
+import { repoSlug } from '../utils/platformUrl';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -158,17 +159,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       // Determine repo name for display
       const repoUrl = repoParam || importing || alreadyImported || '';
       if (repoUrl) {
-        try {
-          const slug = repoUrl
-            .replace(/\.git$/, '')
-            .replace(/\/$/, '')
-            .split('/')
-            .slice(-2)
-            .join('/');
-          setImportRepoName(slug);
-        } catch {
-          setImportRepoName(repoUrl);
-        }
+        setImportRepoName(repoSlug(repoUrl) ?? repoUrl);
       }
 
       if (alreadyImported) {

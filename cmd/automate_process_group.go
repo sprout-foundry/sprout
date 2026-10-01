@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -23,4 +24,8 @@ func setProcessGroup(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setsid = true
+}
+
+func forwardSignal(cmd *exec.Cmd, sig os.Signal) error {
+	return cmd.Process.Signal(sig)
 }

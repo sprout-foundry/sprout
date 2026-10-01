@@ -27,6 +27,7 @@ func TestCheckConfigDirPermissions_Secure(t *testing.T) {
 }
 
 func TestCheckConfigDirPermissions_Insecure(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0755)
 	require.NoError(t, err)
@@ -54,6 +55,7 @@ func TestCheckFilePermissions_Secure(t *testing.T) {
 }
 
 func TestCheckFilePermissions_Insecure(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpFile := filepath.Join(t.TempDir(), "test.json")
 	err := os.WriteFile(tmpFile, []byte("{}"), 0644)
 	require.NoError(t, err)
@@ -96,6 +98,7 @@ func TestCheckAllSecurityFiles(t *testing.T) {
 }
 
 func TestCheckAllSecurityFiles_InsecureFiles(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0755) // insecure
 	require.NoError(t, err)
@@ -110,6 +113,7 @@ func TestCheckAllSecurityFiles_InsecureFiles(t *testing.T) {
 }
 
 func TestFixPermissions(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpDir := t.TempDir()
 
 	// Create dir and files with insecure perms
@@ -143,6 +147,7 @@ func TestRunStartupCheck_Clean(t *testing.T) {
 }
 
 func TestRunStartupCheck_AutoFix(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	resetStartupCheck()
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0755)
@@ -191,6 +196,7 @@ func TestGetPermissionError_Nonexistent(t *testing.T) {
 }
 
 func TestIsWorldReadable(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpFile := filepath.Join(t.TempDir(), "test.json")
 
 	err := os.WriteFile(tmpFile, []byte("{}"), 0600)
@@ -207,6 +213,7 @@ func TestIsWorldReadable(t *testing.T) {
 }
 
 func TestIsGroupReadable(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpFile := filepath.Join(t.TempDir(), "test.json")
 
 	err := os.WriteFile(tmpFile, []byte("{}"), 0600)
@@ -223,6 +230,7 @@ func TestIsGroupReadable(t *testing.T) {
 }
 
 func TestGetFileMode(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpFile := filepath.Join(t.TempDir(), "test.json")
 	err := os.WriteFile(tmpFile, []byte("{}"), 0600)
 	require.NoError(t, err)
@@ -233,11 +241,12 @@ func TestGetFileMode(t *testing.T) {
 }
 
 func TestGetFileMode_Nonexistent(t *testing.T) {
-	_, err := GetFileMode("/nonexistent")
+	_, err := GetFileMode(filepath.Join(t.TempDir(), "nonexistent"))
 	assert.Error(t, err)
 }
 
 func TestGetDirMode(t *testing.T) {
+	skipWithoutPOSIXModes(t)
 	tmpDir := t.TempDir()
 	err := os.Chmod(tmpDir, 0700)
 	require.NoError(t, err)
@@ -263,8 +272,7 @@ func TestCheckSymlinkSafety_SymlinkWithinConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	link := filepath.Join(tmpDir, "link")
-	err = os.Symlink(target, link)
-	require.NoError(t, err)
+	symlinkOrSkip(t, target, link)
 
 	warning := CheckSymlinkSafety(link, tmpDir)
 	assert.Empty(t, warning, "symlink within config dir should be safe")
@@ -280,8 +288,7 @@ func TestCheckSymlinkSafety_SymlinkOutsideConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	link := filepath.Join(tmpDir, "link")
-	err = os.Symlink(target, link)
-	require.NoError(t, err)
+	symlinkOrSkip(t, target, link)
 
 	warning := CheckSymlinkSafety(link, tmpDir)
 	assert.NotEmpty(t, warning, "symlink outside config dir should warn")
@@ -296,4 +303,58 @@ func TestCheckAllSymlinks(t *testing.T) {
 
 	warnings := CheckAllSymlinks(tmpDir)
 	assert.Empty(t, warnings, "regular file should not trigger symlink warning")
+}
+
+func TestCheckSymlinkSafety_RelativeSymlinkEscapingConfig(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, "config")
+	require.NoError(t, os.Mkdir(configDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "outside_file"), []byte("data"), 0o600))
+
+	link := filepath.Join(configDir, "link")
+	symlinkOrSkip(t, filepath.Join("..", "outside_file"), link)
+
+	assert.NotEmpty(t, CheckSymlinkSafety(link, configDir), "relative symlink escaping config dir should warn")
+}
+
+func TestCheckSymlinkSafety_SiblingWithConfigDirPrefix(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, "config")
+	sibling := filepath.Join(root, "config-evil")
+	require.NoError(t, os.Mkdir(configDir, 0o700))
+	require.NoError(t, os.Mkdir(sibling, 0o700))
+	target := filepath.Join(sibling, "file")
+	require.NoError(t, os.WriteFile(target, []byte("data"), 0o600))
+
+	link := filepath.Join(configDir, "link")
+	symlinkOrSkip(t, target, link)
+
+	assert.NotEmpty(t, CheckSymlinkSafety(link, configDir), "a sibling dir sharing the config dir's name prefix is outside it")
+}
+
+func TestPermissionChecksSilentWithoutPOSIXModes(t *testing.T) {
+	if posixModes {
+		t.Skip("mode bits are meaningful on this platform")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "api_keys.json"), []byte("{}"), 0o644))
+	pc := NewPermissionChecker(dir)
+	assert.Empty(t, pc.CheckAllSecurityFiles(), "synthesized Windows mode bits must not produce warnings")
+	assert.Empty(t, pc.FixPermissions())
+}
+
+// skipWithoutPOSIXModes skips tests asserting on mode bits, which Windows
+// synthesizes from the read-only attribute instead of storing.
+func skipWithoutPOSIXModes(t *testing.T) {
+	t.Helper()
+	if !posixModes {
+		t.Skip("file mode bits do not describe access on Windows")
+	}
+}
+
+func symlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported (Windows needs Developer Mode or admin): %v", err)
+	}
 }

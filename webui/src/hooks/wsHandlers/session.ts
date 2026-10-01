@@ -1,3 +1,4 @@
+import type { Message } from '@sprout/ui';
 import type {
   CompactCompletedData,
   CompactStartedData,
@@ -29,13 +30,29 @@ export const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
     pendingProviderChangeValueRef.current = null;
   }
 
+  // Seed reports metrics after each model call. Text streamed after this
+  // belongs to the next step; without a break it ran on from the previous
+  // one ("DONEThe edit is complete…").
+  const raw = (event.data ?? {}) as Record<string, unknown>;
+  const depth = Number(raw.subagent_depth ?? 0);
+  const endsStep = typeof raw.iteration === 'number' && !(Number.isFinite(depth) && depth > 0);
+
   setState((prev) => ({
     provider: String(data.provider || prev.provider),
     model: String(data.model || prev.model),
     stats: { ...prev.stats, ...data },
     logs: appendCappedLog(prev.logs, logEntry),
+    ...(endsStep ? { messages: endStepParagraph(prev.messages) } : {}),
   }));
 };
+
+/** Ends the running answer's paragraph if it ends in text, so a later step starts a new one. */
+function endStepParagraph(messages: Message[]): Message[] {
+  const last = messages[messages.length - 1];
+  if (!last || last.type !== 'assistant' || last.isSubagentRun) return messages;
+  if (!last.content.trim() || last.content.endsWith('\n')) return messages;
+  return [...messages.slice(0, -1), { ...last, content: `${last.content}\n\n` }];
+}
 
 // Handle workspace_changed event
 //

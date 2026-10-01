@@ -17,6 +17,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { terminalText } from '../../services/terminalText';
 import type { WasmShell } from '../../services/wasmShell';
 
 const host = document.getElementById('terminal')!;
@@ -52,7 +53,9 @@ function post(type: string, payload: Record<string, unknown> = {}) {
   window.parent?.postMessage({ source: 'sprout-terminal', type, ...payload }, '*');
 }
 
-function execute(line: string) {
+let busy = false;
+
+async function execute(line: string) {
   const command = line.trim();
   if (!command) {
     prompt();
@@ -65,19 +68,25 @@ function execute(line: string) {
     prompt();
     return;
   }
-  const result = wasm.executeCommand(command);
-  if (result.stdout) term.write(`\r\n${result.stdout.replace(/\n/g, '\r\n')}`);
-  if (result.stderr) term.write(`\r\n\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+  busy = true;
+  let result;
+  try {
+    result = wasm.executeCommandAsync ? await wasm.executeCommandAsync(command) : wasm.executeCommand(command);
+  } finally {
+    busy = false;
+  }
+  const text = terminalText(result);
+  if (text) term.write(`\r\n${text}`);
   post('command', { command, exitCode: result.exitCode });
   prompt();
 }
 
 term.onData((data) => {
-  if (!wasm) return;
+  if (!wasm || busy) return;
   switch (data) {
     case '\r': // Enter
       term.write('\r\n');
-      execute(inputBuffer);
+      void execute(inputBuffer);
       inputBuffer = '';
       break;
     case '\u007f': // Backspace

@@ -52,6 +52,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 	state := AgentState{
 		Messages:                       messages,
 		MessageTimestamps:              a.state.GetMessageTimestamps(),
+		QueryDisplays:                  a.queryDisplaysFor(messages),
 		TurnCheckpoints:                a.copyTurnCheckpoints(),
 		PreviousSummary:                a.state.GetPreviousSummary(),
 		CompactSummary:                 compactSummary, // Store 5K-limited summary for continuity
@@ -82,6 +83,7 @@ func (a *Agent) ImportState(data []byte) error {
 	}
 	a.state.SetMessages(state.Messages)
 	a.state.SetMessageTimestamps(state.MessageTimestamps)
+	a.restoreQueryDisplays(state.QueryDisplays)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {
@@ -105,6 +107,7 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
 	a.state.SetFreeTokens(state.FreeTokens)
+	a.markUsageBooked()
 	a.restorePendingNotifications(state.PendingBackgroundNotifications)
 	return nil
 }

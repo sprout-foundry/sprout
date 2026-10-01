@@ -68,9 +68,9 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
-							chatAgent.ForceSaveAndExit(1)
+							chatAgent.ForceSaveAndExit(exitInterrupted)
 						}
-						os.Exit(1)
+						os.Exit(exitInterrupted)
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
@@ -107,9 +107,9 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 					fmt.Println()
 					console.GlyphStopped.Printf("Force quitting...")
 					if chatAgent != nil {
-						chatAgent.ForceSaveAndExit(1)
+						chatAgent.ForceSaveAndExit(exitInterrupted)
 					}
-					os.Exit(1)
+					os.Exit(exitInterrupted)
 				}()
 
 				// Any subsequent signal after shutdown starts should force quit.
@@ -119,9 +119,9 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 						fmt.Println()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
-							chatAgent.ForceSaveAndExit(1)
+							chatAgent.ForceSaveAndExit(exitInterrupted)
 						}
-						os.Exit(1)
+						os.Exit(exitInterrupted)
 					case <-ctx.Done():
 						return
 					}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"testing"
 )
 
@@ -23,6 +24,9 @@ func TestExitCodeFromWaitErr_ExitErrorCarriesCode(t *testing.T) {
 }
 
 func TestExitCodeFromWaitErr_SignalDeathIsNegative(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no signal death; a killed process reports an ordinary exit code")
+	}
 	err := exec.Command("sh", "-c", "kill -9 $$").Run()
 	if got := exitCodeFromWaitErr(err); got != -1 {
 		t.Errorf("exitCodeFromWaitErr(SIGKILL) = %d, want -1 (err: %v)", got, err)

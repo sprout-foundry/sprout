@@ -19,11 +19,12 @@ vi.mock('@codemirror/view', () => ({
     set: vi.fn((decorations) => decorations),
   },
   ViewPlugin: { fromClass: vi.fn(() => []) },
-  EditorView: { baseTheme: vi.fn(() => []) },
+  EditorView: { baseTheme: vi.fn(() => []), decorations: {} },
 }));
 
 vi.mock('@codemirror/state', () => ({
-  Annotation: { define: vi.fn(() => ({})) },
+  StateEffect: { define: vi.fn(() => ({})) },
+  StateField: { define: vi.fn(() => ({})) },
   Extension: {},
 }));
 

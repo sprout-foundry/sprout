@@ -358,14 +358,10 @@ func TestValidateStateFilePath(t *testing.T) {
 			t.Fatalf("failed to create target: %v", err)
 		}
 		if err := os.Symlink(target, link); err != nil {
-			t.Fatalf("failed to create symlink: %v", err)
+			t.Skipf("symlinks unavailable (Windows needs Developer Mode or admin): %v", err)
 		}
 		// Change to temp dir so the relative symlink path resolves
-		origDir, _ := os.Getwd()
-		if err := os.Chdir(tmpDir); err != nil {
-			t.Fatalf("failed to chdir: %v", err)
-		}
-		defer os.Chdir(origDir)
+		t.Chdir(tmpDir)
 		_, err := validateStateFilePath("link_state.json")
 		if err == nil {
 			t.Error("expected error for symlink path, got nil")

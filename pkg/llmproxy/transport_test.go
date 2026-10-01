@@ -492,3 +492,44 @@ func TestSetCorsProxy_RejectsInvalidURLs(t *testing.T) {
 	}
 	SetCorsProxy("")
 }
+
+func TestRoundTrip_AllowedOriginsBlocksOthers(t *testing.T) {
+	cap := &captureTransport{}
+	rt := &rewriteTransport{base: cap}
+	rt.allowedOrigins.Store([]string{"http://localhost:8080"})
+
+	for _, raw := range []string{"https://api.openai.com/v1/models", "https://ollama.com/props", "http://localhost:9090/x"} {
+		req := httptest.NewRequest(http.MethodGet, raw, nil)
+		if _, err := rt.RoundTrip(req); err == nil || !strings.Contains(err.Error(), "blocked") {
+			t.Errorf("%s: want blocked error, got %v", raw, err)
+		}
+	}
+	if cap.lastReq != nil {
+		t.Fatalf("blocked requests must not reach the network, saw %s", cap.lastReq.URL)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://localhost:8080/proxy/chat", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("same-origin request blocked: %v", err)
+	}
+	if cap.lastReq == nil || cap.lastReq.URL.Path != "/proxy/chat" {
+		t.Fatalf("same-origin request not forwarded: %+v", cap.lastReq)
+	}
+}
+
+func TestSetAllowedOrigins_NormalizesAndClears(t *testing.T) {
+	t.Cleanup(func() { SetAllowedOrigins(nil) })
+	SetAllowedOrigins([]string{" HTTPS://App.Example.com/ ", ""})
+	u, _ := url.Parse("https://app.example.com/proxy/chat")
+	if !defaultTransport.originAllowed(u) {
+		t.Fatal("normalized origin should match")
+	}
+	other, _ := url.Parse("https://api.openai.com/v1/models")
+	if defaultTransport.originAllowed(other) {
+		t.Fatal("other origins must be blocked")
+	}
+	SetAllowedOrigins(nil)
+	if !defaultTransport.originAllowed(other) {
+		t.Fatal("an empty list lifts the restriction")
+	}
+}

@@ -151,6 +151,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	// Build a live agent snapshot for this client
 	stateData, err := json.Marshal(agent.AgentState{
 		Messages:                state.Messages,
+		QueryDisplays:           state.QueryDisplays,
 		TurnCheckpoints:         state.TurnCheckpoints,
 		TaskActions:             state.TaskActions,
 		TotalCost:               state.TotalCost,
@@ -215,7 +216,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		"message":           "Session restored",
 		"session_id":        state.SessionID,
 		"message_count":     len(state.Messages),
-		"messages":          state.Messages,
+		"messages":          state.DisplayMessages(),
 		"total_tokens":      state.TotalTokens,
 		"name":              state.Name,
 		"working_directory": state.WorkingDirectory,

@@ -71,6 +71,16 @@
   background-color: var(--border-default);
 }
 
+/* Keyboard focus: the rail itself lights up so the active divider is
+   obvious; arrow keys then move it (see ResizeHandle.tsx). */
+.resize-handle:focus {
+  outline: none;
+}
+
+.resize-handle:focus-visible {
+  background-color: var(--accent-primary);
+}
+
 .resize-handle.resizing {
   background-color: var(--accent-primary);
   opacity: 0.5;

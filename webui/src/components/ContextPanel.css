@@ -33,6 +33,7 @@
 }
 
 .context-panel-resizer {
+  position: relative;
   width: 6px;
   min-height: 0;
   border-radius: 8px;
@@ -44,6 +45,24 @@
     border-color 0.15s ease,
     opacity 150ms var(--ease-out);
   flex-shrink: 0;
+}
+
+/* The grab zone reaches past the thin rail on both sides. */
+.context-panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  right: -6px;
+}
+
+.context-panel-resizer:focus {
+  outline: none;
+}
+
+.context-panel-resizer:focus-visible {
+  background: var(--accent-primary);
 }
 
 .context-panel-resizer:hover {
@@ -66,30 +85,7 @@
 
 /* ── Tool query groups (rolling history) ── */
 
-.tool-query-group {
-  margin-bottom: 4px;
-}
-
-.tool-query-group--current {
-  /* Subtle accent border to distinguish current turn */
-  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);
-  margin-left: -2px;
-  padding-left: 4px;
-}
-
 /* ── Activity tab section labels ── */
-
-.activity-section-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 8px 2px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-tertiary, #8b949e);
-}
 
 /* Deep-link highlight: highlightTool() sets activeToolId, briefly marking
  * the targeted tool card / subagent card so the scroll target is visible. */
@@ -97,45 +93,6 @@
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 55%, transparent);
   outline-offset: 2px;
   border-radius: var(--radius-sm, 4px);
-}
-
-.tool-query-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: var(--text-secondary, #8b949e);
-  cursor: pointer;
-  user-select: none;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-  border-radius: var(--radius-sm, 4px);
-}
-
-.tool-query-header:hover {
-  background: var(--bg-hover, rgba(110, 118, 129, 0.1));
-  color: var(--text-primary, #e6edf3);
-}
-
-.tool-query-chevron {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-tertiary, #8b949e);
-  flex-shrink: 0;
-}
-
-.tool-query-label {
-  font-weight: 500;
-  letter-spacing: -0.005em;
-}
-
-.tool-query-count {
-  color: var(--text-tertiary, #8b949e);
-  margin-left: auto;
-  font-size: 10px;
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .tool-depth-badge {
@@ -199,10 +156,6 @@
 
 .tool-execution[data-depth='2']::before {
   background: color-mix(in srgb, var(--accent-warning) 50%, transparent);
-}
-
-.tool-query-tools {
-  /* wrapper for tool cards within an expanded query group */
 }
 
 .context-panel-empty {
@@ -279,7 +232,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    bottom: var(--sprout-terminal-reserved-height);
+    bottom: var(--sprout-bottom-reserved-height);
     left: 0;
     width: 100vw !important;
     min-width: 100vw;

@@ -1,0 +1,77 @@
+.provider-key-source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.provider-key-source legend {
+  padding: 0;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.provider-key-source-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+.provider-key-source-option {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, var(--border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  user-select: none;
+}
+
+.provider-key-source-option:hover {
+  border-color: var(--border-strong, var(--border-color));
+}
+
+.provider-key-source-option.selected {
+  border-color: var(--accent-color, var(--accent-primary));
+  background: color-mix(in srgb, var(--accent-color, var(--accent-primary)) 10%, var(--bg-primary));
+}
+
+.provider-key-source-option input {
+  margin: 0;
+  accent-color: var(--accent-color, var(--accent-primary));
+}
+
+.provider-key-source-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent-color, var(--accent-primary));
+  outline-offset: 2px;
+}
+
+.provider-key-source-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-color, var(--accent-primary));
+  background: color-mix(in srgb, var(--accent-color, var(--accent-primary)) 12%, transparent);
+  white-space: nowrap;
+}
+
+.provider-key-source-error {
+  color: var(--accent-error);
+  font-size: 11px;
+}

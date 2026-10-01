@@ -160,7 +160,7 @@ func TestWasmStreamReader_JSReadableStream(t *testing.T) {
 		return nil
 	})
 
-	stream := js.Global().Call("ReadableStream", map[string]interface{}{"start": startFunc})
+	stream := js.Global().Get("ReadableStream").New(map[string]interface{}{"start": startFunc})
 	readerObj := stream.Call("getReader")
 
 	wasmReader := &wasmStreamReader{
@@ -200,7 +200,7 @@ func TestWasmStreamReader_JSReadableStream_EOF(t *testing.T) {
 		return nil
 	})
 
-	stream := js.Global().Call("ReadableStream", map[string]interface{}{"start": startFunc})
+	stream := js.Global().Get("ReadableStream").New(map[string]interface{}{"start": startFunc})
 	readerObj := stream.Call("getReader")
 
 	wasmReader := &wasmStreamReader{
@@ -231,7 +231,7 @@ func TestWasmStreamReader_JSReadableStream_LargeChunk(t *testing.T) {
 		return nil
 	})
 
-	stream := js.Global().Call("ReadableStream", map[string]interface{}{"start": startFunc})
+	stream := js.Global().Get("ReadableStream").New(map[string]interface{}{"start": startFunc})
 	readerObj := stream.Call("getReader")
 
 	wasmReader := &wasmStreamReader{
@@ -292,7 +292,7 @@ func TestWasmStreamReader_JSReadableStream_MultipleChunks(t *testing.T) {
 		return nil
 	})
 
-	stream := js.Global().Call("ReadableStream", map[string]interface{}{"start": startFunc})
+	stream := js.Global().Get("ReadableStream").New(map[string]interface{}{"start": startFunc})
 	readerObj := stream.Call("getReader")
 
 	wasmReader := &wasmStreamReader{
@@ -330,7 +330,7 @@ func TestWasmStreamReader_JSReadableStream_EmptyChunkThenData(t *testing.T) {
 		return nil
 	})
 
-	stream := js.Global().Call("ReadableStream", map[string]interface{}{"start": startFunc})
+	stream := js.Global().Get("ReadableStream").New(map[string]interface{}{"start": startFunc})
 	readerObj := stream.Call("getReader")
 
 	wasmReader := &wasmStreamReader{

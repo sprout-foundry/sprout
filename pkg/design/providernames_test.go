@@ -42,11 +42,11 @@ func TestDesignTierNoProprietaryNames(t *testing.T) {
 	// Sanity: the guard is only meaningful if it actually reads the design
 	// validators. pkg/design must contribute at least one file, and the
 	// handler must be in scope too.
-	assert.Contains(t, files, filepath.Join("pkg", "design", "design.go"),
+	assert.Contains(t, files, "pkg/design/design.go",
 		"design-tier Go scan must include pkg/design production files")
-	assert.Contains(t, files, filepath.Join("pkg", "agent_tools", "design_validate_handler.go"),
+	assert.Contains(t, files, "pkg/agent_tools/design_validate_handler.go",
 		"design-tier Go scan must include the design_validate handler")
-	assert.Contains(t, files, filepath.Join("pkg", "agent_tools", "design_assets_handler.go"),
+	assert.Contains(t, files, "pkg/agent_tools/design_assets_handler.go",
 		"design-tier Go scan must include the design_assets handler")
 
 	assert.Empty(t, scanFilesForProprietaryNames(t, root, files),

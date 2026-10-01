@@ -336,7 +336,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	if s.IsCompact() && status == "completed" {
 		if diffSuffix := ComputeDiffStat(name, args); diffSuffix != "" {
 			s.flushExternalWrite()
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("%s%s%s", console.ColorDim, FormatCompactDiffLine(name, args, diffSuffix), console.ColorReset))
+			fmt.Fprintf(os.Stderr, "%s%s%s\n", console.Esc(console.ColorDim), FormatCompactDiffLine(name, args, diffSuffix), console.Esc(console.ColorReset))
 		}
 		s.run = nil // prevent stale state from contaminating error tool collapse
 		footer.Refresh()
@@ -351,7 +351,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	if s.IsVerbose() {
 		if resultLen := ReadEventInt(data, "result_length"); resultLen > 0 {
 			if sizeStr := FormatResultSize(resultLen); sizeStr != "" {
-				resultSuffix = fmt.Sprintf(" %s· %s%s", console.ColorDim, sizeStr, console.ColorReset)
+				resultSuffix = fmt.Sprintf(" %s· %s%s", console.Esc(console.ColorDim), sizeStr, console.Esc(console.ColorReset))
 			}
 		}
 	}

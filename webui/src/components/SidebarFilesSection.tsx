@@ -1,23 +1,29 @@
-import { FileTree, type FileInfo } from '@sprout/ui';
+import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isCloud } from '../config/mode';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
+import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
+import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
+import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
+import { gitCorsProxy } from '../services/gitCorsProxy';
+import { fetchPlatformGitHubConnected, usesPlatformGitHub } from '../services/platformGitHub';
+import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
-import { repoDir } from '../services/workspaceFs/workspaceGit';
-import { debugLog } from '../utils/log';
+import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
 import GitHubRepoPicker from './GitHubRepoPicker';
+import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
 
 export interface FileTreeHandle {
-  refresh: () => void;
+  refresh: (options?: FileTreeRefreshOptions) => void;
   revealFile: (filePath: string) => void;
 }
 
@@ -46,27 +52,18 @@ interface SidebarFilesSectionProps {
   workspaceRoot?: string;
 }
 
-// ── Repo import types ──────────────────────────────────────────────────────
-
-interface RepoImportFile {
-  path: string;
-  content: string;
-}
-
-interface RepoImportResponse {
-  files: RepoImportFile[];
-  repo: string;
-}
-
 // ── Component ──────────────────────────────────────────────────────────────
 
 const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>(
   ({ onFileClick, workspaceRoot }, ref) => {
-    const fileTreeRef = useRef<{ refresh: () => void; revealFile: (filePath: string) => void } | null>(null);
+    const fileTreeRef = useRef<FileTreeHandle | null>(null);
+    // Files the agent or a shell command creates or deletes show up without
+    // a manual refresh; in place, so the tree doesn't flash.
+    useFileTreeAutoRefresh(() => fileTreeRef.current?.refresh({ quiet: true }));
 
     useImperativeHandle(ref, () => ({
-      refresh: () => {
-        fileTreeRef.current?.refresh();
+      refresh: (options) => {
+        fileTreeRef.current?.refresh(options);
       },
       revealFile: (filePath: string) => {
         fileTreeRef.current?.revealFile(filePath);
@@ -74,6 +71,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }));
 
     const api = ApiService.getInstance();
+    const bufferManager = useOptionalBufferManager();
 
     // ── Working directory (session-level cwd) ─────────────────────
     // Shared with the terminal / git / agent surfaces via the workspaceCwd
@@ -95,9 +93,6 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           // No repos/ yet (or the backend is unreachable): keep [].
         });
     }, []);
-    useEffect(() => {
-      refreshRepos();
-    }, [refreshRepos]);
 
     // The cwd row is shell-scoped: the studio shell is a single native
     // workspace (the gate modal picks it, the shell owns the root), so the
@@ -112,6 +107,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       setIsStudioShell(getShellIdentity() === 'studio');
       return onShellIdentityChange((identity) => setIsStudioShell(identity === 'studio'));
     }, []);
+
+    // Only the studio shell shows the repo selector; elsewhere the list has
+    // no reader, and a workspace without repos/ answers with an error.
+    useEffect(() => {
+      if (isStudioShell) refreshRepos();
+    }, [isStudioShell, refreshRepos]);
 
     // Keep the cwd honest: if the selected repo disappears (removed while the
     // store still points at it), fall back to the root rather than rooting the
@@ -210,88 +211,57 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }, []);
 
     // ── Clone repository handler ────────────────────────────────
-    // Signed in to GitHub → open the repo picker (authenticated clone,
-    // private repos work). Signed out → the original anonymous prompt
-    // flow, unchanged.
+    // Signed in to GitHub (a stored token, or the Foundry account's
+    // connection in the hosted editor) → open the repo picker (authenticated
+    // clone, private repos work). Otherwise → the anonymous prompt flow.
     const [isRepoPickerOpen, setIsRepoPickerOpen] = useState(false);
 
     const handleCloneRepo = async () => {
-      if (getStoredToken()) {
+      const accountConnected = usesPlatformGitHub() && (await fetchPlatformGitHubConnected().catch(() => false));
+      if (getStoredToken() || accountConnected) {
         setIsRepoPickerOpen(true);
         return;
       }
 
-      const url = window.prompt(
-        'Clone Repository\n\nEnter a public GitHub repository URL to clone:\nhttps://github.com/owner/repo.git',
-        '',
+      const input = await showThemedPrompt(
+        gitCorsProxy()
+          ? 'GitHub repository to clone (URL or owner/name). It replaces the repository in this workspace.'
+          : 'GitHub repository to clone (URL or owner/name):',
+        {
+          title: 'Add repository',
+          placeholder: 'https://github.com/owner/repo',
+        },
       );
+      if (!input || !input.trim()) return;
 
-      if (!url) return; // User cancelled
-
-      // Validate URL
-      if (!url.startsWith('https://') || !url.endsWith('.git')) {
-        window.alert('URL must be an HTTPS Git URL ending in .git');
+      let url: string;
+      try {
+        url = parseRepoRef(input).url.replace(/\.git$/, '');
+      } catch (err) {
+        await showThemedAlert(err instanceof Error ? err.message : String(err), {
+          title: 'Invalid repository',
+          type: 'warning',
+        });
         return;
       }
 
       try {
-        // Call the repo import endpoint.
-        // In cloud mode, the CloudAdapter handles this; in local mode, the
-        // server-side handler does. Both support POST /api/repo/import.
-        const response = await clientFetch('/api/repo/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errData.error || `HTTP ${response.status}`);
-        }
-
-        const data: RepoImportResponse = await response.json();
-
-        if (!data.files || data.files.length === 0) {
-          throw new Error('No files found in repository');
-        }
-
-        // Write each file to the virtual filesystem via the /api/create endpoint.
-        // The CloudAdapter (cloud mode) or clientFetch (local mode) handles this.
-        for (const file of data.files) {
-          // First ensure parent directories exist by creating the file directly.
-          // The WASM shell's writeFile creates intermediate dirs implicitly.
-          const createResponse = await clientFetch('/api/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: file.path, directory: false }),
-          });
-
-          if (!createResponse.ok) {
-            // If file creation fails, try creating via the file write endpoint.
-            // Some backends require a two-step (create then write).
-            debugLog(`[clone-repo] create returned ${createResponse.status} for ${file.path}`, null);
-          }
-
-          // Write the file content
-          const writeResponse = await clientFetch(`/api/file?path=${encodeURIComponent(file.path)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: file.content }),
-          });
-
-          if (!writeResponse.ok) {
-            debugLog(`[clone-repo] write returned ${writeResponse.status} for ${file.path}`, null);
-          }
-        }
-
-        // Refresh the file tree and the workspace selector's repo list to
-        // show imported files.
-        fileTreeRef.current?.refresh();
+        // A real clone (through the platform's git proxy) rather than a file
+        // dump: the workspace gets history, the origin remote and branches, so
+        // git status, commit and push work on it.
+        const result = await cloneIntoWorkspace(url);
+        setActiveRepoURL(url);
         refreshRepos();
+        setTimeout(() => {
+          fileTreeRef.current?.refresh();
+          void findClonedReadme(result.dir).then((readme) => {
+            const target = readme ?? result.dir;
+            if (target) fileTreeRef.current?.revealFile(target);
+          });
+        }, 300);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Show error via browser alert as a fallback
-        window.alert(`Failed to clone repository: ${message}`);
+        await showThemedAlert(message, { title: "Couldn't clone repository", type: 'error' });
       }
     };
 
@@ -340,12 +310,13 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             )}
           </div>
         )}
-        {/* GitHub repo picker — authenticated clone (opened when a PAT is
-            stored; see handleCloneRepo). */}
+        {/* GitHub repo picker — authenticated clone (opened when GitHub is
+            connected; see handleCloneRepo). */}
         <GitHubRepoPicker
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}
-          onCloned={(_repo, result) => {
+          onCloned={(repo, result) => {
+            setActiveRepoURL(repo.clone_url);
             // Re-pull the repo list so the new clone appears in the cwd
             // selector immediately (no remount needed).
             refreshRepos();
@@ -357,7 +328,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
               // scrolls into view in the tree.
               setTimeout(async () => {
                 const readme = await findClonedReadme(result.dir);
-                fileTreeRef.current?.revealFile(readme ?? result.dir);
+                const target = readme ?? result.dir;
+                if (target) fileTreeRef.current?.revealFile(target);
               }, 700);
             }, 300);
           }}
@@ -459,9 +431,11 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           }}
           onDeletePath={async (path, _isDir) => {
             await api.deleteItem(path);
+            bufferManager?.closeBuffersForDeletedPath(path);
           }}
           onRenamePath={async (oldPath, newPath) => {
             await api.renameItem(oldPath, newPath);
+            bufferManager?.retargetBufferPaths(oldPath, newPath);
           }}
           onOpenInFileBrowser={async (path) => {
             await api.openInFileBrowser(path);

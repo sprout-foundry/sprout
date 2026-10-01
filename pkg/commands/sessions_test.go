@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -673,13 +674,22 @@ func TestSessionsCommand_SessionWithName(t *testing.T) {
 
 // --- PTY-based interactive terminal tests ---
 
+func openTestPTY(t *testing.T) (ptmx, pts *os.File) {
+	t.Helper()
+	ptmx, pts, err := pty.Open()
+	if errors.Is(err, pty.ErrUnsupported) {
+		t.Skip("pty.Open has no Windows implementation; these tests need a Unix PTY as stdin")
+	}
+	require.NoError(t, err, "failed to open pty")
+	return ptmx, pts
+}
+
 // setupPTY creates a PTY pair and replaces os.Stdin with the slave side.
 // Returns a cleanup function that restores stdin and closes both sides.
 func setupPTY(t *testing.T) (master *os.File, cleanup func()) {
 	t.Helper()
 
-	ptmx, pts, err := pty.Open()
-	require.NoError(t, err, "failed to open pty")
+	ptmx, pts := openTestPTY(t)
 
 	oldStdin := os.Stdin
 	os.Stdin = pts
@@ -1188,8 +1198,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_NoInput(t *testin
 	// Setup PTY manually (not via setupPTY) because we need to close the
 	// master before calling the function to trigger EOF, and we must avoid
 	// a double-close on the master fd in cleanup.
-	ptmx, pts, ptyErr := pty.Open()
-	require.NoError(t, ptyErr, "failed to open pty")
+	ptmx, pts := openTestPTY(t)
 	oldStdin := os.Stdin
 	os.Stdin = pts
 

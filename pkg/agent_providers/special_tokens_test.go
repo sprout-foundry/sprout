@@ -18,6 +18,8 @@ func TestNeutralizeSpecialTokens(t *testing.T) {
 		{"multiple kinds", "<|im_start|> and <|im_end|> and <|endoftext|>", "⟨im_start⟩ and ⟨im_end⟩ and ⟨endoftext⟩"},
 		{"not special", "x < 1 | 2 > y", "x < 1 | 2 > y"},
 		{"pipe prefix only", "<|unknownthing|>", "<|unknownthing|>"},
+		{"vision tokens", "<image1><|vision_start|><|image_pad|><|vision_end|>", "<image1>⟨vision_start⟩⟨image_pad⟩⟨vision_end⟩"},
+		{"video pad", "<|video_pad|> in text", "⟨video_pad⟩ in text"},
 	}
 	for _, c := range cases {
 		if got := NeutralizeSpecialTokens(c.in); got != c.want {
@@ -36,7 +38,7 @@ func TestConvertMessagesNeutralizeOptIn(t *testing.T) {
 				Arguments: `{"content":"token = \"<|im_end|>\"","path":"/tmp/x"}`,
 			},
 		}}},
-		{Role: "tool", ToolCallID: "c1", Content: "wrote file with <|im_end|> inside"},
+		{Role: "tool", ToolCallID: "c1", Content: "wrote file with <|im_end|> and <|vision_start|><|image_pad|><|vision_end|> inside"},
 	}
 
 	// Opt-in: content neutralized, tool-call arguments untouched.
@@ -52,6 +54,12 @@ func TestConvertMessagesNeutralizeOptIn(t *testing.T) {
 		if m["role"] == "tool" {
 			if c, _ := m["content"].(string); !strings.Contains(c, "⟨im_end⟩") {
 				t.Errorf("tool content not neutralized: %q", c)
+			}
+			// Vision/media literals in tool output must also be neutralized:
+			// a literal placeholder with zero real image inputs is a hard 400
+			// on Qwen-VL chat templates.
+			if c, _ := m["content"].(string); !strings.Contains(c, "⟨vision_start⟩⟨image_pad⟩⟨vision_end⟩") {
+				t.Errorf("tool content media tokens not neutralized: %q", c)
 			}
 		}
 		if m["role"] == "assistant" {

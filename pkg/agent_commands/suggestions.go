@@ -3,6 +3,7 @@ package commands
 import (
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // SuggestCommands returns up to maxSuggestions command names that are
@@ -23,9 +24,9 @@ func (r *CommandRegistry) SuggestCommands(name string, maxSuggestions int) []str
 	}
 
 	const maxDistance = 3
-	candidates := make([]scored, 0, len(r.commands)+len(r.aliases))
+	best := make(map[string]int, len(r.commands))
 
-	consider := func(candidate string) {
+	consider := func(candidate, canonical string) {
 		lower := strings.ToLower(candidate)
 		dist := levenshtein(target, lower)
 		// Treat prefix matches as best-case so "cm" → "commit" wins over
@@ -33,23 +34,32 @@ func (r *CommandRegistry) SuggestCommands(name string, maxSuggestions int) []str
 		if strings.HasPrefix(lower, target) {
 			dist = 0
 		}
-		if dist <= maxDistance {
-			candidates = append(candidates, scored{name: candidate, dist: dist})
+		// Short names are within edit distance of almost any short typo, so
+		// the budget never exceeds the candidate's own length.
+		if dist > maxDistance || dist >= len(lower) {
+			return
+		}
+		if prev, ok := best[canonical]; !ok || dist < prev {
+			best[canonical] = dist
 		}
 	}
 
-	seen := make(map[string]struct{}, len(r.commands))
 	for n := range r.commands {
-		consider(n)
-		seen[n] = struct{}{}
+		consider(n, n)
 	}
-	// Aliases participate in suggestions too — typos may match a short
-	// alias the user expected (e.g. /md → /m → /models).
-	for alias := range r.aliases {
-		if _, ok := seen[alias]; ok {
+	// Aliases route typos to their command (e.g. /md → /m → /model), but
+	// the suggestion names the command, and punctuation aliases like /?
+	// never match a word.
+	for alias, canonical := range r.aliases {
+		if isPunctuationAlias(alias) {
 			continue
 		}
-		consider(alias)
+		consider(alias, canonical)
+	}
+
+	candidates := make([]scored, 0, len(best))
+	for n, d := range best {
+		candidates = append(candidates, scored{name: n, dist: d})
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -67,6 +77,15 @@ func (r *CommandRegistry) SuggestCommands(name string, maxSuggestions int) []str
 		out[i] = candidates[i].name
 	}
 	return out
+}
+
+func isPunctuationAlias(alias string) bool {
+	for _, r := range alias {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // levenshtein returns the edit distance between a and b. O(len(a) × len(b))

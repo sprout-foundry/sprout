@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Agent socket protocol (SP-136 P4): full CLI-on-daemon.
@@ -151,6 +152,9 @@ type AgentServer struct {
 	once  sync.Once
 }
 
+// socketProbeTimeout bounds the check for a live daemon on an existing socket.
+const socketProbeTimeout = 500 * time.Millisecond
+
 // Start begins listening. Returns once bound.
 func (s *AgentServer) Start(ctx context.Context) error {
 	if s.SocketPath == "" {
@@ -165,6 +169,13 @@ func (s *AgentServer) Start(ctx context.Context) error {
 
 	if err := os.MkdirAll(filepath.Dir(s.SocketPath), 0o700); err != nil {
 		return fmt.Errorf("agent server: create socket dir: %w", err)
+	}
+	// Replace a stale socket file, but never one a running daemon still
+	// serves: unlinking it would leave that daemon unreachable for every
+	// CLI client until it restarts.
+	if conn, err := net.DialTimeout("unix", s.SocketPath, socketProbeTimeout); err == nil {
+		_ = conn.Close()
+		return fmt.Errorf("agent server: %s is served by another running daemon", s.SocketPath)
 	}
 	_ = os.Remove(s.SocketPath)
 

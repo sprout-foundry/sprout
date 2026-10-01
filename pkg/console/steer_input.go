@@ -346,7 +346,7 @@ func (r *SteerInputReader) Stop() {
 		select {
 		case <-doneCh:
 		case <-time.After(2 * time.Second):
-			fmt.Fprintln(os.Stderr, "[steer] Stop() timed out waiting for readLoop — terminal state may be corrupted")
+			GlyphWarning.Print("Input reader did not stop in time — the terminal may need `reset`.")
 		}
 	}
 	// Disable bracketed paste before restoring termios so the

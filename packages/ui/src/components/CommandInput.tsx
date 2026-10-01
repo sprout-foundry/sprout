@@ -866,6 +866,12 @@ function CommandInput({
         break;
       }
       case 'Tab':
+        // Tab completes inside the input, but the field must not trap
+        // keyboard users: Shift+Tab always moves focus back, and Tab in an
+        // empty input (nothing to complete) moves focus on.
+        if (e.shiftKey || draftValue === '') {
+          break;
+        }
         e.preventDefault();
         {
           const info = detectSlashCommandAtCursor();

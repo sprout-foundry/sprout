@@ -1,22 +1,20 @@
-import { Bot, History, PanelRightOpen, PanelRightClose } from 'lucide-react';
-import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { History, MessageSquare, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
-import { ActivityTab } from './contextPanel/ActivityTab';
 import AgentChangesPanel from './AgentChangesPanel';
 import type {
   ContextPanelProps,
   ContextPanelHandle,
   ChatContextPanelProps,
   ChatTabId,
-  ToolExecution,
   PanelTab,
 } from './contextPanel/types';
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
-import { useSubagentRuns } from './contextPanel/useSubagentRuns';
+import { supportsAgentChanges } from '../config/mode';
 
-const TAB_IDS = ['activity', 'changes'] as const;
+const TAB_IDS: readonly ChatTabId[] = ['thread', 'changes'];
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
   const isChat = props.context === 'chat';
@@ -29,37 +27,14 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // disappears as the user moves between chat and files.
   const isIdle = props.isIdle ?? false;
 
-  // ── Hooks ──────────────────────────────────────────────────────────
-
-  const toolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
-
-  const groupedByQuery = useMemo(() => {
-    const groups = new Map<number, ToolExecution[]>();
-    for (const tool of toolExecutions) {
-      const qid = tool.queryId ?? 0;
-      if (!groups.has(qid)) groups.set(qid, []);
-      const bucket = groups.get(qid);
-      if (bucket) bucket.push(tool);
-    }
-    return groups;
-  }, [toolExecutions]);
-
-  const maxQueryId = useMemo(() => {
-    if (groupedByQuery.size === 0) return 0;
-    return Math.max(...Array.from(groupedByQuery.keys()));
-  }, [groupedByQuery]);
-
   // Panel state (no external deps — avoids circular hook ordering)
   const state = useContextPanelState(props);
-
-  const { subagentRuns, resourceCounts } = useSubagentRuns(chatProps);
 
   // ── Imperative handle ─────────────────────────────────────────────
 
   const handleTabClick = (tabId: string) => {
     state.setPanelCollapsed(false);
     state.setChatTab(tabId as ChatTabId);
-    // Both tabs are self-loading (AgentChangesPanel fetches on mount).
   };
 
   const imperativeHandle = {
@@ -67,41 +42,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       if (TAB_IDS.includes(tab as ChatTabId)) {
         handleTabClick(tab);
       }
-    },
-    highlightTool: (toolId: string) => {
-      if (!isChat || !chatProps) return;
-      state.setPanelCollapsed(false);
-      state.setChatTab('activity');
-      state.setActiveToolId(toolId);
-      const tool = chatProps.toolExecutions.find((t) => t.id === toolId);
-      if (tool) {
-        const qid = tool.queryId ?? 0;
-        const maxQid = chatProps.toolExecutions.reduce((max, t) => Math.max(max, t.queryId ?? 0), 0);
-        state.setExpandedQueries((prev) => {
-          // expandedQueries has inverted semantics for the current turn:
-          //   current turn: isExpanded = !isInSet (in-set = collapsed)
-          //   past turns:   isExpanded = isInSet  (in-set = expanded)
-          // To guarantee the target group is visible, we need:
-          //   - current turn: REMOVE qid from the set (so it defaults to expanded)
-          //   - past turn:    ADD qid to the set (so it expands)
-          if (qid === maxQid) {
-            if (!prev.has(qid)) return prev; // already expanded
-            const next = new Set(prev);
-            next.delete(qid);
-            return next;
-          }
-          if (prev.has(qid)) return prev; // already expanded
-          const next = new Set(prev);
-          next.add(qid);
-          return next;
-        });
-      }
-      setTimeout(() => {
-        const el = state.toolRefs.current[toolId];
-        if (el != null) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      }, 150);
     },
     closePanel: () => {
       state.setPanelCollapsed(true);
@@ -118,65 +58,41 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     [isChat, chatProps],
   );
 
-  // ── Computed counts for tabs ──────────────────────────────────────
-
-  const activeToolCount = toolExecutions.filter((t) => t.status === 'started' || t.status === 'running').length;
-
-  const activeSubagentCount = subagentRuns.filter(
-    ({ tool }) => tool.status === 'started' || tool.status === 'running',
-  ).length;
-
   // ── Tab definitions ───────────────────────────────────────────────
 
+  const hasThread = !!chatProps?.threadContent;
   const chatPanelTabs: PanelTab[] = useMemo(
     () => [
-      {
-        id: 'activity',
-        label: 'Activity',
-        icon: <Bot size={14} />,
-        count:
-          activeSubagentCount > 0
-            ? `${activeSubagentCount} active`
-            : activeToolCount > 0
-              ? `${activeToolCount} active`
-              : `${toolExecutions.length} total`,
-      },
-      {
-        id: 'changes',
-        label: 'Agent Changes',
-        icon: <History size={14} />,
-      },
+      ...(hasThread ? [{ id: 'thread' as const, label: 'Conversation', icon: <MessageSquare size={14} /> }] : []),
+      ...(supportsAgentChanges
+        ? [
+            {
+              id: 'changes' as const,
+              label: 'Agent Changes',
+              icon: <History size={14} />,
+            },
+          ]
+        : []),
     ],
-    [activeSubagentCount, activeToolCount, toolExecutions.length],
+    [hasThread],
   );
 
+  // The conversation takes the panel whenever it leaves the main view.
+  const { setChatTab } = state;
+  useEffect(() => {
+    setChatTab(hasThread ? 'thread' : 'changes');
+  }, [hasThread, setChatTab]);
+
   const activeTab = chatPanelTabs.find((t) => t.id === state.chatTab) || chatPanelTabs[0];
+  // Nothing to show (a hosted chat in the main view): no column at all.
+  if (!activeTab) return null;
 
   // ── Render tab content ────────────────────────────────────────────
 
   const renderTabContent = () => {
-    switch (state.chatTab) {
-      case 'activity':
-        return (
-          <ActivityTab
-            toolExecutions={toolExecutions}
-            subagentRuns={subagentRuns}
-            resourceCounts={resourceCounts}
-            groupedByQuery={groupedByQuery}
-            maxQueryId={maxQueryId}
-            expandedQueries={state.expandedQueries}
-            expandedTools={state.expandedTools}
-            expandedSubagents={state.expandedSubagents}
-            activeToolId={state.activeToolId}
-            toolRefs={state.toolRefs}
-            toggleQueryGroup={state.toggleQueryGroup}
-            toggleToolExpansion={state.toggleToolExpansion}
-            toggleSubagentExpansion={state.toggleSubagentExpansion}
-            setActiveToolId={state.setActiveToolId}
-            setExpandedTools={state.setExpandedTools}
-            setExpandedQueries={state.setExpandedQueries}
-          />
-        );
+    switch (activeTab.id) {
+      case 'thread':
+        return <div className="context-thread">{chatProps?.threadContent}</div>;
       case 'changes':
         return <AgentChangesPanel />;
       default:
@@ -207,9 +123,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           {activeTab.icon}
           <h4>{activeTab.label}</h4>
         </div>
-        <div className="side-panel-header-actions">
-          <span className="tool-count">{activeTab.count}</span>
-        </div>
+        {activeTab.count && (
+          <div className="side-panel-header-actions">
+            <span className="tool-count">{activeTab.count}</span>
+          </div>
+        )}
       </div>
       <div className="side-panel-body">{renderTabContent()}</div>
     </>
@@ -222,9 +140,18 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         <div
           className="context-panel-resizer"
           onMouseDown={state.startResize}
+          onKeyDown={(e) => {
+            // The panel is docked right: ArrowLeft widens it, ArrowRight narrows it.
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            const step = e.shiftKey ? 50 : 10;
+            state.setPanelWidth(state.panelWidth + (e.key === 'ArrowLeft' ? step : -step));
+          }}
+          tabIndex={0}
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize context panel"
+          aria-valuenow={Math.round(state.panelWidth)}
         />
       )}
       {(isMobileLayout && state.panelCollapsed) || (isTabletLayout && state.panelCollapsed) ? null : (

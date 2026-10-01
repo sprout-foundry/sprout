@@ -3,6 +3,8 @@ package trace
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -814,8 +816,8 @@ func TestNewJSONLWriter_BadDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent directory, got nil")
 	}
-	if !strings.Contains(err.Error(), "no such file or directory") {
-		t.Errorf("expected 'no such file or directory' error, got: %v", err)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("expected a not-exist error, got: %v", err)
 	}
 	if w != nil {
 		t.Error("expected nil writer on error")
@@ -825,13 +827,15 @@ func TestNewJSONLWriter_BadDirectory(t *testing.T) {
 // --- NewTraceSession directory creation tests ---
 
 func TestNewTraceSession_MkdirFails(t *testing.T) {
-	// Create a temporary directory and make it read-only
-	parentDir := t.TempDir()
-	if err := os.Chmod(parentDir, 0555); err != nil {
-		t.Fatalf("failed to make parent directory read-only: %v", err)
+	// A regular file where the parent directory should be: mkdir fails on
+	// every OS and even as root, unlike a chmod 0555 directory (which
+	// Windows ignores).
+	parentDir := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(parentDir, nil, 0o600); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
 	}
 
-	// Attempt to create session in read-only directory
+	// Attempt to create session under the blocking file
 	s, err := NewTraceSession(parentDir, "provider", "model")
 	if err == nil {
 		t.Fatal("expected error for read-only directory")

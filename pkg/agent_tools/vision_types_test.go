@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestGetBaseName(t *testing.T) {
 		{
 			name: "Windows-style path (basic)",
 			path: "C:\\Users\\file.txt",
-			want: "C:\\Users\\file.txt", // filepath.Base on Unix doesn't handle backslashes as separators
+			want: windowsStyleBaseName(),
 		},
 	}
 
@@ -422,4 +423,13 @@ func TestUIElementSerialization(t *testing.T) {
 	if decoded.Issues != "Low contrast with background" {
 		t.Errorf("decoded.Issues = %v, want 'Low contrast with background'", decoded.Issues)
 	}
+}
+
+// windowsStyleBaseName is GetBaseName(`C:\Users\file.txt`): backslash is a
+// separator only on Windows, so elsewhere the whole string is one element.
+func windowsStyleBaseName() string {
+	if runtime.GOOS == "windows" {
+		return "file.txt"
+	}
+	return `C:\Users\file.txt`
 }

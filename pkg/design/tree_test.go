@@ -509,7 +509,7 @@ func TestValidateFileErrors(t *testing.T) {
 	})
 
 	t.Run("directory", func(t *testing.T) {
-		_, err := ValidateFile(root, "design/wireframes")
+		_, err := ValidateFile(root, "design/tokens")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "directory")
 	})

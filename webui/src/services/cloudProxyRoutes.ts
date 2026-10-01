@@ -38,6 +38,17 @@ export const SESSION_EXPIRED_EVENT = 'sprout:session-expired';
 let redirectScheduled = false;
 
 /**
+ * The sign-in URL that brings the browser back to this page (same project,
+ * same Home page). The query is re-encoded: the platform refuses a return
+ * path containing "://", which a hand-typed `?repo=https://…` has.
+ */
+export function signInReturningHere(): string {
+  const params = new URLSearchParams(window.location.search).toString();
+  const here = window.location.pathname + (params ? `?${params}` : '');
+  return `/login?return_to=${encodeURIComponent(here)}`;
+}
+
+/**
  * Dispatch the session-expired CustomEvent once and schedule a deferred
  * redirect to the login page. The 750ms delay gives toast/listeners time
  * to react before full-page navigation.
@@ -51,8 +62,7 @@ function notifySessionExpired(): void {
     // Defer redirect so event listeners (toast, analytics, etc.) can react
     // before full-page navigation.
     setTimeout(() => {
-      window.location.href =
-        '/login?return_to=' + encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = signInReturningHere();
     }, 750);
   }
 }

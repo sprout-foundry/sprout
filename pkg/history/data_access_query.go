@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -60,8 +59,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			continue
 		}
 
-		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
-		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+		safeFilename := SafeChangeFilename(metadata.Filename)
 
 		// Tier detection: a revision dir is "warm" when conversation.json
 		// has been dropped (the compaction policy's only transition
@@ -179,8 +177,7 @@ func GetAllChangesMetadata() ([]ChangeLog, error) {
 		// reading + base64-decoding. Store in OriginalCode/NewCode as
 		// non-empty sentinels so existing callers that check
 		// `OriginalCode != ""` for recoverability still work.
-		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
-		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+		safeFilename := SafeChangeFilename(metadata.Filename)
 
 		hasOriginal := fileExists(filepath.Join(changeDir, safeFilename+originalSuffix))
 		hasNew := fileExists(filepath.Join(changeDir, safeFilename+updatedSuffix))

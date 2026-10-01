@@ -499,3 +499,53 @@ describe('malformed bridge output', () => {
     expect(shell.listDir('/')).toEqual({ entries: [], error: 'undefined' });
   });
 });
+
+describe('listDir wire format', () => {
+  // cmd/wasm listDirFunc returns wasmshell.ListDirEntryJSON: a bare array of
+  // entries (JSON null for an empty directory) or {"error": "..."}.
+  function installWasmListDir(payload: string) {
+    (window as unknown as Record<string, unknown>).Go = function Go() {
+      return {
+        run: () => {
+          (window as unknown as Record<string, unknown>).SproutWasm = {
+            init: (_cfg?: string) => '',
+            executeCommand: (_input: string) => '{"stdout":"","stderr":"","exitCode":0}',
+            autoComplete: (_input: string) => '{"completions":[]}',
+            getCwd: () => '/',
+            changeDir: (_dir: string) => '{"cwd":"/"}',
+            writeFile: (_path: string, _content: string) => '',
+            readFile: (_path: string) => '{"content":""}',
+            listDir: (_path: string) => payload,
+            deleteFile: (_path: string) => '',
+          };
+        },
+        importObject: {},
+      };
+    };
+  }
+
+  it('reads the bare entry array the WASM export returns', async () => {
+    installWasmListDir(
+      '[{"name":"src","type":"dir","size":0,"mode":2147484141},{"name":"go.mod","type":"file","size":21,"mode":420}]',
+    );
+    const shell = await initWasmShell();
+    expect(shell.listDir('/')).toEqual({
+      entries: [
+        { name: 'src', type: 'dir', size: 0, mode: 2147484141 },
+        { name: 'go.mod', type: 'file', size: 21, mode: 420 },
+      ],
+    });
+  });
+
+  it('treats JSON null as an empty directory, not an error', async () => {
+    installWasmListDir('null');
+    const shell = await initWasmShell();
+    expect(shell.listDir('/empty')).toEqual({ entries: [] });
+  });
+
+  it('surfaces the error object', async () => {
+    installWasmListDir('{"error":"open /nope: file does not exist"}');
+    const shell = await initWasmShell();
+    expect(shell.listDir('/nope')).toEqual({ entries: [], error: 'open /nope: file does not exist' });
+  });
+});

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -178,7 +179,7 @@ func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
 		Type: "function",
 	}
 	toolCall.Function.Name = "open_file"
-	toolCall.Function.Arguments = `{"path":"` + filePath + `"}`
+	toolCall.Function.Arguments = `{"path":` + strconv.Quote(filePath) + `}`
 
 	result, err := agent.executeTool(toolCall)
 	if err != nil {
@@ -205,7 +206,7 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 
 	writeCall := api.ToolCall{ID: "call_guard_write", Type: "function"}
 	writeCall.Function.Name = "write_file"
-	writeCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{\"k\":1}"}`
+	writeCall.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"content":"{\"k\":1}"}`
 
 	_, err = agent.executeTool(writeCall)
 	if err != nil {
@@ -230,7 +231,7 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 
 	invalidCall := api.ToolCall{ID: "call_guard_write_invalid", Type: "function"}
 	invalidCall.Function.Name = "write_file"
-	invalidCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{invalid"}`
+	invalidCall.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"content":"{invalid"}`
 	_, err = agent.executeTool(invalidCall)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "invalid json") {
 		t.Fatalf("expected invalid JSON write_file to fail with invalid json error, got: %v", err)
@@ -245,7 +246,7 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 
 	editCall := api.ToolCall{ID: "call_guard_edit", Type: "function"}
 	editCall.Function.Name = "edit_file"
-	editCall.Function.Arguments = `{"path":"` + jsonPath + `","old_str":"1","new_str":"2"}`
+	editCall.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"old_str":"1","new_str":"2"}`
 
 	_, err = agent.executeTool(editCall)
 	if err != nil {
@@ -266,7 +267,7 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 
 	badEdit := api.ToolCall{ID: "call_guard_edit_invalid", Type: "function"}
 	badEdit.Function.Name = "edit_file"
-	badEdit.Function.Arguments = `{"path":"` + jsonPath + `","old_str":"2","new_str":"2}"}` // makes JSON invalid
+	badEdit.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"old_str":"2","new_str":"2}"}` // makes JSON invalid
 	_, err = agent.executeTool(badEdit)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "invalid json") {
 		t.Fatalf("expected edit_file invalid json mutation to fail, got: %v", err)
@@ -367,7 +368,7 @@ func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
 	// handlePatchStructuredFile itself, so use "patch_ops" here.
 	patchCall := api.ToolCall{ID: "call_patch_alias", Type: "function"}
 	patchCall.Function.Name = "patch_structured_file"
-	patchCall.Function.Arguments = `{"path":"` + jsonPath + `","patch_ops":[{"op":"add","path":"/items/0","value":"x"}]}`
+	patchCall.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"patch_ops":[{"op":"add","path":"/items/0","value":"x"}]}`
 
 	_, err = agent.executeTool(patchCall)
 	if err != nil {
@@ -401,7 +402,7 @@ func TestPatchStructuredFileAcceptsDataFallbackToWrite(t *testing.T) {
 
 	call := api.ToolCall{ID: "call_patch_data_fallback", Type: "function"}
 	call.Function.Name = "patch_structured_file"
-	call.Function.Arguments = `{"path":"` + jsonPath + `","format":"json","data":{"new":2}}`
+	call.Function.Arguments = `{"path":` + strconv.Quote(jsonPath) + `,"format":"json","data":{"new":2}}`
 
 	_, err = agent.executeTool(call)
 	if err != nil {

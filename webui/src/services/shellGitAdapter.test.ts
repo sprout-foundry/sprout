@@ -26,6 +26,7 @@ const mockBranch = vi.mocked(gitBranch);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockBranch.mockResolvedValue([{ name: 'master', current: true }]);
 });
 
 describe('git status', () => {
@@ -56,6 +57,29 @@ describe('git status', () => {
     });
     const r = await SHELL_GIT_SUBCOMMANDS.status(['-s']);
     expect(r.stdout.split('\n')[0]).toBe(' M x.py');
+  });
+
+  it('-s puts staged changes in the first column and marks untracked files', async () => {
+    mockStatus.mockResolvedValue({
+      staged: [{ path: 'a.go', status: 'modified', staged: true }],
+      unstaged: [],
+      untracked: [{ path: 'new.txt', status: 'new', staged: false }],
+    });
+    const r = await SHELL_GIT_SUBCOMMANDS.status(['-s']);
+    expect(r.stdout).toBe('M  a.go\n?? new.txt\n');
+  });
+
+  it('names the current branch and prints only non-empty sections', async () => {
+    mockStatus.mockResolvedValue({
+      staged: [],
+      unstaged: [{ path: 'README.md', status: 'modified', staged: false }],
+      untracked: [],
+    });
+    const r = await SHELL_GIT_SUBCOMMANDS.status([]);
+    expect(r.stdout).toMatch(/^On branch master\n/);
+    expect(r.stdout).toContain('modified:   README.md');
+    expect(r.stdout).not.toContain('Changes to be committed');
+    expect(r.stdout).not.toContain('Untracked files');
   });
 });
 

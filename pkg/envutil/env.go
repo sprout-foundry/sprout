@@ -39,11 +39,15 @@ func HasPrefix(name string) bool {
 	return strings.HasPrefix(name, "SPROUT_")
 }
 
-// homeDir resolves the user's home directory, preferring $HOME and
+// HomeDir resolves the user's home directory, preferring $HOME and
 // falling back to os.UserHomeDir(). Returns ("", error) if neither
 // yields a path. Every resolver in this package must call this so
 // that no resolver panics when $HOME is unset (WASM, minimal sandboxes).
-func homeDir() (string, error) {
+// Callers comparing against "home" must use this rather than
+// os.UserHomeDir: on Windows the latter reads %USERPROFILE%, which
+// diverges from $HOME under Git Bash/MSYS and from the config roots
+// derived here.
+func HomeDir() (string, error) {
 	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
 		return h, nil
 	}
@@ -73,7 +77,7 @@ func resolveRootPath(envVar, xdgVar, homeRelative string) (string, error) {
 	if xdg := strings.TrimSpace(os.Getenv(xdgVar)); xdg != "" {
 		return filepath.Join(xdg, "sprout"), nil
 	}
-	home, err := homeDir()
+	home, err := HomeDir()
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +108,7 @@ func ConfigDir() (string, error) {
 	if xdg := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdg != "" {
 		return ensureDir(filepath.Join(xdg, "sprout"), 0700)
 	}
-	home, err := homeDir()
+	home, err := HomeDir()
 	if err != nil {
 		return "", err
 	}

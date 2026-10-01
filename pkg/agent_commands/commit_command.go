@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ func (c *CommitCommand) parseFlags(args []string) []string {
 	var cleanArgs []string
 	for _, arg := range args {
 		switch arg {
-		case "--skip-prompt":
+		case "--yes", "-y", "--skip-prompt":
 			c.skipPrompt = true
 		case "--dry-run":
 			c.dryRun = true
@@ -111,6 +112,7 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Default behavior: use new interactive commit flow with flags
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	flow.SetUserInstructions(c.userInstructions)
+	flow.agentError = c.agentError
 	return flow.Execute()
 }
 
@@ -319,17 +321,14 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	cfg, err := configuration.LoadOrInitConfig(true)
 	if err != nil {
 		c.printf("%sFailed to load configuration: %v\n", console.GlyphWarning.Prefix(), err)
-		if chatAgent == nil {
-			if c.agentError != nil {
-				c.printf("%sUsing manual commit mode (AI agent unavailable: %v)", console.GlyphWarning.Prefix(), c.agentError)
-			} else {
-				c.println("Using manual commit mode (no AI agent available)")
-			}
-		}
-	} else {
-		commitProvider := cfg.GetCommitProvider()
-		commitModel := cfg.GetCommitModel()
-		c.printf("Using provider: %s, model: %s for commit message generation\n", commitProvider, commitModel)
+	}
+	switch {
+	case chatAgent == nil && c.agentError != nil:
+		c.printf("%sManual commit mode — AI agent unavailable: %v\n", console.GlyphWarning.Prefix(), c.agentError)
+	case chatAgent == nil:
+		c.println(console.GlyphWarning.Prefix() + "Manual commit mode — no AI agent available")
+	case cfg != nil && cfg.GetCommitProvider() != "":
+		c.printf("%sCommit message via %s · %s\n", console.GlyphInfo.Prefix(), cfg.GetCommitProvider(), cfg.GetCommitModel())
 	}
 
 	// Get staged diff
@@ -383,6 +382,9 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Retry loop for commit message generation (LLM if available, otherwise manual input)
 	for {
 		if client == nil {
+			if c.skipPrompt {
+				return errors.New("no AI provider available to generate a commit message, and --yes rules out typing one")
+			}
 			msg, aborted := c.readManualCommitMessage(reader, diffOutput)
 			if aborted {
 				return nil
@@ -459,7 +461,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 				return nil
 			}
 			if action == security.SecretRedact {
-				c.println(console.GlyphWarning.Prefix() + "Warning: commit proceeding but secrets were detected in staged files.")
+				c.println(console.GlyphWarning.Prefix() + "Committing with secrets detected in staged files (redacted from the message).")
 			}
 		}
 	}

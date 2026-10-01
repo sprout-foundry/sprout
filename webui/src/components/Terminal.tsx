@@ -27,8 +27,8 @@ import { createPortal } from 'react-dom';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
 import {
-  TERMINAL_HEIGHT_DEFAULT,
   TERMINAL_HEIGHT_STORAGE_KEY,
+  defaultTerminalHeight,
   parseTerminalHeight,
   clampTerminalHeight,
   FONT_SIZE_MIN,
@@ -48,12 +48,15 @@ interface TerminalProps {
   isConnected?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (expanded: boolean) => void;
+  /** Collapsed means gone, not a strip: for hosts where the terminal is occasional. */
+  hideWhenCollapsed?: boolean;
 }
 
 function Terminal({
   isConnected = true,
   isExpanded: externalIsExpanded = false,
   onToggleExpand,
+  hideWhenCollapsed = false,
 }: TerminalProps): JSX.Element {
   const getCollapsedHeight = useCallback(() => {
     if (typeof window === 'undefined') return 42;
@@ -64,7 +67,7 @@ function Terminal({
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
   const [terminalHeight, setTerminalHeight] = usePersistedNumber(
     TERMINAL_HEIGHT_STORAGE_KEY,
-    TERMINAL_HEIGHT_DEFAULT,
+    defaultTerminalHeight(),
     parseTerminalHeight,
     clampTerminalHeight,
   );
@@ -166,12 +169,13 @@ function Terminal({
     // top). The terminal portal (outside #root, real viewport) reads
     // this too — it wants the LOGICAL value for its wrapper height and
     // applies the factor itself.
-    const logical = isExpanded ? terminalHeight : collapsedHeight;
+    const collapsed = hideWhenCollapsed ? 0 : collapsedHeight;
+    const logical = isExpanded ? terminalHeight : collapsed;
     document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${logical}px`);
     return () => {
-      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
+      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsed}px`);
     };
-  }, [collapsedHeight, isExpanded, terminalHeight]);
+  }, [collapsedHeight, hideWhenCollapsed, isExpanded, terminalHeight]);
 
   // Responsive collapsed height
   useEffect(() => {
@@ -294,7 +298,7 @@ function Terminal({
   // and the app's reserved-height var accounts for it (see Terminal.css).
   return createPortal(
     <div
-      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}`}
+      className={`terminal-portal${isExpanded ? ' terminal-portal--expanded' : ''}${hideWhenCollapsed && !isExpanded ? ' terminal-portal--hidden' : ''}`}
       style={{ ['--terminal-height' as string]: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
     >
       <div
@@ -312,6 +316,18 @@ function Terminal({
           <div
             className="terminal-resize-handle"
             onPointerDown={handleVerticalResizeStart}
+            onKeyDown={(e) => {
+              // The terminal is docked at the bottom: ArrowUp makes it taller.
+              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+              e.preventDefault();
+              const step = e.shiftKey ? 50 : 10;
+              setTerminalHeight((h) => h + (e.key === 'ArrowUp' ? step : -step));
+            }}
+            tabIndex={0}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize terminal"
+            aria-valuenow={Math.round(terminalHeight)}
             title="Drag to resize terminal"
           />
         )}

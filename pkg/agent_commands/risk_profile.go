@@ -15,7 +15,9 @@ import (
 // the SP-058 shell-command gating profile mid-session. The CLI flag
 // --risk-profile sets the same field at startup; this command lets the
 // user adjust without restarting.
-type RiskProfileCommand struct{}
+type RiskProfileCommand struct {
+	outputSink
+}
 
 func (c *RiskProfileCommand) Name() string {
 	return "risk-profile"
@@ -62,7 +64,7 @@ func (c *RiskProfileCommand) Execute(args []string, chatAgent *agent.Agent) erro
 	case "clear", "none", "default-config":
 		chatAgent.SetRiskProfileOverride("")
 		active := chatAgent.GetActiveRiskProfile()
-		console.GlyphSuccess.Printf("Cleared risk-profile override; active profile is now %q", string(active))
+		console.GlyphSuccess.Fprintf(c.out(), "Cleared risk-profile override; active profile is now %q", string(active))
 		return nil
 	case "list", "show":
 		return c.show(chatAgent)
@@ -80,27 +82,27 @@ func (c *RiskProfileCommand) Execute(args []string, chatAgent *agent.Agent) erro
 	}
 
 	chatAgent.SetRiskProfileOverride(configuration.RiskProfile(first))
-	console.GlyphSuccess.Printf("Risk-profile override set to %q (session only — does not persist)", first)
+	console.GlyphSuccess.Fprintf(c.out(), "Risk-profile override set to %q (session only — does not persist)", first)
 	return nil
 }
 
 func (c *RiskProfileCommand) show(chatAgent *agent.Agent) error {
 	active := chatAgent.GetActiveRiskProfile()
-	console.GlyphInfo.Printf("Active risk profile: %q", string(active))
+	console.GlyphInfo.Fprintf(c.out(), "Active risk profile: %q", string(active))
 
 	cfg := chatAgent.GetConfig()
 	if cfg != nil && cfg.RiskProfile != "" {
-		fmt.Printf("   config.risk_profile: %q\n", cfg.RiskProfile)
+		c.printf("   config.risk_profile: %q\n", cfg.RiskProfile)
 	} else {
-		fmt.Println("   config.risk_profile: (unset — falls back to \"default\")")
+		c.println("   config.risk_profile: (unset — falls back to \"default\")")
 	}
-	fmt.Println("   Built-in profiles:")
+	c.println("   Built-in profiles:")
 	for _, name := range builtinProfileNames() {
 		marker := "  "
 		if name == string(active) {
 			marker = "* "
 		}
-		fmt.Printf("     %s%s\n", marker, name)
+		c.printf("     %s%s\n", marker, name)
 	}
 	if cfg != nil && len(cfg.RiskProfiles) > 0 {
 		userDefined := make([]string, 0, len(cfg.RiskProfiles))
@@ -108,13 +110,13 @@ func (c *RiskProfileCommand) show(chatAgent *agent.Agent) error {
 			userDefined = append(userDefined, k)
 		}
 		sort.Strings(userDefined)
-		fmt.Println("   User-defined profiles (from config.risk_profiles):")
+		c.println("   User-defined profiles (from config.risk_profiles):")
 		for _, name := range userDefined {
 			marker := "  "
 			if name == string(active) {
 				marker = "* "
 			}
-			fmt.Printf("     %s%s\n", marker, name)
+			c.printf("     %s%s\n", marker, name)
 		}
 	}
 	return nil

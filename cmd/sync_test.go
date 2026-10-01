@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -92,6 +93,9 @@ func TestSyncCmd_NotARepoIsReportable(t *testing.T) {
 }
 
 func TestSyncCmd_CatastrophicFailureErrorJSON(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores directory mode bits, so a 0000-mode dir stays readable")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root — 0000-mode dir would still be readable")
 	}

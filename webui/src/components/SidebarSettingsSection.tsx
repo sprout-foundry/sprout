@@ -5,8 +5,11 @@ import type { ChangeEvent } from 'react';
 import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
+import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
+import { usesPlatformGitHub } from '../services/platformGitHub';
+import EditorModelSection from './EditorModelSection';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
 import { getStoredUser } from '../services/githubService';
@@ -198,6 +201,14 @@ function CloudProviderModelSection({
   );
 }
 
+/**
+ * Browser workspaces served by the platform run the agent in WASM through the
+ * platform proxy, which routes by the account's editor model (managed, or the
+ * user's own key — EditorModelSection). Studio's native build keeps the local
+ * provider pickers: its shell serves BYOK providers itself.
+ */
+const PLATFORM_MANAGED_MODEL = isCloud && !NATIVE_FS_ENABLED;
+
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
   availableThemePacks: { id: string; name: string }[];
@@ -383,67 +394,85 @@ export default function SidebarSettingsSection({
             <option value="xlarge">Extra Large</option>
           </select>
         </div>
-        <div className="config-item">
-          <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
-          <select
-            id="hotkey-preset-select"
-            defaultValue=""
-            onChange={handleHotkeyPresetChange}
-            className="styled-select"
-          >
-            <option value="" disabled>
-              Choose a preset…
-            </option>
-            <option value="vscode">VS Code</option>
-            <option value="webstorm">WebStorm</option>
-            <option value="sprout">Sprout (Legacy)</option>
-          </select>
-        </div>
-        <div className="config-item settings-help-spaced-top">
-          <button
-            type="button"
-            className="settings-link-btn settings-link-btn--hotkeys"
-            onClick={() => {
-              // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
-              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
-            }}
-          >
-            <Keyboard size={14} />
-            Edit Keyboard Shortcuts (JSON)
-          </button>
-        </div>
+        {/* Presets and custom bindings are stored by the daemon; browser
+            mode uses the built-in shortcuts only. */}
+        {!isCloud && (
+          <>
+            <div className="config-item">
+              <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
+              <select
+                id="hotkey-preset-select"
+                defaultValue=""
+                onChange={handleHotkeyPresetChange}
+                className="styled-select"
+              >
+                <option value="" disabled>
+                  Choose a preset…
+                </option>
+                <option value="vscode">VS Code</option>
+                <option value="webstorm">WebStorm</option>
+                <option value="sprout">Sprout (Legacy)</option>
+              </select>
+            </div>
+            <div className="config-item settings-help-spaced-top">
+              <button
+                type="button"
+                className="settings-link-btn settings-link-btn--hotkeys"
+                onClick={() => {
+                  // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
+                  window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
+                }}
+              >
+                <Keyboard size={14} />
+                Edit Keyboard Shortcuts (JSON)
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── Cloud mode: simplified settings ──────────────────── */}
       {isCloud ? (
         <>
-          <div className="section">
-            <h4>Provider &amp; Model</h4>
-            <CloudProviderModelSection
-              selectedProvider={selectedProvider}
-              selectedModel={selectedModel}
-              providers={providers}
-              availableModels={availableModels}
-              isLoadingProviders={isLoadingProviders}
-              isConnected={isConnected}
-              onProviderChange={onProviderChange}
-              onModelChange={onModelChange}
-            />
-          </div>
-          <div className="section">
-            <h4>API Key</h4>
-            <p className="settings-section-desc">
-              Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely
-              on the server.
-            </p>
-            <CredentialsSettingsTab />
-          </div>
+          {PLATFORM_MANAGED_MODEL ? (
+            <div className="section">
+              <h4>Model</h4>
+              <EditorModelSection />
+            </div>
+          ) : (
+            <>
+              <div className="section">
+                <h4>Provider &amp; Model</h4>
+                <CloudProviderModelSection
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  providers={providers}
+                  availableModels={availableModels}
+                  isLoadingProviders={isLoadingProviders}
+                  isConnected={isConnected}
+                  onProviderChange={onProviderChange}
+                  onModelChange={onModelChange}
+                />
+              </div>
+              <div className="section">
+                <h4>API Key</h4>
+                <p className="settings-section-desc">
+                  Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored
+                  securely on the server.
+                </p>
+                <CredentialsSettingsTab />
+              </div>
+            </>
+          )}
           <div className="section">
             <h4>GitHub</h4>
-            <p className="settings-section-desc">
-              Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
-              agent push and pull on your behalf.
-            </p>
+            {/* Hosted, the account card below says it all. */}
+            {!usesPlatformGitHub() && (
+              <p className="settings-section-desc">
+                Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
+                agent push and pull on your behalf.
+              </p>
+            )}
             <GitHubAccountPanel user={gitHubUser} onSignedIn={setGitHubUser} onSignedOut={() => setGitHubUser(null)} />
           </div>
         </>

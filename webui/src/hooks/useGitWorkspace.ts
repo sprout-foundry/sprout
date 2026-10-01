@@ -5,8 +5,10 @@ import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
 import * as workspaceApi from '../services/api/workspaceApi';
 import { notificationBus } from '../services/notificationBus';
+import { GIT_REPO_CHANGED_EVENT } from '../services/workspaceClone';
 import { getWorkspaceCwd, subscribeWorkspaceCwd } from '../services/workspaceCwd';
 import type { SproutEvent } from '../types/events';
+import { changesWorkspaceFiles } from './workspaceFileEvents';
 import type {
   GitStatusData,
   FileSection,
@@ -203,6 +205,14 @@ export const useGitWorkspace = ({
   // newly targeted repo immediately.
   useEffect(() => subscribeWorkspaceCwd(() => loadGitStatus()), [loadGitStatus]);
 
+  // A clone swaps in a repository (branch, history, remote) without any file
+  // event the watchers below would see.
+  useEffect(() => {
+    const reload = () => loadGitStatus();
+    window.addEventListener(GIT_REPO_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(GIT_REPO_CHANGED_EVENT, reload);
+  }, [loadGitStatus]);
+
   // Fetch workspace root once on mount (workspace rarely changes during a session).
   useEffect(() => {
     workspaceApi
@@ -234,49 +244,7 @@ export const useGitWorkspace = ({
     };
 
     const handleGitRefreshEvent = (event: SproutEvent) => {
-      // 1) file_changed events from the agent's write/edit file tools
-      if (event?.type === 'file_changed') {
-        const eventData = event.data as Record<string, unknown> | undefined;
-        const action = String(eventData?.action || '');
-        // Skip git-level actions — those already trigger explicit refreshes
-        // via runGitAction → loadGitStatus.
-        if (action.startsWith('git_')) return;
-
-        // Only refresh on actual file content changes
-        if (!['write', 'edit', 'created', 'deleted'].includes(action)) return;
-
-        scheduleRefresh();
-        return;
-      }
-
-      // 2) file_content_changed events from the server-side fsnotify file
-      //    watcher (e.g., when a file changes on disk from a shell command
-      //    or external process, and the file is open in the editor).
-      if (event?.type === 'file_content_changed') {
-        scheduleRefresh();
-        return;
-      }
-
-      // 3) tool_end events from file-modifying tools — covers shell_command
-      //    (which can run sed/cp/mv/git checkout/etc.) and the structured
-      //    file tools that go through writeFileContent on the server.
-      if (event?.type === 'tool_end') {
-        const eventData = event.data as Record<string, unknown> | undefined;
-        if (eventData?.status === 'failed') return; // Don't refresh on failure
-
-        const toolName = String(eventData?.tool_name || '');
-        const fileModifyingTools = [
-          'shell_command',
-          'write_file',
-          'edit_file',
-          'write_structured_file',
-          'patch_structured_file',
-        ];
-        if (!fileModifyingTools.includes(toolName)) return;
-
-        scheduleRefresh();
-        return;
-      }
+      if (changesWorkspaceFiles(event)) scheduleRefresh();
     };
 
     events.onEvent(handleGitRefreshEvent);

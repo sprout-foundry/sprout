@@ -304,7 +304,7 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	}
 
 	// Publish file change event
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "write", string(content)))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged(canonicalPath, "write", string(content)))
 
 	// Stat the file to get actual filesystem mtime for the client
 	modTime := int64(0)

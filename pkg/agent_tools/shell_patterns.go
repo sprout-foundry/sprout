@@ -301,6 +301,9 @@ func isDangerousPattern(cmd string) bool {
 			return true
 		}
 	}
+	if isWindowsDiskDestruction(evalCmd) {
+		return true
+	}
 
 	// Check for workspace commands targeting system directories.
 	// This catches cp/mv/chmod/etc. that modify files in /etc/, /usr/, etc.
@@ -429,5 +432,5 @@ func isCautionPattern(cmd string) bool {
 			return true
 		}
 	}
-	return false
+	return isWindowsDeletion(cmdLower)
 }

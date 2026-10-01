@@ -2,7 +2,6 @@
 package credentials
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -159,7 +158,7 @@ func AtomicModify(fn func(Store) error) error {
 		return err
 	}
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, false, 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock for atomic modify: %w", err)
 	}
@@ -191,7 +190,7 @@ func AtomicModifyForDir(configDir string, fn func(Store) error) error {
 		return err
 	}
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, false, 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock for atomic modify: %w", err)
 	}
@@ -242,7 +241,7 @@ func Load() (Store, error) {
 	// Acquire shared lock for reading (allows concurrent reads)
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryRLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, true, 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire lock for load: %w", err)
 	}
@@ -300,7 +299,7 @@ func LoadFromDir(configDir string) (Store, error) {
 	// Acquire shared lock for reading (allows concurrent reads)
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryRLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, true, 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire lock for load: %w", err)
 	}
@@ -378,7 +377,7 @@ func Save(store Store) error {
 	// Acquire exclusive lock for writing
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, false, 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock for save: %w", err)
 	}
@@ -416,7 +415,7 @@ func SaveToDir(store Store, configDir string) error {
 	// Acquire exclusive lock for writing
 	lockPath := path + ".lock"
 	fileLock := flock.New(lockPath)
-	locked, err := fileLock.TryLockContext(context.Background(), 15*time.Second)
+	locked, err := tryLock(fileLock, false, 15*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock for save: %w", err)
 	}

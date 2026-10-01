@@ -158,7 +158,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 			continue
 		}
 
-		n, err := os.Stdin.Read(buf)
+		n, err := stdinRead(buf)
 
 		// Handle non-blocking read errors
 		if err != nil {

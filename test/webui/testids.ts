@@ -126,8 +126,6 @@ const TESTIDS = {
   "context-panel": "context-panel",
   "context-panel-collapse": "context-panel-collapse",
   "context-panel-tab": "context-panel-tab",
-  "context-panel-subagents": "context-panel-subagents",
-  "context-panel-activity": "context-panel-activity",
   "context-panel-changes": "context-panel-changes",
   "context-panel-tasks": "context-panel-tasks",
 
@@ -248,6 +246,19 @@ const TESTIDS = {
   // GitHub account / repo picker (authenticated clone)
   "gh-account-card": "gh-account-card",
   "gh-signout-btn": "gh-signout-btn",
+  "home-nav": "home-nav",
+  "platform-home": "platform-home",
+  "phone-tab-bar": "phone-tab-bar",
+  "header-search": "header-search",
+  "project-nav": "project-nav",
+  "project-rail": "project-rail",
+  "chat-open-repo": "chat-open-repo",
+  "new-project-dialog": "new-project-dialog",
+  "open-repo-input": "open-repo-input",
+  "open-repo-submit": "open-repo-submit",
+  "header-credits-chip": "header-credits-chip",
+  "platform-gh-card": "platform-gh-card",
+  "platform-gh-manage": "platform-gh-manage",
   "gh-signin-form": "gh-signin-form",
   "gh-signin-input": "gh-signin-input",
   "gh-signin-submit": "gh-signin-submit",
@@ -264,6 +275,7 @@ const TESTIDS = {
   "gh-picker-close": "gh-picker-close",
   "gh-picker-search": "gh-picker-search",
   "gh-picker-list": "gh-picker-list",
+  "gh-picker-open-typed": "gh-picker-open-typed",
   "gh-picker-loading": "gh-picker-loading",
   "gh-picker-empty": "gh-picker-empty",
   "gh-picker-clone-error": "gh-picker-clone-error",
@@ -283,6 +295,7 @@ const TESTIDS = {
   // Notifications
   "notification-center": "notification-center",
   "notification-center-mark-all-read": "notification-center-mark-all-read",
+  "notification-history": "notification-history",
 
   // Shell approval
   "shell-approval-accept-all": "shell-approval-accept-all",
@@ -299,6 +312,8 @@ const TESTIDS = {
   "escalation-toast-cloud-task-status": "escalation-toast-cloud-task-status",
   "escalation-toast-cloud-task-link": "escalation-toast-cloud-task-link",
   "escalation-toast-cloud-task-error": "escalation-toast-cloud-task-error",
+  "escalation-toast-start-workspace": "escalation-toast-start-workspace",
+  "escalation-toast-workspace-error": "escalation-toast-workspace-error",
 
   // Escalation toast, ETH-2 txn action (run in the cloud container)
   "escalation-toast-txn": "escalation-toast-txn",
@@ -314,6 +329,7 @@ const TESTIDS = {
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
   // select is the single surface showing the cwd (no duplication).
   "workspace-cwd-bar": "workspace-cwd-bar",
+  "editor-model-section": "editor-model-section",
   "workspace-cwd-select": "workspace-cwd-select",
   "workspace-add-repo-btn": "workspace-add-repo-btn",
 

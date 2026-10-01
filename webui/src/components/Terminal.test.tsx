@@ -3,6 +3,7 @@
 import { act, forwardRef, useImperativeHandle } from 'react';
 import { createRoot } from 'react-dom/client';
 import Terminal, { nextActiveAfterClose } from './Terminal';
+import { defaultTerminalHeight } from './terminalPref';
 
 // ---------------------------------------------------------------------------
 // Mock TerminalPane — forwardRef component with imperative handle { clear, focus }
@@ -1044,13 +1045,13 @@ describe('Terminal height persistence', () => {
     document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
-  it('initializes with default height (400px) when localStorage is empty', () => {
+  it('initializes with the viewport-aware default height when localStorage is empty', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
 
     const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
-    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe(`${defaultTerminalHeight()}px`);
 
     // localStorage should NOT have been written just from mounting
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
@@ -1078,7 +1079,7 @@ describe('Terminal height persistence', () => {
     expect(portal.style.getPropertyValue('--terminal-height')).toBe('120px');
   });
 
-  it('clamps persisted invalid value to default (400px)', () => {
+  it('clamps persisted invalid value to the default height', () => {
     localStorage.setItem(STORAGE_KEY, 'not-a-number');
 
     const view = renderTerminal({ isExpanded: true });
@@ -1086,7 +1087,7 @@ describe('Terminal height persistence', () => {
     root = view.root;
 
     const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
-    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe(`${defaultTerminalHeight()}px`);
   });
 
   it('persists height to localStorage after resize drag completes', () => {
@@ -1105,7 +1106,7 @@ describe('Terminal height persistence', () => {
 
     // Verify initial height
     const portal = document.body.querySelector('.terminal-portal') as HTMLElement;
-    expect(portal.style.getPropertyValue('--terminal-height')).toBe('400px');
+    expect(portal.style.getPropertyValue('--terminal-height')).toBe(`${defaultTerminalHeight()}px`);
 
     // Simulate pointerdown on resize handle and immediately pointerup
     // (pointer events: the handle is touch-enabled via pointer capture).
@@ -1127,7 +1128,7 @@ describe('Terminal height persistence', () => {
     });
 
     // After drag completes, height should be persisted
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('400');
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(String(defaultTerminalHeight()));
   });
 
   it('sets correct CSS variable when expanded with persisted height', () => {

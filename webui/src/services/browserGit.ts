@@ -11,6 +11,8 @@
 import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
+import { generateUnifiedDiff } from '../utils/simpleDiff';
+import { gitCorsProxy } from './gitCorsProxy';
 
 const FS_NAME = 'sprout-git';
 const REPO_DIR = '/repo';
@@ -37,15 +39,38 @@ export interface BrowserGitConfig {
 
 let config: BrowserGitConfig | null = null;
 
+// Resolves once the app wires the VFS bridge; boot-time work (the ?repo=
+// deep link) starts before that and waits on it.
+let markConfigured: () => void = () => undefined;
+let configured = new Promise<void>((resolve) => {
+  markConfigured = resolve;
+});
+
 export function configureBrowserGit(cfg: BrowserGitConfig) {
   config = cfg;
   repoInitialized = false;
+  markConfigured();
+}
+
+/** Wait for configureBrowserGit, failing after timeoutMs. */
+export function whenBrowserGitConfigured(timeoutMs = 30000): Promise<void> {
+  if (config) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('browser git was not configured in time')), timeoutMs);
+    void configured.then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 /** Test-only: restore the pre-bootstrap (never-configured) state. */
 export function __resetBrowserGitForTest(): void {
   config = null;
   repoInitialized = false;
+  configured = new Promise<void>((resolve) => {
+    markConfigured = resolve;
+  });
 }
 
 /**
@@ -84,10 +109,15 @@ function emptyGitStatus() {
 
 async function ensureDir(path: string) {
   const fs = getFs().promises;
-  try {
-    await fs.mkdir(path);
-  } catch {
-    // best-effort: may already exist.
+  // lightning-fs mkdir creates one level: make each ancestor in turn, or a
+  // file two folders deep under a new folder fails with ENOENT.
+  const parts = path.split('/').filter(Boolean);
+  for (let i = 1; i <= parts.length; i++) {
+    try {
+      await fs.mkdir(`/${parts.slice(0, i).join('/')}`);
+    } catch {
+      // best-effort: may already exist.
+    }
   }
 }
 
@@ -188,11 +218,17 @@ async function syncGitFsToVfs() {
     }
   }
   await config.writeVfsFiles(files);
+  return files.length;
+}
+
+/** GitHub's git endpoints take a token as Basic auth, not Bearer. */
+function gitHubTokenAuth(token: string): string {
+  return `Basic ${btoa(`x-access-token:${token}`)}`;
 }
 
 function getAuth() {
   if (config?.token) {
-    return { headers: { Authorization: `Bearer ${config.token}` } };
+    return { headers: { Authorization: gitHubTokenAuth(config.token) } };
   }
   return undefined;
 }
@@ -368,8 +404,103 @@ export async function gitDiff(opts?: { path?: string; cached?: boolean }) {
   return changes;
 }
 
+/**
+ * Working-tree diff for one file against HEAD, in the GitDiffResponse shape
+ * the diff view renders (text diff plus both full versions for the merge
+ * view). Browser git has no index distinct from the working tree, so every
+ * change is reported as unstaged.
+ */
+export async function gitFileDiff(path: string) {
+  await ensureInitialized();
+  await syncVfsToGitFs();
+  const fs = getFs().promises;
+  const rel = path
+    .replace(/^\/workspace\//, '')
+    .replace(/^\/+/, '')
+    .replace(/^repo\//, '');
+
+  let original = '';
+  try {
+    const head = await git.resolveRef({ fs, dir: REPO_DIR, ref: 'HEAD' });
+    const { blob } = await git.readBlob({ fs, dir: REPO_DIR, oid: head, filepath: rel });
+    original = new TextDecoder().decode(blob);
+  } catch {
+    // New file, or no commits yet: the HEAD side is empty.
+  }
+  let modified = '';
+  try {
+    modified = String(await fs.readFile(`${REPO_DIR}/${rel}`, 'utf8'));
+  } catch {
+    // Deleted in the working tree: the new side is empty.
+  }
+
+  const body = generateUnifiedDiff(original, modified, `a/${rel}`, `b/${rel}`);
+  let diff = '';
+  if (body) {
+    // generateUnifiedDiff lists the whole file after its ---/+++ headers;
+    // present that as one hunk so the diff parser gets line numbers.
+    const lines = body.split('\n');
+    const fileHeaders = lines.slice(0, 2).join('\n');
+    const hunkBody = lines.slice(2).join('\n');
+    const oldLen = original === '' ? 0 : original.split('\n').length;
+    const newLen = modified === '' ? 0 : modified.split('\n').length;
+    diff =
+      `diff --git a/${rel} b/${rel}\n${fileHeaders}\n` +
+      `@@ -${oldLen ? 1 : 0},${oldLen} +${newLen ? 1 : 0},${newLen} @@\n${hunkBody}`;
+  }
+  return {
+    message: 'success',
+    path: rel,
+    has_staged: false,
+    has_unstaged: diff !== '',
+    staged_diff: '',
+    unstaged_diff: diff,
+    diff,
+    original_content: original,
+    modified_content: modified,
+  };
+}
+
+/** The browser repository's origin URL, or null when there is no repository or remote. */
+export async function gitOriginUrl(): Promise<string | null> {
+  try {
+    const remotes = await git.listRemotes({ fs: getFs().promises, dir: REPO_DIR });
+    return remotes.find((r) => r.remote === 'origin')?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Put the repository's files back into the VFS where they are missing,
+ * leaving every file already there (including unsaved-to-git edits) alone.
+ * Returns how many files were written.
+ */
+export async function restoreGitWorkingTree(): Promise<number> {
+  if (!config) throw new Error('browserGit not configured');
+  const present = new Set((await config.readVfsFiles()).map((f) => f.path));
+  const files: Array<{ path: string; content: string }> = [];
+  for (const relPath of await readdirRecursive(REPO_DIR)) {
+    if (relPath.startsWith('.git') || present.has(relPath)) continue;
+    try {
+      const content = await getFs().promises.readFile(`${REPO_DIR}/${relPath}`, 'utf8');
+      files.push({ path: relPath, content: String(content) });
+    } catch {
+      // best-effort: skip binary/unreadable files.
+    }
+  }
+  if (files.length > 0) await config.writeVfsFiles(files);
+  return files.length;
+}
+
 export async function gitClone(url: string, opts?: { token?: string }) {
   const fs = getFs().promises;
+  // The previous repository's files leave the workspace with it, so two
+  // repositories never mix in one tree.
+  const previousFiles = (await readdirRecursive(REPO_DIR).catch(() => [] as string[])).filter(
+    (p) => !p.startsWith('.git'),
+  );
+  if (previousFiles.length > 0) await config?.deleteVfsFiles?.(previousFiles);
   // Clear existing repo contents
   try {
     const existing = await readdirRecursive(REPO_DIR);
@@ -390,11 +521,12 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   // isomorphic-git as a request header — it is never stored or logged here.
   const headers: Record<string, string> = { ...(getAuth()?.headers ?? {}) };
   if (opts?.token) {
-    headers.Authorization = `Bearer ${opts.token}`;
+    headers.Authorization = gitHubTokenAuth(opts.token);
   }
   await git.clone({
     fs,
     http,
+    corsProxy: gitCorsProxy(),
     dir: REPO_DIR,
     url,
     depth: 1,
@@ -402,21 +534,98 @@ export async function gitClone(url: string, opts?: { token?: string }) {
     headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
   repoInitialized = true;
-  await syncGitFsToVfs();
-  return { message: 'ok', url };
+  const files = await syncGitFsToVfs();
+  let branch: string | null = null;
+  try {
+    branch = (await git.currentBranch({ fs, dir: REPO_DIR })) ?? null;
+  } catch {
+    // best-effort: detached HEAD reports no branch.
+  }
+  return { message: 'ok', url, branch, files };
 }
 
-export async function gitPush(remote = 'origin', branch = 'main') {
+export async function gitPush(remote = 'origin', branch?: string) {
   await ensureInitialized();
-  await git.push({
-    fs: getFs().promises,
-    http,
-    dir: REPO_DIR,
-    remote,
-    ref: branch,
-    headers: getAuth()?.headers,
-  });
+  const fs = getFs().promises;
+  const remotes = await git.listRemotes({ fs, dir: REPO_DIR });
+  if (!remotes.some((r) => r.remote === remote)) {
+    throw new Error(
+      `This repository has no "${remote}" remote to push to. Add the repository from GitHub (Files › Add repository) to push.`,
+    );
+  }
+  const ref = branch || (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
+  try {
+    await git.push({
+      fs,
+      http,
+      corsProxy: gitCorsProxy(),
+      dir: REPO_DIR,
+      remote,
+      ref,
+      headers: getAuth()?.headers,
+    });
+  } catch (err) {
+    throw new Error(describePushError(err));
+  }
   return { message: 'ok', pushed: true };
+}
+
+/** Plain-language reason for a failed push; GitHub's auth failures surface as HTTP 401/403. */
+function describePushError(err: unknown): string {
+  const status = (err as { data?: { statusCode?: number } })?.data?.statusCode;
+  if (status === 401 || status === 403) {
+    return 'GitHub rejected the push. Connect a GitHub account with write access to this repository (Settings › GitHub), then try again.';
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  if (/not a simple fast-forward|rejected/i.test(message)) {
+    return "The remote has commits you don't have yet. Pull is not available in the browser; run the push from a cloud container instead.";
+  }
+  return `Push failed: ${message}`;
+}
+
+/**
+ * Fast-forward the current branch from its remote. Only a clean working tree
+ * is pulled, so no local edit can be overwritten; a diverged branch is
+ * reported rather than merged.
+ */
+export async function gitPull() {
+  const status = await gitStatus();
+  if (status.staged.length > 0 || status.unstaged.length > 0) {
+    throw new Error('Commit or undo your changes before pulling — pull only updates a clean working tree.');
+  }
+  const fs = getFs().promises;
+  const ref = (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
+  const before = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  try {
+    await git.fastForward({
+      fs,
+      http,
+      corsProxy: gitCorsProxy(),
+      dir: REPO_DIR,
+      ref,
+      singleBranch: true,
+      headers: getAuth()?.headers,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/fast-?forward/i.test(message)) {
+      throw new Error('Your branch and the remote have diverged; merging is not available in the browser.');
+    }
+    throw new Error(`Pull failed: ${message}`);
+  }
+  await syncGitFsToVfs();
+  const after = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  const removed = [...before].filter((p) => !after.has(p));
+  if (removed.length > 0) await config?.deleteVfsFiles?.(removed);
+  return { message: 'ok', pulled: true };
+}
+
+export async function gitCreateBranch(name: string) {
+  await ensureInitialized();
+  const branch = (name ?? '').trim();
+  if (!branch) throw new Error('Enter a branch name.');
+  await git.branch({ fs: getFs().promises, dir: REPO_DIR, ref: branch, checkout: true });
+  return { message: 'ok', branch };
 }
 
 export async function gitInit() {
@@ -440,7 +649,6 @@ export const BROWSER_GIT_UNSUPPORTED_OPS: ReadonlySet<string> = new Set([
   'unstage-all',
   'reset',
   'discard',
-  'pull',
   'revert',
   'commit-message',
   'pull-request',
@@ -524,8 +732,22 @@ export async function executeGitOp(
       return gitStageAll();
     case 'commit':
       return gitCommit((body?.message as string) || 'commit');
-    case 'log':
-      return gitLog(Number(body?.count ?? 50));
+    case 'log': {
+      // HTTP surface: GitLogResponse. The UI pages with ?limit=&offset=;
+      // shell consumers keep calling gitLog() for the bare list.
+      const limit = Math.max(1, Number(query?.limit ?? body?.count ?? 50));
+      const offset = Math.max(0, Number(query?.offset ?? 0));
+      const all = await gitLog(offset + limit + 1);
+      const page = all.slice(offset, offset + limit);
+      return {
+        message: 'success',
+        commits: page.map((c) => ({ ...c, short_hash: c.hash.slice(0, 7) })),
+        offset,
+        limit,
+        // One extra commit was fetched to tell whether another page exists.
+        total: all.length > offset + limit ? offset + limit + 1 : all.length,
+      };
+    }
     case 'branch':
     case 'branches': {
       // Boot-time guard (matches the 'status' case above): before browser git
@@ -543,8 +765,13 @@ export async function executeGitOp(
     }
     case 'checkout':
       return gitCheckout((body?.branch as string) || (body?.name as string));
+    case 'branch/create':
+      return gitCreateBranch(body?.name as string);
     case 'diff':
-      return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
+      // HTTP surface: GitDiffResponse for one file (the panel always asks per
+      // path); shell consumers keep using gitDiff() for the change list.
+      if (query?.path) return gitFileDiff(query.path);
+      return gitDiff({ cached: query?.cached === 'true' });
     case 'push':
       return gitPush(body?.remote as string, body?.branch as string);
     case 'clone':
@@ -567,7 +794,7 @@ export async function executeGitOp(
     case 'discard':
       throw new Error('discard is not yet supported in browser mode');
     case 'pull':
-      throw new Error('pull is not yet supported in browser mode');
+      return gitPull();
     case 'revert':
       throw new Error('revert is not yet supported in browser mode');
     case 'commit-message':

@@ -31,11 +31,7 @@ var (
 
 func getEmbeddingManager() (*embedding.EmbeddingManager, error) {
 	embedMgrOnce.Do(func() {
-		cwd, err := os.Getwd()
-		if err != nil {
-			embedMgrErr = err
-			return
-		}
+		cwd := workspaceRoot
 		cfg := &configuration.EmbeddingIndexConfig{
 			MaxResults: 10,
 		}

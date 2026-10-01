@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -308,6 +309,9 @@ func isSummarySystemPathPrefix(p string) bool {
 	if p == "" {
 		return false
 	}
+	if runtime.GOOS == "windows" {
+		p = strings.ToLower(p)
+	}
 	for _, prefix := range summarySystemPathPrefixList() {
 		if p == prefix {
 			return true
@@ -317,27 +321,4 @@ func isSummarySystemPathPrefix(p string) bool {
 		}
 	}
 	return false
-}
-
-func summarySystemPathPrefixList() []string {
-	return []string{
-		"/etc",
-		"/usr",
-		"/var",
-		"/bin",
-		"/sbin",
-		"/boot",
-		"/proc",
-		"/sys",
-		"/dev",
-		"/lib",
-		"/lib64",
-		"/opt",
-		"/root",
-		"/System",
-		"/Library",
-		"/private/etc",
-		"/private/var",
-		"/Applications",
-	}
 }

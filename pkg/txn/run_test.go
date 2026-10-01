@@ -11,12 +11,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // RunCommand tests. The shell is /bin/sh (or $SHELL when absolute), so the
 // commands below stick to POSIX sh.
 
 func TestRunCommand_ExitCodeZero(t *testing.T) {
+	requireShell(t)
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{Command: "echo hello"})
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
@@ -36,6 +39,7 @@ func TestRunCommand_ExitCodeZero(t *testing.T) {
 }
 
 func TestRunCommand_StreamsCapturedSeparately(t *testing.T) {
+	requireShell(t)
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{
 		Command: "echo to-out; echo to-err 1>&2",
 	})
@@ -51,6 +55,7 @@ func TestRunCommand_StreamsCapturedSeparately(t *testing.T) {
 }
 
 func TestRunCommand_NonZeroExitCode(t *testing.T) {
+	requireShell(t)
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{Command: "exit 42"})
 	if err != nil {
 		t.Fatalf("a non-zero exit is reportable, not an error: %v", err)
@@ -61,6 +66,7 @@ func TestRunCommand_NonZeroExitCode(t *testing.T) {
 }
 
 func TestRunCommand_CommandNotFoundIsReportedNotErrored(t *testing.T) {
+	requireShell(t)
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{Command: "definitely-not-a-command-xyz"})
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
@@ -75,8 +81,9 @@ func TestRunCommand_CommandNotFoundIsReportedNotErrored(t *testing.T) {
 }
 
 func TestRunCommand_WorkdirIsCwd(t *testing.T) {
+	requireShell(t)
 	dir := t.TempDir()
-	result, err := RunCommand(context.Background(), dir, RunRequest{Command: "pwd"})
+	result, err := RunCommand(context.Background(), dir, RunRequest{Command: pwdCommand()})
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
 	}
@@ -84,18 +91,19 @@ func TestRunCommand_WorkdirIsCwd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(result.Stdout) != want {
+	if filepath.FromSlash(strings.TrimSpace(result.Stdout)) != want {
 		t.Fatalf("pwd = %q, want %q", result.Stdout, want)
 	}
 }
 
 func TestRunCommand_RelativeWorkdirConfinedToRoot(t *testing.T) {
+	requireShell(t)
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	result, err := RunCommand(context.Background(), dir, RunRequest{
-		Command: "pwd",
+		Command: pwdCommand(),
 		Workdir: "sub",
 	})
 	if err != nil {
@@ -107,6 +115,7 @@ func TestRunCommand_RelativeWorkdirConfinedToRoot(t *testing.T) {
 }
 
 func TestRunCommand_AbsoluteWorkdirRefused(t *testing.T) {
+	requireShell(t)
 	if _, err := RunCommand(context.Background(), t.TempDir(), RunRequest{
 		Command: "pwd",
 		Workdir: "/etc",
@@ -116,6 +125,7 @@ func TestRunCommand_AbsoluteWorkdirRefused(t *testing.T) {
 }
 
 func TestRunCommand_WorkdirTraversalRefused(t *testing.T) {
+	requireShell(t)
 	if _, err := RunCommand(context.Background(), t.TempDir(), RunRequest{
 		Command: "pwd",
 		Workdir: "../elsewhere",
@@ -125,6 +135,7 @@ func TestRunCommand_WorkdirTraversalRefused(t *testing.T) {
 }
 
 func TestRunCommand_MissingWorkdirTargetIsReportable(t *testing.T) {
+	requireShell(t)
 	dir := t.TempDir()
 	result, err := RunCommand(context.Background(), dir, RunRequest{
 		Command: "pwd",
@@ -142,6 +153,7 @@ func TestRunCommand_MissingWorkdirTargetIsReportable(t *testing.T) {
 }
 
 func TestRunCommand_TimeoutKillsAndReports124(t *testing.T) {
+	requireShell(t)
 	started := time.Now()
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{
 		Command:        "sleep 30",
@@ -163,9 +175,7 @@ func TestRunCommand_TimeoutKillsAndReports124(t *testing.T) {
 }
 
 func TestRunCommand_TimeoutKillsWholeProcessGroup(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("no process groups on Windows")
-	}
+	requireShell(t)
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "child-lived")
 	script := fmt.Sprintf(
@@ -173,7 +183,7 @@ func TestRunCommand_TimeoutKillsWholeProcessGroup(t *testing.T) {
 		// after the shell is gone. If the GROUP is killed (not just the
 		// shell), the marker never appears.
 		"sh -c 'sleep 2; touch %s' & sleep 30",
-		marker)
+		filepath.ToSlash(marker))
 	result, err := RunCommand(context.Background(), dir, RunRequest{Command: script, TimeoutSeconds: 1})
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
@@ -190,6 +200,7 @@ func TestRunCommand_TimeoutKillsWholeProcessGroup(t *testing.T) {
 }
 
 func TestRunCommand_TimeoutDefaultsAndHardCap(t *testing.T) {
+	requireShell(t)
 	if got := normalizeTimeout(0); got != DefaultTimeoutSeconds*time.Second {
 		t.Fatalf("normalizeTimeout(0) = %v, want the 600s default", got)
 	}
@@ -205,9 +216,7 @@ func TestRunCommand_TimeoutDefaultsAndHardCap(t *testing.T) {
 }
 
 func TestRunCommand_TruncationKeepsTail(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("relies on /bin/sh tooling")
-	}
+	requireShell(t)
 	dir := t.TempDir()
 	// Number the lines so the retained tail is identifiable.
 	result, err := RunCommand(context.Background(), dir, RunRequest{
@@ -254,6 +263,7 @@ func TestRollingBuffer_Table(t *testing.T) {
 }
 
 func TestRunCommand_EmptyCommand(t *testing.T) {
+	requireShell(t)
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{Command: ""})
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
@@ -265,6 +275,7 @@ func TestRunCommand_EmptyCommand(t *testing.T) {
 }
 
 func TestRunCommand_InheritsEnvironment(t *testing.T) {
+	requireShell(t)
 	t.Setenv("SPROUT_TXN_TEST_VAR", "inherited")
 	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{
 		Command: "printf %s \"$SPROUT_TXN_TEST_VAR\"",
@@ -275,4 +286,22 @@ func TestRunCommand_InheritsEnvironment(t *testing.T) {
 	if result.Stdout != "inherited" {
 		t.Fatalf("stdout = %q, want the inherited env value", result.Stdout)
 	}
+}
+
+// requireShell skips on a Windows machine without Git for Windows: the
+// commands above are POSIX sh, and RunCommand falls back to cmd.exe there.
+func requireShell(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" && shellexec.Path() == "" {
+		t.Skip("no POSIX shell (Git for Windows bash) installed")
+	}
+}
+
+// pwdCommand prints the working directory in the host's native form: Git
+// Bash's plain pwd prints the MSYS form (/c/Users/...).
+func pwdCommand() string {
+	if runtime.GOOS == "windows" {
+		return "pwd -W"
+	}
+	return "pwd"
 }

@@ -60,7 +60,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	console.GlyphShell.Fprintf(os.Stdout, "Executing: %s", command)
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		console.GlyphError.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 

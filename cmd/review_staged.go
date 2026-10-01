@@ -18,6 +18,7 @@ import (
 
 var (
 	reviewStagedModel      string
+	reviewStagedProvider   string
 	reviewStagedSkipPrompt bool // Not strictly necessary for review, but consistent with other commands
 )
 
@@ -26,27 +27,24 @@ var reviewStagedCmd = &cobra.Command{
 	Short: "Perform an AI-powered code review on staged Git changes",
 	Long: `This command uses an LLM to review your currently staged Git changes.
 It provides feedback on code quality, potential issues, and suggestions for improvement.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := utils.GetLogger(reviewStagedSkipPrompt)
 
 		cfg, err := configuration.LoadOrInitConfig(reviewStagedSkipPrompt)
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to load or initialize config: %w", err))
-			return
+			return fmt.Errorf("failed to load or initialize config: %w", err)
 		}
 
 		// Override model if specified by flag
 		var customAgentClient api.ClientInterface
-		if reviewStagedModel != "" {
-			clientType, resolvedModel, err := configuration.ResolveProviderModel(cfg, "", reviewStagedModel)
+		if reviewStagedModel != "" || reviewStagedProvider != "" {
+			clientType, resolvedModel, err := configuration.ResolveProviderModel(cfg, reviewStagedProvider, reviewStagedModel)
 			if err != nil {
-				logger.LogError(fmt.Errorf("failed to resolve provider/model from '%s': %w", reviewStagedModel, err))
-				return
+				return fmt.Errorf("failed to resolve provider/model from '%s': %w", reviewStagedModel, err)
 			}
 			customAgentClient, err = factory.CreateProviderClient(clientType, resolvedModel)
 			if err != nil {
-				logger.LogError(fmt.Errorf("failed to create agent client with provider '%s' model '%s': %w", clientType, resolvedModel, err))
-				return
+				return fmt.Errorf("failed to create agent client with provider '%s' model '%s': %w", clientType, resolvedModel, err)
 			}
 			logger.LogProcessStep(fmt.Sprintf("Using custom provider/model: %s | %s", clientType, resolvedModel))
 		}
@@ -59,26 +57,24 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 				// ExitError means git exited with a non-zero status, which is what we want for staged changes
 				logger.LogProcessStep("Staged changes detected. Performing code review...")
 			} else {
-				logger.LogError(fmt.Errorf("failed to check for staged changes: %w", err))
-				return
+				return fmt.Errorf("failed to check for staged changes: %w", err)
 			}
 		} else {
 			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'sprout review'.")
-			return
+			return nil
 		}
 
 		// Get the diff of staged changes
 		cmdDiff := exec.Command("git", "diff", "--cached")
 		stagedDiffBytes, err := cmdDiff.Output()
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to get staged diff: %w", err))
-			return
+			return fmt.Errorf("failed to get staged diff: %w", err)
 		}
 		stagedDiff := string(stagedDiffBytes)
 
 		if strings.TrimSpace(stagedDiff) == "" {
 			logger.LogUserInteraction("No actual diff content found in staged changes. Nothing to review.")
-			return
+			return nil
 		}
 
 		// Optimize diff for code review (uses higher thresholds and better filtering)
@@ -139,8 +135,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 		reviewResponse, err := service.PerformReview(ctx, opts)
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
-			return
+			return fmt.Errorf("failed to get code review from LLM: %w", err)
 		}
 
 		logger.LogUserInteraction("\n--- Code Review ---")
@@ -172,10 +167,13 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			logger.LogUserInteraction(fmt.Sprintf("\nSuggested New Prompt for Re-execution:\n%s", reviewResponse.NewPrompt))
 		}
 		logger.LogUserInteraction("----------------------")
+		return nil
 	},
 }
 
 func init() {
-	reviewStagedCmd.Flags().StringVarP(&reviewStagedModel, "model", "m", "", "Specify the LLM model to use for the code review (e.g., 'ollama:llama3')")
-	reviewStagedCmd.Flags().BoolVar(&reviewStagedSkipPrompt, "skip-prompt", false, "Skip any interactive prompts (e.g., for confirmation, though less relevant for review)")
+	reviewStagedCmd.Flags().StringVarP(&reviewStagedModel, "model", "m", "", "Model for the review (e.g. 'ollama:llama3')")
+	reviewStagedCmd.Flags().StringVarP(&reviewStagedProvider, "provider", "p", "", "Provider for the review")
+	reviewStagedCmd.Flags().BoolVarP(&reviewStagedSkipPrompt, "yes", "y", false, "Skip interactive prompts")
+	boolFlagAlias(reviewStagedCmd.Flags(), &reviewStagedSkipPrompt, "skip-prompt", "yes", aliasDeprecated)
 }

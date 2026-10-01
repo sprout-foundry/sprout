@@ -22,9 +22,9 @@ import (
 func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("[>>] MCP Server Setup")
-	fmt.Println("==================")
-	fmt.Println()
+	m.println("[>>] MCP Server Setup")
+	m.println("==================")
+	m.println()
 
 	// Load existing config (no longer needed for MCP)
 
@@ -43,19 +43,19 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry *mcp.MCPServerRegistry, reader *bufio.Reader) error {
 	// Show available templates
 	templates := registry.ListTemplates()
-	fmt.Println("Select MCP server type:")
-	fmt.Println()
+	m.println("Select MCP server type:")
+	m.println()
 
 	for i, template := range templates {
-		fmt.Printf("%d. %s\n", i+1, template.Name)
-		fmt.Printf("   %s\n", template.Description)
+		m.printf("%d. %s\n", i+1, template.Name)
+		m.printf("   %s\n", template.Description)
 		if len(template.Features) > 0 {
-			fmt.Printf("   Features: %s\n", strings.Join(template.Features, ", "))
+			m.printf("   Features: %s\n", strings.Join(template.Features, ", "))
 		}
-		fmt.Println()
+		m.println()
 	}
 
-	fmt.Print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
+	m.print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
 	choice, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
@@ -72,18 +72,18 @@ func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry 
 
 // setupServerFromTemplate sets up an MCP server from a specific template
 func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template mcp.MCPServerTemplate, reader *bufio.Reader) error {
-	fmt.Println()
-	console.GlyphInfo.Printf("%s Setup", template.Name)
-	fmt.Println(strings.Repeat("=", len(template.Name)+7))
-	fmt.Println()
+	m.println()
+	console.GlyphInfo.Fprintf(m.out(), "%s Setup", template.Name)
+	m.println(strings.Repeat("=", len(template.Name)+7))
+	m.println()
 
 	if template.Docs != "" {
-		fmt.Printf("[lib] Documentation: %s\n", template.Docs)
-		fmt.Println()
+		m.printf("  Documentation: %s\n", template.Docs)
+		m.println()
 	}
 
 	// Get server name
-	fmt.Printf("Enter server name (default: %s): ", strings.ToLower(strings.ReplaceAll(template.Name, " ", "-")))
+	m.printf("Enter server name (default: %s): ", strings.ToLower(strings.ReplaceAll(template.Name, " ", "-")))
 	nameInput, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read server name: %w", err)
@@ -103,10 +103,10 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 
 	// Check if server already exists
 	if _, exists := mcpConfig.Servers[serverName]; exists {
-		fmt.Printf("Server '%s' already exists. Reconfigure? %s: ", serverName, utils.DefaultChoiceHint(false))
+		m.printf("Server '%s' already exists. Reconfigure? %s: ", serverName, utils.DefaultChoiceHint(false))
 		confirm, _ := reader.ReadString('\n')
 		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-			fmt.Println("Setup cancelled.")
+			m.println("Setup cancelled.")
 			return nil
 		}
 	}
@@ -119,22 +119,22 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		// Check if already set in environment
 		if existingValue := os.Getenv(envVar.Name); existingValue != "" {
 			if envVar.Secret {
-				fmt.Printf("Using existing %s from environment\n", envVar.Name)
+				m.printf("Using existing %s from environment\n", envVar.Name)
 			} else {
-				fmt.Printf("Using existing %s from environment: %s\n", envVar.Name, existingValue)
+				m.printf("Using existing %s from environment: %s\n", envVar.Name, existingValue)
 			}
 			value = existingValue
 		} else {
 			// Prompt user for value
-			fmt.Printf("%s:\n", envVar.Description)
+			m.printf("%s:\n", envVar.Description)
 			if envVar.Required {
-				fmt.Print("Enter " + envVar.Name + ": ")
+				m.print("Enter " + envVar.Name + ": ")
 			} else {
 				defaultText := ""
 				if envVar.Default != "" {
 					defaultText = fmt.Sprintf(" (default: %s)", envVar.Default)
 				}
-				fmt.Printf("Enter %s%s: ", envVar.Name, defaultText)
+				m.printf("Enter %s%s: ", envVar.Name, defaultText)
 			}
 
 			input, err := reader.ReadString('\n')
@@ -158,7 +158,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	var customArgs []string
 
 	if template.ID == "http-generic" {
-		fmt.Print("Enter MCP server URL: ")
+		m.print("Enter MCP server URL: ")
 		urlInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read URL: %w", err)
@@ -170,7 +170,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	}
 
 	if template.ID == "stdio-generic" {
-		fmt.Print("Enter command: ")
+		m.print("Enter command: ")
 		cmdInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read command: %w", err)
@@ -180,7 +180,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 			return errors.New("command is required for stdio servers")
 		}
 
-		fmt.Print("Enter arguments (space-separated, or press Enter for none): ")
+		m.print("Enter arguments (space-separated, or press Enter for none): ")
 		argsInput, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read arguments: %w", err)
@@ -203,22 +203,22 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
-	fmt.Println()
-	console.GlyphSuccess.Printf("%s configured successfully!", template.Name)
+	m.println()
+	console.GlyphSuccess.Fprintf(m.out(), "%s configured successfully!", template.Name)
 	if serverConfig.Type == "http" {
-		fmt.Printf("Type: Remote HTTP server\n")
-		fmt.Printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
+		m.printf("Type: Remote HTTP server\n")
+		m.printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+		m.printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	}
-	fmt.Println()
-	fmt.Printf("To test the configuration, run: /mcp test %s\n", serverName)
+	m.println()
+	m.printf("To test the configuration, run: /mcp test %s\n", serverName)
 
 	if len(template.Features) > 0 {
-		fmt.Println()
-		console.GlyphInfo.Print("Features available:")
+		m.println()
+		console.GlyphInfo.Fprintln(m.out(), "Features available:")
 		for _, feature := range template.Features {
-			fmt.Printf("• %s\n", feature)
+			m.printf("• %s\n", feature)
 		}
 	}
 

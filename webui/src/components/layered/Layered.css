@@ -1,0 +1,599 @@
+/* Layered layout: project rail (L1) + project sidebar (L2). */
+
+.sidebar.layered {
+  display: flex;
+  flex-direction: row;
+}
+
+.project-rail {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.project-rail-btn,
+.project-rail-project {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.project-rail-btn:hover,
+.project-rail-project:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.project-rail-brand {
+  color: var(--accent-primary);
+  cursor: default;
+}
+
+.project-rail-project {
+  align-items: baseline;
+  gap: 1px;
+  padding-top: 3px;
+  border-color: var(--border-subtle);
+  background: var(--bg-elevated);
+  line-height: 1;
+}
+
+/* Read like an element symbol: large first letter, small second. */
+.project-rail-mono-major {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.project-rail-mono-minor {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.project-rail-project.active .project-rail-mono-minor {
+  color: var(--text-secondary);
+}
+
+.rail-hover-card {
+  position: fixed;
+  z-index: 1300;
+  transform: translateY(-50%);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-elevated);
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.rail-hover-card-owner {
+  color: var(--text-tertiary);
+}
+
+.rail-hover-card-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.project-rail-project.active {
+  border: 2px solid var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.project-rail-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-1) 0;
+}
+
+.project-rail-spacer {
+  flex: 1;
+}
+
+.project-rail-account .user-menu {
+  margin-left: 0;
+}
+
+.project-nav {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.project-nav-header,
+.project-nav-drill-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* The standalone project switcher stands in for the title: it takes the
+ * header's free width, and its folder name ellipsizes within it. */
+.project-nav-header .location-switcher {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-nav-title,
+.project-nav-siblings {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.project-nav-sibling {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.project-nav-sibling:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.project-nav-sibling.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: default;
+}
+
+.project-nav-sibling.active span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-nav-drill-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-nav-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.project-nav-new:hover {
+  border-color: var(--border-focus);
+}
+
+.project-nav-back {
+  display: inline-flex;
+  padding: 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.project-nav-back:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.project-nav-scroll,
+.project-nav-drill-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.project-nav-section {
+  padding: var(--space-2) 0;
+}
+
+.project-nav-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.project-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px var(--space-4);
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-nav-item span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-nav-item:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.project-nav-item.active {
+  border-left-color: var(--accent-primary);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.project-nav-running {
+  flex: none !important;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: project-nav-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes project-nav-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.project-nav-empty {
+  padding: 4px var(--space-4);
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.project-nav-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-2) 0;
+  flex-shrink: 0;
+}
+
+.context-thread {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.context-thread > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.header-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 24px;
+  min-width: 260px;
+  margin: 0 auto;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.header-search-btn:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.header-search-btn kbd {
+  margin-left: auto;
+  font-family: inherit;
+}
+
+/* The sidebars run the full window height; the terminal (fixed to the
+ * viewport, see Terminal.css) sits beside them under the main view. Same
+ * logical/painted math as .terminal-portal: the inset is logical px, the
+ * portal paints at --ui-scale. */
+.layout-layered .app {
+  padding-bottom: 0;
+}
+
+.layout-layered .app > main {
+  padding-bottom: var(--sprout-bottom-reserved-height);
+  box-sizing: border-box;
+}
+
+.layout-layered .terminal-portal {
+  left: calc(var(--sprout-left-inset, 0px) * var(--ui-scale, 1));
+  width: calc(100% / var(--ui-scale, 1) - var(--sprout-left-inset, 0px));
+}
+
+.layered-top-bar {
+  flex-shrink: 0;
+}
+
+/* ── Phone tab bar ── */
+:root.phone-tab-bar-shown {
+  --sprout-bottom-nav-height: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+.phone-tab-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  display: flex;
+  height: var(--sprout-bottom-nav-height);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.phone-tab,
+.phone-tab-account .user-menu-trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.phone-tab > span,
+.user-menu-trigger-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-tab.active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.phone-tab-account {
+  padding: 0;
+}
+
+.phone-tab-account .user-menu {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.phone-tab-account .user-menu-trigger {
+  height: 100%;
+}
+
+/* An empty header row gives its height back (phones: search moves to the
+ * tab bar and the balance to the toolbar). */
+.layout-layered .header-bar:not(:has(> :not(.header-bar-actions), > .header-bar-actions > *)) {
+  display: none;
+}
+
+/* The tab bar already offers Home, Activity and the account. */
+.phone-tab-bar-shown .sidebar.mobile .project-rail :is([aria-label='Home'], [aria-label='Activity']),
+.phone-tab-bar-shown .sidebar.mobile .project-rail-account {
+  display: none;
+}
+
+/* A phone's full-screen terminal stops above the tab bar, so the other
+ * places stay one tap away. */
+.phone-tab-bar-shown .terminal-portal--expanded {
+  height: auto;
+}
+
+.layout-layered .terminal-portal {
+  bottom: calc(var(--sprout-bottom-nav-height) * var(--ui-scale, 1));
+}
+
+/* Rail popovers (the account menu) open beside the rail, outside the
+ * sidebar box; the panels inside keep their own scroll containers. */
+.sidebar.layered {
+  overflow: visible;
+}
+
+/* Home: platform pages over the main area; the rail and sidebar stay. The
+ * frame stays mounted while hidden so switching never reloads it. */
+.platform-home {
+  position: absolute;
+  top: 0;
+  bottom: var(--sprout-bottom-nav-height);
+  left: var(--sprout-left-inset, 0px);
+  right: 0;
+  z-index: 150;
+  display: none;
+  background: var(--bg-primary);
+}
+
+.platform-home.open {
+  display: block;
+}
+
+.platform-home-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* The terminal belongs to the editor, not Home. */
+.home-open .terminal-portal {
+  display: none;
+}
+
+.project-nav-return {
+  margin: var(--space-2) 0;
+  color: var(--accent-primary);
+}
+
+.project-rail-btn.active {
+  background: var(--bg-elevated);
+  color: var(--accent-primary);
+}
+
+.platform-home.open {
+  display: flex;
+  flex-direction: column;
+}
+
+.platform-home-frame {
+  flex: 1;
+  min-height: 0;
+}
+
+.platform-home-mobile-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* The context panel belongs to the editor; its toggle does nothing in Home. */
+.home-open .header-context-toggle-btn {
+  visibility: hidden;
+}
+
+/* Phone toolbar: the project's name, since its sidebar is in the drawer. */
+.top-mobile-project {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.new-project-visibility {
+  display: flex;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0 var(--space-10) var(--space-6);
+  border: none;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.new-project-visibility label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.new-project-error {
+  padding: 0 var(--space-10) var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--accent-error);
+}
+
+.project-rail-btn,
+.phone-tab {
+  position: relative;
+}
+
+.activity-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent-error);
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.phone-tab > .activity-badge {
+  top: 4px;
+  right: calc(50% - 18px);
+  max-width: none;
+}
+
+/* Activity has its place in the rail and the phone tab bar. */
+.layout-layered .statusbar-item-notification {
+  display: none;
+}

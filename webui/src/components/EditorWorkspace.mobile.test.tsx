@@ -128,3 +128,26 @@ describe('P4.2 mobile peer-buffer topology', () => {
     expect(chat.querySelector('[data-testid="chat-view-mock"]')).not.toBeNull();
   });
 });
+
+describe('phone chat switcher', () => {
+  it('names the current chat and switches to another from the list', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    activeBufferKind.current = 'chat';
+    const onActiveChatChange = vi.fn();
+    render(
+      <EditorWorkspace
+        {...minimalProps}
+        activeChatId="c1"
+        onActiveChatChange={onActiveChatChange}
+        chatSessions={[
+          { id: 'c1', name: 'Fix login' },
+          { id: 'c2', name: 'Write docs' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Fix login/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Write docs/ }));
+    expect(onActiveChatChange).toHaveBeenCalledWith('c2');
+  });
+});

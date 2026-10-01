@@ -12,6 +12,20 @@ import { appendCappedLog } from '../../utils/logCap';
 import { parseSecurityAnalysis } from '../../utils/parseSecurityAnalysis';
 import { createLogEntry, type EventHandlerContext } from '../webSocketEventHelpers';
 
+/**
+ * The asking chat's name when the request comes from a chat other than the
+ * one on screen — the dialog opens over whatever you're viewing, so it has to
+ * say whose command or edit it is.
+ */
+function fromOtherChat(
+  ctx: EventHandlerContext,
+  chatSessions: Array<{ id: string; name?: string }>,
+): string | undefined {
+  const chatId = (ctx.event.data as { chat_id?: unknown } | undefined)?.chat_id;
+  if (!chatId || String(chatId) === ctx.activeChatIdRef.current) return undefined;
+  return chatSessions.find((c) => c.id === String(chatId))?.name || 'another chat';
+}
+
 // Handle security_approval_request event
 export const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
@@ -22,6 +36,7 @@ export const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void =>
   if (data.status === 'responded') return;
   setState((prev) => ({
     securityApprovalRequest: {
+      fromChat: fromOtherChat(ctx, prev.chatSessions),
       requestId: String(data.request_id || ''),
       toolName: String(data.tool_name || ''),
       riskLevel: String(data.risk_level || 'CAUTION'),
@@ -59,6 +74,7 @@ export const handleSecurityPromptRequest = (ctx: EventHandlerContext): void => {
   if (!data.prompt) return;
   setState((prev) => ({
     securityPromptRequest: {
+      fromChat: fromOtherChat(ctx, prev.chatSessions),
       requestId: String(data.request_id || ''),
       prompt: String(data.prompt || ''),
       filePath: data.file_path != null ? String(data.file_path) : undefined,
@@ -84,6 +100,7 @@ export const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   if (!data.question) return;
   setState((prev) => ({
     askUserRequest: {
+      fromChat: fromOtherChat(ctx, prev.chatSessions),
       requestId: String(data.request_id || ''),
       question: String(data.question || ''),
       header: data.header,
@@ -130,6 +147,7 @@ export const handleEditApprovalRequest = (ctx: EventHandlerContext): void => {
 
   setState((prev) => ({
     editApprovalRequest: {
+      fromChat: fromOtherChat(ctx, prev.chatSessions),
       requestId: String(data.request_id),
       filePath: String(data.file_path),
       unifiedDiff: data.unified_diff != null ? String(data.unified_diff) : undefined,
@@ -166,6 +184,7 @@ export const handleShellApprovalRequest = (ctx: EventHandlerContext): void => {
 
   setState((prev) => ({
     shellApprovalRequest: {
+      fromChat: fromOtherChat(ctx, prev.chatSessions),
       requestId: String(data.request_id),
       command: String(data.command),
       parts,

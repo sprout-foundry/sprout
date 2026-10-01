@@ -62,7 +62,7 @@ func TestFileWritePublishesFileChangedEvent(t *testing.T) {
 			if filePath == "" {
 				filePath, _ = fields["path"].(string)
 			}
-			require.Contains(t, filePath, "design/screens/login.html")
+			require.Contains(t, filepath.ToSlash(filePath), "design/screens/login.html")
 			require.Equal(t, "write", fields["action"])
 			return
 		case <-deadline:

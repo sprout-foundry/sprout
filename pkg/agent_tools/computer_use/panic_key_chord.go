@@ -2,7 +2,6 @@ package computer_use
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -112,12 +111,6 @@ func formatChordForLog(keys []string) string {
 		return "<none>"
 	}
 	return strings.Join(keys, "+")
-}
-
-// errMissingHelper returns a friendly error string for callers that don't
-// install xdotool/osascript.
-func errMissingHelper(tool string) error {
-	return fmt.Errorf("chord watcher requires %s to be installed and on $PATH; install it or set computer_use.panic_key_chord = \"disabled\"", tool)
 }
 
 // GOOSName returns runtime.GOOS, exposed via this package to keep

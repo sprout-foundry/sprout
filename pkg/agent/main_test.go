@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/internal/testgit"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/search"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -41,6 +42,7 @@ import (
 //     building an HNSW index with 30+ GB peak allocation. We redirect the
 //     global updater to a throwaway temp dir so those writes are harmless.
 func TestMain(m *testing.M) {
+	finishProviders := configuration.IsolateGlobalConfigForTests()
 	// Agents built in tests shell out to git (tool handlers, change_tracking,
 	// PR review); redirect git config so those subprocesses never touch the
 	// developer's real ~/.gitconfig.
@@ -97,7 +99,7 @@ func TestMain(m *testing.M) {
 		filepath.Join(sessionsDir, "search-index.json"), sessionsDir)
 
 	utils.GetLogger(true) // skipPrompts=true → userInteractionEnabled=false
-	code := m.Run()
+	code := finishProviders(m.Run())
 
 	search.RestoreGlobalUpdater(oldUpdater)
 

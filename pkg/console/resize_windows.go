@@ -20,9 +20,12 @@ func startResizeWatcher(onSubscribers func(), onFooter func()) (stop func()) {
 	stopCh := make(chan struct{})
 	done := make(chan struct{})
 
+	// Seed with the current size: starting from 0x0 made the first tick
+	// report a resize that never happened, and the footer's resize path
+	// then cleared and redrew the screen half a second after startup.
+	lastW, lastH := pollTerminalSize()
 	go func() {
 		defer close(done)
-		var lastW, lastH int
 		ticker := time.NewTicker(windowsPollInterval)
 		defer ticker.Stop()
 		for {

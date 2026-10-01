@@ -68,6 +68,12 @@ type SelectList struct {
 	fd    int
 	isTTY bool
 
+	// pending holds bytes read but not yet processed: one read can return
+	// several keys (a paste, or typed-ahead input the console delivers
+	// together), and each must be handled rather than only the first.
+	pending []byte
+	readErr error
+
 	// testOut, when non-nil, overrides the destination for mouse-tracking
 	// escape sequences so tests can capture the emitted bytes. It is a
 	// test seam only; production code leaves it nil and sequences are
@@ -228,10 +234,6 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 
 	s.render()
 
-	var buf [8]byte
-	ticker := time.NewTicker(5 * time.Millisecond)
-	defer ticker.Stop()
-
 	for {
 		if ctx != nil {
 			select {
@@ -241,24 +243,71 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 			}
 		}
 
-		n, err := os.Stdin.Read(buf[:])
-		if n == 0 {
-			if err != nil && !errors.Is(err, syscall.EAGAIN) && !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, io.EOF) {
-				return "", false, err
+		b, got := s.readByteBefore(time.Now().Add(50 * time.Millisecond))
+		if !got {
+			if s.readErr != nil {
+				return "", false, s.readErr
 			}
-			<-ticker.C
 			s.repaintIfResized()
 			continue
 		}
 
-		// Handle the byte(s) we just read. Most actions are a single
-		// byte; ESC and arrow-key sequences read 2-3 bytes inline.
-		b := buf[0]
-		done, val, ok := s.processKey(b, n, buf[:])
+		// One key at a time; ESC sequences pull their remaining bytes
+		// through readByteBefore, and a UTF-8 character is gathered whole.
+		key := []byte{b}
+		if b >= 0xC0 {
+			key = s.collectUTF8(b)
+		}
+		done, val, ok := s.processKey(b, len(key), key)
 		if done {
 			return val, ok, nil
 		}
 	}
+}
+
+// readByteBefore returns the next input byte, waiting until deadline for
+// one to arrive. Reads are gated on readiness so the picker never parks in
+// a blocking read: on Windows such a read cannot be interrupted, which
+// left Esc waiting for another key and the prompt's context timeout unable
+// to fire.
+func (s *SelectList) readByteBefore(deadline time.Time) (byte, bool) {
+	for {
+		if len(s.pending) > 0 {
+			b := s.pending[0]
+			s.pending = s.pending[1:]
+			return b, true
+		}
+		wait := time.Until(deadline)
+		if wait <= 0 || !waitForStdinReadable(s.fd, wait) {
+			return 0, false
+		}
+		var buf [64]byte
+		n, err := stdinRead(buf[:])
+		if n > 0 {
+			s.pending = append(s.pending, buf[:n]...)
+			continue
+		}
+		if err != nil && !errors.Is(err, syscall.EAGAIN) && !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, io.EOF) {
+			s.readErr = err
+			return 0, false
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// collectUTF8 gathers the continuation bytes of the character that starts
+// with lead.
+func (s *SelectList) collectUTF8(lead byte) []byte {
+	key := []byte{lead}
+	deadline := time.Now().Add(30 * time.Millisecond)
+	for len(key) < utf8Width(lead) {
+		b, ok := s.readByteBefore(deadline)
+		if !ok {
+			break
+		}
+		key = append(key, b)
+	}
+	return key
 }
 
 // mouseOut returns the writer used for mouse-tracking escape sequences.

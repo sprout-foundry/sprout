@@ -101,11 +101,6 @@ vi.mock('../extensions/lintDiagnostics', () => ({
 }));
 
 // Unsaved line highlight
-const mockSetOriginalContentOf = vi.fn((v) => `setOriginalContent(${v})`);
-vi.mock('../extensions/unsavedLineHighlight', () => ({
-  unsavedLineHighlight: vi.fn(() => 'mock-unsavedLineHighlight'),
-  setOriginalContent: { of: (...a) => mockSetOriginalContentOf(...a) },
-}));
 
 // API service
 const mockGetInstance = vi.fn();

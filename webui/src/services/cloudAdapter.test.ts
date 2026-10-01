@@ -379,8 +379,8 @@ describe('CloudAdapter', () => {
 
   const workspaceSyntheticResponse = {
     message: 'ok',
-    workspace_root: '/home/user',
-    daemon_root: '/home/user',
+    workspace_root: '/workspace',
+    daemon_root: '/workspace',
   };
 
   describe('fetch - workspace endpoint synthetic response', () => {
@@ -779,14 +779,32 @@ describe('CloudAdapter', () => {
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
     });
 
-    it('should proxy chat-sessions endpoint to Foundry', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
+    it('serves chat-sessions from the browser, not the platform', async () => {
+      const response = await adapter.fetch('/api/chat-sessions', { method: 'GET' });
 
-      await adapter.fetch('/api/chat-sessions', { method: 'GET' });
+      expect(mockFetch).not.toHaveBeenCalled();
+      const body = await response.json();
+      expect(body.chat_sessions.length).toBeGreaterThan(0);
+      expect(body.active_chat_id).toBe(body.chat_sessions[0].id);
+    });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/chat-sessions');
+    it('reads chat-session request bodies passed on init (create, then switch)', async () => {
+      const created = await (
+        await adapter.fetch('/api/chat-sessions/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).json();
+      const switched = await adapter.fetch('/api/chat-sessions/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: created.chat_session.id }),
+      });
+
+      expect(switched.status).toBe(200);
+      expect((await switched.json()).active_chat_id).toBe(created.chat_session.id);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should preserve body from Request object for standard backend proxy', async () => {
@@ -1001,7 +1019,7 @@ describe('CloudAdapter', () => {
       mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
       // Use a Foundry-backend endpoint (not WASM-local) to test query param preservation
-      await adapter.fetch('/api/chat-sessions?limit=10', { method: 'GET' });
+      await adapter.fetch('/api/tasks?limit=10', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
@@ -1761,6 +1779,35 @@ describe('CloudAdapter', () => {
   describe('restoreRepo (?repo= reload persistence)', () => {
     const repoUrl = 'https://github.com/octocat/Hello-World';
 
+    // A fresh VFS: nothing exists yet, so every imported file is written.
+    beforeEach(() => {
+      mockWasmShell.readFile.mockImplementation(() => ({ content: '', error: 'file does not exist' }));
+    });
+    afterEach(() => {
+      mockWasmShell.readFile.mockImplementation((path: string) => ({ content: '// file at ' + path, error: '' }));
+    });
+
+    it("doesn't overwrite a file the VFS already has (the user's edits)", async () => {
+      mockWasmShell.readFile.mockImplementation((path: string) =>
+        path === 'README'
+          ? { content: 'edited by the user', error: '' }
+          : { content: '', error: 'file does not exist' },
+      );
+      mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
+        repo: 'octocat/Hello-World',
+        files: [
+          { path: 'README', content: 'hi' },
+          { path: 'LICENSE', content: 'MIT' },
+        ],
+        importedAt: '2026-09-23T00:00:00Z',
+      });
+
+      await adapter.restoreRepo(repoUrl);
+
+      expect(mockWasmShell.writeFile).not.toHaveBeenCalledWith('README', 'hi');
+      expect(mockWasmShell.writeFile).toHaveBeenCalledWith('LICENSE', 'MIT');
+    });
+
     it('re-seeds the VFS from the cache on a hit (no network call)', async () => {
       mockRepoImportCache.loadRepoImport.mockResolvedValueOnce({
         repo: 'octocat/Hello-World',
@@ -1793,5 +1840,26 @@ describe('CloudAdapter', () => {
         expect.objectContaining({ repo: 'octocat/Hello-World' }),
       );
     });
+  });
+});
+
+describe('CloudAdapter — agent network restriction', () => {
+  it('limits the WASM agent to this page and the platform API once the shell starts', async () => {
+    const setAllowedOrigins = vi.fn();
+    (globalThis as { SproutWasm?: unknown }).SproutWasm = { setAllowedOrigins };
+    try {
+      const fresh = new CloudAdapter({
+        apiBase: 'https://api.sprout.dev',
+        wsBase: '',
+        getAuthToken: () => null,
+      } as never);
+      // Any wasm-local request boots the shell.
+      await fresh.fetch('/api/files');
+      expect(setAllowedOrigins).toHaveBeenCalledWith(
+        expect.arrayContaining([window.location.origin, 'https://api.sprout.dev']),
+      );
+    } finally {
+      delete (globalThis as { SproutWasm?: unknown }).SproutWasm;
+    }
   });
 });

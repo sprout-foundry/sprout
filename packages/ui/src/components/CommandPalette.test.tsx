@@ -747,3 +747,25 @@ describe('Accessibility', () => {
     vi.useRealTimers();
   });
 });
+
+describe('CommandPalette file folders', () => {
+  it('shows folders relative to the workspace root', () => {
+    act(() => {
+      root.render(
+        createElement(CommandPalette, {
+          isOpen: true,
+          onClose: vi.fn(),
+          onOpenFile: vi.fn(),
+          initialMode: 'files',
+          workspaceRoot: '/workspace',
+          recentFiles: [
+            { name: 'oauth.go', path: '/workspace/oauth.go', type: 'file' },
+            { name: 'flow.go', path: '/workspace/device/flow.go', type: 'file' },
+          ],
+        }),
+      );
+    });
+    const folders = Array.from(document.querySelectorAll('.command-palette-item-path')).map((el) => el.textContent);
+    expect(folders).toEqual(['device']);
+  });
+});

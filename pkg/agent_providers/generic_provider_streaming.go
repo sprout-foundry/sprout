@@ -125,6 +125,20 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	return response, nil
 }
 
+// inStreamError turns an error the server sent mid-stream into the error the
+// agent would have seen had the server answered with a failing status, so a
+// rate limit is retried as one and the provider's message reaches the user.
+func (p *GenericProvider) inStreamError(e api.StreamError) error {
+	msg := e.Message
+	if msg == "" {
+		msg = "provider reported an error (" + e.Code + ")"
+	}
+	if e.Code == "rate_limited" || e.Code == "429" {
+		return agenterrors.NewRateLimitError(msg, nil, p.config.Name)
+	}
+	return agenterrors.NewProviderError(msg, nil, p.config.Name, "")
+}
+
 // handleStreamingResponse processes the streaming response
 func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *http.Response, callback api.StreamCallback) (*api.ChatResponse, error) {
 	// Some providers answer a streaming request with a single plain JSON
@@ -246,6 +260,11 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 		}
 		if data == "[DONE]" {
 			break
+		}
+
+		if streamErr, ok := api.ParseSSEError(data); ok {
+			resp.Body.Close()
+			return nil, p.inStreamError(streamErr)
 		}
 
 		if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {

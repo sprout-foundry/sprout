@@ -92,7 +92,9 @@ export function ChatFooter({
           <Clock size={14} />
         </span>
         <span className="workspace-busy-text">
-          Another chat ({workspaceBusy.runningChatName}) is working in this workspace — send anyway queues after it.
+          {onSendAnyway
+            ? `Another chat (${workspaceBusy.runningChatName}) is working in this workspace — send anyway queues after it.`
+            : `Another chat (${workspaceBusy.runningChatName}) is working in this workspace — your message is queued and sends when it finishes.`}
         </span>
         {onSendAnyway && pendingDraft?.trim() ? (
           <button

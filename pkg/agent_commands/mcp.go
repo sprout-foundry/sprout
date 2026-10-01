@@ -10,7 +10,9 @@ import (
 )
 
 // MCPCommand implements the /mcp slash command
-type MCPCommand struct{}
+type MCPCommand struct {
+	outputSink
+}
 
 // Name returns the command name
 func (m *MCPCommand) Name() string {
@@ -82,22 +84,22 @@ func (m *MCPCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // showHelp displays usage information
 func (m *MCPCommand) showHelp() error {
-	fmt.Println("MCP (Model Context Protocol) Server Management")
-	fmt.Println("==============================================")
-	fmt.Println()
-	fmt.Println("Available subcommands:")
-	fmt.Println("  /mcp add              - Add a new MCP server interactively")
-	fmt.Println("  /mcp remove [name]   - Remove an MCP server")
-	fmt.Println("  /mcp list             - List all configured MCP servers")
-	fmt.Println("  /mcp test [name]     - Test MCP server connection")
-	fmt.Println("  /mcp help             - Show this help")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  /mcp add              - Start interactive setup for MCP servers")
-	fmt.Println("  /mcp list             - See all configured servers")
-	fmt.Println("  /mcp test git         - Test Git MCP server")
-	fmt.Println("  /mcp test github      - Test GitHub MCP server")
-	fmt.Println("  /mcp remove git       - Remove Git MCP server")
+	m.println("MCP (Model Context Protocol) Server Management")
+	m.println("==============================================")
+	m.println()
+	m.println("Available subcommands:")
+	m.println("  /mcp add              - Add a new MCP server interactively")
+	m.println("  /mcp remove [name]   - Remove an MCP server")
+	m.println("  /mcp list             - List all configured MCP servers")
+	m.println("  /mcp test [name]     - Test MCP server connection")
+	m.println("  /mcp help             - Show this help")
+	m.println()
+	m.println("Examples:")
+	m.println("  /mcp add              - Start interactive setup for MCP servers")
+	m.println("  /mcp list             - See all configured servers")
+	m.println("  /mcp test git         - Test Git MCP server")
+	m.println("  /mcp test github      - Test GitHub MCP server")
+	m.println("  /mcp remove git       - Remove Git MCP server")
 
 	return nil
 }

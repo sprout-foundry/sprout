@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -212,10 +213,36 @@ func resolveShellCdArg(arg, currentCwd string) string {
 		}
 		return arg[2:]
 	}
+	if runtime.GOOS == "windows" {
+		if p, ok := resolveWindowsRootedCdArg(arg); ok {
+			return p
+		}
+	}
 	if !filepath.IsAbs(arg) {
 		return filepath.Join(currentCwd, arg)
 	}
 	return arg
+}
+
+// resolveWindowsRootedCdArg handles POSIX-style rooted paths, which the
+// agent's shell (Git Bash) accepts but filepath.IsAbs rejects. "/c/x" is
+// the MSYS spelling of C:\x. Any other rooted path ("/etc") points into
+// the shell's own filesystem view, never under the workspace, so it is
+// returned as-is — still non-absolute to Windows, IsCdTargetAllowed
+// refuses it — rather than being joined onto the cwd.
+func resolveWindowsRootedCdArg(arg string) (string, bool) {
+	if !strings.HasPrefix(arg, "/") || strings.HasPrefix(arg, "//") {
+		return "", false
+	}
+	if len(arg) >= 2 && isASCIILetter(arg[1]) && (len(arg) == 2 || arg[2] == '/') {
+		rest := filepath.FromSlash(strings.TrimPrefix(arg[2:], "/"))
+		return filepath.Clean(strings.ToUpper(arg[1:2]) + `:\` + rest), true
+	}
+	return arg, true
+}
+
+func isASCIILetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // GetShellCommandHistoryEntry retrieves a shell command result from history

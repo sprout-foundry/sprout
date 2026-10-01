@@ -257,6 +257,12 @@ func pathIsWorkspaceSafe(pathStr string) bool {
 	if pathStr == "" || pathStr == "-" {
 		return true
 	}
+	if isUNCPath(pathStr) {
+		return false
+	}
+	if slashed, ok := windowsDrivePathAsSlash(pathStr); ok {
+		pathStr = slashed
+	}
 
 	// Clean the path to resolve . and .. segments.
 	// path.Clean fully resolves all ".." for absolute paths: if the result starts

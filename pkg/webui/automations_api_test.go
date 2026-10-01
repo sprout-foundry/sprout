@@ -431,10 +431,9 @@ func TestHandleAPIAutomateSessionsList_WithSessions(t *testing.T) {
 func TestHandleAPIAutomateSessionsList_StatusEnrichment(t *testing.T) {
 	ws, daemonRoot := newAutomateTestServer(t)
 
-	// PID 1 (init) is always alive on Unix.
 	createSessionFile(daemonRoot, "running-sess", &automate.AutomateSessionInfo{
 		Workflow:  "live-wf",
-		PID:       1,
+		PID:       os.Getpid(),
 		StartedAt: time.Now(),
 		Kind:      "automate",
 	})
@@ -1086,8 +1085,8 @@ func TestHandleAPIAutomateRun_ApprovalResponseIncludesSummary(t *testing.T) {
 			{"name": "fetch", "command": "aws s3 sync s3://datasets ./data"}
 		],
 		"allowed_paths": [
-			{"path": "/srv/datasets", "mode": "read_write", "reason": "Read training data"},
-			{"path": "/var/log/sprout", "mode": "read_only"}
+			{"path": ` + jsonQuote(osAbs("/srv/datasets")) + `, "mode": "read_write", "reason": "Read training data"},
+			{"path": ` + jsonQuote(osAbs("/var/log/sprout")) + `, "mode": "read_only"}
 		]
 	}`
 	if err := os.WriteFile(filepath.Join(automateDir, "needs-approval.json"), []byte(wfJSON), 0o644); err != nil {
@@ -1163,11 +1162,11 @@ func TestHandleAPIAutomateRun_ApprovalResponseIncludesSummary(t *testing.T) {
 		t.Fatalf("expected 2 allowed_paths, got: %+v", summary["allowed_paths"])
 	}
 	first := allowedPaths[0].(map[string]interface{})
-	if first["path"] != "/srv/datasets" || first["mode"] != "read_write" || first["reason"] != "Read training data" {
+	if first["path"] != osAbs("/srv/datasets") || first["mode"] != "read_write" || first["reason"] != "Read training data" {
 		t.Errorf("allowed_paths[0]: got %+v (want /srv/datasets, read_write, \"Read training data\")", first)
 	}
 	second := allowedPaths[1].(map[string]interface{})
-	if second["path"] != "/var/log/sprout" || second["mode"] != "read_only" {
+	if second["path"] != osAbs("/var/log/sprout") || second["mode"] != "read_only" {
 		t.Errorf("allowed_paths[1]: got %+v (want /var/log/sprout, read_only)", second)
 	}
 	// Reason omitempty — the second entry has no reason, so the key
@@ -1394,7 +1393,7 @@ func TestMakeSessionResponse_Exited(t *testing.T) {
 func TestMakeSessionResponse_Running(t *testing.T) {
 	info := automate.AutomateSessionInfo{
 		Workflow:  "live-wf",
-		PID:       1, // init is always alive on Unix
+		PID:       os.Getpid(),
 		StartedAt: time.Now(),
 		Kind:      "automate",
 	}

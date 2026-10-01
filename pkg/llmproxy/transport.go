@@ -15,6 +15,7 @@
 package llmproxy
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,6 +45,8 @@ type rewriteTransport struct {
 	// route through an arbitrary CORS proxy to bypass browser CORS
 	// restrictions. A zero/empty value means this feature is disabled.
 	corsProxy atomic.Value // string
+
+	allowedOrigins atomic.Value // []string
 }
 
 var defaultTransport = &rewriteTransport{base: http.DefaultTransport}
@@ -129,7 +132,40 @@ func GetCorsProxy() string {
 //     routes through the sprout platform proxy
 //
 // Otherwise delegates straight to the base transport.
+// SetAllowedOrigins restricts outbound requests to the given origins
+// ("https://host[:port]"). Requests to any other origin fail without touching
+// the network. The browser build sets this to the page's own origin: every
+// request the agent needs goes through the platform, and anything else
+// (provider model catalogs, backend probes) would leak usage to third parties
+// and fail on CORS anyway. An empty list lifts the restriction.
+func SetAllowedOrigins(origins []string) {
+	cleaned := make([]string, 0, len(origins))
+	for _, o := range origins {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" {
+			cleaned = append(cleaned, strings.ToLower(o))
+		}
+	}
+	defaultTransport.allowedOrigins.Store(cleaned)
+}
+
+func (t *rewriteTransport) originAllowed(u *url.URL) bool {
+	allowed, _ := t.allowedOrigins.Load().([]string)
+	if len(allowed) == 0 {
+		return true
+	}
+	origin := strings.ToLower(u.Scheme + "://" + u.Host)
+	for _, a := range allowed {
+		if a == origin {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !t.originAllowed(req.URL) {
+		return nil, fmt.Errorf("request to %s blocked: in the browser the agent only talks to the platform", req.URL.Host)
+	}
 	// Check corsProxy FIRST (highest precedence).
 	if proxy, _ := t.corsProxy.Load().(string); proxy != "" {
 		scheme := strings.ToLower(req.URL.Scheme)

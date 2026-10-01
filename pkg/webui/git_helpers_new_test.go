@@ -4,6 +4,7 @@ package webui
 
 import (
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -78,6 +79,9 @@ func TestNormalizeGitPath(t *testing.T) {
 		{"empty", "", ""},
 		{"backslash to forward (Linux: unchanged)", "foo\\bar", "foo\\bar"},
 	}
+	if runtime.GOOS == "windows" {
+		tests[len(tests)-1].want = "foo/bar"
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -98,18 +102,18 @@ func TestMakeGitRelativePath(t *testing.T) {
 	}{
 		{
 			name: "relative stays unchanged",
-			path: "foo.go", workspaceRoot: "/workspace",
+			path: "foo.go", workspaceRoot: osAbs("/workspace"),
 			want: "foo.go",
 		},
 		{
 			name: "absolute in workspace",
-			path: "/workspace/src/foo.go", workspaceRoot: "/workspace",
+			path: osAbs("/workspace/src/foo.go"), workspaceRoot: osAbs("/workspace"),
 			want: "src/foo.go",
 		},
 		{
 			name: "absolute outside workspace",
-			path: "/other/foo.go", workspaceRoot: "/workspace",
-			want: "/other/foo.go",
+			path: osAbs("/other/foo.go"), workspaceRoot: osAbs("/workspace"),
+			want: osAbs("/other/foo.go"),
 		},
 	}
 

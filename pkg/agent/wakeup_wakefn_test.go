@@ -132,3 +132,30 @@ func waitQuerySettled(t *testing.T, a *Agent) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// TestTryAutoResume_GoroutinePathCallsDoneFn verifies the headless resume
+// turn reports its end: it starts inside the agent, so the done hook is the
+// WebUI's only way to book it and refresh the chat's snapshot.
+func TestTryAutoResume_GoroutinePathCallsDoneFn(t *testing.T) {
+	a := newTestAgentWithWakeup(t, true)
+	t.Cleanup(func() { a.Shutdown() })
+
+	done := make(chan struct{}, 1)
+	a.SetWakeupDoneFn(func(error) { done <- struct{}{} })
+
+	a.QueueNotification(Notification{
+		Content:   "Background task completed",
+		SessionID: "test-session",
+		Kind:      NotifShellBg,
+	})
+
+	if !a.TryAutoResume() {
+		t.Fatal("TryAutoResume should return true when notifications are pending")
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("done hook was not called after the resume turn")
+	}
+	waitQuerySettled(t, a)
+}

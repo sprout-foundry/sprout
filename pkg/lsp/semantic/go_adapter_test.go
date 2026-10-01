@@ -2877,9 +2877,14 @@ func TestTypeScriptSessionAdapterRunWithSuccessResponse(t *testing.T) {
 func initFakeWorker(a *typeScriptSessionAdapter, stdin io.WriteCloser, stdout *bufio.Reader) {
 	// Set internal fields so ensureWorkerLocked's guard passes:
 	//   a.cmd != nil && a.cmd.Process != nil && a.cmd.ProcessState == nil
-	// We use PID 1 (init), which is always running. Kill on it returns
-	// EPERM (discarded by resetWorkerLocked). Wait returns an error (also discarded).
-	a.cmd = &exec.Cmd{Process: &os.Process{Pid: 1}}
+	// The worker is a real, harmless child (this test binary running no
+	// tests): a hand-built os.Process carries no handle, and killing it
+	// panics on Windows. Kill and Wait in resetWorkerLocked reap it.
+	cmd := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // G204: re-executes this test binary with no tests
+	if err := cmd.Start(); err != nil {
+		panic(fmt.Sprintf("start fake worker: %v", err))
+	}
+	a.cmd = cmd
 	a.stdin = stdin
 	a.stdout = stdout
 }

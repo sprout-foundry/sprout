@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
 // RunAgentWorkflowLoop iterates over unchecked TODO items, processing each
@@ -285,11 +285,7 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		buildCmd := strings.TrimSpace(loop.BuildCommand)
 		if buildCmd != "" {
 			console.GlyphShell.Printf("%s", buildCmd)
-			shell := os.Getenv("SHELL")
-			if shell == "" {
-				shell = "/bin/sh"
-			}
-			cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
+			cmd := shellexec.CommandContext(ctx, buildCmd)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if buildErr := cmd.Run(); buildErr != nil {
@@ -361,11 +357,7 @@ func RunAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			// Re-check build.
 			buildCmd := strings.TrimSpace(loop.BuildCommand)
 			if buildCmd != "" {
-				shell := os.Getenv("SHELL")
-				if shell == "" {
-					shell = "/bin/sh"
-				}
-				cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
+				cmd := shellexec.CommandContext(ctx, buildCmd)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				if buildErr := cmd.Run(); buildErr != nil {

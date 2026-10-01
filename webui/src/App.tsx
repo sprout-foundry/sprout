@@ -1,5 +1,6 @@
 import { EventsContextProvider, useEvents } from '@sprout/events';
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
@@ -8,15 +9,16 @@ import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
-import SyncStatusBanner from './components/SyncStatusBanner';
+import { ApprovalOriginNotice } from './components/ApprovalOriginNotice';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
 import OnboardingDialog from './components/OnboardingDialog';
 import PasswordPromptDialog from './components/PasswordPromptDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
-import ShellApprovalPanel from './components/ShellApprovalPanel';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
+import ShellApprovalPanel from './components/ShellApprovalPanel';
+import SyncStatusBanner from './components/SyncStatusBanner';
 import UIManager from './components/UIManager';
 import UpdateAvailableBanner from './components/UpdateAvailableBanner';
 import UpdateNotification from './components/UpdateNotification';
@@ -33,9 +35,9 @@ import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
+import { useBackgroundChatSync } from './hooks/useBackgroundChatSync';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
 import type { QueuedMessage } from './hooks/useChatSessionManager';
-import { useBackgroundChatSync } from './hooks/useBackgroundChatSync';
 import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
@@ -46,6 +48,7 @@ import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
 import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
+import { useActiveRepoURL } from './services/activeRepo';
 import { ApiService } from './services/api';
 import { loadPersistedAppState } from './services/appStatePersistence';
 import { clientFetch } from './services/clientSession';
@@ -270,6 +273,7 @@ function AppInner() {
     activeChatIdRef,
     queuedMessagesRef,
     isProcessing: state.isProcessing,
+    workspaceBusy: state.workspaceBusy,
   });
 
   // Background chat panes (chat buffers open in non-active split panes)
@@ -365,11 +369,7 @@ function AppInner() {
 
   // ── Escalation Triggers (cloud mode) ────────────────────────────
 
-  const repoURL = useMemo(() => {
-    if (typeof window === 'undefined') return undefined;
-    const params = new URLSearchParams(window.location.search);
-    return params.get('repo') ?? undefined;
-  }, []);
+  const repoURL = useActiveRepoURL();
 
   useEscalationTriggers({
     repoURL,
@@ -508,9 +508,19 @@ function AppInner() {
                       <UpdateNotification />
                       <UpdateAvailableBanner />
                       <EscalationListener />
+                      <AgentEscalationBridge repoURL={repoURL} />
                       <InstallPromptBanner />
                       <SyncStatusBanner />
                       <DisconnectedOverlay isConnected={state.isConnected} />
+                      <ApprovalOriginNotice
+                        chatName={
+                          state.securityApprovalRequest?.fromChat ??
+                          state.securityPromptRequest?.fromChat ??
+                          state.askUserRequest?.fromChat ??
+                          state.editApprovalRequest?.fromChat ??
+                          state.shellApprovalRequest?.fromChat
+                        }
+                      />
                       {state.securityApprovalRequest && (
                         <SecurityApprovalDialog
                           requestId={state.securityApprovalRequest.requestId}

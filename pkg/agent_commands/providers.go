@@ -3,11 +3,9 @@ package commands
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -25,7 +23,9 @@ func readInput() string {
 }
 
 // ProvidersCommand implements the /provider slash command
-type ProvidersCommand struct{}
+type ProvidersCommand struct {
+	outputSink
+}
 
 // Name returns the command name
 func (p *ProvidersCommand) Name() string {
@@ -136,19 +136,19 @@ func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []str
 
 // showProviderStatus displays current provider information
 func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	fmt.Println()
-	console.GlyphInfo.Print("Provider Status:")
+	p.println()
+	console.GlyphInfo.Fprintln(p.out(), "Provider Status:")
 
 	// Show current active provider
 	currentProvider := chatAgent.GetProviderType()
 	currentModel := chatAgent.GetModel()
-	console.GlyphSuccess.Printf("Active Provider: %s", getProviderDisplayName(currentProvider))
-	console.GlyphInfo.Printf("Current Model: %s", currentModel)
-	fmt.Println()
+	console.GlyphSuccess.Fprintf(p.out(), "Active Provider: %s", getProviderDisplayName(currentProvider))
+	console.GlyphInfo.Fprintf(p.out(), "Current Model: %s", currentModel)
+	p.println()
 
 	// Show all supported providers
 	available := configManager.GetAvailableProviders()
-	console.GlyphInfo.Print("Supported Providers:")
+	console.GlyphInfo.Fprintln(p.out(), "Supported Providers:")
 
 	for _, provider := range available {
 		displayName := getProviderDisplayName(provider)
@@ -168,16 +168,16 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 			}
 		}
 
-		fmt.Printf("%s**%s** %s\n", statusGlyph.Prefix(), displayName, statusText)
-		fmt.Printf("   Model: %s\n", model)
-		fmt.Println()
+		p.printf("%s**%s** %s\n", statusGlyph.Prefix(), displayName, statusText)
+		p.printf("   Model: %s\n", model)
+		p.println()
 	}
 
-	fmt.Println("Usage:")
-	fmt.Println("  /provider                    - Show this status")
-	fmt.Println("  /provider list              - List available providers only")
-	fmt.Println("  /provider select            - Interactive provider selection")
-	fmt.Println("  /provider <provider_name>   - Switch to specific provider")
+	p.println("Usage:")
+	p.println("  /provider                    - Show this status")
+	p.println("  /provider list              - List available providers only")
+	p.println("  /provider select            - Interactive provider selection")
+	p.println("  /provider <provider_name>   - Switch to specific provider")
 
 	return nil
 }
@@ -186,8 +186,8 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) error {
 	available := configManager.GetAvailableProviders()
 
-	fmt.Println()
-	console.GlyphInfo.Print("All Providers:")
+	p.println()
+	console.GlyphInfo.Fprintln(p.out(), "All Providers:")
 
 	for i, provider := range available {
 		name := getProviderDisplayName(provider)
@@ -201,7 +201,7 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 			status = console.GlyphSuccess.Prefix() + "(ready)"
 		}
 
-		fmt.Printf("%d. **%s** %s - %s\n", i+1, name, status, model)
+		p.printf("%d. **%s** %s - %s\n", i+1, name, status, model)
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager,
 func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, chatAgent *agent.Agent) error {
 	providers := configManager.GetAvailableProviders()
 	if len(providers) == 0 {
-		console.GlyphInfo.Print("No providers configured.")
+		console.GlyphInfo.Fprintln(p.out(), "No providers configured.")
 		return nil
 	}
 
@@ -275,7 +275,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 		return fmt.Errorf("provider picker: %w", err)
 	}
 	if !ok || chosen == "" {
-		fmt.Println("Provider selection cancelled.")
+		p.println("Provider selection cancelled.")
 		return nil
 	}
 	return p.setProvider(chosen, configManager, chatAgent)
@@ -347,7 +347,7 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 	}
 
 	// Switch to the provider
-	console.GlyphDim.Printf("Switching to %s...", getProviderDisplayName(provider))
+	console.GlyphDim.Fprintf(p.out(), "Switching to %s...", getProviderDisplayName(provider))
 
 	// Switch the agent to the new provider (persisted for CLI use)
 	err = chatAgent.SetProviderPersisted(provider)
@@ -358,76 +358,27 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 	// Get the model that was set
 	model := chatAgent.GetModel()
 
-	console.GlyphSuccess.Printf("Provider switched to: %s", getProviderDisplayName(provider))
-	console.GlyphInfo.Printf("Using model: %s", model)
+	console.GlyphSuccess.Fprintf(p.out(), "Provider switched to: %s", getProviderDisplayName(provider))
+	console.GlyphInfo.Fprintf(p.out(), "Using model: %s", model)
 
 	// For local providers, proactively start the LLM server so the first
 	// chat request doesn't hit a connection-refused error.
 	if provider == api.SproutLocalClientType {
-		console.GlyphDim.Print("Starting local model server...")
+		console.GlyphDim.Fprintln(p.out(), "Starting local model server...")
 		if err := chatAgent.EnsureLocalServer(); err != nil {
-			console.GlyphWarning.Printf("Could not start local model server: %v", err)
-			console.GlyphInfo.Print("The server will start automatically on your first request.")
+			console.GlyphWarning.Fprintf(p.out(), "Could not start local model server: %v", err)
+			console.GlyphInfo.Fprintln(p.out(), "The server will start automatically on your first request.")
 		} else {
-			console.GlyphSuccess.Print("Local model server ready.")
+			console.GlyphSuccess.Fprintln(p.out(), "Local model server ready.")
 		}
 	}
 
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Println()
-		console.GlyphInfo.Print(note)
+		p.println()
+		console.GlyphInfo.Fprintln(p.out(), note)
 	}
 
 	return nil
-}
-
-// selectModelFromList allows users to interactively select from available models
-func selectModelFromList(models []api.ModelInfo, preferredModel string) (string, error) {
-	if len(models) == 0 {
-		return "", errors.New("no models available")
-	}
-
-	// If preferred model is available, use it
-	for _, model := range models {
-		if model.ID == preferredModel {
-			return preferredModel, nil
-		}
-	}
-
-	fmt.Println()
-	console.GlyphWarning.Printf("Preferred model '%s' not found.", preferredModel)
-	fmt.Println("Available models:")
-	for i, model := range models {
-		fmt.Printf("  %d) %s\n", i+1, model.ID)
-	}
-
-	fmt.Print("Select a model (or press Enter for first available): ")
-	input := readInput()
-
-	if input == "" {
-		// Default to first model
-		selectedModel := models[0].ID
-		console.GlyphDim.Printf("Selected first available model: %s", selectedModel)
-		return selectedModel, nil
-	}
-
-	// Try to parse as number
-	if selection, err := strconv.Atoi(input); err == nil && selection >= 1 && selection <= len(models) {
-		selectedModel := models[selection-1].ID
-		console.GlyphSuccess.Printf("Selected model: %s", selectedModel)
-		return selectedModel, nil
-	}
-
-	// Try to find exact match
-	for _, model := range models {
-		if strings.EqualFold(model.ID, input) {
-			console.GlyphSuccess.Printf("Selected model: %s", model.ID)
-			return model.ID, nil
-		}
-	}
-
-	console.GlyphError.Printf("Invalid selection. Using first available model: %s", models[0].ID)
-	return models[0].ID, nil
 }
 
 // getProviderDisplayName returns a user-friendly name for the provider

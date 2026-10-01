@@ -175,6 +175,7 @@ describe('cloudSessionStore', () => {
       const first = saveSession([userMsg('one')]);
       // Bump time so ordering is deterministic.
       await new Promise((r) => setTimeout(r, 5));
+      resetActiveSessionId();
       const second = saveSession([userMsg('two')]);
 
       const { sessions } = listSessions();
@@ -184,11 +185,15 @@ describe('cloudSessionStore', () => {
   });
 
   describe('active session id tracking', () => {
-    it('saveSession with no explicit id generates a fresh one each call', () => {
+    it('repeated saves of a new conversation update one record', () => {
       const a = saveSession([userMsg('a')]);
-      const b = saveSession([userMsg('b')]);
-      expect(a).not.toBe(b);
-      expect(listSessions().sessions).toHaveLength(2);
+      const b = saveSession([userMsg('a'), assistantMsg('reply')]);
+      const c = saveSession([userMsg('a'), assistantMsg('reply'), userMsg('more')]);
+      expect(b).toBe(a);
+      expect(c).toBe(a);
+      expect(getActiveSessionId()).toBe(a);
+      expect(listSessions().sessions).toHaveLength(1);
+      expect(listSessions().sessions[0].message_count).toBe(3);
     });
 
     it('restoreSession marks the session active so later saves update it', () => {
@@ -274,6 +279,7 @@ describe('cloudSessionStore', () => {
   describe('clearAllSessions', () => {
     it('wipes every cloud session key', () => {
       saveSession([userMsg('one')]);
+      resetActiveSessionId();
       saveSession([userMsg('two')]);
       expect(listSessions().sessions).toHaveLength(2);
 

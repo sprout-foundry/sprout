@@ -54,7 +54,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent("", "git_commit", req.Message))
+	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_commit", req.Message))
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,

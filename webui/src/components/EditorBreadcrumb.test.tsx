@@ -21,18 +21,29 @@ let root: ReturnType<typeof createRoot>;
 function renderBreadcrumb(
   props: Partial<{
     filePath: string;
+    workspaceRoot: string;
+    showFileName: boolean;
     onNavigate?: (path: string) => void;
     symbols?: BreadcrumbSymbol[];
     onNavigateToSymbol?: (line: number) => void;
   }> = {},
 ) {
-  const { filePath = 'src/components/App.tsx', onNavigate, symbols, onNavigateToSymbol } = props;
+  const {
+    filePath = 'src/components/App.tsx',
+    workspaceRoot,
+    showFileName,
+    onNavigate,
+    symbols,
+    onNavigateToSymbol,
+  } = props;
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root.render(
       <EditorBreadcrumb
         filePath={filePath}
+        workspaceRoot={workspaceRoot}
+        showFileName={showFileName}
         onNavigate={onNavigate}
         symbols={symbols}
         onNavigateToSymbol={onNavigateToSymbol}
@@ -88,6 +99,18 @@ describe('EditorBreadcrumb null rendering', () => {
   test('returns null for path with only one non-empty segment', () => {
     renderBreadcrumb({ filePath: 'src' });
     expect(container.querySelector('.editor-breadcrumb')).toBeNull();
+  });
+
+  test('shows a file inside the workspace relative to it', () => {
+    renderBreadcrumb({ filePath: '/home/ada/app/api/client.go', workspaceRoot: '/home/ada/app' });
+    expect(container.querySelector('.editor-breadcrumb')?.textContent).toBe('apiclient.go');
+    renderBreadcrumb({ filePath: '/home/ada/app/README.md', workspaceRoot: '/home/ada/app/', showFileName: true });
+    expect(container.querySelector('.editor-breadcrumb')?.textContent).toBe('README.md');
+  });
+
+  test('names a top-level file when asked to, for layouts without tabs', () => {
+    renderBreadcrumb({ filePath: '/README', showFileName: true });
+    expect(container.querySelector('.editor-breadcrumb')?.textContent).toContain('README');
   });
 });
 

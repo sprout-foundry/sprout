@@ -140,6 +140,17 @@ export interface CommandPaletteProps {
   /** True while the host is indexing files (or otherwise warming up data).
    *  Surfaces a spinner so the user knows results may be temporarily empty. */
   isLoading?: boolean;
+  /** The workspace's absolute path. File rows show their folder relative to
+   *  it (nothing for a file at the root) instead of the full path. */
+  workspaceRoot?: string;
+}
+
+function relativeDirectory(filePath: string, workspaceRoot?: string): string {
+  const path = filePath.replace(/\\/g, '/');
+  const root = (workspaceRoot ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const rel = root && path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
+  const slash = rel.lastIndexOf('/');
+  return slash <= 0 ? '' : rel.slice(0, slash);
 }
 
 function CommandPalette({
@@ -157,6 +168,7 @@ function CommandPalette({
   onOpenFileInNewPane,
   recentFiles,
   isLoading = false,
+  workspaceRoot,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);
@@ -309,7 +321,7 @@ function CommandPalette({
         const recents = recentFiles ?? [];
         // Decreasing score so most-recent stays on top after the group sort.
         recents.forEach((file, i) => {
-          const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+          const dir = relativeDirectory(file.path, workspaceRoot);
           items.push({
             kind: 'file',
             filePath: file.path,
@@ -322,7 +334,7 @@ function CommandPalette({
         });
       } else if (fileResults.length > 0) {
         for (const file of fileResults) {
-          const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+          const dir = relativeDirectory(file.path, workspaceRoot);
           const pathScore = fuzzyScore(q, file.path);
           if (pathScore.score < 0.3) continue;
           const nameScore = fuzzyScore(q, file.name);
@@ -432,7 +444,7 @@ function CommandPalette({
       }
     }
     return out;
-  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols, workspaceSymbols]);
+  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols, workspaceSymbols, workspaceRoot]);
 
   // Remember which item the user has selected (by its stable key).
   useEffect(() => {

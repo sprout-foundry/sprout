@@ -95,3 +95,23 @@ func (sp *sproutProvider) clearProviderError() {
 	}
 	sp.agent.state.SetLastProviderError(nil)
 }
+
+// isBodyTooLargeError reports whether err is an HTTP 413 — the provider
+// rejected the request body as oversized. Distinct from context overflow:
+// the remedy is shedding payload (inline images), not compacting history.
+func isBodyTooLargeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Provider HTTP errors are formatted as "HTTP <code>" (optionally
+	// followed by ": <body>" or " (empty body, ...)"). Match the code
+	// precisely — the next character must not be a digit — so
+	// "HTTP 4130" never matches.
+	msg := err.Error()
+	idx := strings.Index(msg, "HTTP 413")
+	if idx < 0 {
+		return false
+	}
+	end := idx + len("HTTP 413")
+	return end == len(msg) || (msg[end] < '0' || msg[end] > '9')
+}

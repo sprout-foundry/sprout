@@ -314,7 +314,7 @@ function ReviewWorkspaceTab({
                 <div className="processing-spinner">
                   <Loader2 size={14} />
                 </div>
-                <div className="processing-text">Running deep review…</div>
+                <div className="processing-text">Running review…</div>
               </div>
             </div>
           ) : null}

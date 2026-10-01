@@ -35,6 +35,9 @@ func TestBuildReviewerChangeContext_StagedScopeExcludesUnstaged(t *testing.T) {
 	if strings.Contains(got, "unstaged") || strings.Contains(got, "untracked.go") {
 		t.Errorf("staged scope leaked unstaged/untracked content:\n%s", got)
 	}
+	if !strings.Contains(got, "(staged content, line-numbered)") || !strings.Contains(got, `    3  func main() { println("staged") }`) {
+		t.Errorf("staged excerpt not taken from the index:\n%s", got)
+	}
 	if !strings.Contains(got, "git diff --cached") {
 		t.Errorf("staged scope not labeled:\n%s", got)
 	}

@@ -555,7 +555,7 @@ export const useGitWorkspace = ({
       onViewChange('editor');
     } catch (error) {
       warn(`[handleRunReview] failed: ${error instanceof Error ? error.message : String(error)}`);
-      setReviewError(error instanceof Error ? error.message : 'Failed to generate deep review');
+      setReviewError(error instanceof Error ? error.message : 'Failed to generate review');
       setDeepReview(null);
     } finally {
       setIsReviewLoading(false);
@@ -606,7 +606,7 @@ export const useGitWorkspace = ({
         await poll();
       } catch (error) {
         warn(`[handleFixFromReview] outer error: ${error instanceof Error ? error.message : String(error)}`);
-        setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from deep review');
+        setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from review');
         setIsReviewFixing(false);
       }
     },

@@ -174,7 +174,7 @@ If there is no `design/` directory, none of the above applies — do not create 
      - It touches a risk class: auth, secrets/credentials, DB migrations or persisted state, concurrency, protocol/API compatibility, security-sensitive code
      - The change came from a subagent and something about it feels off
      - The user asked for a dedicated review
-   - The reviewer receives the working-tree diff and repo conventions automatically; your prompt only needs the intent of the change and anything risky to focus on. For a review of a commit or branch instead, name the range.
+   - The reviewer receives the working-tree diff, line-numbered code around each change, new files, and repo conventions automatically. Keep your prompt to a few lines: the intent of the change and the risks to focus on. Do not pass `files` contents or paste diffs, and do not ask it to build or run tests — you already proved the change. For a review of a commit or branch instead, name the range.
    - For very large diffs (roughly 1500+ changed lines), split the review across 2–4 `reviewer` tasks in `run_parallel_subagents`, each assigned a file group, then merge their findings.
    - Fix findings by severity: MUST_FIX before commit; VERIFY by confirming acceptable or fixing; NOTE is optional.
    - After substantial MUST_FIX fixes, one re-review of the new diff is enough. Do not loop reviews.

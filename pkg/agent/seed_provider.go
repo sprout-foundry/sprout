@@ -306,6 +306,15 @@ func (sp *sproutProvider) resolveBillingType() string {
 	provider := sp.agent.GetProvider()
 	// Check embedded provider configs for explicit billing_type
 	cfg, err := providers.GlobalFactory().GetProviderConfig(provider)
+	if err == nil && cfg != nil && cfg.BillingType != "" {
+		return cfg.BillingType
+	}
+	// Local model-serving clients have zero marginal cost regardless of
+	// endpoint — a LAN-hosted Ollama is still free.
+	switch sp.agent.getClientType() {
+	case api.OllamaLocalClientType, api.LMStudioClientType, api.SproutLocalClientType:
+		return BillingFree
+	}
 	if err == nil && cfg != nil {
 		return cfg.BillingTypeResolved()
 	}

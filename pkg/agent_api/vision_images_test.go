@@ -31,9 +31,10 @@ func TestTrimImagesBeyondLatestWithinBudget(t *testing.T) {
 	if CountImages(got) != 2 {
 		t.Errorf("CountImages() = %d, want 2 (budget not binding)", CountImages(got))
 	}
-	// Not binding: the input slice must come back untouched (stable prefix).
-	if &got[0] == &msgs[0] && got[0].Content != "q" {
-		t.Errorf("content mutated: %q", got[0].Content)
+	// Not binding: the input slice must come back as-is (stable wire
+	// prefix for the provider's prompt cache).
+	if &got[0] != &msgs[0] {
+		t.Error("non-binding budget must return the input slice unchanged")
 	}
 }
 
@@ -93,8 +94,11 @@ func TestTrimImagesBeyondLatestZeroBudgetStripsAll(t *testing.T) {
 	if CountImages(got) != 0 {
 		t.Errorf("CountImages() = %d, want 0", CountImages(got))
 	}
-	if !strings.Contains(got[0].Content, "withheld") {
-		t.Errorf("note missing after full strip")
+	// The 413 cascade's terminal strip is a server-side rejection — the
+	// note must say the body limit withheld the pixels, not that the model
+	// declined image input.
+	if !strings.Contains(got[0].Content, imageWithholdNote) {
+		t.Errorf("note should be the body-limit withhold note, got %q", got[0].Content)
 	}
 }
 
@@ -105,7 +109,7 @@ func TestTrimImagesBeyondLatestIdempotentNote(t *testing.T) {
 	}
 	once := TrimImagesBeyondLatest(msgs, 0)
 	twice := TrimImagesBeyondLatest(once, 0)
-	if strings.Count(twice[0].Content, "withheld") > 2 {
-		t.Errorf("note duplicated across calls: %q", twice[0].Content)
+	if n := strings.Count(twice[0].Content, "withheld"); n > 1 {
+		t.Errorf("note duplicated across calls (%d): %q", n, twice[0].Content)
 	}
 }

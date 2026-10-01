@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -224,7 +225,7 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 	}
 
 	if len(listResp.Models) > 0 {
-		bracketWarn(os.Stderr, fmt.Sprintf("Model '%s' not found locally. Available models: %v", model, availableModels))
+		console.GlyphWarning.Fprintln(os.Stderr, fmt.Sprintf("Model '%s' not found locally. Available models: %v", model, availableModels))
 		fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 		c.model = listResp.Models[0].Name
 		return nil

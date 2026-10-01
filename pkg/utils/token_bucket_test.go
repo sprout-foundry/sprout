@@ -339,13 +339,32 @@ func TestTokenRefill(t *testing.T) {
 		t.Errorf("Expected bucket to be empty, got %f tokens", tb.GetAvailableTokens())
 	}
 
-	// Wait for refill (100ms should give 1 token at 10 tps)
-	time.Sleep(100 * time.Millisecond)
+	// time.Sleep is a lower bound, so a loaded CI runner (the slow macOS
+	// runners in particular) can overshoot well past the requested
+	// duration. A fixed token window ("~1 token after 100ms") turns that
+	// overshoot into a flake. Instead, measure the tokens gained between
+	// two consecutive reads and compare against the elapsed time actually
+	// observed: each GetAvailableTokens call refills up to "now", so the
+	// delta is exactly rate * (time between reads), with no dependence on
+	// absolute scheduling. Looped per the flake policy so a single slow
+	// tick cannot pass by luck.
+	rate := tb.GetRate()
+	prev := tb.GetAvailableTokens()
+	for i := 0; i < 10; i++ {
+		start := time.Now()
+		time.Sleep(20 * time.Millisecond)
+		elapsed := time.Since(start)
 
-	// Should have ~1 token now
-	available := tb.GetAvailableTokens()
-	if available < 0.8 || available > 1.2 {
-		t.Errorf("Expected ~1 token after 100ms at 10 tps, got %f", available)
+		available := tb.GetAvailableTokens()
+		delta := available - prev
+		want := rate * elapsed.Seconds()
+		if delta < want*0.9 {
+			t.Errorf("iter %d: refill %f tokens in %v, want >= %.3f", i, delta, elapsed, want*0.9)
+		}
+		if delta > want+0.2 {
+			t.Errorf("iter %d: refill %f tokens in %v, want <= %.3f", i, delta, elapsed, want+0.2)
+		}
+		prev = available
 	}
 }
 

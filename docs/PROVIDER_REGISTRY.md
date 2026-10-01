@@ -95,7 +95,7 @@ Quick summary:
 The struct lives at
 [`pkg/agent_providers/provider_config.go::ProviderConfig`](../pkg/agent_providers/provider_config.go).
 The remote-fetch duplicate (`RemoteProviderConfig` in
-[`pkg/providerregistry/registry.go`](../pkg/providerregistry/registry.go))
+`pkg/providerregistry` (registry_providers.go / registry_aliases.go / registry_models.go))
 shadows it field-for-field; the conversion happens in
 `RemoteProviderConfig.ToProviderConfig()`. Both share the same
 validation rules via `validateRemoteConfig`.

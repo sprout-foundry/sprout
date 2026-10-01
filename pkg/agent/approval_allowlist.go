@@ -1,36 +1,28 @@
+// Package agent: shell-command allowlist + persistence — *Agent forwarders
+// (SP-141 phase 3, increment 3). The implementation lives in
+// pkg/agent/approvals (allowlist.go); these one-line methods keep the
+// *Agent method surface used by the approval broker, the tool-security
+// gates, and seed-time security checks.
+//
+// Behavior preservation: each forwarder keeps the pre-move
+// `agent == nil` guard before resolving config/manager (GetConfigManager
+// is not nil-safe on a nil *Agent). ElevateSessionToPermissive is not
+// moved — it mutates agent-local risk-profile state.
+
 package agent
 
 import (
-	"path"
-
+	"github.com/sprout-foundry/sprout/pkg/agent/approvals"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // IsShellCommandAllowlisted reports whether the command matches an approved literal or glob pattern.
 // Critical-tier commands are still blocked regardless of allowlist matches.
 func (a *Agent) IsShellCommandAllowlisted(command string) bool {
-	if a == nil || command == "" {
+	if a == nil {
 		return false
 	}
-	cfg := a.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	// 1. Literal match against ApprovedShellCommands (unchanged behavior).
-	for _, c := range cfg.ApprovedShellCommands {
-		if c == command {
-			return true
-		}
-	}
-	// 2. Glob pattern match against ApprovedShellCommandPatterns.
-	// path.Match uses glob syntax (not regexp) — safer and simpler.
-	for _, pattern := range cfg.ApprovedShellCommandPatterns {
-		if matched, err := path.Match(pattern, command); err == nil && matched {
-			return true
-		}
-	}
-	return false
+	return approvals.IsShellCommandAllowlisted(a.GetConfig(), command)
 }
 
 // PersistShellCommandAllowlist appends command to the user's persistent
@@ -40,24 +32,9 @@ func (a *Agent) IsShellCommandAllowlisted(command string) bool {
 // a save so the file's mtime updates (cheap).
 func (a *Agent) PersistShellCommandAllowlist(command string) error {
 	if a == nil {
-		return agenterrors.NewPermission("nil agent", nil)
+		return approvals.ErrNilAgent
 	}
-	if command == "" {
-		return agenterrors.NewValidation("cannot allowlist empty command", nil)
-	}
-	mgr := a.GetConfigManager()
-	if mgr == nil {
-		return agenterrors.NewPermission("no config manager — cannot persist allowlist", nil)
-	}
-	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
-		for _, c := range cfg.ApprovedShellCommands {
-			if c == command {
-				return nil
-			}
-		}
-		cfg.ApprovedShellCommands = append(cfg.ApprovedShellCommands, command)
-		return nil
-	})
+	return approvals.PersistShellCommandAllowlist(a.GetConfigManager(), command)
 }
 
 // PersistShellCommandPattern appends pattern to the user's persistent
@@ -67,53 +44,17 @@ func (a *Agent) PersistShellCommandAllowlist(command string) error {
 // a save so the file's mtime updates (cheap).
 func (a *Agent) PersistShellCommandPattern(pattern string) error {
 	if a == nil {
-		return agenterrors.NewPermission("nil agent", nil)
+		return approvals.ErrNilAgent
 	}
-	if pattern == "" {
-		return agenterrors.NewValidation("cannot allowlist empty pattern", nil)
-	}
-	mgr := a.GetConfigManager()
-	if mgr == nil {
-		return agenterrors.NewPermission("no config manager — cannot persist allowlist pattern", nil)
-	}
-	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
-		for _, p := range cfg.ApprovedShellCommandPatterns {
-			if p == pattern {
-				return nil
-			}
-		}
-		cfg.ApprovedShellCommandPatterns = append(cfg.ApprovedShellCommandPatterns, pattern)
-		return nil
-	})
+	return approvals.PersistShellCommandPattern(a.GetConfigManager(), pattern)
 }
 
 // PersistShellCommandAskPolicy adds a "always ask" command policy rule for the given command.
 func (a *Agent) PersistShellCommandAskPolicy(command string) error {
 	if a == nil {
-		return agenterrors.NewPermission("nil agent", nil)
+		return approvals.ErrNilAgent
 	}
-	if command == "" {
-		return agenterrors.NewValidation("cannot persist empty command as ask policy", nil)
-	}
-	mgr := a.GetConfigManager()
-	if mgr == nil {
-		return agenterrors.NewPermission("no config manager — cannot persist ask policy", nil)
-	}
-	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
-		if cfg.CommandPolicies == nil {
-			cfg.CommandPolicies = &configuration.CommandPolicies{}
-		}
-		for _, r := range cfg.CommandPolicies.Rules {
-			if r.Pattern == command && r.Action == configuration.CommandPolicyAsk {
-				return nil // already exists
-			}
-		}
-		cfg.CommandPolicies.Rules = append(cfg.CommandPolicies.Rules, configuration.CommandRule{
-			Pattern: command,
-			Action:  configuration.CommandPolicyAsk,
-		})
-		return nil
-	})
+	return approvals.PersistShellCommandAskPolicy(a.GetConfigManager(), command)
 }
 
 // ElevateSessionToPermissive sets the transient risk-profile override to "permissive" for this session.

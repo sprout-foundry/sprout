@@ -1320,15 +1320,6 @@ func TestGetChangeTrackingStatus_NilAgent(t *testing.T) {
 // Review Context Tests
 // =====================================================================
 
-func TestExtractStagedChangesSummary_NoGitRepo(t *testing.T) {
-	// Create a temp dir that is not a git repo, using t.Chdir for auto-restore
-	t.Chdir(t.TempDir())
-
-	// extractStagedChangesSummary should return "" when not in a git repo
-	result := extractStagedChangesSummary()
-	assert.Equal(t, "", result)
-}
-
 // =====================================================================
 // BuildLogActions Tests
 // =====================================================================

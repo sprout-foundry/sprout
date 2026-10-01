@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,8 +17,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// handleAPIGitDeepReview performs the same deep staged review flow as /review-deep,
-// but without routing through /api/query so it doesn't pollute chat history.
+// handleAPIGitDeepReview runs a single-call, evidence-focused review of the
+// staged change and returns structured MUST_FIX/VERIFY guidance for the review
+// tab's fix picker. It does not use the reviewer subagent that /review-deep
+// runs. It bypasses /api/query so the review doesn't enter chat history.
 func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -83,16 +83,12 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	}
 
 	reviewCtx := &codereview.ReviewContext{
-		Diff:             optimizedDiff.OptimizedContent,
-		Config:           cfg,
-		Logger:           logger,
-		AgentClient:      agentClient,
-		ProjectType:      ws.gitReviewDetectProjectType(workspaceRoot),
-		CommitMessage:    ws.gitReviewExtractStagedChangesSummary(workspaceRoot),
-		KeyComments:      gitReviewExtractKeyCommentsFromDiff(stagedDiff),
-		ChangeCategories: gitReviewCategorizeChanges(stagedDiff),
-		FullFileContext:  ws.gitReviewExtractFileContextForChanges(workspaceRoot, stagedDiff),
+		Diff:        optimizedDiff.OptimizedContent,
+		Config:      cfg,
+		Logger:      logger,
+		AgentClient: agentClient,
 	}
+	codereview.BuildStagedContext(r.Context(), workspaceRoot, stagedDiff).Apply(reviewCtx)
 
 	if len(optimizedDiff.FileSummaries) > 0 {
 		var summaryInfo strings.Builder
@@ -104,19 +100,18 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	}
 
 	opts := &codereview.ReviewOptions{
-		Type:             codereview.StagedReview,
-		SkipPrompt:       true,
-		RollbackOnReject: false,
+		Type:       codereview.StagedReview,
+		SkipPrompt: true,
 	}
 
 	reviewResponse, err := service.PerformAgenticReview(reviewCtx, opts)
 	if err != nil {
-		writeJSONErr(w, http.StatusInternalServerError, "deep_review_failed", fmt.Sprintf("Deep review failed: %v", err))
+		writeJSONErr(w, http.StatusInternalServerError, "deep_review_failed", fmt.Sprintf("Review failed: %v", err))
 		return
 	}
 
 	reviewOutput := fmt.Sprintf("%s\n%s\n\nStatus: %s\n\nFeedback:\n%s",
-		"[list] AI CODE REVIEW (DEEP PASS)",
+		"[list] AI CODE REVIEW",
 		strings.Repeat("═", 50),
 		strings.ToUpper(reviewResponse.Status),
 		reviewResponse.Feedback)
@@ -129,7 +124,7 @@ func (ws *ReactWebServer) handleAPIGitDeepReview(w http.ResponseWriter, r *http.
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":              "Deep review completed",
+		"message":              "Review completed",
 		"status":               reviewResponse.Status,
 		"feedback":             reviewResponse.Feedback,
 		"detailed_guidance":    reviewResponse.DetailedGuidance,
@@ -282,7 +277,7 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID, fixPrompt st
 		prompt += "\n\nFirst validate that each of these selected review items is a valid issue, then use subagents to address the valid ones. When resolved, use a code review subagent to review the solution and iterate until the issues are resolved."
 	} else {
 		fixInstructions := "First validate that all of these review items are valid issues, then use subagents to address any of the valid issues. When they are resolved, use a code review subagent to review the solution and fix any issues that come out of it and iterate through the process until the issues are resolved."
-		prompt = fmt.Sprintf("Use this deep review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
+		prompt = fmt.Sprintf("Use this review output as input:\n\n%s\n\n%s", reviewOutput, fixInstructions)
 		if strings.TrimSpace(fixPrompt) != "" {
 			prompt += fmt.Sprintf("\n\nAdditional instructions from the user:\n%s", fixPrompt)
 		}
@@ -476,173 +471,4 @@ func (j *gitFixReviewJob) snapshot(since int) (status string, logs []string, nex
 	copy(chunk, j.Logs[since:])
 
 	return j.Status, chunk, total, j.Result, j.Error
-}
-
-func (ws *ReactWebServer) gitReviewDetectProjectType(workspaceRoot string) string {
-	projectMarkers := []struct {
-		name string
-		file string
-	}{
-		{name: "Go project", file: "go.mod"},
-		{name: "Node.js project", file: "package.json"},
-		{name: "Python project", file: "requirements.txt"},
-		{name: "Python project", file: "setup.py"},
-		{name: "Python project", file: "pyproject.toml"},
-		{name: "Rust project", file: "Cargo.toml"},
-		{name: "Ruby project", file: "Gemfile"},
-	}
-
-	for _, marker := range projectMarkers {
-		if _, err := os.Stat(filepath.Join(workspaceRoot, marker.file)); err == nil {
-			return marker.name
-		}
-	}
-	return ""
-}
-
-func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary(workspaceRoot string) string {
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--stat")
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-
-	statLines := strings.Split(string(output), "\n")
-	if len(statLines) > 0 && strings.TrimSpace(statLines[0]) != "" {
-		return fmt.Sprintf("Staged changes summary: %s", strings.TrimSpace(statLines[0]))
-	}
-	return ""
-}
-
-func gitReviewExtractKeyCommentsFromDiff(diff string) string {
-	lines := strings.Split(diff, "\n")
-	keyComments := make([]string, 0, 8)
-	currentFile := ""
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git") {
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				currentFile = strings.TrimPrefix(parts[3], "b/")
-			}
-			continue
-		}
-
-		if strings.HasPrefix(line, "+") && (strings.Contains(line, "//") || strings.Contains(line, "#")) {
-			comment := strings.TrimSpace(strings.TrimPrefix(line, "+"))
-			if gitReviewIsImportantComment(comment) {
-				keyComments = append(keyComments, fmt.Sprintf("- %s: %s", currentFile, comment))
-			}
-		}
-	}
-
-	if len(keyComments) == 0 {
-		return ""
-	}
-	if len(keyComments) > 10 {
-		keyComments = keyComments[:10]
-	}
-	return strings.Join(keyComments, "\n")
-}
-
-func gitReviewIsImportantComment(comment string) bool {
-	return codereview.IsImportantComment(comment)
-}
-
-func gitReviewCategorizeChanges(diff string) string {
-	lines := strings.Split(diff, "\n")
-	categories := make(map[string]int)
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git") || strings.HasPrefix(line, "index") {
-			continue
-		}
-
-		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			addedLine := strings.TrimPrefix(line, "+")
-			if strings.Contains(strings.ToUpper(addedLine), "SECURITY") ||
-				strings.Contains(addedLine, "filesystem.ErrOutsideWorkingDirectory") ||
-				strings.Contains(addedLine, "WithSecurityBypass") {
-				categories["Security fixes/improvements"]++
-			}
-			if strings.Contains(addedLine, "error") ||
-				strings.Contains(addedLine, "Err") ||
-				strings.Contains(addedLine, "return nil") ||
-				strings.Contains(addedLine, "if err") {
-				categories["Error handling"]++
-			}
-			if strings.Contains(addedLine, "require(") ||
-				strings.Contains(addedLine, "github.com/") ||
-				strings.Contains(addedLine, "go.mod") {
-				categories["Dependency updates"]++
-			}
-			if strings.Contains(addedLine, "Test") || strings.Contains(addedLine, "test") {
-				categories["Test changes"]++
-			}
-		}
-
-		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			categories["Code removal/refactoring"]++
-		}
-	}
-
-	if len(categories) == 0 {
-		return ""
-	}
-
-	linesOut := make([]string, 0, len(categories))
-	for category, count := range categories {
-		linesOut = append(linesOut, fmt.Sprintf("- %s (%d changes)", category, count))
-	}
-	return strings.Join(linesOut, "\n")
-}
-
-func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(workspaceRoot, diff string) string {
-	lines := strings.Split(diff, "\n")
-	changedFiles := make(map[string]bool)
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git") {
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				changedFiles[strings.TrimPrefix(parts[3], "b/")] = true
-			}
-		}
-	}
-
-	contextParts := make([]string, 0, len(changedFiles))
-	for relPath := range changedFiles {
-		if !ws.gitReviewIsValidRepoFilePath(workspaceRoot, relPath) || gitReviewShouldSkipFileForContext(relPath) {
-			continue
-		}
-
-		absPath := filepath.Join(workspaceRoot, relPath)
-		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// Skip files that exceed the read size limit
-		if fi, statErr := os.Stat(absPath); statErr == nil && fi.Size() > maxFileReadSize {
-			continue
-		}
-
-		content, err := os.ReadFile(absPath)
-		if err != nil {
-			continue
-		}
-
-		fileLines := strings.Split(string(content), "\n")
-		maxLines := 500
-		if len(fileLines) < maxLines {
-			maxLines = len(fileLines)
-		}
-		if maxLines > 0 {
-			contextParts = append(contextParts, fmt.Sprintf("### %s\n```go\n%s\n```", relPath, strings.Join(fileLines[:maxLines], "\n")))
-		}
-	}
-
-	if len(contextParts) == 0 {
-		return ""
-	}
-	return strings.Join(contextParts, "\n\n")
 }

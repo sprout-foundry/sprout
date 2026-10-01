@@ -43,7 +43,7 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?}. " +
 			"IDs auto-generate as task-1, task-2, etc. when omitted.\n\n" +
 			"`persona` is optional per task (same IDs as `run_subagent`) and applies that persona's system prompt, tools, and provider/model. " +
-			"Tasks without a persona use the default subagent config (`subagent_provider` / `subagent_model`). " +
+			"Tasks without a persona use the default subagent persona, as with `run_subagent`. " +
 			"For a large diff review, split it across `reviewer` tasks by file group so each reviewer judges a slice concurrently.\n\n" +
 			"**Result contract**: each subagent's `files_modified` (also mirrored as " +
 			"`[subagent files modified] … [/subagent files modified]` at the top of its `stdout`) " +

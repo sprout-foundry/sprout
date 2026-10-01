@@ -109,20 +109,10 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 	}
 
 	prepared := *ctx
-	if len(ctx.RelatedFiles) > 0 {
-		prepared.RelatedFiles = append([]string(nil), ctx.RelatedFiles...)
-	}
 
 	prepared.CommitMessage = truncateForPromptSection(prepared.CommitMessage, maxReviewMetadataFieldBytes, "commit message")
 	prepared.KeyComments = truncateForPromptSection(prepared.KeyComments, maxReviewMetadataFieldBytes, "key comments")
 	prepared.ChangeCategories = truncateForPromptSection(prepared.ChangeCategories, maxReviewMetadataFieldBytes, "change categories")
-	prepared.OriginalPrompt = truncateForPromptSection(prepared.OriginalPrompt, maxReviewMetadataFieldBytes, "original request")
-	prepared.ProcessedInstructions = truncateForPromptSection(prepared.ProcessedInstructions, maxReviewMetadataFieldBytes, "processed instructions")
-
-	if len(prepared.RelatedFiles) > maxReviewRelatedFiles {
-		omitted := len(prepared.RelatedFiles) - maxReviewRelatedFiles
-		prepared.RelatedFiles = append(prepared.RelatedFiles[:maxReviewRelatedFiles], fmt.Sprintf("... (%d additional related files omitted)", omitted))
-	}
 
 	promptBudget := s.reviewPromptByteBudget(&prepared)
 	promptDirty := true
@@ -150,21 +140,9 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 		return &prepared
 	}
 
-	if len(prepared.RelatedFiles) > 0 {
-		prepared.RelatedFiles = nil
-		promptDirty = true
-		prompt = rebuildPrompt()
-	}
-
-	if len(prompt) <= promptBudget {
-		return &prepared
-	}
-
 	prepared.KeyComments = ""
 	prepared.ChangeCategories = ""
 	prepared.CommitMessage = truncateForPromptSection(prepared.CommitMessage, 4*1024, "commit message")
-	prepared.OriginalPrompt = truncateForPromptSection(prepared.OriginalPrompt, 4*1024, "original request")
-	prepared.ProcessedInstructions = truncateForPromptSection(prepared.ProcessedInstructions, 4*1024, "processed instructions")
 	promptDirty = true
 	prompt = rebuildPrompt()
 
@@ -175,7 +153,6 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 	overheadCtx := prepared
 	overheadCtx.Diff = ""
 	overheadCtx.FullFileContext = ""
-	overheadCtx.RelatedFiles = nil
 	overhead := len(s.buildEnhancedReviewPrompt(&overheadCtx, false))
 	remaining := promptBudget - overhead - len("\n## Code Changes to Review\n```diff\n\n```")
 	if remaining < 8*1024 {
@@ -280,24 +257,8 @@ func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, struct
 		promptParts = append(promptParts, fmt.Sprintf("\n## Change Categories\n%s", ctx.ChangeCategories))
 	}
 
-	// Add related files context if available
-	if len(ctx.RelatedFiles) > 0 {
-		promptParts = append(promptParts, fmt.Sprintf("\n## Related Files to Consider\nThe following files may be affected by or related to these changes:\n%s", strings.Join(ctx.RelatedFiles, "\n")))
-	}
-
-	// Add original prompt context
-	if ctx.OriginalPrompt != "" {
-		promptParts = append(promptParts, fmt.Sprintf("\n## Original Request\n%s", ctx.OriginalPrompt))
-	}
-
-	// Add processed instructions if available
-	if ctx.ProcessedInstructions != "" {
-		promptParts = append(promptParts, fmt.Sprintf("\n## Processed Instructions\n%s", ctx.ProcessedInstructions))
-	}
-
-	// Add full file context if available
 	if ctx.FullFileContext != "" {
-		promptParts = append(promptParts, fmt.Sprintf("\n## Full File Context\n%s", ctx.FullFileContext))
+		promptParts = append(promptParts, fmt.Sprintf("\n## Code Around Each Change (current file content, line-numbered)\n%s", ctx.FullFileContext))
 	}
 
 	// Add the diff to review (LAST, after all context)

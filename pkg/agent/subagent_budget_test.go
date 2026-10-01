@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,10 +15,10 @@ func TestPersonaBudget_ReviewerDefaults(t *testing.T) {
 	_, runner := newReviewTestRunner(t)
 
 	b := runner.personaBudget("code_reviewer")
-	if b.iterations != 30 || b.duration != 10*time.Minute {
-		t.Fatalf("reviewer budget = %+v, want 30 iterations / 10m", b)
+	if b.iterations != 15 || b.duration != 8*time.Minute {
+		t.Fatalf("reviewer budget = %+v, want 15 iterations / 8m", b)
 	}
-	if got := b.hardMaxIterations(); got != 30+subagentWrapUpIterations {
+	if got := b.hardMaxIterations(); got != 15+subagentWrapUpIterations {
 		t.Errorf("hardMaxIterations = %d", got)
 	}
 	if !runner.personaBudget("coder").isZero() {
@@ -32,7 +34,7 @@ func TestCreateSubagent_MaxIterationsFollowsPersonaBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reviewer.Shutdown()
-	if reviewer.maxIterations != 30+subagentWrapUpIterations {
+	if reviewer.maxIterations != 15+subagentWrapUpIterations {
 		t.Errorf("reviewer maxIterations = %d", reviewer.maxIterations)
 	}
 
@@ -50,7 +52,7 @@ func TestResolveSubagentTimeout_PersonaBudget(t *testing.T) {
 	_, runner := newReviewTestRunner(t)
 	t.Setenv("SPROUT_TOOL_TIMEOUT", "")
 
-	if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "reviewer"}); got != 10*time.Minute+subagentWrapUpGrace {
+	if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "reviewer"}); got != 8*time.Minute+subagentWrapUpGrace {
 		t.Errorf("reviewer timeout = %s", got)
 	}
 	if got := runner.resolveSubagentTimeout(SubagentOptions{Persona: "coder"}); got != defaultSubagentTimeout {
@@ -80,9 +82,10 @@ func TestMonitorWrapUp_InjectsOnceAtIterationBudget(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	var injected atomic.Bool
 	done := make(chan struct{})
 	go func() {
-		monitorWrapUp(ctx, sub, subagentBudget{iterations: 3}, time.Now())
+		monitorWrapUp(ctx, sub, subagentBudget{iterations: 3}, time.Now(), &injected)
 		close(done)
 	}()
 
@@ -108,6 +111,9 @@ func TestMonitorWrapUp_InjectsOnceAtIterationBudget(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("monitor did not exit after injecting")
 	}
+	if !injected.Load() {
+		t.Error("injected flag not set")
+	}
 }
 
 func TestMonitorWrapUp_TimeBudget(t *testing.T) {
@@ -124,7 +130,7 @@ func TestMonitorWrapUp_TimeBudget(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	go monitorWrapUp(ctx, sub, subagentBudget{duration: time.Minute}, time.Now().Add(-2*time.Minute))
+	go monitorWrapUp(ctx, sub, subagentBudget{duration: time.Minute}, time.Now().Add(-2*time.Minute), nil)
 
 	select {
 	case msg := <-sub.inputInjectionChan:
@@ -186,5 +192,27 @@ func TestLowContextSubagentStillNarrowedByPersona(t *testing.T) {
 
 	if len(parent.contextProfile.ToolAllowlist) > 0 && !toolNames(parent.getOptimizedToolDefinitions(nil))["write_file"] {
 		t.Error("root agent's low-context allowlist was narrowed by persona")
+	}
+}
+
+func TestSubagentRunRecord(t *testing.T) {
+	base := &SubagentResult{ID: "t1", Elapsed: 1500 * time.Millisecond, Iterations: 12, ToolCalls: 20, TokensUsed: 900, Cost: 0.01}
+	rec := subagentRunRecord("reviewer", base, 38, false, true)
+	if rec["outcome"] != "completed" || rec["elapsed_ms"] != int64(1500) || rec["iterations"] != 12 ||
+		rec["max_iterations"] != 38 || rec["wrap_up_injected"] != true || rec["persona"] != "reviewer" {
+		t.Errorf("unexpected record: %v", rec)
+	}
+
+	for _, tc := range []struct {
+		r    SubagentResult
+		want string
+	}{
+		{SubagentResult{Cancelled: true, Error: errors.New("x")}, "cancelled"},
+		{SubagentResult{Truncated: true}, "budget_exceeded"},
+		{SubagentResult{Error: errors.New("boom")}, "error"},
+	} {
+		if got := subagentRunRecord("coder", &tc.r, 200, false, false)["outcome"]; got != tc.want {
+			t.Errorf("outcome = %v, want %s", got, tc.want)
+		}
 	}
 }

@@ -3,7 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // A persona's iteration/time budget is soft: on reaching it the subagent is
@@ -55,8 +58,8 @@ func subagentWrapUpMessage(reason string) string {
 }
 
 // monitorWrapUp injects a single wrap-up instruction into agent once it
-// reaches either soft budget, then exits.
-func monitorWrapUp(ctx context.Context, agent *Agent, b subagentBudget, start time.Time) {
+// reaches either soft budget, then exits. injected records whether it fired.
+func monitorWrapUp(ctx context.Context, agent *Agent, b subagentBudget, start time.Time, injected *atomic.Bool) {
 	if agent == nil || b.isZero() {
 		return
 	}
@@ -79,8 +82,45 @@ func monitorWrapUp(ctx context.Context, agent *Agent, b subagentBudget, start ti
 			}
 			if err := agent.InjectInputContext(subagentWrapUpMessage(reason)); err != nil {
 				agent.Logger().Debug("[subagent] wrap-up injection failed: %v\n", err)
+			} else if injected != nil {
+				injected.Store(true)
 			}
 			return
 		}
+	}
+}
+
+// subagentRunRecord is the per-run telemetry written to the runlog so subagent
+// cost and duration can be measured per persona (e.g. whether reviews are slow
+// because of turn count or per-turn latency).
+func subagentRunRecord(persona string, result *SubagentResult, maxIterations int, hitMaxIterations, wrapUpInjected bool) map[string]any {
+	outcome := "completed"
+	switch {
+	case result.Cancelled:
+		outcome = "cancelled"
+	case result.BudgetExceeded || result.Truncated:
+		outcome = "budget_exceeded"
+	case result.Error != nil:
+		outcome = "error"
+	}
+	return map[string]any{
+		"task_id":            result.ID,
+		"persona":            persona,
+		"outcome":            outcome,
+		"elapsed_ms":         result.Elapsed.Milliseconds(),
+		"iterations":         result.Iterations,
+		"max_iterations":     maxIterations,
+		"hit_max_iterations": hitMaxIterations,
+		"wrap_up_injected":   wrapUpInjected,
+		"tool_calls":         result.ToolCalls,
+		"tokens_used":        result.TokensUsed,
+		"cost":               result.Cost,
+		"output_complete":    result.OutputComplete,
+	}
+}
+
+func logSubagentRun(record map[string]any) {
+	if logger := utils.GetRunLogger(); logger != nil {
+		logger.LogEvent("subagent_run", record)
 	}
 }

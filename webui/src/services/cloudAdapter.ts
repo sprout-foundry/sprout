@@ -279,7 +279,7 @@ export class CloudAdapter implements APIAdapter {
       await browserGit.whenBrowserGitConfigured();
 
       const origin = await browserGit.gitOriginUrl();
-      const sameRepo = origin !== null && sameRepoRef(origin, want.owner, want.name);
+      const sameRepo = origin !== null && sameRepoRef(origin, want, parseRepoRef);
       if (sameRepo) {
         await browserGit.restoreGitWorkingTree();
       } else {
@@ -573,13 +573,21 @@ export class CloudAdapter implements APIAdapter {
 }
 
 /** Whether a remote URL points at owner/name (case-insensitive, .git optional). */
-function sameRepoRef(remoteURL: string, owner: string, name: string): boolean {
-  // owner may span several segments (GitLab subgroups), so compare the whole
-  // repo path at the end of the remote.
-  const remote = remoteURL
-    .replace(/\.git$/, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
-  const path = `${owner}/${name}`.toLowerCase();
-  return remote.endsWith(`/${path}`) || remote.endsWith(`:${path}`);
+function sameRepoRef(
+  remoteURL: string,
+  want: { host: string; owner: string; name: string },
+  parseRepoRef: (input: string) => { host: string; owner: string; name: string },
+): boolean {
+  // Host and full path must both match: the same owner/name can exist on
+  // several hosts, and owner may span segments (GitLab subgroups).
+  try {
+    const have = parseRepoRef(remoteURL);
+    return (
+      have.host === want.host &&
+      have.owner.toLowerCase() === want.owner.toLowerCase() &&
+      have.name.toLowerCase() === want.name.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
 }

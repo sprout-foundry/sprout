@@ -97,7 +97,7 @@ export interface CloneResult {
 
 /** Clone `urlOrRef` into repos/<owner>/<name>/ through the seam. */
 export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise<CloneResult> {
-  const { owner, name, url } = parseRepoRef(urlOrRef);
+  const { owner, name, url, host } = parseRepoRef(urlOrRef);
   const fs = opts.fs ?? (await import('./index')).getWorkspaceFs();
   const dir = repoDir(`${owner}/${name}`);
 
@@ -119,7 +119,8 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
       depth: opts.depth ?? 1,
       singleBranch: true,
       ref: opts.branch,
-      onAuth: opts.token ? () => ({ username: 'git', token: opts.token }) : undefined,
+      // The token is a GitHub token: never offer it to another host.
+      onAuth: opts.token && host === 'github.com' ? () => ({ username: 'git', token: opts.token }) : undefined,
       onProgress: opts.onProgress,
     });
   } catch (err) {
@@ -163,6 +164,9 @@ export async function listRepos(fs?: WorkspaceFs): Promise<string[]> {
     if (depth > MAX_DEPTH) return;
     const listing = await seam.list(dir, 1);
     if (!listing.ok) return;
+    // Group and owner directories hold only directories; a folder with files
+    // in it is someone's own content, not more namespace to search.
+    if (depth > 1 && listing.files.some((f) => !f.isDir)) return;
     for (const child of listing.files.filter((f) => f.isDir)) {
       if (depth >= 2) {
         const dotGit = await seam.stat(`${child.path}/.git`);

@@ -261,6 +261,15 @@ describe('workspaceGit', () => {
     await expect(cloneRepo('acme/api', { fs })).rejects.toThrow(/already exists/);
   });
 
+  it('listRepos finds subgroup repos and skips folders of loose files', async () => {
+    const fs = fsWithSeed();
+    await fs.write('repos/acme/api/.git/HEAD', 'ref: refs/heads/main');
+    await fs.write('repos/group/sub/app/.git/HEAD', 'ref: refs/heads/main');
+    await fs.write('repos/notes/misc/todo.txt', 'not a repo');
+    await fs.write('repos/notes/misc/deep/.git/HEAD', 'inside loose files: not listed');
+    expect(await listRepos(fs)).toEqual(['acme/api', 'group/sub/app']);
+  });
+
   it('listRepos and removeRepo round-trip through the seam', async () => {
     const fs = fsWithSeed();
     await fs.write('repos/acme/api/.git/HEAD', 'ref: refs/heads/main');

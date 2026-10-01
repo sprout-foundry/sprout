@@ -163,6 +163,18 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     setOpen(target);
   };
 
+  // "Open settings" from elsewhere (an out-of-credits toast, a missing
+  // provider): leave Home and show Settings here.
+  useEffect(() => {
+    if (!supportsSettings) return;
+    const onOpenSettings = () => {
+      closeHome();
+      setOpen({ kind: 'section', id: 'settings' });
+    };
+    window.addEventListener('sprout:open-settings-focus', onOpenSettings);
+    return () => window.removeEventListener('sprout:open-settings-focus', onOpenSettings);
+  }, []);
+
   const entry = (kind: 'section' | 'design', id: keyof typeof NAV_ICONS, label: string) => ({
     target: { kind, id } as ProjectNavTarget,
     label,

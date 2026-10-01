@@ -1,6 +1,6 @@
 # SP-141: pkg/agent Package Decomposition
 
-**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) in progress (increments 1–6 landed 2026-09-27/28/29 — broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phases 4–5 pending
+**Status:** In progress — phases 1–2 shipped 2026-09-26; phase 3 (`approvals`) complete (increments 1–6 landed 2026-09-27/29 — security-analyzer, path-tier, allowlist, risk vocabulary, broker behind `ApprovalAgent`, `ResolveToolRisk` behind `RiskAgent`); phase 4 (`subagents`) complete (increment 1 — data foundation — and increment 2 — runner leaf logic — landed 2026-09-29; the `SubagentRunner` orchestration core is documented as rooted in `pkg/agent`, see the rootedness finding); phase 5 pending
 **Created:** 2026-09-19
 **Origin:** 2026-09-19 codebase evaluation — `pkg/agent` had grown to 238
 non-test files / ~51K LOC in a single package, the largest concentration in
@@ -302,9 +302,91 @@ the repo. This spec plans the split; it does not schedule it.
     build + vet + gofmt clean; approvals suite ok; the 37-test risk
     battery (ResolveToolRisk incl. nil-agent, git gates, path tiers,
     workspace policy, shadow-mode parity) all green.
-- Phases 4–5 pending (`subagents`, `tools`).
-
-## Problem
+- **Phase 4 (2026-09-29): `pkg/agent/subagents` increment 1 — the
+  subagent data foundation landed.** The wire/result types
+  (`SubagentStatus` + the six status consts, `FileChange`,
+  `SubagentRunMetrics`, `SubagentReturn`, `ProgressEntry`,
+  `SubagentError`, `SubagentOptions`, `SharedState`, `SubagentResult`,
+  `SubagentProgressEntry`, `SubagentTask`, `SubagentMetrics`), the pure
+  helpers (`IsOutputComplete`, `ProgressLogCap`), the terminal display
+  (`PrintSubagentStart`/`PrintParallelSubagentStart`/
+  `PrintSubagentDone` + `compactCount`/`plural`/the stat suffix), the
+  spawn-time `AppendSubagentPreamble`, and the process-wide
+  active-subagent counter + `BuildSubagentPrefix` moved to
+  `pkg/agent/subagents` (types.go, display.go, preamble.go,
+  lifecycle.go). `pkg/agent/subagent_forwarders.go` re-exports the types
+  as aliases and forwards the six lowercase call-site names so the tool
+  handlers, the task runner, and the workflow wiring are unchanged.
+  `subagent_types.go` keeps only `SubagentRunner`/`runningSubagent`
+  (they hold `*Agent` fields directly — the runner seam is the next
+  increment); `subagent_lifecycle.go` keeps the runner construction,
+  `Metrics()`, and the lifecycle-event publishers. The three pure test
+  files moved with their code.
+  - **Import-safety note:** `subagents` imports `changes` (for
+    `changes.TrackedFileChange` on `SubagentResult.FileChanges`),
+    `console` (display glyphs), `agent_tools`, `configuration`,
+    `embedding`, `events` — none of which import the `pkg/agent` parent,
+    so the `pkg/agent → subagents` edge stays one-way (no cycle through
+    the forwarder).
+  - **Verification:** content-identity confirmed (normalized-diff of
+    every moved block and test file vs. the originals = 0 lines beyond
+    the rename set); build + vet + gofmt clean; the `subagents` suite
+    green;   the `pkg/agent` subagent batteries (display/prefix/output-
+    complete) still pass through the forwarders.
+- **Phase 4 (2026-09-29): `pkg/agent/subagents` increment 2 — the
+  runner leaf logic landed, and the runner's rootedness was established.**
+  The two pure leaves of the runner cluster moved to
+  `pkg/agent/subagents` (timeout.go, lifecycle_events.go): the
+  execution-timeout policy (`ResolveSubagentTimeout` /
+  `EnvSubagentTimeout` / `IsOrchestratorPersona` + the two tier consts)
+  and the lifecycle-event emission (`PublishLifecycleEvent` /
+  `PublishLifecycleEventWithCost` — the subagent_activity event + runlog
+  mirror). `pkg/agent` keeps thin `*SubagentRunner` method wrappers
+  (`subagent_task_timeout.go`, `subagent_lifecycle.go`) that resolve the
+  runner's shared ConfigManager/EventBus and delegate, so every
+  `*SubagentRunner`-typed call site and the whitebox tests are unchanged.
+  - **Verification:** content-identity confirmed (normalized-diff of both
+    moved bodies vs. the originals = 0 lines beyond the receiver→param
+    renames and the wrapper delegations); build + vet + gofmt clean; the
+    `subagents` suite green; the `pkg/agent` subagent batteries (timeout
+    incl. the nil-shared / nil-ConfigManager defensive paths, the
+    SPROUT_TOOL_TIMEOUT env-override matrix, the publishLifecycleEvent
+    runlog integration test) all green.
+- **Phase 4 (2026-09-29) — the SubagentRunner rootedness finding (scope
+  boundary, recorded so it isn't re-derived).** The `SubagentRunner`
+  struct and its methods are **rooted in `pkg/agent`** — unlike the
+  `workflow`/`changes`/`approvals` clusters, the orchestration core cannot
+  move to `pkg/agent/subagents`. Three airtight blockers:
+  1. **Import cycle.** The struct holds `parentAgent *Agent` and
+     `runningSubagent` holds `Agent *Agent`; increment 1's forwarder
+     already makes the import arrow `pkg/agent → subagents`. Moving the
+     struct into `subagents` would require `subagents → pkg/agent` to
+     name `*Agent` — a cycle.
+  2. **Unexported construction that no interface can express.**
+     `createSubagent` (subagent_creation.go) writes ~15 unexported `*Agent`
+     fields on the child and wires the pkg/agent-only managers
+     (`*ClarificationManager`, `*AgentOutputManager`, `*AgentStateManager`)
+     into it; `setupSubagentRun`/`finalizeSubagentResult`/the monitors read
+     the parent's unexported fields (`.clarificationManager`, `.output`,
+     `.debug`, `.subagentDepth`, `.riskProfileOverride`) and the child's
+     unexported `.state`. Expressing these through a seam interface would
+     require the interface (in `subagents`) to NAME pkg/agent types —
+     again a cycle. So the concrete `*Agent` must stay reachable, i.e. the
+     struct stays in `pkg/agent`.
+  3. **Whitebox test surface.** 47 assertions across 6 test files reach
+     into unexported runner fields (`runner.parentAgent`/`.shared`/
+     `.testClientFactory`), child unexported fields (`subAgent.
+     subagentDepth`, `child.clarificationManager`), and the unexported
+     `createSubagent`/`resolveSubagentTimeout`; the steering tests build
+     `&runningSubagent{...}` literals directly.
+  **Consequence:** the `SubagentRunner` orchestration (Run/RunParallel/
+  CancelAll/createSubagent/setupSubagentRun/runTask/finalizeSubagentResult/
+  the budget+progress monitors) is part of the "core lifecycle" cluster
+  that moves LAST in the SP-141 plan — and its only movable leaves (the
+  two above) have already been extracted. Increment 1's data foundation +
+  increment 2's leaves are the extent of the `subagents` extraction; the
+  runner struct stays put with the god package.
+- Phases 4–5 continue (phase 5 = the `tools` cluster, the largest).## Problem
 
 `pkg/agent` is a god package. Everything the in-process agent does lives in
 one Go namespace: query lifecycle, tool handlers, provider wiring, workflow

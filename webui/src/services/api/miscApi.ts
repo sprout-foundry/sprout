@@ -70,7 +70,7 @@ export async function getProviderModels(fetchFn: typeof fetch, provider: string)
 
 export async function generateDeepReview(fetchFn: typeof fetch): Promise<DeepReviewResponse> {
   const response = await fetchFn('/api/git/deep-review', { method: 'POST' });
-  if (!response.ok) throw new Error('Failed to generate deep review');
+  if (!response.ok) throw new Error('Failed to generate review');
   return response.json();
 }
 

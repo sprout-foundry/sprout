@@ -201,12 +201,6 @@ func helperSpec(t *testing.T, tmpDir string, port int, delayMs int, markerFile s
 	}
 	spec.LogPath = filepath.Join(tmpDir, "daemon.log")
 
-	// The spawned helper is the full test binary; under `go test -race` its
-	// package init (eager tree-sitter grammar blob decoding in pkg/ast) can
-	// take tens of seconds, far beyond any StartTimeout. The helper only
-	// serves /health — it never parses code — so skip the pre-warm.
-	spec.Env = append(spec.Env, "SPROUT_SKIP_GRAMMAR_PREWARM=1")
-
 	// Always kill spawned helpers when the test finishes, even on failure —
 	// orphaned helpers leak listener ports and exhaust the ephemeral range
 	// on constrained hosts (e.g. 60700-61000 in CI containers).

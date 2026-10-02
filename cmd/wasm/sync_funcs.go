@@ -270,7 +270,7 @@ func handleWorkspacePatchConflictFunc(_ js.Value, args []js.Value) interface{} {
 
 // ─── Metadata stash ──────────────────────────────────────────────
 // The cmd/wasm process doesn't currently own a long-lived Agent
-// instance (the embedding manager runs without one in this build). When
+// instance. When
 // the WASM build gains a real agent loop (Tier 2b), applyFileMetadata
 // will route directly into Agent.SetFileMetadata. Until then we keep
 // the metadata in a process-level snapshot so it's not lost.

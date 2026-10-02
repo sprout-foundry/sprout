@@ -30,7 +30,6 @@ require github.com/odvcencio/gotreesitter v0.16.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0
-	github.com/coder/hnsw v0.6.1
 	github.com/ebitengine/purego v0.11.1
 	github.com/google/uuid v1.6.0
 	github.com/jezek/xgb v1.3.1
@@ -38,7 +37,6 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/sprout-foundry/sinter v0.6.1
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1
 	golang.org/x/image v0.45.0
 	modernc.org/sqlite v1.53.0
@@ -135,11 +133,3 @@ require (
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/sys v0.47.0
 )
-
-// Vendored fork of coder/hnsw v0.6.1 with a Windows-compat patch for
-// encode.go (upstream calls github.com/google/renameio.TempFile, which
-// is gated by `// +build !windows` and thus undefined on Windows). The
-// only diff from upstream is the renameio.TempFile call site → a small
-// in-package atomic-write helper. Source lives in ./internal/hnsw/.
-// Drop this replace when upstream merges a Windows fix.
-replace github.com/coder/hnsw => ./internal/hnsw

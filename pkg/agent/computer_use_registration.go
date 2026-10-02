@@ -115,12 +115,14 @@ func (a *Agent) checkComputerUseActivation() error {
 }
 
 // isComputerUseToolBlocked reports whether the named tool is a computer-use
-// tool being invoked by a persona other than computer_user.
+// tool being invoked by a persona other than computer_user, or by any
+// subagent: computer use must stay top-level and interactively consented,
+// even if a config makes computer_user spawnable.
 func isComputerUseToolBlocked(toolName string, agent *Agent) bool {
 	if !computerUseToolNames[toolName] {
 		return false
 	}
-	if agent == nil {
+	if agent == nil || agent.IsSubagent() {
 		return true
 	}
 	active := normalizeAgentPersonaID(agent.state.GetActivePersona())

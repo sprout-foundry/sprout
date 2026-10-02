@@ -15,19 +15,15 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/require"
 )
 
 // session describes one concurrent client session in the multi-workspace gate
-// test: a client ID, the workspace it binds to, and the embedding index dir
-// that identifies its workspace's manager.
+// test: a client ID and the workspace it binds to.
 type session struct {
-	clientID   string
-	workspace  string
-	managerKey string // embedding index dir for this workspace
+	clientID  string
+	workspace string
 }
 
 // TestMultiWorkspaceConcurrentSessions is the SP-136 Phase-1 integration gate.
@@ -41,10 +37,7 @@ type session struct {
 //     property is that the plumbing routes correctly and never hangs).
 //  2. Client contexts are isolated per session: each has its own workspace
 //     root, and no session sees another session's workspace.
-//  3. Embedding managers are isolated per workspace: two sessions in the same
-//     workspace share ONE manager (daemon dedup), while different workspaces
-//     get DIFFERENT managers (no cross-workspace index sharing).
-//  4. The daemon's RSS stays bounded across the concurrent run (Linux only —
+//  3. The daemon's RSS stays bounded across the concurrent run (Linux only —
 //     the daemon runs in-process here, so /proc/self is the daemon's RSS).
 func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	// Isolate session-state persistence: if a provider IS configured in the
@@ -87,11 +80,11 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 
 	// 5 sessions across 3 workspaces: w1×2, w2×2, w3×1.
 	sessions := []session{
-		{"sess-1", workspaceDirs[0], filepath.Join(daemonRoot, "idx", "w1")},
-		{"sess-2", workspaceDirs[0], filepath.Join(daemonRoot, "idx", "w1")},
-		{"sess-3", workspaceDirs[1], filepath.Join(daemonRoot, "idx", "w2")},
-		{"sess-4", workspaceDirs[1], filepath.Join(daemonRoot, "idx", "w2")},
-		{"sess-5", workspaceDirs[2], filepath.Join(daemonRoot, "idx", "w3")},
+		{"sess-1", workspaceDirs[0]},
+		{"sess-2", workspaceDirs[0]},
+		{"sess-3", workspaceDirs[1]},
+		{"sess-4", workspaceDirs[1]},
+		{"sess-5", workspaceDirs[2]},
 	}
 	require.Len(t, sessions, 5)
 	workspaceCount := map[string]int{}
@@ -105,21 +98,14 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	// Run all 5 sessions concurrently behind a start barrier.
 	start := make(chan struct{})
 	errCh := make(chan error, len(sessions))
-	managers := make([]*embedding.EmbeddingManager, len(sessions))
-	var mgrMu sync.Mutex
-
 	var wg sync.WaitGroup
-	for i, s := range sessions {
+	for _, s := range sessions {
 		wg.Add(1)
-		go func(i int, s session) {
+		go func(s session) {
 			defer wg.Done()
 			<-start
-			errCh <- runConcurrentSession(t, ws, s, func(m *embedding.EmbeddingManager) {
-				mgrMu.Lock()
-				managers[i] = m
-				mgrMu.Unlock()
-			})
-		}(i, s)
+			errCh <- runConcurrentSession(t, ws, s)
+		}(s)
 	}
 	close(start)
 	wg.Wait()
@@ -146,19 +132,7 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	require.Len(t, distinctRoots, 3,
 		"client contexts must map to exactly 3 distinct workspace roots, got %v", distinctRoots)
 
-	// 3. Embedding manager isolation: same workspace → same manager pointer;
-	//    different workspace → different manager pointer.
-	require.NotNil(t, managers[0])
-	for i := range managers {
-		require.NotNil(t, managers[i], "session %d must have acquired an embedding manager", i)
-	}
-	require.Same(t, managers[0], managers[1], "sessions in w1 must share one embedding manager")
-	require.Same(t, managers[2], managers[3], "sessions in w2 must share one embedding manager")
-	require.NotSame(t, managers[0], managers[2], "w1 and w2 must have different embedding managers")
-	require.NotSame(t, managers[0], managers[4], "w1 and w3 must have different embedding managers")
-	require.NotSame(t, managers[2], managers[4], "w2 and w3 must have different embedding managers")
-
-	// 4. Daemon RSS stays bounded across the concurrent run.
+	// 3. Daemon RSS stays bounded across the concurrent run.
 	endRSS := processRSSKB(t)
 	if endRSS > 0 && startRSS > 0 {
 		growthKB := endRSS - startRSS
@@ -192,9 +166,9 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 }
 
 // runConcurrentSession drives one session through the daemon plumbing:
-// set workspace root, create/get the default chat session, force agent
-// plumbing via getChatAgent, and acquire the workspace embedding manager.
-func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session, onManager func(*embedding.EmbeddingManager)) error {
+// set workspace root, create/get the default chat session, and force agent
+// plumbing via getChatAgent.
+func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session) error {
 	t.Helper()
 
 	// Bound each session so a hang fails the test instead of wedging CI.
@@ -225,23 +199,12 @@ func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session, onManager
 					return fmt.Errorf("getChatAgent returned unexpected error: %w", agentErr)
 				}
 			}
-
-			// Acquire the workspace-scoped embedding manager.
-			mgr := embedding.AcquireManager(
-				&configuration.EmbeddingIndexConfig{IndexDir: s.managerKey},
-				s.workspace,
-			)
-			if mgr == nil {
-				return fmt.Errorf("embedding manager acquisition returned nil for %s", s.clientID)
-			}
-			onManager(mgr)
 			return nil
 		}()
 	}()
 
 	select {
 	case err := <-done:
-		// Release any manager acquired by this session (matches AcquireManager).
 		return err
 	case <-time.After(30 * time.Second):
 		return fmt.Errorf("session %s hung for 30s (daemon did not respond)", s.clientID)

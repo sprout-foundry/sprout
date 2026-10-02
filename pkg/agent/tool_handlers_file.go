@@ -1,8 +1,7 @@
 package agent
 
 // tool_handlers_file.go — the read_file handler: the read path itself
-// (text, image, and PDF multimodal reads) plus the semantic-context
-// injection. The write_file path lives in tool_handlers_file_write.go and
+// (text, image, and PDF multimodal reads). The write_file path lives in tool_handlers_file_write.go and
 // the edit_file path + shared arg helpers in tool_handlers_file_edit.go.
 
 import (
@@ -16,7 +15,6 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -68,8 +66,6 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		if err != nil {
 			return result, agenterrors.NewTool("read_file", "read file", err).WithDetail("path", path)
 		}
-		// Inject semantic context if embedding is enabled
-		result = injectSemanticContext(ctx, a, path, result)
 		return result, nil
 	}
 
@@ -94,78 +90,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if err != nil {
 		return "", agenterrors.NewTool("read_file", "failed to read file", err).WithDetail("path", path)
 	}
-	// Inject semantic context if embedding is enabled
-	result = injectSemanticContext(ctx, a, path, result)
 	return result, nil
-}
-
-// injectSemanticContext appends semantically related function references to
-// the read_file result, giving the agent awareness of related code in other files.
-// This is the input-side of the embedding system — proactive context, not warnings.
-func injectSemanticContext(ctx context.Context, a *Agent, filePath string, content string) string {
-	if !shouldInjectContext(a) {
-		return content
-	}
-
-	// Only inject for code files with extractable units
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if ext != ".go" && ext != ".ts" && ext != ".tsx" && ext != ".py" {
-		return content
-	}
-
-	em := a.GetEmbeddingManager()
-	if em == nil || !em.IsInitialized() {
-		return content
-	}
-
-	// Use the first ~500 chars as a representative query
-	query := content
-	if len(query) > 500 {
-		query = query[:500]
-	}
-
-	// Code-vs-code: QuerySimilarCode embeds both sides as documents so the
-	// score is comparable to DefaultRelatedCodeThreshold. This used to call
-	// QuerySimilar at 0.85, which embedded the code as a question and gated it
-	// above anything that regime can produce, so nothing was ever injected.
-	results, err := em.QuerySimilarCode(ctx, query, 5, em.RelatedCodeThreshold())
-	if err != nil || len(results) == 0 {
-		return content
-	}
-
-	// Filter out results from the same file (agent already has that context)
-	var external []embedding.QueryResult
-	workspaceRoot := a.GetWorkspaceRoot()
-	for _, r := range results {
-		if embedding.NormalizePathToWorkspace(workspaceRoot, r.Record.File) != embedding.NormalizePathToWorkspace(workspaceRoot, filePath) {
-			external = append(external, r)
-		}
-	}
-
-	if len(external) == 0 {
-		return content
-	}
-
-	var sb strings.Builder
-	sb.WriteString("\n\n--- Related code (semantic search) ---\n")
-	for _, r := range external {
-		sb.WriteString(fmt.Sprintf("• %s (similarity: %.2f)\n  %s [%d-%d]\n",
-			r.Record.ID, r.Similarity, r.Record.Signature, r.Record.StartLine, r.Record.EndLine))
-	}
-	sb.WriteString("--- End related code ---\n")
-
-	return content + sb.String()
-}
-
-func shouldInjectContext(a *Agent) bool {
-	if a == nil {
-		return false
-	}
-	cfg := a.GetConfig()
-	if cfg == nil || !cfg.EmbeddingIndex.IsEnabled() {
-		return false
-	}
-	return a.GetEmbeddingManager() != nil
 }
 
 // isImageExtension returns true for common image file extensions

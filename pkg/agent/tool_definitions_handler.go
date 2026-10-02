@@ -191,7 +191,6 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	env.TodoManager = agent.GetTodoManager()
 	env.IsInteractiveCLI = !agent.HasActiveWebUIClients() && !isNonInteractive()
 	env.ApprovalManager = newToolsApprovalAdapter(agent)
-	env.EmbeddingMgr = agent.GetEmbeddingManager()
 	env.VisionProcessor = agent.GetVisionProcessor()
 	env.WebBrowser = tools.NewBrowserAdapter()
 	env.PrimaryAcceptsImages = func() bool {

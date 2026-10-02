@@ -504,7 +504,6 @@ func setupTestSubagentRunner(agent *Agent) {
 	runner := NewSubagentRunner(agent, &SharedState{
 		EventBus:      agent.eventBus,
 		TodoManager:   agent.todoMgr,
-		EmbeddingMgr:  agent.embeddingMgr,
 		ConfigManager: agent.configManager,
 		WorkspaceRoot: agent.workspaceRoot,
 	})

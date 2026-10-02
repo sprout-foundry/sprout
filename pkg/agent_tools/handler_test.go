@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -780,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 51 {
-		t.Fatalf("AllTools() returned %d tools, want 51", len(tools))
+	if len(tools) != 52 {
+		t.Fatalf("AllTools() returned %d tools, want 52", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -794,7 +795,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"rollback_changes":        "rollback_changes",
 		"view_history":            "view_history",
 		"list_skills":             "list_skills",
-		"embedding_index":         "embedding_index",
 		"write_file":              "write_file",
 		"write_structured_file":   "write_structured_file",
 		"edit_file":               "edit_file",
@@ -810,7 +810,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"activate_skill":          "activate_skill",
 		"browse_url":              "browse_url",
 		"web_search":              "web_search",
-		"semantic_search":         "semantic_search",
 		"analyze_image_content":   "analyze_image_content",
 		"analyze_ui_screenshot":   "analyze_ui_screenshot", // SP-109 Phase 3 Batch A2
 		"list_automate_workflows": "list_automate_workflows",
@@ -824,6 +823,9 @@ func TestAllToolsRegistration(t *testing.T) {
 		// SP-109 Phase 3 Batch B — subagent function-pointer tools
 		"run_subagent":           "run_subagent",
 		"run_parallel_subagents": "run_parallel_subagents",
+		"review_changes":         "review_changes",
+		"check_subagent":         "check_subagent",
+		"stop_subagent":          "stop_subagent",
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		"request_clarification": "request_clarification",
 		"respond_clarification": "respond_clarification",
@@ -905,10 +907,6 @@ func TestAllToolsRegistration(t *testing.T) {
 			if len(def.Required) != 0 {
 				t.Errorf("list_skills Required = %v, want nil/empty", def.Required)
 			}
-		case "embedding_index":
-			if len(def.Required) != 1 || def.Required[0] != "operation" {
-				t.Errorf("embedding_index Required = %v, want [\"operation\"]", def.Required)
-			}
 		case "write_file":
 			if len(def.Required) != 2 || def.Required[0] != "path" || def.Required[1] != "content" {
 				t.Errorf("write_file Required = %v, want [\"path\" \"content\"]", def.Required)
@@ -960,10 +958,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "web_search":
 			if len(def.Required) != 1 || def.Required[0] != "query" {
 				t.Errorf("web_search Required = %v, want [\"query\"]", def.Required)
-			}
-		case "semantic_search":
-			if len(def.Required) != 1 || def.Required[0] != "query" {
-				t.Errorf("semantic_search Required = %v, want [\"query\"]", def.Required)
 			}
 		case "analyze_image_content":
 			if len(def.Required) != 1 || def.Required[0] != "image_path" {
@@ -2136,7 +2130,7 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "empty content",
 			input: []byte{},
-			want:  []string{},
+			want:  []string{""},
 		},
 		{
 			name:  "single line no newline",
@@ -2171,15 +2165,15 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "nil content",
 			input: nil,
-			want:  []string{},
+			want:  []string{""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := splitLines(tt.input)
+			got := utils.SplitLinesKeepEmpty(string(tt.input))
 			if len(got) != len(tt.want) {
-				t.Errorf("splitLines(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
+				t.Errorf("SplitLinesKeepEmpty(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
 				return
 			}
 			for i := range got {

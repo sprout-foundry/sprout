@@ -190,13 +190,6 @@ type IterationStore interface {
 	SetCurrentIteration(int)
 }
 
-// SessionIntentStore manages the session intent embedding vector.
-type SessionIntentStore interface {
-	GetSessionIntentEmbedding() []float32
-	SetSessionIntentEmbedding([]float32)
-	SetSessionIntentEmbeddingIfNil(emb []float32) bool
-}
-
 // ProviderErrorStore manages the last provider error information.
 type ProviderErrorStore interface {
 	GetLastProviderError() *ProviderErrorInfo
@@ -254,7 +247,6 @@ type StateManager interface {
 	SessionConfigStore
 	ConfigOverrideStore
 	IterationStore
-	SessionIntentStore
 	ProviderErrorStore
 	EstimatedTokenStore
 	ContinuationNudgeStore

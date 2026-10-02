@@ -108,9 +108,12 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// Only read when a tracker is present. A read miss (file does not
 	// exist yet) is the create case: original stays empty.
 	var preWriteOriginal string
-	if env.ResolveToolFuncs().TrackFileWrite != nil {
-		if data, readErr := os.ReadFile(path); readErr == nil {
+	existed := false
+	trackPath := trackingPath(ctx, path)
+	if env.ResolveToolFuncs().TracksWrites() {
+		if data, readErr := os.ReadFile(trackPath); readErr == nil {
 			preWriteOriginal = string(data)
+			existed = true
 		}
 	}
 
@@ -126,8 +129,8 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// ChangeTracker (powers the Agent Changes panel, /api/changes/*, and
 	// revert tooling). Best-effort — a tracking failure must not fail the
 	// write itself. Nil func = no tracker (standalone handler use).
-	if fn := env.ResolveToolFuncs().TrackFileWrite; fn != nil {
-		if trackErr := fn(path, preWriteOriginal, content); trackErr != nil {
+	if funcs := env.ResolveToolFuncs(); funcs.TracksWrites() {
+		if trackErr := funcs.TrackWrite(trackPath, preWriteOriginal, content, existed); trackErr != nil {
 			log.Printf("[write_file] change tracking failed for %q: %v", path, trackErr)
 		}
 	}

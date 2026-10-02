@@ -49,9 +49,9 @@ if (typeof Response === 'undefined') {
 describe('cloudEndpointRegistry', () => {
   describe('CLOUD_ENDPOINTS', () => {
     it('should have all required endpoints defined', () => {
-      // Verify we have approximately 103 endpoints (19 wasm-local + 27 browser-git + 14 foundry-backend + 40 synthetic + 3 no-op);
+      // Verify we have approximately 97 endpoints (19 wasm-local + 27 browser-git + 14 foundry-backend + 34 synthetic + 3 no-op);
       // the chat-session list is served browser-local, outside the registry.
-      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(103);
+      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(97);
     });
 
     it('should have unique path+method combinations', () => {
@@ -481,10 +481,10 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of synthetic endpoints', () => {
       const synthetic = getEndpointsByCategory('synthetic');
-      // Includes onboarding, instances, embedding/LSP, history,
+      // Includes onboarding, instances, LSP, history,
       // settings/mcp/skills/subagent-types, and other not-available-in-
       // browser-mode endpoints.
-      expect(synthetic.length).toBeGreaterThanOrEqual(40);
+      expect(synthetic.length).toBeGreaterThanOrEqual(34);
       expect(synthetic.length).toBeLessThan(70);
     });
 

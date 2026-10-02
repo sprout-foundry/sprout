@@ -38,11 +38,9 @@ import {
   handleCompactCompleted,
   handleCompactStarted,
   handleContextManagementDiagnostic,
-  handleDriftDetected,
   handleMetricsUpdate,
   handleProviderNoCredential,
   handleRateLimited,
-  handleRecallDiagnostic,
   handleWorkspaceChanged,
   handleWorkspacePatch,
 } from './wsHandlers/session';
@@ -335,8 +333,6 @@ export function useWebSocketEventHandler({
           return handleShellApprovalRequest(ctx);
         case 'input_required':
           return handleInputRequired(ctx);
-        case 'drift_detected':
-          return handleDriftDetected(ctx);
         case 'context_management_diagnostic':
           return handleContextManagementDiagnostic(ctx);
         case 'chat_run_restored':
@@ -349,8 +345,6 @@ export function useWebSocketEventHandler({
           return handleDelegateClarificationResponded(ctx);
         case 'workspace_patch':
           return handleWorkspacePatch(ctx);
-        case 'recall_diagnostic':
-          return handleRecallDiagnostic(ctx);
         case 'session_displaced':
           return handleSessionDisplaced(ctx);
         default:

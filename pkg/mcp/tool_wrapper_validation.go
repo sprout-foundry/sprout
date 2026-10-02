@@ -3,12 +3,15 @@ package mcp
 // tool_wrapper_validation.go — the JSON-Schema argument-validation half of
 // MCPToolWrapper (split from tool_wrapper.go): compileSchema, ValidateArgs,
 // extractValidationFailures, extractLocationAndReason, and the string-parsing
-// leaf helpers (splitLines, trimSpace, normalizePath, indexOf, replaceAll).
+// leaf helpers (trimSpace, normalizePath, indexOf, replaceAll); line splitting
+// delegates to utils.SplitLines.
 // The wrapper lifecycle / Execute / AgentTool conversion stays in
 // tool_wrapper.go.
 import (
 	"fmt"
 	"log/slog"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -113,7 +116,7 @@ func extractValidationFailures(err error) []ValidationFailure {
 	}
 
 	detail := err.Error()
-	lines := splitLines(detail)
+	lines := utils.SplitLines(detail)
 	var failures []ValidationFailure
 
 	for _, line := range lines {
@@ -147,7 +150,7 @@ func extractLocationAndReason(detail string) (ValidationFailure, bool) {
 	// or
 	// "at '/query': got number, want string"
 
-	lines := splitLines(detail)
+	lines := utils.SplitLines(detail)
 	for _, line := range lines {
 		// Skip lines that don't contain location info
 		line = trimSpace(line)
@@ -203,21 +206,6 @@ func extractLocationAndReason(detail string) (ValidationFailure, bool) {
 	}
 
 	return ValidationFailure{}, false
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
 }
 
 func trimSpace(s string) string {

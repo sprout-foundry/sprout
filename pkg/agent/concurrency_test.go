@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // ---------------------------------------------------------------------------
@@ -226,62 +225,6 @@ func TestRace_Agent_interrupt(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				a.ClearInterrupt()
-			}
-		}()
-	}
-
-	wg.Wait()
-}
-
-// ---------------------------------------------------------------------------
-// Test 6: Agent.embeddingMgr — unsynchronized pointer read/write
-// ---------------------------------------------------------------------------
-//
-// BUG: EnableEmbeddingIndex() sets a.embeddingMgr. DisableEmbeddingIndex()
-// reads a.embeddingMgr, calls Close(), and sets it to nil.
-// IsEmbeddingIndexEnabled() and GetEmbeddingManager() read it. None of these
-// hold any lock, so concurrent reads and writes of the pointer race.
-//
-// FIX: Use atomic.Pointer[embedding.EmbeddingManager] for embeddingMgr and
-// use atomic.Load/atomic.Store in all getters and setters.
-func TestRace_Agent_embeddingMgr(t *testing.T) {
-	a := &Agent{
-		state:    NewAgentStateManager(false),
-		output:   NewAgentOutputManager(),
-		security: NewAgentSecurityManager(),
-		mcpSub:   NewAgentMCPManager(),
-	}
-
-	var wg sync.WaitGroup
-
-	// Readers: IsEmbeddingIndexEnabled() / GetEmbeddingManager() read
-	// a.embeddingMgr without synchronization.
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				_ = a.IsEmbeddingIndexEnabled()
-			}
-		}()
-	}
-
-	// Writers: simulate Enable/Disable. We hold embeddingMu (the same mutex the
-	// real EnableEmbeddingIndex / DisableEmbeddingIndex paths use) around the
-	// field writes so the test verifies the PRODUCT readers race-cleanly under
-	// proper concurrent enable/disable, not that a buggy caller stays safe.
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				a.embeddingMu.Lock()
-				if j%2 == 0 {
-					a.embeddingMgr = &embedding.EmbeddingManager{}
-				} else {
-					a.embeddingMgr = nil
-				}
-				a.embeddingMu.Unlock()
 			}
 		}()
 	}

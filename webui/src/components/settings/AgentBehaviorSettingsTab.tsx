@@ -73,20 +73,20 @@ export default function AgentBehaviorSettingsTab({
       {renderNumberInput &&
         renderNumberInput(
           'wakeup.max_tokens_per_session',
-          'Max tokens per session',
+          'Max auto-resume tokens per message',
           0,
-          100000,
-          500,
-          'Hard cap. 0 = unlimited.',
+          10000000,
+          50000,
+          'Token cap for auto-resume turns; resets each time you send a message. Default 500,000. 0 = unlimited.',
         )}
       {renderNumberInput &&
         renderNumberInput(
           'wakeup.max_resumes_per_session',
-          'Max resumes per session',
+          'Max auto-resumes per message',
           0,
           100,
           1,
-          'Max auto-resumes before requiring manual input. 0 = unlimited.',
+          'Auto-resumes allowed before waiting for your next message. 0 = unlimited.',
         )}
     </div>
   );

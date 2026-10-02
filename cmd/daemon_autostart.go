@@ -17,7 +17,7 @@ const defaultDaemonIdleTimeout = 60 * time.Second
 // maybeAutoStartDaemon implements SP-136 P2's lazy daemon auto-start for the
 // CLI: when a sprout command starts and no healthy daemon is detected, spawn
 // one in the background (best-effort, asynchronous) so later phases (P3/P4)
-// can route embedding and agent work through it.
+// can route agent work through it.
 //
 // It returns a cleanup func (no-op in P2; later phases register a lifecycle
 // connection here). It NEVER blocks the caller: startup proceeds in-process

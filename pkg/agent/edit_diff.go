@@ -7,6 +7,7 @@ package agent
 // approval broker stay in edit_approval.go.
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"strings"
 
 	"github.com/pmezard/go-difflib/difflib"
@@ -63,8 +64,8 @@ type EditDecision struct {
 
 // SplitIntoHunks computes the unified diff and splits it into discrete hunks with stable IDs.
 func SplitIntoHunks(original, proposed string) []Hunk {
-	origLines := splitLines(original)
-	newLines := splitLines(proposed)
+	origLines := utils.SplitLinesKeepEmpty(original)
+	newLines := utils.SplitLinesKeepEmpty(proposed)
 
 	groups := difflib.NewMatcher(origLines, newLines).GetGroupedOpCodes(3)
 
@@ -125,7 +126,7 @@ func ApplyHunks(original string, hunks []Hunk, acceptedIDs []string) string {
 		accepted[id] = true
 	}
 
-	result := splitLines(original)
+	result := utils.SplitLinesKeepEmpty(original)
 
 	for _, hunk := range hunks {
 		if !accepted[hunk.ID] {
@@ -212,8 +213,8 @@ func findSubslice(lines, oldContent []string, startIdx int) int {
 // GenerateUnifiedDiff produces a standard unified-diff string from original and proposed content.
 func GenerateUnifiedDiff(path, original, proposed string) (string, error) {
 	diff := difflib.UnifiedDiff{
-		A:        splitLines(original),
-		B:        splitLines(proposed),
+		A:        utils.SplitLinesKeepEmpty(original),
+		B:        utils.SplitLinesKeepEmpty(proposed),
 		FromFile: path,
 		ToFile:   path,
 		Context:  3,

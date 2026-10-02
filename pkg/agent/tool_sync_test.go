@@ -63,9 +63,6 @@ func TestToolSync_AllToolsPresent(t *testing.T) {
 
 	sproutNames := make(map[string]bool)
 	for _, h := range sprout.All() {
-		if h.Definition().RequiresEmbeddings {
-			continue
-		}
 		sproutNames[h.Name()] = true
 	}
 
@@ -258,12 +255,7 @@ func TestToolSync_CountConsistency(t *testing.T) {
 	sprout := tools.GetNewToolRegistry()
 	seed := NewSeedToolRegistry(nil)
 
-	sproutCount := 0
-	for _, h := range sprout.All() {
-		if !h.Definition().RequiresEmbeddings {
-			sproutCount++
-		}
-	}
+	sproutCount := len(sprout.All())
 	seedCount := len(seed.GetTools())
 
 	if sproutCount != seedCount {

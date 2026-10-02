@@ -10,6 +10,10 @@ import (
 )
 
 func (ws *ReactWebServer) startWakeupPoller(ctx context.Context, interval time.Duration) {
+	// A running poller is what lets background subagent tasks resume an
+	// idle agent; without one they run blocking (see agent.SetBackgroundHost).
+	agent.SetBackgroundHost(true)
+	defer agent.SetBackgroundHost(false)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

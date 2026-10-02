@@ -24,7 +24,7 @@ var searchCmd = &cobra.Command{
 Builds or loads a search index then queries it.
 
 Examples:
-  sprout search "embedding index"
+  sprout search "rate limit"
   sprout search --reindex "auth error"
   sprout search --json "test"
   sprout search --dir /tmp --since 2026-01-01 "foo"`,

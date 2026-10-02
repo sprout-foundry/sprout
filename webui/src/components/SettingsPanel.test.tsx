@@ -88,16 +88,6 @@ vi.mock('./settings/SkillsSettingsTab', () => ({
     return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
   },
 }));
-vi.mock('./settings/PersistentContextSettingsTab', () => ({
-  default: function TabMock({ settings }) {
-    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
-  },
-}));
-vi.mock('./settings/EmbeddingSettingsTab', () => ({
-  default: function TabMock({ settings }) {
-    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
-  },
-}));
 vi.mock('./settings/LanguageServersSettingsTab', () => ({
   default: function TabMock({ settings }) {
     return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
@@ -384,7 +374,7 @@ describe('localStorage persistence', () => {
       STORAGE_KEY,
       JSON.stringify({
         expanded: ['workspace'],
-        activeSubsection: 'workspace-embeddings',
+        activeSubsection: 'workspace-mcp',
       }),
     );
 
@@ -402,21 +392,21 @@ describe('localStorage persistence', () => {
   it('writes activeSubsection to localStorage when a subsection tab is clicked', () => {
     renderPanel();
 
-    // Click the "Embeddings" subsection tab inside the Workspace section
+    // Click the "MCP Servers" subsection tab inside the Workspace section
     // First expand Workspace
     const workspaceHeader = findSectionHeaderByLabel('Workspace');
     act(() => {
       workspaceHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Now click the Embeddings tab
-    const embeddingsTab = container.querySelector('[data-testid="settings-workspace-embeddings-tab"]');
+    // Now click the MCP Servers tab
+    const mcpTab = container.querySelector('[data-testid="settings-workspace-mcp-tab"]');
     act(() => {
-      embeddingsTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      mcpTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(stored.activeSubsection).toBe('workspace-embeddings');
+    expect(stored.activeSubsection).toBe('workspace-mcp');
   });
 });
 
@@ -462,15 +452,14 @@ describe('subsection tabs', () => {
     const agentSection = container.querySelectorAll('.settings-section')[0];
     const tabs = agentSection.querySelectorAll('.settings-subsection-btn');
 
-    // Agent has 5 subsections: General, Security, Subagents, Skills, Memory
-    expect(tabs.length).toBe(5);
+    // Agent has 4 subsections: General, Security, Subagents, Skills
+    expect(tabs.length).toBe(4);
 
     const tabLabels = Array.from(tabs).map((t) => t.textContent?.trim());
     expect(tabLabels).toContain('General');
     expect(tabLabels).toContain('Security');
     expect(tabLabels).toContain('Subagents');
     expect(tabLabels).toContain('Skills');
-    expect(tabLabels).toContain('Memory');
   });
 });
 

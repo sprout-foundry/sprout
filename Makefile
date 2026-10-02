@@ -77,7 +77,7 @@ prepare-grammars:
 # Test parallelism knobs. Peak test-suite memory is roughly
 #   (TEST_P concurrent test binaries) x (per-binary working set, inflated by
 #   the race detector's ~5-10x shadow memory). Measured per-package peaks with
-#   -race: pkg/embedding 1.15GB, pkg/agent_tools 940MB, pkg/agent 910MB, cmd
+#   -race: pkg/agent_tools 940MB, pkg/agent 910MB, cmd
 #   and pkg/webui ~645MB. With internal -parallel multiplying inside each
 #   binary, the Go defaults (-p / -parallel = GOMAXPROCS) peak this suite at
 #   30-40GB. TEST_P=2 keeps -race runs inside ~10GB (fits a 16GB laptop);
@@ -170,7 +170,7 @@ test-ci: test-unit
 
 # Coverage Check - Run tests with coverage and enforce minimum threshold
 # Note: timeout is the per-test-binary cap, not the wall clock. -race slows
-# pkg/agent + pkg/embedding enough that 10m wasn't enough; 20m gives headroom.
+# pkg/agent enough that 10m wasn't enough; 20m gives headroom.
 #
 # Packages with no *_test.go files are excluded from the coverage run. Go's
 # coverage tooling (go tool covdata) crashes on Windows (STATUS_DLL_INIT_FAILED,
@@ -395,6 +395,8 @@ check-needs-react-rebuild:
 lint:
 	@echo "Linting frontend code..."
 	@cd webui && npm run lint && npm run format:check && npm run type-check && echo "Lint completed successfully"
+	@echo "Validating docs/CONSUMPTION_GUIDE.md against packages/ui..."
+	@node docs/__tests__/consumption-guide.test.js
 
 # Auto-fix frontend linting issues
 lint-fix:

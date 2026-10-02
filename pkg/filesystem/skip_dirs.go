@@ -1,8 +1,8 @@
 package filesystem
 
 // SkipDirs is the canonical list of directory names that should be excluded
-// from directory walks across all tools — embedding index builds, codegraph
-// indexing, repo_map generation, and search_files.
+// from directory walks across all tools — codegraph indexing, repo_map
+// generation, and search.
 //
 // Every package that walks a directory tree MUST consult this list so the
 // exclusion behavior is consistent. Keeping it in one place prevents the

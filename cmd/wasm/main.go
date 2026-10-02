@@ -26,8 +26,8 @@ func main() {
 	wasmshell.SetStoreWriter(store)
 
 	// Register the SproutWasm global object with all exposed functions.
-	// Start with the shell-level API; embedding/memory entries are added
-	// from embedding_funcs.go so this stays focused on the core wiring.
+	// Start with the shell-level API; feature areas add their entries from
+	// their own *_funcs.go files.
 	apiSurface := map[string]interface{}{
 		"init":           js.FuncOf(initFunc),
 		"executeCommand": js.FuncOf(executeCommandFunc),
@@ -48,9 +48,6 @@ func main() {
 	for name, fn := range configJSFuncs() {
 		apiSurface[name] = fn
 	}
-	for name, fn := range conversationJSFuncs() {
-		apiSurface[name] = fn
-	}
 	for name, fn := range syncJSFuncs() {
 		apiSurface[name] = fn
 	}
@@ -63,9 +60,6 @@ func main() {
 	for name, fn := range agentJSFuncs() {
 		apiSurface[name] = fn
 	}
-	for name, fn := range workspaceJSFuncs() {
-		apiSurface[name] = fn
-	}
 	for name, fn := range llmJSFuncs() {
 		apiSurface[name] = fn
 	}
@@ -76,9 +70,6 @@ func main() {
 		apiSurface[name] = fn
 	}
 	for name, fn := range toolExecJSFuncs() {
-		apiSurface[name] = fn
-	}
-	for name, fn := range embeddingJSFuncs() {
 		apiSurface[name] = fn
 	}
 	for name, fn := range askUserJSFuncs() {

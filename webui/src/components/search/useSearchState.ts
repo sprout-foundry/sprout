@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { ApiService } from '../../services/api';
 import { useLog } from '../../utils/log';
-import type { DuplicateCluster, SearchResult, SemanticSearchResult, SearchState } from './types';
+import type { SearchResult, SearchState } from './types';
 import { DEBOUNCE_DELAY } from './types';
 
 /** Strip leading ./ from a path. */
@@ -37,51 +37,16 @@ export function useSearchState(
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
-  const [semanticMode, setSemanticMode] = useState(false);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [totalMatches, setTotalMatches] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [truncated, setTruncated] = useState(false);
-  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[] | null>(null);
-  const [semanticDuration, setSemanticDuration] = useState<string | null>(null);
-  const [semanticNote, setSemanticNote] = useState<string | null>(null);
-  const [duplicateClusters, setDuplicateClusters] = useState<DuplicateCluster[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReplace, setShowReplace] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [replaceStatus, setReplaceStatus] = useState<string | null>(null);
   const [excludePatterns, setExcludePatterns] = useState('');
-  const [semanticThreshold, setSemanticThreshold] = useState(0.3);
-  const [indexStatus, setIndexStatus] = useState<{
-    available: boolean;
-    initialized: boolean;
-    building: boolean;
-    record_count: number;
-  } | null>(null);
-  const [isBuilding, setIsBuilding] = useState(false);
-
-  // Semantic search is an experimental, opt-in feature backed by the
-  // embedding index (SP-137: enabled && experimental, off by default).
-  // When the gate is off the Brain toggle is hidden entirely, so no
-  // status probing, index auto-builds, or semantic queries can fire.
-  const [embeddingsEnabled, setEmbeddingsEnabled] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    apiService
-      .getSettings()
-      .then((settings) => {
-        if (cancelled) return;
-        const ei = settings.embedding_index;
-        setEmbeddingsEnabled(!!(ei && ei.enabled && ei.experimental));
-      })
-      .catch(() => {
-        if (!cancelled) setEmbeddingsEnabled(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiService]);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -94,10 +59,6 @@ export function useSearchState(
         setTotalMatches(0);
         setTotalFiles(0);
         setTruncated(false);
-        setSemanticResults(null);
-        setSemanticDuration(null);
-        setSemanticNote(null);
-        setDuplicateClusters(null);
         setError(null);
         return;
       }
@@ -107,62 +68,31 @@ export function useSearchState(
       setReplaceStatus(null);
 
       try {
-        if (semanticMode) {
-          if (!embeddingsEnabled) {
-            setSemanticResults([]);
-            setSemanticNote('Semantic search requires enabling the experimental embedding index in Settings.');
-            setResults(null);
-            return;
-          }
-          const response = await apiService.searchSemantic(query, {
-            top_k: 20,
-            threshold: semanticThreshold,
-          });
-          setSemanticResults(response.results || []);
-          setSemanticDuration(response.duration || null);
-          setSemanticNote(response.note || null);
-          setDuplicateClusters(response.duplicate_clusters || null);
-          setResults(null);
-        } else {
-          const response = await apiService.search(query, {
-            case_sensitive: caseSensitive,
-            whole_word: wholeWord,
-            regex: useRegex,
-            exclude: excludePatterns || undefined,
-          });
-          setResults(response.results || []);
-          setTotalMatches(response.total_matches || 0);
-          setTotalFiles(response.total_files || 0);
-          setTruncated(response.truncated || false);
-          setSemanticResults(null);
-          setSemanticDuration(null);
+        const response = await apiService.search(query, {
+          case_sensitive: caseSensitive,
+          whole_word: wholeWord,
+          regex: useRegex,
+          exclude: excludePatterns || undefined,
+        });
+        setResults(response.results || []);
+        setTotalMatches(response.total_matches || 0);
+        setTotalFiles(response.total_files || 0);
+        setTruncated(response.truncated || false);
 
-          // Auto-expand if only one result
-          if (response.results && response.results.length === 1) {
-            setExpandedFiles(new Set([response.results[0].file]));
-          }
+        // Auto-expand if only one result
+        if (response.results && response.results.length === 1) {
+          setExpandedFiles(new Set([response.results[0].file]));
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Search failed';
         log.error(`Search failed: ${errorMessage}`, { title: 'Search Error' });
         setError(errorMessage);
         setResults(null);
-        setSemanticResults(null);
       } finally {
         setIsSearching(false);
       }
     },
-    [
-      semanticMode,
-      embeddingsEnabled,
-      caseSensitive,
-      wholeWord,
-      useRegex,
-      excludePatterns,
-      semanticThreshold,
-      apiService,
-      log,
-    ],
+    [caseSensitive, wholeWord, useRegex, excludePatterns, apiService, log],
   );
 
   // ── Debounced search trigger ─────────────────────────────────
@@ -182,9 +112,6 @@ export function useSearchState(
       }, DEBOUNCE_DELAY);
     } else {
       setResults(null);
-      setSemanticResults(null);
-      setSemanticDuration(null);
-      setSemanticNote(null);
       setTotalMatches(0);
       setTotalFiles(0);
       setTruncated(false);
@@ -197,75 +124,6 @@ export function useSearchState(
       }
     };
   }, [searchQuery, performSearch]);
-
-  // ── Re-search when semanticMode toggles ──────────────────────
-
-  useEffect(() => {
-    setResults(null);
-    setSemanticResults(null);
-    setSemanticDuration(null);
-    setSemanticNote(null);
-    setDuplicateClusters(null);
-    setTotalMatches(0);
-    setTotalFiles(0);
-    setTruncated(false);
-    if (searchQuery.trim()) {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      debounceTimerRef.current = setTimeout(() => {
-        performSearch(searchQuery);
-      }, DEBOUNCE_DELAY);
-    }
-  }, [semanticMode, searchQuery, performSearch]);
-
-  // ── Semantic index status polling ────────────────────────────
-
-  useEffect(() => {
-    if (!semanticMode || !embeddingsEnabled) return;
-
-    const checkAndBuild = async () => {
-      try {
-        const status = await apiService.searchSemanticStatus();
-        setIndexStatus(status);
-
-        if (status.available && !status.initialized && !status.building) {
-          setIsBuilding(true);
-          try {
-            await apiService.searchSemanticBuild();
-            const poll = async () => {
-              const s = await apiService.searchSemanticStatus();
-              setIndexStatus(s);
-              if (s.building) {
-                setTimeout(poll, 2000);
-              } else {
-                setIsBuilding(false);
-              }
-            };
-            setTimeout(poll, 1000);
-          } catch {
-            setIsBuilding(false);
-          }
-        } else if (status.building) {
-          setIsBuilding(true);
-          const poll = async () => {
-            const s = await apiService.searchSemanticStatus();
-            setIndexStatus(s);
-            if (s.building) {
-              setTimeout(poll, 2000);
-            } else {
-              setIsBuilding(false);
-            }
-          };
-          setTimeout(poll, 2000);
-        }
-      } catch {
-        setIndexStatus(null);
-      }
-    };
-
-    checkAndBuild();
-  }, [semanticMode, embeddingsEnabled, apiService]);
 
   // ── Filter results by exclude patterns ───────────────────────
 
@@ -314,10 +172,6 @@ export function useSearchState(
       } else if (e.key === 'Escape') {
         setSearchQuery('');
         setResults(null);
-        setSemanticResults(null);
-        setSemanticDuration(null);
-        setSemanticNote(null);
-        setDuplicateClusters(null);
         setTotalMatches(0);
         setTotalFiles(0);
         setTruncated(false);
@@ -381,10 +235,6 @@ export function useSearchState(
     setSearchQuery('');
     setExcludePatterns('');
     setResults(null);
-    setSemanticResults(null);
-    setSemanticDuration(null);
-    setSemanticNote(null);
-    setDuplicateClusters(null);
     setTotalMatches(0);
     setTotalFiles(0);
     setTruncated(false);
@@ -396,7 +246,6 @@ export function useSearchState(
   const toggleCaseSensitive = useCallback(() => setCaseSensitive((prev) => !prev), []);
   const toggleWholeWord = useCallback(() => setWholeWord((prev) => !prev), []);
   const toggleRegex = useCallback(() => setUseRegex((prev) => !prev), []);
-  const toggleSemanticMode = useCallback(() => setSemanticMode((prev) => !prev), []);
 
   // ── Return ───────────────────────────────────────────────────
 
@@ -410,18 +259,12 @@ export function useSearchState(
     caseSensitive,
     wholeWord,
     useRegex,
-    semanticMode,
     toggleCaseSensitive,
     toggleWholeWord,
     toggleRegex,
-    toggleSemanticMode,
     // Results
     results,
     filteredResults,
-    semanticResults,
-    semanticDuration,
-    semanticNote,
-    duplicateClusters,
     totalMatches,
     totalFiles,
     truncated,
@@ -438,12 +281,6 @@ export function useSearchState(
     // Exclude
     excludePatterns,
     setExcludePatterns,
-    // Semantic
-    semanticThreshold,
-    setSemanticThreshold,
-    indexStatus,
-    isBuilding,
-    embeddingsEnabled,
     // Expansion
     expandedFiles,
     toggleFile,

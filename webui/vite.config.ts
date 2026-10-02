@@ -291,7 +291,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/@lezer/')) return 'codemirror';
             if (id.includes('node_modules/@codemirror/')) return 'codemirror';
             if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
-            if (id.includes('node_modules/onnxruntime')) return 'onnxruntime';
             return undefined;
           },
         },

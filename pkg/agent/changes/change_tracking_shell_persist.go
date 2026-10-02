@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -161,8 +162,7 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 		return marshalErr
 	}
 
-	// Atomic write: temp file in same dir, then rename. Same pattern as
-	// the embedding store's meta-file save.
+	// Atomic write: temp file in same dir, then rename.
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -223,6 +223,13 @@ func evictOldestWorkspaces(schema *shellSkipDirsFileSchema, n int) {
 // Errors when no config directory can be determined (very rare —
 // happens only when $HOME is unset and $XDG_CONFIG_HOME isn't either).
 func shellSkipDirsFilePath() (string, error) {
+	// Under `go test`, refuse to persist unless the test pointed the config
+	// dir somewhere explicit. Packages without config isolation otherwise
+	// wrote their temp workspaces into the developer's real skip file,
+	// evicting real entries from its LRU (mirrors git.SafeGitCmd's guard).
+	if testing.Testing() && os.Getenv("SPROUT_CONFIG_DIR") == "" && os.Getenv("SPROUT_CONFIG") == "" {
+		return "", errors.New("shell skip-dir persistence is disabled in tests without an isolated config dir")
+	}
 	dir, err := configuration.GetConfigDir()
 	if err != nil {
 		return "", err

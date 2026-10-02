@@ -89,7 +89,7 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 		if pattern, ok := payload["search_pattern"].(string); ok && pattern != "" {
 			return fmt.Sprintf("%s %s", toolName, pattern)
 		}
-	case "web_search", "semantic_search":
+	case "web_search":
 		if query, ok := payload["query"].(string); ok && query != "" {
 			if len(query) > 80 {
 				return fmt.Sprintf("%s %s...", toolName, query[:77])
@@ -126,10 +126,6 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 	case "TodoWrite":
 		if todos, ok := payload["todos"].([]interface{}); ok {
 			return fmt.Sprintf("%s (%d items)", toolName, len(todos))
-		}
-	case "embedding_index":
-		if operation, ok := payload["operation"].(string); ok && operation != "" {
-			return fmt.Sprintf("%s %s", toolName, operation)
 		}
 	case "activate_skill":
 		if skillID, ok := payload["skill_id"].(string); ok && skillID != "" {

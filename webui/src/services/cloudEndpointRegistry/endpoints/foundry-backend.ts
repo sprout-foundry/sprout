@@ -19,13 +19,6 @@ const chatAndQueryEndpoints: CloudEndpoint[] = [
   },
 ];
 
-// --- Embedding & Semantic Search ---
-// Intentionally empty: these endpoints are not available in browser mode and
-// return synthetic safe-default responses (see synthetic.ts). The earlier
-// foundry-backend duplicates were removed because they caused 401/404 errors
-// in cloud mode and triggered error toasts in the UI.
-const embeddingEndpoints: CloudEndpoint[] = [];
-
 // --- Agent Terminal Sessions ---
 const terminalEndpoints: CloudEndpoint[] = [
   {
@@ -173,7 +166,6 @@ const workspaceEndpoints: CloudEndpoint[] = [];
  */
 export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...chatAndQueryEndpoints,
-  ...embeddingEndpoints,
   ...terminalEndpoints,
   ...gitEndpoints,
   ...diagnosticsEndpoints,

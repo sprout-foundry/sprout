@@ -39,7 +39,7 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.NotEmpty(t, cfg.SubagentTypes, "SubagentTypes should contain defaults")
 	assert.NotEmpty(t, cfg.Skills, "Skills should contain defaults")
 	assert.True(t, cfg.Wakeup.Enabled, "Wakeup should default to enabled")
-	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession, "Wakeup MaxTokensPerSession should default to 5000")
+	assert.Equal(t, DefaultWakeupMaxTokens, cfg.Wakeup.MaxTokensPerSession, "Wakeup MaxTokensPerSession should default to DefaultWakeupMaxTokens")
 	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession, "Wakeup MaxResumesPerSession should default to 10")
 }
 
@@ -296,8 +296,8 @@ func TestLoadDefaultsAppliedForOmittedWakeup(t *testing.T) {
 
 	assert.True(t, cfg.Wakeup.Enabled,
 		"Wakeup.Enabled should default to true when the key is absent from file")
-	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession,
-		"Wakeup.MaxTokensPerSession should default to 5000 when omitted")
+	assert.Equal(t, DefaultWakeupMaxTokens, cfg.Wakeup.MaxTokensPerSession,
+		"Wakeup.MaxTokensPerSession should default when omitted")
 	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession,
 		"Wakeup.MaxResumesPerSession should default to 10 when omitted")
 }
@@ -322,7 +322,7 @@ func TestLoadRespectsExplicitWakeupOptOut(t *testing.T) {
 
 	assert.False(t, cfg.Wakeup.Enabled,
 		"Wakeup.Enabled should be false when explicitly set to false in file")
-	assert.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession,
+	assert.Equal(t, DefaultWakeupMaxTokens, cfg.Wakeup.MaxTokensPerSession,
 		"Wakeup.MaxTokensPerSession should keep its default when not in file")
 	assert.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession,
 		"Wakeup.MaxResumesPerSession should keep its default when not in file")

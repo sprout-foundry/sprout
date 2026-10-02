@@ -947,69 +947,6 @@ class ApiService {
     return searchApi.search(clientFetch, query, options);
   }
 
-  // ── Semantic Search API ──────────────────────────────────────────
-
-  async searchSemantic(
-    query: string,
-    options?: {
-      top_k?: number;
-      threshold?: number;
-    },
-  ): Promise<{
-    results: Array<{
-      file: string;
-      name: string;
-      signature: string;
-      start_line: number;
-      end_line: number;
-      language: string;
-      similarity: number;
-      type: string;
-    }>;
-    duplicate_clusters: Array<{
-      files: string[];
-      similarity: number;
-    }>;
-    query: string;
-    total: number;
-    duration: string;
-    note?: string;
-  }> {
-    return searchApi.searchSemantic(clientFetch, query, options);
-  }
-
-  async searchSemanticStatus(): Promise<{
-    available: boolean;
-    initialized: boolean;
-    building: boolean;
-    record_count: number;
-    workspace: string;
-    init_error?: string;
-  }> {
-    return searchApi.searchSemanticStatus(clientFetch);
-  }
-
-  async searchSemanticBuild(): Promise<{ status: string }> {
-    return searchApi.searchSemanticBuild(clientFetch);
-  }
-
-  async searchSemanticPreview(
-    file: string,
-    startLine: number,
-    context?: number,
-  ): Promise<{
-    file: string;
-    start_line: number;
-    snippet: Array<{
-      line_number: number;
-      content: string;
-      is_context: boolean;
-    }>;
-    total_lines: number;
-  }> {
-    return searchApi.searchSemanticPreview(clientFetch, file, startLine, context);
-  }
-
   async searchReplace(request: {
     search: string;
     replace: string;

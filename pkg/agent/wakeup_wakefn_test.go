@@ -12,6 +12,7 @@ import (
 // goroutine. This is the fix for prose rendering one chunk per line —
 // the resume turn must run inside the REPL loop's turn machinery.
 func TestTryAutoResume_RoutesThroughWakeFn(t *testing.T) {
+	disableWakeupBatching(t)
 	a := newTestAgentWithWakeup(t, true)
 	t.Cleanup(func() { a.Shutdown() })
 
@@ -53,6 +54,7 @@ func TestTryAutoResume_RoutesThroughWakeFn(t *testing.T) {
 // goroutine (the WebUI-daemon surface), and nothing is stashed for the
 // REPL.
 func TestTryAutoResume_NoWakeFnUsesGoroutine(t *testing.T) {
+	disableWakeupBatching(t)
 	a := newTestAgentWithWakeup(t, true)
 	t.Cleanup(func() { a.Shutdown() })
 
@@ -74,6 +76,7 @@ func TestTryAutoResume_NoWakeFnUsesGoroutine(t *testing.T) {
 // TestSetWakeupWakeFn_NilReverts verifies passing nil unregisters the
 // wake function so TryAutoResume falls back to the goroutine path.
 func TestSetWakeupWakeFn_NilReverts(t *testing.T) {
+	disableWakeupBatching(t)
 	a := newTestAgentWithWakeup(t, true)
 	t.Cleanup(func() { a.Shutdown() })
 
@@ -137,6 +140,7 @@ func waitQuerySettled(t *testing.T, a *Agent) {
 // turn reports its end: it starts inside the agent, so the done hook is the
 // WebUI's only way to book it and refresh the chat's snapshot.
 func TestTryAutoResume_GoroutinePathCallsDoneFn(t *testing.T) {
+	disableWakeupBatching(t)
 	a := newTestAgentWithWakeup(t, true)
 	t.Cleanup(func() { a.Shutdown() })
 

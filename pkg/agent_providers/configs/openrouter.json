@@ -755,13 +755,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.008372,
+        "cached_input_cost": 0.0056,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.04186,
+        "input_cost": 0.028,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 0.08372,
+        "output_cost": 0.056,
         "tags": [
           "tools",
           "reasoning",
@@ -769,11 +769,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.0108,
+        "cached_input_cost": 0.0051,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.0108,
+        "input_cost": 0.0051,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
         "output_cost": 1.28,
         "tags": [
@@ -1881,6 +1881,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.15,
         "context_length": 262144,
         "description": "Kimi K2 Thinking is Moonshot AI’s most advanced open reasoning model to date, extending the K2 series into agentic, long-horizon reasoning. Built on the trillion-parameter Mixture-of-Experts (MoE) architecture introduced in...",
         "id": "moonshotai/kimi-k2-thinking",
@@ -1939,13 +1940,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.6635,
+        "cached_input_cost": 0.27,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 0.6635,
+        "input_cost": 2.7,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 10,
+        "output_cost": 13.5,
         "tags": [
           "tools",
           "vision",
@@ -2117,13 +2118,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.12,
+        "cached_input_cost": 0.1,
         "context_length": 512288,
         "description": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid Transformer-Mamba mixture-of-experts architecture, it...",
         "id": "nvidia/nemotron-3-ultra-550b-a55b",
-        "input_cost": 0.6,
+        "input_cost": 0.5,
         "name": "NVIDIA: Nemotron 3 Ultra",
-        "output_cost": 2.4,
+        "output_cost": 2.2,
         "tags": [
           "tools",
           "reasoning",
@@ -3664,12 +3665,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "The Qwen3.5 Series 35B-A3B is a native vision-language model designed with a hybrid architecture that integrates linear attention mechanisms and a sparse mixture-of-experts model, achieving higher inference efficiency. Its overall...",
         "id": "qwen/qwen3.5-35b-a3b",
-        "input_cost": 0.1625,
+        "input_cost": 0.15,
         "name": "Qwen: Qwen3.5-35B-A3B",
-        "output_cost": 1.3,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -4000,13 +4002,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.020625,
+        "cached_input_cost": 0.033,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
         "id": "tencent/hy3",
-        "input_cost": 0.0825,
+        "input_cost": 0.132,
         "name": "Tencent: Hy3",
-        "output_cost": 0.33,
+        "output_cost": 0.528,
         "tags": [
           "tools",
           "reasoning",
@@ -4074,11 +4076,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.16,
         "context_length": 1048576,
         "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
         "id": "thinkingmachines/inkling",
-        "input_cost": 1,
+        "input_cost": 0.95,
         "name": "Thinking Machines: Inkling",
         "output_cost": 4.05,
         "tags": [
@@ -4398,13 +4400,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1775,
+        "cached_input_cost": 0.14,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
         "id": "z-ai/glm-5.3",
-        "input_cost": 0.2219,
+        "input_cost": 1.4,
         "name": "Z.ai: GLM 5.3",
-        "output_cost": 3.39,
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
@@ -4517,13 +4519,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.6635,
+        "cached_input_cost": 0.8,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.6635,
+        "input_cost": 1.34,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 10,
+        "output_cost": 13,
         "tags": [
           "tools",
           "vision",
@@ -4592,11 +4594,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.0108,
+        "cached_input_cost": 0.0051,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.0108,
+        "input_cost": 0.0051,
         "name": "DeepSeek V4 Flash Latest",
         "output_cost": 1.28,
         "tags": [
@@ -5593,13 +5595,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.02975,
+        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that benefit from domain-specific customization.",
         "id": "nvidia/nemotron-3.5-lightning",
-        "input_cost": 0.0595,
+        "input_cost": 0.06,
         "name": "NVIDIA: Nemotron 3.5 Lightning",
-        "output_cost": 0.17,
+        "output_cost": 0.16,
         "tags": [
           "reasoning",
           "structured_output"
@@ -5899,13 +5901,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.067,
+        "cached_input_cost": 0.08,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
         "input_cost": 0.12,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 1.14,
+        "output_cost": 4,
         "tags": [
           "tools",
           "reasoning",
@@ -6164,13 +6166,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0378,
+        "cached_input_cost": 0.042,
         "context_length": 1048576,
         "description": "Tencent: Hy4 preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that demand strong reasoning and long-context understanding.",
         "id": "tencent/hy4-preview",
-        "input_cost": 0.7506,
+        "input_cost": 0.834,
         "name": "Tencent: Hy4 preview",
-        "output_cost": 2.2509,
+        "output_cost": 2.501,
         "tags": [
           "tools",
           "reasoning",
@@ -6265,13 +6267,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.01,
+        "cached_input_cost": 0.01125,
         "context_length": 1310720,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.02,
+        "input_cost": 0.02625,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.3,
+        "output_cost": 0.9,
         "tags": [
           "tools",
           "vision",
@@ -6539,13 +6541,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.01,
+        "cached_input_cost": 0.006,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.03,
+        "input_cost": 0.3,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 0.5,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6696,13 +6698,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.025,
+        "cached_input_cost": 0.002115,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.025,
+        "input_cost": 0.015,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.6,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6711,13 +6713,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1642,
+        "cached_input_cost": 0.0042,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
         "id": "~deepseek/deepseek-pro-latest",
-        "input_cost": 0.1642,
+        "input_cost": 0.132,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 3.5,
+        "output_cost": 0.396,
         "tags": [
           "tools",
           "reasoning",
@@ -7317,6 +7319,31 @@
         "tags": [
           "tools",
           "vision"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Apodex 1.1 Mini is a reasoning-first model from Apodex, built for complex, long-horizon research and forecasting tasks. It works directly with files, data, code, and tools to produce verifiable results, and is designed for agentic research workflows where answers need to be grounded in evidence.",
+        "id": "apodex/apodex-1.1-mini:free",
+        "input_cost": 0,
+        "name": "Apodex: Apodex 1.1 Mini (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.1 Flash is a hybrid reasoning mixture-of-experts model from inclusionAI, with 25B active parameters out of 560B total.",
+        "id": "inclusionai/ling-3.1-flash",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.1 Flash",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
         ]
       }
     ],

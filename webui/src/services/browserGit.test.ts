@@ -237,9 +237,9 @@ describe('executeGitOp dispatch', () => {
       expect(mockFastForward).not.toHaveBeenCalled();
     });
 
-    it('push explains a GitHub auth rejection', async () => {
+    it('push explains a git host auth rejection', async () => {
       mockGitPush.mockRejectedValueOnce(Object.assign(new Error('HTTP Error: 403'), { data: { statusCode: 403 } }));
-      await expect(executeGitOp('push', {})).rejects.toThrow(/GitHub rejected the push/);
+      await expect(executeGitOp('push', {})).rejects.toThrow(/git host rejected the push/);
     });
   });
 

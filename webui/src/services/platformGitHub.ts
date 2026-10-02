@@ -29,9 +29,14 @@ export async function fetchPlatformGitHubConnected(): Promise<boolean> {
 }
 
 interface PlatformRepo {
-  id: number;
+  id: number | string;
+  /** Git host ("github.com", "gitlab.com", …); absent from older platforms. */
+  host?: string;
+  /** Repo path on the host; may include GitLab subgroups. */
+  path?: string;
   full_name: string;
   html_url: string;
+  clone_url?: string;
   description?: string;
   default_branch: string;
   private: boolean;
@@ -57,7 +62,10 @@ export async function listPlatformRepos(): Promise<GitHubRepo[]> {
 }
 
 function toGitHubRepo(r: PlatformRepo): GitHubRepo {
-  const [owner = '', name = r.full_name] = r.full_name.split('/');
+  const path = r.path || r.full_name;
+  const cut = path.lastIndexOf('/');
+  const owner = cut >= 0 ? path.slice(0, cut) : '';
+  const name = cut >= 0 ? path.slice(cut + 1) : path;
   return {
     id: r.id,
     name,
@@ -65,7 +73,7 @@ function toGitHubRepo(r: PlatformRepo): GitHubRepo {
     private: r.private,
     description: r.description ?? null,
     html_url: r.html_url,
-    clone_url: `${r.html_url}.git`,
+    clone_url: r.clone_url || `${r.html_url}.git`,
     default_branch: r.default_branch,
     updated_at: r.updated_at,
     owner: { login: owner, avatar_url: '' },

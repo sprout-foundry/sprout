@@ -225,23 +225,49 @@ describe('workspaceGit', () => {
       owner: 'acme',
       name: 'api',
       url: 'https://github.com/acme/api.git',
+      host: 'github.com',
     });
     expect(parseRepoRef('acme/api')).toEqual({
       owner: 'acme',
       name: 'api',
       url: 'https://github.com/acme/api.git',
+      host: 'github.com',
     });
     expect(() => parseRepoRef('not a repo')).toThrow();
   });
 
+  it('keeps GitLab subgroups and drops view suffixes', () => {
+    expect(parseRepoRef('https://gitlab.com/group/sub/app/-/merge_requests/3')).toEqual({
+      owner: 'group/sub',
+      name: 'app',
+      url: 'https://gitlab.com/group/sub/app.git',
+      host: 'gitlab.com',
+    });
+    expect(parseRepoRef('https://github.com/acme/api/tree/main/src').url).toBe('https://github.com/acme/api.git');
+    expect(parseRepoRef('https://bitbucket.org/team/app/src/main/').owner).toBe('team');
+    expect(() => parseRepoRef('https://gitlab.com/group/../app')).toThrow();
+    expect(() => parseRepoRef('https://gitlab.com/onlyone')).toThrow();
+  });
+
   it('repoDir builds the repos/owner/name layout', () => {
     expect(repoDir('acme/api')).toBe('repos/acme/api');
+    expect(repoDir('group/sub/app')).toBe('repos/group/sub/app');
+    expect(() => repoDir('nope')).toThrow();
   });
 
   it('cloneRepo rejects an existing checkout', async () => {
     const fs = fsWithSeed();
     await fs.mkdir('repos/acme/api');
     await expect(cloneRepo('acme/api', { fs })).rejects.toThrow(/already exists/);
+  });
+
+  it('listRepos finds subgroup repos and skips folders of loose files', async () => {
+    const fs = fsWithSeed();
+    await fs.write('repos/acme/api/.git/HEAD', 'ref: refs/heads/main');
+    await fs.write('repos/group/sub/app/.git/HEAD', 'ref: refs/heads/main');
+    await fs.write('repos/notes/misc/todo.txt', 'not a repo');
+    await fs.write('repos/notes/misc/deep/.git/HEAD', 'inside loose files: not listed');
+    expect(await listRepos(fs)).toEqual(['acme/api', 'group/sub/app']);
   });
 
   it('listRepos and removeRepo round-trip through the seam', async () => {

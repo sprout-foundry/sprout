@@ -100,8 +100,6 @@ export interface ContextPanelBaseProps {
 
 export interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
-  /** Layered layout: the conversation, shown here while the main view holds other work. */
-  threadContent?: ReactNode;
   toolExecutions: ToolExecution[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
@@ -158,7 +156,7 @@ export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 /** Up to this width the panel is an overlay drawer, so it starts closed. */
 export const OVERLAY_LAYOUT_MAX_WIDTH = 1024;
 
-export type ChatTabId = 'thread' | 'changes';
+export type ChatTabId = 'changes';
 
 export interface PanelTab {
   id: ChatTabId;

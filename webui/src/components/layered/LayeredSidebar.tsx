@@ -14,7 +14,7 @@ import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
-import { githubRepoSlug } from '../../utils/platformUrl';
+import { repoSlug as repoSlugFromURL } from '../../utils/platformUrl';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
@@ -75,10 +75,13 @@ function openRepo(url: string): void {
 }
 
 async function promptForRepo(): Promise<void> {
-  const input = await showThemedPrompt('GitHub repository to open (owner/name or URL):', {
-    title: 'Open a repository',
-    placeholder: 'owner/repo',
-  });
+  const input = await showThemedPrompt(
+    'Repository to open (GitHub owner/name, or a GitHub, GitLab or Bitbucket URL):',
+    {
+      title: 'Open a repository',
+      placeholder: 'owner/repo',
+    },
+  );
   if (!input?.trim()) return;
   try {
     openRepo(parseRepoRef(input.trim()).url.replace(/\.git$/, ''));
@@ -101,7 +104,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     else await promptForRepo();
   };
   const activeRepo = useActiveRepoURL();
-  const repoSlug = githubRepoSlug(activeRepo);
+  const repoSlug = repoSlugFromURL(activeRepo);
   const recentRepos = useRecentRepos();
   const home = useHomeView();
   // Phones: whatever opens a Home page (a dialog's "Connect GitHub", a
@@ -210,10 +213,10 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const projects: RailProject[] = isCloud
     ? recentRepos.map((url) => ({
         id: url,
-        label: githubRepoSlug(url) ?? url,
-        active: !home.open && githubRepoSlug(url) === repoSlug,
+        label: repoSlugFromURL(url) ?? url,
+        active: !home.open && repoSlugFromURL(url) === repoSlug,
         onSelect: () => {
-          if (githubRepoSlug(url) === repoSlug) closeHome();
+          if (repoSlugFromURL(url) === repoSlug) closeHome();
           else openRepo(url);
           props.onCloseDrawer?.();
         },

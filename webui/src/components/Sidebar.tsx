@@ -2,7 +2,7 @@ import React, { type ComponentType, useEffect, useState, useMemo, useCallback, u
 import './Sidebar.css';
 import { supportsAutomations, supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { githubRepoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../utils/platformUrl';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlugins } from '../contexts/PluginContext';
@@ -218,7 +218,7 @@ function Sidebar({
   onRequestProviderSetup,
   onViewChange,
 }: SidebarProps): JSX.Element {
-  const staticWorkspaceLabel = githubRepoSlug(useActiveRepoURL()) ?? 'No repository open';
+  const staticWorkspaceLabel = repoSlug(useActiveRepoURL()) ?? 'No repository open';
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.

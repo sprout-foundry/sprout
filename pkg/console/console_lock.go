@@ -49,6 +49,11 @@ var outputMu sync.Mutex
 // without adding a separate mutex.
 var activeInputReader *InputReader
 
+// activeSelectList is the picker on screen, so background output can print
+// above it and a live footer's resize can clear and redraw it. Guarded by
+// outputMu.
+var activeSelectList *SelectList
+
 // activeSteerReader points to the SteerInputReader whose readLoop is
 // currently active (or nil). Set by SteerInputReader.Start, cleared by
 // Stop. Read by PrintExternal so mid-turn security cautions can print
@@ -128,6 +133,10 @@ func PrintExternal(msg string) {
 		ir.printExternalLocked(msg)
 		return
 	}
+	if sl := activeSelectList; sl != nil {
+		sl.printExternalLocked(msg)
+		return
+	}
 	fmt.Print(msg)
 }
 
@@ -180,7 +189,7 @@ func promptOnScreen() bool {
 		return false
 	}
 	defer outputMu.Unlock()
-	return activeSteerReader != nil || activeInputReader != nil
+	return activeSteerReader != nil || activeInputReader != nil || activeSelectList != nil
 }
 
 func init() {

@@ -57,13 +57,9 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg OutputVerbosityToggler) {
 	keymapOnce.Do(func() {
 		// SP-115 Phase 4: set the initial hint visibility based on verbosity.
 		// Compact verbosity hides the hint; default and verbose show it. An
-		// empty current value (no loaded config) leaves the footer default —
-		// matching the GetConfig()-nil early return the direct-Manager call
-		// used to make.
+		// unset verbosity is the default level, so it shows the hint too.
 		if footer != nil && cfg != nil {
-			if cur := cfg.CurrentOutputVerbosity(); cur != "" {
-				footer.SetShowKeymapHint(cur != verbosityCompact)
-			}
+			footer.SetShowKeymapHint(cfg.CurrentOutputVerbosity() != verbosityCompact)
 		}
 
 		// Alt+T: footer tooltip toggle (CLI-D-3)

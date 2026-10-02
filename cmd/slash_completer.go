@@ -3,9 +3,11 @@
 package cmd
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
@@ -248,6 +250,75 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) console.
 // When steerOnly is true, only commands that are safe to run mid-turn
 // (SteerCapable && SafeDuringSteer()) are offered, matching the steer
 // panel's execution gate.
+// slashDropdownCandidates lists each matching command once under its
+// canonical name, with its aliases noted in the description. Listing aliases
+// as rows of their own buried the commands: "/c" offered /c, /cg, /ch,
+// /changes, /cl before /clear. A command whose name is exactly the typed
+// prefix sorts first; then commands whose canonical name matches; then
+// those reached only through an alias.
+func slashDropdownCandidates(registry *agent_commands.CommandRegistry, names []string, prefix string) []console.CompletionCandidate {
+	type match struct {
+		name      string
+		desc      string
+		rank      int
+		aliasHint string
+	}
+	byName := map[string]*match{}
+	var order []string
+	for _, name := range names {
+		if !strings.HasPrefix(strings.ToLower(name), prefix) {
+			continue
+		}
+		cmd, ok := registry.GetCommand(name)
+		if !ok {
+			continue
+		}
+		canonical := cmd.Name()
+		rank := 2
+		switch {
+		case strings.EqualFold(canonical, prefix):
+			rank = 0
+		case strings.HasPrefix(strings.ToLower(canonical), prefix):
+			rank = 1
+		}
+		m, seen := byName[canonical]
+		if !seen {
+			m = &match{name: canonical, desc: cmd.Description(), rank: rank}
+			if aliases := visibleAliases(registry.AliasesOf(canonical)); len(aliases) > 0 {
+				m.aliasHint = " · /" + strings.Join(aliases, " /")
+			}
+			byName[canonical] = m
+			order = append(order, canonical)
+		}
+		m.rank = min(m.rank, rank)
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := byName[order[i]], byName[order[j]]
+		if a.rank != b.rank {
+			return a.rank < b.rank
+		}
+		return a.name < b.name
+	})
+	out := make([]console.CompletionCandidate, len(order))
+	for i, name := range order {
+		m := byName[name]
+		out[i] = console.CompletionCandidate{Text: "/" + m.name, Description: m.desc + m.aliasHint}
+	}
+	return out
+}
+
+// visibleAliases drops punctuation aliases like "?" and sorts the rest.
+func visibleAliases(aliases []string) []string {
+	out := aliases[:0:0]
+	for _, a := range aliases {
+		if a != "" && unicode.IsLetter(rune(a[0])) {
+			out = append(out, a)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func buildRichSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) console.RichCompletionProvider {
 	return func(line string, cursorPos int) []console.CompletionCandidate {
 		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
@@ -262,21 +333,7 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) cons
 		}
 
 		if !strings.ContainsAny(line, " \t") {
-			prefix := strings.ToLower(line[1:])
-			var matches []console.CompletionCandidate
-			for _, name := range names {
-				if strings.HasPrefix(strings.ToLower(name), prefix) {
-					desc := ""
-					if cmd, ok := registry.GetCommand(name); ok {
-						desc = cmd.Description()
-					}
-					matches = append(matches, console.CompletionCandidate{
-						Text:        "/" + name,
-						Description: desc,
-					})
-				}
-			}
-			return matches
+			return slashDropdownCandidates(registry, names, strings.ToLower(line[1:]))
 		}
 
 		// Argument completion path — return plain text candidates

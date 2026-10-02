@@ -43,13 +43,14 @@ func TestMain(m *testing.M) {
 	// without this override, tests calling NewManagerSilent/NewManager
 	// without per-test SPROUT_CONFIG isolation read/write the real
 	// workspace config file, corrupting it with test fixtures.
-	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-agent-test-config"))
-
+	// The directory is per-run: a shared fixed path let one interrupted run
+	// leave encrypted keys without their key.age, failing every later run.
 	tmpDir, err := os.MkdirTemp("", "sprout-agent-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)
 		os.Exit(1)
 	}
+	_ = os.Setenv("SPROUT_CONFIG", filepath.Join(tmpDir, "config"))
 	sessionsDir := filepath.Join(tmpDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: mkdir sessions: %v\n", err)

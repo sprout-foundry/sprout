@@ -87,21 +87,21 @@ func TestRendererSetTerminalWidth(t *testing.T) {
 
 	// Initial width
 	require.Equal(t, 120, r.terminalWidth, "initial width should be 120")
-	require.Equal(t, 120, r.formatter.width, "formatter width should be 120")
+	require.Equal(t, 118, r.formatter.width, "formatter lays out inside the 2-col indent")
 
 	// Update width
 	r.SetTerminalWidth(80)
 	require.Equal(t, 80, r.terminalWidth, "renderer width should update to 80")
-	require.Equal(t, 80, r.formatter.width, "formatter width should update to 80")
+	require.Equal(t, 78, r.formatter.width, "formatter width should follow, minus the indent")
 
 	// Zero or negative width falls back to 80
 	r.SetTerminalWidth(0)
 	require.Equal(t, 80, r.terminalWidth, "zero width should fall back to 80")
-	require.Equal(t, 80, r.formatter.width, "formatter width should fall back to 80")
+	require.Equal(t, 78, r.formatter.width, "formatter width should fall back to 80 minus the indent")
 
 	r.SetTerminalWidth(-1)
 	require.Equal(t, 80, r.terminalWidth, "negative width should fall back to 80")
-	require.Equal(t, 80, r.formatter.width, "formatter width should fall back to 80")
+	require.Equal(t, 78, r.formatter.width, "formatter width should fall back to 80 minus the indent")
 }
 
 func TestRendererSetTerminalWidthConcurrent(t *testing.T) {

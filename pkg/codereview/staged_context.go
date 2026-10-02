@@ -63,8 +63,14 @@ func BuildStagedContext(ctx context.Context, dir, stagedDiff string) StagedConte
 // stagedHunkContext excerpts the staged (index) version of each file so the
 // review never shows unstaged edits that won't be committed.
 func stagedHunkContext(ctx context.Context, root, stagedDiff string) string {
-	excerpts := HunkExcerptsFrom(stagedDiff, func(rel string) ([]string, bool) {
-		content, err := runGit(ctx, root, "show", ":"+rel)
+	return revHunkContext(ctx, root, "", stagedDiff)
+}
+
+// revHunkContext excerpts each file in diff as it exists at rev; an empty rev
+// reads the index.
+func revHunkContext(ctx context.Context, root, rev, diff string) string {
+	excerpts := HunkExcerptsFrom(diff, func(rel string) ([]string, bool) {
+		content, err := runGit(ctx, root, "show", rev+":"+rel)
 		if err != nil {
 			return nil, false
 		}

@@ -50,8 +50,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	defer term.Restore(ir.termFd, oldState)
 
 	// Initialize line state
-	ir.line = ""
-	ir.cursorPos = 0
+	ir.resetEdit()
 	ir.historyIndex = -1
 	ir.hasEditedLine = false
 	ir.updateTerminalWidth()
@@ -87,9 +86,14 @@ func (ir *InputReader) ReadLine() (string, error) {
 	// lock, the footer's DECRC could restore the cursor to a pre-prompt
 	// position (column 0), making the first typed character appear at
 	// the start of the row instead of after the prompt prefix.
-	LockOutput()
-	fmt.Printf("\r\033[K%s", ir.prompt)
-	UnlockOutput()
+	if ir.composerPinned() {
+		fmt.Print(HideCursorSeq())
+		ir.Refresh()
+	} else {
+		LockOutput()
+		fmt.Printf("\r\033[K%s", ir.prompt)
+		UnlockOutput()
+	}
 
 	// SP-055 follow-up: if the REPL carried over unsent steer text,
 	// pre-fill it into the line buffer and render it so the user can
@@ -194,6 +198,17 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 			// Handle Ctrl+C and Ctrl+Z directly before parsing
 			if b == 3 { // Ctrl+C
+				// Same teardown as Enter: a pinned dropdown would otherwise
+				// stay on screen beside the fresh prompt.
+				if ir.autocomplete != nil && ir.autocomplete.visible {
+					ir.autocomplete.hide()
+					ir.suppressAutocompleteNextRefresh = true
+					ir.Refresh()
+				}
+				if ir.line != "" {
+					ir.abandonLine()
+					continue
+				}
 				fmt.Printf("\r%s", ClearToEndOfLineSeq()) // Clear line
 				fmt.Println("^C")
 				return "", fmt.Errorf("interrupted")
@@ -260,6 +275,15 @@ func (ir *InputReader) ReadLine() (string, error) {
 				case 23: // Ctrl-W — delete previous word
 					ir.DeleteWordBackward()
 					continue
+				case 25: // Ctrl-Y — yank the last killed text
+					ir.Yank()
+					continue
+				case 31: // Ctrl-_ (also Ctrl-/) — undo
+					ir.Undo()
+					continue
+				case 12: // Ctrl-L — clear the screen
+					ir.ClearScreen()
+					continue
 				}
 			}
 
@@ -318,14 +342,19 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.handleMouseEvent(event.Data)
 					continue
 				}
+				if event.Type == EventEnter && ir.autocomplete != nil && ir.autocomplete.visible && ir.autocomplete.fileMode {
+					// Enter on an @path completes it; the message is
+					// still being written.
+					ir.HandleEvent(&InputEvent{Type: EventTab})
+					continue
+				}
 				if event.Type == EventEnter {
 					// If the autocomplete dropdown is visible, accept the
 					// selected candidate before submitting the line.
 					if ir.autocomplete != nil && ir.autocomplete.visible {
 						text := ir.autocomplete.accept()
 						if text != "" {
-							ir.line = text
-							ir.cursorPos = len(ir.line)
+							ir.replaceLine(text)
 						}
 						// hide() marks the dropdown invisible; the next
 						// Refresh() → refreshLocked() tears down the pinned
@@ -348,13 +377,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 						ir.suppressAutocompleteNextRefresh = true
 						ir.Refresh()
 					}
-					// End of input
-					fmt.Println() // Move to next line
-					input := ir.line
-					if input != "" {
-						ir.AddToHistory(input)
-					}
-					return input, nil
+					return ir.finishSubmit(), nil
 				}
 				ir.HandleEvent(event)
 			}

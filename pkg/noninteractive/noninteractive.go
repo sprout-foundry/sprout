@@ -7,7 +7,7 @@ import "strings"
 
 // HelpHint is the canonical guidance shown when a provider is not configured
 // in non-interactive environments (daemons, CI, piped stdin).
-const HelpHint = "Set SPROUT_PROVIDER / configure ~/.config/sprout/config.json, or run `sprout agent` interactively"
+const HelpHint = "Run `sprout keys set <provider>` or export the provider's API key (e.g. DEEPINFRA_API_KEY), or run `sprout` in a terminal for guided setup"
 
 // IsNonInteractiveHint checks if an error message contains the HelpHint text.
 // This is a sentinel check for callers to detect

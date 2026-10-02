@@ -5,6 +5,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -66,8 +67,17 @@ func maybeRunOnboarding() bool {
 	if !needsOnboarding() {
 		return false
 	}
-	return runGuidedOnboarding()
+	if runGuidedOnboarding() {
+		return true
+	}
+	onboardingDeclined = true
+	return false
 }
+
+// onboardingDeclined records that the guided setup ran this process and
+// ended without a provider (skipped or failed), so startup continues in
+// editor-only mode instead of failing.
+var onboardingDeclined bool
 
 // runGuidedOnboarding walks the user through provider → model → API key →
 // persist. Returns true on successful completion, false on skip or failure.
@@ -156,8 +166,16 @@ func selectProviderInteractive() (string, bool) {
 			{Label: "Skip (editor-only mode)", Detail: "set up AI later", Value: "skip"},
 		}
 	} else {
-		// Recommended first, then the rest.
+		// Recommended first, then the rest. The local provider is listed
+		// only when this build can run it.
+		providers := make([]providercatalog.Provider, 0, len(catalog.Providers))
 		for _, p := range catalog.Providers {
+			if p.ID == "sprout-local" && !localAIAvailable() {
+				continue
+			}
+			providers = append(providers, p)
+		}
+		for _, p := range providers {
 			if p.Recommended {
 				models := ""
 				if p.DefaultModel != "" {
@@ -172,7 +190,7 @@ func selectProviderInteractive() (string, bool) {
 				})
 			}
 		}
-		for _, p := range catalog.Providers {
+		for _, p := range providers {
 			if p.Recommended {
 				continue
 			}
@@ -249,6 +267,11 @@ func collectAndValidateAPIKey(providerID string, catProvider providercatalog.Pro
 			if strings.Contains(strings.ToLower(err.Error()), "no api key provided") {
 				return false // user typed nothing / aborted
 			}
+			if errors.Is(err, configuration.ErrAPIKeyTooShort) && attempt < maxAPIKeyRetries {
+				fmt.Println()
+				console.GlyphWarning.Printf("%v — paste the whole key (%d/%d attempts).", err, attempt, maxAPIKeyRetries)
+				continue
+			}
 			fmt.Println()
 			console.GlyphWarning.Printf("Could not read input: %v", err)
 			return false
@@ -261,7 +284,7 @@ func collectAndValidateAPIKey(providerID string, catProvider providercatalog.Pro
 		modelCount, valErr := configuration.ValidateAndSaveAPIKey(providerID, key)
 		if valErr != nil {
 			fmt.Println()
-			console.GlyphWarning.Printf("Validation failed: %v", valErr)
+			console.GlyphWarning.Printf("That key didn't work: %v", leafErrorMessage(valErr))
 			if attempt < maxAPIKeyRetries {
 				fmt.Printf("Let's try again (%d/%d attempts).\n", attempt, maxAPIKeyRetries)
 				continue

@@ -195,6 +195,16 @@ func createChatAgent() (*agent.Agent, error) {
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
 
+	// Setup was skipped or didn't finish: start in editor-only mode — the
+	// web UI without an agent — rather than failing on the missing provider.
+	if onboardingDeclined && !daemonMode {
+		daemonMode = true
+		fmt.Println()
+		console.GlyphInfo.Printf("Starting in editor-only mode: browse and edit your files in the web UI.")
+		fmt.Println("Add an AI provider any time in the web UI's settings, or run 'sprout keys set <provider>' and start sprout again.")
+		return nil, nil
+	}
+
 	// If using the local provider, pre-load the model in-process — with
 	// the user's actual persisted/flag-selected model, not the RAM-tier
 	// default. This preload runs before the real agent (and its own

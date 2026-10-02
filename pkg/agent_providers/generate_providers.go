@@ -306,7 +306,7 @@ func displayName(name string) string {
 	case "chutes":
 		return "Chutes"
 	case "openrouter":
-		return "OpenRouter (Recommended)"
+		return "OpenRouter"
 	case "zai":
 		return "Z.AI"
 	case "openai":

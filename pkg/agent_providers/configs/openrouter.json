@@ -14,7 +14,7 @@
     "temperature": 0.7,
     "top_p": 1
   },
-  "display_name": "OpenRouter (Recommended)",
+  "display_name": "OpenRouter",
   "endpoint": "https://openrouter.ai/api/v1/chat/completions",
   "headers": {
     "HTTP-Referer": "https://github.com/sprout-foundry/sprout",

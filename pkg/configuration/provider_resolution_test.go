@@ -116,7 +116,7 @@ func TestMapProviderStringToClientType_AcceptsDisplayNames(t *testing.T) {
 		want        api.ClientType
 	}{
 		{"OpenAI", api.OpenAIClientType},
-		{"OpenRouter (Recommended)", api.OpenRouterClientType},
+		{"OpenRouter", api.OpenRouterClientType},
 		{"Ollama (Local)", api.OllamaLocalClientType},
 		{"Ollama (Cloud)", api.OllamaCloudClientType},
 		{"DeepInfra", api.DeepInfraClientType},

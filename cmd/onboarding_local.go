@@ -8,6 +8,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
+// localAIAvailable reports whether this build can run the local provider.
+func localAIAvailable() bool { return false }
+
 // onboardingLocal handles the sprout-local provider onboarding flow.
 // On builds without MLX support, this explains that local AI is not available.
 func onboardingLocal() (string, bool) {

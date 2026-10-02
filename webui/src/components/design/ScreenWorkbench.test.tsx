@@ -74,7 +74,7 @@ function briefFor(stem = 'login'): ScreenBriefModel {
     stem,
     inventory: inventory(),
     flowTexts: { 'design/flows/sign-up.mmd': FLOW_TEXT },
-    wireframeText: '<svg><!-- {color.primary} --><!-- {motion.dur} --></svg>',
+    screenText: '<!-- {color.primary} --><!-- {motion.dur} -->',
     readmeText: '- `login` — review — sign-in entry point',
     tokenTexts: {
       'design/tokens/base.tokens.json': JSON.stringify({
@@ -231,7 +231,7 @@ describe('ScreenWorkbench', () => {
     renderWorkbench({ brief: briefFor('ghost') });
     const root = screen.getByTestId('design-workbench');
     expect(root).toHaveAttribute('data-found', 'false');
-    expect(screen.getByTestId('design-workbench-not-found')).toHaveTextContent('design/wireframes/ghost.svg');
+    expect(screen.getByTestId('design-workbench-not-found')).toHaveTextContent('design/screens/ghost.html');
     expect(screen.queryByTestId('design-workbench-render')).toBeNull();
   });
 });

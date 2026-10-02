@@ -135,6 +135,10 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return &InputEvent{Type: EventWordRight}
 		}
+		if b == 'd' {
+			ep.Reset()
+			return &InputEvent{Type: EventDeleteWordForward}
+		}
 		// Alt+Backspace (Meta-DEL): ESC followed by 0x7F. Delete the
 		// previous word, same as Ctrl-W.
 		if b == 127 {
@@ -190,16 +194,16 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return event
 		case 'C': // Right arrow (or Ctrl+Right = forward word)
-			ctrlMod := strings.Contains(string(ep.buffer), ";5")
+			wordMod := hasWordMotionModifier(ep.buffer)
 			ep.Reset()
-			if ctrlMod {
+			if wordMod {
 				return &InputEvent{Type: EventWordRight}
 			}
 			return &InputEvent{Type: EventRight}
 		case 'D': // Left arrow (or Ctrl+Left = backward word)
-			ctrlMod := strings.Contains(string(ep.buffer), ";5")
+			wordMod := hasWordMotionModifier(ep.buffer)
 			ep.Reset()
-			if ctrlMod {
+			if wordMod {
 				return &InputEvent{Type: EventWordLeft}
 			}
 			return &InputEvent{Type: EventLeft}
@@ -400,4 +404,12 @@ func (ep *EscapeParser) Reset() {
 	ep.mouseBuf = nil
 	ep.utf8Buf = nil
 	ep.utf8Need = 0
+}
+
+// hasWordMotionModifier reports whether an arrow key's CSI parameters carry
+// Alt (3), Ctrl (5) or Ctrl+Alt (7) — e.g. ESC[1;3D, which macOS terminals
+// send for Option+Left. All of them move by word, as in bash and zsh.
+func hasWordMotionModifier(seq []byte) bool {
+	s := string(seq)
+	return strings.Contains(s, ";3") || strings.Contains(s, ";5") || strings.Contains(s, ";7")
 }

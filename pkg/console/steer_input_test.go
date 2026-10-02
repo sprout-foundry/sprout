@@ -59,7 +59,7 @@ func TestSteerInputReader_PrintableAccumulates(t *testing.T) {
 	r.insertAtCursor([]byte{'h'})
 	r.insertAtCursor([]byte{'i'})
 
-	if got := string(r.buffer); got != "hi" {
+	if got := r.line; got != "hi" {
 		t.Fatalf("expected buffer 'hi', got %q", got)
 	}
 }
@@ -74,7 +74,7 @@ func TestSteerInputReader_BackspaceTrims(t *testing.T) {
 	r.insertAtCursor([]byte{'c'})
 	r.handleBackspace()
 
-	if got := string(r.buffer); got != "ab" {
+	if got := r.line; got != "ab" {
 		t.Fatalf("expected 'ab', got %q", got)
 	}
 }
@@ -87,8 +87,8 @@ func TestSteerInputReader_BackspaceOnEmptyIsNoop(t *testing.T) {
 	r.handleBackspace()
 	r.handleBackspace()
 
-	if len(r.buffer) != 0 {
-		t.Fatalf("expected empty buffer, got %q", string(r.buffer))
+	if len(r.line) != 0 {
+		t.Fatalf("expected empty buffer, got %q", r.line)
 	}
 }
 
@@ -108,8 +108,8 @@ func TestSteerInputReader_SubmitFiresCallbackAndClearsBuffer(t *testing.T) {
 	if submitted[0] != "focus on perf" {
 		t.Fatalf("expected 'focus on perf', got %q", submitted[0])
 	}
-	if len(r.buffer) != 0 {
-		t.Fatalf("buffer should clear after submit, got %q", string(r.buffer))
+	if len(r.line) != 0 {
+		t.Fatalf("buffer should clear after submit, got %q", r.line)
 	}
 }
 
@@ -138,8 +138,8 @@ func TestSteerInputReader_InterruptFiresAndClears(t *testing.T) {
 	if interrupted != 1 {
 		t.Fatalf("expected 1 interrupt, got %d", interrupted)
 	}
-	if len(r.buffer) != 0 {
-		t.Fatalf("interrupt should clear buffer, got %q", string(r.buffer))
+	if len(r.line) != 0 {
+		t.Fatalf("interrupt should clear buffer, got %q", r.line)
 	}
 	if len(submitted) != 0 {
 		t.Fatalf("interrupt should not submit, got %d submissions", len(submitted))
@@ -186,8 +186,10 @@ func TestSteerLineWithCursor_FitsInWidth(t *testing.T) {
 	// The pinned line renders text + caret padded to terminal width.
 	// Verify the cursor caret is present and the line is exactly cols
 	// wide (accounting for visible chars, not bytes).
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
 	out := steerRowText("hello", 20, true)
-	if !strings.Contains(out, "▏") {
+	if !strings.Contains(out, caretOn) {
 		t.Fatalf("expected cursor caret in output, got %q", out)
 	}
 	if visibleLen(out) != 20 {
@@ -199,12 +201,14 @@ func TestSteerLineWithCursor_TruncatesLongInput(t *testing.T) {
 	// Input longer than the terminal width should ellipsize so the
 	// caret stays visible (otherwise the user can't tell where their
 	// keystrokes land).
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
 	long := strings.Repeat("a", 100)
 	out := steerRowText(long, 20, true)
 	if !strings.Contains(out, "…") {
 		t.Fatalf("expected ellipsis for overflow, got %q", out)
 	}
-	if !strings.Contains(out, "▏") {
+	if !strings.Contains(out, caretOn) {
 		t.Fatalf("caret should still appear, got %q", out)
 	}
 	if visibleLen(out) != 20 {
@@ -276,12 +280,12 @@ func TestSteerHistory_UpArrowRecallsMostRecent(t *testing.T) {
 
 	// Up arrow: should bring back "beta" (most recent).
 	r.recallHistory(-1)
-	if got := string(r.buffer); got != "beta" {
+	if got := r.line; got != "beta" {
 		t.Fatalf("expected 'beta' after Up, got %q", got)
 	}
 	// Another Up: should walk to "alpha".
 	r.recallHistory(-1)
-	if got := string(r.buffer); got != "alpha" {
+	if got := r.line; got != "alpha" {
 		t.Fatalf("expected 'alpha' after second Up, got %q", got)
 	}
 }
@@ -305,12 +309,12 @@ func TestSteerHistory_DownArrowReturnsToPendingBuffer(t *testing.T) {
 
 	// Up arrow → recall "hello" (snapshots "in-progress" as pending).
 	r.recallHistory(-1)
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("expected 'hello' after Up, got %q", got)
 	}
 	// Down arrow → return to "in-progress".
 	r.recallHistory(+1)
-	if got := string(r.buffer); got != "in-progress" {
+	if got := r.line; got != "in-progress" {
 		t.Fatalf("expected pending buffer restored, got %q", got)
 	}
 }
@@ -329,7 +333,7 @@ func TestSteerHistory_TypingExitsRecall(t *testing.T) {
 	r.recallHistory(-1) // bring back "old message"
 	r.insertAtCursor([]byte{'!'})
 
-	if got := string(r.buffer); got != "old message!" {
+	if got := r.line; got != "old message!" {
 		t.Fatalf("expected edited recall, got %q", got)
 	}
 	if r.historyIndex != -1 {
@@ -364,8 +368,8 @@ func TestSteerHistory_EmptyHistoryNoOpOnArrow(t *testing.T) {
 	r.historyIndex = -1
 
 	r.recallHistory(-1) // Up on empty history
-	if len(r.buffer) != 0 {
-		t.Fatalf("Up on empty history should leave buffer empty, got %q", string(r.buffer))
+	if len(r.line) != 0 {
+		t.Fatalf("Up on empty history should leave buffer empty, got %q", r.line)
 	}
 }
 
@@ -383,7 +387,7 @@ func TestSteerRetract_UpArrowPullsBackPendingSteer(t *testing.T) {
 
 	r.handleEvent(&InputEvent{Type: EventUp})
 
-	if got := string(r.buffer); got != "fix typo plz" {
+	if got := r.line; got != "fix typo plz" {
 		t.Fatalf("expected pulled-back text in buffer, got %q", got)
 	}
 	if r.cursorPos != len("fix typo plz") {
@@ -415,7 +419,7 @@ func TestSteerRetract_SecondUpFallsBackToHistory(t *testing.T) {
 	})
 
 	r.handleEvent(&InputEvent{Type: EventUp})
-	if got := string(r.buffer); got != "earlier steer" {
+	if got := r.line; got != "earlier steer" {
 		t.Fatalf("first Up should retract, got %q", got)
 	}
 
@@ -441,7 +445,7 @@ func TestSteerRetract_FallthroughToHistoryWhenNothingPending(t *testing.T) {
 	r.SetRetractFn(func() (string, bool) { return "", false })
 
 	r.handleEvent(&InputEvent{Type: EventUp})
-	if got := string(r.buffer); got != "past message" {
+	if got := r.line; got != "past message" {
 		t.Fatalf("Up should fall back to history recall, got %q", got)
 	}
 }
@@ -466,7 +470,7 @@ func TestSteerRetract_SkippedWhenBufferNonEmpty(t *testing.T) {
 	if retractCalls != 0 {
 		t.Fatal("retract must not fire when buffer is non-empty")
 	}
-	if got := string(r.buffer); got != "typing" {
+	if got := r.line; got != "typing" {
 		t.Fatalf("buffer must be unchanged, got %q", got)
 	}
 }
@@ -554,17 +558,17 @@ func TestSteerBackspace_RemovesFullMultibyteRune(t *testing.T) {
 	// Manually load a buffer with "hi 字" (4-byte UTF-8 string —
 	// ASCII "hi " is 3 bytes, "字" is 3 bytes = 6 total). Place the
 	// cursor at the end so backspace deletes the rune before it.
-	r.buffer = []byte("hi 字")
-	r.cursorPos = len(r.buffer)
+	r.line = "hi 字"
+	r.cursorPos = len(r.line)
 	r.handleBackspace()
-	got := string(r.buffer)
+	got := r.line
 	if got != "hi " {
-		t.Fatalf("backspace should remove the whole rune '字', got %q (%d bytes)", got, len(r.buffer))
+		t.Fatalf("backspace should remove the whole rune '字', got %q (%d bytes)", got, len(r.line))
 	}
 
 	// Another backspace removes the trailing space.
 	r.handleBackspace()
-	if got := string(r.buffer); got != "hi" {
+	if got := r.line; got != "hi" {
 		t.Fatalf("expected 'hi', got %q", got)
 	}
 }
@@ -574,10 +578,10 @@ func TestSteerBackspace_RemovesFourByteEmoji(t *testing.T) {
 	var interrupted int
 	r := newTestReader(&submitted, &interrupted)
 	// Rocket emoji is 4 bytes in UTF-8.
-	r.buffer = []byte("ok 🚀")
-	r.cursorPos = len(r.buffer)
+	r.line = "ok 🚀"
+	r.cursorPos = len(r.line)
 	r.handleBackspace()
-	if got := string(r.buffer); got != "ok " {
+	if got := r.line; got != "ok " {
 		t.Fatalf("expected 'ok ' after emoji backspace, got %q", got)
 	}
 }
@@ -594,18 +598,18 @@ func TestSteerHistory_ArrowEventsOnlyArrowsAct(t *testing.T) {
 
 	// Right/Left move the cursor but do NOT mutate the buffer contents.
 	// Home moves the cursor to the start. None mutate the buffer.
-	r.buffer = append(r.buffer[:0], []byte("current")...)
-	r.cursorPos = len(r.buffer)
+	r.line = "current"
+	r.cursorPos = len(r.line)
 	r.handleEvent(&InputEvent{Type: EventRight})
 	r.handleEvent(&InputEvent{Type: EventLeft})
 	r.handleEvent(&InputEvent{Type: EventHome})
-	if got := string(r.buffer); got != "current" {
+	if got := r.line; got != "current" {
 		t.Fatalf("Left/Right/Home should not mutate buffer, got %q", got)
 	}
 
 	// Up arrow — should now recall.
 	r.handleEvent(&InputEvent{Type: EventUp})
-	if got := string(r.buffer); got != "entry" {
+	if got := r.line; got != "entry" {
 		t.Fatalf("Up arrow should recall history, got %q", got)
 	}
 }
@@ -633,7 +637,7 @@ func TestSteerInputReader_PasteAccumulatesIntoBuffer(t *testing.T) {
 	if r.pasteActive {
 		t.Fatalf("endPaste should clear pasteActive")
 	}
-	if got := string(r.buffer); got != "hello\nworld" {
+	if got := r.line; got != "hello\nworld" {
 		t.Fatalf("expected paste content in buffer, got %q", got)
 	}
 }
@@ -656,7 +660,7 @@ func TestSteerInputReader_PasteSurvivesNewlines(t *testing.T) {
 	if len(submitted) != 0 {
 		t.Fatalf("paste containing newlines must not submit, got %d submissions", len(submitted))
 	}
-	if got := string(r.buffer); got != "line1\r\nline2\nline3" {
+	if got := r.line; got != "line1\r\nline2\nline3" {
 		t.Fatalf("paste content corrupted, got %q", got)
 	}
 }
@@ -676,7 +680,7 @@ func TestSteerInputReader_PasteAppendsToExistingBuffer(t *testing.T) {
 	}
 	r.endPaste()
 
-	if got := string(r.buffer); got != "hi there" {
+	if got := r.line; got != "hi there" {
 		t.Fatalf("paste should append to existing buffer, got %q", got)
 	}
 }
@@ -689,7 +693,7 @@ func TestSteerInputReader_PasteAppendsToExistingBuffer(t *testing.T) {
 
 func TestSteerCursor_StartEndMovement(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 5
 
 	r.moveCursorStart()
@@ -704,7 +708,7 @@ func TestSteerCursor_StartEndMovement(t *testing.T) {
 
 func TestSteerCursor_BackwardForwardRune(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 5
 
 	r.moveCursorBackward()
@@ -733,11 +737,11 @@ func TestSteerCursor_BackwardForwardRune(t *testing.T) {
 
 func TestSteerCursor_InsertAtCursor(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 2
 
 	r.insertAtCursor([]byte{'X'})
-	if got := string(r.buffer); got != "heXllo" {
+	if got := r.line; got != "heXllo" {
 		t.Fatalf("insertAtCursor: expected 'heXllo', got %q", got)
 	}
 	if r.cursorPos != 3 {
@@ -747,7 +751,7 @@ func TestSteerCursor_InsertAtCursor(t *testing.T) {
 	// Inserting a multi-byte sequence advances cursor by its length.
 	r.cursorPos = 0
 	r.insertAtCursor([]byte("AB"))
-	if got := string(r.buffer); got != "ABheXllo" {
+	if got := r.line; got != "ABheXllo" {
 		t.Fatalf("insertAtCursor multi: expected 'ABheXllo', got %q", got)
 	}
 	if r.cursorPos != 2 {
@@ -758,10 +762,10 @@ func TestSteerCursor_InsertAtCursor(t *testing.T) {
 func TestSteerCursor_InsertAtEnd(t *testing.T) {
 	// Inserting when cursor is at len(buffer) appends and advances.
 	r := &SteerInputReader{}
-	r.buffer = []byte("hi")
+	r.line = "hi"
 	r.cursorPos = 2
 	r.insertAtCursor([]byte("!"))
-	if got := string(r.buffer); got != "hi!" {
+	if got := r.line; got != "hi!" {
 		t.Fatalf("expected 'hi!', got %q", got)
 	}
 	if r.cursorPos != 3 {
@@ -772,10 +776,10 @@ func TestSteerCursor_InsertAtEnd(t *testing.T) {
 func TestSteerCursor_InsertAtCursorInsertsAtCursor(t *testing.T) {
 	// insertAtCursor inserts at the cursor position instead of appending.
 	r := &SteerInputReader{}
-	r.buffer = []byte("ac")
+	r.line = "ac"
 	r.cursorPos = 1
 	r.insertAtCursor([]byte{'b'})
-	if got := string(r.buffer); got != "abc" {
+	if got := r.line; got != "abc" {
 		t.Fatalf("insertAtCursor at cursor: expected 'abc', got %q", got)
 	}
 	if r.cursorPos != 2 {
@@ -786,10 +790,10 @@ func TestSteerCursor_InsertAtCursorInsertsAtCursor(t *testing.T) {
 func TestSteerCursor_BackspaceAtStartIsNoop(t *testing.T) {
 	// Backspace with cursor at position 0 should be a no-op.
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 0
 	r.handleBackspace()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("backspace at start should not change buffer, got %q", got)
 	}
 	if r.cursorPos != 0 {
@@ -800,10 +804,10 @@ func TestSteerCursor_BackspaceAtStartIsNoop(t *testing.T) {
 func TestSteerCursor_BackspaceBeforeCursor(t *testing.T) {
 	// Backspace deletes the rune BEFORE the cursor, not the last rune.
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 3 // cursor between 'l' and 'l' (after "hel")
 	r.handleBackspace()
-	if got := string(r.buffer); got != "helo" {
+	if got := r.line; got != "helo" {
 		t.Fatalf("backspace before cursor: expected 'helo', got %q", got)
 	}
 	if r.cursorPos != 2 {
@@ -813,10 +817,10 @@ func TestSteerCursor_BackspaceBeforeCursor(t *testing.T) {
 
 func TestSteerCursor_DeleteWordBackward(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 11 // end
 	r.deleteWordBackward()
-	if got := string(r.buffer); got != "hello " {
+	if got := r.line; got != "hello " {
 		t.Fatalf("deleteWordBackward: expected 'hello ', got %q", got)
 	}
 	if r.cursorPos != 6 {
@@ -828,10 +832,10 @@ func TestSteerCursor_DeleteWordBackwardTrimsLeadingSpace(t *testing.T) {
 	// Cursor after a space: deleteWordBackward skips whitespace then
 	// deletes the preceding word.
 	r := &SteerInputReader{}
-	r.buffer = []byte("foo bar  ")
+	r.line = "foo bar  "
 	r.cursorPos = 9 // after the two trailing spaces
 	r.deleteWordBackward()
-	if got := string(r.buffer); got != "foo " {
+	if got := r.line; got != "foo " {
 		t.Fatalf("expected 'foo ', got %q", got)
 	}
 	if r.cursorPos != 4 {
@@ -841,10 +845,10 @@ func TestSteerCursor_DeleteWordBackwardTrimsLeadingSpace(t *testing.T) {
 
 func TestSteerCursor_DeleteWordBackwardAtStartIsNoop(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 0
 	r.deleteWordBackward()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("deleteWordBackward at start should be noop, got %q", got)
 	}
 	if r.cursorPos != 0 {
@@ -854,10 +858,10 @@ func TestSteerCursor_DeleteWordBackwardAtStartIsNoop(t *testing.T) {
 
 func TestSteerCursor_KillToEnd(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 5 // after "hello"
 	r.killToEnd()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("killToEnd: expected 'hello', got %q", got)
 	}
 	if r.cursorPos != 5 {
@@ -867,20 +871,20 @@ func TestSteerCursor_KillToEnd(t *testing.T) {
 
 func TestSteerCursor_KillToEndAtEndIsNoop(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 5
 	r.killToEnd()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("killToEnd at end should be noop, got %q", got)
 	}
 }
 
 func TestSteerCursor_KillToStart(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 5 // after "hello"
 	r.killToStart()
-	if got := string(r.buffer); got != " world" {
+	if got := r.line; got != " world" {
 		t.Fatalf("killToStart: expected ' world', got %q", got)
 	}
 	if r.cursorPos != 0 {
@@ -890,20 +894,20 @@ func TestSteerCursor_KillToStart(t *testing.T) {
 
 func TestSteerCursor_KillToStartAtStartIsNoop(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 0
 	r.killToStart()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("killToStart at start should be noop, got %q", got)
 	}
 }
 
 func TestSteerCursor_DeleteForward(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 0
 	r.deleteForward()
-	if got := string(r.buffer); got != "ello" {
+	if got := r.line; got != "ello" {
 		t.Fatalf("deleteForward: expected 'ello', got %q", got)
 	}
 	if r.cursorPos != 0 {
@@ -913,17 +917,17 @@ func TestSteerCursor_DeleteForward(t *testing.T) {
 
 func TestSteerCursor_DeleteForwardAtEndIsNoop(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 5
 	r.deleteForward()
-	if got := string(r.buffer); got != "hello" {
+	if got := r.line; got != "hello" {
 		t.Fatalf("deleteForward at end should be noop, got %q", got)
 	}
 }
 
 func TestSteerCursor_MoveWordBackward(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 11
 	r.moveWord(-1)
 	if r.cursorPos != 6 {
@@ -938,7 +942,7 @@ func TestSteerCursor_MoveWordBackward(t *testing.T) {
 
 func TestSteerCursor_MoveWordForward(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 0
 	r.moveWord(1)
 	if r.cursorPos != 5 {
@@ -956,7 +960,7 @@ func TestSteerCursor_MoveWordSkipsSpaces(t *testing.T) {
 	// skips the non-whitespace word "two", landing at the end of "two"
 	// (byte 5). This matches InputReader.MoveWord forward semantics.
 	r := &SteerInputReader{}
-	r.buffer = []byte("  two words")
+	r.line = "  two words"
 	r.cursorPos = 0
 	r.moveWord(1)
 	if r.cursorPos != 5 {
@@ -967,9 +971,9 @@ func TestSteerCursor_MoveWordSkipsSpaces(t *testing.T) {
 func TestSteerCursor_UTF8BackwardRune(t *testing.T) {
 	// "héllo": h(1) é(2) l(1) l(1) o(1) = 6 bytes, cursor at end=6.
 	r := &SteerInputReader{}
-	r.buffer = []byte("héllo")
-	r.cursorPos = len(r.buffer) // 6
-	r.moveCursorBackward()      // before 'o' → byte 5
+	r.line = "héllo"
+	r.cursorPos = len(r.line) // 6
+	r.moveCursorBackward()    // before 'o' → byte 5
 	if r.cursorPos != 5 {
 		t.Fatalf("UTF-8 backward: expected 5, got %d", r.cursorPos)
 	}
@@ -991,8 +995,8 @@ func TestSteerCursor_UTF8MoveWordBackward(t *testing.T) {
 	// "café town" — "café" is 5 bytes (c,a,f,é=2). Cursor at end.
 	// moveWord(-1) lands at start of "town" (byte 6, after "café ").
 	r := &SteerInputReader{}
-	r.buffer = []byte("café town") // c a f é(2) SP t o w n = 10 bytes
-	r.cursorPos = len(r.buffer)    // 10
+	r.line = "café town"      // c a f é(2) SP t o w n = 10 bytes
+	r.cursorPos = len(r.line) // 10
 	r.moveWord(-1)
 	if r.cursorPos != 6 {
 		t.Fatalf("UTF-8 moveWord(-1): expected 6, got %d", r.cursorPos)
@@ -1007,10 +1011,10 @@ func TestSteerCursor_UTF8MoveWordBackward(t *testing.T) {
 func TestSteerCursor_UTF8BackspaceDeletesFullRune(t *testing.T) {
 	// Backspace before cursor deletes a full multibyte rune.
 	r := &SteerInputReader{}
-	r.buffer = []byte("hi 字") // h i SP 字(3 bytes) = 6 bytes
-	r.cursorPos = len(r.buffer)
+	r.line = "hi 字" // h i SP 字(3 bytes) = 6 bytes
+	r.cursorPos = len(r.line)
 	r.handleBackspace()
-	if got := string(r.buffer); got != "hi " {
+	if got := r.line; got != "hi " {
 		t.Fatalf("UTF-8 backspace: expected 'hi ', got %q", got)
 	}
 	if r.cursorPos != 3 {
@@ -1022,10 +1026,10 @@ func TestSteerCursor_UTF8DeleteForward(t *testing.T) {
 	// deleteForward at the start of a multibyte rune deletes the
 	// whole rune.
 	r := &SteerInputReader{}
-	r.buffer = []byte("a🚀b") // a(1) 🚀(4) b(1) = 6 bytes
-	r.cursorPos = 1          // before 🚀
+	r.line = "a🚀b"  // a(1) 🚀(4) b(1) = 6 bytes
+	r.cursorPos = 1 // before 🚀
 	r.deleteForward()
-	if got := string(r.buffer); got != "ab" {
+	if got := r.line; got != "ab" {
 		t.Fatalf("UTF-8 deleteForward: expected 'ab', got %q", got)
 	}
 	if r.cursorPos != 1 {
@@ -1062,14 +1066,14 @@ func TestSteerCursor_InterruptResetsCursor(t *testing.T) {
 
 func TestSteerCursor_ResetBufferResetsCursor(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 5
 	r.ResetBuffer()
 	if r.cursorPos != 0 {
 		t.Fatalf("ResetBuffer should reset cursor to 0, got %d", r.cursorPos)
 	}
-	if len(r.buffer) != 0 {
-		t.Fatalf("ResetBuffer should clear buffer, got %q", string(r.buffer))
+	if len(r.line) != 0 {
+		t.Fatalf("ResetBuffer should clear buffer, got %q", r.line)
 	}
 }
 
@@ -1106,7 +1110,7 @@ func TestSteerCursor_PasteSetsCursorToEnd(t *testing.T) {
 
 func TestSteerHandleEvent_LeftRightMoveCursor(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello")
+	r.line = "hello"
 	r.cursorPos = 0
 
 	// Right arrow moves cursor forward.
@@ -1123,7 +1127,7 @@ func TestSteerHandleEvent_LeftRightMoveCursor(t *testing.T) {
 
 func TestSteerHandleEvent_CtrlLeftRightMoveWords(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 0
 
 	// Ctrl+Right moves forward one word.
@@ -1147,16 +1151,16 @@ func TestSteerHandleEvent_UpDownRecall(t *testing.T) {
 	}
 	r.handleSubmit()
 
-	r.buffer = append(r.buffer[:0], []byte("current")...)
-	r.cursorPos = len(r.buffer)
+	r.line = "current"
+	r.cursorPos = len(r.line)
 	// Up arrow recalls history.
 	r.handleEvent(&InputEvent{Type: EventUp})
-	if got := string(r.buffer); got != "entry" {
+	if got := r.line; got != "entry" {
 		t.Fatalf("Up arrow should recall 'entry', got %q", got)
 	}
 	// Down arrow returns toward the live buffer.
 	r.handleEvent(&InputEvent{Type: EventDown})
-	if got := string(r.buffer); got != "current" {
+	if got := r.line; got != "current" {
 		t.Fatalf("Down arrow should restore 'current', got %q", got)
 	}
 }
@@ -1164,10 +1168,10 @@ func TestSteerHandleEvent_UpDownRecall(t *testing.T) {
 func TestSteerInsertAtCursor_MidBufferKeepsRest(t *testing.T) {
 	// Insert in the middle must preserve the tail of the buffer.
 	r := &SteerInputReader{}
-	r.buffer = []byte("hello world")
+	r.line = "hello world"
 	r.cursorPos = 5
 	r.insertAtCursor([]byte(" cruel"))
-	if got := string(r.buffer); got != "hello cruel world" {
+	if got := r.line; got != "hello cruel world" {
 		t.Fatalf("mid insert: expected 'hello cruel world', got %q", got)
 	}
 	if r.cursorPos != 11 {
@@ -1256,7 +1260,7 @@ func TestSteerCtrlXCtrlE_StateMachineFlow(t *testing.T) {
 
 func TestSteerSearch_EnterSearchModeSnapshotsBuffer(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("in-progress text")
+	r.line = "in-progress text"
 	r.cursorPos = 5
 
 	r.enterSearchMode()
@@ -1277,7 +1281,7 @@ func TestSteerSearch_EnterSearchModeSnapshotsBuffer(t *testing.T) {
 
 func TestSteerSearch_ExitSearchModeCancelRestoresBuffer(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("original")
+	r.line = "original"
 	r.cursorPos = 8
 
 	r.enterSearchMode()
@@ -1289,7 +1293,7 @@ func TestSteerSearch_ExitSearchModeCancelRestoresBuffer(t *testing.T) {
 	if r.searchMode {
 		t.Fatal("exitSearchMode should clear searchMode")
 	}
-	if got := string(r.buffer); got != "original" {
+	if got := r.line; got != "original" {
 		t.Fatalf("cancel should restore original buffer, got %q", got)
 	}
 	if r.cursorPos != 8 {
@@ -1299,7 +1303,7 @@ func TestSteerSearch_ExitSearchModeCancelRestoresBuffer(t *testing.T) {
 
 func TestSteerSearch_ExitSearchModeAcceptLoadsResult(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("original")
+	r.line = "original"
 	r.cursorPos = 8
 
 	r.history = []string{"alpha", "beta", "gamma"}
@@ -1311,7 +1315,7 @@ func TestSteerSearch_ExitSearchModeAcceptLoadsResult(t *testing.T) {
 	if r.searchMode {
 		t.Fatal("exitSearchMode should clear searchMode")
 	}
-	if got := string(r.buffer); got != "beta" {
+	if got := r.line; got != "beta" {
 		t.Fatalf("accept should load search result into buffer, got %q", got)
 	}
 	if r.cursorPos != len("beta") {
@@ -1486,7 +1490,7 @@ func TestSteerSearch_AcceptOnEmptyResultIsNoOp(t *testing.T) {
 	// When searchResult is empty (no match), accepting should restore
 	// the pre-search buffer rather than load an empty string.
 	r := &SteerInputReader{}
-	r.buffer = []byte("original")
+	r.line = "original"
 	r.cursorPos = 8
 	r.history = []string{"alpha"}
 	// enterSearchMode snapshots the buffer so exitSearchMode can restore.
@@ -1495,14 +1499,14 @@ func TestSteerSearch_AcceptOnEmptyResultIsNoOp(t *testing.T) {
 	r.searchResult = ""
 	r.exitSearchMode(true)
 
-	if got := string(r.buffer); got != "original" {
+	if got := r.line; got != "original" {
 		t.Fatalf("accept with no result should restore buffer, got %q", got)
 	}
 }
 
 func TestSteerSearch_EnterSearchModeOnEmptyHistory(t *testing.T) {
 	r := &SteerInputReader{}
-	r.buffer = []byte("typing")
+	r.line = "typing"
 	r.cursorPos = 6
 	// No history at all.
 	r.enterSearchMode()

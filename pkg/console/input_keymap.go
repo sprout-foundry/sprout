@@ -178,36 +178,18 @@ func KeymapHelpTable() string {
 	return b.String()
 }
 
-// KeymapHintRow renders a single-line hint of keybindings suitable for
-// embedding in the footer hint row. Includes the built-in essential
-// shortcuts (Ctrl+C, Enter, /, Tab) only.
-//
-// Format: "^C interrupt · Enter steer · / commands · Tab autocomplete"
-func KeymapHintRow() string {
-	type hint struct {
-		key   string
-		label string
+// KeymapHintRow renders the footer's one-line shortcut hint for what the
+// input box does in mode: the keys mean different things at the idle
+// prompt (Enter sends) than mid-turn (Enter steers or queues).
+func KeymapHintRow(mode ComposerMode) string {
+	switch mode {
+	case ComposerSteer:
+		return "Enter steer · Tab queue instead · ^C interrupt"
+	case ComposerQueue:
+		return "Enter queue · Tab steer instead · ^C interrupt"
+	default:
+		return "Enter send · Alt+Enter newline · / commands · ? shortcuts"
 	}
-
-	// Built-in shortcuts that aren't in the GlobalKeymap (they're handled
-	// by the input reader / steer input directly). These come first because
-	// they're the most commonly needed.
-	hints := []hint{
-		{"^C", "interrupt"},
-		{"Enter", "steer"},
-		{"/", "commands"},
-		{"Tab", "autocomplete"},
-	}
-
-	if len(hints) == 0 {
-		return ""
-	}
-
-	parts := make([]string, 0, len(hints))
-	for _, h := range hints {
-		parts = append(parts, h.key+" "+h.label)
-	}
-	return strings.Join(parts, " · ")
 }
 
 func padRight(s string, n int) string {

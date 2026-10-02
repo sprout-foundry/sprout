@@ -51,3 +51,15 @@ func TestParsePastedImagePlaceholders_NoImages(t *testing.T) {
 		t.Fatalf("expected no paths, got %q", got)
 	}
 }
+
+func TestCanonicalizeLegacyImageMarkers(t *testing.T) {
+	query := "Pasted image saved to disk: /Users/me/My Projects/app/.sprout/pasted-images/paste_1.png\nWhat is this?"
+	got := CanonicalizeLegacyImageMarkers(query)
+	want := "[image: /Users/me/My Projects/app/.sprout/pasted-images/paste_1.png]\nWhat is this?"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if paths := ParsePastedImagePlaceholders(query); len(paths) != 1 || paths[0] != "/Users/me/My Projects/app/.sprout/pasted-images/paste_1.png" {
+		t.Fatalf("legacy marker with spaces in the path parsed as %q", paths)
+	}
+}

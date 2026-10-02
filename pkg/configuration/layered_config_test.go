@@ -78,6 +78,20 @@ func TestMergeConfig_StringOverrides(t *testing.T) {
 	assert.Equal(t, override.SystemPromptText, result.SystemPromptText)
 }
 
+func TestMergeConfig_DisplayPreferences(t *testing.T) {
+	base := &Config{OutputVerbosity: OutputVerbosityCompact, ShowToolInvocations: true}
+
+	result := MergeConfig(base, &Config{OutputVerbosity: OutputVerbosityVerbose})
+	assert.Equal(t, OutputVerbosityVerbose, result.OutputVerbosity)
+	assert.True(t, result.ShowToolInvocations, "an absent key keeps the base value")
+
+	var override Config
+	require.NoError(t, unmarshalLayer([]byte(`{"show_tool_invocations": false}`), &override))
+	result = MergeConfig(base, &override)
+	assert.Equal(t, OutputVerbosityCompact, result.OutputVerbosity)
+	assert.False(t, result.ShowToolInvocations, "an explicit false overrides the base")
+}
+
 func TestMergeConfig_MapMerge(t *testing.T) {
 	base := &Config{
 		ProviderModels: map[string]string{

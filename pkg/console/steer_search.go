@@ -18,9 +18,7 @@ func (r *SteerInputReader) enterSearchMode() {
 	r.searchResultIndex = -1
 	r.searchBuf = r.searchBuf[:0]
 	// Snapshot current buffer so Esc restores it.
-	snap := make([]byte, len(r.buffer))
-	copy(snap, r.buffer)
-	r.preSearchBuffer = snap
+	r.preSearchBuffer = []byte(r.line)
 	r.preSearchCursorPos = r.cursorPos
 	// Show most recent history entry for empty query.
 	if len(r.history) > 0 {
@@ -36,12 +34,11 @@ func (r *SteerInputReader) exitSearchMode(accept bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if accept && r.searchResult != "" {
-		r.buffer = []byte(r.searchResult)
-		r.cursorPos = len(r.buffer)
+		r.setLineLocked(r.searchResult)
 		r.historyIndex = -1
 		r.pendingBuffer = nil
 	} else {
-		r.buffer = r.preSearchBuffer
+		r.line = string(r.preSearchBuffer)
 		r.cursorPos = r.preSearchCursorPos
 	}
 	r.searchMode = false

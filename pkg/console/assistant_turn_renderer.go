@@ -84,14 +84,14 @@ func (r *AssistantTurnRenderer) SetFooter(f *StatusFooter) {
 // enabled, a StreamingMarkdownFormatter is created for per-line formatting.
 // width <= 0 disables soft-wrap accounting; the indent still works.
 func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *AssistantTurnRenderer {
-	if formatter != nil {
-		formatter.SetWidth(width)
-	}
 	r := &AssistantTurnRenderer{
 		atLineStart:   true,
 		terminalWidth: width,
 		formatter:     formatter,
 		indent:        "  ",
+	}
+	if formatter != nil {
+		formatter.SetWidth(r.contentWidth(width))
 	}
 	if formatter != nil && formatter.enableColors {
 		r.streamFmt = NewStreamingMarkdownFormatter(formatter)
@@ -230,15 +230,12 @@ func (r *AssistantTurnRenderer) emitFormattedLine(line string) int {
 	if formatted == "" {
 		return 0 // line was consumed (e.g. code fence boundary)
 	}
-	// Each output line gets the indent prefix.
 	lineCount := 0
 	for _, outLine := range strings.SplitAfter(formatted, "\n") {
 		if outLine == "" {
 			continue
 		}
-		fmt.Print(r.indent)
-		fmt.Print(outLine)
-		lineCount++
+		lineCount += r.writeWrappedLine(outLine)
 	}
 	return lineCount
 }
@@ -274,6 +271,7 @@ func (r *AssistantTurnRenderer) OnExternalWriteRows(n int) {
 	defer UnlockOutput()
 	// Flush buffered prose before resetting (same rationale as
 	// resetSegment — don't discard unflushed text).
+	r.endReasoningLocked()
 	if r.lineBuf.Len() > 0 {
 		line := r.lineBuf.String()
 		r.lineBuf.Reset()
@@ -321,9 +319,7 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 				if outLine == "" {
 					continue
 				}
-				fmt.Print(r.indent)
-				fmt.Print(outLine)
-				r.physicalLines++
+				r.physicalLines += r.writeWrappedLine(outLine)
 			}
 		}
 	}
@@ -339,6 +335,11 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 }
 
 func (r *AssistantTurnRenderer) resetSegment() {
+	// A tool call can follow reasoning with no prose in between. Finalize
+	// the "▽ Thinking…" header now, while the cursor is still on its row;
+	// the tool's output would otherwise move past it and strand the
+	// ellipsis form.
+	r.endReasoningLocked()
 	// Flush any buffered partial line BEFORE resetting. When a tool call
 	// interrupts mid-sentence prose, the unflushed text in lineBuf would
 	// be silently discarded — the user sees tool calls stream but never
@@ -389,8 +390,18 @@ func (r *AssistantTurnRenderer) SetTerminalWidth(w int) {
 	}
 	r.terminalWidth = w
 	if r.formatter != nil {
-		r.formatter.SetWidth(w)
+		r.formatter.SetWidth(r.contentWidth(w))
 	}
+}
+
+// contentWidth is the width the formatter lays tables and rules out in:
+// every line is printed after the indent, so a full-width table would
+// overflow the terminal by the indent's width.
+func (r *AssistantTurnRenderer) contentWidth(width int) int {
+	if width <= 0 {
+		return width
+	}
+	return max(width-displayWidth(r.indent), 1)
 }
 
 // currentStdoutWidth reads the terminal's current column count live, or 0 if it

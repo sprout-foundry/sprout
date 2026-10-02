@@ -49,17 +49,19 @@ func (r *SteerInputReader) renderLine() {
 		if r.submitMode == SteerSubmitModeQueue {
 			prefix = QueuePromptPrefix
 		}
+		r.footer.SetComposerMode(r.composerModeLocked())
 		r.mu.Unlock()
 		r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+len(text))
 		return
 	}
 
-	text := string(r.buffer)
+	text := r.line
 	cursorByte := r.cursorPos
 	prefix := SteerPromptPrefix
 	if r.submitMode == SteerSubmitModeQueue {
 		prefix = QueuePromptPrefix
 	}
+	r.footer.SetComposerMode(r.composerModeLocked())
 
 	// SP-078 Phase 3: refresh the dropdown candidate list from the
 	// richCompleter. Inline so the snapshot is consistent with the
@@ -127,7 +129,7 @@ func (r *SteerInputReader) renderLine() {
 // callers that update candidates before attaching a footer) can
 // drive the same logic without paying the render cost.
 func (r *SteerInputReader) refreshDropdownLocked(text string, cursorByte int) bool {
-	if r.autocomplete == nil || r.richCompleter == nil {
+	if r.autocomplete == nil {
 		return false
 	}
 	r.autocomplete.update(text, cursorByte, nil, r.richCompleter)
@@ -206,12 +208,13 @@ func (r *SteerInputReader) printExternalLocked(msg string) {
 	// and call drawLocked, the lock-free variant — we hold outputMu and
 	// footer.draw() would try to re-acquire it, deadlocking.
 	r.mu.Lock()
-	text := string(r.buffer)
+	text := r.line
 	cursor := r.cursorPos
 	prefix := SteerPromptPrefix
 	if r.submitMode == SteerSubmitModeQueue {
 		prefix = QueuePromptPrefix
 	}
+	r.footer.SetComposerMode(r.composerModeLocked())
 	r.mu.Unlock()
 	r.footer.mu.Lock()
 	r.footer.steerActive = true

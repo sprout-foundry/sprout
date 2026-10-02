@@ -109,7 +109,7 @@ func TestRenderer_OnExternalWriteResetsSegment(t *testing.T) {
 		r.WriteChunk("done.\n")               // plain prose, no formatting
 		r.FinalizeAtTurnEnd()
 	})
-	// First segment is formatted (header with ███, bullet colored).
+	// First segment is formatted (styled header, colored bullet).
 	// Second segment is plain prose with indent only.
 	require.Contains(t, out, "Heading")
 	require.Contains(t, out, "bullet")

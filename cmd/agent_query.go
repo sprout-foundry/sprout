@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -38,6 +37,10 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 		query = strings.TrimSpace(query)
 	}
 
+	if !autoExecute && !zsh.LooksLikeCommandLine(query) {
+		return false, nil
+	}
+
 	// Check if this is a zsh command
 	isCommand, cmdInfo, err := zsh.IsCommand(query)
 	if err != nil {
@@ -62,22 +65,8 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	}
 
 	// Ask for confirmation (unless auto-execute)
-	if !shouldAutoExecute {
-		_, _ = os.Stdout.Write([]byte("Execute directly? " + console.FormatYesNoPromptStdout(true) + " "))
-
-		// Read response
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return false, fmt.Errorf("failed to read response: %w", err)
-		}
-		response = strings.TrimSpace(strings.ToLower(response))
-
-		// Default to yes if empty, otherwise check for y/yes
-		if response != "" && response != "y" && response != "yes" {
-			// User declined, proceed with normal agent flow
-			return false, nil
-		}
+	if !shouldAutoExecute && !confirmYesNo(ctx, "Run it as a shell command?") {
+		return false, nil
 	}
 
 	// Execute the command with a glyph-led action line.
@@ -87,29 +76,25 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 
 	if err != nil {
 		console.GlyphError.Fprintln(os.Stderr, err.Error())
-		// Command execution failed - ask user if they want to send to LLM instead
-		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? " + console.FormatYesNoPromptStdout(true) + " "))
-
-		// Read response
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			// If we can't read response, just return true (we attempted)
-			return true, nil
-		}
-		response = strings.TrimSpace(strings.ToLower(response))
-
-		// Default to yes (send to LLM) unless user explicitly says no
-		if response == "n" || response == "no" {
-			// User declined, return true since we attempted execution
-			return true, nil
-		}
-
-		// User wants to send to LLM, return false to proceed with normal agent flow
-		return false, nil
+		return !confirmYesNo(ctx, "The command failed. Send it to the assistant instead?"), nil
 	}
 
 	return true, nil
+}
+
+// confirmYesNo asks a yes/no question with the shared picker (y/n keys,
+// Enter takes Yes). Declining, Esc, or no terminal all answer no.
+func confirmYesNo(ctx context.Context, question string) bool {
+	sl := console.NewSelectList(console.SelectListOptions{
+		Title: question,
+		Items: []console.SelectItem{
+			{Label: "Yes", Value: "yes", Key: 'y'},
+			{Label: "No", Value: "no", Key: 'n'},
+		},
+		Footer: "y/n or ↑/↓ + Enter · Esc for no",
+	})
+	value, ok, err := sl.Run(ctx)
+	return err == nil && ok && value == "yes"
 }
 
 // processQueryFn is a package-level variable for testability. Tests can override

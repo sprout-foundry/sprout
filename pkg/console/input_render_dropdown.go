@@ -83,11 +83,36 @@ func (ir *InputReader) renderPinnedDropdownLocked() {
 	if cols <= 0 {
 		cols = 80
 	}
-	full, cursorRow, cursorCol := buildDropdownBlock(
-		ir.prompt, ir.line, ir.cursorPos, cols,
-		ir.autocomplete.candidates, ir.autocomplete.selected,
-	)
+	displayLine, displayCursor := ir.renderLineWithCollapsedPastes()
+	var candidates []CompletionCandidate
+	selected := 0
+	if ir.autocomplete != nil && ir.autocomplete.visible {
+		candidates, selected = ir.autocomplete.candidates, ir.autocomplete.selected
+	}
+	ir.footer.SetComposerMode(ComposerIdle)
+	full, cursorRow, cursorCol := buildDropdownBlock(ir.prompt, displayLine, displayCursor, cols, candidates, selected)
 	ir.footer.SetSteerLineWrappedLocked(full, cursorRow, cursorCol)
+}
+
+// clearInlineInputLocked blanks the inline prompt rows as the input moves
+// into the footer's pinned block. The footer scrolls the region up to make
+// room for the block, and an uncleared prompt would ride up with the
+// transcript as a stale copy. Caller must hold outputMu.
+func (ir *InputReader) clearInlineInputLocked() {
+	if ir.lastWrapPending {
+		fmt.Print(MoveCursorLeftSeq(1))
+	}
+	fmt.Print("\r")
+	if ir.currentPhysicalLine > 0 {
+		fmt.Print(MoveCursorUpSeq(ir.currentPhysicalLine))
+	}
+	rows := max(ir.lastVisualRows, 1)
+	for i := range rows {
+		fmt.Print(ClearLineSeq())
+		if i < rows-1 {
+			fmt.Print(MoveCursorDownSeq(1))
+		}
+	}
 }
 
 // prepareInlineRenderLocked tears down a pinned dropdown block and
@@ -103,13 +128,72 @@ func (ir *InputReader) renderPinnedDropdownLocked() {
 // refreshInputLine's clear-up/redraw math covers exactly the prompt's
 // rows — the same state a normal inline render would have left.
 func (ir *InputReader) prepareInlineRenderLocked() {
-	footer := ir.footer
-	if footer != nil {
-		footer.ClearSteerLineLocked()
+	if ir.footer != nil {
+		ir.footer.ClearSteerLineLocked()
 	}
 	ir.pinnedDropdownActive = false
+	ir.anchorInlineAtBottomLocked()
+}
 
-	promptWidth := len([]rune(stripANSIEscapeCodes(ir.prompt)))
+// redrawAnchoredLocked redraws the idle prompt at the bottom of the scroll
+// region after a resize. Relative redraws can't survive a resize: the
+// terminal's reflow and the footer's own resize handling (which runs in no
+// fixed order with this one) both move the cursor, so the prompt is placed
+// by absolute row instead and every handler converges on the same spot.
+// Caller must hold outputMu.
+func (ir *InputReader) redrawAnchoredLocked(cols int) {
+	if cols > 0 {
+		ir.terminalWidth = cols
+	}
+	if ir.pinnedDropdownActive {
+		ir.renderPinnedDropdownLocked()
+		return
+	}
+	ir.lastLineLength = 0
+	ir.anchorInlineAtBottomLocked()
+	ir.refreshInputLine()
+}
+
+// clearInlineInputForResizeLocked erases the inline prompt in place after
+// the terminal resized and rewrapped it to cols. The cursor is still on the
+// prompt — the terminal carries it along with its line — so the rows are
+// found relative to it rather than by guessing where the prompt sits: it is
+// not always on the region's last row (the recent-sessions picker leaves it
+// mid-screen), and clearing a guessed row can erase transcript. Caller must
+// hold outputMu.
+func (ir *InputReader) clearInlineInputForResizeLocked(cols int) {
+	if ir.pinnedDropdownActive {
+		return
+	}
+	rows := 1
+	if ir.lastLineLength > 0 && cols > 0 {
+		rows = (ir.lastLineLength-1)/cols + 1
+	}
+	fmt.Print("\r")
+	if rows > 1 {
+		fmt.Print(MoveCursorUpSeq(rows - 1))
+	}
+	for i := range rows {
+		fmt.Print(ClearLineSeq())
+		if i < rows-1 {
+			fmt.Print(MoveCursorDownSeq(1))
+		}
+	}
+	if rows > 1 {
+		fmt.Print(MoveCursorUpSeq(rows - 1))
+	}
+	ir.lastVisualRows = 0
+	ir.currentPhysicalLine = 0
+	ir.lastWrapPending = false
+}
+
+// anchorInlineAtBottomLocked moves the cursor to the top row the inline
+// prompt occupies when it sits on the scroll region's last rows, and syncs
+// the render bookkeeping so refreshInputLine clears exactly those rows.
+// Caller must hold outputMu.
+func (ir *InputReader) anchorInlineAtBottomLocked() {
+	footer := ir.footer
+	promptWidth := visibleRuneWidth(ir.prompt)
 	displayLine, _ := ir.renderLineWithCollapsedPastes()
 	totalRows, _, _, _, _ := wrappedGeometry(
 		ir.terminalWidth, promptWidth, displayLine, ir.cursorPos,

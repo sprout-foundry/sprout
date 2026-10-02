@@ -61,7 +61,7 @@ func TestParseProviderName_CustomProvider(t *testing.T) {
 
 func TestGetProviderName_Known(t *testing.T) {
 	assert.Equal(t, "OpenAI", GetProviderName(OpenAIClientType))
-	assert.Equal(t, "OpenRouter (Recommended)", GetProviderName(OpenRouterClientType))
+	assert.Equal(t, "OpenRouter", GetProviderName(OpenRouterClientType))
 	assert.Equal(t, "Ollama (Local)", GetProviderName(OllamaLocalClientType))
 	assert.Equal(t, "Ollama (Cloud)", GetProviderName(OllamaCloudClientType))
 	assert.Equal(t, "Test Provider", GetProviderName(TestClientType))

@@ -111,6 +111,10 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to initialize agent: %w", err)
 			}
+			// No agent: setup was skipped, so serve the web UI alone.
+			if chatAgent == nil {
+				return RunAgent(nil, false, args)
+			}
 			// Use enhanced mode
 			return RunAgent(chatAgent, true, args)
 		}

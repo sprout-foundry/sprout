@@ -124,8 +124,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	// Check if editor mode was the "failed" provider — this isn't a real failure
 	// since editor mode has no provider to initialize
 	if failedProvider == api.EditorClientType {
-		return "", "", agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-			"Set up a provider with: sprout agent --provider <provider> or via webui settings (sprout agent -d)", nil, "", "")
+		return "", "", agenterrors.NewProviderError(editorModeHint, nil, "", "")
 	}
 
 	failedProviderName := api.GetProviderName(failedProvider)

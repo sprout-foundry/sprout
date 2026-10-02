@@ -148,7 +148,8 @@ export default function ScreenWorkbench({
   // refuses.
   const [inlineAssets, setInlineAssets] = useState<Record<string, string>>({});
   const assetRefsKey = useMemo(
-    () => (renderLanguage === 'html' ? referencedAssetPaths(renderContent, designRootPath(renderFileName)).join('|') : ''),
+    () =>
+      renderLanguage === 'html' ? referencedAssetPaths(renderContent, designRootPath(renderFileName)).join('|') : '',
     [renderContent, renderFileName, renderLanguage],
   );
   useEffect(() => {

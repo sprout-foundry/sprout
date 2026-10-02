@@ -495,9 +495,7 @@ const AppContent: React.FC<AppContentProps> = ({
         });
       }
       const chatMode = chatSessions?.find((c) => c.id === id)?.mode;
-      const switched = Promise.resolve(
-        onActiveChatChange?.(id, chatMode === 'design' ? 'design' : 'code'),
-      );
+      const switched = Promise.resolve(onActiveChatChange?.(id, chatMode === 'design' ? 'design' : 'code'));
       onViewChange('chat');
       // A phone keyboard would cover the conversation being opened.
       if (!isMobile) void switched.finally(() => requestComposerFocus(id));

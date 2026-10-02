@@ -137,7 +137,7 @@ func TestSteerInputReader_Completion_NoCompleterIsNoOp(t *testing.T) {
 	r := newTestReader(&submitted, &interrupted)
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/mo" {
+	if got := r.line; got != "/mo" {
 		t.Fatalf("no completer installed should leave buffer unchanged, got %q", got)
 	}
 }
@@ -148,7 +148,7 @@ func TestSteerInputReader_Completion_AppliesFirstCandidate(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("expected buffer /model, got %q", got)
 	}
 	if r.cursorPos != len("/model") {
@@ -162,11 +162,11 @@ func TestSteerInputReader_Completion_CyclesOnRepeatedPress(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("first press: expected /model, got %q", got)
 	}
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/mode" {
+	if got := r.line; got != "/mode" {
 		t.Fatalf("second press: expected /mode, got %q", got)
 	}
 }
@@ -177,13 +177,13 @@ func TestSteerInputReader_Completion_EditResetsCycle(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("first press: expected /model, got %q", got)
 	}
 	// User edits: insert another character → cycle must reset.
 	r.insertAtCursor([]byte("d")) // buffer is now "/modeld"
 	r.handleSteerCompletion()     // fresh cycle: applies /model again
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("after edit + completion: expected /model, got %q", got)
 	}
 }
@@ -194,7 +194,7 @@ func TestSteerInputReader_Completion_NoCandidatesIsSilent(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/zz"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/zz" {
+	if got := r.line; got != "/zz" {
 		t.Fatalf("no candidates must leave buffer unchanged, got %q", got)
 	}
 }
@@ -205,15 +205,15 @@ func TestSteerInputReader_Completion_BackspaceResetsCycle(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("first press: expected /model, got %q", got)
 	}
 	r.handleBackspace() // removes the trailing 'l' → "/mode"
-	if got := string(r.buffer); got != "/mode" {
+	if got := r.line; got != "/mode" {
 		t.Fatalf("after backspace: expected /mode, got %q", got)
 	}
 	r.handleSteerCompletion() // fresh cycle: applies /model
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("after edit + completion: expected /model, got %q", got)
 	}
 }
@@ -226,18 +226,15 @@ func TestSteerInputReader_Completion_BufferEditAtBoundary(t *testing.T) {
 		}
 		return nil
 	})
-	r.buffer = make([]byte, 200)
-	for i := range r.buffer {
-		r.buffer[i] = 'x'
-	}
+	r.line = strings.Repeat("x", 200)
 	r.cursorPos = 200
 	r.handleSteerCompletion()
 	// No candidates for 200 'x's — buffer unchanged.
 	if r.cursorPos != 200 {
 		t.Fatalf("expected cursor unchanged, got %d", r.cursorPos)
 	}
-	if len(r.buffer) != 200 {
-		t.Fatalf("expected buffer unchanged (200 bytes), got %d", len(r.buffer))
+	if len(r.line) != 200 {
+		t.Fatalf("expected buffer unchanged (200 bytes), got %d", len(r.line))
 	}
 }
 
@@ -247,7 +244,7 @@ func TestSteerInputReader_SetCompleter_ClearsCycle(t *testing.T) {
 	})
 	r.insertAtCursor([]byte("/mo"))
 	r.handleSteerCompletion()
-	if got := string(r.buffer); got != "/model" {
+	if got := r.line; got != "/model" {
 		t.Fatalf("setup: expected /model, got %q", got)
 	}
 	// Replace completer with a different one. The cycle should reset so
@@ -261,7 +258,7 @@ func TestSteerInputReader_SetCompleter_ClearsCycle(t *testing.T) {
 	// /model and /mode (lowercase /m prefix matches both). First press
 	// applies the first: /model. But our completer here only knows
 	// /foo and /bar, so it should return those.
-	if got := string(r.buffer); got != "/foo" {
+	if got := r.line; got != "/foo" {
 		t.Fatalf("after SetCompleter + completion: expected /foo, got %q", got)
 	}
 }

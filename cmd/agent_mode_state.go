@@ -51,6 +51,7 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 	// characters" clobbering symptom.
 	if footer := console.GetGlobalStatusFooter(); footer != nil {
 		r.SetFooter(footer)
+		footer.SetTurnActive(true)
 	}
 	currentTurnRenderer.Store(r)
 	firstProseChunk.Store(false)
@@ -78,6 +79,9 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 // renderer. Callers should use this instead of manually tearing down
 // to avoid forgetting hook cleanup.
 func endTurn(chatAgent *agent.Agent, r *console.AssistantTurnRenderer) {
+	if footer := console.GetGlobalStatusFooter(); footer != nil {
+		defer footer.SetTurnActive(false)
+	}
 	if r == nil {
 		return
 	}

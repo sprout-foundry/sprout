@@ -119,11 +119,32 @@ func installUsageErrorHooks(root *cobra.Command) {
 				return newUsageError(cmd, orig(cmd, args))
 			}
 		}
+		if c != root && !c.Runnable() && c.HasSubCommands() {
+			c.RunE = runCommandGroup
+		}
 		for _, sub := range c.Commands() {
 			wrap(sub)
 		}
 	}
 	wrap(root)
+}
+
+// runCommandGroup gives a subcommand-only group (`sprout keys`, `sprout
+// config`) a body. Cobra prints help and exits 0 for a non-runnable command
+// before Args validation runs, so `sprout config set x` would silently
+// "succeed"; a stray word is an unknown subcommand and exits 2.
+func runCommandGroup(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Help()
+	}
+	msg := fmt.Sprintf("unknown command %q for %q", args[0], cmd.CommandPath())
+	if cmd.SuggestionsMinimumDistance <= 0 {
+		cmd.SuggestionsMinimumDistance = 2
+	}
+	if suggestions := cmd.SuggestionsFor(args[0]); len(suggestions) > 0 {
+		msg += "\n\nDid you mean this?\n\t" + strings.Join(suggestions, "\n\t") + "\n"
+	}
+	return &usageError{err: errors.New(msg), cmdPath: cmd.CommandPath()}
 }
 
 func renderUsageError(err error) {

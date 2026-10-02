@@ -48,7 +48,7 @@ export function useCommandSubmit({
       const trimmed = baseCommand.trim();
       const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
       if (uploadedImages.length === 0) return trimmed;
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages.map((img) => `[image: ${img.uploadedPath}]`).join('\n');
       return `${imagePaths}\n\n${trimmed}`;
     },
     [attachedImages],

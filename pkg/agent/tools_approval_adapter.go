@@ -2,6 +2,7 @@ package agent
 
 import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -87,6 +88,17 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 	// already tried above — re-publishing would block a second full
 	// timeout window for the same unanswered question.
 	if !triedBus && a.eventBus != nil {
+		// With no surface that could ever answer — prompts off (--yes or
+		// headless) and no web UI attached — waiting would stall the turn
+		// for the full approval timeout with nothing on screen. Deny now
+		// and say how to allow it. Subagents still wait: their requests
+		// are answered through the parent's interface.
+		if a.agent != nil && !a.agent.IsSubagent() && !a.agent.WebUIAttached() {
+			return tools.ApprovalResult{Approved: false, Reason: noApprovalSurfaceReason}
+		}
+		if a.agent != nil && !a.agent.IsSubagent() {
+			console.GlyphPaused.Printf("Waiting for approval of %s in the web UI", toolName)
+		}
 		decision, outcome := a.approvalMgr.RequestApprovalDecisionWithOutcome(a.eventBus, a.newRequest(toolName, riskLevel, prompt, extras))
 		return approvalResultFrom(decision, outcome)
 	}
@@ -95,6 +107,11 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 	}
 	return tools.ApprovalResult{Approved: false, Reason: "no_channel"}
 }
+
+// noApprovalSurfaceReason is reported when an operation needs approval but
+// nothing can ask for it.
+const noApprovalSurfaceReason = "needs approval, but prompts are off (--yes or a non-interactive run) and no web UI is attached to ask; " +
+	"run interactively to approve it, or allow it up front with --unsafe-shell or /risk-profile permissive"
 
 // preferWebUI reports whether the event-bus dialog should be tried first:
 // a bus exists, this is not a subagent, and a WebUI client is connected.

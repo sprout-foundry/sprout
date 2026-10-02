@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 func TestSelectList_NoItems(t *testing.T) {
@@ -704,5 +706,53 @@ func TestSelectListResizeFlagHandoff(t *testing.T) {
 	s.mu.Unlock()
 	if flagged {
 		t.Error("repaintIfResized did not consume the resized flag")
+	}
+}
+
+func TestRowsOnScreen_CountsRewrappedRows(t *testing.T) {
+	widths := []int{100, 100, 40}
+	if got := rowsOnScreen(widths, 120); got != 3 {
+		t.Fatalf("no rewrap at 120 cols: got %d rows, want 3", got)
+	}
+	if got := rowsOnScreen(widths, 80); got != 5 {
+		t.Fatalf("100-wide rows rewrap onto 2 rows at 80 cols: got %d, want 5", got)
+	}
+}
+
+func TestRenderSelectRow_CappedWidth(t *testing.T) {
+	row := renderSelectRow("Tell me about this codebase", "3h ago", false, min(200, maxSelectRowWidth))
+	if w := displayWidth(row); w != maxSelectRowWidth {
+		t.Fatalf("row width = %d, want %d", w, maxSelectRowWidth)
+	}
+}
+
+func TestRenderAnchoredLocked_EndsOnRegionBottom(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Title: "Recent sessions",
+		Items: []SelectItem{{Label: "one", Value: "1"}, {Label: "two", Value: "2"}},
+	})
+	out := testutil.CaptureStdoutAndStderr(t, func() { s.renderAnchoredLocked(20, 80) })
+	// Title + two items + hint = 4 rows, so drawing starts at row 16 and the
+	// cursor finishes on row 20, the region's last row.
+	if !strings.HasPrefix(out, "\x1b[16;1H") {
+		t.Fatalf("anchored redraw should start at row 16, got %q", out)
+	}
+	if got := len(s.renderedWidths); got != 3 {
+		t.Fatalf("tracked %d frame rows, want 3 (title is tracked separately)", got)
+	}
+}
+
+func TestSelectList_BackgroundLinePrintsAboveFrame(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Title: "Recent sessions",
+		Items: []SelectItem{{Label: "one", Value: "1"}},
+	})
+	out := testutil.CaptureStdoutAndStderr(t, func() {
+		s.printFrameLocked(s.frameLines(80))
+		s.printExternalLocked("daemon started")
+	})
+	after := out[strings.LastIndex(out, "daemon started"):]
+	if !strings.Contains(after, "Recent sessions") || !strings.Contains(after, "one") {
+		t.Fatalf("the frame should be redrawn below the background line, got %q", after)
 	}
 }

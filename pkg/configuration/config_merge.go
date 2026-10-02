@@ -73,6 +73,12 @@ func MergeConfig(base, override *Config) *Config {
 	if override.ReasoningEffort != "" {
 		result.ReasoningEffort = override.ReasoningEffort
 	}
+	if override.OutputVerbosity != "" {
+		result.OutputVerbosity = override.OutputVerbosity
+	}
+	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
+		result.ShowToolInvocations = override.ShowToolInvocations
+	}
 	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}

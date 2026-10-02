@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/notify"
 	"golang.org/x/term"
@@ -63,6 +64,36 @@ func PrintAssistantHeader(model string) {
 		return
 	}
 	fmt.Printf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model)
+}
+
+// PrintUserMessage echoes a submitted message into the conversation under a
+// "▌ you" header that mirrors the assistant's, its text indented beneath.
+// queued marks a message typed mid-turn that is running now.
+func PrintUserMessage(text string, queued bool) {
+	label := "you"
+	if queued {
+		label = "you · queued"
+	}
+	cols := 80
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		cols = w
+	}
+	if envutil.ResolveColorPreference(true) {
+		fmt.Printf("\n\033[1;92m▌\033[0m \033[2m%s\033[0m\n", label)
+	} else {
+		fmt.Printf("\n▌ %s\n", label)
+	}
+	fmt.Print(console.WrapIndented(text, "  ", cols))
+}
+
+// PrintCommandEcho echoes a submitted slash or shell command as one dim
+// line, lighter than a message since it never reaches the model.
+func PrintCommandEcho(text string) {
+	if envutil.ResolveColorPreference(true) {
+		fmt.Printf("\033[2m› %s\033[0m\n", text)
+		return
+	}
+	fmt.Printf("› %s\n", text)
 }
 
 // ShouldShowTurnStats returns true when stderr is connected to a TTY.
@@ -235,9 +266,5 @@ func ShortModelName(model string) string {
 // model. SP-048-5d. Format: "<model> ▸ " when a model name is available,
 // "sprout> " as the legacy fallback when it isn't.
 func BuildPromptPrefix(model string) string {
-	model = strings.TrimSpace(ShortModelName(model))
-	if model == "" {
-		return "sprout> "
-	}
-	return model + " ▸ "
+	return console.ComposerPrefix(console.ComposerIdle)
 }

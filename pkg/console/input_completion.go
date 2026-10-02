@@ -53,8 +53,8 @@ func (ir *InputReader) handleTabCompletion() {
 	if !ok {
 		return
 	}
-	ir.line = newLine
-	ir.cursorPos = newCursorPos
+	ir.replaceLine(newLine)
+	ir.cursorPos = min(newCursorPos, len(ir.line))
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
 	ir.completionCycle.Advance(ir.line)

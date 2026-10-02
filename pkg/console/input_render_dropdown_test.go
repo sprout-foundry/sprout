@@ -78,7 +78,7 @@ func TestInputReader_DropdownPinsToFooter(t *testing.T) {
 	}
 }
 
-func TestInputReader_DropdownHideClearsFooter(t *testing.T) {
+func TestInputReader_DropdownHideLeavesEmptyBox(t *testing.T) {
 	ir, footer, _ := testInputReaderWithFooter()
 
 	captureStdout(t, func() {
@@ -100,19 +100,13 @@ func TestInputReader_DropdownHideClearsFooter(t *testing.T) {
 	if ir.autocomplete.visible {
 		t.Error("dropdown should be hidden after clearing the line")
 	}
-	if ir.pinnedDropdownActive {
-		t.Error("pinnedDropdownActive should be false after hide")
-	}
 	active, _, line, _, _ := footerState(footer)
-	if active {
-		t.Error("footer steer state should be cleared after hide")
+	if !active || line != "> " {
+		t.Errorf("the box should stay pinned, empty, without candidate rows; got active=%v line=%q", active, line)
 	}
-	if line != "" {
-		t.Errorf("footer steerLine should be empty after hide, got %q", line)
-	}
-	// Reserved rows return to the 2-row baseline (rule + content).
-	if got := footer.reservedRows(); got != 2 {
-		t.Errorf("reservedRows after hide = %d, want 2", got)
+	// Box rule + prompt row, then the footer's rule + content.
+	if got := footer.reservedRows(); got != 4 {
+		t.Errorf("reservedRows after hide = %d, want 4", got)
 	}
 }
 
@@ -142,17 +136,18 @@ func TestInputReader_DropdownShowHideReservedRows(t *testing.T) {
 		ir.InsertChar("/")
 		ir.InsertChar("h")
 	})
-	// 2 candidates + 1 prompt row + rule + content.
-	if got := footer.reservedRows(); got != 5 {
-		t.Errorf("reservedRows while pinned = %d, want 5 (2 candidates + 1 prompt + rule + content)", got)
+	// Box rule + 2 candidates + 1 prompt row, then the footer's rule + content.
+	if got := footer.reservedRows(); got != 6 {
+		t.Errorf("reservedRows while pinned = %d, want 6 (box rule + 2 candidates + prompt + rule + content)", got)
 	}
 
 	captureStdout(t, func() {
 		ir.Backspace()
 		ir.Backspace()
 	})
-	if got := footer.reservedRows(); got != 2 {
-		t.Errorf("reservedRows after hide = %d, want 2", got)
+	// The input box stays pinned without the dropdown: box rule + prompt.
+	if got := footer.reservedRows(); got != 4 {
+		t.Errorf("reservedRows after hide = %d, want 4 (box rule + prompt + rule + content)", got)
 	}
 }
 
@@ -173,12 +168,9 @@ func TestInputReader_DropdownShowHideTransitionNoStaleRows(t *testing.T) {
 		ir.Backspace()
 		ir.Backspace()
 	})
-	if ir.pinnedDropdownActive {
-		t.Fatal("hide: dropdown should unpin")
-	}
 	active, _, line, _, _ := footerState(footer)
-	if active || line != "" {
-		t.Fatalf("hide: footer should be cleared, got active=%v line=%q", active, line)
+	if !active || line != "> " {
+		t.Fatalf("hide: the box should stay pinned with just the prompt, got active=%v line=%q", active, line)
 	}
 
 	captureStdout(t, func() {
@@ -198,7 +190,7 @@ func TestInputReader_DropdownShowHideTransitionNoStaleRows(t *testing.T) {
 	}
 }
 
-func TestInputReader_DropdownEnterAcceptClearsFooter(t *testing.T) {
+func TestInputReader_DropdownEnterAcceptLeavesAcceptedTextInBox(t *testing.T) {
 	ir, footer, _ := testInputReaderWithFooter()
 
 	captureStdout(t, func() {
@@ -225,12 +217,9 @@ func TestInputReader_DropdownEnterAcceptClearsFooter(t *testing.T) {
 	if ir.autocomplete.visible {
 		t.Error("dropdown should be hidden after Enter accept")
 	}
-	if ir.pinnedDropdownActive {
-		t.Error("pinnedDropdownActive should be false after Enter accept")
-	}
 	active, _, line, _, _ := footerState(footer)
-	if active || line != "" {
-		t.Errorf("footer should be cleared after Enter accept, got active=%v line=%q", active, line)
+	if !active || line != "> /help" {
+		t.Errorf("box should hold the accepted command without candidates, got active=%v line=%q", active, line)
 	}
 	if ir.line != "/help" {
 		t.Errorf("accepted text should be /help, got %q", ir.line)

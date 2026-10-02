@@ -49,7 +49,7 @@ Examples:
 
 func init() {
 	exportCmd.Flags().String("format", "markdown", "Output format: markdown, html, or json")
-	exportCmd.Flags().String("output", "", "Write to file instead of stdout (default: stdout)")
+	exportCmd.Flags().StringP("output", "o", "", "Write to file instead of stdout")
 	exportCmd.Flags().Bool("latest", false, "Export the most-recently-updated session")
 	exportCmd.Flags().Bool("all", false, "Export all saved sessions (concatenated)")
 	exportCmd.Flags().Bool("include-tool-calls", false, "Include tool call details in the output")

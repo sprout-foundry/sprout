@@ -27,7 +27,7 @@ func (r *SteerInputReader) runExternalEditor() {
 
 	// Snapshot the buffer for the temp file.
 	r.mu.Lock()
-	content := string(r.buffer)
+	content := r.line
 	r.mu.Unlock()
 
 	tmpPath, err := writeBufferToTempFile(content)
@@ -94,8 +94,7 @@ func (r *SteerInputReader) runExternalEditor() {
 	// looks like the user typed exactly what they see.
 	newContent := strings.TrimRight(string(fileContent), "\n")
 	r.mu.Lock()
-	r.buffer = []byte(newContent)
-	r.cursorPos = len(r.buffer)
+	r.setLineLocked(newContent)
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.mu.Unlock()

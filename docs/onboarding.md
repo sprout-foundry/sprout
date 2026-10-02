@@ -57,7 +57,8 @@ If you don't specify a provider, you'll get an interactive menu.
 
 ### Web UI
 
-1. Run `sprout` to start the web UI (opens automatically).
+1. Run `sprout agent -d` to start only the web UI, then open the address it
+   prints (http://localhost:56000 by default). Running `sprout` serves it too.
 2. The onboarding dialog appears on first run — pick a provider, enter your
    key, and click **Complete Setup**.
 
@@ -105,8 +106,9 @@ sprout · zai · glm-5
 # Switch the active provider (must already have a key configured)
 export SPROUT_PROVIDER=openrouter
 
-# Set a default model for a provider
-sprout config set openrouter.model "qwen/qwen3-coder"
+# Choose a model: inside a sprout session, type
+#   /model                       list the provider's models
+#   /model z-ai/glm-5.3-flash    switch to one by ID
 
 # Add a new key
 sprout keys set deepinfra

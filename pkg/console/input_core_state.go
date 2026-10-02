@@ -233,12 +233,19 @@ func (ir *InputReader) handleSuspend(oldState *term.State, nonBlocking bool) *te
 
 	resetTerminalSignals()
 
-	// Redisplay the prompt and the preserved line content.
-	// Unlike a fresh prompt, we keep whatever the user had
-	// typed before suspending (mirrors runExternalEditor).
-	fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
-	ir.Refresh()
+	ir.redrawAfterResume()
 	return newState
+}
+
+// redrawAfterResume redisplays the prompt and the preserved line after a
+// suspend: unlike a fresh prompt, it keeps whatever was typed before
+// (mirrors runExternalEditor). The pinned box redraws with its own label;
+// printing the prompt inline as well would strand it in the scroll region.
+func (ir *InputReader) redrawAfterResume() {
+	if !ir.composerPinned() {
+		fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
+	}
+	ir.Refresh()
 }
 
 // searchByteResult communicates what the ReadLine loop should do after

@@ -198,15 +198,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 			// Handle Ctrl+C and Ctrl+Z directly before parsing
 			if b == 3 { // Ctrl+C
-				// Same teardown as Enter: a pinned dropdown would otherwise
-				// stay on screen beside the fresh prompt.
-				if ir.autocomplete != nil && ir.autocomplete.visible {
-					ir.autocomplete.hide()
-					ir.suppressAutocompleteNextRefresh = true
-					ir.Refresh()
-				}
-				if ir.line != "" {
-					ir.abandonLine()
+				if ir.interruptLine() {
 					continue
 				}
 				fmt.Printf("\r%s", ClearToEndOfLineSeq()) // Clear line

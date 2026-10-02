@@ -163,6 +163,32 @@ func (ir *InputReader) abandonLine() {
 	ir.refreshLocked()
 }
 
+// interruptLine handles Ctrl-C ahead of the read loop's abort. It closes
+// the dropdown and any reverse search, then abandons typed text and
+// reports true so reading continues; on an empty line it reports false
+// and the caller ends the read.
+func (ir *InputReader) interruptLine() bool {
+	// Same teardown as Enter: a pinned dropdown would otherwise stay on
+	// screen beside the fresh prompt.
+	if ir.autocomplete != nil && ir.autocomplete.visible {
+		ir.autocomplete.hide()
+		ir.suppressAutocompleteNextRefresh = true
+		ir.Refresh()
+	}
+	// Ctrl-C mid-search abandons the line the search started from, so the
+	// search has to end first: left active, its stale query would take the
+	// next keys and Esc would bring the abandoned line back.
+	if ir.searchMode {
+		ir.exitSearchMode(false)
+		ir.Refresh()
+	}
+	if ir.line == "" {
+		return false
+	}
+	ir.abandonLine()
+	return true
+}
+
 // composerPinned reports whether the input draws in the footer's pinned box
 // (any time a live footer is attached) rather than inline in the scroll
 // region, the fallback without one.

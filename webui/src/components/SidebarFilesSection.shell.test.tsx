@@ -23,9 +23,16 @@ vi.mock('../services/workspaceFs/backendsExport', () => ({
 // so mock the mode module rather than fighting env-replacement ordering. The
 // factory must not close over top-level lets (vi.mock is hoisted) — the flag
 // lives on a hoisted-safe object created inside vi.hoisted.
-const modeState = vi.hoisted(() => ({ isCloud: true }));
+const modeState = vi.hoisted(() => ({ isCloud: true, isLayeredLayout: false }));
 vi.mock('../config/mode', () => ({
   isCloud: modeState.isCloud,
+}));
+// The layered layout opens repositories from its repository rail, so the row
+// carries the button only in the classic layout.
+vi.mock('../config/layout', () => ({
+  get isLayeredLayout() {
+    return modeState.isLayeredLayout;
+  },
 }));
 
 let container: HTMLDivElement;
@@ -41,6 +48,7 @@ function renderSection() {
 describe('SidebarFilesSection: shell-scoped cwd row', () => {
   beforeEach(() => {
     modeState.isCloud = true;
+    modeState.isLayeredLayout = false;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -61,6 +69,13 @@ describe('SidebarFilesSection: shell-scoped cwd row', () => {
     expect(container.querySelector('[data-testid="workspace-cwd-select"]')).toBeNull();
     expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
+  });
+
+  it('layered layout: no add-repo button (the repository rail opens repos)', () => {
+    modeState.isLayeredLayout = true;
+    publishShellIdentityForTests('webui');
+    renderSection();
+    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).toBeNull();
   });
 
   it('studio shell: the full row renders (selector + add button)', () => {

@@ -236,6 +236,24 @@
   overflow: auto;
 }
 
+/* The file tree scrolls its own list; with the rows above it stacked on a
+   100%-tall tree, the drill body would scroll as well. */
+.project-nav-drill-body:has(> .file-tree) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.project-nav-drill-body:has(> .file-tree) > * {
+  flex-shrink: 0;
+}
+
+.project-nav-drill-body:has(> .file-tree) > .file-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
 .project-nav-section {
   padding: var(--space-2) 0;
 }
@@ -312,18 +330,6 @@
   border-top: 1px solid var(--border-subtle);
   padding: var(--space-2) 0;
   flex-shrink: 0;
-}
-
-.context-thread {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.context-thread > * {
-  flex: 1;
-  min-height: 0;
 }
 
 .header-search-btn {

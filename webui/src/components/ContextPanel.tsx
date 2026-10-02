@@ -1,5 +1,5 @@
-import { History, MessageSquare, PanelRightOpen, PanelRightClose } from 'lucide-react';
-import { useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { History, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
 import AgentChangesPanel from './AgentChangesPanel';
@@ -14,7 +14,7 @@ import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { supportsAgentChanges } from '../config/mode';
 
-const TAB_IDS: readonly ChatTabId[] = ['thread', 'changes'];
+const TAB_IDS: readonly ChatTabId[] = ['changes'];
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
   const isChat = props.context === 'chat';
@@ -60,10 +60,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Tab definitions ───────────────────────────────────────────────
 
-  const hasThread = !!chatProps?.threadContent;
   const chatPanelTabs: PanelTab[] = useMemo(
     () => [
-      ...(hasThread ? [{ id: 'thread' as const, label: 'Conversation', icon: <MessageSquare size={14} /> }] : []),
       ...(supportsAgentChanges
         ? [
             {
@@ -74,14 +72,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           ]
         : []),
     ],
-    [hasThread],
+    [],
   );
-
-  // The conversation takes the panel whenever it leaves the main view.
-  const { setChatTab } = state;
-  useEffect(() => {
-    setChatTab(hasThread ? 'thread' : 'changes');
-  }, [hasThread, setChatTab]);
 
   const activeTab = chatPanelTabs.find((t) => t.id === state.chatTab) || chatPanelTabs[0];
   // Nothing to show (a hosted chat in the main view): no column at all.
@@ -91,8 +83,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const renderTabContent = () => {
     switch (activeTab.id) {
-      case 'thread':
-        return <div className="context-thread">{chatProps?.threadContent}</div>;
       case 'changes':
         return <AgentChangesPanel />;
       default:

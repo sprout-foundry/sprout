@@ -162,6 +162,10 @@ type SubagentOptions struct {
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
+	// Quiet suppresses streaming the subagent's output to the terminal. Used
+	// for background runs, whose output would otherwise interleave with the
+	// primary agent's. Activity events are still published.
+	Quiet bool
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -258,6 +262,9 @@ type SubagentTask struct {
 	Provider   string
 	Persona    string
 	WorkingDir string // optional: override workspace root
+	// SystemPrompt is the resolved persona system prompt; empty falls back to
+	// SubagentOptions.SystemPrompt.
+	SystemPrompt string
 }
 
 // SubagentMetrics tracks operational metrics for the subagent runner.

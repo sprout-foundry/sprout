@@ -33,6 +33,7 @@ type subagentRunContext struct {
 	outputMu        *sync.Mutex
 	running         *runningSubagent
 	budgetExceeded  *atomic.Bool
+	wrapUpInjected  *atomic.Bool
 }
 
 // setupSubagentRun creates and configures a subagent for execution.
@@ -195,8 +196,10 @@ func (r *SubagentRunner) setupSubagentRun(
 			outputMu.Unlock()
 		}
 
-		for _, line := range pending {
-			console.PrintLine(line)
+		if !opts.Quiet {
+			for _, line := range pending {
+				console.PrintLine(line)
+			}
 		}
 		// Publish each complete line as a subagent_activity event for the WebUI feed.
 		if subEventBus != nil {
@@ -231,20 +234,24 @@ func (r *SubagentRunner) setupSubagentRun(
 		}
 		outputMu.Unlock()
 
-		for _, line := range pending {
-			console.PrintLine(line)
+		if !opts.Quiet {
+			for _, line := range pending {
+				console.PrintLine(line)
+			}
 		}
 	})
 
 	// Track the running subagent
 	running := &runningSubagent{
-		ID:        taskID,
-		Persona:   opts.Persona,
-		Prompt:    prompt,
-		StartedAt: startTime,
-		Ctx:       runCtx,
-		Cancel:    cancel,
-		Agent:     subAgent,
+		ID:          taskID,
+		Persona:     opts.Persona,
+		Prompt:      prompt,
+		StartedAt:   startTime,
+		Ctx:         runCtx,
+		Cancel:      cancel,
+		Agent:       subAgent,
+		progressMu:  &progressMu,
+		progressLog: &progressLog,
 	}
 	r.active.Store(taskID, running)
 
@@ -256,6 +263,8 @@ func (r *SubagentRunner) setupSubagentRun(
 
 	// Per-subagent progress monitoring: emit periodic activity events.
 	go r.monitorProgress(runCtx, subAgent, taskID, opts.Persona)
+	var wrapUpInjected atomic.Bool
+	go monitorWrapUp(runCtx, subAgent, r.personaBudget(opts.Persona), startTime, &wrapUpInjected)
 
 	rc := &subagentRunContext{
 		runCtx:          runCtx,
@@ -276,6 +285,7 @@ func (r *SubagentRunner) setupSubagentRun(
 	// Same pointer as the one monitorBudget writes to, so
 	// finalizeSubagentResult sees the real Store() value.
 	rc.budgetExceeded = &budgetExceeded
+	rc.wrapUpInjected = &wrapUpInjected
 
 	return rc, nil
 }
@@ -365,6 +375,12 @@ func (r *SubagentRunner) finalizeSubagentResult(
 				}
 			}
 		}
+	}
+
+	if result != nil {
+		logSubagentRun(subagentRunRecord(opts.Persona, result, subAgent.maxIterations,
+			subAgent.state.GetLastRunTerminationReason() == RunTerminationMaxIterations,
+			rc.wrapUpInjected.Load()))
 	}
 
 	// Clean up tracking

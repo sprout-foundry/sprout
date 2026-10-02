@@ -2,6 +2,7 @@ package wasmshell
 
 import (
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"os"
 	"path/filepath"
 	"sort"
@@ -268,7 +269,7 @@ func (o *diffOpts) normalize(l string) string {
 }
 
 func (o *diffOpts) diffText(out *strings.Builder, leftName, rightName, a, b string) int {
-	al, bl := splitLines(a), splitLines(b)
+	al, bl := utils.SplitLines(a), utils.SplitLines(b)
 	an, bn := al, bl
 	if o.ignoreWS || o.ignoreAll || o.ignoreCase {
 		an, bn = make([]string, len(al)), make([]string, len(bl))

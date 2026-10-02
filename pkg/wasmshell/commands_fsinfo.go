@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"hash"
 	"os"
 	"path/filepath"
@@ -84,7 +85,7 @@ func hashCheck(name string, sum func(string) string, files []string, stdin strin
 	}
 	var out strings.Builder
 	failed := 0
-	for _, l := range splitLines(list) {
+	for _, l := range utils.SplitLines(list) {
 		want, file, ok := strings.Cut(l, "  ")
 		if !ok {
 			continue

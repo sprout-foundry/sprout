@@ -28,6 +28,11 @@ func (a *Agent) IsShutdown() bool {
 func (a *Agent) shutdownLocked() {
 	defer a.shutdown.Store(true)
 
+	// Background subagent tasks outlive turns but not the agent.
+	if a.subagentRunner != nil {
+		a.subagentRunner.CancelAll()
+	}
+
 	// Save command history to configuration before shutdown.
 	// saveHistoryToConfig reads state via getters (which are individually
 	// thread-safe) and calls configManager.UpdateConfig for persistence.

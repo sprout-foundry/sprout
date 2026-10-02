@@ -51,7 +51,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 					continue
 				}
 			}
-			if h.Name() == "run_subagent" && !agent.CanSpawnSubagents() {
+			if spawnsSubagentsAnyMode(h.Name()) && !agent.CanSpawnSubagents() {
 				continue
 			}
 		}

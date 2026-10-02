@@ -35,8 +35,9 @@ func (h *listChangesHandler) Name() string { return "list_changes" }
 func (h *listChangesHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "list_changes",
-		Description: "List files created, modified, or deleted this session. " +
-			"Use for commit messages, progress checks, and cross-session reasoning. " +
+		Description: "List files you (and your subagents) created, modified, or deleted this session, as recorded by the change tracker. " +
+			"It does not include changes made outside your tools (the user's edits, other processes), so it is not the full working-tree diff: " +
+			"for reviews and commit messages use `git diff` / `git status`. Use this for undo (with recover_file / revert_my_changes) and for recalling what you did. " +
 			"Supports diffs, activity-block grouping, and persisted history merge.",
 		Required: []string{},
 		Parameters: []ParameterDef{
@@ -44,7 +45,7 @@ func (h *listChangesHandler) Definition() ToolDefinition {
 			{Name: "tool", Type: "string", Description: "Tool name filter (e.g. write_file, edit_file)"},
 			{Name: "path_pattern", Type: "string", Description: "Path glob filter (e.g. pkg/auth/*.go)"},
 			{Name: "include_diff", Type: "boolean", Description: "Add per-file unified diff to results"},
-			{Name: "group_by", Type: "string", Description: "Set to 'block' for activity-block summary"},
+			{Name: "group_by", Type: "string", Description: "Default: one entry per file with its net effect (changes that net out to nothing are omitted). 'change' for one entry per recorded change; 'block' for an activity-block summary"},
 			{Name: "include_persisted", Type: "boolean", Description: "Merge in persistent history records"},
 		},
 	}

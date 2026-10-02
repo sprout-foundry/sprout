@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -780,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 49 {
-		t.Fatalf("AllTools() returned %d tools, want 49", len(tools))
+	if len(tools) != 52 {
+		t.Fatalf("AllTools() returned %d tools, want 52", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -822,6 +823,9 @@ func TestAllToolsRegistration(t *testing.T) {
 		// SP-109 Phase 3 Batch B — subagent function-pointer tools
 		"run_subagent":           "run_subagent",
 		"run_parallel_subagents": "run_parallel_subagents",
+		"review_changes":         "review_changes",
+		"check_subagent":         "check_subagent",
+		"stop_subagent":          "stop_subagent",
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		"request_clarification": "request_clarification",
 		"respond_clarification": "respond_clarification",
@@ -2126,7 +2130,7 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "empty content",
 			input: []byte{},
-			want:  []string{},
+			want:  []string{""},
 		},
 		{
 			name:  "single line no newline",
@@ -2161,15 +2165,15 @@ func TestSplitLines_ZC(t *testing.T) {
 		{
 			name:  "nil content",
 			input: nil,
-			want:  []string{},
+			want:  []string{""},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := splitLines(tt.input)
+			got := utils.SplitLinesKeepEmpty(string(tt.input))
 			if len(got) != len(tt.want) {
-				t.Errorf("splitLines(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
+				t.Errorf("SplitLinesKeepEmpty(%q) = %v (len %d); want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
 				return
 			}
 			for i := range got {

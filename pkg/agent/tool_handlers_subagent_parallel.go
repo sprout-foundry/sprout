@@ -137,6 +137,10 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 			}
 			task.Prompt = prompt
 
+			if persona, ok := taskMap["persona"].(string); ok {
+				task.Persona = strings.TrimSpace(persona)
+			}
+
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
 		} else {
@@ -323,10 +327,12 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 	result := make([]SubagentTask, len(tasks))
 	for i, pt := range tasks {
 		result[i] = SubagentTask{
-			ID:       pt.ID,
-			Prompt:   pt.Prompt,
-			Model:    pt.Model,
-			Provider: pt.Provider,
+			ID:           pt.ID,
+			Prompt:       pt.Prompt,
+			Model:        pt.Model,
+			Provider:     pt.Provider,
+			Persona:      pt.Persona,
+			SystemPrompt: pt.SystemPrompt,
 		}
 	}
 	return result

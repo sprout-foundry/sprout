@@ -46,7 +46,7 @@ func subagentStatSuffix(res *SubagentResult) string {
 		parts = append(parts, fmt.Sprintf("%d %s", n, plural(n, "file", "files")))
 	}
 	if res.TokensUsed > 0 {
-		parts = append(parts, compactCount(res.TokensUsed)+" tok")
+		parts = append(parts, CompactCount(res.TokensUsed)+" tok")
 	}
 	if res.Cost > 0 {
 		parts = append(parts, fmt.Sprintf("$%.2f", res.Cost))
@@ -71,7 +71,7 @@ func plural(n int, one, many string) string {
 }
 
 // compactCount renders 12500 → "12.5k", 1_500_000 → "1.5M".
-func compactCount(n int) string {
+func CompactCount(n int) string {
 	switch {
 	case n >= 1_000_000:
 		return strings.TrimSuffix(fmt.Sprintf("%.1f", float64(n)/1_000_000), ".0") + "M"

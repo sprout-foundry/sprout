@@ -245,7 +245,7 @@ type Config struct {
 // WakeupConfig controls auto-resume behavior for background task completions.
 type WakeupConfig struct {
 	Enabled              bool `json:"enabled"`                 // Master switch; default true
-	MaxTokensPerSession  int  `json:"max_tokens_per_session"`  // Hard cap on auto-resume token spend; default 5000
+	MaxTokensPerSession  int  `json:"max_tokens_per_session"`  // Cap on auto-resume token spend between user messages; default 500000
 	MaxResumesPerSession int  `json:"max_resumes_per_session"` // Max auto-resumes before requiring user input; default 10
 }
 
@@ -255,8 +255,30 @@ type WakeupConfig struct {
 func DefaultWakeupConfig() WakeupConfig {
 	return WakeupConfig{
 		Enabled:              true,
-		MaxTokensPerSession:  5000,
+		MaxTokensPerSession:  DefaultWakeupMaxTokens,
 		MaxResumesPerSession: 10,
+	}
+}
+
+// DefaultWakeupMaxTokens bounds the tokens auto-resume turns may spend
+// between two user messages (the budget resets on each real user query).
+// A resume turn resends the whole conversation, so one turn on a working
+// context costs on the order of 100k tokens; the bound allows a few resumes
+// per message while MaxResumesPerSession caps the count.
+const DefaultWakeupMaxTokens = 500_000
+
+// legacyWakeupMaxTokens is the previous default. It was too small for any
+// real resume turn — the first resume always exhausted it, so later
+// completions waited for the user's next message.
+const legacyWakeupMaxTokens = 5000
+
+// upgradeLegacyWakeupBudget raises a token budget still at the legacy
+// default. Full config saves materialize the defaults, so the old value sits
+// in most user configs without having been chosen; any other value is an
+// explicit setting and is kept.
+func upgradeLegacyWakeupBudget(c *Config) {
+	if c != nil && c.Wakeup.MaxTokensPerSession == legacyWakeupMaxTokens {
+		c.Wakeup.MaxTokensPerSession = DefaultWakeupMaxTokens
 	}
 }
 

@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -94,13 +95,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			reviewDiff += summaryInfo.String()
 		}
 
-		// Extract metadata for enhanced review context
-		// These help the LLM understand intent and avoid false positives
-		projectType := detectProjectType()
-		commitMessage := extractStagedChangesSummary()
-		keyComments := extractKeyCommentsFromDiff(stagedDiff)
-		changeCategories := categorizeChanges(stagedDiff)
-
 		// Create the unified code review service
 		service := codereview.NewCodeReviewService(cfg, logger)
 
@@ -110,27 +104,19 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			agentClient = service.GetDefaultAgentClient()
 		}
 
-		// This helps avoid false positives when functionality moved across files.
-		fullFileContext := extractFileContextForChanges(stagedDiff)
-
 		// Create the review context with metadata
 		ctx := &codereview.ReviewContext{
-			Diff:             reviewDiff,
-			Config:           cfg,
-			Logger:           logger,
-			AgentClient:      agentClient,
-			ProjectType:      projectType,
-			CommitMessage:    commitMessage,
-			KeyComments:      keyComments,
-			ChangeCategories: changeCategories,
-			FullFileContext:  fullFileContext,
+			Diff:        reviewDiff,
+			Config:      cfg,
+			Logger:      logger,
+			AgentClient: agentClient,
 		}
+		codereview.BuildStagedContext(context.Background(), "", stagedDiff).Apply(ctx)
 
 		// Create review options for staged review
 		opts := &codereview.ReviewOptions{
-			Type:             codereview.StagedReview,
-			SkipPrompt:       reviewStagedSkipPrompt,
-			RollbackOnReject: false, // Don't rollback for staged reviews
+			Type:       codereview.StagedReview,
+			SkipPrompt: reviewStagedSkipPrompt,
 		}
 
 		reviewResponse, err := service.PerformReview(ctx, opts)
@@ -145,14 +131,14 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		// If review needs revision and not in skip-prompt mode, offer agentic review
 		if !reviewStagedSkipPrompt && (reviewResponse.Status == "needs_revision" || reviewResponse.Status == "rejected") {
 			logger.LogUserInteraction("\n")
-			prompt := "The review identified issues that need attention. Would you like to run a deeper agentic review (with file reading tools) for more accurate analysis? This may take longer but can provide better context. (yes/no): "
+			prompt := "The review identified issues that need attention. Would you like to run a stricter evidence-focused review pass to filter out false positives? For a review that opens files to verify findings, use /review-deep in an interactive session. (yes/no): "
 
 			if logger.AskForConfirmation(prompt, false, false) {
 				agenticResponse, err := service.PerformAgenticReview(ctx, opts)
 				if err != nil {
-					logger.LogUserInteraction("Note: Agentic review mode is not yet implemented. Using initial review results.")
+					logger.LogUserInteraction(fmt.Sprintf("Note: evidence-focused review failed (%v). Using initial review results.", err))
 				} else {
-					logger.LogUserInteraction("\n--- Agentic Review Results ---")
+					logger.LogUserInteraction("\n--- Evidence-Focused Review Results ---")
 					logger.LogUserInteraction(fmt.Sprintf("Status: %s", strings.ToUpper(agenticResponse.Status)))
 					logger.LogUserInteraction(fmt.Sprintf("Feedback:\n%s", agenticResponse.Feedback))
 

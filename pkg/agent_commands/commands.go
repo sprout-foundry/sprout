@@ -171,6 +171,7 @@ func NewCommandRegistry() *CommandRegistry {
 
 	// output verbosity and tool invocation display
 	registry.Register(&VerboseCommand{})
+	registry.Register(&TasksCommand{})
 	registry.Register(&ToolsCommand{})
 
 	// Credential management

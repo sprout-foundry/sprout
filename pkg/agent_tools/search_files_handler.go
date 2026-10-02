@@ -128,20 +128,22 @@ func (h *searchFilesHandler) MaxResultSize() int     { return 0 }
 func (h *searchFilesHandler) SafeForParallel() bool  { return false }
 func (h *searchFilesHandler) Interactive() bool      { return false }
 
+// compileSearchPattern treats the pattern as a regex, which is what the tool
+// descriptions promise. A pattern that is not valid regex (an unbalanced
+// "foo(" from a call-site query) falls back to a literal match rather than
+// erroring. A /slash-wrapped/ pattern is strictly a regex.
 func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
-	var raw string
-	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 2 {
-		raw = pattern[1 : len(pattern)-1]
-		if !caseSensitive {
-			raw = "(?i)" + raw
-		}
-	} else {
-		raw = regexp.QuoteMeta(pattern)
-		if !caseSensitive {
-			raw = "(?i)" + raw
-		}
+	prefix := ""
+	if !caseSensitive {
+		prefix = "(?i)"
 	}
-	return regexp.Compile(raw)
+	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 2 {
+		return regexp.Compile(prefix + pattern[1:len(pattern)-1])
+	}
+	if re, err := regexp.Compile(prefix + pattern); err == nil {
+		return re, nil
+	}
+	return regexp.Compile(prefix + regexp.QuoteMeta(pattern))
 }
 
 // shouldSkipDir returns true for well-known directories that should never be

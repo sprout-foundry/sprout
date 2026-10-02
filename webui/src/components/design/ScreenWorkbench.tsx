@@ -19,9 +19,11 @@
  * `ScreenWorkbenchContainer`.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { DesignFeedbackAnnotation } from '../../services/api/types';
 import { designRootPath } from '../../services/api/designApiPaths';
+import { readAsset } from '../../services/api/designApi';
+import { referencedAssetPaths } from '../../design/screenRefs';
 import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import type { ScreenBriefModel } from './screenBrief';
@@ -51,6 +53,8 @@ export interface ScreenWorkbenchProps {
   onStatusSaved?: () => void;
   /** Consent-aware read override for the status editor (tests/hosts). */
   readFn?: typeof fetch;
+  /** Plain transport for the preview asset reads (defaults to the shell's fetch). */
+  fetchFn?: typeof fetch;
 }
 
 /** The screen files the agent-state slice names (the screen's working set). */
@@ -134,7 +138,45 @@ export default function ScreenWorkbench({
   onOpenFeedbackPane,
   onStatusSaved,
   readFn,
+  fetchFn,
 }: ScreenWorkbenchProps) {
+  // The preview inliner (SP-143 §143.4 hosted half): the rendered screen's
+  // local text references, read through the page's own file path and handed
+  // to LivePreview so the iframe copy carries their bytes as data: URLs.
+  // The iframe's own fetches bypass the page's fetch interceptor in the
+  // hosted editor — /api/file there is a real HTTP request the server
+  // refuses.
+  const [inlineAssets, setInlineAssets] = useState<Record<string, string>>({});
+  const assetRefsKey = useMemo(
+    () => (renderLanguage === 'html' ? referencedAssetPaths(renderContent, designRootPath(renderFileName)).join('|') : ''),
+    [renderContent, renderFileName, renderLanguage],
+  );
+  useEffect(() => {
+    if (!assetRefsKey) {
+      setInlineAssets((current) => (Object.keys(current).length ? {} : current));
+      return;
+    }
+    const read = readFn ?? fetchFn;
+    if (!read) return;
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(
+        assetRefsKey.split('|').map(async (ref) => {
+          try {
+            next[ref] = await readAsset(read, designRootPath(ref));
+          } catch {
+            // An unreadable ref falls back to the proxy form for that path.
+          }
+        }),
+      );
+      if (!cancelled) setInlineAssets(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assetRefsKey, readFn, fetchFn]);
+
   const open = (annotations ?? []).filter((annotation) => !annotation.resolved);
   const [focusedAnnotation, setFocusedAnnotation] = useState<string | null>(null);
   const files = agentFiles(brief);
@@ -188,6 +230,7 @@ export default function ScreenWorkbench({
             // Design screens preview through the §143.4 ref rewriter (the
             // iframe copy only); a wireframe SVG has no external refs.
             previewPath={renderLanguage === 'html' ? designRootPath(renderFileName) : undefined}
+            inlineAssets={inlineAssets}
           />
           <AnnotationPins
             target={renderFileName}

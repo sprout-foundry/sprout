@@ -249,6 +249,7 @@ func feedbackTargetStems(root string) []string {
 		{"wireframes", ".svg"},
 		{"components", ".svg"},
 		{"screens", ".html"},
+		{"flows", ".json"},
 		{"flows", ".mmd"},
 	} {
 		for _, stem := range fileStems(root, spec.subdir, spec.ext) {

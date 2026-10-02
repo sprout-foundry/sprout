@@ -23,7 +23,12 @@ const (
 	// TokenSubdir holds the W3C DTCG *.tokens.json files.
 	TokenSubdir = "tokens"
 
-	// FlowSubdir holds the mermaid *.mmd flow sources.
+	// ScreenSubdir holds the primary screens: self-contained
+	// design/screens/<stem>.html documents (SP-140-9 §9a).
+	ScreenSubdir = "screens"
+
+	// FlowSubdir holds the flow sources (design/flows/<name>.json, SP-140-9
+	// §9b) plus their derived .mmd exports.
 	FlowSubdir = "flows"
 
 	// RuntimeSubdir holds the SP-143 screen-kit fixed assets: the screen

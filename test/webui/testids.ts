@@ -461,6 +461,8 @@ const TESTIDS = {
   "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
   // SP-140-6 agent side column (§6f, DesignSideColumn.tsx + DesignAgentPanel.tsx)
   "design-side-column": "design-side-column",
+  "design-side-close": "design-side-close",
+  "design-side-reopen": "design-side-reopen",
   "design-side-tab-details": "design-side-tab-details",
   "design-side-tab-agent": "design-side-tab-agent",
   "design-side-panel-details": "design-side-panel-details",

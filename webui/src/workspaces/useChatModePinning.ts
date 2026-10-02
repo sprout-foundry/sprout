@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { CHAT_MODE_PIN_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY } from '../constants/app';
+import { repoScopedKey } from '../services/repoScope';
 import type { WorkspaceModeId } from './registry';
 import { readPersistedWorkspaceMode, uiContextScope } from './useWorkspaceMode';
 
@@ -39,7 +40,7 @@ export function chatModePinStorageKey(): string {
     return `${CHAT_MODE_PIN_STORAGE_KEY}:default:local`;
   }
   const pid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return `${CHAT_MODE_PIN_STORAGE_KEY}:${pid}:${uiContextScope()}`;
+  return repoScopedKey(`${CHAT_MODE_PIN_STORAGE_KEY}:${pid}:${uiContextScope()}`);
 }
 
 /**

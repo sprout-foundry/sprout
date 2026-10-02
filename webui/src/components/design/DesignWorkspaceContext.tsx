@@ -115,13 +115,22 @@ export function DesignWorkspaceProvider({ tab, active, children }: DesignWorkspa
 
   useEffect(() => {
     if (!active) return;
-    const refetch = () => fetchInventory(++fetchSeq.current);
+    const refetch = () => {
+      // A background tab needs no tree reads (§6a cadence: live when seen).
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      fetchInventory(++fetchSeq.current);
+    };
     refetch();
     // §6a: focus + slow interval keep the tree live without a push channel.
     window.addEventListener('focus', refetch);
     const timer = window.setInterval(refetch, DESIGN_REFRESH_INTERVAL_MS);
+    const visibility = () => {
+      if (document.visibilityState === 'visible') fetchInventory(++fetchSeq.current);
+    };
+    document.addEventListener('visibilitychange', visibility);
     return () => {
       window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', visibility);
       window.clearInterval(timer);
     };
   }, [active, fetchInventory]);

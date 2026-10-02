@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INSTANCE_PID_STORAGE_KEY, WORKSPACE_MODE_STORAGE_KEY } from '../constants/app';
+import { repoScopedKey } from '../services/repoScope';
 import {
   DEFAULT_WORKSPACE_MODE,
   availableModes,
@@ -35,7 +36,7 @@ export function workspaceModeStorageKey(): string {
     return `${WORKSPACE_MODE_STORAGE_KEY}:default:local`;
   }
   const pid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return `${WORKSPACE_MODE_STORAGE_KEY}:${pid}:${uiContextScope()}`;
+  return repoScopedKey(`${WORKSPACE_MODE_STORAGE_KEY}:${pid}:${uiContextScope()}`);
 }
 
 /** The persisted mode id for this instance, or null when unset/unreadable. */

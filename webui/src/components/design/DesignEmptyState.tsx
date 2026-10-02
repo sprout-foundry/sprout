@@ -51,7 +51,7 @@ const STARTER_CARDS: StarterCard[] = [
     title: 'Discover the design in your code',
     body: 'Your components and styles already imply a visual language. The agent reads them and drafts the tree that mirrors the app.',
     prompt:
-      'This workspace has frontend code but no design/ tree yet. Before reading anything, ask me which pages or components matter most. Then read those components and styles, distill the visual language into DTCG token files under design/tokens/, and draft design/README.md (manifest), wireframes, and flows that mirror what the app actually renders. Run design_validate after each artifact.',
+      'This workspace has frontend code but no design/ tree yet. Before reading anything, ask me which pages or components matter most. Then read those components and styles, distill the visual language into design token files under design/tokens/, and draft design/README.md (manifest), screens, and flows that mirror what the app actually renders. Run design_validate after each artifact.',
     codeOrder: 0,
     freshOrder: 3,
   },
@@ -59,9 +59,9 @@ const STARTER_CARDS: StarterCard[] = [
     id: 'running-app',
     icon: Camera,
     title: 'Capture your running app',
-    body: 'If the app runs, the agent screenshots real screens with its headless browser and drafts tokens, wireframes, and flows from what the app actually looks like.',
+    body: 'If the app runs, the agent screenshots real screens with its headless browser and drafts tokens, screens, and flows from what the app actually looks like.',
     prompt:
-      'I want to start a design tree from my running app. Ask me for the URL (or how to start the dev server and which port it uses), then use analyze_ui_screenshot on each main page and distill what you see into design/ tokens, wireframes, and flows — asking me which pages to capture before you start.',
+      'I want to start a design tree from my running app. Ask me for the URL (or how to start the dev server and which port it uses), then use analyze_ui_screenshot on each main page and distill what you see into design/ tokens, screens, and flows — asking me which pages to capture before you start.',
     codeOrder: 1,
     freshOrder: 4,
   },
@@ -69,7 +69,7 @@ const STARTER_CARDS: StarterCard[] = [
     id: 'images',
     icon: Image,
     title: 'Import images & whiteboards',
-    body: 'Photos of whiteboards, exported mockups, paper sketches — the agent extracts wireframes, tokens, or flows from each image in the workspace.',
+    body: 'Photos of whiteboards, exported mockups, paper sketches — the agent extracts screens, tokens, or flows from each image in the workspace.',
     prompt:
       'I have design material as images (whiteboard photos, exported mockups, sketches). Ask me where the images live in this workspace and what each one should become, then use design_import_sketch per image and write the extracted artifacts into the design/ tree, validating each one. If an image is not yet in the workspace, tell me to drop it in first.',
     codeOrder: 2,
@@ -89,9 +89,9 @@ const STARTER_CARDS: StarterCard[] = [
     id: 'draft',
     icon: Sprout,
     title: 'Start from an idea',
-    body: 'No code, no assets — just describe the product. The agent interviews you first, then runs the loop: brief, tokens, wireframes, flows, screens.',
+    body: 'No code, no assets — just describe the product. The agent interviews you first, then runs the loop: tokens, screens, flows — validating between steps.',
     prompt:
-      'Start a design system for a new project in this workspace. Interview me first: ask me what the product does, who uses it, the main flows, and any brand direction. Then draft design/README.md (manifest with screens and frames), a starter DTCG token file, and wireframes + flows for the primary screens — running design_validate between steps.',
+      'Start a design system for a new project in this workspace. Interview me first: ask me what the product does, who uses it, the main flows, and any brand direction. Then draft design/README.md (manifest with screens and frames), a starter token file, and screens + flows for the primary screens — running design_validate between steps.',
     codeOrder: 4,
     freshOrder: 0,
   },

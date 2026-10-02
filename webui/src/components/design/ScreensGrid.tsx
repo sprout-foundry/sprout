@@ -55,7 +55,7 @@ import type {
   DesignFeedbackAnnotation,
 } from '../../services/api/types';
 import LivePreview from '../LivePreview';
-import { injectPreviewMarker, rewriteScreenRefs } from '../../design/screenRefs';
+import { injectPreviewMarker, referencedAssetPaths, rewriteScreenRefs } from '../../design/screenRefs';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
 import ConflictBanner from './ConflictBanner';
@@ -293,6 +293,54 @@ export default function ScreensGrid({
   }, [requestedPaths, contentByPath, transport]);
 
   const contentFor = useCallback((path: string) => contentByPath?.[path] ?? texts[path] ?? '', [contentByPath, texts]);
+
+  // The preview inliner's asset map (SP-143 §143.4 hosted half): the union of
+  // the read screens' local text references, read through the same page-side
+  // path as the screens themselves and inlined into each thumbnail's srcDoc
+  // as data: URLs. In the hosted editor the iframe's own fetches bypass the
+  // page's fetch interceptor — /api/file there is a real HTTP request the
+  // platform server refuses — so the assets must ride in the document.
+  const screenContentsKey = cards
+    .filter((c) => c.kind === 'screen')
+    .map((c) => `${c.path}:${(contentByPath?.[c.path] ?? texts[c.path] ?? '').length}`)
+    .join('|');
+  const [inlinedAssets, setInlinedAssets] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const contents = cards
+      .filter((c) => c.kind === 'screen')
+      .map((c) => [c.path, contentByPath?.[c.path] ?? texts[c.path] ?? ''] as const)
+      .filter(([, text]) => text);
+    const refs = new Set<string>();
+    for (const [path, text] of contents) {
+      for (const ref of referencedAssetPaths(text, path)) refs.add(ref);
+    }
+    if (refs.size === 0) {
+      setInlinedAssets((current) => (Object.keys(current).length ? {} : current));
+      return () => {
+        cancelled = true;
+      };
+    }
+    void cancelled;
+    (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(
+        [...refs].map(async (ref) => {
+          try {
+            next[ref] = await readAsset(transport, designRelativePath(ref));
+          } catch {
+            // An unreadable ref falls back to the proxy form for that path.
+          }
+        }),
+      );
+      if (!cancelled) setInlinedAssets(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // screenContentsKey summarizes both the card set and the read lengths.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenContentsKey, transport]);
 
   // §6e: the selected screen's annotations. A failed read renders zero pins
   // (the pin layer is advisory; the feedback validator owns read errors).
@@ -597,7 +645,7 @@ export default function ScreensGrid({
                           className="design-screen-thumb-frame"
                           title={card.name}
                           sandbox=""
-                          srcDoc={rewriteScreenRefs(content, { previewPath: card.path })}
+                          srcDoc={rewriteScreenRefs(content, { previewPath: card.path, inline: inlinedAssets })}
                           loading="lazy"
                           data-testid={`design-screen-thumb-${card.name}`}
                         />

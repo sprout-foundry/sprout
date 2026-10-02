@@ -70,9 +70,12 @@ const (
 // token|wireframe|flow|feedback).
 type DeltaKind = string
 
-// Delta kinds, fixed by SP-140-5 §5b.
+// Delta kinds, fixed by SP-140-5 §5b (token|screen|flow|feedback; the
+// pre-SP-140-9 "wireframe" kind remains a legal read value for stored legacy
+// reports but the analyzer no longer emits it).
 const (
 	DeltaKindToken     DeltaKind = "token"
+	DeltaKindScreen    DeltaKind = "screen"
 	DeltaKindWireframe DeltaKind = "wireframe"
 	DeltaKindFlow      DeltaKind = "flow"
 	DeltaKindFeedback  DeltaKind = "feedback"
@@ -104,13 +107,13 @@ type SyncReport struct {
 	// call; apply mode is item 5.4). It is advisory metadata for a stored
 	// report.
 	Mode string `json:"mode,omitempty"`
-	// TokensPath / WireframeDir / FlowsDir are the design-tier directories the
+	// TokensPath / ScreensDir / FlowsDir are the design-tier directories the
 	// run cross-referenced, slash-separated and workspace-relative. They are
 	// always present so the report reads as a design-tree lookup rather than a
 	// bag of deltas.
-	TokensPath   string `json:"tokensPath"`
-	WireframeDir string `json:"wireframesPath"`
-	FlowsDir     string `json:"flowsPath"`
+	TokensPath string `json:"tokensPath"`
+	ScreensDir string `json:"screensPath"`
+	FlowsDir   string `json:"flowsPath"`
 	// TouchedCount is the number of touched code files analysed.
 	TouchedCount int `json:"touchedCount"`
 	// DeltaCount is the number of deltas; also broken out by Basis and Kind
@@ -176,14 +179,14 @@ type SyncDelta struct {
 	// dotted token path for new/revalued entries, or the pre-change alias
 	// target for a literal rename ("" otherwise).
 	TokenEntry string `json:"tokenEntry,omitempty"`
-	// WireframeStem is the proposed wireframe stem for a structural delta
+	// ScreenStem is the proposed screen stem for a structural delta
 	// ("" otherwise).
-	WireframeStem string `json:"wireframeStem,omitempty"`
+	ScreenStem string `json:"screenStem,omitempty"`
 	// FlowEdge is the proposed flow edge ("login --> home") for a structural
 	// delta ("" otherwise).
 	FlowEdge string `json:"flowEdge,omitempty"`
-	// FlowFile is the design/flows/*.mmd the edge would be added to
-	// ("" otherwise).
+	// FlowFile is the design/flows/*.json flow source the edge would be
+	// added to ("" otherwise).
 	FlowFile string `json:"flowFile,omitempty"`
 	// Status is the status a created artifact would carry (draft for
 	// §5b-created wireframes/edges).
@@ -235,14 +238,14 @@ func AnalyzeTouchedFiles(in SyncInput) (*SyncReport, error) {
 
 	report := &SyncReport{
 		TokensPath:    path.Join(DirName, TokenSubdir),
-		WireframeDir:  path.Join(DirName, "wireframes"),
+		ScreensDir:    path.Join(DirName, ScreenSubdir),
 		FlowsDir:      path.Join(DirName, FlowSubdir),
 		ByBasis:       map[string]int{},
 		ByKind:        map[string]int{},
 		Deltas:        []SyncDelta{},
 		WritesNothing: true,
 		NextStep: "Analyze is read-only. Run design_sync with mode=apply to write the " +
-			"safe subset (literal token renames/revalues, wireframe/flow additions) into design/; " +
+			"safe subset (literal token renames/revalues, screen/flow additions) into design/; " +
 			"inferred deltas stay proposals.",
 	}
 
@@ -364,12 +367,18 @@ type syncTree struct {
 	// carrying it, sorted — the inferred "switch to an existing token"
 	// candidate index.
 	byValue map[string][]string
-	// wireframeStems is the set of design/wireframes/*.svg stems.
+	// wireframeStems is the set of design/wireframes/*.svg stems (legacy
+	// tier, read-only: the deprecation validator flags it, sync never writes
+	// it).
 	wireframeStems map[string]bool
-	// flowFiles are the design/flows/*.mmd paths, sorted.
+	// screenStems is the set of design/screens/*.html stems — the primary
+	// screen tier (SP-140-9 §9a) and the tier structural deltas propose into.
+	screenStems map[string]bool
+	// flowFiles are the design/flows/*.json flow-source paths, sorted.
 	flowFiles []string
-	// flowEdges is the set of existing "source --> target" edges across the
-	// flow files, for "nav target moved" detection.
+	// flowEdges is the set of screen-level "source --> target" edges across
+	// the flow sources (consecutive steps whose screens are set), for
+	// "nav target moved" detection and edge-proposal dedup.
 	flowEdges map[string]bool
 	// screenFiles are the design/screens/*.html paths, sorted.
 	screenFiles []string
@@ -384,6 +393,7 @@ func loadSyncTree(root string) syncTree {
 		byCSSVar:       map[string]string{},
 		byValue:        map[string][]string{},
 		wireframeStems: map[string]bool{},
+		screenStems:    map[string]bool{},
 		flowEdges:      map[string]bool{},
 	}
 	if !FileExists(root) {
@@ -418,37 +428,58 @@ func loadSyncTree(root string) syncTree {
 		}
 	}
 
-	// Wireframe stems.
+	// Wireframe stems (legacy tier — read-only context).
 	if matches, err := filepath.Glob(filepath.Join(root, DirName, "wireframes", "*.svg")); err == nil {
 		for _, m := range matches {
 			tree.wireframeStems[strings.TrimSuffix(path.Base(filepath.ToSlash(m)), ".svg")] = true
 		}
 	}
-	// Flow files + their existing edges.
-	if matches, err := filepath.Glob(filepath.Join(root, DirName, FlowSubdir, "*.mmd")); err == nil {
+	// Screen stems — the primary tier structural proposals resolve against.
+	if matches, err := filepath.Glob(filepath.Join(root, DirName, ScreenSubdir, "*.html")); err == nil {
 		sort.Strings(matches)
 		for _, m := range matches {
-			rel, relErr := filepath.Rel(root, m)
-			if relErr != nil {
-				continue
-			}
-			tree.flowFiles = append(tree.flowFiles, filepath.ToSlash(rel))
-			if data, readErr := os.ReadFile(m); readErr == nil {
-				fc := ParseFlowchart(string(data))
-				for _, e := range fc.Edges {
-					tree.flowEdges[e.Source+" --> "+e.Target] = true
-				}
-			}
-		}
-	}
-	// Screen files.
-	if matches, err := filepath.Glob(filepath.Join(root, DirName, "screens", "*.html")); err == nil {
-		sort.Strings(matches)
-		for _, m := range matches {
+			stem := strings.TrimSuffix(path.Base(filepath.ToSlash(m)), ".html")
+			tree.screenStems[stem] = true
 			if rel, relErr := filepath.Rel(root, m); relErr == nil {
 				tree.screenFiles = append(tree.screenFiles, filepath.ToSlash(rel))
 			}
 		}
+	}
+	// Flow sources + their screen-level edges. A malformed flow source is
+	// skipped here (the validator reports it) — the sync report must not fail
+	// on a tree the user can still be advised about.
+	if paths, err := FlowSourcePaths(root); err == nil {
+		for _, p := range paths {
+			rel, relErr := filepath.Rel(root, p)
+			if relErr != nil {
+				continue
+			}
+			rel = filepath.ToSlash(rel)
+			raw, readErr := os.ReadFile(p)
+			if readErr != nil {
+				continue
+			}
+			src, parseErr := ParseFlowSource(rel, raw)
+			if parseErr != nil {
+				continue
+			}
+			tree.flowFiles = append(tree.flowFiles, rel)
+			byID := map[string]FlowStep{}
+			for _, s := range src.Steps {
+				byID[s.ID] = s
+			}
+			for _, s := range src.Steps {
+				if s.Next == "" {
+					continue
+				}
+				from, to := s.Screen, byID[s.Next].Screen
+				if from == "" || to == "" {
+					continue
+				}
+				tree.flowEdges[from+" --> "+to] = true
+			}
+		}
+		sort.Strings(tree.flowFiles)
 	}
 	return tree
 }

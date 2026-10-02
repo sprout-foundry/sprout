@@ -331,7 +331,10 @@ output has been *seen*, validated, and the tree reflects it. Run this loop:
    `design_validate`-style static findings marked `visual: false` instead of
    failing the turn. Reach for `design_render` directly when you want the
    rendered image without a rubric pass; use `analyze_ui_screenshot` for
-   screenshots and local HTML you did not author.
+   screenshots and local HTML you did not author. **Hosts without these
+   tools** (the in-browser editor ships only `design_validate` +
+   `design_assets`) skip this step and close the loop at the static check —
+   say so in the summary rather than naming a tool you do not have.
 4. **Fix**, then **repeat** from step 2 — a fix can break a different check,
    so the loop re-enters at the static pass.
 

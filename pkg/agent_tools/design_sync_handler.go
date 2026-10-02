@@ -166,6 +166,10 @@ type designSyncApplyOutput struct {
 	// have escaped design/ (§5e). Always empty in practice; present so a caller
 	// can assert the invariant.
 	OutsideDesign []string `json:"outsideDesign,omitempty"`
+	// RefreshedFlowExports is the number of derived flow exports (§9b .mmd)
+	// regenerated after the apply wrote their sources, so the tree never sits
+	// with a stale-export error following a successful apply.
+	RefreshedFlowExports int `json:"refreshedFlowExports,omitempty"`
 	// ImplementationUntouched states the §5e invariant explicitly: apply writes
 	// design files and never rewrites the implementation. Always true.
 	ImplementationUntouched bool `json:"implementationUntouched"`

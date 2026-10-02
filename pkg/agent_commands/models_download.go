@@ -49,11 +49,8 @@ func ensureLocalModelDownloaded(out *outputSink, modelID string) error {
 	var lastPct int64 = -1
 	var lastBytes int64 = -1
 	if _, err := localmodel.EnsureModel(ctx, *status, func(downloaded, total int64) {
-		// total<=0 means the caller doesn't know the full download size up
-		// front (see pollDownloadProgress's doc comment: hf download gives
-		// no way to learn it without an extra API round-trip) — show bytes
-		// downloaded so far instead of a percentage, still far better than
-		// showing nothing while a multi-GB download runs for minutes.
+		// total<=0 means the download size is not known up front — show
+		// bytes downloaded so far instead of a percentage.
 		if total <= 0 {
 			if downloaded != lastBytes {
 				lastBytes = downloaded
@@ -75,6 +72,22 @@ func ensureLocalModelDownloaded(out *outputSink, modelID string) error {
 	}
 	out.println()
 	console.GlyphSuccess.Fprintf(out.out(), "Download complete!")
+	return ensureLocalRuntime(ctx, out)
+}
+
+// ensureLocalRuntime downloads the MLX runtime when this Mac has none. MLX
+// loads once at startup, so the model is usable after sprout restarts.
+func ensureLocalRuntime(ctx context.Context, out *outputSink) error {
+	if !localmodel.RuntimeSupported() || localmodel.MLXAvailable() {
+		return nil
+	}
+	if !localmodel.RuntimeInstalled() {
+		out.println("Downloading the local AI runtime (one time, about 40 MB)...")
+		if err := localmodel.InstallRuntime(ctx, nil); err != nil {
+			return fmt.Errorf("install local AI runtime: %w", err)
+		}
+	}
+	console.GlyphInfo.Fprintf(out.out(), "Restart sprout to start using local models.")
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
@@ -131,6 +132,7 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
+	localmodel.MaybeReexecWithBundledRuntime()
 	applyCommandGroups(rootCmd)
 	installUsageErrorHooks(rootCmd)
 	registerProviderFlagCompletion(agentCmd, commitCmd, planCmd, reviewStagedCmd, shellCmd)

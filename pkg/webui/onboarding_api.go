@@ -46,6 +46,9 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
 	for _, desc := range descriptors {
+		if desc.ID == "sprout-local" && !localmodel.RuntimeSupported() {
+			continue
+		}
 		meta, _ := configuration.GetProviderAuthMetadata(desc.ID)
 		hasCredential := configuration.HasProviderAuth(desc.ID)
 		entry := onboardingProvider{

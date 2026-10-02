@@ -22,7 +22,7 @@ func newTestReaderWithRichCompleter(rc RichCompletionProvider) *SteerInputReader
 // a footer.
 func refreshTestDropdown(r *SteerInputReader) {
 	r.mu.Lock()
-	r.refreshDropdownLocked(string(r.buffer), r.cursorPos)
+	r.refreshDropdownLocked(r.line, r.cursorPos)
 	r.mu.Unlock()
 }
 
@@ -83,7 +83,7 @@ func TestSteerInputReader_Dropdown_VisibleOnlyForSlashPrefix(t *testing.T) {
 	}
 
 	// Buffer starts with / → candidates appear.
-	r.buffer = r.buffer[:0]
+	r.line = ""
 	r.cursorPos = 0
 	r.insertAtCursor([]byte("/"))
 	refreshTestDropdown(r)
@@ -212,7 +212,7 @@ func TestSteerInputReader_Dropdown_TabAcceptsSelected(t *testing.T) {
 
 	// Tab accepts.
 	r.acceptDropdown()
-	if got := string(r.buffer); got != "/history" {
+	if got := r.line; got != "/history" {
 		t.Fatalf("accept should replace buffer with selected candidate, got %q", got)
 	}
 	if r.cursorPos != len("/history") {
@@ -235,10 +235,10 @@ func TestSteerInputReader_Dropdown_AcceptEmptyIsNoop(t *testing.T) {
 	r.autocomplete.selected = -1
 	r.autocomplete.candidates = nil
 
-	original := string(r.buffer)
+	original := r.line
 	r.acceptDropdown()
-	if string(r.buffer) != original {
-		t.Fatalf("accept on invalid state should not change buffer, got %q", r.buffer)
+	if r.line != original {
+		t.Fatalf("accept on invalid state should not change buffer, got %q", r.line)
 	}
 }
 
@@ -257,13 +257,13 @@ func TestSteerInputReader_Dropdown_EscapeHides(t *testing.T) {
 		t.Fatal("setup: dropdown should be visible")
 	}
 
-	original := string(r.buffer)
+	original := r.line
 	r.hideDropdown()
 	if r.autocomplete.visible {
 		t.Fatal("hideDropdown should clear visible flag")
 	}
-	if string(r.buffer) != original {
-		t.Fatalf("hideDropdown should not change buffer, got %q", r.buffer)
+	if r.line != original {
+		t.Fatalf("hideDropdown should not change buffer, got %q", r.line)
 	}
 }
 
@@ -328,11 +328,11 @@ func TestSteerInputReader_Dropdown_UpRecallsHistoryWhenHidden(t *testing.T) {
 	r.handleSubmit()
 
 	// Empty buffer — dropdown won't be visible.
-	r.buffer = r.buffer[:0]
+	r.line = ""
 	r.cursorPos = 0
 
 	r.handleEvent(&InputEvent{Type: EventUp})
-	if got := string(r.buffer); got != "entry" {
+	if got := r.line; got != "entry" {
 		t.Fatalf("Up with no dropdown should recall history, got %q", got)
 	}
 }

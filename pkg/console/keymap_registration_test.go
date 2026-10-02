@@ -136,3 +136,19 @@ func resetForSubtest(t *testing.T) {
 		globalKeymapOnce = sync.Once{}
 	})
 }
+
+func TestRegisterKeymapForFooter_HintFollowsVerbosity(t *testing.T) {
+	for verbosity, want := range map[string]bool{
+		"":        true,
+		"default": true,
+		"verbose": true,
+		"compact": false,
+	} {
+		resetForSubtest(t)
+		f := &StatusFooter{}
+		RegisterKeymapForFooter(f, &fakeVerbosityConfig{verbosity: verbosity})
+		if f.showKeymapHint != want {
+			t.Errorf("verbosity %q: showKeymapHint = %v, want %v", verbosity, f.showKeymapHint, want)
+		}
+	}
+}

@@ -12,6 +12,9 @@ const maxDropdownRows = 5
 type CompletionCandidate struct {
 	Text        string
 	Description string
+	// Display, when set, is shown in the dropdown in place of Text (an
+	// @file candidate's Text is the whole completed line).
+	Display string
 }
 
 // RichCompletionProvider returns structured candidates that include a
@@ -42,6 +45,9 @@ type inlineAutocomplete struct {
 	// the completer and show the same candidates). Cleared when the
 	// line changes via any edit.
 	dismissedLine string
+	// fileMode is set while the candidates are @file paths rather than
+	// slash commands.
+	fileMode bool
 }
 
 // newInlineAutocomplete returns a zero-value manager (hidden).
@@ -53,7 +59,15 @@ func newInlineAutocomplete() *inlineAutocomplete {
 // be visible. Called after each buffer mutation. Prefers the rich
 // provider when set, falling back to the plain completer.
 func (a *inlineAutocomplete) update(line string, cursorPos int, completer CompletionProvider, richCompleter RichCompletionProvider) {
-	if (!strings.HasPrefix(line, "/")) || cursorPos != len(line) {
+	if cursorPos != len(line) {
+		a.hide()
+		return
+	}
+	if _, ok := atFileToken(line); ok {
+		a.updateFiles(line)
+		return
+	}
+	if !strings.HasPrefix(line, "/") {
 		a.hide()
 		return
 	}
@@ -70,7 +84,7 @@ func (a *inlineAutocomplete) update(line string, cursorPos int, completer Comple
 	// visible, and we have a completer. Assumes the completer is
 	// deterministic for the same input — completers that consult external
 	// state must invalidate this cache themselves.
-	if a.visible && line == a.lastLine && (richCompleter != nil || completer != nil) {
+	if a.visible && !a.fileMode && line == a.lastLine && (richCompleter != nil || completer != nil) {
 		return
 	}
 
@@ -83,6 +97,26 @@ func (a *inlineAutocomplete) update(line string, cursorPos int, completer Comple
 		candidates = plainToCandidates(completer(line, cursorPos))
 	}
 
+	a.fileMode = false
+	a.show(line, candidates)
+}
+
+// updateFiles shows the @file candidates for line.
+func (a *inlineAutocomplete) updateFiles(line string) {
+	if a.dismissedLine == line {
+		a.hide()
+		return
+	}
+	if a.visible && a.fileMode && line == a.lastLine {
+		return
+	}
+	a.show(line, atFileCandidates(line))
+	a.fileMode = a.visible
+}
+
+// show makes candidates the visible list for line, hiding the dropdown
+// when there are none.
+func (a *inlineAutocomplete) show(line string, candidates []CompletionCandidate) {
 	if len(candidates) == 0 {
 		a.hide()
 		return
@@ -127,7 +161,11 @@ func formatDropdownRow(c CompletionCandidate, selected bool, cols int) string {
 		prefix = marker
 	}
 
-	body := " " + c.Text
+	label := c.Text
+	if c.Display != "" {
+		label = c.Display
+	}
+	body := " " + label
 	if c.Description != "" {
 		body = body + "  " + c.Description
 	}
@@ -148,6 +186,7 @@ func (a *inlineAutocomplete) hide() {
 	a.candidates = nil
 	a.selected = 0
 	a.lastLine = ""
+	a.fileMode = false
 }
 
 // dismiss hides the dropdown AND suppresses it from reappearing for
@@ -157,6 +196,18 @@ func (a *inlineAutocomplete) hide() {
 func (a *inlineAutocomplete) dismiss(line string) {
 	a.hide()
 	a.dismissedLine = line
+}
+
+// settleAfterAccept closes the list after a Tab/Enter accept. A slash
+// command stays dismissed for the accepted line; an @path may keep going
+// (a directory lists its contents), so it is only hidden and the next
+// update decides.
+func (a *inlineAutocomplete) settleAfterAccept(line string, wasFileMode bool) {
+	if wasFileMode {
+		a.hide()
+		return
+	}
+	a.dismiss(line)
 }
 
 // accept returns the currently selected candidate's text, or "" if none.

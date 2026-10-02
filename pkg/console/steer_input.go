@@ -61,6 +61,8 @@ func isEAGAIN(err error) bool {
 //	Ctrl+B/F         → move cursor back / forward one rune
 //	Ctrl+D           → forward-delete rune at cursor
 //	Ctrl+K/U         → kill from cursor to end / start of buffer
+//	Ctrl+Y           → yank the last killed text
+//	Alt+D            → kill the word after the cursor
 //	Ctrl+W           → delete word before cursor
 //	Alt+B/F          → move cursor back / forward one word
 //	Ctrl+Left/Right  → move cursor back / forward one word
@@ -77,6 +79,8 @@ func isEAGAIN(err error) bool {
 // behavior of StatusFooter / ActivityIndicator. Callers can construct
 // the reader unconditionally; the gating happens here.
 type SteerInputReader struct {
+	editBuffer
+
 	mu sync.Mutex
 
 	footer      *StatusFooter
@@ -94,14 +98,6 @@ type SteerInputReader struct {
 	active bool
 	stopCh chan struct{}
 	doneCh chan struct{}
-
-	// buffer accumulates the in-progress steer message.
-	buffer []byte
-
-	// cursorPos is the byte offset into buffer where the next edit
-	// lands. The footer renders a caret marker at this position so
-	// the user sees where typed characters will be inserted.
-	cursorPos int
 
 	// oldState is the pre-steer-mode termios snapshot, restored on Stop.
 	// Use steerTermiosState (NOT term.State) because we run a "cbreak"-
@@ -208,14 +204,21 @@ const (
 	SteerSubmitModeQueue                        // auto-run at turn end
 )
 
-// SteerPromptPrefix is the visible glyph + space rendered at the start
-// of the pinned input line in STEER mode. QueuePromptPrefix is the
-// alternative shown after the user toggles via Tab. Both exposed for
-// testing / theming.
-const (
-	SteerPromptPrefix = "⇄ steer › "
-	QueuePromptPrefix = "⏸ queue › "
+// SteerPromptPrefix and QueuePromptPrefix are the input box labels in
+// STEER and QUEUE mode — the shared composer labels, so the box reads the
+// same as the idle prompt. Exposed for tests.
+var (
+	SteerPromptPrefix = ComposerPrefix(ComposerSteer)
+	QueuePromptPrefix = ComposerPrefix(ComposerQueue)
 )
+
+// composerMode is the footer's view of the reader's submit mode.
+func (r *SteerInputReader) composerModeLocked() ComposerMode {
+	if r.submitMode == SteerSubmitModeQueue {
+		return ComposerQueue
+	}
+	return ComposerSteer
+}
 
 // NewSteerInputReader builds a reader that draws into the given footer
 // and reports submitted/interrupt events via the callbacks. The
@@ -423,7 +426,7 @@ func (r *SteerInputReader) SetRetractFn(fn func() (string, bool)) {
 func (r *SteerInputReader) DrainUnsentBuffer() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return string(r.buffer)
+	return r.line
 }
 
 // ResetBuffer clears the in-progress steer buffer. Called by the
@@ -432,8 +435,7 @@ func (r *SteerInputReader) DrainUnsentBuffer() string {
 func (r *SteerInputReader) ResetBuffer() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.buffer = r.buffer[:0]
-	r.cursorPos = 0
+	r.resetEdit()
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 }

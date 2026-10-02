@@ -193,6 +193,7 @@ To modify behavior, add to your `~/.config/sprout/config.json`:
    ```
 3. If you've disabled auto-execution, it will ask for confirmation first
 4. If it's not a clear command, falls through to normal AI processing
+5. Without `!`, input only runs when it reads like a command line: a real subcommand (`go test`, `npm install`, `git status`), a Makefile target (`make build`), or shell-looking arguments (flags, paths, pipes, `file.ext`, an existing path). A bare word, a question, or a sentence that starts with a command's name ("make sure the tests pass", "find the bug") goes to the assistant — prefix it with `!` to run it anyway
 
 ### Manual execution with `!`:
 

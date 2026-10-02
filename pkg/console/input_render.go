@@ -40,11 +40,11 @@ func (ir *InputReader) refreshLocked() {
 		ir.autocomplete.update(ir.line, ir.cursorPos, ir.completer, ir.richCompleter)
 	}
 
-	pinned := ir.autocomplete != nil &&
-		ir.autocomplete.visible &&
-		ir.footer != nil &&
-		ir.footer.canPinInput()
+	pinned := ir.composerPinned()
 	if pinned {
+		if !ir.pinnedDropdownActive {
+			ir.clearInlineInputLocked()
+		}
 		ir.pinnedDropdownActive = true
 		ir.renderPinnedDropdownLocked()
 	} else {
@@ -64,9 +64,8 @@ func (ir *InputReader) refreshLocked() {
 // region. Called by refreshLocked whenever the dropdown is hidden or
 // no footer is attached.
 func (ir *InputReader) refreshInputLine() {
-	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
-	promptWidth := len(promptRunes)
+	promptWidth := visibleRuneWidth(ir.prompt)
 
 	// Compute multi-line-aware geometry. The display line may contain
 	// literal `\n` (from pastes or Alt+Enter) — each acts as a hard
@@ -127,7 +126,7 @@ func (ir *InputReader) refreshInputLine() {
 	// where the new content's final row is shorter than what was there.
 	fmt.Printf("%s", ClearToEndOfLineSeq())
 
-	ir.lastLineLength = promptWidth + utf8.RuneCountInString(displayLine)
+	ir.lastLineLength = promptWidth + displayWidth(displayLine)
 	ir.lastVisualRows = currentLineCount
 
 	// Position cursor: we're currently at (endLine, endCol). Move to
@@ -300,4 +299,17 @@ func stripANSIEscapeCodes(text string) string {
 	}
 
 	return result.String()
+}
+
+// ClearScreen wipes the screen and redraws the prompt at the top (Ctrl-L).
+func (ir *InputReader) ClearScreen() {
+	LockOutput()
+	defer UnlockOutput()
+	if ir.composerPinned() {
+		ir.footer.clearScreenLocked()
+	} else {
+		fmt.Print("\033[H\033[2J")
+		ir.lastVisualRows, ir.currentPhysicalLine, ir.lastWrapPending = 0, 0, false
+	}
+	ir.refreshLocked()
 }

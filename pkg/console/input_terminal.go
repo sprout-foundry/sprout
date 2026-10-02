@@ -50,6 +50,14 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 		ir.terminalWidth = newWidth
 		return false
 	}
+	if ir.footer != nil && ir.footer.canPinInput() {
+		ir.terminalWidth = newWidth
+		LockOutput()
+		ir.clearInlineInputForResizeLocked(newWidth)
+		ir.redrawAnchoredLocked(newWidth)
+		UnlockOutput()
+		return true
+	}
 
 	// Compute how many physical rows the OLD content occupies at the
 	// new width. The terminal has already reflowed the on-screen rows,
@@ -162,6 +170,7 @@ func (ir *InputReader) teardownInputTerm() {
 	UnlockOutput()
 	fmt.Print(bracketedPasteDisable)
 	fmt.Print(MouseTrackingDisable)
+	fmt.Print(ShowCursorSeq())
 	writeModifyOtherKeysDisable(os.Stdout)
 	_ = setNonblock(ir.termFd, false)
 }

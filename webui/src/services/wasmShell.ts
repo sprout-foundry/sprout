@@ -99,6 +99,8 @@ export interface WasmShell {
   respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
   /** Deliver a shell approval decision to a pending shell approval request. */
   respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
+  /** The §6b design status JSON for the workspace root (GET /api/design/status). */
+  designStatus?(): string;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -260,6 +262,9 @@ export interface SproutWasmAPI {
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   supportedLanguages?(): string;
+  // ── Design health (cmd/wasm/design_funcs.go) ──
+  /** The §6b design status JSON for the workspace root. Absent in binaries built before the export existed. */
+  designStatus?(root?: string): string;
 }
 
 declare global {

@@ -72,6 +72,8 @@ export {
   writeLayout,
   DesignWriteConflictError,
   baseMtimeFromResponse,
+  contentHashOf,
+  etagFromResponse,
 } from './designApiWrite';
 export type { SafeWriteOptions, WriteConflict } from './designApiWrite';
 export {

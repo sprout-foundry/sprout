@@ -2,6 +2,7 @@ package design
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,7 +33,7 @@ func syncWrite(t *testing.T, root, rel, content string) {
 }
 
 // syncFixtureTree is a minimal, valid design/ tree the analyze fixtures
-// cross-reference: one colour token, two wireframes, one flow, one screen.
+// cross-reference: one colour token, two screens, one flow source.
 const syncFixtureTokens = `{
   "color": {
     "brand": {
@@ -46,17 +47,26 @@ const syncFixtureTokens = `{
   }
 }`
 
-const syncFixtureWireframe = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">
-  <rect id="go" data-nav="home" />
-</svg>`
+const syncFixtureScreen = `<!doctype html>
+<html lang="en" data-screen="%s">
+<head><meta charset="utf-8"><title>%s</title>
+<style>body{width:390px;}</style></head>
+<body><main><h1>%s</h1></main></body>
+</html>
+`
 
 func syncWriteFixtureTree(t *testing.T, root string) {
 	t.Helper()
 	syncWrite(t, root, "design/tokens/color.tokens.json", syncFixtureTokens)
-	syncWrite(t, root, "design/wireframes/login.svg", syncFixtureWireframe)
-	syncWrite(t, root, "design/wireframes/home.svg", syncFixtureWireframe)
-	syncWrite(t, root, "design/flows/sign-up.mmd", "flowchart TD\n  login --> home\n")
-	syncWrite(t, root, "design/screens/login.html", `<style>.root{width:390px;}</style>`)
+	syncWrite(t, root, "design/screens/login.html", fmt.Sprintf(syncFixtureScreen, "login", "login", "login"))
+	syncWrite(t, root, "design/screens/home.html", fmt.Sprintf(syncFixtureScreen, "home", "home", "home"))
+	syncWrite(t, root, "design/flows/sign-up.json", `{
+  "name": "sign-up",
+  "steps": [
+    { "id": "login", "label": "Sign in", "screen": "login", "trigger": "tap Submit", "next": "home" },
+    { "id": "home", "label": "Home", "screen": "home" }
+  ]
+}`)
 }
 
 // syncDeltaFor returns the first delta matching a predicate, or fails.
@@ -99,7 +109,7 @@ func TestAnalyzeTouchedFiles_EmptyInputIsAnEmptyReport(t *testing.T) {
 	assert.Empty(t, rep.Deltas)
 	assert.True(t, rep.WritesNothing, "analyze mode writes nothing (§5e)")
 	assert.Equal(t, "design/tokens", rep.TokensPath)
-	assert.Equal(t, "design/wireframes", rep.WireframeDir)
+	assert.Equal(t, "design/screens", rep.ScreensDir)
 	assert.Equal(t, "design/flows", rep.FlowsDir)
 	// Counts maps are always present so the JSON shape is stable.
 	require.NotNil(t, rep.ByBasis)
@@ -240,8 +250,8 @@ func TestAnalyzeTouchedFiles_RenamedVarReferenceIsKnown(t *testing.T) {
 // design/tokens/ tier at all: every var is counterpart-less, and the
 // separator-tolerance lookup must not dereference an absent token projection.
 func TestAnalyzeTouchedFiles_NoTokenTierDoesNotPanic(t *testing.T) {
-	root := t.TempDir()
-	syncWrite(t, root, "design/wireframes/login.svg", syncFixtureWireframe)
+	root := t.TempDir() // no design/
+	syncWrite(t, root, "src/theme.css", ":root{--x:1px;}")
 
 	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
 		{Path: "src/theme.css", Content: []byte(":root{ --color-brand-primary: #0055ff; color: var(--color_brand_primary); }\n")},
@@ -277,10 +287,10 @@ func TestAnalyzeTouchedFiles_UnknownVarRefIsAnInferredProposal(t *testing.T) {
 
 // -----------------------------------------------------------------------------
 // §5b fixture 2 — new route + screen component → structural delta proposing a
-// wireframe stem and flow edge
+// screen stem and flow step
 // -----------------------------------------------------------------------------
 
-func TestAnalyzeTouchedFiles_NewRouteProposesWireframeAndFlow(t *testing.T) {
+func TestAnalyzeTouchedFiles_NewRouteProposesScreenAndFlow(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
 
@@ -294,15 +304,15 @@ func TestAnalyzeTouchedFiles_NewRouteProposesWireframeAndFlow(t *testing.T) {
 	}})
 	require.NoError(t, err)
 
-	wf := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.Kind == DeltaKindWireframe })
+	wf := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.Kind == DeltaKindScreen })
 	assert.Equal(t, DeltaBasisStructural, wf.Basis)
 	assert.Equal(t, ConfidenceMedium, wf.Confidence)
 	assert.True(t, wf.SafeToApply, "structural deltas are the safe subset")
 	assert.False(t, wf.Proposal)
-	assert.Equal(t, "check-deposit", wf.WireframeStem)
-	assert.True(t, SlugMatches(wf.WireframeStem), "the proposed stem is a legal wireframe name")
+	assert.Equal(t, "check-deposit", wf.ScreenStem)
+	assert.True(t, SlugMatches(wf.ScreenStem), "the proposed stem is a legal screen name")
 	assert.Equal(t, FlowDraftStatus, wf.Status)
-	assert.Contains(t, wf.DesignFiles, "design/wireframes/check-deposit.svg")
+	assert.Contains(t, wf.DesignFiles, "design/screens/check-deposit.html")
 	assert.Contains(t, wf.Delta, "/check-deposit")
 
 	flow := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.Kind == DeltaKindFlow })
@@ -311,17 +321,18 @@ func TestAnalyzeTouchedFiles_NewRouteProposesWireframeAndFlow(t *testing.T) {
 	assert.NotEmpty(t, flow.FlowEdge, "the edge is proposed")
 	assert.Contains(t, flow.FlowEdge, "check-deposit")
 	assert.Contains(t, flow.DesignFiles, flow.FlowFile)
+	assert.Contains(t, flow.FlowFile, ".json", "flow proposals target the flow source, not the derived export")
 	assert.Equal(t, FlowDraftStatus, flow.Status)
 
-	// /login already has a wireframe: not re-proposed.
+	// /login already has a screen: not re-proposed.
 	for _, d := range rep.Deltas {
-		assert.NotEqual(t, "login", d.WireframeStem, "an existing wireframe must not be re-proposed")
+		assert.NotEqual(t, "login", d.ScreenStem, "an existing screen must not be re-proposed")
 	}
 }
 
-// TestAnalyzeTouchedFiles_NavTargetWithoutWireframe covers the "nav target
-// moved" structural case: a link to a screen with no wireframe.
-func TestAnalyzeTouchedFiles_NavTargetWithoutWireframe(t *testing.T) {
+// TestAnalyzeTouchedFiles_NavTargetWithoutScreen covers the "nav target
+// moved" structural case: a link to a screen with no primary artifact.
+func TestAnalyzeTouchedFiles_NavTargetWithoutScreen(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
 
@@ -330,14 +341,14 @@ func TestAnalyzeTouchedFiles_NavTargetWithoutWireframe(t *testing.T) {
 	}})
 	require.NoError(t, err)
 
-	d := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.WireframeStem == "settings" })
-	assert.Equal(t, DeltaKindWireframe, d.Kind)
+	d := syncDeltaFor(t, rep, func(d SyncDelta) bool { return d.ScreenStem == "settings" })
+	assert.Equal(t, DeltaKindScreen, d.Kind)
 	assert.Equal(t, DeltaBasisStructural, d.Basis)
-	assert.Contains(t, d.DesignFiles, "design/wireframes/settings.svg")
+	assert.Contains(t, d.DesignFiles, "design/screens/settings.html")
 }
 
 // TestAnalyzeTouchedFiles_ExistingNavTargetIsNotReproposed is the negative
-// control: a nav target whose wireframe already exists produces nothing.
+// control: a nav target whose screen already exists produces nothing.
 func TestAnalyzeTouchedFiles_ExistingNavTargetIsNotReproposed(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
@@ -349,25 +360,23 @@ func TestAnalyzeTouchedFiles_ExistingNavTargetIsNotReproposed(t *testing.T) {
 	assert.Empty(t, rep.Deltas)
 }
 
-// TestAnalyzeTouchedFiles_DeliveredScreenIsNamedInTheWireframeDelta covers the
-// design-ahead half of a structural delta: a screen exists for the stem, so the
-// delta names it as adoption context.
-func TestAnalyzeTouchedFiles_DeliveredScreenIsNamedInTheWireframeDelta(t *testing.T) {
+// TestAnalyzeTouchedFiles_LegacyWireframeStillSuppressesTheProposal covers a
+// pre-migration tree: a wireframe with the stem means the screen concept
+// exists, so no screen proposal is emitted (the deprecation validator owns
+// the conversion nag).
+func TestAnalyzeTouchedFiles_LegacyWireframeStillSuppressesTheProposal(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
-	syncWrite(t, root, "design/screens/settings.html", `<style>.root{width:390px;}</style>`)
+	syncWrite(t, root, "design/wireframes/settings.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"/>`)
 
 	rep, err := AnalyzeTouchedFiles(SyncInput{Root: root, Touched: []SyncFileInput{
-		{Path: "src/routes.tsx", Content: []byte(`{ path: "/settings", element: <Settings /> }` + "\n")},
+		{Path: "src/Nav.tsx", Content: []byte(`<nav><Link to="/settings">Settings</Link></nav>` + "\n")},
 	}})
 	require.NoError(t, err)
-
-	d := syncDeltaFor(t, rep, func(d SyncDelta) bool {
-		return d.Kind == DeltaKindWireframe && d.WireframeStem == "settings"
-	})
-	assert.Contains(t, d.DesignFiles, "design/wireframes/settings.svg")
-	assert.Contains(t, d.DesignFiles, "design/screens/settings.html")
-	assert.Contains(t, d.Delta, "delivered screen")
+	for _, d := range rep.Deltas {
+		assert.NotEqual(t, "settings", d.ScreenStem,
+			"a legacy wireframe with the stem suppresses a new screen proposal: %s", d.Delta)
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -587,7 +596,7 @@ func TestSyncReport_IsJSONShapeStableForApply(t *testing.T) {
 	require.NoError(t, err)
 	var generic map[string]any
 	require.NoError(t, json.Unmarshal(data, &generic))
-	for _, key := range []string{"tokensPath", "wireframesPath", "flowsPath",
+	for _, key := range []string{"tokensPath", "screensPath", "flowsPath",
 		"touchedCount", "deltaCount", "byBasis", "byKind", "deltas", "writesNothing", "nextStep"} {
 		assert.Contains(t, generic, key, "report must carry %q", key)
 	}
@@ -662,21 +671,21 @@ func TestSlugMatches(t *testing.T) {
 
 func TestProposeFlowEdgePrefersParentSegment(t *testing.T) {
 	tree := syncTree{
-		wireframeStems: map[string]bool{"login": true, "home": true, "settings": true},
-		flowEdges:      map[string]bool{"login --> home": true},
-		flowFiles:      []string{"design/flows/sign-up.mmd"},
+		screenStems: map[string]bool{"login": true, "home": true, "settings": true},
+		flowEdges:   map[string]bool{"login --> home": true},
+		flowFiles:   []string{"design/flows/sign-up.json"},
 	}
 	edge, file := proposeFlowEdge("settings-profile", tree)
 	assert.Equal(t, "settings --> settings-profile", edge)
-	assert.Equal(t, "design/flows/sign-up.mmd", file)
+	assert.Equal(t, "design/flows/sign-up.json", file)
 
 	// No parent segment → a deterministic fallback source.
 	edge, file = proposeFlowEdge("check-deposit", tree)
 	assert.Equal(t, "home --> check-deposit", edge)
-	assert.Equal(t, "design/flows/sign-up.mmd", file)
+	assert.Equal(t, "design/flows/sign-up.json", file)
 }
 
-func TestProposeFlowEdgeNoWireframesYieldsNoEdge(t *testing.T) {
+func TestProposeFlowEdgeNoScreensYieldsNoEdge(t *testing.T) {
 	tree := syncTree{flowEdges: map[string]bool{}}
 	edge, _ := proposeFlowEdge("check-deposit", tree)
 	assert.Empty(t, edge, "no source screen means no proposed edge")
@@ -773,9 +782,9 @@ func TestPlanSyncApply_LiteralRevalueRewritesDTCGEntry(t *testing.T) {
 	assert.Equal(t, w.Content, plan2.Writes[0].Content, "a second apply rewrites byte-identical bytes (no-op)")
 }
 
-// Fixture 2: a new route/screen → a skeleton wireframe + a flow edge, both with
+// Fixture 2: a new route/screen → a skeleton screen + a flow step, both with
 // draft status; the second plan is a no-op.
-func TestPlanSyncApply_StructuralCreatesWireframeAndFlowEdge(t *testing.T) {
+func TestPlanSyncApply_StructuralCreatesScreenAndFlowStep(t *testing.T) {
 	root := t.TempDir()
 	syncWriteFixtureTree(t, root)
 
@@ -783,35 +792,36 @@ func TestPlanSyncApply_StructuralCreatesWireframeAndFlowEdge(t *testing.T) {
   { path: "/check-deposit", element: <CheckDeposit /> },
 ];` + "\n"
 	plan := syncApplyPlanFor(t, root, []SyncFileInput{{Path: "src/routes.tsx", Content: []byte(router)}})
-	require.Len(t, plan.Writes, 2, "one wireframe + one flow edge")
+	require.Len(t, plan.Writes, 2, "one screen + one flow step")
 
-	var wf, flow *SyncApplyWrite
+	var screen, flow *SyncApplyWrite
 	for i := range plan.Writes {
 		switch plan.Writes[i].Op {
-		case SyncPlanningAddWireframe:
-			wf = &plan.Writes[i]
-		case SyncPlanningAddFlowEdge:
+		case SyncPlanningAddScreen:
+			screen = &plan.Writes[i]
+		case SyncPlanningAddFlowStep:
 			flow = &plan.Writes[i]
 		}
 	}
-	require.NotNil(t, wf)
+	require.NotNil(t, screen)
 	require.NotNil(t, flow)
 
-	assert.Equal(t, "design/wireframes/check-deposit.svg", wf.Path)
-	assert.Equal(t, "check-deposit", wf.Stem)
-	assert.Equal(t, FlowDraftStatus, wf.Status, "a §5b-created wireframe is a draft")
-	assert.True(t, wf.Created)
-	assert.Contains(t, string(wf.Content), "check-deposit")
-	assert.Contains(t, string(wf.Content), FlowDraftStatus)
+	assert.Equal(t, "design/screens/check-deposit.html", screen.Path)
+	assert.Equal(t, "check-deposit", screen.Stem)
+	assert.Equal(t, FlowDraftStatus, screen.Status, "a §5b-created screen is a draft")
+	assert.True(t, screen.Created)
+	assert.Contains(t, string(screen.Content), "check-deposit")
+	assert.Contains(t, string(screen.Content), FlowDraftStatus)
+	assert.Contains(t, string(screen.Content), `data-screen="check-deposit"`, "the screen carries the §9a identity attribute")
 
-	assert.Equal(t, "design/flows/sign-up.mmd", flow.Path)
+	assert.Equal(t, "design/flows/sign-up.json", flow.Path, "the step goes into the flow source")
 	assert.Equal(t, FlowDraftStatus, flow.Status)
 	assert.Contains(t, flow.Edge, "check-deposit")
-	assert.Contains(t, string(flow.Content), flow.Edge)
-	assert.Contains(t, string(flow.Content), "login --> home", "the existing edge is preserved")
+	assert.Contains(t, string(flow.Content), "check-deposit")
+	assert.Contains(t, string(flow.Content), `"sign-up"`, "the flow source keeps its identity")
 
 	// Apply, then re-analyze: nothing further to plan.
-	syncWrite(t, root, wf.Path, string(wf.Content))
+	syncWrite(t, root, screen.Path, string(screen.Content))
 	syncWrite(t, root, flow.Path, string(flow.Content))
 	plan2 := syncApplyPlanFor(t, root, []SyncFileInput{{Path: "src/routes.tsx", Content: []byte(router)}})
 	assert.Empty(t, plan2.Writes, "a second apply is a no-op")
@@ -915,29 +925,55 @@ func TestPlanSyncApply_Deterministic(t *testing.T) {
 	}
 }
 
-// The created skeleton wireframe is well-formed XML and parses as a wireframe
-// (structure-only; no text is expected yet).
-func TestSkeletonWireframeSVGIsWellFormed(t *testing.T) {
-	svg := skeletonWireframeSVG("check-deposit")
-	findings := ValidateWireframe("design/wireframes/check-deposit.svg", []byte(svg),
-		[]string{"login", "home", "check-deposit"}, []Frame{{Name: "mobile", Width: 390, Height: 844}})
+// The created skeleton screen parses as a screen (structure-only; no content
+// is expected yet).
+func TestSkeletonScreenHTMLIsAValidScreen(t *testing.T) {
+	html := skeletonScreenHTML("check-deposit")
+	findings := validateScreen("design/screens/check-deposit.html", []byte(html), []Frame{{Name: "mobile", Width: 390, Height: 844}})
 	for _, f := range findings {
-		assert.NotEqual(t, "svg_wellformed", f.Rule, "the skeleton must be well-formed XML: %s", f.Message)
 		assert.NotEqual(t, SeverityError, f.Severity, "no hard error from the skeleton: %s", f.Message)
 	}
-	assert.Contains(t, svg, FlowDraftStatus)
+	assert.Contains(t, html, FlowDraftStatus)
+	assert.Contains(t, html, `data-screen="check-deposit"`)
 }
 
-// appendFlowEdge is idempotent and preserves existing content.
-func TestAppendFlowEdge(t *testing.T) {
-	base := []byte("flowchart TD\n  login --> home\n")
-	got := string(appendFlowEdge(base, "home --> check-deposit"))
-	assert.Equal(t, "flowchart TD\n  login --> home\n  home --> check-deposit\n", got)
-	// An already-present edge is not re-added.
-	assert.Equal(t, string(base), string(appendFlowEdge(base, "login --> home")))
-	// A document with no declaration gains one.
-	got = string(appendFlowEdge([]byte("  a --> b\n"), "b --> c"))
-	assert.True(t, strings.HasPrefix(got, "flowchart TD\n"))
+// appendFlowStep is idempotent and preserves existing steps.
+func TestAppendFlowStep(t *testing.T) {
+	base := []byte(`{"name":"sign-up","steps":[{"id":"login","label":"Sign in","screen":"login","next":"home"},{"id":"home","label":"Home","screen":"home"}]}`)
+	got, err := appendFlowStep(base, "design/flows/sign-up.json", "home --> check-deposit")
+	require.NoError(t, err)
+	out := string(got)
+	assert.Contains(t, out, `"check-deposit"`)
+	assert.Contains(t, out, `"next": "check-deposit"`)
+
+	// An already-present screen pair is not re-added.
+	same, err := appendFlowStep(got, "design/flows/sign-up.json", "home --> check-deposit")
+	require.NoError(t, err)
+	assert.Equal(t, out, string(same))
+}
+
+// A malformed flow source is left alone (a proposal, not a broken write).
+func TestAppendFlowStep_MalformedSourceIsAnError(t *testing.T) {
+	_, err := appendFlowStep([]byte("{not json"), "design/flows/sign-up.json", "a --> b")
+	assert.Error(t, err)
+}
+
+// A source step that already walks elsewhere is not silently re-routed.
+func TestAppendFlowStep_RefusesToReroute(t *testing.T) {
+	base := []byte(`{"name":"sign-up","steps":[{"id":"login","label":"Sign in","screen":"login","next":"home"},{"id":"home","label":"Home","screen":"home"}]}`)
+	_, err := appendFlowStep(base, "design/flows/sign-up.json", "login --> settings")
+	assert.Error(t, err, "re-routing login's walk is a design decision")
+}
+
+// newFlowSourceDocument builds a parseable minimal source for a proposed edge.
+func TestNewFlowSourceDocument(t *testing.T) {
+	d := SyncDelta{FlowEdge: "login --> home", ScreenStem: "onboarding"}
+	raw := newFlowSourceDocument(d)
+	src, err := ParseFlowSource("design/flows/onboarding.json", raw)
+	require.NoError(t, err)
+	assert.Equal(t, "onboarding", src.Name)
+	require.Len(t, src.Steps, 2)
+	assert.Equal(t, "home", src.Steps[0].Next)
 }
 
 // rewriteDTCEntry / addDTCEntry are surgical and deterministic.

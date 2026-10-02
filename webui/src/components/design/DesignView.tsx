@@ -111,6 +111,9 @@ export default function DesignView({
   // §6f rework: the right column's active tab. Selecting an asset shows
   // Details; a prefill flips to Agent (below). Both bodies stay mounted.
   const [sideTab, setSideTab] = useState<DesignSideTab>('details');
+  // The mobile overlay's collapsed state: the close affordance hides the
+  // column; any asset selection (or prefill) reopens it.
+  const [sideCollapsed, setSideCollapsed] = useState(false);
   const [prefill, setPrefill] = useState<string | null>(null);
 
   // Remount the agent panel's chat whenever the Agent tab is
@@ -138,7 +141,10 @@ export default function DesignView({
   // what the click was for. Covers both selection paths (sidebar pane and
   // canvas bodies); clearing a selection does NOT flip the tab back.
   useEffect(() => {
-    if (rawSelected) setSideTab('details');
+    if (rawSelected) {
+      setSideTab('details');
+      setSideCollapsed(false);
+    }
   }, [rawSelected]);
 
   useEffect(() => {
@@ -188,6 +194,7 @@ export default function DesignView({
   const askAgent = useCallback((prompt: string) => {
     setPrefill(prompt);
     setSideTab('agent');
+    setSideCollapsed(false);
   }, []);
 
   // The flows canvas follows the shared selection when the selected asset is
@@ -281,10 +288,24 @@ export default function DesignView({
           )}
         </section>
 
+        {sideCollapsed && (
+          <button
+            type="button"
+            className="design-side-reopen"
+            aria-label="Open side panel"
+            data-testid="design-side-reopen"
+            onClick={() => setSideCollapsed(false)}
+          >
+            Panel
+          </button>
+        )}
+
         <DesignSideColumn
           sideTab={sideTab}
           onSideTabChange={setSideTab}
           hasSelection={!!selectedAsset}
+          hidden={sideCollapsed}
+          onClose={sideTab === 'agent' || selectedAsset ? () => setSideCollapsed(true) : undefined}
           details={
             <aside className="design-view-detail" aria-label="Design detail" data-testid="design-detail-pane">
               <DesignDetailPane

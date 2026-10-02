@@ -21,6 +21,15 @@ function entriesFor(tab: string, inventory: DesignInventory | null): DesignAsset
   if (tab === 'flows') return inventory.flows;
   if (tab === 'screens') return inventory.screens;
   if (tab === 'tokens') return inventory.tokenFiles;
+  if (tab === 'feedback') {
+    return (inventory.feedback ?? []).map((f) => ({
+      path: f.path,
+      name: f.name,
+      kind: 'feedback' as const,
+      size: 0,
+      modified: 0,
+    }));
+  }
   return [];
 }
 
@@ -28,6 +37,7 @@ const EMPTY_PLACEHOLDER: Record<string, string> = {
   flows: 'No flows in this workspace.',
   screens: 'No screens in this workspace.',
   tokens: 'No token files in this workspace.',
+  feedback: 'No feedback files in this workspace.',
 };
 
 export default function DesignAssetsPane() {

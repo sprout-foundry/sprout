@@ -7,41 +7,31 @@
     "purpose": "sign-in entry point with credential recovery",
     "status": "draft",
     "listedInReadme": true,
-    "wireframe": "design/wireframes/login.svg",
-    "wireframeExists": true,
+    "screenFile": "design/screens/login.html",
+    "screenExists": true,
+    "wireframeExists": false,
     "flowsIn": [
       {
-        "flow": "design/flows/sign-up.mmd",
+        "flow": "design/flows/sign-up.json",
         "flowName": "sign-up",
         "source": "landing",
         "target": "login",
         "direction": "in",
-        "otherStem": "landing"
-      },
-      {
-        "flow": "design/flows/sign-up.mmd",
-        "flowName": "sign-up",
-        "source": "login",
-        "target": "login",
-        "direction": "both"
+        "trigger": "open sign-in",
+        "otherStem": "landing",
+        "otherLabel": "Landing"
       }
     ],
     "flowsOut": [
       {
-        "flow": "design/flows/sign-up.mmd",
+        "flow": "design/flows/sign-up.json",
         "flowName": "sign-up",
         "source": "login",
         "target": "home",
         "direction": "out",
         "trigger": "tap Submit",
-        "otherStem": "home"
-      },
-      {
-        "flow": "design/flows/sign-up.mmd",
-        "flowName": "sign-up",
-        "source": "login",
-        "target": "login",
-        "direction": "both"
+        "otherStem": "home",
+        "otherLabel": "Home"
       }
     ],
     "tokenPaths": [
@@ -74,18 +64,14 @@
         "[hierarchy] Primary CTA reads as secondary"
       ]
     },
-    "screenFile": "design/screens/login.html",
     "writesNothing": true
   },
   "screen": "login",
   "tree": {
     "design/README.md": "# Design Workspace\n\n## Device frames\n\n```\nframes:\n  desktop: 1440x900\n```\n\n## Screens\n\n- `login` — draft — sign-in entry point with credential recovery\n- `home` — ready — message list with unread badges\n\n## Flows\n\n- `sign-up` — draft — account creation from landing to first-run\n",
-    "design/feedback/login.json": "{\"target\":\"design/wireframes/login.svg\",\"status\":\"changes-requested\",\"resolution\":\"\",\"annotations\":[{\"id\":\"a1\",\"at\":{\"x\":0.42,\"y\":0.18},\"area\":\"hierarchy\",\"note\":\"Primary CTA reads as secondary\",\"resolved\":false,\"created\":\"2026-09-15T10:36:47Z\"},{\"id\":\"a2\",\"at\":{\"x\":0.1,\"y\":0.9},\"area\":\"contrast\",\"note\":\"Low contrast label\",\"resolved\":true,\"created\":\"2026-09-15T10:37:00Z\"}]}",
-    "design/flows/sign-up.mmd": "flowchart TD\n  landing --> login\n  login -- \"tap Submit\" --> home\n  login --> login\n  home -->|back| landing\n",
-    "design/screens/login.html": "<!doctype html><html><body><p>delivered</p></body></html>",
-    "design/tokens/color.tokens.json": "{\n  \"color\": { \"brand\": { \"primary\": { \"$type\": \"color\", \"$value\": \"#0055ff\" } } },\n  \"dimension\": { \"space\": { \"medium\": { \"$type\": \"dimension\", \"$value\": \"8px\" } } }\n}",
-    "design/wireframes/home.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1440 900\"><text>Home</text></svg>",
-    "design/wireframes/landing.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1440 900\"><text>Landing</text></svg>",
-    "design/wireframes/login.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1440 900\"><!-- {color.brand.primary} --><!-- {color.legacy.accent} --><rect id=\"submit\" data-nav=\"home\"/><text>Sign in</text></svg>"
+    "design/feedback/login.json": "{\"target\": \"design/screens/login.html\", \"status\": \"changes-requested\", \"resolution\": \"\", \"annotations\": [{\"id\": \"a1\", \"at\": {\"x\": 0.42, \"y\": 0.18}, \"area\": \"hierarchy\", \"note\": \"Primary CTA reads as secondary\", \"resolved\": false, \"created\": \"2026-09-15T10:36:47Z\"}, {\"id\": \"a2\", \"at\": {\"x\": 0.1, \"y\": 0.9}, \"area\": \"contrast\", \"note\": \"Low contrast label\", \"resolved\": true, \"created\": \"2026-09-15T10:37:00Z\"}]}",
+    "design/flows/sign-up.json": "{\n  \"name\": \"sign-up\",\n  \"steps\": [\n    { \"id\": \"landing\", \"label\": \"Landing\", \"screen\": \"landing\", \"trigger\": \"open sign-in\", \"next\": \"login\" },\n    { \"id\": \"login\", \"label\": \"Sign in\", \"screen\": \"login\", \"trigger\": \"tap Submit\", \"next\": \"home\" },\n    { \"id\": \"home\", \"label\": \"Home\", \"screen\": \"home\", \"trigger\": \"back\", \"next\": \"landing-end\" },\n    { \"id\": \"landing-end\", \"label\": \"Landing (return)\", \"screen\": \"landing\" }\n  ]\n}\n",
+    "design/screens/login.html": "\u003c!doctype html\u003e\u003chtml lang=\"en\" data-screen=\"login\"\u003e\u003cbody\u003e\u003c!-- {color.brand.primary} --\u003e\u003c!-- {color.legacy.accent} --\u003e\u003cp\u003edelivered\u003c/p\u003e\u003c/body\u003e\u003c/html\u003e",
+    "design/tokens/color.tokens.json": "{\n  \"color\": { \"brand\": { \"primary\": { \"$type\": \"color\", \"$value\": \"#0055ff\" } } },\n  \"dimension\": { \"space\": { \"medium\": { \"$type\": \"dimension\", \"$value\": \"8px\" } } }\n}"
   }
 }

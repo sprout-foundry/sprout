@@ -1,6 +1,7 @@
 package design
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -18,12 +19,12 @@ const (
 	// SyncPlanningAddToken adds a DTCG entry that does not yet exist (a literal
 	// token rename/addition the code introduced). Delta is the token path.
 	SyncPlanningAddToken SyncPlanningOp = "add-token"
-	// SyncPlanningAddWireframe creates a skeleton wireframe SVG with draft
-	// status. Delta is the wireframe stem.
-	SyncPlanningAddWireframe SyncPlanningOp = "add-wireframe"
-	// SyncPlanningAddFlowEdge appends the proposed edge to a flow file. Delta is
-	// the edge ("login --> home").
-	SyncPlanningAddFlowEdge SyncPlanningOp = "add-flow-edge"
+	// SyncPlanningAddScreen creates a skeleton screen HTML document with draft
+	// status. Delta is the screen stem.
+	SyncPlanningAddScreen SyncPlanningOp = "add-screen"
+	// SyncPlanningAddFlowStep appends a step for the proposed edge to a flow
+	// source document. Delta is the edge ("login --> home").
+	SyncPlanningAddFlowStep SyncPlanningOp = "add-flow-step"
 )
 
 // SyncApplyWrite is one design-file write the apply half will perform. Path is
@@ -42,7 +43,7 @@ type SyncApplyWrite struct {
 	Delta string `json:"delta"`
 	// Token is the DTCG token path the write concerns ("" otherwise).
 	Token string `json:"token,omitempty"`
-	// Stem is the wireframe stem the write concerns ("" otherwise).
+	// Stem is the screen stem the write concerns ("" otherwise).
 	Stem string `json:"stem,omitempty"`
 	// Edge is the flow edge the write adds ("" otherwise).
 	Edge string `json:"edge,omitempty"`
@@ -173,7 +174,7 @@ func PlanSyncApply(report *SyncReport, read SyncFileReader) *SyncApplyPlan {
 	writesByPath := map[string]int{}  // path -> index into plan.Writes
 	tokenUpdates := map[string]bool{} // "file\x00token" -> already planned
 	edgesByFile := map[string]map[string]bool{}
-	wireframes := map[string]bool{}
+	screensPlanned := map[string]bool{}
 
 	addWrite := func(w SyncApplyWrite) {
 		if !designConfinedPath(w.Path) {
@@ -224,26 +225,26 @@ func PlanSyncApply(report *SyncReport, read SyncFileReader) *SyncApplyPlan {
 			writesByPath[w.Path] = len(plan.Writes)
 			addWrite(w)
 
-		case DeltaKindWireframe:
-			if d.WireframeStem == "" || wireframes[d.WireframeStem] {
+		case DeltaKindScreen, DeltaKindWireframe:
+			if d.ScreenStem == "" || screensPlanned[d.ScreenStem] {
 				continue
 			}
-			wireframes[d.WireframeStem] = true
-			wfPath := syncWireframePath(d)
-			if !designConfinedPath(wfPath) {
-				plan.Refused = append(plan.Refused, wfPath)
+			screensPlanned[d.ScreenStem] = true
+			screenPath := syncScreenPath(d)
+			if screenPath == "" || !designConfinedPath(screenPath) {
+				plan.Refused = append(plan.Refused, screenPath)
 				continue
 			}
-			_, exists := read(wfPath)
+			_, exists := read(screenPath)
 			addWrite(SyncApplyWrite{
-				Path:    wfPath,
-				Op:      SyncPlanningAddWireframe,
-				Kind:    DeltaKindWireframe,
+				Path:    screenPath,
+				Op:      SyncPlanningAddScreen,
+				Kind:    DeltaKindScreen,
 				Delta:   d.Delta,
-				Stem:    d.WireframeStem,
+				Stem:    d.ScreenStem,
 				Status:  FlowDraftStatus,
 				Created: !exists,
-				Content: []byte(skeletonWireframeSVG(d.WireframeStem)),
+				Content: []byte(skeletonScreenHTML(d.ScreenStem)),
 			})
 
 		case DeltaKindFlow:
@@ -259,20 +260,35 @@ func PlanSyncApply(report *SyncReport, read SyncFileReader) *SyncApplyPlan {
 			edgesByFile[d.FlowFile][d.FlowEdge] = true
 			current, exists := read(d.FlowFile)
 			var content []byte
+			var created bool
 			if exists {
-				content = appendFlowEdge(current, d.FlowEdge)
+				next, err := appendFlowStep(current, d.FlowFile, d.FlowEdge)
+				if err != nil {
+					plan.Notes = append(plan.Notes,
+						fmt.Sprintf("%s: flow edge %q not applied: %v", d.FlowFile, d.FlowEdge, err))
+					plan.Proposals = append(plan.Proposals, SyncApplyProposal{
+						Delta:     d.Delta,
+						Kind:      d.Kind,
+						Basis:     d.Basis,
+						Reason:    fmt.Sprintf("the flow source could not be updated: %v", err),
+						CodeFiles: append([]string{}, d.CodeFiles...),
+					})
+					continue
+				}
+				content = next
 			} else {
-				content = []byte("flowchart TD\n  " + d.FlowEdge + "\n")
+				content = newFlowSourceDocument(d)
+				created = true
 			}
 			plan.Writes = append(plan.Writes, SyncApplyWrite{
 				Path:    d.FlowFile,
-				Op:      SyncPlanningAddFlowEdge,
+				Op:      SyncPlanningAddFlowStep,
 				Kind:    DeltaKindFlow,
 				Delta:   d.Delta,
 				Edge:    d.FlowEdge,
-				Stem:    d.WireframeStem,
+				Stem:    d.ScreenStem,
 				Status:  FlowDraftStatus,
-				Created: !exists,
+				Created: created,
 				Content: content,
 			})
 
@@ -411,60 +427,143 @@ func tokenTokenPath(d SyncDelta) string {
 	return d.Token
 }
 
-// syncWireframePath is the wireframe path a structural delta targets: the delta's
-// designFiles entry ending in .svg under design/wireframes/, else the
-// conventional path from the stem.
-func syncWireframePath(d SyncDelta) string {
+// syncScreenPath is the screen path a structural delta targets: the delta's
+// designFiles entry ending in .html under design/screens/, else the
+// conventional path from the stem. A legacy wireframe-path delta (a stored
+// pre-migration report) is refused here by returning "" — apply never writes
+// the retired tier.
+func syncScreenPath(d SyncDelta) string {
 	for _, f := range d.DesignFiles {
-		if strings.HasPrefix(f, path.Join(DirName, "wireframes")+"/") &&
-			strings.HasSuffix(f, ".svg") {
+		if strings.HasPrefix(f, path.Join(DirName, ScreenSubdir)+"/") &&
+			strings.HasSuffix(f, ".html") {
 			return f
 		}
 	}
-	if d.WireframeStem != "" {
-		return path.Join(DirName, "wireframes", d.WireframeStem+".svg")
+	if d.ScreenStem != "" {
+		return ScreenRelPath(d.ScreenStem)
 	}
 	return ""
 }
 
-// skeletonWireframeSVG renders the §5b skeleton wireframe for a new screen: a
-// viewBox-only SVG carrying the draft status marker (as a comment, the same
-// convention the manifest status markers and token-usage comments use) and the
-// screen's stem as the root id. It is deliberately structure-only — a draft the
-// next design turn fleshes out — never code.
-//
-// The comment carries the status so the artifact is self-describing; the frame
-// matches the mobile frame the fixture tree uses (390x844).
-func skeletonWireframeSVG(stem string) string {
+// skeletonScreenHTML renders the §5b skeleton screen for a new screen: a
+// self-contained HTML document carrying the draft status marker (as a
+// comment), the data-screen identity attribute the SP-140-9 §9a contract
+// requires, and a placeholder body sized to the mobile frame. It is
+// deliberately structure-only — a draft the next design turn fleshes out —
+// never code.
+func skeletonScreenHTML(stem string) string {
 	var b strings.Builder
-	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">` + "\n")
-	fmt.Fprintf(&b, "  <!-- status: %s (created by design_sync apply from a new route/screen in code) -->\n", FlowDraftStatus)
-	fmt.Fprintf(&b, "  <!-- screen: %s -->\n", stem)
-	fmt.Fprintf(&b, "  <g id=\"%s\">\n", stem)
-	b.WriteString(`    <rect x="0" y="0" width="390" height="844" fill="none" />` + "\n")
-	b.WriteString("  </g>\n")
-	b.WriteString("</svg>\n")
+	b.WriteString("<!doctype html>\n")
+	fmt.Fprintf(&b, "<!-- status: %s (created by design_sync apply from a new route/screen in code) -->\n", FlowDraftStatus)
+	fmt.Fprintf(&b, "<html lang=\"en\" data-screen=%q>\n", stem)
+	b.WriteString("<head>\n")
+	fmt.Fprintf(&b, "  <meta charset=\"utf-8\">\n  <title>%s</title>\n", stem)
+	b.WriteString("  <style>\n    html, body { margin: 0; }\n    body { font-family: system-ui, sans-serif; padding: 16px; width: 390px; box-sizing: border-box; }\n")
+	b.WriteString("  </style>\n</head>\n")
+	fmt.Fprintf(&b, "<body>\n  <main id=%q>\n    <h1>%s</h1>\n    <p>Draft skeleton — flesh out this screen; the SP-143 screen kit is the starting point.</p>\n  </main>\n</body>\n</html>\n", stem, stem)
 	return b.String()
 }
 
-// appendFlowEdge appends an edge statement to a flow document, preserving the
-// existing declaration if there is one and adding one when there is not. It is
-// idempotent: an edge already present (as a parsed edge) is not re-added.
-func appendFlowEdge(content []byte, edge string) []byte {
-	text := string(content)
-	fc := ParseFlowchart(text)
-	for _, e := range fc.Edges {
-		if e.Source+" --> "+e.Target == edge {
-			return content
+// appendFlowStep appends the step pair a proposed edge needs to a flow source
+// document: the source screen gains a step (when it has none), and the target
+// screen gains the linked step. relPath is the flow source's workspace-relative
+// path (its file stem is the flow's identity). It is idempotent: an edge whose
+// from/to screen pair already exists in the walk is not re-added. An error
+// means the document is malformed or the walk would need re-routing — apply
+// leaves the delta as a proposal.
+func appendFlowStep(content []byte, relPath, edge string) ([]byte, error) {
+	src, err := ParseFlowSource(relPath, content)
+	if err != nil {
+		return nil, err
+	}
+	from, to, ok := strings.Cut(edge, " --> ")
+	if !ok || from == "" || to == "" {
+		return nil, fmt.Errorf("edge %q is not a \"source --> target\" pair", edge)
+	}
+
+	screenOf := map[string]string{}
+	screenByID := map[string]string{}
+	for _, s := range src.Steps {
+		if s.Screen != "" {
+			screenOf[s.Screen] = s.ID
+			screenByID[s.ID] = s.Screen
 		}
 	}
-	if len(content) > 0 && !strings.HasSuffix(text, "\n") {
-		text += "\n"
+	// Idempotence: an existing consecutive pair with these screens is a no-op.
+	for _, s := range src.Steps {
+		if s.Next == "" || s.Screen != from {
+			continue
+		}
+		if screenByID[s.Next] == to {
+			return content, nil
+		}
 	}
-	if fc.Declarations == 0 {
-		text = "flowchart TD\n" + text
+
+	fromID, toID := screenOf[from], screenOf[to]
+	if fromID == "" {
+		fromID = flowStepID(src.Steps, from)
+		src.Steps = append(src.Steps, FlowStep{ID: fromID, Label: from, Screen: from})
 	}
-	return []byte(text + "  " + edge + "\n")
+	if toID == "" {
+		toID = flowStepID(src.Steps, to)
+		src.Steps = append(src.Steps, FlowStep{ID: toID, Label: to, Screen: to})
+	}
+	for i := range src.Steps {
+		if src.Steps[i].ID != fromID {
+			continue
+		}
+		if src.Steps[i].Next != "" && screenByID[src.Steps[i].Next] != to {
+			// The source step already walks somewhere else; re-routing it is
+			// a design decision, so surface it rather than rewiring.
+			return nil, fmt.Errorf("step %q already walks to %q; re-routing it to %q is a design decision",
+				fromID, src.Steps[i].Next, to)
+		}
+		src.Steps[i].Next = toID
+	}
+
+	out, err := json.MarshalIndent(src, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
+// newFlowSourceDocument builds a minimal flow source for a proposed edge when
+// no flow source exists yet: one step per endpoint plus the walk edge between
+// them. The .mmd beside it is derived by the export, never written here.
+func newFlowSourceDocument(d SyncDelta) []byte {
+	from, to, _ := strings.Cut(d.FlowEdge, " --> ")
+	name := d.ScreenStem
+	if name == "" {
+		name = from
+	}
+	src := FlowSource{
+		Name: name,
+		Steps: []FlowStep{
+			{ID: from, Label: from, Screen: from, Next: to},
+			{ID: to, Label: to, Screen: to},
+		},
+	}
+	out, _ := json.MarshalIndent(src, "", "  ")
+	return append(out, '\n')
+}
+
+// flowStepID derives a unique step id for a screen inside a flow source: the
+// screen stem when free, otherwise stem-2, stem-3, …
+func flowStepID(steps []FlowStep, screen string) string {
+	taken := map[string]bool{}
+	for _, s := range steps {
+		taken[s.ID] = true
+	}
+	if !taken[screen] {
+		return screen
+	}
+	for n := 2; ; n++ {
+		candidate := fmt.Sprintf("%s-%d", screen, n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }
 
 // distinctSortedPaths returns the sorted distinct write paths.

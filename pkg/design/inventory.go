@@ -266,6 +266,11 @@ func assetKind(sub, name string) string {
 			return KindScreen
 		}
 	case "flows":
+		// The .json source and the derived .mmd export are both flow assets;
+		// a .layout.json sidecar is canvas state, not a flow (SP-140-9 §9b).
+		if strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, layoutSidecarSuffix) {
+			return KindFlow
+		}
 		if strings.HasSuffix(name, ".mmd") {
 			return KindFlow
 		}
@@ -364,17 +369,61 @@ func topGroup(p string) string {
 	return p
 }
 
-// scanFlows collects node/edge counts per design/flows/*.mmd file
-// (SP-140-2 §2c), sorted by path. A missing flows directory yields an empty
-// slice.
+// scanFlows collects node/edge counts per flow source document
+// (design/flows/*.json, the .layout.json sidecars excluded, SP-140-9 §9b),
+// sorted by path. A legacy .mmd with no .json source still counts (it is the
+// only flow truth in a pre-migration tree); a source's derived .mmd does not
+// double-count. A missing flows directory yields an empty slice.
 func scanFlows(root string) ([]FlowCounts, error) {
-	matches, err := filepath.Glob(filepath.Join(root, DirName, "flows", "*.mmd"))
+	jsonMatches, err := filepath.Glob(filepath.Join(root, DirName, "flows", "*.json"))
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(matches)
-	out := make([]FlowCounts, 0, len(matches))
-	for _, match := range matches {
+	sort.Strings(jsonMatches)
+	out := make([]FlowCounts, 0, len(jsonMatches))
+	hasSource := map[string]bool{}
+	for _, match := range jsonMatches {
+		name := path.Base(filepath.ToSlash(match))
+		if strings.HasSuffix(name, layoutSidecarSuffix) {
+			continue
+		}
+		data, err := os.ReadFile(match)
+		if err != nil {
+			return nil, err
+		}
+		rel, err := filepath.Rel(root, match)
+		if err != nil {
+			return nil, err
+		}
+		rel = filepath.ToSlash(rel)
+		flowName := strings.TrimSuffix(name, ".json")
+		hasSource[flowName] = true
+		if src, parseErr := ParseFlowSource(rel, data); parseErr == nil {
+			byID := map[string]bool{}
+			for _, s := range src.Steps {
+				byID[s.ID] = true
+			}
+			edgeCount := 0
+			for _, s := range src.Steps {
+				if s.Next != "" && byID[s.Next] {
+					edgeCount++
+				}
+			}
+			out = append(out, FlowCounts{Path: rel, Name: flowName, Nodes: len(src.Steps), Edges: edgeCount})
+		} else {
+			out = append(out, FlowCounts{Path: rel, Name: flowName, Nodes: 0, Edges: 0})
+		}
+	}
+	mmdMatches, err := filepath.Glob(filepath.Join(root, DirName, "flows", "*.mmd"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(mmdMatches)
+	for _, match := range mmdMatches {
+		flowName := strings.TrimSuffix(path.Base(filepath.ToSlash(match)), ".mmd")
+		if hasSource[flowName] {
+			continue
+		}
 		data, err := os.ReadFile(match)
 		if err != nil {
 			return nil, err
@@ -387,10 +436,11 @@ func scanFlows(root string) ([]FlowCounts, error) {
 		fc := ParseFlowchart(string(data))
 		out = append(out, FlowCounts{
 			Path:  rel,
-			Name:  assetName(path.Base(rel)),
+			Name:  flowName,
 			Nodes: len(fc.NodeOrder),
 			Edges: len(fc.Edges),
 		})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
 }

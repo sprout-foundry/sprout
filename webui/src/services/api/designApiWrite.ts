@@ -70,6 +70,28 @@ export function baseMtimeFromResponse(response: Response): number | undefined {
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : undefined;
 }
 
+/** The ETag a read response carries (the WASM host stamps the content hash). */
+export function etagFromResponse(response: Response): string | undefined {
+  const etag = response.headers.get('ETag');
+  if (!etag) return undefined;
+  return etag.replace(/^"|"$/g, '') || undefined;
+}
+
+/**
+ * SHA-256 hex of a string (WebCrypto; hex-encoded to match the daemon's
+ * baseHash spelling). Resolves undefined where crypto.subtle is unavailable
+ * (non-secure contexts) — the caller then sends no hash and no guard runs.
+ */
+export async function contentHashOf(text: string): Promise<string | undefined> {
+  if (typeof crypto === 'undefined' || !crypto.subtle) return undefined;
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return undefined;
+  }
+}
+
 /** Thrown when a §7a conditional write is refused (409) — nothing was written. */
 export class DesignWriteConflictError extends Error {
   readonly conflict: WriteConflict;

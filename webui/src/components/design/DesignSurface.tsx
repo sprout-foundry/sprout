@@ -148,6 +148,7 @@ const DesignSurface: React.FC<DesignSurfaceProps> = ({
             workspace?.select(path);
           }}
           onOpenSection={onTabChange}
+          onAskAgent={handleAskAgent}
         />
       </ErrorBoundary>
       <ErrorBoundary panelName="Design">

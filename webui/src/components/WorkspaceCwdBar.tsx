@@ -77,9 +77,10 @@ export default function WorkspaceCwdBar({
   showSelector = true,
   onAddRepo,
   addRepoDisabled,
-}: WorkspaceCwdBarProps): ReactElement {
+}: WorkspaceCwdBarProps): ReactElement | null {
   const options = useMemo(() => buildCwdOptions(cwd, repos), [cwd, repos]);
   const value = options.some((option) => option.value === cwd) ? cwd : '';
+  if (!showSelector && !onAddRepo) return null;
 
   return (
     <div className="workspace-cwd-bar" data-testid="workspace-cwd-bar">

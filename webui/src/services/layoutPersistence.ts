@@ -12,6 +12,7 @@
 import { debugLog } from '../utils/log';
 import type { EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { getTabWorkspacePath } from './clientSession';
+import { repoScopedKey } from './repoScope';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,11 +78,12 @@ const VIRTUAL_PATH_PREFIX = '__workspace/';
 /**
  * Returns a short, filesystem-safe suffix derived from the workspace path.
  * Empty/unknown workspace → '_default'.  Otherwise the path with / replaced by :.
+ * In the hosted editor the repo scope is appended, so each repo keeps its own tabs.
  */
 function getWorkspaceSuffix(): string {
   const ws = getTabWorkspacePath();
-  if (!ws || ws === '/') return '_default';
-  return ws.replace(/\//g, ':');
+  const suffix = !ws || ws === '/' ? '_default' : ws.replace(/\//g, ':');
+  return repoScopedKey(suffix);
 }
 
 /** Returns the workspace-scoped key for the main layout state snapshot. */

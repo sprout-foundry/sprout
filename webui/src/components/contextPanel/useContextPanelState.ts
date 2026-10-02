@@ -54,7 +54,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
   const [panelWidth, setPanelWidthRaw] = useState(loadPersistedWidth);
   const panelContainerRef = useRef<HTMLDivElement>(null);
 
-  const [chatTab, setChatTab] = useState<ChatTabId>('thread');
+  const [chatTab, setChatTab] = useState<ChatTabId>('changes');
   const [isResizing, setIsResizing] = useState(false);
 
   const isChat = props.context === 'chat';

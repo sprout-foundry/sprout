@@ -625,13 +625,6 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
       const s = wasmShellRef.current;
       if (!s || !term) return;
 
-      term.writeln('');
-      term.writeln('\x1b[33m╔══════════════════════════════════════════╗\x1b[0m');
-      term.writeln('\x1b[33m║  \x1b[1mSprout WASM Browser Shell\x1b[0m\x1b[33m              ║\x1b[0m');
-      term.writeln('\x1b[33m║  \x1b[2mGo compiled to WebAssembly\x1b[0m\x1b[33m             ║\x1b[0m');
-      term.writeln('\x1b[33m║  \x1b[2mFiles persist in IndexedDB\x1b[0m\x1b[33m            ║\x1b[0m');
-      term.writeln('\x1b[33m╚══════════════════════════════════════════╝\x1b[0m');
-      term.writeln('');
       term.writeln('Type \x1b[1mhelp\x1b[0m for available commands.');
       term.writeln('');
 

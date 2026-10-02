@@ -11,6 +11,7 @@ import { parseDate } from '../utils/dateUtils';
 import { debugLog } from '../utils/log';
 import { notificationBus } from './notificationBus';
 import { getPluginViewIds } from './pluginRegistry';
+import { repoScopedKey } from './repoScope';
 
 // ── Local Helper Types ───────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ export const getAppStateStorageKey = (): string => {
   }
   const instancePid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
   const scope = getUIContextScope();
-  return `${APP_STATE_STORAGE_KEY}:${instancePid}:${scope}`;
+  return repoScopedKey(`${APP_STATE_STORAGE_KEY}:${instancePid}:${scope}`);
 };
 
 export const loadPersistedAppState = (): Partial<AppState> | null => {

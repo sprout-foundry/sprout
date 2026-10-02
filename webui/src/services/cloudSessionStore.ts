@@ -24,6 +24,7 @@
 
 import type { Message } from '../types/app';
 import { debugLog } from '../utils/log';
+import { repoScope } from './repoScope';
 
 /** Public key prefix — exported so tests / callers can clear cloud data. */
 export const CLOUD_SESSION_PREFIX = 'sprout-cloud-session-';
@@ -78,6 +79,34 @@ interface SerializedMessage {
 interface SessionIndex {
   current_session_id: string;
   sessions: CloudSessionMeta[];
+}
+
+/**
+ * Transcripts are shared across repositories (one index, one eviction
+ * budget), but each repository remembers its own current transcript in
+ * `current_by_repo`; `current_session_id` is the unscoped one.
+ */
+interface StoredSessionIndex {
+  current_session_id?: unknown;
+  current_by_repo?: unknown;
+  sessions?: unknown;
+}
+
+function currentByRepo(parsed: StoredSessionIndex | null): Record<string, string> {
+  const map = parsed?.current_by_repo;
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(map)) if (typeof v === 'string') out[k] = v;
+  return out;
+}
+
+function readStoredIndex(ls: Storage): StoredSessionIndex | null {
+  try {
+    const raw = ls.getItem(INDEX_KEY);
+    return raw ? (JSON.parse(raw) as StoredSessionIndex) : null;
+  } catch {
+    return null;
+  }
 }
 
 function emptyIndex(): SessionIndex {
@@ -150,12 +179,13 @@ function readIndex(): SessionIndex {
   const ls = storage();
   if (!ls) return emptyIndex();
   try {
-    const raw = ls.getItem(INDEX_KEY);
-    if (!raw) return emptyIndex();
-    const parsed = JSON.parse(raw) as Partial<SessionIndex>;
+    const parsed = readStoredIndex(ls);
+    if (!parsed) return emptyIndex();
     const sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+    const scope = repoScope();
+    const current = scope ? (currentByRepo(parsed)[scope] ?? '') : parsed.current_session_id;
     return {
-      current_session_id: typeof parsed.current_session_id === 'string' ? parsed.current_session_id : '',
+      current_session_id: typeof current === 'string' ? current : '',
       sessions: sessions.filter(isValidMeta),
     };
   } catch (err) {
@@ -177,7 +207,18 @@ function writeIndex(index: SessionIndex): void {
   const ls = storage();
   if (!ls) return;
   try {
-    ls.setItem(INDEX_KEY, JSON.stringify(index));
+    const prev = readStoredIndex(ls);
+    const byRepo = currentByRepo(prev);
+    let current = index.current_session_id;
+    const scope = repoScope();
+    if (scope) {
+      byRepo[scope] = index.current_session_id;
+      current = typeof prev?.current_session_id === 'string' ? prev.current_session_id : '';
+    }
+    ls.setItem(
+      INDEX_KEY,
+      JSON.stringify({ current_session_id: current, current_by_repo: byRepo, sessions: index.sessions }),
+    );
   } catch (err) {
     debugLog('[cloudSessionStore] failed to write index:', err);
   }

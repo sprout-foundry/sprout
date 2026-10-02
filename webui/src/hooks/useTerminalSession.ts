@@ -113,8 +113,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
   isActiveRef.current = isActive;
 
   const sendResize = useCallback(() => {
-    if (!paneConnectedRef.current || !terminalWSRef.current || !xtermRef.current || !fitAddonRef.current) return;
+    if (!xtermRef.current || !fitAddonRef.current) return;
     fitAddonRef.current.fit();
+    if (!paneConnectedRef.current || !terminalWSRef.current) return;
     const cols = xtermRef.current.cols;
     const rows = xtermRef.current.rows;
     if (!cols || !rows || cols < 1 || rows < 1) return;

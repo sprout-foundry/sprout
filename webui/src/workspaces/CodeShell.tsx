@@ -18,7 +18,6 @@ import HeaderBar from '../components/HeaderBar';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
-import Chat from '../components/ChatView';
 import { isLayeredLayout } from '../config/layout';
 import { isCloud, supportsAgentChanges } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
@@ -65,12 +64,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     diffState,
   } = chat;
 
-  // Layered layout: while the main view holds other work, the active
-  // conversation moves into the contextual sidebar.
-  const threadContent = isLayeredLayout && !showContextSidebar ? <Chat {...chatProps} /> : undefined;
-  // The panel holds the conversation (while other work has the main view)
-  // and, on a local daemon, the agent's change history.
-  const hasContextPanel = !!threadContent || supportsAgentChanges;
+  // On a local daemon the panel holds the agent's change history.
+  const hasContextPanel = supportsAgentChanges;
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
@@ -166,8 +161,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           <ContextSidebar
             isMobile={isMobile}
             isTablet={isTablet}
-            showContextSidebar={showContextSidebar || !!threadContent}
-            threadContent={threadContent}
+            showContextSidebar={showContextSidebar}
             contextPanelRef={contextPanelRef}
             toolExecutions={toolExecutions}
             logs={logs}

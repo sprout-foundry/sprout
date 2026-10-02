@@ -61,7 +61,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			}
 		}
 		// For run_subagent, respect depth limit in all modes
-		if toolName == "run_subagent" && !agent.CanSpawnSubagents() {
+		if spawnsSubagentsAnyMode(toolName) && !agent.CanSpawnSubagents() {
 			errMsg := fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 				"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 				"If you need additional work done, please complete your current task and return "+

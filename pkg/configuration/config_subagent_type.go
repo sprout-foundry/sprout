@@ -129,6 +129,9 @@ type SubagentType struct {
 	LocalOnly          bool              `json:"local_only,omitempty"`           // Only available in local mode (not cloud)
 	Delegatable        bool              `json:"delegatable,omitempty"`          // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
 	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`   // Risk cascade rules for the runtime auto-approve check
+	IterationBudget    int               `json:"iteration_budget,omitempty"`     // Soft iteration budget as a subagent (0 = none)
+	TimeBudgetSeconds  int               `json:"time_budget_seconds,omitempty"`  // Soft wall-clock budget as a subagent (0 = none)
+	ReadOnly           bool              `json:"read_only,omitempty"`            // Never modifies files; subagent runs default to the background
 	// Capabilities is an explicit list of agency grants this persona holds
 	// (e.g. "git_write"). Replaces sniffing AutoApproveRules to infer what a
 	// persona is allowed to do. Use HasCapability to query.

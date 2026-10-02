@@ -17,7 +17,7 @@ Sprout uses a two-library architecture for UI components:
 | `packages/ui` | Canonical component library (primitives) | `@sprout/ui` |
 | `webui/src/components` | Application-specific components (composites) | Internal only |
 
-**Decision**: Option B from SP-039 — keep `packages/ui` as the canonical shared library. See [`roadmap/SP-039-DECISION.md`](../roadmap/SP-039-DECISION.md) for full rationale.
+**Decision**: Option B from SP-039 — keep `packages/ui` as the canonical shared library. (Full rationale: SP-039's spec body, preserved in git history — `git log --diff-filter=A -- roadmap/SP-039-DECISION.md`.)
 
 ### Import Direction
 
@@ -83,10 +83,10 @@ pnpm add @sprout/ui
 |---------|---------|---------|
 | `react` | `>=18.0.0` | React framework |
 | `react-dom` | `>=18.0.0` | React DOM rendering |
-| `@sprout/events` | `^0.1.0` | Event bus for cross-component communication |
+| `@sprout/events` | `file:../events` (workspace) | Event bus for cross-component communication |
 
 ```bash
-npm install react react-dom @sprout/events
+npm install react react-dom @sprout/events@^1.0.0
 ```
 
 If you already have React installed, you only need:
@@ -528,7 +528,7 @@ To identify the available CSS variables, inspect the component styles in your br
 If you see errors about missing peer dependencies, install the required packages:
 
 ```bash
-npm install react react-dom @sprout/events
+npm install react react-dom @sprout/events@^1.0.0
 ```
 
 ### CSS styles are not applied

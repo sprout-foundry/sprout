@@ -55,6 +55,7 @@ var lowContextProfile = ContextProfile{
 		"list_changes",
 		"recover_file",
 		"run_subagent",
+		"review_changes",
 		"ask_user",
 		// Design loop tools (SP-140): pure Go over workspace files, valid in
 		// every context tier. Without them an auto-LCM model (<132K window,

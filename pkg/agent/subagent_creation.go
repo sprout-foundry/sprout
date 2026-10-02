@@ -73,6 +73,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	if opts.WorkingDir != "" {
 		effectiveWorkspaceRoot = opts.WorkingDir
 	}
+	systemPrompt += subagentConventionsSection(effectiveWorkspaceRoot)
 
 	// Create interrupt context derived from the parent's context so
 	// cancellation (Ctrl+C, timeout, runCtx cancel) propagates into the
@@ -92,7 +93,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		client:              client,
 		systemPrompt:        systemPrompt,
 		baseSystemPrompt:    systemPrompt,
-		maxIterations:       defaultSubagentMaxIterations, // bounded to prevent runaway loops
+		maxIterations:       r.personaBudget(opts.Persona).hardMaxIterations(), // bounded to prevent runaway loops
 		clientType:          clientType,
 		debug:               r.parentAgent != nil && r.parentAgent.debug,
 		configManager:       r.shared.ConfigManager,
@@ -134,6 +135,13 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// short-lived subagents. This enables configurable nesting: EA (0)
 	// → orchestrator (1) → coder/tester (2).
 	agent.subagentDepth = r.parentAgent.subagentDepth + 1
+	// The state manager defaults the active persona to the orchestrator; a
+	// subagent must run as the persona it was spawned as so tool advertising
+	// and capability checks (e.g. git_write) follow that persona's catalog
+	// entry rather than the orchestrator's.
+	if persona := canonicalPersonaID(agent, opts.Persona); persona != "" && agent.GetConfig().GetSubagentType(persona) != nil {
+		agent.state.SetActivePersona(persona)
+	}
 
 	// Enable a lightweight change tracker on the subagent so the returned
 	// envelope can include a structured FilesModified manifest. Tracking
@@ -142,6 +150,11 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// enabled (handled elsewhere). Cheap to keep always on — the cost
 	// is one entry per write.
 	agent.EnableChangeTracking("subagent run")
+
+	// Per-agent tool dispatch: the subagent's file tools must report to its
+	// own change tracker, and its list_changes / revert_my_changes /
+	// recover_file must act on its own history, not another agent's.
+	agent.toolFuncs = buildAgentToolFuncs(agent)
 
 	// Inherit the parent's TerminalManager. Without this, subagents (and
 	// recursively their own subagents) try to call shell_command with

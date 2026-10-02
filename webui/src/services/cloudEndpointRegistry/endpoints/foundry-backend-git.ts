@@ -94,7 +94,7 @@ export const gitEndpoints: CloudEndpoint[] = [
     path: '/api/git/deep-review',
     methods: ['POST'],
     category: 'browser-git',
-    description: 'Deep review',
+    description: 'Staged-change review',
   },
   {
     path: '/api/git/deep-review/fix',

@@ -2,8 +2,10 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -261,88 +263,79 @@ func GetRecentFileLog(filePath string, limit int) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-// IsFileContentCommitted reports whether the working-tree version of
-// filePath matches what is recorded at git HEAD — i.e. the file is
-// tracked by git AND has no uncommitted modifications. This is the
-// git-awareness primitive used by the revert/recover staleness guards
-// to refuse rolling back work that the user has intentionally
-// committed to version control.
-//
-// Semantics:
-//
-//   - Not a git repo (GetGitRootDir fails) → (false, nil): no git
-//     protection applies; callers fall back to the content-only check.
-//   - File not tracked by git (untracked, or HEAD:<path> unknown) →
-//     (false, nil): no git protection; content check applies.
-//   - File tracked and working tree matches HEAD → (true, nil):
-//     PROTECTED — the content is committed; reverting to an older
-//     snapshot would silently undo committed work.
-//   - File tracked but differs from HEAD (uncommitted modifications) →
-//     (false, nil): not protected; the content-only staleness check
-//     still decides.
-//
-// The check is performed in two steps:
-//
-//  1. `git ls-files --error-unmatch <relpath>` verifies the file is
-//     tracked by git. Untracked files exit non-zero.
-//  2. `git diff --quiet HEAD -- <relpath>` confirms the working-tree
-//     copy is identical to HEAD. Both are read-only commands, so
-//     SafeGitCmd is invoked with dir="" (matching the existing
-//     GetGitStatus / GetUncommittedChanges pattern), which is not
-//     blocked by the test-mode mutating-command guard.
-//
-// Step 1 is critical: `git diff --quiet HEAD -- <path>` alone returns
-// exit 0 for UNTRACKED files because `git diff` does not include
-// untracked files in its comparison. Without the tracked-file gate,
-// a freshly-created (but never `git add`ed) file would be incorrectly
-// reported as committed-clean, breaking the staleness guard.
-//
-// Any unexpected git error is returned as (false, err) so callers can
-// fall back to the conservative content-only behavior rather than
-// blocking legitimate reverts.
+// IsFileContentCommitted reports whether filePath is tracked by git and its
+// working-tree content matches HEAD (committed-clean). Outside a repository,
+// or for untracked files, it reports false with no error.
 func IsFileContentCommitted(filePath string) (bool, error) {
-	// Establish we are inside a git repository. GetGitRootDir uses the
-	// process CWD; the staleness guards are always invoked with paths
-	// resolved relative to the workspace root, so this is the right
-	// scope. A non-repo is not an error — it just means no git
-	// protection applies.
-	gitRoot, err := GetGitRootDir()
+	info, err := FileCommitState(filePath)
+	return info.CommittedClean, err
+}
+
+// FileCommitInfo describes a file's state relative to git HEAD.
+type FileCommitInfo struct {
+	// CommittedClean: tracked, and the working-tree content matches HEAD.
+	CommittedClean bool
+	// LastCommit is the commit time of the latest commit touching the
+	// file (zero when untracked or unknown).
+	LastCommit time.Time
+}
+
+// FileCommitState inspects filePath in the repository that contains it.
+// The repository is found from the file's own directory, not the process
+// CWD: the two differ whenever sprout runs outside the workspace (daemon,
+// WebUI), and resolving from the CWD silently reported every file as
+// uncommitted there — disabling the guards that keep a revert from undoing
+// committed work.
+func FileCommitState(filePath string) (FileCommitInfo, error) {
+	absPath, err := filepath.Abs(filePath)
 	if err != nil {
-		return false, nil
+		return FileCommitInfo{}, nil
 	}
-
-	// Resolve the path relative to the repo root so the commands target
-	// the correct tracked entry, and run them from that root: a relPath
-	// is meaningless from a subdirectory CWD. GetFileGitPath handles
-	// symlink resolution on both the file and the git root.
-	relPath, err := GetFileGitPath(filePath)
+	dir := filepath.Dir(absPath)
+	for {
+		if _, statErr := os.Stat(dir); statErr == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return FileCommitInfo{}, nil
+		}
+		dir = parent
+	}
+	out, err := SafeGitCmd(dir, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
-		return false, nil
+		return FileCommitInfo{}, nil // not in a repository: no git protection applies
+	}
+	gitRoot := strings.TrimSpace(string(out))
+	if evaled, err := filepath.EvalSymlinks(gitRoot); err == nil {
+		gitRoot = evaled
+	}
+	resolved := absPath
+	if evaled, err := filepath.EvalSymlinks(absPath); err == nil {
+		resolved = evaled
+	} else if evaledDir, err := filepath.EvalSymlinks(filepath.Dir(absPath)); err == nil {
+		resolved = filepath.Join(evaledDir, filepath.Base(absPath))
+	}
+	relPath, err := filepath.Rel(gitRoot, resolved)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return FileCommitInfo{}, nil
 	}
 
-	// Step 1: verify the file is tracked by git. Without this gate,
-	// the diff below would exit 0 for untracked files (git diff does
-	// not compare against untracked files), incorrectly reporting them
-	// as committed-clean. `git ls-files --error-unmatch` exits
-	// non-zero for paths not known to git.
-	trackedCmd := SafeGitCmd(gitRoot, "ls-files", "--error-unmatch", relPath)
-	if err := trackedCmd.Run(); err != nil {
-		// File is not tracked by git → not committed / not protected.
-		return false, nil
+	// Untracked files are never protected; `git diff` below would exit 0
+	// for them and misreport them as committed-clean.
+	if err := SafeGitCmd(gitRoot, "ls-files", "--error-unmatch", relPath).Run(); err != nil {
+		return FileCommitInfo{}, nil
 	}
-
-	// Step 2: the file is tracked. Check whether the working-tree copy
-	// matches HEAD. `git diff --quiet HEAD -- <path>` exits 0 when the
-	// working-tree file is identical to HEAD (no uncommitted changes),
-	// and non-zero otherwise (uncommitted modifications present).
-	cmd := SafeGitCmd(gitRoot, "diff", "--quiet", "--no-ext-diff", "HEAD", "--", relPath)
-	if err := cmd.Run(); err != nil {
-		// exit code != 0: the file differs from HEAD (uncommitted
-		// modifications). Not committed-clean → not protected.
-		return false, nil
+	var info FileCommitInfo
+	if out, err := SafeGitCmd(gitRoot, "log", "-1", "--format=%ct", "--", relPath).Output(); err == nil {
+		if secs, convErr := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64); convErr == nil {
+			info.LastCommit = time.Unix(secs, 0)
+		}
 	}
-	// exit code 0: tracked AND working tree matches HEAD → PROTECTED.
-	return true, nil
+	// `git diff --quiet HEAD -- <path>` exits 0 when the working tree
+	// matches HEAD.
+	info.CommittedClean = SafeGitCmd(gitRoot, "diff", "--quiet", "--no-ext-diff", "HEAD", "--", relPath).Run() == nil
+	return info, nil
 }
 
 // CommittedFilePaths returns a set of absolute filesystem paths for

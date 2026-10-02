@@ -395,6 +395,8 @@ check-needs-react-rebuild:
 lint:
 	@echo "Linting frontend code..."
 	@cd webui && npm run lint && npm run format:check && npm run type-check && echo "Lint completed successfully"
+	@echo "Validating docs/CONSUMPTION_GUIDE.md against packages/ui..."
+	@node docs/__tests__/consumption-guide.test.js
 
 # Auto-fix frontend linting issues
 lint-fix:

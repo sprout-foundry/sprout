@@ -16,7 +16,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent/changes"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -169,7 +168,6 @@ type SubagentOptions struct {
 type SharedState struct {
 	EventBus      *events.EventBus
 	TodoManager   *tools.TodoManager
-	EmbeddingMgr  *embedding.EmbeddingManager
 	ConfigManager *configuration.Manager
 	WorkspaceRoot string
 }

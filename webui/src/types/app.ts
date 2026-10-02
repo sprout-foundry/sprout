@@ -257,12 +257,6 @@ export interface AppState {
      */
     reason?: 'unavailable' | 'switch';
   } | null;
-  driftNotification: {
-    similarity: number;
-    threshold: number;
-    sessionId: string;
-    options: string[];
-  } | null;
   /** Controls how much inter-tool-call narration and streaming detail is shown. */
   outputVerbosity: 'compact' | 'default' | 'verbose';
   /** Value of the command input. Lives in the store (not local useState) so

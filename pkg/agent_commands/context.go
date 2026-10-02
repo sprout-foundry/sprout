@@ -49,10 +49,10 @@ func (c *ContextCommand) Usage() string {
 		"/context auto            Clear the override — let auto-detection decide from the model window.",
 		"",
 		"Modes:",
-		"  full          All tools, full orchestrator system prompt, proactive context on.",
+		"  full          All tools, full orchestrator system prompt.",
 		"                Default for models with >= 64K context.",
 		"  low_context   8-tool allowlist (edit-test-commit + safety net), lite prompt,",
-		"                proactive context off, tighter compaction. Auto-activated for",
+		"                tighter compaction. Auto-activated for",
 		"                models with 8K–64K context.",
 		"",
 		"The mode is resolved once at agent creation and persists to config.",
@@ -109,10 +109,10 @@ func (c *ContextCommand) show(chatAgent *agent.Agent) error {
 // what's actually shaping the session.
 func (c *ContextCommand) describeLevers(profile configuration.ContextProfile) string {
 	if profile.Mode == configuration.ContextModeLowContext {
-		return fmt.Sprintf("   Active levers: %d tools, lite prompt, AGENTS.md kept, proactive context off, trigger %.2f",
+		return fmt.Sprintf("   Active levers: %d tools, lite prompt, AGENTS.md kept, trigger %.2f",
 			len(profile.ToolAllowlist), profile.CompactionTriggerFraction)
 	}
-	return "   Active levers: all tools, full orchestrator prompt, proactive context on"
+	return "   Active levers: all tools, full orchestrator prompt"
 }
 
 func (c *ContextCommand) set(chatAgent *agent.Agent, mode configuration.ContextMode) error {

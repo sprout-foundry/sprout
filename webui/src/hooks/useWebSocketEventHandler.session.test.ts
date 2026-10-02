@@ -1,7 +1,7 @@
 /**
  * useWebSocketEventHandler.session_test.ts — Tests for the session_terminated
- * event handler and the four log-only handlers (delegate_clarification_*,
- * workspace_patch, recall_diagnostic).
+ * event handler and the log-only handlers (delegate_clarification_*,
+ * workspace_patch).
  *
  * Verifies that:
  * - session_terminated resets activeRequestsRef, sets lastError, and stops
@@ -117,7 +117,6 @@ function createDefaultState(): Record<string, unknown> {
     askUserRequest: null,
     passwordRequest: null,
     editApprovalRequest: null,
-    driftNotification: null,
     modelSelectionRequest: null,
     outputVerbosity: 'default' as const,
   };
@@ -518,55 +517,6 @@ describe('workspace_patch', () => {
     const loggedData = stateHolder.current.logs[0].data as Record<string, unknown> | undefined;
     expect(loggedData?.content).toBeUndefined();
     expect(loggedData?.path).toBe('foo.txt');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: recall_diagnostic (log-only)
-// ---------------------------------------------------------------------------
-
-describe('recall_diagnostic', () => {
-  function setup() {
-    const stateHolder = { current: createDefaultState() };
-    const setStateMock = vi.fn((updater: unknown) => {
-      if (typeof updater === 'function') {
-        const prev = stateHolder.current;
-        stateHolder.current = { ...prev, ...(updater(prev) as object) };
-      } else {
-        stateHolder.current = updater as typeof stateHolder.current;
-      }
-    });
-    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
-    const activeRequestsRef: MutableRefObject<number> = { current: 0 };
-
-    act(() => {
-      root.render(
-        createElement(HookWrapper, {
-          stateHolder,
-          setStateMock,
-          activeChatIdRef,
-          activeRequestsRef,
-        }),
-      );
-    });
-
-    return { stateHolder };
-  }
-
-  it('creates an info-level log entry with system category', () => {
-    const { stateHolder } = setup();
-
-    act(() => {
-      hookHandleEvent!({
-        id: 'evt-recall',
-        type: 'recall_diagnostic',
-        data: { query: 'test', results: 3, elapsed_ms: 42 },
-      });
-    });
-
-    expect(stateHolder.current.logs).toHaveLength(1);
-    expect(stateHolder.current.logs[0].level).toBe('info');
-    expect(stateHolder.current.logs[0].category).toBe('system');
   });
 });
 

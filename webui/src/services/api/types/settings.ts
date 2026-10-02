@@ -34,17 +34,6 @@ export interface SproutSettings {
   };
   custom_providers: Record<string, CustomProviderConfig>;
   skills: Record<string, SkillConfig>;
-  embedding_index?: {
-    enabled: boolean;
-    /** Second opt-in gate (SP-137): off by default; see EmbeddingIndexConfig. */
-    experimental: boolean;
-    provider: string;
-    ort_library_path: string;
-    model_dir: string;
-    auto_index: boolean;
-    max_results: number;
-    exclude_paths: string[];
-  };
   /** Cap the effective context window (tokens). Limits how large a request's input can be,
    *  reducing cost on models with very large native context windows. 0 or absent = no limit. */
   max_context_tokens?: number | null;

@@ -5,7 +5,7 @@
  * services/wasmShell for this module when the dist build is invoked with
  * VITE_SPROUT_NATIVE_FS=1 (scripts/build-webui-dist.mjs --native-fs). The
  * native shell provides the POSIX shell / VFS natively, so the WASM loader
- * (Go→WASM binary fetch + IndexedDB + ONNX bridges) is hard-excluded from
+ * (Go→WASM binary fetch + IndexedDB) is hard-excluded from
  * the bundle.
  *
  * No runtime dependency on the real module: every interface is re-exported

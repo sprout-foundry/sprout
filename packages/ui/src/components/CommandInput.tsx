@@ -55,12 +55,6 @@ export interface CommandInputProps {
   historyApi?: CommandHistoryApi;
   /** API adapter for slash-command ARGUMENT completion from the server */
   completionApi?: CommandCompletionApi;
-  /** Whether the code index is enabled */
-  isIndexEnabled?: boolean;
-  /** Whether the code index is currently building */
-  isIndexBuilding?: boolean;
-  /** Toggle the code index on/off */
-  onToggleIndex?: (enabled: boolean) => Promise<void>;
 }
 
 function CommandInput({

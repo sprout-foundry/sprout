@@ -90,16 +90,14 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 
 	// Second guard: state/data/cache artifacts resolved off the CONFIG root.
 	// The legacy-.sprout check above misses this entirely — a path built from
-	// configDir looks modern but still lands in the wrong category root. This
-	// is how two divergent embedding indexes appeared: the manager wrote
-	// <data>/embeddings while the tool and CLI read <config>/embeddings.
+	// configDir looks modern but still lands in the wrong category root, so a
+	// writer and a reader can silently diverge on where an artifact lives.
 	misrouted := map[string]string{
-		"embeddings": "envutil.DataDir()",
-		"sessions":   "envutil.StateDir()",
-		"logs":       "envutil.StateDir()",
-		"changes":    "the workspace root",
-		"revisions":  "the workspace root",
-		"runlogs":    "the workspace root",
+		"sessions":  "envutil.StateDir()",
+		"logs":      "envutil.StateDir()",
+		"changes":   "the workspace root",
+		"revisions": "the workspace root",
+		"runlogs":   "the workspace root",
 	}
 	checkConfigRootMisrouting := func(dir string) {
 		root := filepath.Join(repoRoot, dir)

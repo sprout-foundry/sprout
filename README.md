@@ -30,7 +30,7 @@ sprout plan                                                     # planning mode 
 sprout review                                                   # AI review of staged changes
 sprout commit                                                   # generate a conventional commit
 sprout pr                                                       # open a PR for the current branch
-sprout search "embedding index"                                 # search past sessions
+sprout search "rate limit"                                      # search past sessions
 ```
 
 First run walks you through provider selection and API-key validation: [docs/onboarding.md](docs/onboarding.md).

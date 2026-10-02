@@ -42,8 +42,8 @@ func newTestEnv(t *testing.T, workspaceRoot string) ToolEnv {
 // newHermeticConfigManager returns a configuration.Manager backed by a
 // per-test temp directory. Safe under t.Parallel — does not call
 // t.Setenv. Used by every test that calls a handler whose Execute path
-// constructs a Manager when env.ConfigManager is nil (embedding_index,
-// semantic_search, list_skills, fetch_url, etc.).
+// constructs a Manager when env.ConfigManager is nil (list_skills,
+// fetch_url, etc.).
 func newHermeticConfigManager(t *testing.T) *configuration.Manager {
 	t.Helper()
 	cfgDir := filepath.Join(t.TempDir(), ".sprout")
@@ -1050,82 +1050,6 @@ func TestListSkillsConformance_Execute(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// embedding_index Conformance Tests
-// ---------------------------------------------------------------------------
-
-func TestEmbeddingIndexConformance_Definition(t *testing.T) {
-	t.Parallel()
-	h := &embeddingIndexHandler{}
-
-	require.Equal(t, "embedding_index", h.Name())
-
-	def := h.Definition()
-	require.Equal(t, "embedding_index", def.Name)
-	require.NotEmpty(t, def.Description)
-	require.Equal(t, []string{"operation"}, def.Required)
-
-	// Check parameter schema
-	paramNames := make(map[string]bool)
-	for _, p := range def.Parameters {
-		paramNames[p.Name] = true
-	}
-	require.True(t, paramNames["operation"], "should have 'operation' parameter")
-}
-
-func TestEmbeddingIndexConformance_Validate_MissingOperation(t *testing.T) {
-	t.Parallel()
-	h := &embeddingIndexHandler{}
-
-	err := h.Validate(map[string]any{})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "required")
-}
-
-func TestEmbeddingIndexConformance_Validate_EmptyOperation(t *testing.T) {
-	t.Parallel()
-	h := &embeddingIndexHandler{}
-
-	// extractString allows empty strings - the handler only validates presence
-	err := h.Validate(map[string]any{"operation": ""})
-	require.NoError(t, err)
-}
-
-func TestEmbeddingIndexConformance_Validate_Valid(t *testing.T) {
-	t.Parallel()
-	h := &embeddingIndexHandler{}
-
-	require.NoError(t, h.Validate(map[string]any{"operation": "build"}))
-	require.NoError(t, h.Validate(map[string]any{"operation": "update"}))
-	require.NoError(t, h.Validate(map[string]any{"operation": "status"}))
-}
-
-func TestEmbeddingIndexConformance_Execute_Status(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	h := &embeddingIndexHandler{}
-	ctx := newTestCtx(dir)
-
-	env := newTestEnv(t, dir)
-	res, err := h.Execute(ctx, env, map[string]any{"operation": "status"})
-	require.NoError(t, err)
-	require.False(t, res.IsError)
-	require.Contains(t, res.Output, "Embedding Index Status")
-}
-
-func TestEmbeddingIndexConformance_Execute_InvalidOperation(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	h := &embeddingIndexHandler{}
-	ctx := newTestCtx(dir)
-
-	env := newTestEnv(t, dir)
-	res, err := h.Execute(ctx, env, map[string]any{"operation": "invalid_op"})
-	require.NoError(t, err)
-	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "Unknown operation")
-}
-
-// ---------------------------------------------------------------------------
 // Helper function conformance tests
 // ---------------------------------------------------------------------------
 
@@ -1274,7 +1198,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// list_directory has no required params → nil args are valid
 			err := h.Validate(nil)
 			switch name {
-			case "read_file", "fetch_url", "search_files", "embedding_index",
+			case "read_file", "fetch_url", "search_files",
 				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories",
 				"get_callers", "get_callees", "design_brief":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
@@ -1286,7 +1210,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			} // Validate must handle empty map
 			err = h.Validate(map[string]any{})
 			switch name {
-			case "read_file", "fetch_url", "search_files", "embedding_index",
+			case "read_file", "fetch_url", "search_files",
 				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories",
 				"get_callers", "get_callees", "design_brief":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
@@ -2544,61 +2468,6 @@ func (f *fakeSearchEngine) Search(ctx context.Context, query string) (string, er
 		return "", f.failErr
 	}
 	return f.results[query], nil
-}
-
-func TestSemanticSearchHandlerConformance(t *testing.T) {
-	h := &semanticSearchHandler{}
-
-	// Test Name
-	if h.Name() != "semantic_search" {
-		t.Errorf("Name() = %q, want %q", h.Name(), "semantic_search")
-	}
-
-	// Test Definition
-	d := h.Definition()
-	if d.Name != "semantic_search" {
-		t.Errorf("Definition().Name = %q, want %q", d.Name, "semantic_search")
-	}
-	if d.Description == "" {
-		t.Error("Definition().Description should not be empty")
-	}
-
-	hasParam := func(name string) bool {
-		for _, p := range d.Parameters {
-			if p.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	for _, name := range []string{"query", "threshold", "top_k"} {
-		if !hasParam(name) {
-			t.Errorf("Definition missing '%s' parameter", name)
-		}
-	}
-
-	// Validate: missing required
-	if err := h.Validate(nil); err == nil {
-		t.Error("Validate(nil) should return error")
-	}
-	if err := h.Validate(map[string]any{}); err == nil {
-		t.Error("Validate(empty) should return error for missing query")
-	}
-
-	// Validate: valid query
-	if err := h.Validate(map[string]any{"query": "find similar code"}); err != nil {
-		t.Errorf("Validate(query) should return nil, got: %v", err)
-	}
-
-	// Validate: valid with optional params
-	if err := h.Validate(map[string]any{"query": "test", "top_k": 10, "threshold": 0.8}); err != nil {
-		t.Errorf("Validate(full args) should return nil, got: %v", err)
-	}
-
-	// Validate: non-string query
-	if err := h.Validate(map[string]any{"query": 123}); err == nil {
-		t.Error("Validate(non-string query) should return error")
-	}
 }
 
 func TestAnalyzeImageContentHandlerConformance(t *testing.T) {

@@ -108,7 +108,7 @@ func isLocalProvider(agent *Agent) bool {
 }
 
 // postProcessResult applies model-specific constraints, truncation, secret redaction,
-// duplicate embedding check, and TodoWrite event emission. Returns the final result string.
+// and TodoWrite event emission. Returns the final result string.
 func postProcessResult(ctx context.Context, agent *Agent, toolName string, args map[string]interface{}, result string) string {
 	if result == "" {
 		return result
@@ -153,17 +153,7 @@ func postProcessResult(ctx context.Context, agent *Agent, toolName string, args 
 		}
 	}
 
-	// 4. Duplicate embedding check + async re-index for write tools
-	if shouldCheckDuplicates(toolName, agent) {
-		if path, ok := args["path"].(string); ok && path != "" {
-			if note := runDuplicateCheck(ctx, agent, path); note != "" {
-				result = result + note
-			}
-			reindexFileAfterWrite(agent, path)
-		}
-	}
-
-	// 5. TodoWrite event emission
+	// 4. TodoWrite event emission
 	if toolName == "TodoWrite" {
 		agent.PublishTodoUpdate(formatTodoItemsForEvent(agent.GetTodoManager().Read()))
 	}

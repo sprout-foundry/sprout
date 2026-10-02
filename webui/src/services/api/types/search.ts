@@ -1,5 +1,5 @@
 /**
- * Search (text + semantic) API types.
+ * Search API types.
  */
 
 export interface SearchMatch {
@@ -63,55 +63,4 @@ export interface SearchReplaceResponse {
   changes: SearchReplaceChange[];
   total_changes: number;
   preview: boolean;
-}
-
-export interface SemanticSearchOptions {
-  top_k?: number;
-  threshold?: number;
-}
-
-export interface SemanticSearchResult {
-  file: string;
-  name: string;
-  signature: string;
-  start_line: number;
-  end_line: number;
-  language: string;
-  similarity: number;
-  type: string; // "code_unit" or "file"
-}
-
-export interface SemanticSearchDuplicateCluster {
-  files: string[];
-  similarity: number;
-}
-
-export interface SemanticSearchResponse {
-  results: SemanticSearchResult[];
-  duplicate_clusters: SemanticSearchDuplicateCluster[];
-  query: string;
-  total: number;
-  duration: string;
-  /** Optional informational note (e.g. when unavailable in browser mode). */
-  note?: string;
-}
-
-export interface SemanticSearchStatusResponse {
-  available: boolean;
-  initialized: boolean;
-  building: boolean;
-  record_count: number;
-  workspace: string;
-  init_error?: string;
-}
-
-export interface SemanticSearchPreviewResponse {
-  file: string;
-  start_line: number;
-  snippet: Array<{
-    line_number: number;
-    content: string;
-    is_context: boolean;
-  }>;
-  total_lines: number;
 }

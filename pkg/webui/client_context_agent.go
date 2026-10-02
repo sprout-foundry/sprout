@@ -238,9 +238,9 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	defer ws.mutex.Unlock()
 	ctx = ws.getOrCreateClientContextLocked(clientID)
 	if ctx.Agent != nil {
-		// Lost the creation race. `created` is fully constructed — its
-		// embedding manager is already building the workspace index — so it
-		// must be shut down, not just dropped on the floor.
+		// Lost the creation race. `created` is fully constructed — its MCP
+		// servers and background watchers are already running — so it must
+		// be shut down, not just dropped on the floor.
 		ws.releaseAgents("agent_creation_race", created)
 	}
 	if ctx.Agent == nil {

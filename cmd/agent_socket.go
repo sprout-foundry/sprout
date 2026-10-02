@@ -90,8 +90,7 @@ func (s *SharedAgentService) beginQuery() bool {
 
 // releaseAgent starts shutting down an ephemeral query agent on a background
 // goroutine, off the response path. Dropping the pointer is not enough:
-// Agent.Shutdown is what releases the shared embedding manager refcount
-// (acquired at construction), stops MCP child processes, cancels
+// Agent.Shutdown is what stops MCP child processes, cancels
 // lifetime/interrupt contexts, waits background goroutines, and closes the
 // async output channel. Without it each one-shot query leaks a refcount and
 // the workspace's HNSW store can never close again.
@@ -110,7 +109,7 @@ func (s *SharedAgentService) releaseAgent(a *agent.Agent) {
 // WaitForTeardown blocks until every ephemeral agent released so far has
 // finished shutting down, bounded to 10s so a hung Agent.Shutdown can't
 // wedge daemon exit forever. AgentServer.OnClose calls it so the daemon
-// does not exit while an agent is still flushing its embedding store.
+// does not exit while an agent is still flushing its state.
 func (s *SharedAgentService) WaitForTeardown() {
 	// The closed flag — not a held lock — is what excludes new Adds: set it
 	// under teardownMu so no beginQuery can slip in, then unlock before Wait
@@ -274,9 +273,8 @@ func newEphemeralDaemonAgent(workDir string, opts daemon.QueryOptions) (*agent.A
 	}
 	callAgent.SetWorkspaceRoot(workDir)
 	// From here on the caller releases the slot (nil) on error, not the
-	// agent — an agent abandoned mid-construction still holds the shared
-	// embedding-manager refcount and MCP lifetime contexts, so shut it
-	// down before returning each error.
+	// agent — an agent abandoned mid-construction still holds MCP lifetime
+	// contexts, so shut it down before returning each error.
 	if opts.Persona != "" {
 		if err := callAgent.ApplyPersona(opts.Persona); err != nil {
 			callAgent.Shutdown()
@@ -338,8 +336,7 @@ func (s *SharedAgentService) ExecuteTool(ctx context.Context, name string, args 
 // a daemon that's spawned but stuck (see maybeAutoStartDaemon) can still
 // accept a connection into the OS backlog while never servicing it, so this
 // does one cheap round-trip (ListSessions, the lightest read-only op the
-// protocol has) with a short timeout, mirroring the real handshake
-// NewRemoteEmbeddingProvider already does for the embedding socket.
+// protocol has) with a short timeout.
 //
 // Used to decide whether createChatAgent can skip its own local-model
 // preload because tryDaemonOneShot (called later in the same invocation)
@@ -379,7 +376,7 @@ func startDaemonAgentServer(ctx context.Context, daemonMode bool, chatAgent *age
 		// with no WebUI activity.
 		Activity: daemon.NewDaemonActivity(),
 		// Block daemon exit until ephemeral query agents have flushed their
-		// embedding stores — mirrors webui's waitForAgentTeardown.
+		// state — mirrors webui's waitForAgentTeardown.
 		OnClose: svc.WaitForTeardown,
 	}
 	if err := srv.Start(ctx); err != nil {

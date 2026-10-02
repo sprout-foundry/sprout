@@ -761,14 +761,6 @@ function copyWasmFiles(targetDir) {
     console.log("  ⚠ wasm_exec.js not found, skipping");
   }
 
-  const embeddingWasmFile = join(wasmDir, "embedding.wasm");
-  if (existsSync(embeddingWasmFile)) {
-    cpSync(embeddingWasmFile, join(targetWasmDir, "embedding.wasm"));
-    console.log("  ✓ embedding.wasm");
-  } else {
-    console.log("  ⚠ embedding.wasm not found, skipping (lazy-load module)");
-  }
-
   // Remove stale version.json that CRA may have copied from public/wasm/.
   // The authoritative version.json is generated at the dist root by generateVersionJson().
   const staleVersionJson = join(targetWasmDir, "version.json");
@@ -945,7 +937,6 @@ function verifyDistLayout(outputDir) {
   // Optional files — warn if missing but don't fail
   const optional = [
     { path: "wasm/sprout.wasm", desc: "Shell WASM binary" },
-    { path: "wasm/embedding.wasm", desc: "Embedding WASM binary (SP-045-3)" },
     { path: "manifest.json", desc: "PWA manifest" },
     { path: "sw.js", desc: "Service worker" },
     {
@@ -1218,7 +1209,7 @@ function main(opts) {
   console.log("  index.html      - Application entry point");
   console.log("  assets/         - Vite build output (JS, CSS, fonts)");
   console.log(
-    "  wasm/           - Go WASM modules (sprout.wasm, embedding.wasm, wasm_exec.js)",
+    "  wasm/           - Go WASM modules (sprout.wasm, wasm_exec.js)",
   );
   console.log("  version.json    - Version and build metadata");
   console.log("  manifest.json   - PWA manifest");

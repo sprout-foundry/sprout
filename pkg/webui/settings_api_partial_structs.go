@@ -55,28 +55,6 @@ func applyCustomProvidersSettings(cfg *configuration.Config, patch map[string]in
 	return nil
 }
 
-func applyEmbeddingIndexSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
-	if v, ok := patch["embedding_index"]; ok {
-		knownKeys["embedding_index"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return fmt.Errorf("invalid embedding_index config: %w", err)
-		}
-		var ei configuration.EmbeddingIndexConfig
-		if err := json.Unmarshal(raw, &ei); err != nil {
-			return fmt.Errorf("invalid embedding_index config: %w", err)
-		}
-		for i, p := range ei.ExcludePaths {
-			ei.ExcludePaths[i] = truncateString(p, maxSettingPathLength)
-		}
-		// Provider field removed — embedding provider is always the
-		// bundled ONNX EmbeddingGemma-300M today.
-		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
-		cfg.EmbeddingIndex = &ei
-	}
-	return nil
-}
-
 func applyComputerUseSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
 	if v, ok := patch["computer_use"]; ok {
 		knownKeys["computer_use"] = true
@@ -123,26 +101,6 @@ func applyLanguageServerSettings(cfg *configuration.Config, patch map[string]int
 				}
 			}
 			cfg.LanguageServers = servers
-		}
-	}
-	return nil
-}
-
-func applyPersistentContextSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
-	if v, ok := patch["persistent_context"]; ok {
-		knownKeys["persistent_context"] = true
-		if v == nil {
-			cfg.PersistentContext = nil
-		} else {
-			raw, err := json.Marshal(v)
-			if err != nil {
-				return fmt.Errorf("invalid persistent_context config: %w", err)
-			}
-			var pc configuration.PersistentContextConfig
-			if err := json.Unmarshal(raw, &pc); err != nil {
-				return fmt.Errorf("invalid persistent_context config: %w", err)
-			}
-			cfg.PersistentContext = &pc
 		}
 	}
 	return nil

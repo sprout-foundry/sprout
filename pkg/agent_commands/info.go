@@ -12,7 +12,7 @@ import (
 
 // InfoCommand implements the /info slash command — a one-shot overview
 // of the agent's current state: model, provider, context, cost, persona,
-// embedding index, and subagent config.
+// and subagent config.
 type InfoCommand struct {
 	stdout io.Writer
 }
@@ -47,7 +47,7 @@ func (c *InfoCommand) Usage() string {
 		"/info   Quick one-shot overview of live agent state.",
 		"",
 		"Shows model, provider, context tokens (used/limit/%), cost, workspace,",
-		"persona, embedding index status, and subagent provider/model.",
+		"persona, and subagent provider/model.",
 		"Use /status for detailed runtime status or /setup for persisted config.",
 		"",
 		"Flags:",
@@ -94,17 +94,6 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		persona = "none"
 	}
 
-	// Embeddings
-	embeddingEnabled := chatAgent.IsEmbeddingIndexEnabled()
-	embedCount := 0
-	if mgr := chatAgent.GetEmbeddingManager(); mgr != nil {
-		embedCount = mgr.IndexSize()
-	}
-	embedStatus := "disabled"
-	if embeddingEnabled {
-		embedStatus = "enabled"
-	}
-
 	// Subagent config
 	cfg := chatAgent.GetConfig()
 	subagentProvider := "(unknown)"
@@ -120,7 +109,6 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
 	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
 	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
-	fmt.Fprintf(c.out(), "Embeddings: %s (%d records)\n", embedStatus, embedCount)
 	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
 	fmt.Fprintln(c.out())
 
@@ -137,8 +125,6 @@ type infoJSONPayload struct {
 	Cost             float64 `json:"cost"`
 	Workspace        string  `json:"workspace"`
 	Persona          string  `json:"persona"`
-	EmbeddingEnabled bool    `json:"embedding_enabled"`
-	EmbeddingRecords int     `json:"embedding_records"`
 	SubagentProvider string  `json:"subagent_provider"`
 	SubagentModel    string  `json:"subagent_model"`
 }
@@ -174,12 +160,6 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		persona = "none"
 	}
 
-	embeddingEnabled := chatAgent.IsEmbeddingIndexEnabled()
-	embedCount := 0
-	if mgr := chatAgent.GetEmbeddingManager(); mgr != nil {
-		embedCount = mgr.IndexSize()
-	}
-
 	subagentProvider := "(unknown)"
 	subagentModel := "(unknown)"
 	if cfg := chatAgent.GetConfig(); cfg != nil {
@@ -196,8 +176,6 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		Cost:             chatAgent.GetTotalCost(),
 		Workspace:        workspace,
 		Persona:          persona,
-		EmbeddingEnabled: embeddingEnabled,
-		EmbeddingRecords: embedCount,
 		SubagentProvider: subagentProvider,
 		SubagentModel:    subagentModel,
 	})

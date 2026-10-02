@@ -1,8 +1,7 @@
 # Platform Support
 
 Sprout targets five build platforms. Most features work everywhere; some
-are inherently platform-specific (process management, terminal control,
-native embeddings). This matrix documents what's available on each.
+are inherently platform-specific (process management, terminal control). This matrix documents what's available on each.
 
 ## Build targets
 
@@ -11,7 +10,7 @@ native embeddings). This matrix documents what's available on each.
 | **Linux/macOS (native)** | `go build .` | CLI daemon, WebUI server, full agent |
 | **Windows** | `go build .` | CLI daemon, WebUI server, full agent |
 | **WASM** | `make build-all` (`GOOS=js GOARCH=wasm`) | Browser shell, WebUI embedded agent |
-| **no-CGO** | `go build -tags '!cgo'` | Stripped binary without ONNX embeddings |
+| **no-CGO** | `go build -tags '!cgo'` | Stripped binary without CGO-dependent features |
 | **Browser (rod)** | `go build .` | Requires Chromium for headless browser features |
 
 ## Feature availability matrix
@@ -25,8 +24,6 @@ native embeddings). This matrix documents what's available on each.
 | **PDF processing** | ✅ Full | ✅ Full | ❌ Not available | ✅ Full |
 | **Headless browser** | ✅ Full (rod) | ✅ Full (rod) | ❌ Not available | ✅ Full |
 | **Code intelligence graph** | ✅ SQLite store | ✅ SQLite store | ❌ Not available | ✅ Full |
-| **ONNX embeddings** | ✅ Full (CGO) | ✅ Full (CGO) | ⚠️ JS bridge | ❌ Static fallback |
-| **Static embeddings** | ❌ Uses ONNX | ❌ Uses ONNX | ✅ JS-native | ✅ Hash fallback |
 | **Terminal raw mode** | ✅ ioctl (OPOST safe) | ⚠️ term.MakeRaw | ❌ N/A | ✅ Full |
 | **Terminal health** | ✅ Termios capture | ⚠️ Always "sane" | ❌ N/A | ✅ Full |
 | **Signal handling** | ✅ Full set | ⚠️ Interrupt only | ⚠️ Interrupt only | ✅ Full |
@@ -57,10 +54,6 @@ SIGINT → SIGTERM → SIGKILL. Terminal raw mode uses `term.MakeRaw` (may
 cause staircase rendering without OPOST preservation). PID-alive checks
 use `OpenProcess` + `GetExitCodeProcess` (the legacy `os.FindProcess`
 returned false positives for recycled PIDs).
-
-**no-CGO:** ONNX Runtime requires CGO. Without it, embeddings fall back to
-a deterministic hash-based provider (384-dim FNV-1a). Search and recall
-work but with lower quality than ONNX models.
 
 **non-Linux:** OOM watchdog has no `/proc` to scan, so memory alerts never
 fire. Process start-time comparison (for PID-reuse detection) fail-opens.

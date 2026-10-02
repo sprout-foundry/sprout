@@ -14,9 +14,8 @@ import (
 // per-domain helpers. Each helper owns one slice of the configuration surface:
 // agent prompt/behavior, paths/context, risk/safety, subagent routing,
 // provider routing, pdf-ocr, shell-detection, api timeouts, version, and the
-// complex struct sections (mcp, custom_providers, embedding_index,
-// computer_use, language_servers, persistent_context, security_policy,
-// skills). The orchestrator in settings_api_put.go simply iterates them.
+// complex struct sections (mcp, custom_providers, computer_use,
+// language_servers, security_policy, skills). The orchestrator in settings_api_put.go simply iterates them.
 //
 // Each helper signature:
 //
@@ -460,10 +459,8 @@ var partialSettingsAppliers = []func(*configuration.Config, map[string]interface
 	applyVersionSettings,
 	applyMCPSettings,
 	applyCustomProvidersSettings,
-	applyEmbeddingIndexSettings,
 	applyComputerUseSettings,
 	applyLanguageServerSettings,
-	applyPersistentContextSettings,
 	applySkillsSettings,
 	applyWakeupSettings,
 	applyCommandPoliciesSettings,

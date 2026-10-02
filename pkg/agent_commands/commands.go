@@ -141,14 +141,8 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register transcript / diagnostics command
 	registry.Register(&TranscriptCommand{})
 
-	// Register indexing command
-	registry.Register(&IndexCommand{})
-
 	// Register search command
 	registry.Register(&SearchCommand{})
-
-	// Register recall command
-	registry.Register(&RecallCommand{})
 
 	// Register skill command
 	registry.Register(&SkillCommand{})
@@ -202,7 +196,6 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.RegisterAlias("stats", "usage")
 	registry.RegisterAlias("c", "commit")
 	registry.RegisterAlias("s", "search")
-	registry.RegisterAlias("i", "index")
 	registry.RegisterAlias("e", "edit")
 	registry.RegisterAlias("r", "review")
 	// SC-7: aliases for remaining high-frequency commands.

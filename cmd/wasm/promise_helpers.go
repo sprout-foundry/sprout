@@ -11,10 +11,10 @@ import (
 )
 
 // ─── JS Promise Helpers ─────────────────────────────────────────────
-// Shared across all func files in the WASM shell and embedding modules.
+// Shared across all func files in the WASM shell.
 
 // asPromise wraps a Go function that does async work into a JS Promise. The
-// browser side gets `await SproutWasm.searchSemantic(...)` semantics for free.
+// browser side gets `await SproutWasm.<fn>(...)` semantics for free.
 // Errors are surfaced as rejected promises; success results are passed to
 // resolve() as native JS values (after running through marshalJS).
 func asPromise(do func(ctx context.Context) (interface{}, error)) interface{} {

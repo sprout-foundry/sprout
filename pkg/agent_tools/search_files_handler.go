@@ -108,11 +108,6 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 			res.FilesShown, res.FilesMatched)
 	}
 
-	// When the literal pass finds nothing and semantic search can answer, say so.
-	if len(res.Hits) == 0 && env.EmbeddingMgr != nil && env.EmbeddingMgr.Readiness().CanAnswerQueries() {
-		output = fmt.Sprintf("No text matches for '%s' in %s.\n\nThe embedding index is available — `search` with a plain-language description will also find code that uses different wording.", searchPattern, directory)
-	}
-
 	return ToolResult{Output: output, IsError: false}, nil
 }
 

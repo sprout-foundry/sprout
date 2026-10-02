@@ -23,7 +23,6 @@ func AllTools() []ToolHandler {
 		&rollbackChangesHandler{},
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
-		&embeddingIndexHandler{},
 		&writeFileHandler{},
 		&writeStructuredFileHandler{},
 		&editFileHandler{},
@@ -39,7 +38,6 @@ func AllTools() []ToolHandler {
 		&activateSkillHandler{},
 		// browse_url is registered via registerBrowseURLTool() (build-tagged)
 		&webSearchHandler{},
-		&semanticSearchHandler{},
 		&listAutomateWorkflowsHandler{},
 		&listChangesHandler{},
 		&revertMyChangesHandler{},

@@ -50,14 +50,13 @@ func TestWorkspaceConfigResolution(t *testing.T) {
 
 // At $HOME the workspace layer and the user-level state directory are the same
 // folder, so a legacy config.json there is the user's GLOBAL config. Reading it
-// as a workspace layer is the aliasing that turned a global "embeddings on"
-// preference into indexing the entire home directory — and every existing
-// install has that file. $HOME resolves to no workspace layer at all.
+// as a workspace layer aliases a global preference into a per-workspace
+// override — and every existing install has that file. $HOME resolves to no workspace layer at all.
 func TestWorkspaceConfigNeverFallsBackToGlobalAtHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	writeFile(t, filepath.Join(home, ".sprout", "config.json"), `{"embedding_index":{"enabled":true}}`)
+	writeFile(t, filepath.Join(home, ".sprout", "config.json"), `{"skip_prompt":true}`)
 
 	assert.Equal(t, "", GetWorkspaceConfigPath(home),
 		"home must not resolve its workspace layer to the user-level config.json")
@@ -138,7 +137,7 @@ func TestHomeIgnoresPreexistingWorkspaceFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeFile(t, filepath.Join(home, ".sprout", WorkspaceConfigFileName),
-		`{"embedding_index":{"enabled":true,"auto_index":true}}`)
+		`{"skip_prompt":true}`)
 
 	if got := GetWorkspaceConfigPath(home); got != "" {
 		t.Errorf("a machine-written workspace.json at $HOME must be ignored, got %q", got)

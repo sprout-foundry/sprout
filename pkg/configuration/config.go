@@ -184,12 +184,6 @@ type Config struct {
 	CompletionProvider string `json:"completion_provider,omitempty"` // Provider for code completions (defaults to LastUsedProvider)
 	CompletionModel    string `json:"completion_model,omitempty"`    // Model for code completions (defaults to provider's default model)
 
-	// Embedding Index Configuration
-	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
-
-	// Persistent Context Configuration
-	PersistentContext *PersistentContextConfig `json:"persistent_context,omitempty"`
-
 	// ComputerUse gates the computer_user persona's desktop-control tools. Off by default.
 	ComputerUse *ComputerUseConfig `json:"computer_use,omitempty"`
 
@@ -364,11 +358,6 @@ func NewConfig() *Config {
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		Wakeup:                      DefaultWakeupConfig(),
-		EmbeddingIndex: &EmbeddingIndexConfig{
-			Enabled:    boolPtr(false),
-			AutoIndex:  boolPtr(false),
-			MaxResults: 3,
-		},
 	}
 }
 

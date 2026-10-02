@@ -127,7 +127,6 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeAgentMessage,
 		events.EventTypeWorkspaceChanged,
 		events.EventTypeSessionTerminated,
-		events.EventTypeDriftDetected,
 		events.EventTypeSessionChanged,
 		events.EventTypeAutomateSessionStarted,
 		events.EventTypeAutomateSessionEnded,

@@ -103,9 +103,6 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 		return nil
 	}
 
-	// If embeddings are available, look for a topic-shift boundary inside the candidate range.
-	endIdx = a.refineRollupEnd(ctx, checkpoints, startIdx, endIdx)
-
 	sources := checkpoints[startIdx : endIdx+1]
 	rollup, err := a.buildRollupCheckpoint(ctx, sources, level+1)
 	if err != nil {
@@ -113,13 +110,6 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 	}
 
 	a.replaceWithRollup(startIdx, endIdx, rollup)
-
-	// Embed the rollup so semantic recall can surface it after its source entries are absorbed.
-	sessionID := ""
-	if a.state != nil {
-		sessionID = a.state.GetSessionID()
-	}
-	a.embedRollupCheckpoint(ctx, sessionID, rollup)
 	return nil
 }
 

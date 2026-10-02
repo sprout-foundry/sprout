@@ -83,8 +83,8 @@ type ReactWebServer struct {
 	clientWorkspaces map[string]string
 
 	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
-	// (and tests) can wait for agent teardown — which writes history and
-	// flushes the embedding store — to finish rather than racing it.
+	// (and tests) can wait for agent teardown — which writes history — to
+	// finish rather than racing it.
 	agentTeardownWg sync.WaitGroup
 
 	lastClientContextCleanupAt      time.Time

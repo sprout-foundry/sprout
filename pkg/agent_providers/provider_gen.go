@@ -325,7 +325,7 @@ func ProviderDisplayNames() map[string]string {
 		"mistral":      "Mistral",
 		"ollama-cloud": "Ollama (Cloud)",
 		"openai":       "OpenAI",
-		"openrouter":   "OpenRouter (Recommended)",
+		"openrouter":   "OpenRouter",
 		"sprout-local": "Local (Offline)",
 		"zai":          "Z.AI",
 		"zai-coding":   "GLM Coding Plan",

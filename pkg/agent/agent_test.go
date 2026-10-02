@@ -1013,9 +1013,9 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 			phrase string
 		}{
 			{"non-interactive mode (case-insensitive)", "non-interactive mode"},
-			{"SPROUT_PROVIDER env var", "SPROUT_PROVIDER"},
-			{"config file path", "~/.config/sprout/config.json"},
-			{"interactive run guidance", "run `sprout agent` interactively"},
+			{"keys command", "sprout keys set"},
+			{"API key env var", "API key"},
+			{"guided setup", "guided setup"},
 		}
 
 		for _, tc := range expectedPhrases {
@@ -1031,7 +1031,7 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		//   "no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint + ": %w"
 		errMsg := "no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint + ": some error"
 
-		required := []string{"non-interactive mode", "SPROUT_PROVIDER", "~/.config/sprout/config.json"}
+		required := []string{"non-interactive mode", "sprout keys set", "API key"}
 		for _, phrase := range required {
 			if !strings.Contains(errMsg, phrase) {
 				t.Errorf("expected error to contain %q, got: %s", phrase, errMsg)
@@ -1050,11 +1050,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		if !strings.Contains(strings.ToLower(errMsg), "non-interactive mode") {
 			t.Errorf("expected error to contain 'non-interactive mode' (case-insensitive), got: %s", errMsg)
 		}
-		if !strings.Contains(errMsg, "SPROUT_PROVIDER") {
-			t.Errorf("expected error to contain 'SPROUT_PROVIDER', got: %s", errMsg)
-		}
-		if !strings.Contains(errMsg, "~/.config/sprout/config.json") {
-			t.Errorf("expected error to contain '~/.config/sprout/config.json', got: %s", errMsg)
+		if !strings.Contains(errMsg, "sprout keys set") {
+			t.Errorf("expected error to contain 'sprout keys set', got: %s", errMsg)
 		}
 	})
 
@@ -1065,9 +1062,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 
 		required := []string{
 			"non-interactive",
-			"SPROUT_PROVIDER",
-			"~/.config/sprout/config.json",
-			"run `sprout agent` interactively",
+			"sprout keys set",
+			"guided setup",
 		}
 		for _, phrase := range required {
 			if !strings.Contains(errMsg, phrase) {

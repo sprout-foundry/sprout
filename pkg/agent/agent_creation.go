@@ -446,9 +446,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		}
 		// Check if editor mode is active
 		if resolvedType == api.EditorClientType {
-			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: sprout agent --provider <provider> "+
-				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+			return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
@@ -493,14 +491,10 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
-				return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-					"Set up a provider with: sprout agent --provider <provider> "+
-					"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+				return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 			}
 		} else {
-			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: sprout agent --provider <provider> "+
-				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+			return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 		}
 	}
 
@@ -657,3 +651,8 @@ func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 func isInteractiveTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
+
+// editorModeHint is the error shown when no AI provider is configured.
+// Its opening words are matched by the web UI (pkg/webui/api_query.go).
+const editorModeHint = "editor mode is active — no AI provider configured. Run `sprout keys set <provider>`, " +
+	"or start `sprout agent -d` and add one in the web UI's settings"

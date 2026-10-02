@@ -81,17 +81,17 @@ curl_with_retries() {
     # --retry-delay 2 + --retry-max-time 60 caps the wait so a fully-down
     # endpoint doesn't hang for minutes. --connect-timeout 15 fails fast
     # on DNS / unreachable hosts.
-    if out=$(curl --fail --show-error --silent --location \
+    out=$(curl --fail --show-error --silent --location \
         --retry "$retries" \
         --retry-delay 2 \
         --retry-max-time 60 \
         --connect-timeout 15 \
-        "$@" 2>&1); then
+        "$@" 2>&1) || exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
         printf '%s' "$out"
         return 0
     fi
 
-    exit_code=$?
     case "$exit_code" in
         6)
             log_error "DNS lookup failed. Are you offline or behind a captive portal?" ;;
@@ -232,7 +232,9 @@ detect_arch() {
     esac
 }
 
-# Determine install directory, preferring the location of any existing sprout binary
+# Determine install directory. Order: $SPROUT_INSTALL_DIR, the Termux
+# prefix, the directory of an existing sprout on PATH (upgrade in place),
+# /usr/local/bin if writable without sudo, else ~/.local/bin.
 get_install_dir() {
     if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
         echo "$SPROUT_INSTALL_DIR"
@@ -269,20 +271,14 @@ get_install_dir() {
         return
     fi
 
-    # Prefer /usr/local/bin (with sudo) if it's in PATH, since it's the standard location
-    if echo ":${PATH}:" | grep -q ":/usr/local/bin:"; then
+    # A fresh install never prompts for sudo: use /usr/local/bin only when
+    # the user can already write to it, otherwise the per-user bin dir.
+    if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
         echo "/usr/local/bin"
         return
     fi
 
-    # Fall back to user-local bin if it exists on PATH
-    if [ -d "$HOME/bin" ] && [ -w "$HOME/bin" ] && echo ":${PATH}:" | grep -q ":${HOME}/bin:"; then
-        echo "$HOME/bin"
-        return
-    fi
-
-    # Last resort: /usr/local/bin (will require sudo)
-    echo "/usr/local/bin"
+    echo "${HOME}/.local/bin"
 }
 
 # Get version from environment or fetch latest from GitHub.
@@ -329,19 +325,21 @@ download_release() {
 
     log_info "Downloading $filename" >&2
 
-    if ! curl --fail --show-error --location --progress-bar \
+    local code=0
+    curl --fail --show-error --location --progress-bar \
         --retry "$retries" \
         --retry-delay 2 \
         --retry-max-time 120 \
         --connect-timeout 15 \
         -o "$TEMP_DIR/$filename" \
-        "$download_url"; then
-        local code=$?
-        log_error "Failed to download $download_url (curl exit $code)" >&2
-        log_error "If GitHub Releases is unreachable from your network, you can" >&2
-        log_error "download the tarball manually and run:" >&2
-        log_error "  SPROUT_VERSION=$version sh install.sh" >&2
-        log_error "after placing it in your current directory." >&2
+        "$download_url" || code=$?
+    if [ "$code" -ne 0 ]; then
+        log_error "Failed to download $download_url (curl exit $code)"
+        # A 404 surfaces as exit 22 or 56 depending on the curl version, so
+        # don't try to tell "bad version" from "bad network" by code.
+        log_error "Check that release $version exists and ships $filename:"
+        log_error "  https://github.com/sprout-foundry/sprout/releases"
+        log_error "If it does, check your network / proxy, or retry with SPROUT_INSTALL_RETRIES=5."
         return "$code"
     fi
 
@@ -349,36 +347,52 @@ download_release() {
     echo "$download_url"
 }
 
-# Install the binary
+# Install the binary. Everything before the final rename works on
+# $TEMP_DIR or a staged copy, so any failure leaves an existing install
+# untouched.
 install_binary() {
     local tarball="$1"
     local install_dir="$2"
-    
-    # Extract the tarball
+    local extract_dir="$TEMP_DIR/extract"
+
     log_info "Extracting binary from $tarball"
-    tar -xzf "$tarball" -C "$TEMP_DIR"
-    
-    # Determine the actual binary name in the tarball
+    mkdir -p "$extract_dir"
+    tar -xzf "$tarball" -C "$extract_dir"
+
     local extracted_binary
     extracted_binary=$(tar -tzf "$tarball" | grep -v '/$' | head -1)
-    
-    # Check if we need sudo
-    if [ ! -w "$install_dir" ]; then
-        log_warn "Installing to $install_dir requires elevated privileges"
-        if command -v sudo >/dev/null 2>&1; then
-            log_info "Using sudo for installation..."
-            sudo mkdir -p "$install_dir"
-            sudo cp "$TEMP_DIR/$extracted_binary" "${install_dir}/sprout"
-            sudo chmod +x "${install_dir}/sprout"
-        else
-            log_error "Installation requires sudo but sudo is not available"
+    if [ -z "$extracted_binary" ] || [ ! -f "$extract_dir/$extracted_binary" ]; then
+        log_error "No binary found in $tarball"
+        exit 1
+    fi
+    chmod 755 "$extract_dir/$extracted_binary"
+
+    local sudo_cmd=""
+    mkdir -p "$install_dir" 2>/dev/null || true
+    if [ ! -d "$install_dir" ] || [ ! -w "$install_dir" ]; then
+        if ! command -v sudo >/dev/null 2>&1; then
+            log_error "Installing to $install_dir requires sudo, which is not available."
+            log_error "Re-run with SPROUT_INSTALL_DIR=\$HOME/.local/bin to install without it."
             exit 1
         fi
-    else
-        cp "$TEMP_DIR/$extracted_binary" "${install_dir}/sprout"
-        chmod +x "${install_dir}/sprout"
+        log_warn "Installing to $install_dir requires elevated privileges"
+        log_info "Using sudo for installation..."
+        sudo_cmd="sudo"
+        $sudo_cmd mkdir -p "$install_dir"
     fi
-    
+
+    # Stage beside the target and rename over it: a same-directory rename
+    # is atomic, so the old binary keeps working until the new one is
+    # complete.
+    local staged="${install_dir}/.sprout.new.$$"
+    if ! $sudo_cmd cp "$extract_dir/$extracted_binary" "$staged" ||
+        ! $sudo_cmd chmod 755 "$staged" ||
+        ! $sudo_cmd mv -f "$staged" "${install_dir}/sprout"; then
+        $sudo_cmd rm -f "$staged" 2>/dev/null || true
+        log_error "Could not write ${install_dir}/sprout. The existing install (if any) was left unchanged."
+        exit 1
+    fi
+
     log_success "sprout installed to $install_dir/sprout"
 }
 
@@ -405,9 +419,8 @@ verify_installation() {
     # that the darwin/arm64 release binary needs. The release pipeline
     # cross-compiles linux-arm64 with CGO disabled so this should normally
     # pass on Termux too.
-    local run_output run_status
-    run_output=$("$binary_path" version 2>&1)
-    run_status=$?
+    local run_output run_status=0
+    run_output=$("$binary_path" version 2>&1) || run_status=$?
     if [ "$run_status" -ne 0 ]; then
         log_error "sprout was installed to $binary_path but failed to run."
 
@@ -466,23 +479,6 @@ verify_installation() {
     log_success "sprout binary verified"
 }
 
-# Remove old versions
-remove_old_versions() {
-    local install_dir="$1"
-    local binary_path="${install_dir}/sprout"
-
-    if [ -f "$binary_path" ]; then
-        local old_version
-        old_version=$("$binary_path" version 2>/dev/null | head -1 || echo "unknown")
-        log_info "Removing old version: $old_version"
-        if ! rm -f "$binary_path" 2>/dev/null; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo rm -f "$binary_path"
-            fi
-        fi
-    fi
-}
-
 # Print uninstall instructions
 print_uninstall_instructions() {
     local install_dir="$1"
@@ -498,17 +494,72 @@ print_uninstall_instructions() {
     echo ""
 }
 
+# Succeeds if $1 is a PATH entry. Compares physical paths because
+# get_install_dir resolves symlinks (e.g. /tmp vs /private/tmp on macOS).
+dir_on_path() {
+    local target entry
+    target=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+    local IFS=:
+    for entry in $PATH; do
+        if [ -n "$entry" ] && [ "$(cd "$entry" 2>/dev/null && pwd -P)" = "$target" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Print the line that puts $install_dir on PATH for the user's login shell.
+print_path_hint() {
+    local install_dir="$1"
+    local dir_expr="$install_dir"
+    case "$install_dir" in
+        "$HOME"/*) dir_expr="\$HOME${install_dir#"$HOME"}" ;;
+    esac
+
+    local rc_file line
+    line="export PATH=\"$dir_expr:\$PATH\""
+    # shellcheck disable=SC2088  # "~" is display text for the user
+    case "$(basename "${SHELL:-sh}")" in
+        zsh)  rc_file="~/.zshrc" ;;
+        bash)
+            if [ "$(uname -s)" = "Darwin" ]; then
+                rc_file="~/.bash_profile"
+            else
+                rc_file="~/.bashrc"
+            fi
+            ;;
+        fish)
+            rc_file="~/.config/fish/config.fish"
+            line="fish_add_path $dir_expr"
+            ;;
+        *)    rc_file="~/.profile" ;;
+    esac
+
+    log_warn "$install_dir is not on your PATH."
+    echo "  Add this line to $rc_file, then open a new terminal:"
+    echo ""
+    echo "    $line"
+    echo ""
+}
+
 # Print success message
 print_success() {
     local install_dir="$1"
     local version="$2"
-    
+
     echo ""
     log_success "sprout $version installed successfully!"
     echo ""
     echo "  Binary location: $install_dir/sprout"
     echo ""
-    echo "  Run 'sprout version' to verify the installation"
+
+    if ! dir_on_path "$install_dir"; then
+        print_path_hint "$install_dir"
+    fi
+
+    # shellcheck disable=SC2016  # literal backticks, not command substitution
+    echo '  Next: cd into a project and run `sprout` — it will ask for an AI provider key.'
+    echo "  Getting started: https://github.com/sprout-foundry/sprout#get-it-working-about-5-minutes"
     echo ""
 
     # The darwin/arm64 release binary loads Apple's MLX C libraries at
@@ -550,8 +601,9 @@ FLAGS:
 ENV VARS:
   SPROUT_VERSION         pin a specific release tag (e.g. v0.14.0).
                          Skips the GitHub API call.
-  SPROUT_INSTALL_DIR     install destination. Defaults to /usr/local/bin,
-                         existing sprout dir on PATH, or $PREFIX/bin on Termux.
+  SPROUT_INSTALL_DIR     install destination. Defaults to the existing
+                         sprout dir on PATH, else /usr/local/bin if writable
+                         without sudo, else ~/.local/bin ($PREFIX/bin on Termux).
   SPROUT_INSTALL_RETRIES network retry count for curl (default 3).
   SPROUT_SKIP_CHECKSUM   if "1", skip SHA256 verification of the download.
                          Use only when a release is missing the manifest.
@@ -664,6 +716,9 @@ preview_install() {
     elif [ ! -d "$install_dir" ]; then
         local parent
         parent=$(dirname "$install_dir")
+        while [ ! -d "$parent" ]; do
+            parent=$(dirname "$parent")
+        done
         if [ ! -w "$parent" ]; then
             printf '  %-22s %s\n' "Privilege:" "sudo required (would create $install_dir)"
         else
@@ -871,23 +926,20 @@ main() {
             ;;
     esac
 
-    if is_termux; then
-        mkdir -p "$install_dir"
-    fi
-    
-    # Remove old versions if they exist
-    remove_old_versions "$install_dir"
-    
-    # Download the release
+    # Download and verify into $TEMP_DIR before touching the install dir,
+    # so a failed upgrade leaves the current binary in place.
     local download_url
-    download_url=$(download_release "$version" "$os" "$arch")
+    if ! download_url=$(download_release "$version" "$os" "$arch"); then
+        log_error "Download failed. Nothing was changed."
+        exit 1
+    fi
     log_info "Downloaded from: $download_url"
 
     # Verify the downloaded archive against the release's SHA256SUMS manifest.
     # Failure here aborts before we chmod+x — that's the whole point.
     local archive_name="sprout-${os}-${arch}.tar.gz"
     if ! verify_checksum "$TEMP_DIR/$archive_name" "$archive_name" "$version"; then
-        log_error "Refusing to install an unverified binary."
+        log_error "Refusing to install an unverified binary. Nothing was changed."
         exit 1
     fi
 

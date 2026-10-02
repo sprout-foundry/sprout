@@ -21,9 +21,7 @@ const memoryDirName = "memories"
 //
 // This handler saves a memory file to ~/.config/sprout/memories/<name>.md
 // for persistence across conversations. It does NOT require an *Agent — the
-// file is written directly to disk. Embedding/indexing of the memory for
-// semantic search is handled separately (the agent's embedding manager
-// picks it up on next index or via MigrateMemories).
+// file is written directly to disk.
 type saveMemoryHandler struct{}
 
 func (h *saveMemoryHandler) Name() string {

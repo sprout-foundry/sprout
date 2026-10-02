@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {
@@ -69,7 +70,7 @@ func formatWriteSummary(path string, content []byte, size int64) string {
 	}
 
 	// Long file: return first 5 and last 5 lines with truncation notice
-	allLines := splitLines(content)
+	allLines := utils.SplitLinesKeepEmpty(string(content))
 	firstLines := allLines[:5]
 	lastLines := allLines[len(allLines)-5:]
 
@@ -91,26 +92,6 @@ func countLines(content []byte) int {
 		}
 	}
 	return count
-}
-
-// splitLines splits content into individual lines.
-func splitLines(content []byte) []string {
-	result := []string{}
-	start := 0
-	for i, b := range content {
-		if b == '\n' {
-			result = append(result, string(content[start:i]))
-			start = i + 1
-		}
-	}
-	// Add last line (may be empty if file ends with newline)
-	if start < len(content) {
-		result = append(result, string(content[start:]))
-	} else if len(content) > 0 && content[len(content)-1] == '\n' {
-		// File ends with newline - add empty last line
-		result = append(result, "")
-	}
-	return result
 }
 
 // joinLines joins lines with newlines.

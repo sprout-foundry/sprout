@@ -38,7 +38,6 @@ func TestSeedCompactionPersistRebasesSproutCheckpoints(t *testing.T) {
 	// fixture.
 	a.contextProfile = configuration.ContextProfile{
 		CompactionTriggerFraction: 0.05,
-		SkipProactiveContext:      true,
 	}
 	a.initSubManagers()
 

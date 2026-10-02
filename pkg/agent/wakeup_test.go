@@ -71,6 +71,7 @@ func TestTryAutoResume_NoNotifications(t *testing.T) {
 // notifications and returns true when wakeup is enabled and there are
 // pending notifications.
 func TestTryAutoResume_WithNotifications(t *testing.T) {
+	disableWakeupBatching(t)
 	a := newTestAgentWithWakeup(t, true)
 	t.Cleanup(func() { a.Shutdown() })
 
@@ -119,6 +120,7 @@ func TestTryAutoResume_WakeupDisabled(t *testing.T) {
 // TestTryAutoResume_BudgetExhausted tests that the wakeup budget is
 // respected — after MaxResumesPerSession resumes, TryAutoResume stops.
 func TestTryAutoResume_BudgetExhausted(t *testing.T) {
+	disableWakeupBatching(t)
 	NewTestStateDir(t)
 	a := newTestAgent(t)
 	t.Cleanup(func() { a.Shutdown() })

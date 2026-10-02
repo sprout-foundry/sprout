@@ -114,7 +114,6 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 		Name:                    a.generateSessionName(),
 		WorkingDirectory:        cleanWorkingDir,
 		ConfigOverrides:         a.state.GetConfigOverrides(),
-		SessionIntentEmbedding:  a.state.GetSessionIntentEmbedding(),
 		LastProviderError:       a.state.GetLastProviderError(),
 	}
 

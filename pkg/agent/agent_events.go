@@ -142,20 +142,6 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 	)
 }
 
-// PublishRecallDiagnostic emits a single semantic-recall pass diagnostic.
-func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
-	a.publishEvent(
-		events.EventTypeRecallDiagnostic,
-		events.RecallDiagnosticEvent(
-			diag.EmbedDurationMS,
-			diag.CandidatesConsidered,
-			diag.Injected,
-			diag.InjectedChars,
-			diag.TopScores,
-		),
-	)
-}
-
 // PublishRateLimited emits a rate_limited event so the WebUI can show
 // "rate-limited, retrying…" and gate the input until the backoff elapses.
 func (a *Agent) PublishRateLimited(ev *events.RateLimitedEvent) {

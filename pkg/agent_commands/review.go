@@ -109,8 +109,10 @@ func (c *ReviewDeepCommand) Usage() string {
 	return strings.Join([]string{
 		"/review-deep   Deep evidence-based code review on staged Git changes.",
 		"",
-		"Runs an agentic review that cross-references source code for each",
-		"finding. More thorough (and slower) than /review.",
+		"Runs the reviewer persona as a subagent: it starts from the staged",
+		"diff and opens source files to verify each finding before reporting.",
+		"More thorough (and slower) than /review. Optional text after the",
+		"command is passed to the reviewer as a focus.",
 	}, "\n")
 }
 
@@ -234,17 +236,17 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 
 	reviewCtx := &codereview.ReviewContext{
-		Diff:             optimizedDiff.OptimizedContent,
-		Config:           cfg,
-		Logger:           logger,
-		AgentClient:      agentClient,
-		GoCtx:            goCtx, // cancellation context
-		ProjectType:      detectProjectType(),
-		CommitMessage:    extractStagedChangesSummary(),
-		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),
-		ChangeCategories: categorizeChanges(stagedDiff),
-		FullFileContext:  extractFileContextForChanges(stagedDiff),
+		Diff:        optimizedDiff.OptimizedContent,
+		Config:      cfg,
+		Logger:      logger,
+		AgentClient: agentClient,
+		GoCtx:       goCtx, // cancellation context
 	}
+	workspaceRoot := ""
+	if chatAgent != nil {
+		workspaceRoot = chatAgent.GetWorkspaceRoot()
+	}
+	codereview.BuildStagedContext(goCtx, workspaceRoot, stagedDiff).Apply(reviewCtx)
 
 	// Add file summaries to context if available
 	if len(optimizedDiff.FileSummaries) > 0 {
@@ -258,13 +260,15 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 
 	// Create review options for staged review
 	opts := &codereview.ReviewOptions{
-		Type:             codereview.StagedReview,
-		SkipPrompt:       true,  // Skip prompts for slash command
-		RollbackOnReject: false, // Don't rollback for staged reviews
+		Type:       codereview.StagedReview,
+		SkipPrompt: true, // Skip prompts for slash command
 	}
 
 	var reviewResponse *types.CodeReviewResult
-	if deepReview {
+	if deepReview && chatAgent != nil {
+		logger.LogProcessStep("Starting reviewer subagent for deep review...")
+		reviewResponse, err = runDeepReviewSubagent(goCtx, chatAgent, strings.Join(args, " "))
+	} else if deepReview {
 		logger.LogProcessStep("Sending staged changes to LLM for deep review...")
 		reviewResponse, err = service.PerformAgenticReview(reviewCtx, opts)
 	} else {
@@ -328,7 +332,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		statusGlyph = console.GlyphSuccess
 	case "rejected", "failed":
 		statusGlyph = console.GlyphError
-	case "needs_changes", "warning":
+	case "needs_changes", "needs_revision", "warning":
 		statusGlyph = console.GlyphWarning
 	}
 	fmt.Printf("%sStatus: %s\r\n\r\n", statusGlyph.Prefix(), strings.ToUpper(reviewResponse.Status))
@@ -375,4 +379,20 @@ func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []st
 		prefix = args[len(args)-1]
 	}
 	return PathCompleter(prefix)
+}
+
+// runDeepReviewSubagent reviews the staged change with reviewer subagent(s).
+func runDeepReviewSubagent(ctx context.Context, chatAgent *agent.Agent, focus string) (*types.CodeReviewResult, error) {
+	review, err := chatAgent.ReviewChanges(ctx, agent.ReviewChangesOptions{Scope: "staged", Focus: focus})
+	if err != nil {
+		return nil, err
+	}
+	status := map[string]string{"APPROVE": "approved", "CHANGES_REQUIRED": "needs_revision"}[review.Verdict]
+	if status == "" {
+		status = "inconclusive"
+	}
+	return &types.CodeReviewResult{
+		Status:   status,
+		Feedback: review.Markdown(),
+	}, nil
 }

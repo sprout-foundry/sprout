@@ -61,7 +61,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			}
 		}
 		// For run_subagent, respect depth limit in all modes
-		if toolName == "run_subagent" && !agent.CanSpawnSubagents() {
+		if spawnsSubagentsAnyMode(toolName) && !agent.CanSpawnSubagents() {
 			errMsg := fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 				"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 				"If you need additional work done, please complete your current task and return "+
@@ -251,8 +251,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.IsInteractiveCLI = !agent.HasActiveWebUIClients() && !isNonInteractive()
 		// Wire ApprovalManager adapter so migrated tools can request security approvals.
 		env.ApprovalManager = newToolsApprovalAdapter(agent)
-		// Wire new ToolEnv fields for vision, embedding, and subsystem interfaces.
-		env.EmbeddingMgr = agent.GetEmbeddingManager()
+		// Wire new ToolEnv fields for vision and subsystem interfaces.
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
 		env.SkillLoader = newSkillLoaderAdapter(agent)
@@ -328,21 +327,6 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			agent.debugLog("[tool] tool dispatched via new registry (error): %s\n", toolName)
 		}
 		return images, "", agenterrors.NewTool(toolName, errMsg, nil)
-	}
-
-	// After successful tool execution, run embedding duplicate check for write tools.
-	if output != "" {
-		if shouldCheckDuplicates(toolName, agent) {
-			if path, ok := args["path"].(string); ok && path != "" {
-				note := runDuplicateCheck(ctx, agent, path)
-				if note != "" {
-					output = output + note
-				}
-				// Keep the index fresh — async so the agent response
-				// isn't blocked on re-embedding.
-				reindexFileAfterWrite(agent, path)
-			}
-		}
 	}
 
 	return images, output, nil

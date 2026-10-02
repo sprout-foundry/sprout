@@ -3,13 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 )
-
-// repoMapSemanticTopK bounds how many semantically-matched files widen the map.
-const repoMapSemanticTopK = 40
 
 type repoMapHandler struct{}
 
@@ -23,7 +18,7 @@ func (h *repoMapHandler) Definition() ToolDefinition {
 		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes) with line numbers. Use this before reading files to identify which files and functions are relevant to your task. Supports Go, TypeScript, JavaScript, Python, Rust, Java, and C files.", Parameters: []ParameterDef{
 			{Name: "directory", Type: "string", Description: "Directory to scan (default: .)"},
 			{Name: "depth", Type: "integer", Description: "Detail level: 1=directory tree only, 2=tree+top-level symbols, 3=full symbols (default)"},
-			{Name: "query", Type: "string", Description: "Filter the map to what is relevant. Matches file paths and symbol names as a case-insensitive substring, and — when the embedding index is enabled — also files that match the query semantically, so a conceptual query like 'user authentication' works without knowing the identifier."},
+			{Name: "query", Type: "string", Description: "Filter the map to what is relevant. Matches file paths and symbol names as a case-insensitive substring."},
 		},
 		Required: []string{},
 	}
@@ -75,8 +70,7 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 
 	query, _ := extractString(args, "query")
 
-	output, err := GenerateRepoMapWithSemanticMatches(ctx, directory, depth, query,
-		semanticMatchesForQuery(ctx, env, directory, query))
+	output, err := GenerateRepoMap(ctx, directory, depth, query)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("Error generating repo map: %v", err),
@@ -95,49 +89,3 @@ func (h *repoMapHandler) Timeout() time.Duration { return 30 * time.Second }
 func (h *repoMapHandler) MaxResultSize() int     { return 0 }
 func (h *repoMapHandler) SafeForParallel() bool  { return false }
 func (h *repoMapHandler) Interactive() bool      { return false }
-
-// semanticMatchesForQuery resolves the workspace-relative files that a semantic
-// search associates with query, or nil when semantic search is unavailable.
-// Every failure mode degrades to plain substring behavior.
-func semanticMatchesForQuery(ctx context.Context, env ToolEnv, directory, query string) map[string]bool {
-	// An index with no records cannot contribute matches, and querying it costs
-	// a ~145ms embed for a guaranteed-empty result.
-	if query == "" || env.EmbeddingMgr == nil || !env.EmbeddingMgr.Readiness().CanAnswerQueries() {
-		return nil
-	}
-
-	root := env.WorkspaceRoot
-	if root == "" {
-		root = directory
-	}
-
-	// Bounded: this runs on a tool call the user is waiting on.
-	results, err := env.EmbeddingMgr.QuerySimilar(ctx, query, repoMapSemanticTopK,
-		env.EmbeddingMgr.SemanticSearchThreshold())
-	if err != nil || len(results) == 0 {
-		return nil
-	}
-
-	// Records store whatever path shape the index build used — absolute in the
-	// daemon, relative when built from a relative root. Both sides have to be
-	// absolutised before Rel, or the result keeps a "../.." prefix and never
-	// matches the walk's workspace-relative paths.
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return nil
-	}
-
-	paths := make(map[string]bool, len(results))
-	for _, r := range results {
-		abs, err := filepath.Abs(r.Record.File)
-		if err != nil {
-			continue
-		}
-		rel, err := filepath.Rel(absRoot, abs)
-		if err != nil || strings.HasPrefix(rel, "..") {
-			continue // outside the workspace being mapped
-		}
-		paths[filepath.ToSlash(rel)] = true
-	}
-	return paths
-}

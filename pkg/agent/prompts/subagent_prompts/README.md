@@ -34,7 +34,7 @@ These prompts are loaded automatically when a subagent is spawned with a specifi
 
 - **Implement a feature / fix a bug / refactor** → `coder`
 - **Write tests for code** → `tester`
-- **Review a diff for real issues** → `reviewer`
+- **Review a diff for real issues** → call the `review_changes` tool (it runs `reviewer` subagents with pre-built context); spawn `reviewer` directly only for a custom review task
 - **Design tokens, wireframes, flows, screens under `design/`** → `designer` (aliases `ux`, `design`)
 - **Investigate codebase / web research / scrape content** → `researcher`
 - **Coordinate cross-project work** → `coordinator`

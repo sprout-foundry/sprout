@@ -85,7 +85,6 @@ function Chat(props: ChatProps): JSX.Element {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
-  const [indexingError, setIndexingError] = useState<string | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [commandOutputPanelVisible, setCommandOutputPanelVisible] = useState(false);
   const [commandOutputError, setCommandOutputError] = useState<Error | null>(null);
@@ -361,27 +360,6 @@ function Chat(props: ChatProps): JSX.Element {
     [isRewinding, onInputChange, chatId],
   );
 
-  const handleToggleIndex = useCallback(async (enabled: boolean) => {
-    try {
-      const response = await clientFetch('/api/embedding-index', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('Failed to toggle indexing:', response.status, text);
-        // Surface failure to the user instead of silent console-only log
-        setIndexingError(response.ok ? null : `Indexing toggle failed (${response.status})`);
-      } else {
-        setIndexingError(null);
-      }
-    } catch (e) {
-      console.error('Failed to toggle indexing:', e);
-      setIndexingError('Failed to toggle indexing — see console for details');
-    }
-  }, []);
-
   // SP-114 Phase 2: dedicated command-surface handler. Called when the user
   // submits a slash command via the chat input's onSendCommand prop (Enter on
   // a `/`-prefixed line while not actively chatting). Routes through
@@ -593,21 +571,9 @@ function Chat(props: ChatProps): JSX.Element {
               onQueueReorder={onQueueReorder}
               onClearQueuedMessages={onClearQueuedMessages}
               completionApi={completionApi}
-              isIndexEnabled={!!stats?.embedding_index_enabled}
-              isIndexBuilding={!!stats?.embedding_index_building}
-              onToggleIndex={handleToggleIndex}
               onUploadImage={handleUploadImage}
             />
             <ChatMetricsStrip stats={stats} isConnected={isConnected} onModelClick={onModelClick} />
-            {indexingError && (
-              <div
-                className="indexing-error-banner"
-                role="alert"
-                style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}
-              >
-                {indexingError}
-              </div>
-            )}
           </div>
 
           <ChatMessageContextMenu

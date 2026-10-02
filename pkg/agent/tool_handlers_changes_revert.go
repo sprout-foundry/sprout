@@ -1,10 +1,5 @@
 package agent
 
-// tool_handlers_changes_revert.go — the revert_my_changes tool: the
-// handler, candidate selection / scope parsing, per-file revert execution,
-// and the staleness / recoverability checks, split out of
-// tool_handlers_changes.go.
-
 import (
 	"context"
 	"encoding/json"
@@ -91,6 +86,24 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 		if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 			continue
 		}
+		// A bulk rollup (e.g. `git checkout .` over many files) carries
+		// per-file before/after content in BulkItems; revert those files
+		// individually. The rollup row's own FilePath is a label, not a
+		// file, and count-only rollups (no items) have nothing to restore.
+		if ch.Operation == "bulk" {
+			for _, item := range ch.BulkItems {
+				filtered = append(filtered, TrackedFileChange{
+					FilePath:     item.FilePath,
+					OriginalCode: item.OriginalCode,
+					NewCode:      item.NewCode,
+					Operation:    item.Operation,
+					Timestamp:    ch.Timestamp,
+					ToolCall:     ch.ToolCall,
+					Source:       ch.Source,
+				})
+			}
+			continue
+		}
 		filtered = append(filtered, ch)
 	}
 
@@ -142,11 +155,24 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 		return "", false, "path is outside the workspace — skipped"
 	}
 
+	// Already at its pre-session state (e.g. a later `git checkout`
+	// discarded the agent's edit, or an earlier revert already ran):
+	// nothing to restore, and reporting it as stale would be wrong.
+	current, readErr := os.ReadFile(abs)
+	exists := readErr == nil
+	if ch.Operation == "create" && !exists {
+		return "none", true, "already absent (the created file no longer exists)"
+	}
+	if ch.Operation != "create" && exists && string(current) == ch.OriginalCode &&
+		(ch.OriginalCode == "" || isRecoverableOriginal(ch.OriginalCode)) {
+		return "none", true, "already at its original content"
+	}
+
 	// Staleness guard: if the file on disk no longer matches what the
 	// agent wrote (NewCode), it was modified intentionally after the
 	// snapshot — by a git commit, another session, or manual edit.
 	// Reverting would silently clobber that newer work.
-	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode) {
+	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode, ch.Timestamp) {
 		history.AuditRevertSkip("revertOne", abs, "stale or committed")
 		return "", false, "file modified since snapshot (stale — skipped)"
 	}
@@ -158,12 +184,15 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 			return "delete", false, fmt.Sprintf("remove created file: %v", err)
 		}
 		if tracker != nil {
+			tracker.RecordRevert(abs, string(current), "", false, "revert_my_changes")
 			tracker.SyncShellCacheForPath(abs)
 		}
 		return "delete", true, "removed file created during session"
 	}
 
-	if !isRecoverableOriginal(ch.OriginalCode) {
+	// Past the create branch, an empty original is a genuinely empty file
+	// (existence is recorded explicitly), so it restores as empty.
+	if ch.OriginalCode != "" && !isRecoverableOriginal(ch.OriginalCode) {
 		return "", false, "original content was not captured (binary, oversized, or outside workspace)"
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -181,6 +210,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}
 	if tracker != nil {
+		tracker.RecordRevert(abs, string(current), ch.OriginalCode, true, "revert_my_changes")
 		tracker.SyncShellCacheForPath(abs)
 	}
 	return "restore", true, "wrote original content back to disk"
@@ -324,6 +354,6 @@ func isStaleForRevert(absPath, newCode string) bool {
 // recovery paths that have the snapshot's OriginalCode. This allows
 // recovery of uncommitted work destroyed by a destructive git command
 // (git checkout, git reset, git clean) that aligned the file to HEAD.
-func isStaleForRevertWithOriginal(absPath, newCode, originalCode string) bool {
-	return !history.IsRevertSafeWithOriginal(absPath, newCode, originalCode)
+func isStaleForRevertWithOriginal(absPath, newCode, originalCode string, changedAt time.Time) bool {
+	return !history.IsRevertSafeAt(absPath, newCode, originalCode, changedAt)
 }

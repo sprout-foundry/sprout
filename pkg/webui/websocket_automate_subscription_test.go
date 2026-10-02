@@ -75,7 +75,6 @@ func TestShouldForwardEvent_NonAutomateUnaffected(t *testing.T) {
 	globalTypes := []string{
 		events.EventTypeMetricsUpdate,
 		events.EventTypeFileContentChanged,
-		events.EventTypeDriftDetected,
 	}
 
 	for _, et := range globalTypes {

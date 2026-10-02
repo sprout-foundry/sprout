@@ -31,7 +31,7 @@ func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]Sym
 }
 
 // scopedSymbolEntries converts a parsed file's symbols into repo-map entries
-// using the SAME extractor the embedding index uses.
+// using ast.ExtractSymbols.
 //
 // This previously read result.Symbols, which parser.go populates by walking
 // only the top-level children of the root. ast.ExtractSymbols walks nested

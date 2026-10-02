@@ -24,6 +24,8 @@ import (
 // The poller runs on a ticker (every `interval`) and is cancelled when
 // the REPL exits via `ctx`.
 func startCLIWakeupPoller(ctx context.Context, chatAgent *agent.Agent, indicator *console.ActivityIndicator, interval time.Duration) {
+	agent.SetBackgroundHost(true)
+	defer agent.SetBackgroundHost(false)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

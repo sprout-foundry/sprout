@@ -53,107 +53,6 @@ These were present before SP-045 and are unchanged.
 | `getHistory()` | — | string[] | Shell history entries. |
 | `getEnv(name)` | `string` | string | Returns env var value. |
 
-## Tier 1 — Semantic search
-
-ONNX-quality embeddings via the `__sproutONNX` bridge (Tier 2a). When the
-bridge is installed, semantic search uses EmbeddingGemma-300M quality.
-When absent, the embedding manager returns an error — there is no static
-fallback.
-
-### `buildSemanticIndex(): Promise<BuildStats>`
-
-Walks the current working directory and builds the static embedding
-index. The first call from a session does a full rebuild; subsequent
-calls are incremental (only re-embeds changed files via content hashes).
-
-```typescript
-type BuildStats = {
-  filesProcessed: number;
-  unitsExtracted: number;
-  unitsEmbedded:  number;
-  durationMs:     number;
-};
-```
-
-### `getSemanticStatus(): Promise<Status>`
-
-Cheap status read for UI affordances.
-
-```typescript
-type Status = {
-  initialized: boolean;
-  building:    boolean;
-  indexSize:   number; // number of records currently in the vector store
-};
-```
-
-### `searchSemantic(query, topK?, threshold?): Promise<Result[]>`
-
-Returns the top-K matches above `threshold` (0.0 by default; reasonable
-values are 0.5-0.85). The shape mirrors `embedding.QueryResult` minus the
-embedding vector (which we strip — it's large and useless to the
-browser).
-
-```typescript
-type Result = {
-  id:         string;  // "<file>:<symbol>" or "memory:<name>"
-  file:       string;
-  name:       string;
-  type:       string;  // "code_unit" | "file" | "conversation_turn" | "memory"
-  signature:  string;
-  startLine:  number;
-  endLine:    number;
-  similarity: number;  // cosine similarity, 0..1
-};
-```
-
-### `updateSemanticFile(filePath): Promise<{ok: boolean}>`
-
-Incrementally re-indexes a single file (after the host knows it's
-changed). Drops the file's old records and embeds the new content.
-
-## Tier 1 — Memory CRUD
-
-Memories are markdown files in `~/.config/sprout/memories/` (on the
-MEMFS-backed home dir). Each is stored alongside an embedding so semantic
-search across them just works.
-
-### `listMemories(): Promise<Memory[]>`
-
-```typescript
-type Memory = {
-  name:    string; // filename without `.md`
-  path:    string; // absolute MEMFS path
-  content: string;
-};
-```
-
-### `readMemory(name): Promise<{name, content}>`
-
-Returns one memory by name. Rejects if missing.
-
-### `saveMemory(name, content): Promise<{ok, name}>`
-
-Writes (creates or replaces) and embeds. Names containing `/`, `\`, or
-just being `.`/`..` are rejected to prevent directory traversal.
-
-### `deleteMemory(name): Promise<{ok: true}>`
-
-Removes the markdown file and its embedding from the conversation store.
-Idempotent — deleting a missing memory still resolves with `ok: true`.
-
-### `searchMemories(query, topK?, threshold?): Promise<MemoryResult[]>`
-
-Semantic search restricted to records with `Type == "memory"`.
-
-```typescript
-type MemoryResult = {
-  name:       string;
-  similarity: number;
-  preview:    string; // first 200 chars of the memory content
-};
-```
-
 ## Tier 1 — Configuration
 
 Reads/writes through `pkg/configuration`. The on-disk file is
@@ -195,59 +94,10 @@ this before agent commands ship.
 
 Removes one API key.
 
-## Tier 1 — Conversation persistence
-
-Builds on the same `ConversationStore` the native sprout uses for SP-027.
-Turns live in the same JSONL file as memories but filtered by
-`Type == "conversation_turn"`.
-
-### `getConversationHistory(sessionId?): Promise<Turn[]>`
-
-Returns every stored turn, optionally filtered to a specific session.
-Without the arg, returns all turns. Embeddings are stripped before
-returning.
-
-```typescript
-type Turn = {
-  id:                string;
-  userPrompt:        string;
-  indexedAt:         string;  // RFC3339 nanosecond timestamp
-  sessionId?:        string;
-  turnNumber?:       number;
-  workingDir?:       string;
-  duration?:         number;
-  tokenUsage?:       number;
-  actionableSummary?: string;
-  filesTouched?:     string[];
-  deleted?:          boolean;
-};
-```
-
-### `saveConversationTurn(jsonString): Promise<{ok, id}>`
-
-Persists a turn. The JSON shape matches `agent.ConversationTurn` (see
-`pkg/agent/conversation_turn.go`). Missing `id` and `timestamp` are
-generated. Embedding and ONNX dual-write happen via the same path as
-native sprout (`EmbedAndStoreTurn`).
-
-### `searchConversations(query, topK?, threshold?, sessionId?): Promise<Turn[]>`
-
-Semantic search across stored turns. Optional `sessionId` restricts to a
-single session.
-
-### `deleteConversationTurn(id): Promise<{ok, deleted}>`
-
-Marks a turn as deleted. Note: the underlying `ConversationStore`
-currently doesn't support hard-delete (`SP-045-1e` follow-up), so this
-sets `metadata.deleted = true` and zeroes the embedding so the turn no
-longer matches semantic queries. The record stays present in
-`getConversationHistory` results with `deleted: true` so UIs can
-hide it.
-
 ## Testing
 
 Pure-Go helpers underneath the JS bridge have unit tests in
-`cmd/wasm/wasm_funcs_test.go`. Because the package is gated to
+`cmd/wasm/*_test.go`. Because the package is gated to
 `//go:build js && wasm`, running them requires the bundled exec helper:
 
 ```bash
@@ -263,82 +113,10 @@ GOOS=js GOARCH=wasm go test \
   ./cmd/wasm/
 ```
 
-Tests cover: memory-name sanitization (path-traversal rejection),
-`indexOfID`, `turnRecordToJS` (embedding strip + metadata propagation +
-nil safety + deleted flag). The js.Value-bound entries (the actual
+The js.Value-bound entries (the actual
 js.FuncOf wrappers, `asPromise`, `marshalJS`, `argString`/`argInt`/
 `argFloat32`) need a full WASM-in-browser harness to test meaningfully
 and are validated by the integration tests in the host page instead.
-
-## Tier 2a — ONNX-quality embeddings via `__sproutONNX`
-
-The WASM build's static-provider embeddings work well for many queries
-but match HuggingFace tokenizers' real EmbeddingGemma-300M output only
-loosely. For ONNX-quality semantic search, the WASM build can delegate
-inference to a JS-side `onnxruntime-web` provider via a small global
-contract.
-
-### Contract
-
-When `globalThis.__sproutONNX` is defined, the Go-WASM side detects it
-inside `NewONNXEmbeddingProvider` and routes Embed/EmbedBatch calls
-through it. When absent, the WASM build falls back to the static
-provider — no error, just lower-quality search.
-
-The contract object must expose:
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `embed` | `(text: string) => Promise<Float32Array>` | yes | Returns one embedding. |
-| `embedBatch` | `(texts: string[]) => Promise<Float32Array[]>` | yes | Same, batched. Result order must match input order. |
-| `modelHash` | `string` | optional | Stable identifier; defaults to `"browser-bridge"`. Used to key the per-model JSONL store, so changing this invalidates the on-disk index. |
-| `modelName` | `string` | optional | Defaults to `onnx-embeddinggemma-300m-web-bridge`. Surfaces in logs. |
-| `dimensions` | `number` | optional | Overrides the 768 default — useful if the JS side does MRL truncation. |
-
-Promise rejection surfaces as a Go-side error in `Embed`/`EmbedBatch`.
-A hung promise is bounded by either the caller's `context.Context`
-deadline or an internal 60-second fallback timeout.
-
-### One-line install (preferred)
-
-`webui/src/services/sproutONNXBridge.ts` ships a helper that wraps the
-existing `BrowserONNXProvider` in the contract shape:
-
-```typescript
-import { installSproutONNXBridge } from './services/sproutONNXBridge';
-
-// Stand up the JS-side ONNX provider once, before the WASM module
-// starts calling into Go-side embedding code. The function is
-// idempotent — calling twice replaces the previous bridge cleanly.
-const provider = installSproutONNXBridge({ dtype: 'q8', backend: 'webgpu' });
-
-// Later, when the page is unmounting:
-await provider.close();
-```
-
-### Hand-rolled install (for testing or custom providers)
-
-```typescript
-(globalThis as any).__sproutONNX = {
-  modelHash: 'my-provider-v1',
-  modelName: 'my-onnx-provider',
-  dimensions: 768,
-  async embed(text) {
-    // ... return Float32Array of length 768
-  },
-  async embedBatch(texts) {
-    // ... return Float32Array[]
-  },
-};
-```
-
-### Verification
-
-`pkg/embedding/onnx_wasm_bridge_test.go` covers the WASM-side bridge with
-mocked JS providers: round-trip correctness, batch ordering, promise
-rejection surfacing, and context cancellation.
-`webui/src/services/sproutONNXBridge.test.ts` covers the host-side
-adapter: contract shape, lifecycle, idempotent install/uninstall.
 
 ## Tier 1 — Workspace sync (browser-primary model)
 
@@ -412,9 +190,6 @@ Stops the ticker. Idempotent: safe to call when nothing is running.
 A page can load `sprout.wasm` and use the JS API surface without any of
 the platform-side infrastructure:
 
-- **No `__sproutONNX`** — `searchSemantic`/`buildSemanticIndex`/and all
-  semantic functions return an error about ONNX bridge unavailability.
-  Memory and configuration functions work normally.
 - **No `setSyncEndpoint` / `applyFileMetadata`** — the agent's staleness
   rule still applies WITHIN a session (must read before write this turn),
   but the conflict rule's "unsynced browser edits" branch is never
@@ -430,13 +205,7 @@ go.run(wasmInstance.instance);
 const err = SproutWasm.init();
 if (err) throw new Error(err);
 
-// Optional: install the ONNX bridge for semantic search
-// (skip this if you don't need search / memory embedding features)
-// import { installSproutONNXBridge } from './services/sproutONNXBridge';
-// const provider = installSproutONNXBridge({ dtype: 'q8', backend: 'webgpu' });
-
-// Done. listMemories, getConfig, etc. work.
-// Semantic search requires the __sproutONNX bridge to be installed first.
+// Done. getConfig, setConfig, etc. work.
 ```
 
 ## Tier 2b — LLM proxy routing (foundation)

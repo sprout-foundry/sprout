@@ -16,6 +16,7 @@ const (
 	NotifAutomate       NotificationKind = "automate"
 	NotifShellBg        NotificationKind = "shell_bg"
 	NotifShellBgTimeout NotificationKind = "shell_bg_timeout"
+	NotifSubagent       NotificationKind = "subagent"
 )
 
 // Notification is a durable completion message queued when a background task
@@ -40,6 +41,8 @@ func (n Notification) FormatForAgent() string {
 		b.WriteString("Background command completed\n\n")
 	case NotifShellBgTimeout:
 		b.WriteString("Background command timed out\n\n")
+	case NotifSubagent:
+		b.WriteString("Background subagent task finished\n\n")
 	}
 	b.WriteString(n.Content)
 	return b.String()
@@ -109,6 +112,24 @@ func (a *Agent) QueueNotification(n Notification) {
 	defer a.notifMu.Unlock()
 	n.Timestamp = time.Now()
 	a.pendingNotifications = append(a.pendingNotifications, n)
+}
+
+// removeNotifications drops queued notifications for sessionID — used when
+// the primary already collected that task's result, so the notification
+// would only trigger a redundant resume turn.
+func (a *Agent) removeNotifications(sessionID string) {
+	if a == nil {
+		return
+	}
+	a.notifMu.Lock()
+	defer a.notifMu.Unlock()
+	kept := a.pendingNotifications[:0]
+	for _, n := range a.pendingNotifications {
+		if n.SessionID != sessionID {
+			kept = append(kept, n)
+		}
+	}
+	a.pendingNotifications = kept
 }
 
 func (a *Agent) DrainNotifications() []Notification {
@@ -385,6 +406,9 @@ func (a *Agent) TryAutoResume() bool {
 	if a.IsWakeupDisabled() {
 		return false
 	}
+	if a.shouldDeferWakeup(time.Now()) {
+		return false // a poller retries once the batch has settled
+	}
 
 	// Drain BEFORE consuming budget: two pollers (CLI REPL + WebUI) can
 	// race here, and the loser must not burn a resume slot on an empty
@@ -441,6 +465,49 @@ func (a *Agent) TryAutoResume() bool {
 		}
 	}()
 	return true
+}
+
+// Wakeup batching. Completions that land close together should reach the
+// agent as one resume turn, not a turn per completion a few seconds apart.
+var (
+	// wakeupSettleWindow: wait until the newest completion is this old, so a
+	// burst (several tasks finishing within moments) is drained together.
+	wakeupSettleWindow = 2 * time.Second
+	// wakeupBatchWindow: while other background subagent tasks are still
+	// running, hold the first completion up to this long so their results
+	// can join it. Also the cap on any hold, so a long-running task never
+	// starves a finished one.
+	wakeupBatchWindow = 30 * time.Second
+)
+
+// shouldDeferWakeup reports whether a resume should wait for more
+// completions. It never defers past wakeupBatchWindow from the oldest
+// pending notification.
+func (a *Agent) shouldDeferWakeup(now time.Time) bool {
+	a.notifMu.Lock()
+	if len(a.pendingNotifications) == 0 {
+		a.notifMu.Unlock()
+		return false
+	}
+	oldest, newest := a.pendingNotifications[0].Timestamp, a.pendingNotifications[0].Timestamp
+	for _, n := range a.pendingNotifications[1:] {
+		if n.Timestamp.Before(oldest) {
+			oldest = n.Timestamp
+		}
+		if n.Timestamp.After(newest) {
+			newest = n.Timestamp
+		}
+	}
+	a.notifMu.Unlock()
+
+	switch {
+	case now.Sub(oldest) >= wakeupBatchWindow:
+		return false
+	case now.Sub(newest) < wakeupSettleWindow:
+		return true
+	default:
+		return a.subagentRunner != nil && a.subagentRunner.hasRunningBackground()
+	}
 }
 
 // WaitWakeupGoroutines blocks until every auto-resume goroutine

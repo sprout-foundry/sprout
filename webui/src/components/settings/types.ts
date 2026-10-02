@@ -72,9 +72,7 @@ export type SettingsSubsection =
   | 'agent-behavior'
   | 'agent-subagents'
   | 'agent-skills'
-  | 'agent-memory'
   // Workspace (workspace scope)
-  | 'workspace-embeddings'
   | 'workspace-mcp'
   | 'workspace-lsp'
   // Environment (global scope)
@@ -107,7 +105,6 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'agent-behavior', label: 'Security' },
       { id: 'agent-subagents', label: 'Subagents' },
       { id: 'agent-skills', label: 'Skills' },
-      { id: 'agent-memory', label: 'Memory' },
     ],
   },
   {
@@ -116,7 +113,6 @@ export const SECTION_GROUPS: SectionDef[] = [
     scope: 'workspace',
     description: 'Settings for this project directory',
     subsections: [
-      { id: 'workspace-embeddings', label: 'Embeddings' },
       { id: 'workspace-mcp', label: 'MCP Servers' },
       { id: 'workspace-lsp', label: 'Language Servers' },
     ],

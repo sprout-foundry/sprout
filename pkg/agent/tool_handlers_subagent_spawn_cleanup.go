@@ -102,6 +102,17 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 
+		// Reviews share one model setting: an explicit review_provider covers
+		// the reviewer persona too, ahead of the generic subagent settings.
+		if reviewProvider := strings.TrimSpace(config.GetReviewProvider()); reviewProvider != "" &&
+			!personaProviderExplicit && isReviewerPersona(a, persona) {
+			provider = reviewProvider
+			if !personaModelExplicit {
+				model = config.GetReviewModel()
+			}
+			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
+		}
+
 		// Log no-persona spawn resolution for observability. persona is defaulted
 		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
 		// so we check the explicit-provided flag rather than the empty string —
@@ -129,9 +140,17 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			absPromptPath = filepath.Join(subagentWorkspaceRoot, systemPromptPath)
 		}
 		promptBytes, err := os.ReadFile(absPromptPath)
+		if err != nil && os.IsNotExist(err) && !filepath.IsAbs(systemPromptPath) {
+			// Built-in persona prompts are repo-relative paths that only exist
+			// on disk when the workspace is the sprout source tree; everywhere
+			// else they come from the embedded copy.
+			if embedded, embeddedErr := readEmbeddedPromptFile(systemPromptPath); embeddedErr == nil {
+				promptBytes, err = embedded, nil
+			}
+		}
 		if err == nil {
 			systemPromptText = string(promptBytes)
-			a.Logger().Debug("Loaded system prompt from %s\n", absPromptPath)
+			a.Logger().Debug("Loaded system prompt for persona from %s\n", systemPromptPath)
 		} else {
 			a.Logger().Debug("Failed to load system prompt from %s: %v\n", absPromptPath, err)
 		}
@@ -199,12 +218,7 @@ func handleSubagentSecurityError(a *Agent, resultMap map[string]string) string {
 	stderr := resultMap["stderr"]
 	exitCode := resultMap["exit_code"]
 
-	// Check for filesystem security errors
-	if strings.Contains(stderr, "outside working directory") ||
-		strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-		strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-		strings.Contains(stderr, "security warning") ||
-		exitCode != "0" {
+	if exitCode != "0" && isSubagentSecurityFailure(stderr, resultMap["stdout"]) {
 
 		// Subagent encountered a security error or failed
 		// Return a special error format that tells the primary agent to stop retrying
@@ -279,10 +293,7 @@ func handleSubagentNonSecurityFailure(a *Agent, resultMap map[string]string) str
 	stdout := resultMap["stdout"]
 
 	// Check for specific error patterns that indicate we should stop retrying
-	if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-		strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-		strings.Contains(stderr, "security") ||
-		strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+	if isSubagentSecurityFailure(stderr, stdout) {
 
 		// This is a security/authorization error - don't retry
 		errorMsg := fmt.Sprintf("SUBAGENT_FAILED: The subagent encountered a security or authorization error that prevents it from completing the task.\n\n"+
@@ -320,4 +331,30 @@ func buildSubagentFinalResult(a *Agent, resultMap map[string]string, result *Sub
 
 	a.Logger().Debug("Subagent spawn result: %s\n", jsonStr)
 	return jsonStr, nil
+}
+
+// subagentSecurityMarkers identify failures caused by a security or
+// authorization block. Matching is deliberately specific: a generic failure
+// whose message merely mentions "security" must stay retryable rather than
+// tell the caller to stop and ask the user.
+var subagentSecurityMarkers = []string{
+	"outside working directory",
+	"ErrOutsideWorkingDirectory",
+	"ErrWriteOutsideWorkingDirectory",
+	"security warning",
+	"security rejected:",
+	"security hard block:",
+	"security confirmation required:",
+	"SUBAGENT_SECURITY_ERROR",
+}
+
+// isSubagentSecurityFailure reports whether a failed subagent's stderr or
+// stdout shows it was stopped by a security or authorization block.
+func isSubagentSecurityFailure(stderr, stdout string) bool {
+	for _, marker := range subagentSecurityMarkers {
+		if strings.Contains(stderr, marker) || strings.Contains(stdout, marker) {
+			return true
+		}
+	}
+	return false
 }

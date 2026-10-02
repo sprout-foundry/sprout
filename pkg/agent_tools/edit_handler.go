@@ -126,8 +126,9 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	var originalContent string
 	readOK := false
 	trackFn := env.ResolveToolFuncs().TrackFileEdit
+	trackPath := trackingPath(ctx, path)
 	if trackFn != nil {
-		if b, readErr := os.ReadFile(path); readErr == nil {
+		if b, readErr := os.ReadFile(trackPath); readErr == nil {
 			originalContent = string(b)
 			readOK = true
 		}
@@ -147,10 +148,10 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// is re-read post-edit so the tracker stores the exact on-disk state.
 	// Skipped only when the pre-edit read failed (no baseline to record).
 	if trackFn != nil && readOK {
-		newContent, readErr := os.ReadFile(path)
+		newContent, readErr := os.ReadFile(trackPath)
 		if readErr != nil {
 			log.Printf("[edit_file] change tracking: re-read failed for %q: %v", path, readErr)
-		} else if trackErr := trackFn(path, originalContent, string(newContent)); trackErr != nil {
+		} else if trackErr := trackFn(trackPath, originalContent, string(newContent)); trackErr != nil {
 			log.Printf("[edit_file] change tracking failed for %q: %v", path, trackErr)
 		}
 	}

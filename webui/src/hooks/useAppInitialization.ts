@@ -127,7 +127,7 @@ export function useAppInitialization({
       // Compile-time short-circuit (R-2f): a --native-fs dist hard-excludes
       // the wasmShell module (the shell provides the POSIX shell / VFS
       // natively), so the boot path must NOT touch the adapter WASM
-      // preload at all — no fetch/instantiate, no ONNX/embedding chain,
+      // preload at all — no fetch/instantiate,
       // no wasmLoading/wasmError state. NATIVE_FS_ENABLED is a
       // compile-time constant, so in the default build this guard
       // short-circuits into a dead branch and the block below runs

@@ -33,8 +33,7 @@ func (s *SetupCommand) Usage() string {
 		"/setup   Show persisted configuration summary.",
 		"",
 		"Displays provider/model, subagent config, commit/review settings,",
-		"security risk profile, skills, MCP servers, embedding index, and",
-		"credential warnings.",
+		"security risk profile, skills, MCP servers, and credential warnings.",
 		"Use /info for live agent state or /status for runtime status.",
 	}, "\n")
 }
@@ -93,13 +92,6 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	s.printSection("MCP", []keyValue{
 		{"Servers Configured", fmt.Sprintf("%d", mcpCount)},
 	})
-
-	// Embedding
-	if cfg.EmbeddingIndex != nil {
-		s.printSection("Embedding Index", []keyValue{
-			{"Enabled", fmt.Sprintf("%v", cfg.EmbeddingIndex.IsEnabled())},
-		})
-	}
 
 	// Warnings
 	s.printWarnings(cfg, mgr, chatAgent)

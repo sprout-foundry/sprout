@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 	"strings"
 	"testing"
 	"time"
@@ -602,14 +603,14 @@ func TestSplitLines_Normal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := splitLines(tt.input)
+			got := utils.SplitLinesKeepEmpty(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestSplitLines_Empty(t *testing.T) {
-	result := splitLines("")
+	result := utils.SplitLinesKeepEmpty("")
 	assert.Equal(t, []string{""}, result, "empty string should return a single empty element")
 }
 

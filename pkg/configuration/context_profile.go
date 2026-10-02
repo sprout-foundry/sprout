@@ -8,7 +8,7 @@ import "fmt"
 type ContextMode string
 
 const (
-	// ContextModeFull is the default: all tools, full prompt, proactive context enabled.
+	// ContextModeFull is the default: all tools, full prompt.
 	ContextModeFull ContextMode = "full"
 
 	// ContextModeLowContext activates the LCM levers: curated tool allowlist, lite prompt, etc.
@@ -24,7 +24,6 @@ type ContextProfile struct {
 	Mode                      ContextMode `json:"mode,omitempty"`
 	ToolAllowlist             []string    `json:"tool_allowlist,omitempty"`
 	SystemPromptPath          string      `json:"system_prompt_path,omitempty"`
-	SkipProactiveContext      bool        `json:"skip_proactive_context,omitempty"`
 	CompactionTriggerFraction float64     `json:"compaction_trigger_fraction,omitempty"`
 	RecentTurnsToPreserve     int         `json:"recent_turns_to_preserve,omitempty"`
 	RepoMapDefaultDepth       int         `json:"repo_map_default_depth,omitempty"`
@@ -56,6 +55,7 @@ var lowContextProfile = ContextProfile{
 		"list_changes",
 		"recover_file",
 		"run_subagent",
+		"review_changes",
 		"ask_user",
 		// Design loop tools (SP-140): pure Go over workspace files, valid in
 		// every context tier. Without them an auto-LCM model (<132K window,
@@ -78,7 +78,6 @@ var lowContextProfile = ContextProfile{
 		"mcp_refresh",
 	},
 	SystemPromptPath:          "prompts/system_prompt.lite.md",
-	SkipProactiveContext:      true,
 	CompactionTriggerFraction: 0.85,
 	RecentTurnsToPreserve:     2,
 	RepoMapDefaultDepth:       1,

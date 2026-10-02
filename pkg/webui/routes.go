@@ -121,12 +121,10 @@ func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
-	mux.HandleFunc("/api/embedding-index", ws.handleAPIEmbeddingIndex)
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
 	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
-	mux.HandleFunc("/api/recall", ws.handleAPIRecall)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
 	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
 }
@@ -292,11 +290,6 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 
 func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
-	mux.HandleFunc("/api/search/semantic/status", ws.handleAPISemanticStatus)
-	mux.HandleFunc("/api/search/semantic/build", ws.handleAPISemanticBuild)
-	mux.HandleFunc("/api/search/semantic/preview", ws.handleAPISemanticPreview)
-	mux.HandleFunc("/api/search/semantic/preview-context", ws.handleAPISemanticPreviewContext)
-	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
 }

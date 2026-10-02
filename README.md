@@ -30,7 +30,7 @@ sprout plan                                                     # planning mode 
 sprout review                                                   # AI review of staged changes
 sprout commit                                                   # generate a conventional commit
 sprout pr                                                       # open a PR for the current branch
-sprout search "embedding index"                                 # search past sessions
+sprout search "rate limit"                                      # search past sessions
 ```
 
 First run walks you through provider selection and API-key validation: [docs/onboarding.md](docs/onboarding.md).
@@ -104,7 +104,7 @@ Agent guidance for working in this repo: [AGENTS.md](AGENTS.md). Contribution ru
 
 - **CLI** (`sprout`, Go) — cobra command tree, 30+ commands (`agent`, `plan`, `commit`, `review`, `pr`, `search`, `service`, …)
 - **Web UI** (`webui/`, React 18 + Vite + TypeScript) — built by `make deploy-ui`, embedded in the binary
-- **`@sprout/ui`** (`packages/ui`) — shared component library, also [consumable standalone](docs/CONSUMPTION_GUIDE.md); `@sprout/events` ships the event schemas
+- **`@sprout/ui`** (`packages/ui`) — shared component library, `npm install @sprout/ui` [consumes it standalone](docs/CONSUMPTION_GUIDE.md); `@sprout/events` ships the event schemas
 - **Provider catalog** (`pkg/providercatalog/providers.json`) — embedded in the binary, refreshed from GitHub at startup
 - **Sister project** `sprout-foundry` pins a `SPROUT_VERSION` and ships the binary in Docker images — integration contract: [docs/FOUNDRY_CHAT_CONTRACT.md](docs/FOUNDRY_CHAT_CONTRACT.md)
 

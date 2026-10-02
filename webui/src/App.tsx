@@ -4,7 +4,6 @@ import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
-import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
@@ -100,7 +99,6 @@ function App() {
       editApprovalRequest: null,
       shellApprovalRequest: null,
       modelSelectionRequest: null,
-      driftNotification: null,
       outputVerbosity: 'default' as const,
       inputValue: '',
       workspaceBusy: null,
@@ -599,19 +597,6 @@ function AppInner() {
                           }}
                           onSubmit={async (decisions) => {
                             await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
-                          }}
-                        />
-                      )}
-                      {state.driftNotification && (
-                        <DriftNotification
-                          similarity={state.driftNotification.similarity}
-                          threshold={state.driftNotification.threshold}
-                          sessionId={state.driftNotification.sessionId}
-                          options={state.driftNotification.options}
-                          onContinue={() => setState(() => ({ driftNotification: null }))}
-                          onNewChat={() => {
-                            setState(() => ({ driftNotification: null }));
-                            chatManager.handleCreateChat();
                           }}
                         />
                       )}

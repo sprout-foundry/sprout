@@ -501,57 +501,6 @@ func TestBoost_ParseDiffForContent_ContextLines(t *testing.T) {
 }
 
 // =====================================================================
-// IndexCommand Execute (0% coverage paths)
-// =====================================================================
-
-func TestBoost_IndexCommand_NilAgent(t *testing.T) {
-	c := &IndexCommand{}
-	err := c.Execute(nil, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "agent not available")
-}
-
-func TestBoost_IndexCommand_NilAgent_WithAction(t *testing.T) {
-	c := &IndexCommand{}
-	err := c.Execute([]string{"on"}, nil)
-	assert.Error(t, err)
-}
-
-func TestBoost_IndexCommand_UnknownAction(t *testing.T) {
-	c := &IndexCommand{}
-	a := agent.NewTestAgent()
-	err := c.Execute([]string{"badaction"}, a)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown action")
-}
-
-func TestBoost_IndexCommand_Enable(t *testing.T) {
-	c := &IndexCommand{}
-	a := agent.NewTestAgent()
-	output := captureOutput(func() {
-		err := c.Execute([]string{"enable"}, a)
-		if err != nil {
-			// TestAgent may not support full embedding index setup
-			assert.Contains(t, err.Error(), "indexing", "error should relate to indexing")
-		}
-	})
-	// On success path, output mentions "index"
-	if len(output) > 0 {
-		assert.Contains(t, output, "index", "output should mention index-related text")
-	}
-}
-
-func TestBoost_IndexCommand_Status(t *testing.T) {
-	c := &IndexCommand{}
-	a := agent.NewTestAgent()
-	output := captureOutput(func() {
-		err := c.Execute([]string{"status"}, a)
-		assert.NoError(t, err)
-	})
-	assert.Contains(t, output, "Workspace index")
-}
-
-// =====================================================================
 // CommitMessageHandler constructor (0% coverage)
 // =====================================================================
 
@@ -1319,15 +1268,6 @@ func TestGetChangeTrackingStatus_NilAgent(t *testing.T) {
 // =====================================================================
 // Review Context Tests
 // =====================================================================
-
-func TestExtractStagedChangesSummary_NoGitRepo(t *testing.T) {
-	// Create a temp dir that is not a git repo, using t.Chdir for auto-restore
-	t.Chdir(t.TempDir())
-
-	// extractStagedChangesSummary should return "" when not in a git repo
-	result := extractStagedChangesSummary()
-	assert.Equal(t, "", result)
-}
 
 // =====================================================================
 // BuildLogActions Tests

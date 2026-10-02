@@ -1,39 +1,14 @@
+// Package agent: SubagentRunner construction and metrics (SP-141 phase 4,
+// increment 2). The prefix builder and the process-wide active counter
+// moved to pkg/agent/subagents in increment 1 (forwarded via
+// subagent_forwarders.go); the lifecycle-event emission moved in increment
+// 2. These thin wrappers resolve the runner's shared EventBus and delegate.
 package agent
 
 import (
-	"fmt"
-	"strings"
-	"sync/atomic"
-
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/utils"
 )
-
-// buildSubagentPrefix returns the terminal prefix for a subagent based on persona and taskID.
-// For single subagents (taskID starting with "subagent-"), returns "[{persona}]".
-// For parallel subagents (other taskIDs), returns "[{persona}:{taskID}]".
-func buildSubagentPrefix(persona, taskID string) string {
-	if taskID != "" && !strings.HasPrefix(taskID, "subagent-") {
-		return fmt.Sprintf("[%s:%s]", persona, taskID)
-	}
-	return fmt.Sprintf("[%s]", persona)
-}
-
-// activeSubagentCount is the process-wide count of currently-running
-// subagents. The CLI status footer reads it via GetActiveSubagents()
-// to render " · N sub" while delegation is in flight.
-var activeSubagentCount atomic.Int64
-
-// IncrementActiveSubagents bumps the active-subagent counter; paired with
-// DecrementActiveSubagents under a defer in the spawner.
-func IncrementActiveSubagents() { activeSubagentCount.Add(1) }
-
-// DecrementActiveSubagents lowers the active-subagent counter when a
-// subagent finishes (success, error, cancel — any terminal state).
-func DecrementActiveSubagents() { activeSubagentCount.Add(-1) }
-
-// GetActiveSubagents returns the current number of running subagents.
-func GetActiveSubagents() int { return int(activeSubagentCount.Load()) }
 
 // NewSubagentRunner creates a new SubagentRunner
 func NewSubagentRunner(parent *Agent, shared *SharedState) *SubagentRunner {
@@ -55,50 +30,25 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 	}
 }
 
+// sharedEventBus returns the runner's shared EventBus, or nil when there is
+// no shared state (the defensive nil path the emitter must handle).
+func (r *SubagentRunner) sharedEventBus() *events.EventBus {
+	if r.shared == nil {
+		return nil
+	}
+	return r.shared.EventBus
+}
+
 // publishLifecycleEvent emits a subagent_activity event with a status field
-// describing the lifecycle transition. The event is only published when
-// the shared EventBus is available.
+// describing the lifecycle transition (implementation in
+// pkg/agent/subagents).
 func (r *SubagentRunner) publishLifecycleEvent(parentCallID, taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
 	r.publishLifecycleEventWithCost(parentCallID, taskID, persona, status, reason, tokensUsed, elapsedMs, 0)
 }
 
 // publishLifecycleEventWithCost is the extended form used when the runner
-// has the per-subagent cost in hand (typically at "completed"/"cancelled").
-// Kept as a separate entry point so the existing call sites that only have
-// the lifecycle transition remain a one-liner; the original signature is
-// preserved.
+// has the per-subagent cost in hand (implementation in
+// pkg/agent/subagents).
 func (r *SubagentRunner) publishLifecycleEventWithCost(parentCallID, taskID, persona, status, reason string, tokensUsed int, elapsedMs int64, cost float64) {
-	if r.shared == nil || r.shared.EventBus == nil {
-		return
-	}
-	data := map[string]any{
-		"task_id": taskID,
-		"persona": persona,
-		"status":  status, // "queued", "started", "completed", "cancelled"
-	}
-	// Parent tool-call correlation: lets the WebUI attach this event to the
-	// run_subagent tool call that spawned it (seed v1.4.0 provides the ID
-	// in handler contexts).
-	if parentCallID != "" {
-		data["tool_call_id"] = parentCallID
-	}
-	if reason != "" {
-		data["reason"] = reason
-	}
-	if tokensUsed > 0 {
-		data["tokens_used"] = tokensUsed
-	}
-	if elapsedMs > 0 {
-		data["elapsed_ms"] = elapsedMs
-	}
-	if cost > 0 {
-		data["cost"] = cost
-	}
-	r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
-
-	// Also write to the runlog for persistent structured logging.
-	logger := utils.GetRunLogger()
-	if logger != nil {
-		logger.LogEvent("subagent_activity", data)
-	}
+	subagents.PublishLifecycleEventWithCost(r.sharedEventBus(), parentCallID, taskID, persona, status, reason, tokensUsed, elapsedMs, cost)
 }

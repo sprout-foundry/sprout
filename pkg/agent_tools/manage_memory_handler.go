@@ -118,14 +118,6 @@ func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (Tool
 		}, nil
 	}
 
-	// Embed into conversation store (best-effort) if embedding manager is available
-	if env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
-		ctx := context.Background()
-		if convoStore, err := env.EmbeddingMgr.GetConversationStore(ctx); err == nil && convoStore != nil {
-			_ = convoStore.StoreMemory(ctx, sanitized, content)
-		}
-	}
-
 	return ToolResult{
 		Output:     result,
 		TokenUsage: int64(estimateTokenUsage(result)),
@@ -253,15 +245,13 @@ func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, er
 
 	result := fmt.Sprintf("Memory '%s' deleted.", sanitized)
 
-	// Embedding removal is handled by the embedding manager's background cleanup.
-
 	return ToolResult{
 		Output:     result,
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
 
-// executeSearch handles the "search" operation: text matching or semantic search.
+// executeSearch handles the "search" operation: text matching over saved memories.
 func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (ToolResult, error) {
 	query, _ := extractString(args, "query")
 
@@ -296,18 +286,6 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		threshold = 1
 	}
 
-	// Try semantic (embedding-based) search first if the embedding manager is available.
-	if env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
-		output, err := h.semanticSearch(env, query, topK, float32(threshold))
-		if err == nil {
-			return ToolResult{
-				Output:     output,
-				TokenUsage: int64(estimateTokenUsage(output)),
-			}, nil
-		}
-	}
-
-	// Fall back to text-based search
 	results, err := SearchMemoriesByText(query, topK, threshold)
 	if err != nil {
 		return ToolResult{
@@ -321,47 +299,4 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		Output:     output,
 		TokenUsage: int64(estimateTokenUsage(output)),
 	}, nil
-}
-
-// semanticSearch performs semantic search using the embedding manager's ConversationStore.
-func (h *manageMemoryHandler) semanticSearch(env ToolEnv, query string, topK int, threshold float32) (string, error) {
-	ctx := context.Background()
-
-	convoStore, err := env.EmbeddingMgr.GetConversationStore(ctx)
-	if err != nil {
-		return "", agenterrors.NewAgent("manage_memory", "conversation store unavailable", err)
-	}
-	if convoStore == nil {
-		return "", agenterrors.NewAgent("manage_memory", "conversation store is nil", nil)
-	}
-
-	results, err := convoStore.QueryMemories(ctx, query, topK, threshold)
-	if err != nil {
-		return "", agenterrors.NewAgent("manage_memory", "semantic search failed", err)
-	}
-
-	if len(results) == 0 {
-		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d memory/memories via semantic search for: %q\n\n", len(results), query))
-
-	for i, r := range results {
-		preview := ""
-		if md, ok := r.Record.Metadata["content_preview"].(string); ok {
-			preview = md
-		}
-		if len(preview) > 120 {
-			preview = preview[:117] + "..."
-		}
-		sb.WriteString(fmt.Sprintf("#%d — **%s** (similarity: %.2f)\n", i+1, r.Record.Name, r.Similarity))
-		if preview != "" {
-			sb.WriteString(fmt.Sprintf("   Preview: %s\n", preview))
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("Use `manage_memory` with operation=\"read\" to view the full content of any memory.")
-	return sb.String(), nil
 }

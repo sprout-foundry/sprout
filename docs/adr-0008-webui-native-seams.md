@@ -12,10 +12,9 @@ implementation parity**, so the product only ever improves and can roll back
 instantly.
 
 The seam inventory and parity-gated swap protocol are defined in
-`sprout-studio/roadmap/Track-R-selective-replacement.md`. This ADR records the
+`sprout-foundry/roadmap/Track-R-selective-replacement.md`. This ADR records the
 concrete contract that contract depends on: the build-flag set, the
-capability-manifest format, and the runtime handshake. The full code-grounded
-rationale lives in [WEBUI_DECOUPLING_AUDIT.md](./WEBUI_DECOUPLING_AUDIT.md).
+capability-manifest format, and the runtime handshake.
 
 Two seam layers, used together:
 - **Build-time (hard swap):** `scripts/build-webui-dist.mjs` feature flags
@@ -95,9 +94,9 @@ shell provides the shell interface natively yet). Only once the R-2 parity
 gate ratifies the swap does the entry carry `status: "ratified"`, making the
 dist a parity-proven, shell-servable swap.
 
-### Handshake contract (what sprout-studio consumes)
+### Handshake contract (what sprout-foundry consumes)
 
-sprout-studio **reads `capabilities.json` from the served dist** and gates
+sprout-foundry **reads `capabilities.json` from the served dist** and gates
 which portions it serves natively:
 
 1. For each entry in `excluded`, the shell provides the named `portion`
@@ -419,9 +418,7 @@ branch.
   module set that omits a portion it does not provide.
 
 ## References
-- `sprout-studio/roadmap/Track-R-selective-replacement.md` — swap protocol & queue.
-- [docs/WEBUI_DECOUPLING_AUDIT.md](./WEBUI_DECOUPLING_AUDIT.md) — subsystem
-  inventory, full manifest schema, extraction order, FS residual coupling.
-- [docs/DIST_BUNDLE_LAYOUT.md](./DIST_BUNDLE_LAYOUT.md) — canonical dist layout
-  (`capabilities.json` is an optional file in the verified layout).
+- `sprout-foundry/roadmap/Track-R-selective-replacement.md` — swap protocol & queue.
+- The original decoupling audit and dist-layout docs were removed from the
+  tree (b40c65a3a); their content is preserved in git history.
 - [ADR-0007](./adr-0007-locking-strategy.md) — house ADR format.

@@ -6,8 +6,8 @@
 //   - *AgentSessionManager      — MessageStore, SessionStore,
 //     CheckpointStore, SummaryStore, OptimizerStore, ContextBudgetStore,
 //     ConversationPrunerStore, CommandHistoryStore, PauseStore,
-//     SessionConfigStore, ConfigOverrideStore, IterationStore,
-//     SessionIntentStore. (13 sub-interfaces)
+//     SessionConfigStore, ConfigOverrideStore, IterationStore.
+//     (12 sub-interfaces)
 //
 //   - *AgentMetricsManager      — TaskActionStore, CostTracker,
 //     TokenCounter, LLMCallTracker, ToolCallTracker, CacheStats,

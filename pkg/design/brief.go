@@ -121,11 +121,21 @@ type ScreenBrief struct {
 	// screen (the §4b inventory signal: an unlisted wireframe is an orphan).
 	ListedInReadme bool `json:"listedInReadme"`
 
-	// Wireframe is the wireframe path (design/wireframes/<stem>.svg). It is
-	// always set: the brief names where the wireframe *would* live, so a
+	// ScreenFile is the primary screen path (design/screens/<stem>.html). It
+	// is always set: the brief names where the screen *would* live, so a
 	// not-found brief still points the agent at the right file.
-	Wireframe string `json:"wireframe"`
-	// WireframeExists reports whether that file exists.
+	ScreenFile string `json:"screenFile"`
+	// ScreenExists reports whether that primary artifact exists. It is the
+	// brief's main existence check (SP-140-9 §9a: screens are the screen
+	// format).
+	ScreenExists bool `json:"screenExists"`
+
+	// Wireframe is the legacy wireframe path (design/wireframes/<stem>.svg),
+	// set only when that legacy file exists. The tier is retired; the field
+	// survives for trees still carrying a pre-migration wireframe so the
+	// brief can name what it found.
+	Wireframe string `json:"wireframe,omitempty"`
+	// WireframeExists reports whether that legacy file exists.
 	WireframeExists bool `json:"wireframeExists"`
 
 	// FlowsIn / FlowsOut are the flow edges touching the screen, split by
@@ -144,14 +154,11 @@ type ScreenBrief struct {
 
 	// Feedback is the §4d pending-feedback view for the screen (§5g "open
 	// feedback annotations"). The matching feedback file is the one whose §4d
-	// target resolves to the screen's stem, or — when no target matches — the
-	// one whose own file name (stem) equals the screen; the first match by
-	// path order wins (ScanFeedbackDir sorts by path).
+	// target resolves to the screen's tree path (design/screens/<stem>.html,
+	// or a legacy wireframe path), or — when no target matches — the one whose
+	// own file name (stem) equals the screen; the first match by path order
+	// wins (ScanFeedbackDir sorts by path).
 	Feedback BriefFeedback `json:"feedback"`
-
-	// ScreenFile is the delivered design/screens/<stem>.html path, when one
-	// exists (full depth only when it differs from the wireframe).
-	ScreenFile string `json:"screenFile,omitempty"`
 
 	// Guidance is a not-found helper: what to do when the screen is unknown
 	// ("" when the screen exists).
@@ -197,10 +204,13 @@ func RenderScreenBrief(b *ScreenBrief) string {
 	if b.Purpose != "" {
 		fmt.Fprintf(&sb, " Purpose: %s.", b.Purpose)
 	}
-	if b.WireframeExists {
-		fmt.Fprintf(&sb, " Wireframe: %s.", b.Wireframe)
+	if b.ScreenExists {
+		fmt.Fprintf(&sb, " Screen: %s.", b.ScreenFile)
 	} else {
-		fmt.Fprintf(&sb, " Wireframe MISSING (expected %s).", b.Wireframe)
+		fmt.Fprintf(&sb, " Screen MISSING (expected %s).", b.ScreenFile)
+	}
+	if b.WireframeExists {
+		fmt.Fprintf(&sb, " Legacy wireframe: %s.", b.Wireframe)
 	}
 	fmt.Fprintf(&sb, " Flows: %d in, %d out.", len(b.FlowsIn), len(b.FlowsOut))
 	if triggers := briefTriggerList(b); len(triggers) > 0 {
@@ -283,7 +293,7 @@ func BuildScreenBrief(in ScreenBriefInput) (*ScreenBrief, error) {
 	brief := &ScreenBrief{
 		ScreenName:    screen,
 		Depth:         depth,
-		Wireframe:     path.Join(DirName, "wireframes", screen+".svg"),
+		ScreenFile:    ScreenRelPath(screen),
 		FlowsIn:       []BriefFlowEdge{},
 		FlowsOut:      []BriefFlowEdge{},
 		TokenPaths:    []BriefTokenRef{},
@@ -305,10 +315,17 @@ func BuildScreenBrief(in ScreenBriefInput) (*ScreenBrief, error) {
 	brief.Status = status
 	brief.ListedInReadme = listed
 
-	// Wireframe existence.
-	wireframeAbs := filepath.Join(root, filepath.FromSlash(brief.Wireframe))
+	// Primary screen (design/screens/<stem>.html) and legacy wireframe
+	// existence.
+	screenAbs := filepath.Join(root, filepath.FromSlash(brief.ScreenFile))
+	if info, statErr := os.Stat(screenAbs); statErr == nil && !info.IsDir() {
+		brief.ScreenExists = true
+	}
+	wireframeRel := path.Join(DirName, "wireframes", screen+".svg")
+	wireframeAbs := filepath.Join(root, filepath.FromSlash(wireframeRel))
 	if info, statErr := os.Stat(wireframeAbs); statErr == nil && !info.IsDir() {
 		brief.WireframeExists = true
+		brief.Wireframe = wireframeRel
 	}
 
 	// Flow edges touching the screen, with triggers.
@@ -328,8 +345,16 @@ func BuildScreenBrief(in ScreenBriefInput) (*ScreenBrief, error) {
 		}
 	}
 
-	// Token paths the wireframe refers to, plus the available token groups.
-	brief.TokenPaths = briefWireframeTokenRefs(root, brief.Wireframe, WireframeExists(brief.WireframeExists))
+	// Token paths the screen refers to (the primary artifact's
+	// `{group.token}` comments; a legacy wireframe's when no screen exists),
+	// plus the available token groups.
+	tokenArtifact := brief.ScreenFile
+	tokenArtifactExists := brief.ScreenExists
+	if !tokenArtifactExists && brief.WireframeExists {
+		tokenArtifact = brief.Wireframe
+		tokenArtifactExists = true
+	}
+	brief.TokenPaths = briefScreenTokenRefs(root, tokenArtifact, tokenArtifactExists)
 	if groups, groupErr := scanTokenGroups(root); groupErr == nil {
 		brief.TokenGroups = groups
 	} else {
@@ -343,19 +368,15 @@ func BuildScreenBrief(in ScreenBriefInput) (*ScreenBrief, error) {
 	}
 	brief.Feedback = feedback
 
-	// Delivered screen file (full depth only; the long form names it).
-	if depth == BriefDepthFull {
-		screenRel := path.Join(DirName, "screens", screen+".html")
-		if info, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(screenRel))); statErr == nil && !info.IsDir() {
-			brief.ScreenFile = screenRel
-		}
-	}
+	// Delivered screen file is now the primary artifact — always reported
+	// when it exists (the full-depth special case is gone: the screen file IS
+	// the brief's subject).
 
-	// Found = a wireframe with this stem, or a feedback file targeting it. A
-	// screen may legitimately exist in the tree only as pending feedback (the
-	// webui annotation affordance can annotate before the wireframe lands), so
-	// feedback alone counts.
-	brief.Found = brief.WireframeExists || brief.Feedback.Path != ""
+	// Found = the primary screen with this stem, a legacy wireframe with it,
+	// or a feedback file targeting it. A screen may legitimately exist in the
+	// tree only as pending feedback (the webui annotation affordance can
+	// annotate before the screen lands), so feedback alone counts.
+	brief.Found = brief.ScreenExists || brief.WireframeExists || brief.Feedback.Path != ""
 	if !brief.Found {
 		brief.Guidance = boolGuidance(screen, true)
 	} else {
@@ -367,10 +388,6 @@ func BuildScreenBrief(in ScreenBriefInput) (*ScreenBrief, error) {
 
 	return brief, nil
 }
-
-// WireframeExists is a tiny convenience so the token-reference call reads
-// clearly; it mirrors the boolean field.
-func WireframeExists(exists bool) bool { return exists }
 
 // briefReadmeEntry extracts the screen's purpose, status marker, and whether
 // the README Screens listing names it. A missing README yields ("", "", false)
@@ -397,18 +414,80 @@ func briefReadmeEntry(root, screen string) (purpose, status string, listed bool)
 	return purpose, status, listed
 }
 
-// briefFlowEdges parses every design/flows/*.mmd file and returns the edges
-// touching the screen, with triggers, sorted deterministically. The screen is
-// a node id (== wireframe stem, per SP-140-1 §1c). A flow file that cannot be
-// read is skipped (the validator reports it), never a hard error.
+// briefFlowEdges returns the flow edges touching the screen, with triggers,
+// sorted deterministically. Flow sources (design/flows/*.json, SP-140-9 §9b)
+// are the truth: a step's Screen is the node, its Trigger the edge label to
+// the next step. Legacy hand-authored .mmd flows (no .json beside them) are
+// still parsed mermaid — the 9.4-migrated tree has none, external trees may.
+// A flow file that cannot be read/parsed is skipped (the validator reports
+// it), never a hard error.
 func briefFlowEdges(root, screen string) ([]BriefFlowEdge, error) {
+	edges := []BriefFlowEdge{}
+
+	// Flow sources first.
+	srcPaths, err := FlowSourcePaths(root)
+	if err != nil {
+		return nil, fmt.Errorf("globbing %s: %w", filepath.Join(root, DirName, FlowSubdir), err)
+	}
+	seenScreens := map[string]bool{}
+	for _, match := range srcPaths {
+		raw, readErr := os.ReadFile(match)
+		if readErr != nil {
+			continue
+		}
+		rel, relErr := filepath.Rel(root, match)
+		if relErr != nil {
+			rel = match
+		}
+		rel = filepath.ToSlash(rel)
+		flowName := strings.TrimSuffix(path.Base(rel), ".json")
+		seenScreens[flowName] = true
+		src, parseErr := ParseFlowSource(rel, raw)
+		if parseErr != nil {
+			continue
+		}
+		byID := map[string]FlowStep{}
+		for _, s := range src.Steps {
+			byID[s.ID] = s
+		}
+		for _, s := range src.Steps {
+			if s.Next == "" {
+				continue
+			}
+			next := byID[s.Next]
+			if s.Screen != screen && next.Screen != screen {
+				continue
+			}
+			e := BriefFlowEdge{Flow: rel, FlowName: flowName, Source: s.Screen, Target: next.Screen, Trigger: s.Trigger}
+			if e.Source == "" {
+				e.Source = s.ID
+			}
+			if e.Target == "" {
+				e.Target = next.ID
+			}
+			switch {
+			case e.Source == screen && e.Target == screen:
+				e.Direction = "both"
+			case e.Source == screen:
+				e.Direction = "out"
+				e.OtherStem = e.Target
+				e.OtherLabel = next.Label
+			default:
+				e.Direction = "in"
+				e.OtherStem = e.Source
+				e.OtherLabel = s.Label
+			}
+			edges = append(edges, e)
+		}
+	}
+
+	// Legacy .mmd flows: only those with no .json source (the derived
+	// exports of sources already read above would double-count).
 	matches, err := filepath.Glob(filepath.Join(root, DirName, FlowSubdir, "*.mmd"))
 	if err != nil {
 		return nil, fmt.Errorf("globbing %s: %w", filepath.Join(root, DirName, FlowSubdir), err)
 	}
 	sort.Strings(matches)
-
-	edges := []BriefFlowEdge{}
 	for _, match := range matches {
 		data, readErr := os.ReadFile(match)
 		if readErr != nil {
@@ -420,6 +499,9 @@ func briefFlowEdges(root, screen string) ([]BriefFlowEdge, error) {
 		}
 		rel = filepath.ToSlash(rel)
 		flowName := assetName(path.Base(rel))
+		if seenScreens[flowName] {
+			continue
+		}
 
 		fc := ParseFlowchart(string(data))
 		for _, e := range briefFlowEdgesInFile(rel, flowName, string(data), fc) {
@@ -647,16 +729,16 @@ func briefSegmentLabel(seg string) string {
 	return ""
 }
 
-// briefWireframeTokenRefs reads the wireframe and returns the `{group.token}`
-// references its comments carry, sorted by path and de-duplicated. A missing or
-// unreadable wireframe yields an empty, non-nil slice (the brief reports the
-// missing wireframe separately).
-func briefWireframeTokenRefs(root, wireframeRel string, exists bool) []BriefTokenRef {
+// briefScreenTokenRefs reads the screen artifact and returns the
+// `{group.token}` references its comments/HTML carry, sorted by path and
+// de-duplicated. A missing or unreadable artifact yields an empty, non-nil
+// slice (the brief reports the missing screen separately).
+func briefScreenTokenRefs(root, artifactRel string, exists bool) []BriefTokenRef {
 	refs := []BriefTokenRef{}
 	if !exists {
 		return refs
 	}
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(wireframeRel)))
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artifactRel)))
 	if err != nil {
 		return refs
 	}
@@ -711,13 +793,28 @@ func briefScreenFeedback(root, screen, depth string) (BriefFeedback, error) {
 	return BriefFeedback{}, nil
 }
 
-// briefFeedbackMatches reports whether a feedback file concerns the screen:
-// its target stem equals the screen, or its file name (stem) does.
+// briefFeedbackMatches reports whether a feedback file concerns the screen.
+// A target naming the screen's tree path (design/screens/<stem>.html, or the
+// legacy wireframe path) wins; a target or file name whose stem alone equals
+// the screen is the fallback (pre-9.4 files, and the §4d stem-keying the
+// webui writes). A flow target (design/flows/<name>.json) never matches — a
+// screen stem and a flow name may collide, and the tree path is what
+// disambiguates them.
 func briefFeedbackMatches(s FeedbackFileState, screen string) bool {
-	if s.Target != "" && feedbackTargetStem(s.Target) == strings.ToLower(screen) {
-		return true
+	target := strings.ReplaceAll(strings.TrimSpace(s.Target), "\\", "/")
+	if target != "" {
+		if target == ScreenRelPath(screen) {
+			return true
+		}
+		if target == path.Join(DirName, "wireframes", screen+".svg") {
+			return true
+		}
+		if strings.HasPrefix(target, DirName+"/"+FlowSubdir+"/") {
+			return false
+		}
 	}
-	return assetName(path.Base(s.Path)) == screen
+	return feedbackTargetStem(s.Target) == strings.ToLower(screen) ||
+		assetName(path.Base(s.Path)) == screen
 }
 
 // briefOpenAnnotationNotes reads a feedback file and returns the open

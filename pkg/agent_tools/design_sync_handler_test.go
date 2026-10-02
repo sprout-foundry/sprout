@@ -43,12 +43,17 @@ func dsFixtureTree(t *testing.T, root string) {
   "color": { "brand": { "primary": { "$type": "color", "$value": "#0055ff" } } },
   "dimension": { "space": { "medium": { "$type": "dimension", "$value": "8px" } } }
 }`)
-	dsWrite(t, root, "design/wireframes/login.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"><rect id="go" data-nav="home"/></svg>`)
-	dsWrite(t, root, "design/wireframes/home.svg",
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844"/>`)
-	dsWrite(t, root, "design/flows/sign-up.mmd", "flowchart TD\n  login --> home\n")
-	dsWrite(t, root, "design/screens/login.html", `<style>.root{width:390px;}</style>`)
+	dsWrite(t, root, "design/screens/login.html",
+		`<!doctype html><html lang="en" data-screen="login"><body><main id="login"></main></body></html>`)
+	dsWrite(t, root, "design/screens/home.html",
+		`<!doctype html><html lang="en" data-screen="home"><body><main id="home"></main></body></html>`)
+	dsWrite(t, root, "design/flows/sign-up.json", `{
+  "name": "sign-up",
+  "steps": [
+    { "id": "login", "label": "Sign in", "screen": "login", "next": "home" },
+    { "id": "home", "label": "Home", "screen": "home" }
+  ]
+}`)
 }
 
 // dsListChangesOutput renders a list_changes-shaped JSON envelope for the given
@@ -205,14 +210,14 @@ func TestDesignSyncHandler_NewRouteProposesWireframeAndFlow(t *testing.T) {
 	out := dsOutput(t, res)
 
 	wf := dsDeltaFor(t, out, func(d design.SyncDelta) bool {
-		return d.Kind == design.DeltaKindWireframe && d.WireframeStem == "check-deposit"
+		return d.Kind == design.DeltaKindScreen && d.ScreenStem == "check-deposit"
 	})
 	assert.Equal(t, design.DeltaBasisStructural, wf.Basis)
 	assert.Equal(t, design.ConfidenceMedium, wf.Confidence)
 	assert.True(t, wf.SafeToApply)
 	assert.False(t, wf.Proposal)
-	assert.Equal(t, design.FlowDraftStatus, wf.Status, "a §5b-created wireframe is a draft")
-	assert.Contains(t, wf.DesignFiles, "design/wireframes/check-deposit.svg")
+	assert.Equal(t, design.FlowDraftStatus, wf.Status, "a §5b-created screen is a draft")
+	assert.Contains(t, wf.DesignFiles, "design/screens/check-deposit.html")
 
 	flow := dsDeltaFor(t, out, func(d design.SyncDelta) bool { return d.Kind == design.DeltaKindFlow })
 	assert.Equal(t, design.DeltaBasisStructural, flow.Basis)
@@ -560,17 +565,17 @@ func TestDesignSyncHandler_ApplyModeStructuralCreatesWireframeAndFlow(t *testing
 	out := dsOutput(t, res)
 	require.NotNil(t, out.Apply)
 
-	assert.Contains(t, out.Apply.Applied, "design/wireframes/check-deposit.svg")
-	assert.Contains(t, out.Apply.Applied, "design/flows/sign-up.mmd")
+	assert.Contains(t, out.Apply.Applied, "design/screens/check-deposit.html")
+	assert.Contains(t, out.Apply.Applied, "design/flows/sign-up.json")
 
-	wf := dsReadFile(t, root, "design/wireframes/check-deposit.svg")
-	assert.Contains(t, wf, "viewBox", "the skeleton is a viewBox-only SVG")
-	assert.Contains(t, wf, design.FlowDraftStatus, "the created wireframe carries draft status")
+	wf := dsReadFile(t, root, "design/screens/check-deposit.html")
+	assert.Contains(t, wf, `data-screen="check-deposit"`, "the skeleton carries the screen identity")
+	assert.Contains(t, wf, design.FlowDraftStatus, "the created screen carries draft status")
 	assert.Contains(t, wf, "check-deposit")
 
-	flow := dsReadFile(t, root, "design/flows/sign-up.mmd")
-	assert.Contains(t, flow, "check-deposit", "the flow edge was added")
-	assert.Contains(t, flow, "login --> home", "the existing edge survives")
+	flow := dsReadFile(t, root, "design/flows/sign-up.json")
+	assert.Contains(t, flow, "check-deposit", "the flow step was added")
+	assert.Contains(t, flow, `"sign-up"`, "the flow source keeps its identity")
 
 	dsAssertDiffConfinedToDesign(t, before, dsTreeSnapshot(t, root))
 
@@ -1029,8 +1034,8 @@ func TestDesignSyncHandler_ApplyModeTrackedWriteOriginalIsEmptyForCreate(t *test
 	_, err := h.Execute(newTestCtx(root), env, map[string]any{"files": "src/routes.tsx", "mode": "apply"})
 	require.NoError(t, err)
 
-	require.Contains(t, originals, "check-deposit.svg")
-	assert.Empty(t, originals["check-deposit.svg"], "a created file's tracked original is empty (revert deletes it)")
+	require.Contains(t, originals, "check-deposit.html")
+	assert.Empty(t, originals["check-deposit.html"], "a created file's tracked original is empty (revert deletes it)")
 }
 
 // TestDesignSyncHandler_ApplyModeGate1DenyOnTouchedCodePath proves the
@@ -1070,7 +1075,7 @@ func TestDesignSyncHandler_ApplyModeRollsBackOnWriteFailure(t *testing.T) {
 	before := dsTreeSnapshot(t, root)
 
 	env := newTestEnv(t, root)
-	env.FileAccessClassifier = dsDenyPathClassifier{substr: "sign-up.mmd"}
+	env.FileAccessClassifier = dsDenyPathClassifier{substr: "sign-up.json"}
 
 	h := &designSyncHandler{}
 	res, err := h.Execute(newTestCtx(root), env,

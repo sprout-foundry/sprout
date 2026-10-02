@@ -38,6 +38,7 @@ func TestScanValidTree(t *testing.T) {
 		"design/README.md":                KindManifest,
 		"design/tokens/color.tokens.json": KindToken,
 		"design/components/button.svg":    KindComponent,
+		"design/flows/sign-up.json":       KindFlow,
 		"design/flows/sign-up.mmd":        KindFlow,
 		"design/screens/login.html":       KindScreen,
 		"design/icons/home.svg":           KindIcon,
@@ -68,15 +69,13 @@ func TestScanValidTree(t *testing.T) {
 	assert.Equal(t, TokenGroupCount{Group: "color", Tokens: 3}, inv.TokenGroups[0])
 	assert.Equal(t, TokenGroupCount{Group: "typography", Tokens: 1}, inv.TokenGroups[1])
 
-	// Flow node/edge counts: login -> home plus the self-loop home -> home is
-	// 2 nodes and 2 edges (the self-loop keeps every wireframe stem referenced
-	// by a flow, so the §4b inventory pack sees no orphan).
+	// Flow node/edge counts come from the flow source (SP-140-9 §9b): three
+	// step nodes (s1/s2/s3) and one step edge; the fixture screens carry no
+	// data-nav, so nothing joins off-path. The derived .mmd does not
+	// double-count.
 	require.Len(t, inv.Flows, 1)
-	assert.Equal(t, "design/flows/sign-up.mmd", inv.Flows[0].Path)
+	assert.Equal(t, "design/flows/sign-up.json", inv.Flows[0].Path)
 	assert.Equal(t, "sign-up", inv.Flows[0].Name)
-	// The §9b-derived flow: three step nodes (s1/s2/s3) and one labeled
-	// step edge; the fixture screens carry no data-nav, so nothing joins
-	// off-path.
 	assert.Equal(t, 3, inv.Flows[0].Nodes)
 	assert.Equal(t, 1, inv.Flows[0].Edges)
 

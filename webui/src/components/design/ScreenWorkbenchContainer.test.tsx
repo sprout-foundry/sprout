@@ -149,9 +149,7 @@ describe('ScreenWorkbenchContainer', () => {
     mockReadAsset.mockImplementation(async (_read, path) => {
       switch (path) {
         case 'screens/login.html':
-          return '<!doctype html><html><body>login screen</body></html>';
-        case 'wireframes/login.svg':
-          return '<svg><!-- {color.brand.primary} {spacing.density} --></svg>';
+          return '<!doctype html><html data-screen="login"><body><!-- {color.brand.primary} {spacing.density} --><p>login screen</p></body></html>';
         case 'flows/sign-up.mmd':
           return 'flowchart TD\n  home -->|login click| login\n  login -->|submit| sign-up\n';
         case 'design/README.md':

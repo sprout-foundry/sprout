@@ -424,7 +424,7 @@ func TestUmbrella_FreshWorkspaceToValidatedTree(t *testing.T) {
 		kinds[a.Kind]++
 	}
 	require.Equal(t, 3, kinds[KindScreen], "three screens, got kinds=%v", kinds)
-	require.Equal(t, 1, kinds[KindFlow], "one flow (the derived .mmd), got kinds=%v", kinds)
+	require.Equal(t, 2, kinds[KindFlow], "the flow source + its derived .mmd, got kinds=%v", kinds)
 	require.Equal(t, 2, kinds[KindToken], "two DTCG tiers, got kinds=%v", kinds)
 	require.Equal(t, 1, kinds[KindManifest], "the README manifest, got kinds=%v", kinds)
 
@@ -435,12 +435,13 @@ func TestUmbrella_FreshWorkspaceToValidatedTree(t *testing.T) {
 	}
 	require.Equal(t, 7, tokenTotal, "token group counts must total the 7 declared leaves: %#v", inv.TokenGroups)
 
-	// The flow's node/edge counts are the canvas's numbers: the derived graph
-	// carries the four walk nodes and edges plus the off-path rendering of
-	// deposit's data-nav edge (stem node ids, the cross-check's accounted form).
+	// The flow's node/edge counts come from the flow source now (SP-140-9
+	// §9b): the walk's four steps and the three step-to-step edges. The
+	// off-path data-nav edge is a derived-export concept — the canvas
+	// derives it; the inventory counts the source.
 	require.Len(t, inv.Flows, 1)
-	require.Equal(t, 6, inv.Flows[0].Nodes, "four walk nodes + the two stems the off-path edge names")
-	require.Equal(t, 4, inv.Flows[0].Edges, "three walk edges + one off-path edge")
+	require.Equal(t, 4, inv.Flows[0].Nodes, "the walk's four steps")
+	require.Equal(t, 3, inv.Flows[0].Edges, "three step-to-step edges")
 
 	// The manifest summary carries the declared frames + status markers.
 	require.True(t, inv.Manifest.Exists)
@@ -512,7 +513,7 @@ func dvKindByPath(rel string) string {
 		if strings.HasSuffix(name, ".layout.json") {
 			return "layout"
 		}
-		if strings.HasSuffix(name, ".mmd") || strings.HasSuffix(name, ".mmdc") {
+		if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".mmd") || strings.HasSuffix(name, ".mmdc") {
 			return "flow"
 		}
 	case strings.HasPrefix(inner, "tokens/"):

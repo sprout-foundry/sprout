@@ -31,6 +31,10 @@ export interface DesignSideColumnProps {
   agent: ReactNode;
   /** True when an asset is selected (drives the idle marker). */
   hasSelection: boolean;
+  /** Collapsed (the mobile close affordance was used); the column hides but stays mounted so the chat keeps its state. */
+  hidden?: boolean;
+  /** Collapse handler — the mobile overlay's close affordance (desktop ignores it). */
+  onClose?: () => void;
 }
 
 export default function DesignSideColumn({
@@ -39,9 +43,16 @@ export default function DesignSideColumn({
   details,
   agent,
   hasSelection,
+  hidden = false,
+  onClose,
 }: DesignSideColumnProps) {
   return (
-    <aside className="design-side-column" data-testid="design-side-column" data-tab={sideTab}>
+    <aside
+      className="design-side-column"
+      data-testid="design-side-column"
+      data-tab={sideTab}
+      hidden={hidden || undefined}
+    >
       <div className="design-side-tabs" role="tablist" aria-label="Design side panel">
         <button
           type="button"
@@ -55,6 +66,17 @@ export default function DesignSideColumn({
         >
           Details
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="design-side-close"
+            aria-label="Close side panel"
+            data-testid="design-side-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        )}
         <button
           type="button"
           role="tab"

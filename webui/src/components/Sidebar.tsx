@@ -459,6 +459,7 @@ function Sidebar({
       case 'flows':
       case 'screens':
       case 'tokens':
+      case 'feedback':
         // Design mode's sections: the assets browser for the active section,
         // rendered from the shared DesignWorkspaceContext. Outside a provider
         // (hosts without the workspace shell) the pane renders nothing.

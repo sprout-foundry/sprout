@@ -37,6 +37,34 @@ const NOT_RELATIVE_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|\/)/i;
 export interface RewriteScreenRefsOptions {
   /** The previewed document's own path (`design/screens/login.html`). */
   previewPath: string;
+  /**
+   * Workspace-relative path → file content, inlined as data: URLs instead of
+   * `/api/file` proxy URLs. The hosted editor's iframe fetches bypass the
+   * page's fetch interceptor (a real HTTP request the platform server
+   * refuses), so there the refs must carry their bytes with them. Text
+   * assets (CSS, SVG) inline as base64 data: URLs — unknown paths fall back
+   * to the proxy form.
+   */
+  inline?: Record<string, string>;
+}
+
+/** Text asset types the inliner knows a MIME type for. */
+const INLINE_MIME: Array<{ suffix: string; mime: string }> = [
+  { suffix: '.css', mime: 'text/css' },
+  { suffix: '.svg', mime: 'image/svg+xml' },
+  { suffix: '.js', mime: 'text/javascript' },
+  { suffix: '.json', mime: 'application/json' },
+  { suffix: '.txt', mime: 'text/plain' },
+];
+
+/** Base64 (btoa, UTF-8-safe via code points) data URL for a text asset. */
+function dataUrlFor(path: string, content: string): string | null {
+  const entry = INLINE_MIME.find((e) => path.toLowerCase().endsWith(e.suffix));
+  if (!entry || typeof btoa !== 'function') return null;
+  const bytes = new TextEncoder().encode(content);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return `data:${entry.mime};base64,${btoa(binary)}`;
 }
 
 /**
@@ -58,23 +86,31 @@ function resolveAgainstPreview(previewPath: string, ref: string): string {
   return out.join('/');
 }
 
-function rewriteOneRef(previewPath: string, raw: string): string {
+function rewriteOneRef(previewPath: string, raw: string, inline?: Record<string, string>): string {
   const value = raw.trim();
   if (!value || NOT_RELATIVE_RE.test(value)) return raw;
-  return fileUrl(resolveAgainstPreview(previewPath, value));
+  const resolved = resolveAgainstPreview(previewPath, value);
+  if (inline) {
+    const content = inline[resolved];
+    if (content !== undefined) {
+      const dataUrl = dataUrlFor(resolved, content);
+      if (dataUrl) return dataUrl;
+    }
+  }
+  return fileUrl(resolved);
 }
 
-function rewriteCSS(previewPath: string, css: string): string {
+function rewriteCSS(previewPath: string, css: string, inline?: Record<string, string>): string {
   let out = css.replace(
     CSS_URL_RE,
     (whole, sq: string | undefined, dq: string | undefined, bare: string | undefined) => {
       const target = sq !== undefined ? sq : dq !== undefined ? dq : (bare ?? '');
-      const next = rewriteOneRef(previewPath, target);
+      const next = rewriteOneRef(previewPath, target, inline);
       return next === target ? whole : `url(${next})`;
     },
   );
   out = out.replace(CSS_IMPORT_RE, (whole, quote: string, target: string) => {
-    const next = rewriteOneRef(previewPath, target);
+    const next = rewriteOneRef(previewPath, target, inline);
     return next === target ? whole : `@import ${quote}${next}${quote}`;
   });
   return out;
@@ -83,27 +119,29 @@ function rewriteCSS(previewPath: string, css: string): string {
 /**
  * Rewrite the workspace-relative references of `html` — href=/src= attributes
  * and the same targets inside `<style>` blocks and style="" attributes — to
- * `/api/file` proxy URLs resolved against `previewPath`. Absolute,
- * protocol-relative, data:, and pure-fragment references pass through
- * untouched; unparseable HTML comes back unchanged.
+ * `/api/file` proxy URLs resolved against `previewPath` (or data: URLs when
+ * `inline` carries the asset bytes). Absolute, protocol-relative, data:, and
+ * pure-fragment references pass through untouched; unparseable HTML comes
+ * back unchanged.
  */
 export function rewriteScreenRefs(html: string, options: RewriteScreenRefsOptions): string {
   const previewPath = options.previewPath.replace(/\\/g, '/').replace(/^\.\//, '');
   if (!html || !previewPath) return html;
+  const inline = options.inline;
   let out = html.replace(
     ATTR_RE,
     (whole, attr: string, dq: string | undefined, sq: string | undefined, bare: string | undefined) => {
       const value = dq !== undefined ? dq : sq !== undefined ? sq : (bare ?? '');
-      const next = rewriteOneRef(previewPath, value);
+      const next = rewriteOneRef(previewPath, value, inline);
       return next === value ? whole : ` ${attr}="${next.replace(/"/g, '&quot;')}"`;
     },
   );
   out = out.replace(
     /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
-    (_whole, css: string) => `<style>${rewriteCSS(previewPath, css)}</style>`,
+    (_whole, css: string) => `<style>${rewriteCSS(previewPath, css, inline)}</style>`,
   );
   out = out.replace(/\sstyle\s*=\s*"([^"]*)"/gi, (whole, css: string) => {
-    const next = rewriteCSS(previewPath, css);
+    const next = rewriteCSS(previewPath, css, inline);
     return next === css ? whole : ` style="${next}"`;
   });
   return out;
@@ -119,4 +157,33 @@ export function injectPreviewMarker(html: string): string {
   if (!openTag) return html;
   if (/\bdata-sprout-preview(?:\s|=|$)/i.test(openTag[1])) return html;
   return `${html.slice(0, openTag.index)}<html${openTag[1]} data-sprout-preview>${html.slice(openTag.index + openTag[0].length)}`;
+}
+
+/**
+ * The workspace-relative asset paths `html` references (href=/src= plus CSS
+ * url()/@import inside <style> and style=""), resolved against `previewPath`
+ * and filtered to the text assets the preview inliner can carry. This is the
+ * read list a hosted host resolves through the page's own file path before
+ * handing the map to `rewriteScreenRefs` — the iframe's own fetches bypass
+ * the page's fetch interceptor, so the bytes must ride in the document.
+ */
+export function referencedAssetPaths(html: string, previewPath: string): string[] {
+  const preview = previewPath.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (!html || !preview) return [];
+  const found = new Set<string>();
+  const consider = (raw: string): void => {
+    const value = raw.trim();
+    if (!value || NOT_RELATIVE_RE.test(value)) return;
+    const resolved = resolveAgainstPreview(preview, value);
+    if (INLINE_MIME.some((e) => resolved.toLowerCase().endsWith(e.suffix))) found.add(resolved);
+  };
+  for (const m of html.matchAll(ATTR_RE)) {
+    const value = m[2] ?? m[3] ?? m[4] ?? '';
+    consider(value);
+  }
+  for (const css of [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1])) {
+    for (const m of css.matchAll(CSS_URL_RE)) consider(m[3] ?? m[2] ?? m[1] ?? '');
+    for (const m of css.matchAll(CSS_IMPORT_RE)) consider(m[2]);
+  }
+  return [...found].sort();
 }

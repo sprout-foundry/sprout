@@ -207,7 +207,7 @@ func GetProviderName(clientType ClientType) string {
 	// This is kept in sync with providers.ProviderDisplayNames() to avoid circular dependencies
 	providerDisplayNames := map[ClientType]string{
 		OpenAIClientType:      "OpenAI",
-		OpenRouterClientType:  "OpenRouter (Recommended)",
+		OpenRouterClientType:  "OpenRouter",
 		ZAIClientType:         "Z.AI",
 		ZAICodingClientType:   "GLM Coding Plan",
 		DeepInfraClientType:   "DeepInfra",

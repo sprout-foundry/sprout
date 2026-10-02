@@ -14,6 +14,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
+// localAIAvailable reports whether this build can run the local provider:
+// MLX builds on Apple Silicon.
+func localAIAvailable() bool { return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" }
+
 // onboardingLocal handles the sprout-local provider onboarding flow.
 // Unlike cloud providers, sprout-local needs:
 //   - Model selection (with hardware recommendation)

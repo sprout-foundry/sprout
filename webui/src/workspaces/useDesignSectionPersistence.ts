@@ -18,6 +18,7 @@
 
 import { useCallback, useState } from 'react';
 import { DESIGN_SECTION_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY } from '../constants/app';
+import { repoScopedKey } from '../services/repoScope';
 
 /** The Design mode's sections — DesignTab's union, restated to keep this
  * module import-free of the component tree (the hook sits beside the
@@ -25,7 +26,7 @@ import { DESIGN_SECTION_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY } from '../constan
 export type DesignSectionId = 'flows' | 'screens' | 'tokens' | 'feedback';
 
 /** The section a Design-mode workspace opens on when nothing is persisted. */
-export const DEFAULT_DESIGN_SECTION: DesignSectionId = 'flows';
+export const DEFAULT_DESIGN_SECTION: DesignSectionId = 'screens';
 
 /** The UI-context scope, mirroring services/appStatePersistence's rule. */
 export function uiContextScope(): string {
@@ -40,7 +41,7 @@ export function designSectionStorageKey(): string {
     return `${DESIGN_SECTION_STORAGE_KEY}:default:local`;
   }
   const pid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return `${DESIGN_SECTION_STORAGE_KEY}:${pid}:${uiContextScope()}`;
+  return repoScopedKey(`${DESIGN_SECTION_STORAGE_KEY}:${pid}:${uiContextScope()}`);
 }
 
 function isDesignSectionId(value: unknown): value is DesignSectionId {

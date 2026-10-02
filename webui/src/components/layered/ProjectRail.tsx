@@ -55,6 +55,22 @@ export function monogram(label: string): { major: string; minor: string } {
   return { major, minor: minor.toLowerCase() };
 }
 
+/**
+ * The symbols shown on a set of project tiles: one capital letter, or the
+ * two-letter monogram when another project starts with the same letter.
+ */
+export function railSymbols(labels: string[]): string[] {
+  const monos = labels.map(monogram);
+  return monos.map((m, i) =>
+    monos.some((other, j) => j !== i && other.major === m.major) ? m.major + m.minor : m.major,
+  );
+}
+
+/** The name printed along the bottom of a tile: the repository without its owner. */
+function tileName(label: string): string {
+  return label.split('/').pop() || label;
+}
+
 /** The full name beside a rail tile while it's hovered or focused. */
 function RailHoverCard({ label, anchor }: { label: string; anchor: HTMLElement }): ReactElement {
   const rect = anchor.getBoundingClientRect();
@@ -80,6 +96,7 @@ export default function ProjectRail({
   const [hovered, setHovered] = useState<{ label: string; anchor: HTMLElement } | null>(null);
   const [addMenu, setAddMenu] = useState<DOMRect | null>(null);
   const unread = useUnreadNotificationCount();
+  const symbols = railSymbols(projects.map((p) => p.label));
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
       {collapsed && onToggleCollapsed && (
@@ -110,8 +127,8 @@ export default function ProjectRail({
         </span>
       )}
       <div className="project-rail-divider" role="separator" />
-      {projects.map((p) => {
-        const mono = monogram(p.label);
+      {projects.map((p, i) => {
+        const symbol = symbols[i];
         const show = (e: { currentTarget: HTMLElement }) => setHovered({ label: p.label, anchor: e.currentTarget });
         return (
           <button
@@ -126,8 +143,12 @@ export default function ProjectRail({
             onMouseLeave={() => setHovered(null)}
             onBlur={() => setHovered(null)}
           >
-            <span className="project-rail-mono-major">{mono.major}</span>
-            <span className="project-rail-mono-minor">{mono.minor}</span>
+            <span className="project-rail-symbol" aria-hidden="true">
+              {symbol}
+            </span>
+            <span className="project-rail-name" aria-hidden="true">
+              {tileName(p.label)}
+            </span>
           </button>
         );
       })}

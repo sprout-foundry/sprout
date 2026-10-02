@@ -159,7 +159,7 @@ Full layout and data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Platfor
 | [MCP Integration](docs/MCP_INTEGRATION.md) | MCP server setup, configuration, troubleshooting |
 | [Agent Workflow](docs/AGENT_WORKFLOW.md) | Config-driven workflow sequences |
 | [Service / Daemon](docs/SERVICE.md) | Run sprout as a long-lived HTTP/WS service |
-| [Local LLM (MLX)](docs/LOCAL_LLM.md) | Local models via MLX (requires building from source) |
+| [Local LLM (MLX)](docs/LOCAL_LLM.md) | Run a model on your Mac (Apple Silicon), no API key |
 | [Provider Catalog](docs/PROVIDER_CATALOG.md) | Provider catalog system and model metadata |
 | [Provider Registry](docs/PROVIDER_REGISTRY.md) | Remote provider registry, community provider PRs |
 | [LSP Architecture](docs/LSP_ARCHITECTURE.md) | Language server integration |

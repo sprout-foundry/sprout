@@ -111,15 +111,15 @@ func analyzeStructural(f SyncFileInput, tree syncTree) []SyncDelta {
 			deltas = append(deltas, SyncDelta{
 				Delta: fmt.Sprintf("new route %q%s with no screen; propose %s",
 					route, componentSuffix(component), screenPath),
-				Kind:          DeltaKindScreen,
-				Basis:         DeltaBasisStructural,
-				Confidence:    ConfidenceMedium,
-				DesignFiles:   []string{screenPath},
-				SafeToApply:   true,
-				ScreenStem:    stem,
-				Status:        FlowDraftStatus,
-				CodeFiles:     []string{f.Path},
-				Evidence:      fmt.Sprintf("%s (line %d)", strings.TrimSpace(route), line),
+				Kind:        DeltaKindScreen,
+				Basis:       DeltaBasisStructural,
+				Confidence:  ConfidenceMedium,
+				DesignFiles: []string{screenPath},
+				SafeToApply: true,
+				ScreenStem:  stem,
+				Status:      FlowDraftStatus,
+				CodeFiles:   []string{f.Path},
+				Evidence:    fmt.Sprintf("%s (line %d)", strings.TrimSpace(route), line),
 			})
 
 			// The flow step that gets the screen into the graph. The source
@@ -131,17 +131,17 @@ func analyzeStructural(f SyncFileInput, tree syncTree) []SyncDelta {
 				deltas = append(deltas, SyncDelta{
 					Delta: fmt.Sprintf("new screen %q is not in any flow; propose edge %q in %s",
 						stem, edge, flowFile),
-					Kind:          DeltaKindFlow,
-					Basis:         DeltaBasisStructural,
-					Confidence:    ConfidenceMedium,
-					DesignFiles:   []string{flowFile},
-					SafeToApply:   true,
-					ScreenStem:    stem,
-					FlowEdge:      edge,
-					FlowFile:      flowFile,
-					Status:        FlowDraftStatus,
-					CodeFiles:     []string{f.Path},
-					Evidence:      fmt.Sprintf("route %q", route),
+					Kind:        DeltaKindFlow,
+					Basis:       DeltaBasisStructural,
+					Confidence:  ConfidenceMedium,
+					DesignFiles: []string{flowFile},
+					SafeToApply: true,
+					ScreenStem:  stem,
+					FlowEdge:    edge,
+					FlowFile:    flowFile,
+					Status:      FlowDraftStatus,
+					CodeFiles:   []string{f.Path},
+					Evidence:    fmt.Sprintf("route %q", route),
 				})
 			}
 		}
@@ -160,15 +160,15 @@ func analyzeStructural(f SyncFileInput, tree syncTree) []SyncDelta {
 		deltas = append(deltas, SyncDelta{
 			Delta: fmt.Sprintf("nav target %q has no screen; propose %s",
 				target, screenPath),
-			Kind:          DeltaKindScreen,
-			Basis:         DeltaBasisStructural,
-			Confidence:    ConfidenceMedium,
-			DesignFiles:   []string{screenPath},
-			SafeToApply:   true,
-			ScreenStem:    stem,
-			Status:        FlowDraftStatus,
-			CodeFiles:     []string{f.Path},
-			Evidence:      target,
+			Kind:        DeltaKindScreen,
+			Basis:       DeltaBasisStructural,
+			Confidence:  ConfidenceMedium,
+			DesignFiles: []string{screenPath},
+			SafeToApply: true,
+			ScreenStem:  stem,
+			Status:      FlowDraftStatus,
+			CodeFiles:   []string{f.Path},
+			Evidence:    target,
 		})
 	}
 	return deltas

@@ -156,7 +156,7 @@ function StatusBar({
           return (
             <div
               className="statusbar-item statusbar-item-auto-tier"
-              title="Auto mode — shared compute. Limited daily requests."
+              title="Auto: the platform chooses the model"
               data-testid="status-bar-auto-tier"
             >
               <Zap size={12} />

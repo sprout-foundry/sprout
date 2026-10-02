@@ -28,6 +28,9 @@ type SelectItem struct {
 	Label  string
 	Detail string
 	Value  string
+	// Key, when set, picks and confirms this item in one keypress
+	// (case-insensitive). Ignored in Searchable lists, where typing filters.
+	Key rune
 }
 
 // SelectListOptions configures a SelectList run.
@@ -51,6 +54,10 @@ type SelectListOptions struct {
 	// "press any key to continue"-style dismissal so the user doesn't
 	// have to reach for Esc or Enter. Ignored when Searchable is true.
 	DismissOnAnyKey bool
+	// ArmDelay ignores confirming keys (Enter, item shortcuts) for this
+	// long after the list appears, so keys typed ahead for something else
+	// can't pick an option the user never saw. Cancelling works at once.
+	ArmDelay time.Duration
 }
 
 // SelectList drives a single-column picker UI. The zero value is
@@ -58,12 +65,15 @@ type SelectListOptions struct {
 type SelectList struct {
 	opts SelectListOptions
 
-	mu       sync.Mutex
-	cursor   int    // index into the filtered list
-	filter   string // current filter text (Searchable=true only)
-	filtered []int  // indices into opts.Items, in display order
-	offset   int    // scroll offset into filtered (top-of-page)
-	rendered int    // number of rows we last drew (for in-place redraw)
+	mu             sync.Mutex
+	cursor         int    // index into the filtered list
+	filter         string // current filter text (Searchable=true only)
+	filtered       []int  // indices into opts.Items, in display order
+	offset         int    // scroll offset into filtered (top-of-page)
+	renderedWidths []int  // display width of each row we last drew (for in-place redraw)
+	// footerDriven is set while a live status footer redraws the picker on
+	// resize (see StatusFooter.Resize); the picker's own handler stands down.
+	footerDriven bool
 
 	fd    int
 	isTTY bool
@@ -101,6 +111,11 @@ type SelectList struct {
 	// lastEnterProcessed tracks whether we've already processed an Enter
 	// key to avoid re-processing multi-byte sequences like \r\n.
 	lastEnterProcessed bool
+	// armedAt is when confirming keys start counting (see ArmDelay).
+	armedAt time.Time
+	// hintOnFooter is set while the footer's hint row shows opts.Footer,
+	// so the frame leaves out its own copy.
+	hintOnFooter bool
 }
 
 // NewSelectList constructs a picker with the given options. Items
@@ -232,7 +247,32 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 	}
 	UnlockOutput()
 
+	if f := GetGlobalStatusFooter(); f != nil && f.canPinInput() && s.opts.Footer != "" {
+		s.hintOnFooter = f.SetHintOverride(s.opts.Footer)
+		defer f.SetHintOverride("")
+	}
 	s.render()
+	s.armedAt = time.Now().Add(s.opts.ArmDelay)
+
+	// Registered once the title and first frame are on screen, so
+	// background output prints above the picker instead of
+	// below it, where it would throw off the row count every redraw walks
+	// back over. With a live footer, the footer's resize also owns the
+	// cursor (it parks it on the scroll region's last row), so it drives
+	// the picker's resize redraw.
+	if f := GetGlobalStatusFooter(); f != nil && f.canPinInput() {
+		s.mu.Lock()
+		s.footerDriven = true
+		s.mu.Unlock()
+	}
+	LockOutput()
+	activeSelectList = s
+	UnlockOutput()
+	defer func() {
+		LockOutput()
+		activeSelectList = nil
+		UnlockOutput()
+	}()
 
 	for {
 		if ctx != nil {

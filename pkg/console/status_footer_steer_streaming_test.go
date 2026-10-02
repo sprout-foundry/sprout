@@ -40,9 +40,11 @@ func TestDrawLocked_RendersSteerRowsDuringProseStreaming(t *testing.T) {
 	if !strings.Contains(out, "fix the bug") {
 		t.Fatalf("drawLocked under proseStreaming did not render the steer line; output=%q", out)
 	}
-	// Chrome suppression: no rule row or content line mid-stream.
-	if strings.Contains(out, "──") {
-		t.Fatalf("drawLocked under proseStreaming rendered the rule row (chrome must stay suppressed); output=%q", out)
+	// Chrome suppression: the footer's own rule (row 23) and content line
+	// (row 24) stay untouched mid-stream. The input box's rule is part of
+	// the box, below the scroll region, and is drawn with it.
+	if strings.Contains(out, "\x1b[23;1H") || strings.Contains(out, "\x1b[24;1H") {
+		t.Fatalf("drawLocked under proseStreaming redrew footer chrome (must stay suppressed); output=%q", out)
 	}
 }
 

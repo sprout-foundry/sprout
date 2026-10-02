@@ -22,6 +22,11 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 		case EventTab:
 			r.acceptDropdown()
 			return
+		case EventEnter:
+			if r.autocomplete.fileMode {
+				r.acceptDropdown()
+				return
+			}
 		case EventEscape:
 			r.hideDropdown()
 			return
@@ -44,15 +49,14 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 		// before falling through to history recall.
 		if r.retractFn != nil {
 			r.mu.Lock()
-			canRetract := len(r.buffer) == 0 && r.historyIndex == -1
+			canRetract := r.line == "" && r.historyIndex == -1
 			r.mu.Unlock()
 			if canRetract {
 				// Called without r.mu: the callback reaches the agent's
 				// staging queue and must never re-enter the reader.
 				if text, ok := r.retractFn(); ok {
 					r.mu.Lock()
-					r.buffer = []byte(text)
-					r.cursorPos = len(r.buffer)
+					r.setLineLocked(text)
 					r.mu.Unlock()
 					r.renderLine()
 					return
@@ -76,6 +80,8 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 		r.moveWord(1)
 	case EventDeleteWordBackward:
 		r.deleteWordBackward()
+	case EventDeleteWordForward:
+		r.deleteWordForward()
 	case EventEscape:
 		r.clearBuffer()
 	case EventInterrupt:
@@ -115,19 +121,17 @@ func (r *SteerInputReader) acceptDropdown() {
 		r.mu.Unlock()
 		return
 	}
+	fileMode := r.autocomplete.fileMode
 	text := r.autocomplete.accept()
 	if text == "" {
 		r.mu.Unlock()
 		return
 	}
-	r.buffer = []byte(text)
-	r.cursorPos = len(r.buffer)
+	r.setLineLocked(text)
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.resetCompletionCycleLocked()
-	// Dismiss for the ACCEPTED text so the dropdown doesn't reappear
-	// for the same slash command the user just selected.
-	r.autocomplete.dismiss(string(r.buffer))
+	r.autocomplete.settleAfterAccept(r.line, fileMode)
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -139,17 +143,17 @@ func (r *SteerInputReader) acceptDropdown() {
 func (r *SteerInputReader) hideDropdown() {
 	r.mu.Lock()
 	if r.autocomplete != nil {
-		r.autocomplete.dismiss(string(r.buffer))
+		r.autocomplete.dismiss(r.line)
 	}
 	r.mu.Unlock()
 	r.renderLine()
 }
 
-// clearBuffer clears the steer buffer (plain ESC key).
+// clearBuffer clears the steer buffer (plain ESC key); Ctrl-_ brings it
+// back.
 func (r *SteerInputReader) clearBuffer() {
 	r.mu.Lock()
-	r.buffer = r.buffer[:0]
-	r.cursorPos = 0
+	r.setLineLocked("")
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.mu.Unlock()
@@ -161,8 +165,7 @@ func (r *SteerInputReader) clearBuffer() {
 // the user can keep typing or hit Ctrl+C again.
 func (r *SteerInputReader) handleInterrupt() {
 	r.mu.Lock()
-	r.buffer = r.buffer[:0]
-	r.cursorPos = 0
+	r.resetEdit()
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	cb := r.interruptFn
@@ -180,9 +183,8 @@ func (r *SteerInputReader) handleInterrupt() {
 // regardless of mode so up-arrow recall works across both.
 func (r *SteerInputReader) handleSubmit() {
 	r.mu.Lock()
-	text := string(r.buffer)
-	r.buffer = r.buffer[:0]
-	r.cursorPos = 0
+	text := r.line
+	r.resetEdit()
 	mode := r.submitMode
 	submit := r.submitFn
 	queue := r.queueFn

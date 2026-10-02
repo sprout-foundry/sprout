@@ -740,7 +740,7 @@ function CommandInput({
     let commandToSend = textareaValue.trim();
     const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages.map((img) => `[image: ${img.uploadedPath}]`).join('\n');
       commandToSend = `${imagePaths}\n\n${commandToSend}`;
     }
 
@@ -1015,7 +1015,7 @@ function CommandInput({
     let commandToQueue = textareaValue.trim();
     const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
     if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      const imagePaths = uploadedImages.map((img) => `[image: ${img.uploadedPath}]`).join('\n');
       commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
     }
 

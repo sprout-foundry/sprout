@@ -198,6 +198,7 @@ func (ir *InputReader) handleSuspend(oldState *term.State, nonBlocking bool) *te
 	// Re-enter cooked mode before suspension so the shell
 	// state is clean while the user is away.
 	term.Restore(ir.termFd, oldState)
+	fmt.Print(ShowCursorSeq())
 	suspendTerminal()
 
 	// Execution resumes here after SIGCONT (e.g. "fg").
@@ -222,6 +223,9 @@ func (ir *InputReader) handleSuspend(oldState *term.State, nonBlocking bool) *te
 	newState, err := term.MakeRaw(ir.termFd)
 	if err != nil {
 		return nil
+	}
+	if ir.composerPinned() {
+		fmt.Print(HideCursorSeq())
 	}
 
 	// Re-enable bracketed paste mode (lost when we exited raw mode).
@@ -256,12 +260,7 @@ func (ir *InputReader) handleSearchModeByte(b byte) (result searchByteResult, in
 	if b == 13 || b == 10 { // Enter — accept match
 		ir.exitSearchMode(true)
 		ir.Refresh()
-		fmt.Println()
-		input := ir.line
-		if input != "" {
-			ir.AddToHistory(input)
-		}
-		return searchReturn, input
+		return searchReturn, ir.finishSubmit()
 	} else if b == 27 { // Escape — cancel
 		ir.exitSearchMode(false)
 		ir.Refresh()

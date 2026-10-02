@@ -37,6 +37,35 @@ func (h *designSyncHandler) applySyncPlan(ctx context.Context, env ToolEnv, root
 
 	applied, writeErr := writeSyncPlan(ctx, env, plan)
 
+	// The flow tier's derived exports (§9b) hash their source's bytes: a
+	// successful plan that wrote a flow source refreshes the .mmd beside it
+	// so the tree does not sit with a stale-export error the moment apply
+	// finishes. Only on success — a failed apply rolled the tree back, and
+	// leaving a derived export behind would break that contract. Best effort:
+	// a refresh failure is logged, not fatal (the validator's regenerate
+	// remedy still applies).
+	refreshedFlows := 0
+	if writeErr == nil {
+		for _, w := range plan.Writes {
+			if w.Kind != design.DeltaKindFlow || !strings.HasSuffix(w.Path, ".json") {
+				continue
+			}
+			name := strings.TrimSuffix(filepath.Base(w.Path), ".json")
+			artifact, err := design.RenderFlowMDMArtifact(root, name)
+			if err != nil {
+				log.Printf("[design_sync] flow export refresh failed for %s: %v", name, err)
+				continue
+			}
+			abs, resolveErr := filesystem.SafeResolvePathForWriteWithBypass(ctx, artifact.RelPath)
+			if resolveErr != nil {
+				continue
+			}
+			if writeErr := os.WriteFile(abs, artifact.Content, 0o644); writeErr == nil {
+				refreshedFlows++
+			}
+		}
+	}
+
 	// On failure writeSyncPlan rolled back whatever it had applied, so nothing
 	// remains in the tree: report an empty applied set so the structured result
 	// matches reality (the plan still shows what was intended).
@@ -49,6 +78,7 @@ func (h *designSyncHandler) applySyncPlan(ctx context.Context, env ToolEnv, root
 		Applied:                 reported,
 		ProposalCount:           plan.ProposalCount,
 		OutsideDesign:           plan.Refused,
+		RefreshedFlowExports:    refreshedFlows,
 		ImplementationUntouched: true,
 	}
 	out.Apply = applyOut

@@ -24,7 +24,14 @@ interface LivePreviewProps {
   inlineAssets?: Record<string, string>;
 }
 
-function LivePreview({ content, language, fileName, onContentChange, previewPath, inlineAssets }: LivePreviewProps): JSX.Element {
+function LivePreview({
+  content,
+  language,
+  fileName,
+  onContentChange,
+  previewPath,
+  inlineAssets,
+}: LivePreviewProps): JSX.Element {
   const [editorContent, setEditorContent] = useState(content);
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [splitPercent, setSplitPercent] = useState<number>(50);

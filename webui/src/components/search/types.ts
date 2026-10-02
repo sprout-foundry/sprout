@@ -15,32 +15,6 @@ export interface SearchResult {
   match_count: number;
 }
 
-export interface SemanticSearchResult {
-  file: string;
-  name: string;
-  signature: string;
-  start_line: number;
-  end_line: number;
-  language: string;
-  similarity: number;
-  type: string; // "code_unit" or "file"
-  cluster_id?: number; // 0 or undefined = not clustered, 1+ = cluster group
-}
-
-export interface SemanticSearchResponse {
-  results: SemanticSearchResult[];
-  duplicate_clusters: DuplicateCluster[];
-  query: string;
-  total: number;
-  duration: string;
-}
-
-export interface DuplicateCluster {
-  files: string[];
-  similarity: number;
-  count?: number; // number of results in this cluster (may be undefined from backend)
-}
-
 export interface SearchViewProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
 }
@@ -66,20 +40,13 @@ export interface SearchState {
   caseSensitive: boolean;
   wholeWord: boolean;
   useRegex: boolean;
-  semanticMode: boolean;
   toggleCaseSensitive: () => void;
   toggleWholeWord: () => void;
   toggleRegex: () => void;
-  toggleSemanticMode: () => void;
 
   // Results
   results: SearchResult[] | null;
   filteredResults: SearchResult[] | null;
-  semanticResults: SemanticSearchResult[] | null;
-  semanticDuration: string | null;
-  /** Optional informational note returned by semantic search (e.g. unavailable in browser mode). */
-  semanticNote: string | null;
-  duplicateClusters: DuplicateCluster[] | null;
   totalMatches: number;
   totalFiles: number;
   truncated: boolean;
@@ -100,14 +67,6 @@ export interface SearchState {
   excludePatterns: string;
   setExcludePatterns: (p: string) => void;
 
-  // Semantic
-  semanticThreshold: number;
-  setSemanticThreshold: (v: number) => void;
-  indexStatus: { available: boolean; initialized: boolean; building: boolean; record_count: number } | null;
-  isBuilding: boolean;
-  /** True when the experimental embedding index is opted in (enabled && experimental). */
-  embeddingsEnabled: boolean;
-
   // Expansion
   expandedFiles: Set<string>;
   toggleFile: (filePath: string) => void;
@@ -127,13 +86,6 @@ export interface ResultRowCallbacks {
   toggleFile: (filePath: string) => void;
   highlightMatch: (line: string, colStart: number, colEnd: number) => ReactNode;
   expandedFiles: Set<string>;
-}
-
-/** Callbacks for semantic result rendering. */
-export interface SemanticResultCallbacks {
-  onFileClick: (filePath: string, lineNumber?: number) => void;
-  onMouseEnter: (e: React.MouseEvent<HTMLDivElement>, result: SemanticSearchResult) => void;
-  onMouseLeave: () => void;
 }
 
 export const DEBOUNCE_DELAY = 300;

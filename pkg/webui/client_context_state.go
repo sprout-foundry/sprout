@@ -124,7 +124,7 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 			_ = clientCtx.terminal.CloseAllSessions()
 		}
 		// Evicting the map entry does not stop the agent — its own background
-		// goroutines keep it (and its embedding index build) alive.
+		// goroutines keep it alive.
 		ws.releaseAgents("client_context_idle", clientCtx.agents...)
 	}
 

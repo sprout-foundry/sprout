@@ -8,7 +8,7 @@ import (
 // Layer merging needs to distinguish "this layer set the field to false" from
 // "this layer didn't mention the field". Go's zero value collapses both to
 // false, so the merge historically used truthiness as a proxy for
-// presence — `if override.EmbeddingIndex.Enabled { ... }`. That makes every
+// presence — `if override.Wakeup.Enabled { ... }`. That makes every
 // boolean one-way: a narrower layer can turn a flag ON but never OFF.
 //
 // The presence information exists in the raw JSON of each layer, so it's
@@ -123,7 +123,7 @@ func (c *Config) ExplicitKeyPaths() []string {
 }
 
 // SectionExplicitlySet reports whether any field under a section was named by
-// the layer, e.g. SectionExplicitlySet("embedding_index").
+// the layer, e.g. SectionExplicitlySet("wakeup").
 func (c *Config) SectionExplicitlySet(section string) bool {
 	if c == nil {
 		return false

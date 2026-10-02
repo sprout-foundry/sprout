@@ -17,7 +17,7 @@ import (
 const DefaultRemoteSocketTimeout = 10 * time.Minute
 
 // remoteConn wraps a single Unix-socket connection with a read/write lock.
-// The daemon protocols (embedding + agent) are request/response over one
+// The daemon agent protocol is request/response over one
 // stream, so a mutex serializes ops per connection.
 type remoteConn struct {
 	mu   sync.Mutex

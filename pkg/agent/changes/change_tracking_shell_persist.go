@@ -161,8 +161,7 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 		return marshalErr
 	}
 
-	// Atomic write: temp file in same dir, then rename. Same pattern as
-	// the embedding store's meta-file save.
+	// Atomic write: temp file in same dir, then rename.
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

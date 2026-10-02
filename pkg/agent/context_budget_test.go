@@ -65,8 +65,8 @@ func TestCompactionTriggerFractionInRange(t *testing.T) {
 // TestSP125_LowContextMode_32K verifies that an agent created against a 32K
 // context model auto-activates Low-Context Mode with the expected levers:
 // the 13-tool allowlist (ask_user added in a83ced640 for the cloud IDE
-// ask_user/edit-approval flows), the lite system prompt, proactive context
-// disabled, and the tighter compaction trigger.
+// ask_user/edit-approval flows), the lite system prompt, and the tighter
+// compaction trigger.
 func TestSP125_LowContextMode_32K(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	defer cleanup()
@@ -125,18 +125,13 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		t.Errorf("lite prompt + AGENTS.md should be > 1.5K tokens, got ~%d (empty?)", promptTokens)
 	}
 
-	// (d) Proactive context should be disabled.
-	if !agent.contextProfile.SkipProactiveContext {
-		t.Error("expected SkipProactiveContext=true in LCM")
-	}
-
-	// (e) Compaction trigger should be 0.85.
+	// (d) Compaction trigger should be 0.85.
 	trigger := agent.computeCompactionTriggerFraction()
 	if trigger != 0.85 {
 		t.Errorf("expected compaction trigger 0.85, got %.2f", trigger)
 	}
 
-	// (f) Recent turns to preserve should be 2.
+	// (e) Recent turns to preserve should be 2.
 	if agent.recentTurnsToPreserveFor() != 2 {
 		t.Errorf("expected recentTurnsToPreserve=2, got %d", agent.recentTurnsToPreserveFor())
 	}

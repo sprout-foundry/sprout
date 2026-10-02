@@ -130,8 +130,8 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	// Collect the outgoing agents before clearing the fields below. They are
 	// bound to the OLD workspace root, and without an explicit Shutdown their
-	// embedding managers keep building — and writing — that workspace's index
-	// for the rest of the daemon's life. Released after ws.mutex is dropped.
+	// MCP servers and background watchers keep running for the rest of the
+	// daemon's life. Released after ws.mutex is dropped.
 	releasing := chatSessionAgents(ctx)
 	ctx.Agent = nil
 	ctx.AgentState = emptyAgentStateSnapshot()

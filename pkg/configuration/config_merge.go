@@ -162,28 +162,6 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
-	// Merge EmbeddingIndex
-	if override.EmbeddingIndex != nil {
-		if result.EmbeddingIndex == nil {
-			result.EmbeddingIndex = &EmbeddingIndexConfig{}
-		}
-		if override.EmbeddingIndex.Enabled != nil {
-			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
-		}
-		if override.EmbeddingIndex.IndexDir != "" {
-			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir
-		}
-		if override.EmbeddingIndex.MaxResults > 0 {
-			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
-		}
-		if override.EmbeddingIndex.AutoIndex != nil {
-			result.EmbeddingIndex.AutoIndex = override.EmbeddingIndex.AutoIndex
-		}
-		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
-			result.EmbeddingIndex.ExcludePaths = append([]string{}, override.EmbeddingIndex.ExcludePaths...)
-		}
-	}
-
 	// Merge CustomProviders
 	if len(override.CustomProviders) > 0 {
 		if result.CustomProviders == nil {

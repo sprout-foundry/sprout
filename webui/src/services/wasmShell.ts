@@ -7,8 +7,6 @@
  *   console.log(result.stdout);
  */
 
-import { installSproutONNXBridge, installJinaBridge } from './sproutONNXBridge';
-import { installEmbeddingBackendController } from './embeddingBackendController';
 import { safeJsonParse } from '../utils/json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -334,22 +332,6 @@ export async function initWasmShell(config?: {
     await warmIdbCache();
 
     window.__sproutStore = store;
-
-    // Install the ONNX bridges so the Go-WASM build's embedding manager can
-    // delegate inference to onnxruntime-web running in this page.
-    //
-    // __sproutJinaONNX is the primary provider — the embedding manager now
-    // constructs Jina Code v2 exclusively (createONNXProvider →
-    // acquireSharedJinaProvider → NewJinaONNXEmbeddingProvider). The older
-    // __sproutONNX (EmbeddingGemma) bridge is kept for the wasmshell-level
-    // embedding wrapper (pkg/wasmshell/embedding_funcs.go) which still calls
-    // NewONNXEmbeddingProvider directly.
-    installSproutONNXBridge();
-    installJinaBridge();
-    // Install the SP-100 embedding-backend controller so the WASM shell's
-    // SproutWasm.switchEmbeddingBackend / .embeddingBackendStatus / .embeddingModel
-    // functions have a host-side handler to delegate to.
-    installEmbeddingBackendController();
 
     // 2. Load wasm_exec.js.
     debug(' Step 1: Loading wasm_exec.js...');

@@ -15,62 +15,6 @@ type Skill struct {
 	AllowedTools string            `json:"allowed_tools"` // Optional space-delimited list of pre-approved tools
 }
 
-// EmbeddingIndexConfig configures the embedding-based duplicate detection and semantic search.
-// Enabled and AutoIndex are *bool so a layer can distinguish "off" from "unspecified".
-type EmbeddingIndexConfig struct {
-	// Enabled controls whether the embedding index is active.
-	// nil means "not specified at this layer" — inherit from a broader layer.
-	Enabled *bool `json:"enabled,omitempty"`
-
-	// Experimental is a second, independent gate required alongside Enabled.
-	// Off by default, and — critically — a workspace config persisted before
-	// this field existed has no "experimental" key at all, so it decodes to
-	// nil (off) regardless of what Enabled was set to. That's deliberate:
-	// full-workspace auto-indexing was found to cause severe, unbounded
-	// native-memory growth (multi-GB spikes, outside what Go's own memory
-	// accounting or limits can see or bound — see pkg/embedding/index.go).
-	// Existing users with Enabled already true from before this gate must
-	// explicitly opt in again rather than silently keep auto-indexing.
-	Experimental *bool `json:"experimental,omitempty"`
-
-	// IndexDir is the directory where the embedding index JSONL files are stored.
-	// If empty, uses ~/.config/sprout/embeddings/
-	IndexDir string `json:"index_dir,omitempty"`
-
-	// MaxResults is the maximum number of duplicate candidates to return.
-	// Default: 3
-	MaxResults int `json:"max_results,omitempty"`
-
-	// AutoIndex controls whether the index is built automatically on first use.
-	// nil means "not specified at this layer" — inherit from a broader layer.
-	AutoIndex *bool `json:"auto_index,omitempty"`
-
-	// ExcludePaths is a list of additional paths to exclude from indexing.
-	ExcludePaths []string `json:"exclude_paths,omitempty"`
-}
-
-// IsEnabled reports whether the embedding index is on. Requires both Enabled
-// and Experimental — unspecified (nil) is off for either.
-func (e *EmbeddingIndexConfig) IsEnabled() bool {
-	return e != nil && e.Enabled != nil && *e.Enabled && e.IsExperimental()
-}
-
-// IsExperimental reports whether the experimental embedding-index opt-in is
-// set. Unspecified is off.
-func (e *EmbeddingIndexConfig) IsExperimental() bool {
-	return e != nil && e.Experimental != nil && *e.Experimental
-}
-
-// IsAutoIndex reports whether the index builds automatically. Unspecified is off.
-func (e *EmbeddingIndexConfig) IsAutoIndex() bool {
-	return e != nil && e.AutoIndex != nil && *e.AutoIndex
-}
-
-// SetEnabled, SetExperimental, and SetAutoIndex record an explicit value.
-func (e *EmbeddingIndexConfig) SetEnabled(v bool)      { e.Enabled = &v }
-func (e *EmbeddingIndexConfig) SetExperimental(v bool) { e.Experimental = &v }
-func (e *EmbeddingIndexConfig) SetAutoIndex(v bool)    { e.AutoIndex = &v }
-
 // ComputerUseConfig gates the computer_user persona's desktop-control tools. Off by default.
 type ComputerUseConfig struct {
 	// Enabled is the master switch. When false the computer_user tools are never registered.
@@ -253,74 +197,6 @@ func (c *EditApprovalConfig) ShouldGate(path string) bool {
 	default:
 		return false
 	}
-}
-
-// PersistentContextConfig configures persistent conversational context and memory retrieval.
-type PersistentContextConfig struct {
-	// ProactiveContextEnabled controls whether the system primes new sessions with relevant past work. Default: true.
-	ProactiveContextEnabled bool `json:"proactiveContextEnabled,omitempty"`
-
-	// MaxContextualResults is the maximum number of past turns to retrieve. Default: 5.
-	MaxContextualResults int `json:"maxContextualResults,omitempty"`
-
-	// MinRelevanceScore is the minimum time-decayed cosine similarity score. Range: 0.0–1.0. Default: 0.50.
-	MinRelevanceScore float64 `json:"minRelevanceScore,omitempty"`
-
-	// MaxContextChars is the hard cap on total injected character count. Default: 4000.
-	MaxContextChars int `json:"maxContextChars,omitempty"`
-
-	// WorkspaceScopedRetrieval restricts retrieval to the current workspace. Default: false.
-	WorkspaceScopedRetrieval bool `json:"workspaceScopedRetrieval,omitempty"`
-
-	// DriftDetectionEnabled controls whether conversational drift detection is active. Default: true.
-	DriftDetectionEnabled bool `json:"driftDetectionEnabled,omitempty"`
-
-	// DriftThreshold is the cosine similarity threshold below which drift is flagged. Default: 0.60.
-	DriftThreshold float64 `json:"driftThreshold,omitempty"`
-
-	// DriftCheckInterval is the number of turns between drift checks. Default: 5.
-	DriftCheckInterval int `json:"driftCheckInterval,omitempty"`
-
-	// RetentionDays controls how many days to keep persistent context entries. Default: 0 (never expire).
-	RetentionDays int `json:"retentionDays,omitempty"`
-}
-
-// Resolve fills in defaults for zero-value fields. Safe to call on nil.
-func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
-	result := PersistentContextConfig{
-		ProactiveContextEnabled:  true,
-		MaxContextualResults:     5,
-		MinRelevanceScore:        0.50,
-		MaxContextChars:          4000,
-		WorkspaceScopedRetrieval: true,
-		DriftDetectionEnabled:    true,
-		DriftThreshold:           0.60,
-		DriftCheckInterval:       5,
-	}
-	if c != nil {
-		result.ProactiveContextEnabled = c.ProactiveContextEnabled
-		if c.MaxContextualResults > 0 {
-			result.MaxContextualResults = c.MaxContextualResults
-		}
-		if c.MinRelevanceScore > 0 {
-			result.MinRelevanceScore = c.MinRelevanceScore
-		}
-		if c.MaxContextChars > 0 {
-			result.MaxContextChars = c.MaxContextChars
-		}
-		result.WorkspaceScopedRetrieval = c.WorkspaceScopedRetrieval
-		result.DriftDetectionEnabled = c.DriftDetectionEnabled
-		if c.DriftThreshold > 0 {
-			result.DriftThreshold = c.DriftThreshold
-		}
-		if c.DriftCheckInterval > 0 {
-			result.DriftCheckInterval = c.DriftCheckInterval
-		}
-		if c.RetentionDays > 0 {
-			result.RetentionDays = c.RetentionDays
-		}
-	}
-	return result
 }
 
 // ChangeTrackingConfig gates and tunes the ChangeTracker.

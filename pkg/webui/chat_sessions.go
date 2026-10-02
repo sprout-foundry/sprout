@@ -318,8 +318,8 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		cs.CurrentSessionID = strings.TrimSpace(created.GetSessionID())
 	} else {
 		// Lost the creation race. Shut our agent down rather than dropping the
-		// reference — it already spawned an embedding-index build and MCP
-		// servers, which would otherwise outlive the daemon's knowledge of it.
+		// reference — it already spawned MCP servers and background watchers,
+		// which would otherwise outlive the daemon's knowledge of it.
 		orphan := created
 		created = cs.Agent
 		utils.SafeGo(slog.Default(), "agent-shutdown", func() {

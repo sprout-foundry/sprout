@@ -110,10 +110,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	maybeStartUpdateCheck(chatAgent)
 	maybeRenderUpdateNotice(chatAgent)
 
-	// Embeddings are opt-in (they load a ~380MB model); recommend turning them
-	// on once per workspace so the feature stays discoverable without nagging.
-	maybeRecommendEmbeddingIndex(chatAgent)
-
 	// Create enhanced input reader with completion support.
 	// SP-048-5d: prompt includes the current model so users always know
 	// what they're talking to. Falls back to "sprout> " when the model

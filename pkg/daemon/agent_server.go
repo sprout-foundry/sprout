@@ -18,12 +18,11 @@ import (
 
 // Agent socket protocol (SP-136 P4): full CLI-on-daemon.
 //
-// The daemon owns agent state, conversation history, tool dispatch, and the
-// embedding index. The CLI is a presentation layer: it connects to the
+// The daemon owns agent state, conversation history, and tool dispatch. The CLI is a presentation layer: it connects to the
 // daemon's agent socket, sends a query, and renders the response/stream.
 //
-// Wire format: one JSON object per line, same ID-echo convention as the
-// embedding protocol. Ops:
+// Wire format: one JSON object per line; each response echoes the request
+// ID. Ops:
 //
 //	{"id":"1","op":"list_sessions"}                        → ListSessionsResponse
 //	{"id":"2","op":"create_session","session_name":"x"}    → SessionInfo
@@ -142,7 +141,7 @@ type AgentServer struct {
 	// OnClose, when non-nil, is invoked inside Close() after the listener and
 	// conns are closed, before Close returns. It blocks until the service's
 	// teardown finishes — mirroring webui's waitForAgentTeardown so a daemon
-	// exiting doesn't race an in-flight embedding-store flush.
+	// exiting doesn't race an in-flight state flush.
 	OnClose func()
 
 	ln    net.Listener

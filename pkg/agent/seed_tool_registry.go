@@ -39,9 +39,6 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 	}
 
 	for _, h := range tools.GetNewToolRegistry().All() {
-		if h.Definition().RequiresEmbeddings && (agent == nil || agent.GetEmbeddingManager() == nil) {
-			continue
-		}
 		if agent != nil {
 			// LCM tool allowlist: skip tools not in the curated set.
 			if allowSet != nil {

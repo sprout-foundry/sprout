@@ -11,9 +11,8 @@ import (
 
 // releaseAgents shuts down agents the server is dropping.
 //
-// Dropping the pointer is not enough. Agent.Shutdown is what closes the
-// EmbeddingManager (releasing its HNSW store and stopping an in-flight index
-// build), cancels the lifetime context that keeps background watchers running,
+// Dropping the pointer is not enough. Agent.Shutdown is what cancels the
+// lifetime context that keeps background watchers running,
 // and stops MCP child processes. An agent whose reference is merely cleared
 // stays reachable from its own goroutines, so it keeps running — and keeps
 // writing to the workspace index — for the life of the daemon.
@@ -53,7 +52,7 @@ func (ws *ReactWebServer) releaseAgents(reason string, agents ...*agent.Agent) {
 
 // waitForAgentTeardown blocks until every agent released so far has finished
 // shutting down. Shutdown() calls it so the daemon does not exit while an
-// agent is still flushing history or its embedding store; tests call it to
+// agent is still flushing history; tests call it to
 // order teardown writes before temp-directory cleanup.
 func (ws *ReactWebServer) waitForAgentTeardown() {
 	ws.agentTeardownWg.Wait()

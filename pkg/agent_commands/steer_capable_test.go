@@ -23,7 +23,6 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"risk-profile",
 		"max-context",
 		"skill",
-		"recall",
 		"search",
 		"transcript",
 		"verbose",
@@ -76,7 +75,6 @@ func TestSteerCapable_UnsafeCommands(t *testing.T) {
 		"review-deep",
 		"rollback",
 		"rewind",
-		"index",
 		"fork",
 	}
 
@@ -187,16 +185,16 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 		// Read-only / config commands (safe)
 		"info", "codegraph", "model", "provider", "help", "status",
 		"changes", "log", "mcp", "risk-profile", "max-context", "skill",
-		"recall", "search", "transcript", "verbose", "tools", "keys", "custom",
+		"search", "transcript", "verbose", "tools", "keys", "custom",
 		// Mutating commands (unsafe)
 		"setup", "settings", "compact", "sessions", "commit", "clear", "exit",
 		"init", "shell", "exec", "edit", "review", "review-deep", "rollback",
-		"rewind", "index", "fork",
+		"rewind", "fork",
 		// Subagent commands
 		"persona", "subagent-provider", "subagent-model",
 		"subagent-persona", "subagent-personas",
 		// Aliases that should resolve
-		"m", "p", "x", "q", "?", "h", "stats", "c", "s", "i", "e", "r",
+		"m", "p", "x", "q", "?", "h", "stats", "c", "s", "e", "r",
 		"cl", "cp", "st", "rb", "rw", "ch", "cg",
 	}
 
@@ -217,7 +215,6 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 		"usage":     {"stats"},
 		"commit":    {"c"},
 		"search":    {"s"},
-		"index":     {"i"},
 		"edit":      {"e"},
 		"review":    {"r"},
 		"clear":     {"cl", "new"},

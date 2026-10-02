@@ -61,14 +61,10 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"mcp": map[string]interface{}{},
 		// applyCustomProvidersSettings
 		"custom_providers": map[string]interface{}{},
-		// applyEmbeddingIndexSettings
-		"embedding_index": map[string]interface{}{},
 		// applyComputerUseSettings
 		"computer_use": map[string]interface{}{},
 		// applyLanguageServerSettings
 		"language_servers": []interface{}{},
-		// applyPersistentContextSettings
-		"persistent_context": map[string]interface{}{},
 		// applySkillsSettings
 		"skills": map[string]interface{}{},
 		// applyWakeupSettings
@@ -476,10 +472,8 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyVersionSettings",
 		"applyMCPSettings",
 		"applyCustomProvidersSettings",
-		"applyEmbeddingIndexSettings",
 		"applyComputerUseSettings",
 		"applyLanguageServerSettings",
-		"applyPersistentContextSettings",
 		"applySkillsSettings",
 		"applyWakeupSettings",
 		"applyCommandPoliciesSettings",

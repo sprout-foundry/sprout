@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -68,12 +67,6 @@ type ToolDefinition struct {
 	// to the model. Use it for superseded tools: existing callers keep
 	// working without the schema costing context on every turn.
 	Hidden bool `json:"-"`
-
-	// RequiresEmbeddings marks a tool that has no useful behavior without an
-	// embedding index. The registration path filters these out when the
-	// agent has no EmbeddingManager, so the model never sees a tool that
-	// would fail at execution time.
-	RequiresEmbeddings bool `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.
@@ -117,9 +110,6 @@ type ToolEnv struct {
 	MaxTokensFunc      func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
 	ConfigManager *configuration.Manager
-	// EmbeddingMgr is the agent's long-lived embedding manager. When set,
-	// tools must reuse it instead of constructing their own.
-	EmbeddingMgr *embedding.EmbeddingManager
 	// AskUser routes ask_user prompts through the active interactive channel
 	// (WebUI dialog when a browser is connected, terminal stdin otherwise).
 	// Nil means the tool must fall back to the CLI prompt directly.

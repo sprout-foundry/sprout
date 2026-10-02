@@ -140,7 +140,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"disable_thinking":               cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
-		"embedding_index":                cfg.EmbeddingIndex,
 		// SP-063: Computer Use config — gates the computer_user persona's
 		// desktop-control tools. Exposed read-only here; edits round-trip
 		// through applyPartialSettings.
@@ -150,7 +149,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"command_policies":        cfg.CommandPolicies,
 		"language_servers":        cfg.LanguageServers,
 		"security_policy":         cfg.SecurityPolicy,
-		"persistent_context":      cfg.PersistentContext,
 		// SP-058: risk profile + per-profile overrides. The single-
 		// value selector is editable via the settings UI; the
 		// per-profile map is read-only here (advanced; edit

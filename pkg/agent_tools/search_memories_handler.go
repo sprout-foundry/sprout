@@ -13,7 +13,6 @@ import (
 )
 
 // searchMemoriesHandler implements ToolHandler for the search_memories tool.
-// Uses text-based fallback since ToolEnv doesn't carry an EmbeddingManager.
 type searchMemoriesHandler struct{}
 
 func (h *searchMemoriesHandler) Name() string {
@@ -23,7 +22,7 @@ func (h *searchMemoriesHandler) Name() string {
 func (h *searchMemoriesHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "search_memories",
-		Description: "Search saved memories by name and content preview. Lists all memories and filters by text matching against the query. For semantic (vector) search, use the embedding_index tool to build the index first, then call search_memories through the agent.",
+		Description: "Search saved memories by name and content preview. Lists all memories and filters by text matching against the query.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "query",
@@ -154,7 +153,7 @@ type MemorySearchResult struct {
 }
 
 // SearchMemoriesByText lists all memory files and scores them against the query
-// using simple text matching. Returns nil when no embedding index is available.
+// using simple text matching.
 func SearchMemoriesByText(query string, topK int, threshold float64) ([]MemorySearchResult, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {

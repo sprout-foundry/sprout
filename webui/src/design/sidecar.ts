@@ -11,7 +11,7 @@
  * functions with no React, DOM, or I/O. The hash is a synchronous non-crypto
  * content hash (FNV-1a) rather than `crypto.subtle`: drift detection must be
  * synchronous, work identically in the browser and in tests, and — unlike
- * provenance/security hashes (`pkg/trace`, `pkg/embedding` use SHA-256) — it
+ * provenance/security hashes (`pkg/trace` uses SHA-256) — it
  * is a local change-detector with no adversarial requirement. The sidecar
  * remains a derived artifact: a false "fresh" reading is recoverable because
  * the canvas can always re-derive from the `.mmd` (SP-140 invariant 2).

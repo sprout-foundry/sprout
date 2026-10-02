@@ -10,7 +10,6 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
@@ -304,10 +303,6 @@ type Agent struct {
 	// computerUseAppAllowlist tracks apps the user has explicitly allowed for the rest of this session.
 	// Keys are bundle IDs (macOS) or "class:<window_class>" (Linux).
 	computerUseAppAllowlist map[string]bool
-
-	// Embedding index manager for duplicate detection on file writes.
-	embeddingMu  sync.RWMutex // protects embeddingMgr
-	embeddingMgr *embedding.EmbeddingManager
 
 	// Vision processor for image/PDF/OCR analysis. Lazily initialized on first GetVisionProcessor() call.
 	visionProcMu sync.RWMutex // protects visionProcessor

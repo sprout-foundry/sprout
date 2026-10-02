@@ -22,6 +22,9 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 		// Track whether we've processed an Enter to avoid re-processing
 		// multi-byte sequences like \r\n which can cause the picker to
 		// hang or behave unexpectedly
+		if !s.armed() {
+			return false, "", false
+		}
 		if s.lastEnterProcessed {
 			// Already processed an Enter - this is likely the second byte
 			// of a \r\n sequence. Skip it to avoid re-confirming.
@@ -44,6 +47,12 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 		}
 		return false, "", false
 	case b >= 0x20 && b < 0x7F: // printable ASCII
+		if val, ok := s.shortcut(rune(b)); ok {
+			if !s.armed() {
+				return false, "", false
+			}
+			return true, val, true
+		}
 		if s.opts.Searchable {
 			s.filterAppend(string(b))
 			s.render()
@@ -355,4 +364,23 @@ func (s *SelectList) confirm() (string, bool) {
 // so the user's keystroke isn't lost.
 func (s *SelectList) DismissKey() string {
 	return s.dismissKey
+}
+
+// shortcut returns the value of the item bound to key, if any.
+func (s *SelectList) shortcut(key rune) (string, bool) {
+	if s.opts.Searchable {
+		return "", false
+	}
+	key = unicode.ToLower(key)
+	for _, it := range s.opts.Items {
+		if it.Key != 0 && unicode.ToLower(it.Key) == key {
+			return it.Value, true
+		}
+	}
+	return "", false
+}
+
+// armed reports whether confirming keys are accepted yet (see ArmDelay).
+func (s *SelectList) armed() bool {
+	return !time.Now().Before(s.armedAt)
 }

@@ -37,6 +37,10 @@ type StatusFooter struct {
 	// sizeOverride pins terminalSize for tests (no pty needed). nil in
 	// production.
 	sizeOverride *terminalSizeOverride
+	// resizeSnapshot pins terminalSize for the duration of one Resize pass,
+	// so every step of the pass works from the same geometry even if the
+	// window keeps changing (a drag sends a burst of SIGWINCH).
+	resizeSnapshot atomic.Pointer[terminalSizeOverride]
 
 	// lastRows remembers the terminal height at the most recent draw so
 	// that a resize handler can clear the OLD footer rows (which would
@@ -63,11 +67,22 @@ type StatusFooter struct {
 	// lastHintRows is the hint row count we drew last time (0 or 1).
 	// Used by Resize/Stop to clear the old hint row when it was present.
 	lastHintRows int
+	// appliedReserved / appliedRows record the DECSTBM margins last sent,
+	// so shiftScrollRegionLocked can tell how far the pinned block grew or
+	// shrank since then.
+	appliedReserved int
+	appliedRows     int
+	// composerMode is what the pinned input box does on Enter; it picks
+	// the box's label, accent and placeholder and the hint row's wording.
+	composerMode ComposerMode
 
 	// SP-115: keyboard shortcut hint row. When showKeymapHint is true
 	// the footer reserves an extra pinned row above the rule to display
 	// registered keybindings (e.g. "Alt+T breakdown · Alt+V verbose").
 	showKeymapHint bool
+	// hintOverride, when set, replaces the hint row's wording (an open
+	// picker shows its own keys there).
+	hintOverride string
 
 	// SP-078 Phase 1: steerWrappedActive selects the width-aware
 	// WrapSteerLayout render path in drawLocked (instead of the legacy
@@ -354,6 +369,38 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 	}
 }
 
+// SetTurnActive switches the hint row between its mid-turn and idle
+// wording.
+func (f *StatusFooter) SetTurnActive(active bool) {
+	if f == nil {
+		return
+	}
+	mode := ComposerIdle
+	if active {
+		mode = ComposerSteer
+	}
+	if f.setComposerMode(mode) {
+		f.Refresh()
+	}
+}
+
+// SetComposerMode records what the input box does on Enter. The caller's
+// next box update redraws it.
+func (f *StatusFooter) SetComposerMode(mode ComposerMode) {
+	if f == nil {
+		return
+	}
+	f.setComposerMode(mode)
+}
+
+func (f *StatusFooter) setComposerMode(mode ComposerMode) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	changed := f.composerMode != mode
+	f.composerMode = mode
+	return changed
+}
+
 // SetShowKeymapHint enables/disables the keyboard shortcut hint row
 // above the rule. When true, drawLocked reserves an extra row.
 // SP-115.
@@ -362,8 +409,20 @@ func (f *StatusFooter) SetShowKeymapHint(show bool) {
 		return
 	}
 	f.mu.Lock()
+	changed := f.showKeymapHint != show
 	f.showKeymapHint = show
+	live := f.active && f.isTTY && !f.proseStreaming
 	f.mu.Unlock()
+	if !changed || !live {
+		return
+	}
+	// The row count changed under a live footer: re-apply the margins now
+	// rather than letting the next draw paint the hint over a transcript row.
+	LockOutput()
+	defer UnlockOutput()
+	f.shiftScrollRegionLocked()
+	f.applyScrollRegionLocked()
+	f.drawLocked()
 }
 
 // Resize handles a terminal-size change (SIGWINCH). The OLD footer rows

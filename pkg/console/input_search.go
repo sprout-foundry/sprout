@@ -152,6 +152,12 @@ func (ir *InputReader) searchHistory(query string, startIndex int) (string, int,
 
 // renderSearchPrompt draws the reverse-search prompt line.
 func (ir *InputReader) renderSearchPrompt() {
+	if ir.composerPinned() {
+		display := strings.ReplaceAll(ir.searchResult, "\n", "\\n")
+		text := fmt.Sprintf("%s(search) '%s': %s", ir.prompt, ir.searchQuery, display)
+		ir.footer.SetSteerLineWithCursor(text, len(text))
+		return
+	}
 	// Clear the current line and go to the beginning.
 	fmt.Printf("\r%s", ClearLineSeq())
 

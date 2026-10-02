@@ -496,7 +496,7 @@ func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
 func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
-	got := cliui.FormatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
+	got := cliui.FormatToolEndLine(0, "", "[OK] ", "read_file", " (foo.go)", 0.1) // icons arrive as Glyph.Prefix(), space included
 	want := "  [OK] read_file (foo.go) \x1b[2m· 0.1s\x1b[0m"
 	if got != want {
 		t.Errorf("FormatToolEndLine(0, ...) = %q, want %q", got, want)
@@ -505,7 +505,7 @@ func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
 
 func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := cliui.FormatToolEndLine(1, "coder", "[OK]", "read_file", " (foo.go)", 0.2)
+	got := cliui.FormatToolEndLine(1, "coder", "[OK] ", "read_file", " (foo.go)", 0.2)
 	if !strings.Contains(got, "[coder]") {
 		t.Errorf("depth-1 end line should include persona badge, got %q", got)
 	}
@@ -550,7 +550,8 @@ func TestWriteKeyboardHelp_IncludesSteerKeys(t *testing.T) {
 	writeKeyboardHelp(&buf)
 	got := buf.String()
 	for _, want := range []string{
-		"Steer panel",
+		"Steer box",
+		"Ctrl+_ (Ctrl+/)",
 		"Tab",
 		"toggle steer ↔ queue (queue auto-runs at turn end)",
 		"↑ / ↓",

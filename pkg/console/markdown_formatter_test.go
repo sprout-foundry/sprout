@@ -305,12 +305,9 @@ func TestMarkdownFormatter_BasicFormatting(t *testing.T) {
 			name:  "Headers",
 			input: "# Main Title\n## Subtitle\n### Section",
 			contains: []string{
-				ColorBold + ColorBrightBlue,
-				"█",
-				ColorBold + ColorCyan,
-				"▪",
-				ColorBold + ColorBlue,
-				"▸",
+				ColorBold + ColorUnderline + ColorBrightBlue + "Main Title",
+				ColorBold + ColorCyan + "Subtitle",
+				ColorBold + ColorBlue + "Section",
 			},
 		},
 		{

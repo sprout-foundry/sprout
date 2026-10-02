@@ -57,11 +57,12 @@ func FormatToolStartLine(depth int, persona, toolName, preview string) string {
 func FormatToolEndLine(depth int, persona, icon, toolName, preview string, durationSec float64) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
+	// icon is a Glyph.Prefix(), which carries its own trailing space.
 	if cmd, ok := ShellCommandLabel(toolName, preview); ok {
-		return fmt.Sprintf("%s  %s %s%s %s· %.1fs%s",
+		return fmt.Sprintf("%s  %s%s%s %s· %.1fs%s",
 			indent, icon, badge, cmd, console.Esc(console.ColorDim), durationSec, console.Esc(console.ColorReset))
 	}
-	return fmt.Sprintf("%s  %s %s%s%s %s· %.1fs%s",
+	return fmt.Sprintf("%s  %s%s%s%s %s· %.1fs%s",
 		indent, icon, badge, toolName, preview, console.Esc(console.ColorDim), durationSec, console.Esc(console.ColorReset))
 }
 

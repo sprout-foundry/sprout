@@ -29,7 +29,7 @@ var (
 
 func init() {
 	planCmd.Flags().StringVarP(&planModel, "model", "m", "", "Model name for planning")
-	planCmd.Flags().StringVarP(&planProvider, "provider", "p", "", "Provider to use")
+	planCmd.Flags().StringVarP(&planProvider, "provider", "p", "", providerFlagUsage)
 	planCmd.Flags().StringVarP(&planOutputFile, "output", "o", "", "Output file for the plan (default: plan.md)")
 	planCmd.Flags().BoolVarP(&planContinue, "continue", "c", false, "Continue from an existing plan file")
 	planCmd.Flags().BoolVarP(&planCreateTodos, "todos", "t", true, "Create todos from plan items during planning")

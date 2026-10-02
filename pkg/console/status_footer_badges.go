@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -56,8 +57,9 @@ func (f *StatusFooter) composeLine(cols int) string {
 	model := truncTo(f.source.Model(), 30)
 	used, limit := f.source.ContextTokens()
 	cost := f.source.TotalCost()
-	cwd := shortPath(f.source.WorkingDir())
-	branch := gitBranchOf(cwd)
+	workDir := f.source.WorkingDir()
+	cwd := shortPath(workDir)
+	branch := cachedGitBranchOf(workDir)
 
 	costText := formatCost(cost)
 
@@ -111,6 +113,15 @@ func (f *StatusFooter) composeLine(cols int) string {
 			parts = append(parts, styleSegment(badgeColorTodo, fmt.Sprintf("%d/%d done", done, total)))
 		}
 	}
+	// The path is the one badge that can shrink without losing meaning, so
+	// it gets whatever the others leave — shortened from the left, keeping
+	// the directory name and branch — instead of the tail truncation below
+	// cutting off the branch and every badge after it.
+	const cwdIdx = 3
+	others := slices.Delete(slices.Clone(parts), cwdIdx, cwdIdx+1)
+	budget := cols - 1 - visibleLen(" "+strings.Join(others, " · ")+" ") - len(" · ")
+	parts[cwdIdx] = styleSegment(badgeColorCwd, fitCwdSegment(cwd, branch, budget))
+
 	body := " " + strings.Join(parts, " · ") + " "
 	if visibleLen(body) >= cols {
 		return truncWithEllipsis(body, cols)

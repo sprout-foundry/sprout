@@ -228,6 +228,15 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			case 0x17: // Ctrl+W — delete previous word
 				r.deleteWordBackward()
 				continue
+			case 0x19: // Ctrl+Y — yank the last killed text
+				r.yank()
+				continue
+			case 0x1f: // Ctrl+_ (also Ctrl+/) — undo
+				r.undoEdit()
+				continue
+			case 0x0c: // Ctrl+L — repaint the box; clearing mid-turn would strand the live output line
+				r.repaint()
+				continue
 			case 0x18: // Ctrl+X — start of Ctrl-X Ctrl-E sequence
 				r.pendingCtrlX = true
 				continue

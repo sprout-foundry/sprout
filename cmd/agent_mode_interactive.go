@@ -43,8 +43,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	footerSource := &agentFooterSource{agent: chatAgent}
 	footer := console.NewStatusFooter(os.Stderr, footerSource)
 	console.RegisterGlobalStatusFooter(footer)
-	footer.Start()
-	defer footer.Stop()
 
 	// CLI-UX-12: register Alt+T (footer tooltip toggle) and Alt+V
 	// (output verbosity toggle) in the global keymap so power users
@@ -53,8 +51,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// terminal subscriber's isVerbose()/isCompact() helpers pick up
 	// the change on the next tool event (live-read). Idempotent — the
 	// registry uses sync.Once, so multiple mode-bootstrap calls
-	// (interactive + queue) only register once.
+	// (interactive + queue) only register once. Registered before
+	// Start so the first scroll region already reserves the hint row.
 	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+	footer.Start()
+	defer footer.Stop()
 
 	// Compact startup chrome: a single greeting line with the active
 	// provider/model so the first impression is "who am I talking to"

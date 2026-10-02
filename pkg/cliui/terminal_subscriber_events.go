@@ -300,20 +300,7 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 	// PrintExternal auto-appends a trailing newline when
 	// the message lacks one, so the format strings below
 	// omit \n.
-	var line string
-	switch category {
-	case "security_caution":
-		line = fmt.Sprintf("%s[%s] %s", console.GlyphWarning.Prefix(), SecurityCautionLabel, message)
-	case "security_loop":
-		line = fmt.Sprintf("%s[%s] %s", console.GlyphError.Prefix(), SecurityLoopLabel, message)
-	case "tool_error":
-		line = fmt.Sprintf("%s%s", console.GlyphError.Prefix(), message)
-	case "warning":
-		line = fmt.Sprintf("%s%s", console.GlyphWarning.Prefix(), message)
-	default:
-		line = fmt.Sprintf("%s%s", console.GlyphInfo.Prefix(), message)
-	}
-	console.PrintExternal(line)
+	console.PrintExternal(formatAgentNotice(category, message, console.StdoutColumns()))
 	s.run = nil
 	footer.Refresh()
 }
@@ -404,4 +391,26 @@ func StartTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 		state.runEventLoop(ctx, ch, chatAgent, indicator, footer)
 	}()
 	return state.ResetSpawnTurn
+}
+
+// formatAgentNotice lays out an agent message among the turn's tool lines:
+// indented like them, and wrapped with a hanging indent so a long error
+// stays readable instead of running across the terminal's hard wrap.
+func formatAgentNotice(category, message string, cols int) string {
+	var prefix string
+	switch category {
+	case "security_caution":
+		prefix = console.GlyphWarning.Prefix()
+		message = "[" + SecurityCautionLabel + "] " + strings.TrimPrefix(message, "[Security] ")
+	case "security_loop":
+		prefix = console.GlyphError.Prefix()
+		message = "[" + SecurityLoopLabel + "] " + message
+	case "tool_error":
+		prefix = console.GlyphError.Prefix()
+	case "warning":
+		prefix = console.GlyphWarning.Prefix()
+	default:
+		prefix = console.GlyphInfo.Prefix()
+	}
+	return console.WrapHanging("  "+prefix, message, cols)
 }

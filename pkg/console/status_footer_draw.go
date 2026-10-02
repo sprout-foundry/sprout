@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -71,9 +72,10 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 	steerLine := f.steerLine
 	steerCursor := f.steerCursor
 	steerWrapped := f.steerWrappedActive
-	steerRows := f.steerRowCount()
+	steerRows := f.steerBlockRows()
 	hintRows := f.hintRowCount()
 	reserved := f.reservedRowsLocked()
+	mode := f.composerMode
 	f.mu.Unlock()
 	if !steerActive || steerRows == 0 {
 		return
@@ -82,7 +84,6 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 	if rows < reserved+1 {
 		return
 	}
-	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
 	// Wrap the absolute-positioned writes in DECSC/DECRC. Without the
 	// save/restore, every mid-stream steer echo relocates the cursor to
 	// the steer row and leaves it there. Concurrent consumers that erase
@@ -91,20 +92,7 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 	// from the wrong row, miss their own rows, and stack duplicate
 	// frames on every keystroke.
 	fmt.Fprint(f.w, "\0337")
-	for i, lineText := range lines {
-		withCursor := false
-		col := -1
-		if steerCursor >= 0 || steerWrapped {
-			if i == cursorLineIdx {
-				withCursor = true
-				col = cursorByteCol
-			}
-		} else {
-			withCursor = i == len(lines)-1
-		}
-		rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, hintRows, i), steerColor, rendered, footerResetAll)
-	}
+	f.drawComposerLocked(steerLine, steerCursor, steerWrapped, steerRows, hintRows, rows, cols, mode)
 	fmt.Fprint(f.w, "\0338")
 }
 
@@ -131,7 +119,7 @@ func (f *StatusFooter) steerVisualLines(steerLine string, steerCursor, steerRows
 				if rawByteCol > len(lineText) {
 					rawByteCol = len(lineText)
 				}
-				cursorByteCol = visibleRuneWidth(lineText[:rawByteCol])
+				cursorByteCol = rawByteCol
 				break
 			}
 			offset = lineEnd + 1
@@ -155,8 +143,10 @@ func (f *StatusFooter) drawFullLocked() {
 	steerLine := f.steerLine
 	steerCursor := f.steerCursor
 	steerWrapped := f.steerWrappedActive
-	steerRows := f.steerRowCount()
+	steerRows := f.steerBlockRows()
 	hintRows := f.hintRowCount()
+	mode := f.composerMode
+	hintOverride := f.hintOverride
 	f.mu.Unlock()
 	if rows < reserved+1 {
 		return
@@ -169,32 +159,15 @@ func (f *StatusFooter) drawFullLocked() {
 	// UI" without leaking color into surrounding output.
 	fmt.Fprint(f.w, "\0337")
 	if steerActive && steerRows > 0 {
-		// SP-078 Phase 1: two render paths (wrapped vs legacy \n split),
-		// shared with drawSteerRowsLocked via steerVisualLines.
-		lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, steerRows, cols, steerWrapped)
-
-		for i, lineText := range lines {
-			withCursor := false
-			col := -1
-			if steerCursor >= 0 || steerWrapped {
-				// Cursor-aware path: caret only on the line the cursor
-				// actually falls on, at the computed column.
-				if i == cursorLineIdx {
-					withCursor = true
-					col = cursorByteCol
-				}
-			} else {
-				// Legacy path: caret at the end of the last line.
-				withCursor = i == len(lines)-1
-			}
-			rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, hintRows, i), steerColor, rendered, footerResetAll)
-		}
+		f.drawComposerLocked(steerLine, steerCursor, steerWrapped, steerRows, hintRows, rows, cols, mode)
 	}
 	// SP-115: keyboard shortcut hint row. Sits at rows-2 when hintRows=1
 	// (above the rule at rows-1, below the steer panel when active).
 	if hintRows > 0 {
-		hintLine := KeymapHintRow()
+		hintLine := KeymapHintRow(mode)
+		if hintOverride != "" {
+			hintLine = hintOverride
+		}
 		if hintLine != "" {
 			hintRow := rows - 1 - hintRows // hintRows is always 1 → rows-2
 			rendered := padToWidth(truncateToWidth(hintLine, cols, "…"), cols)
@@ -267,6 +240,9 @@ func (f *StatusFooter) terminalSize() (cols, rows int) {
 	if f.sizeOverride != nil {
 		return f.sizeOverride.cols, f.sizeOverride.rows
 	}
+	if snap := f.resizeSnapshot.Load(); snap != nil {
+		return snap.cols, snap.rows
+	}
 	if f.fd < 0 {
 		return 0, 0
 	}
@@ -302,4 +278,89 @@ func (f *StatusFooter) proseStreamingActive() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.proseStreaming
+}
+
+// drawComposerLocked draws the pinned input box: the dim rule on its top
+// row, then its text rows styled for mode (label and caret in the mode's
+// accent, typed text in the normal color, a placeholder when empty).
+// blockRows counts the rule. Caller must hold outputMu.
+func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, steerWrapped bool, blockRows, hintRows, rows, cols int, mode ComposerMode) {
+	_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s", steerRowFor(rows, blockRows, hintRows, 0), composerRule(cols), footerResetAll)
+	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, blockRows-1, cols, steerWrapped)
+	if steerWrapped {
+		f.mu.Lock()
+		row, col := f.steerCursorRow, f.steerCursorCol
+		f.mu.Unlock()
+		if r, c, ok := placeWrappedCaret(steerLine, lines, cols, row, col); ok {
+			cursorLineIdx, cursorByteCol = r, c
+		}
+	}
+	prefix := ComposerPrefix(mode)
+	prefixRow := -1
+	for i, lineText := range lines {
+		if prefixRow < 0 && strings.HasPrefix(lineText, prefix) {
+			prefixRow = i
+		}
+	}
+	for i, lineText := range lines {
+		withCursor := false
+		col := -1
+		if steerCursor >= 0 || steerWrapped {
+			if i == cursorLineIdx {
+				withCursor = true
+				col = cursorByteCol
+			}
+		} else {
+			withCursor = i == len(lines)-1
+		}
+		rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
+		empty := i == prefixRow && lineText == prefix && len(lines) == prefixRow+1
+		styled := styleComposerRow(rendered, i == prefixRow, empty, mode, cols)
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s", steerRowFor(rows, blockRows, hintRows, i+1), styled, footerResetAll)
+	}
+}
+
+// placeWrappedCaret maps the caller's caret — a row in the full wrapped
+// layout and a screen column — onto the rows actually shown (the layout
+// drops its top rows past maxSteerRows) and a byte offset in that row,
+// which is what steerRowTextWithCursor inserts the caret at. Reports false
+// when the caller gave no caret or it falls outside the shown rows, leaving
+// the caret at the end.
+func placeWrappedCaret(text string, shown []string, cols, row, col int) (int, int, bool) {
+	if row < 0 {
+		return 0, 0, false
+	}
+	all, _, _ := WrapSteerLayout(text, 0, cols, 0)
+	r := row - (len(all) - len(shown))
+	if r < 0 || r >= len(shown) {
+		return 0, 0, false
+	}
+	return r, byteIndexAtWidth(shown[r], col), true
+}
+
+// byteIndexAtWidth is the byte offset in s where screen column col begins.
+func byteIndexAtWidth(s string, col int) int {
+	w := 0
+	for i, r := range s {
+		if w >= col {
+			return i
+		}
+		w += runewidth.RuneWidth(r)
+	}
+	return len(s)
+}
+
+// SetHintOverride shows text on the hint row in place of the composer's
+// key hints; "" restores them. Reports whether the hint row is showing,
+// i.e. whether the text is visible.
+func (f *StatusFooter) SetHintOverride(text string) bool {
+	if f == nil {
+		return false
+	}
+	f.mu.Lock()
+	f.hintOverride = text
+	shown := f.showKeymapHint && f.active
+	f.mu.Unlock()
+	f.Refresh()
+	return shown
 }

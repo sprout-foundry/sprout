@@ -2,8 +2,12 @@ package console
 
 import (
 	"bytes"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // stubSource is a minimal ContentSource for tests.
@@ -343,6 +347,58 @@ func TestStatusFooter_ComposeLine_TruncatesAtNarrowWidth(t *testing.T) {
 	}
 }
 
+func TestStatusFooter_ComposeLine_ShortensLongPathKeepingLaterBadges(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model:     "m",
+		limit:     128000,
+		workdir:   "/srv/projects/some/deeply/nested/checkout/my-service",
+		subagents: 2,
+	})
+	line := f.composeLine(60)
+	if visibleLen(line) > 60 {
+		t.Fatalf("line overflows: visible=%d %q", visibleLen(line), line)
+	}
+	for _, want := range []string{"…/", "my-service", "2 sub"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("composeLine(60) missing %q: %q", want, line)
+		}
+	}
+}
+
+func TestStatusFooter_ComposeLine_BranchUnderHomeDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	repo := home + "/proj"
+	require.NoError(t, os.MkdirAll(repo, 0o755))
+	cmd := exec.Command("git", "-C", repo, "init", "-q", "-b", "trunk") //nolint:gosec // G204: git on the test's own temp dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git unavailable: %v %s", err, out)
+	}
+
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: repo})
+	line := f.composeLine(120)
+	require.Contains(t, line, "~/proj (trunk)", "the ~-shortened path must not hide the branch")
+}
+
+func TestFitCwdSegment(t *testing.T) {
+	cases := []struct {
+		cwd, branch string
+		width       int
+		want        string
+	}{
+		{"~/dev/app", "main", 40, "~/dev/app (main)"},
+		{"~/dev/sprout/.claude/worktrees/cli-tui", "wt", 26, "…/worktrees/cli-tui (wt)"},
+		{"~/dev/sprout/.claude/worktrees/cli-tui", "wt", 14, "…/cli-tui (wt)"},
+		{"~/dev/sprout/.claude/worktrees/cli-tui", "wt", 10, "cli-tui"},
+		{"~/dev/sprout/.claude/worktrees/cli-tui", "", 5, "cli-…"},
+	}
+	for _, tc := range cases {
+		if got := fitCwdSegment(tc.cwd, tc.branch, tc.width); got != tc.want {
+			t.Errorf("fitCwdSegment(%q, %q, %d) = %q, want %q", tc.cwd, tc.branch, tc.width, got, tc.want)
+		}
+	}
+}
+
 func TestStatusFooter_ComposeLine_PadsWithSpaces(t *testing.T) {
 	var buf bytes.Buffer
 	f := NewStatusFooter(&buf, &stubSource{
@@ -465,11 +521,18 @@ func TestStatusFooter_ComposeLine_BaselineSourceOmitsTurnSplit(t *testing.T) {
 // Cursor-aware steer rendering (SetSteerLineWithCursor + steerRowTextWithCursor)
 // ---------------------------------------------------------------------------
 
+func forceColor(t *testing.T) {
+	t.Helper()
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+}
+
 func TestSteerRowTextWithCursor_CaretAtEnd(t *testing.T) {
-	// cursorCol < 0 → legacy behavior: caret appended at the end.
+	forceColor(t)
+	// cursorCol < 0: block caret on a reversed space past the end.
 	out := steerRowTextWithCursor("hello", 20, true, -1)
-	if !strings.Contains(out, "▏") {
-		t.Fatalf("expected caret, got %q", out)
+	if !strings.Contains(out, "hello"+caretOn+" "+caretOff) {
+		t.Fatalf("expected block caret after the text, got %q", out)
 	}
 	if visibleLen(out) != 20 {
 		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
@@ -477,10 +540,11 @@ func TestSteerRowTextWithCursor_CaretAtEnd(t *testing.T) {
 }
 
 func TestSteerRowTextWithCursor_CaretAtMidBuffer(t *testing.T) {
-	// cursorCol = 1 → caret inserted between 'a' and 'b'.
+	forceColor(t)
+	// cursorCol = 1: the 'b' under the cursor is reversed, nothing inserted.
 	out := steerRowTextWithCursor("abc", 20, true, 1)
-	if !strings.Contains(out, "a▏bc") {
-		t.Fatalf("expected 'a▏bc' substring, got %q", out)
+	if !strings.Contains(out, "a"+caretOn+"b"+caretOff+"c") {
+		t.Fatalf("expected reversed 'b', got %q", out)
 	}
 	if visibleLen(out) != 20 {
 		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
@@ -488,17 +552,37 @@ func TestSteerRowTextWithCursor_CaretAtMidBuffer(t *testing.T) {
 }
 
 func TestSteerRowTextWithCursor_CaretAtStart(t *testing.T) {
+	forceColor(t)
 	out := steerRowTextWithCursor("abc", 20, true, 0)
-	if !strings.HasPrefix(visiblePart(out), "▏abc") {
-		t.Fatalf("expected caret at start, got %q", out)
+	if !strings.HasPrefix(out, caretOn+"a"+caretOff+"bc") {
+		t.Fatalf("expected caret on the first character, got %q", out)
 	}
 }
 
 func TestSteerRowTextWithCursor_CursorPastEndFallsBackToEnd(t *testing.T) {
-	// cursorCol >= len(text) → caret at end (legacy behavior).
+	forceColor(t)
 	out := steerRowTextWithCursor("abc", 20, true, 5)
-	if !strings.Contains(out, "abc▏") {
+	if !strings.Contains(out, "abc"+caretOn+" "+caretOff) {
 		t.Fatalf("expected caret at end when cursorCol past end, got %q", out)
+	}
+}
+
+func TestSteerRowTextWithCursor_FullRowKeepsItsLastCharacter(t *testing.T) {
+	forceColor(t)
+	// A row exactly as wide as the terminal: the caret must not push it
+	// over and cost it a character (the old inserted ▏ did).
+	row := strings.Repeat("x", 19) + "y"
+	out := steerRowTextWithCursor(row, 20, true, 2)
+	if strings.Contains(out, "…") || !strings.HasSuffix(out, "y") {
+		t.Fatalf("full-width row lost content to the caret: %q", out)
+	}
+}
+
+func TestSteerRowTextWithCursor_NoColorInsertsGlyph(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	out := steerRowTextWithCursor("abc", 20, true, 1)
+	if !strings.Contains(out, "a"+caretGlyph+"bc") || strings.Contains(out, caretOn) {
+		t.Fatalf("expected inserted caret glyph without color codes, got %q", out)
 	}
 }
 
@@ -514,11 +598,10 @@ func TestSteerRowTextWithCursor_NoCursorTruncatesWide(t *testing.T) {
 }
 
 func TestSteerRowTextWithCursor_CaretMidBufferTruncates(t *testing.T) {
-	// Long input with a mid-buffer cursor: caret still visible, line
-	// width respected.
+	forceColor(t)
 	long := strings.Repeat("a", 100)
 	out := steerRowTextWithCursor(long, 20, true, 3)
-	if !strings.Contains(out, "▏") {
+	if !strings.Contains(out, caretOn) {
 		t.Fatalf("caret should appear at mid buffer, got %q", out)
 	}
 	if visibleLen(out) != 20 {

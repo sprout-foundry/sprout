@@ -32,6 +32,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -62,9 +63,47 @@ const defaultCatalogURL = "https://raw.githubusercontent.com/sprout-foundry/spro
 const maxCatalogBytes int64 = 1 << 20
 
 type Catalog struct {
-	UpdatedAt string     `json:"updated_at"`
-	Source    string     `json:"source"`
-	Providers []Provider `json:"providers"`
+	UpdatedAt string `json:"updated_at"`
+	Source    string `json:"source"`
+	// OnboardingOrder lists provider IDs in the order setup surfaces offer
+	// them. It lives in the catalog so it updates with the remote refresh.
+	OnboardingOrder []string   `json:"onboarding_order,omitempty"`
+	Providers       []Provider `json:"providers"`
+}
+
+// OnboardingProviders returns the providers in onboarding order: those
+// named in OnboardingOrder first, in that order, then the rest in catalog
+// order.
+func (c Catalog) OnboardingProviders() []Provider {
+	rank := make(map[string]int, len(c.OnboardingOrder))
+	for i, id := range c.OnboardingOrder {
+		if _, seen := rank[id]; !seen {
+			rank[id] = i
+		}
+	}
+	out := append([]Provider(nil), c.Providers...)
+	sort.SliceStable(out, func(i, j int) bool {
+		ri, iRanked := rank[out[i].ID]
+		rj, jRanked := rank[out[j].ID]
+		switch {
+		case iRanked && jRanked:
+			return ri < rj
+		default:
+			return iRanked && !jRanked
+		}
+	})
+	return out
+}
+
+// OnboardingRank reports a provider's position in the current catalog's
+// onboarding order.
+func OnboardingRank(id string) (int, bool) {
+	for i, ranked := range Current().OnboardingOrder {
+		if ranked == id {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 type Provider struct {
@@ -213,6 +252,19 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 	return nil
 }
 
+// RefreshFromRemoteWithin refreshes the catalog, waiting at most timeout.
+// Setup flows call it so a fresh install sees current recommendations;
+// on failure the embedded catalog stays in use.
+func RefreshFromRemoteWithin(timeout time.Duration) {
+	ensureLoaded()
+	if inTestBinary() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	_ = RefreshFromRemote(ctx, "")
+}
+
 func RefreshFromRemoteAsync(url string) {
 	ensureLoaded()
 	// Skip the network fetch entirely when running under `go test`.  Without
@@ -231,6 +283,7 @@ func RefreshFromRemoteAsync(url string) {
 
 func cloneCatalog(catalog Catalog) Catalog {
 	out := catalog
+	out.OnboardingOrder = append([]string(nil), catalog.OnboardingOrder...)
 	out.Providers = make([]Provider, len(catalog.Providers))
 	for i, provider := range catalog.Providers {
 		outProvider := provider

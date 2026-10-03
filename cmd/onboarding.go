@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -153,6 +154,7 @@ func runGuidedOnboarding() bool {
 // value is treated as the provider ID so the user can still manually pick
 // (e.g. "openrouter") when the embedded catalog hasn't been loaded yet.
 func selectProviderInteractive() (string, bool) {
+	providercatalog.RefreshFromRemoteWithin(3 * time.Second)
 	catalog := providercatalog.Current()
 
 	var items []console.SelectItem
@@ -162,14 +164,14 @@ func selectProviderInteractive() (string, bool) {
 		// option plus skip. The manual entry item's value is a sentinel we
 		// detect below.
 		items = []console.SelectItem{
-			{Label: "Type provider ID manually", Detail: "e.g. openrouter, zai", Value: "__type__"},
+			{Label: "Type provider ID manually", Detail: "e.g. openrouter, deepinfra", Value: "__type__"},
 			{Label: "Skip (editor-only mode)", Detail: "set up AI later", Value: "skip"},
 		}
 	} else {
 		// Recommended first, then the rest. The local provider is listed
 		// only when this build can run it.
 		providers := make([]providercatalog.Provider, 0, len(catalog.Providers))
-		for _, p := range catalog.Providers {
+		for _, p := range catalog.OnboardingProviders() {
 			if p.ID == "sprout-local" && !localAIAvailable() {
 				continue
 			}
@@ -231,7 +233,7 @@ func selectProviderInteractive() (string, bool) {
 	}
 	// Manual type-in sentinel: fall back to a simple prompt.
 	if value == "__type__" {
-		fmt.Print("Enter provider ID (e.g. openrouter, zai): ")
+		fmt.Print("Enter provider ID (e.g. openrouter, deepinfra): ")
 		reader := bufio.NewReader(os.Stdin)
 		input, err := reader.ReadString('\n')
 		if err != nil {

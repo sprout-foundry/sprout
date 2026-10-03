@@ -25,14 +25,13 @@ the key; sprout handles the rest.
 
 | Provider | Best for | Get a key |
 |---|---|---|
-| **Z.AI** | Coding-focused workflows, GLM models | [platform.z.ai](https://platform.z.ai/) |
-| **MiniMax** | Large context windows, coding plans | [platform.minimax.io](https://platform.minimax.io/) |
-| **OpenRouter** | One key, access to many model families | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | **DeepInfra** | Hosted open models, pay-as-you-go | [deepinfra.com](https://deepinfra.com/dash/api_keys) |
+| **OpenRouter** | One key, access to many model families | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | **Chutes** | Low-friction experimentation | [chutes.ai](https://chutes.ai/) |
+| **MiniMax** | Large context windows, coding plans | [platform.minimax.io](https://platform.minimax.io/) |
 
-**Not sure?** Start with **OpenRouter** — one key gives you access to dozens of
-models (Claude, Gemini, DeepSeek, GLM, Qwen) so you can experiment freely.
+**Not sure?** Start with **DeepInfra** and the **DeepSeek V4.1 Flash** or
+**GLM-5.3-Flash** model — fast, strong at coding, and inexpensive.
 
 For a full list with live model availability, run:
 
@@ -47,11 +46,11 @@ sprout keys set   # then pick from the list
 ### Terminal (recommended for first run)
 
 ```bash
-sprout keys set zai
+sprout keys set deepinfra
 ```
 
 This prompts for your key, **validates it against the live API**, and stores it
-in your OS keyring (or encrypted file). Replace `zai` with your chosen provider.
+in your OS keyring (or encrypted file). Replace `deepinfra` with your chosen provider.
 
 If you don't specify a provider, you'll get an interactive menu.
 
@@ -65,12 +64,12 @@ If you don't specify a provider, you'll get an interactive menu.
 ### Environment variable (CI / scripts)
 
 ```bash
-export ZAI_API_KEY=sk-...
+export DEEPINFRA_API_KEY=...
 sprout agent "explain this codebase"
 ```
 
 Each provider has its own env var (e.g. `OPENROUTER_API_KEY`,
-`DEEPINFRA_API_KEY`). The key is read automatically — no config file needed.
+`MINIMAX_API_KEY`). The key is read automatically — no config file needed.
 
 ---
 
@@ -92,7 +91,7 @@ In the web UI, just start typing in the chat panel.
 You should see the active provider and model in your prompt prefix, e.g.:
 
 ```
-sprout · zai · glm-5
+sprout · deepinfra · deepseek-ai/DeepSeek-V4.1-Flash
 > _
 ```
 

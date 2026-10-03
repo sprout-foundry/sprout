@@ -25,7 +25,7 @@ Sprout runs on an AI model from a provider you choose. You pay the provider for 
 **1. Get an API key** from one of these:
 
 - **[DeepInfra](https://deepinfra.com/dash/api_keys)** — sign up, add a little credit, create an API key.
-- **[OpenRouter](https://openrouter.ai/keys)** — sign up, add credit, create an API key. One key gives you hundreds of models.
+- **[OpenRouter](https://openrouter.ai/keys)** — the alternative: sign up, add credit, create an API key. One key gives you hundreds of models.
 
 **2. Open your project and start Sprout:**
 
@@ -36,11 +36,13 @@ sprout
 
 The first run asks which provider you use, takes your key and checks it. You can also set the key ahead of time with `sprout keys set deepinfra` (or `openrouter`), or by exporting `DEEPINFRA_API_KEY` / `OPENROUTER_API_KEY`.
 
-**3. Pick a model.** We suggest **GLM-5.3-Flash** — fast, strong at coding, and inexpensive. In Sprout, type:
+**3. Pick a model.** We suggest **DeepSeek V4.1 Flash** or **GLM-5.3-Flash** — both fast, strong at coding, and inexpensive. In Sprout, type one of:
 
 ```
-/model zai-org/GLM-5.3-Flash       # on DeepInfra
-/model z-ai/glm-5.3-flash          # on OpenRouter
+/model deepseek-ai/DeepSeek-V4.1-Flash   # on DeepInfra
+/model zai-org/GLM-5.3-Flash             # on DeepInfra
+/model deepseek/deepseek-v4.1-flash      # on OpenRouter
+/model z-ai/glm-5.3-flash                # on OpenRouter
 ```
 
 `/model` on its own lists every model your provider offers; `/provider select` switches providers.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,27 @@ import (
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
+
+// roundPrice trims float noise introduced by per-token -> per-Mtok conversion
+// (e.g. 2.5e-8 * 1e6 == 0.024999999999999998). Rounding at 1e-9 keeps every
+// legitimate source precision while making auto-added entries byte-identical
+// to hand-verified ones.
+func roundPrice(v float64) float64 {
+	return math.Round(v*1e9) / 1e9
+}
+
+// sanitizePrice clamps a discovered per-million price to a non-negative value.
+// OpenRouter reports a negative sentinel (e.g. "-1") for models that have no
+// fixed per-token rate — routers such as openrouter/auto whose cost depends on
+// the route taken. Multiplying that sentinel by 1e6 leaked a bogus -1000000
+// into configs and the manifest, which would make cost estimates negative, so
+// treat it as "no known price" (0) instead.
+func sanitizePrice(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	return v
+}
 
 // DiscoverResult holds the comparison between live API models and the
 // provider's config file. It drives both the report and the auto-update logic.
@@ -164,10 +186,10 @@ func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface
 		entry["tags"] = tags
 	}
 	if m.Pricing != nil {
-		entry["input_cost"] = m.Pricing.InputPerMTok
-		entry["output_cost"] = m.Pricing.OutputPerMTok
+		entry["input_cost"] = roundPrice(sanitizePrice(m.Pricing.InputPerMTok))
+		entry["output_cost"] = roundPrice(sanitizePrice(m.Pricing.OutputPerMTok))
 		if m.Pricing.CachedPerMTok > 0 {
-			entry["cached_input_cost"] = m.Pricing.CachedPerMTok
+			entry["cached_input_cost"] = roundPrice(m.Pricing.CachedPerMTok)
 		}
 	}
 	return entry
@@ -291,9 +313,9 @@ func addModelsToManifest(manifestPath, providerID string, newModels []modelcontr
 			OutputPerMTok: 0,
 		}
 		if m.Pricing != nil {
-			entry.InputPerMTok = m.Pricing.InputPerMTok
-			entry.OutputPerMTok = m.Pricing.OutputPerMTok
-			entry.CachedPerMTok = m.Pricing.CachedPerMTok
+			entry.InputPerMTok = roundPrice(sanitizePrice(m.Pricing.InputPerMTok))
+			entry.OutputPerMTok = roundPrice(sanitizePrice(m.Pricing.OutputPerMTok))
+			entry.CachedPerMTok = roundPrice(sanitizePrice(m.Pricing.CachedPerMTok))
 		}
 		pm.Models = append(pm.Models, entry)
 		existing[m.ID] = true

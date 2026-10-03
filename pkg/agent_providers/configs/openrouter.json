@@ -640,21 +640,22 @@
         "context_length": 163840,
         "description": "DeepSeek-V3 is the latest model from the DeepSeek team, building upon the instruction following and coding abilities of the previous versions. Pre-trained on nearly 15 trillion tokens, the reported evaluations...",
         "id": "deepseek/deepseek-chat",
-        "input_cost": 0.32,
+        "input_cost": 0.2574,
         "name": "DeepSeek: DeepSeek V3",
-        "output_cost": 0.89,
+        "output_cost": 1.0287,
         "tags": [
           "tools",
           "structured_output"
         ]
       },
       {
+        "cached_input_cost": 0.11,
         "context_length": 163840,
         "description": "DeepSeek V3, a 685B-parameter, mixture-of-experts model, is the latest iteration of the flagship chat model family from the DeepSeek team. It succeeds the [DeepSeek V3](/deepseek/deepseek-chat-v3) model and performs really well...",
         "id": "deepseek/deepseek-chat-v3-0324",
-        "input_cost": 0.25,
+        "input_cost": 0.29,
         "name": "DeepSeek: DeepSeek V3 0324",
-        "output_cost": 1,
+        "output_cost": 1.14,
         "tags": [
           "tools",
           "structured_output"
@@ -717,7 +718,7 @@
         "context_length": 163840,
         "description": "DeepSeek-V3.1 Terminus is an update to [DeepSeek V3.1](/deepseek/deepseek-chat-v3.1) that maintains the model's original capabilities while addressing issues reported by users, including language consistency and agent capabilities, further optimizing the model's...",
         "id": "deepseek/deepseek-v3.1-terminus",
-        "input_cost": 0.27,
+        "input_cost": 0.3,
         "name": "DeepSeek: DeepSeek V3.1 Terminus",
         "output_cost": 1,
         "tags": [
@@ -727,13 +728,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1345,
+        "cached_input_cost": 0.028,
         "context_length": 163840,
         "description": "DeepSeek-V3.2 is a large language model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism...",
         "id": "deepseek/deepseek-v3.2",
-        "input_cost": 0.269,
+        "input_cost": 0.28,
         "name": "DeepSeek: DeepSeek V3.2",
-        "output_cost": 0.4,
+        "output_cost": 0.42,
         "tags": [
           "tools",
           "reasoning",
@@ -754,13 +755,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.011088,
+        "cached_input_cost": 0.0056,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.05544,
+        "input_cost": 0.028,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 0.11088,
+        "output_cost": 0.056,
         "tags": [
           "tools",
           "reasoning",
@@ -768,13 +769,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.016,
+        "cached_input_cost": 0.0051,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.04,
+        "input_cost": 0.0051,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
-        "output_cost": 0.16,
+        "output_cost": 1.28,
         "tags": [
           "tools",
           "reasoning",
@@ -782,13 +783,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0783,
+        "cached_input_cost": 0.0174,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.9396,
+        "input_cost": 0.2088,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 1.8792,
+        "output_cost": 0.4176,
         "tags": [
           "tools",
           "reasoning",
@@ -1441,9 +1442,9 @@
         "context_length": 1048576,
         "description": "Llama 4 Maverick 17B Instruct (128E) is a high-capacity multimodal language model from Meta, built on a mixture-of-experts (MoE) architecture with 128 experts and 17 billion active parameters per forward...",
         "id": "meta-llama/llama-4-maverick",
-        "input_cost": 0.2,
+        "input_cost": 0.1875,
         "name": "Meta: Llama 4 Maverick",
-        "output_cost": 0.8,
+        "output_cost": 0.6525,
         "tags": [
           "tools",
           "vision",
@@ -1527,7 +1528,7 @@
         "context_length": 1000000,
         "description": "MiniMax-M1 is a large-scale, open-weight reasoning model designed for extended context and high-efficiency inference. It leverages a hybrid Mixture-of-Experts (MoE) architecture paired with a custom \"lightning attention\" mechanism, allowing it...",
         "id": "minimax/minimax-m1",
-        "input_cost": 0.4,
+        "input_cost": 0.55,
         "name": "MiniMax: MiniMax M1",
         "output_cost": 2.2,
         "tags": [
@@ -1539,9 +1540,9 @@
         "context_length": 204800,
         "description": "MiniMax-M2 is a compact, high-efficiency large language model optimized for end-to-end coding and agentic workflows. With 10 billion activated parameters (230 billion total), it delivers near-frontier intelligence across general reasoning,...",
         "id": "minimax/minimax-m2",
-        "input_cost": 0.255,
+        "input_cost": 0.3,
         "name": "MiniMax: MiniMax M2",
-        "output_cost": 1.02,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "reasoning",
@@ -1590,13 +1591,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.06,
+        "cached_input_cost": 0.042,
         "context_length": 204800,
         "description": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participate in its own evolution, M2.7 integrates advanced agentic capabilities through multi-agent...",
         "id": "minimax/minimax-m2.7",
-        "input_cost": 0.3,
+        "input_cost": 0.21,
         "name": "MiniMax: MiniMax M2.7",
-        "output_cost": 1.2,
+        "output_cost": 0.84,
         "tags": [
           "tools",
           "reasoning",
@@ -1909,13 +1910,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.16,
+        "cached_input_cost": 0.07312,
         "context_length": 262144,
         "description": "Kimi K2.6 is Moonshot AI's next-generation multimodal model, designed for long-horizon coding, coding-driven UI/UX generation, and multi-agent orchestration. It handles complex end-to-end coding tasks across Python, Rust, and Go, and...",
         "id": "moonshotai/kimi-k2.6",
-        "input_cost": 0.95,
+        "input_cost": 0.43415,
         "name": "MoonshotAI: Kimi K2.6",
-        "output_cost": 4,
+        "output_cost": 1.828,
         "tags": [
           "tools",
           "vision",
@@ -1928,9 +1929,9 @@
         "context_length": 262144,
         "description": "MoonshotAI: Kimi K2.7 Code is a coding-focused model in Moonshot AI's Kimi K2 family, built to complete end-to-end programming tasks reliably over long contexts. It uses a native multimodal mixture-of-experts...",
         "id": "moonshotai/kimi-k2.7-code",
-        "input_cost": 0.7062,
+        "input_cost": 0.6712,
         "name": "MoonshotAI: Kimi K2.7 Code",
-        "output_cost": 3.21,
+        "output_cost": 3.35,
         "tags": [
           "tools",
           "vision",
@@ -1939,13 +1940,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.27,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 1.7,
+        "input_cost": 2.7,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 8.5,
+        "output_cost": 13.5,
         "tags": [
           "tools",
           "vision",
@@ -2052,12 +2053,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3 Nano 30B A3B is a small language MoE model with highest compute efficiency and accuracy for developers to build specialized agentic AI systems. The model is fully...",
         "id": "nvidia/nemotron-3-nano-30b-a3b",
-        "input_cost": 0.06,
+        "input_cost": 0.05,
         "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
-        "output_cost": 0.24,
+        "output_cost": 0.2,
         "tags": [
           "tools",
           "reasoning",
@@ -2116,13 +2118,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.12,
+        "cached_input_cost": 0.1,
         "context_length": 512288,
         "description": "NVIDIA Nemotron 3 Ultra is an open frontier-reasoning and orchestration model from NVIDIA, with 55B active parameters out of 550B total (MoE). Built on a hybrid Transformer-Mamba mixture-of-experts architecture, it...",
         "id": "nvidia/nemotron-3-ultra-550b-a55b",
-        "input_cost": 0.6,
+        "input_cost": 0.5,
         "name": "NVIDIA: Nemotron 3 Ultra",
-        "output_cost": 2.4,
+        "output_cost": 2.2,
         "tags": [
           "tools",
           "reasoning",
@@ -2770,13 +2772,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.2,
+        "cached_input_cost": 0.4,
         "context_length": 1050000,
         "description": "GPT-5.6 Sol Pro is the same underlying model as [GPT-5.6 Sol](https://openrouter.ai/openai/gpt-5.6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
         "id": "openai/gpt-5.6-sol-pro",
-        "input_cost": 2,
+        "input_cost": 4,
         "name": "OpenAI: GPT-5.6 Sol Pro",
-        "output_cost": 10,
+        "output_cost": 20,
         "tags": [
           "tools",
           "vision",
@@ -2853,13 +2855,12 @@
         ]
       },
       {
-        "cached_input_cost": 0.075,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
         "id": "openai/gpt-oss-120b",
-        "input_cost": 0.15,
+        "input_cost": 0.037,
         "name": "OpenAI: gpt-oss-120b",
-        "output_cost": 0.6,
+        "output_cost": 0.17,
         "tags": [
           "tools",
           "reasoning",
@@ -2867,13 +2868,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.009,
         "context_length": 131072,
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for...",
         "id": "openai/gpt-oss-20b",
-        "input_cost": 0.03,
+        "input_cost": 0.018,
         "name": "OpenAI: gpt-oss-20b",
-        "output_cost": 0.13,
+        "output_cost": 0.09,
         "tags": [
           "tools",
           "reasoning",
@@ -3026,9 +3027,9 @@
         "context_length": 2000000,
         "description": "Your prompt will be processed by a meta-model and routed to one of dozens of models (see below), optimizing for the best possible output. To see which model was used,...",
         "id": "openrouter/auto",
-        "input_cost": -1000000,
+        "input_cost": 0,
         "name": "Auto Router",
-        "output_cost": -1000000,
+        "output_cost": 0,
         "tags": [
           "tools",
           "vision",
@@ -3040,9 +3041,9 @@
         "context_length": 2000000,
         "description": "Auto Router (Beta) is a task-aware router from OpenRouter. It classifies each request, then routes it the [most popular model](/rankings#task-spend) for that task based on aggregate spend, filtered by your...",
         "id": "openrouter/auto-beta",
-        "input_cost": -1000000,
+        "input_cost": 0,
         "name": "Auto Router (Beta)",
-        "output_cost": -1000000,
+        "output_cost": 0,
         "tags": [
           "tools",
           "vision",
@@ -3054,9 +3055,9 @@
         "context_length": 128000,
         "description": "Transform your natural language requests into structured OpenRouter API request objects. Describe what you want to accomplish with AI models, and Body Builder will construct the appropriate API calls. Example:...",
         "id": "openrouter/bodybuilder",
-        "input_cost": -1000000,
+        "input_cost": 0,
         "name": "Body Builder (beta)",
-        "output_cost": -1000000,
+        "output_cost": 0,
         "tags": [
           "tools",
           "structured_output"
@@ -3080,9 +3081,9 @@
         "context_length": 1000000,
         "description": "Fusion turns your prompt into a small multi-model deliberation. A panel of expert models (see below) analyzes your prompt in parallel with web search and web fetch enabled, then a...",
         "id": "openrouter/fusion",
-        "input_cost": -1000000,
+        "input_cost": 0,
         "name": "OpenRouter: Fusion",
-        "output_cost": -1000000,
+        "output_cost": 0,
         "tags": [
           "tools",
           "reasoning"
@@ -3092,9 +3093,9 @@
         "context_length": 2000000,
         "description": "The Pareto Router maintains a tiered shortlist of strong coding models, ranked by [Artificial Analysis](https://artificialanalysis.ai/) coding percentiles. Set min_coding_score between 0 and 1 on the [pareto-router plugin](https://openrouter.ai/docs/guides/routing/routers/pareto-router#the-min_coding_score-parameter) to control how...",
         "id": "openrouter/pareto-code",
-        "input_cost": -1000000,
+        "input_cost": 0,
         "name": "Pareto Code Router",
-        "output_cost": -1000000,
+        "output_cost": 0,
         "tags": [
           "coding",
           "tools"
@@ -3515,10 +3516,11 @@
         ]
       },
       {
+        "cached_input_cost": 0.07,
         "context_length": 262144,
         "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without “thinking” traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
         "id": "qwen/qwen3-next-80b-a3b-instruct",
-        "input_cost": 0.09,
+        "input_cost": 0.1,
         "name": "Qwen: Qwen3 Next 80B A3B Instruct",
         "output_cost": 1.1,
         "tags": [
@@ -3571,9 +3573,9 @@
         "context_length": 262144,
         "description": "Qwen3-VL-30B-A3B-Instruct is a multimodal model that unifies strong text generation with visual understanding for images and videos. Its Instruct variant optimizes instruction-following for general multimodal tasks. It excels in perception...",
         "id": "qwen/qwen3-vl-30b-a3b-instruct",
-        "input_cost": 0.13,
+        "input_cost": 0.15,
         "name": "Qwen: Qwen3 VL 30B A3B Instruct",
-        "output_cost": 0.52,
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "vision",
@@ -3663,13 +3665,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.15625,
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "The Qwen3.5 Series 35B-A3B is a native vision-language model designed with a hybrid architecture that integrates linear attention mechanisms and a sparse mixture-of-experts model, achieving higher inference efficiency. Its overall...",
         "id": "qwen/qwen3.5-35b-a3b",
-        "input_cost": 0.3125,
+        "input_cost": 0.15,
         "name": "Qwen: Qwen3.5-35B-A3B",
-        "output_cost": 1.25,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -3749,13 +3751,12 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities — accepting text, image, and video inputs...",
         "id": "qwen/qwen3.6-27b",
-        "input_cost": 0.3,
+        "input_cost": 0.32,
         "name": "Qwen: Qwen3.6 27B",
-        "output_cost": 2,
+        "output_cost": 3.2,
         "tags": [
           "tools",
           "vision",
@@ -4075,11 +4076,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.16,
         "context_length": 1048576,
         "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
         "id": "thinkingmachines/inkling",
-        "input_cost": 1,
+        "input_cost": 0.95,
         "name": "Thinking Machines: Inkling",
         "output_cost": 4.05,
         "tags": [
@@ -4301,7 +4302,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.055,
+        "cached_input_cost": 0.05,
         "context_length": 131072,
         "description": "GLM-4.6V is a large multimodal model designed for high-fidelity visual understanding and long-context reasoning across images, documents, and mixed media. It supports up to 128K tokens, processes complex page layouts...",
         "id": "z-ai/glm-4.6v",
@@ -4316,13 +4317,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.08,
+        "cached_input_cost": 0.11,
         "context_length": 204800,
         "description": "GLM-4.7 is Z.ai’s latest flagship model, featuring upgrades in two key areas: enhanced programming capabilities and more stable multi-step reasoning/execution. It demonstrates significant improvements in executing complex agent tasks while...",
         "id": "z-ai/glm-4.7",
-        "input_cost": 0.4,
+        "input_cost": 0.6,
         "name": "Z.ai: GLM 4.7",
-        "output_cost": 1.75,
+        "output_cost": 2.2,
         "tags": [
           "tools",
           "reasoning",
@@ -4371,13 +4372,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1794,
+        "cached_input_cost": 0.17914,
         "context_length": 204800,
         "description": "GLM-5.1 delivers a major leap in coding capability, with particularly significant gains in handling long-horizon tasks. Unlike previous models built around minute-level interactions, GLM-5.1 can work independently and continuously on...",
         "id": "z-ai/glm-5.1",
-        "input_cost": 0.966,
+        "input_cost": 0.9646,
         "name": "Z.ai: GLM 5.1",
-        "output_cost": 3.036,
+        "output_cost": 3.0316,
         "tags": [
           "tools",
           "reasoning",
@@ -4385,13 +4386,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.12064,
+        "cached_input_cost": 0.26,
         "context_length": 1048576,
         "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
         "id": "z-ai/glm-5.2",
-        "input_cost": 0.6496,
+        "input_cost": 0.41,
         "name": "Z.ai: GLM 5.2",
-        "output_cost": 2.0416,
+        "output_cost": 3.99,
         "tags": [
           "tools",
           "reasoning",
@@ -4399,13 +4400,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.169,
+        "cached_input_cost": 0.14,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
         "id": "z-ai/glm-5.3",
-        "input_cost": 0.91,
+        "input_cost": 1.4,
         "name": "Z.ai: GLM 5.3",
-        "output_cost": 2.86,
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
@@ -4458,13 +4459,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.5,
+        "cached_input_cost": 0.2,
         "context_length": 1000000,
         "description": "This model always redirects to the latest model in the Claude Opus family.",
         "id": "~anthropic/claude-opus-latest",
-        "input_cost": 5,
+        "input_cost": 4,
         "name": "Anthropic: Claude Opus Latest",
-        "output_cost": 25,
+        "output_cost": 20,
         "tags": [
           "tools",
           "vision",
@@ -4518,13 +4519,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.8,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 1.7,
+        "input_cost": 1.34,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 8.5,
+        "output_cost": 13,
         "tags": [
           "tools",
           "vision",
@@ -4593,13 +4594,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.016,
+        "cached_input_cost": 0.0051,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.04,
+        "input_cost": 0.0051,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.16,
+        "output_cost": 1.28,
         "tags": [
           "tools",
           "reasoning",
@@ -5527,9 +5528,9 @@
         "context_length": 131072,
         "description": "Muse Glimmer 30B is a dense, open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark and optimized for autonomous agents on consumer hardware. It is suited for long-horizon agentic and coding workflows, with multi-step reasoning, reliable tool use, failure recovery, image understanding, and multilingual support across more than 100 languages.",
         "id": "meta/muse-glimmer-30b",
-        "input_cost": 0.3,
+        "input_cost": 0.35,
         "name": "Meta: Muse Glimmer 30B",
-        "output_cost": 1.2,
+        "output_cost": 1.5,
         "tags": [
           "tools",
           "vision",
@@ -5594,13 +5595,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.04,
+        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that benefit from domain-specific customization.",
         "id": "nvidia/nemotron-3.5-lightning",
-        "input_cost": 0.07,
+        "input_cost": 0.06,
         "name": "NVIDIA: Nemotron 3.5 Lightning",
-        "output_cost": 0.2,
+        "output_cost": 0.16,
         "tags": [
           "reasoning",
           "structured_output"
@@ -5633,13 +5634,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.019184,
+        "cached_input_cost": 0.022,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro 0813 is a large-scale mixture-of-experts model from DeepSeek. This is the GA release of DeepSeek V4 Pro, with a 1M-token context window and support for tool calls, JSON output, and thinking mode.",
         "id": "deepseek/deepseek-v4-pro-0813",
-        "input_cost": 0.57552,
+        "input_cost": 0.66,
         "name": "DeepSeek: DeepSeek V4 Pro 0813",
-        "output_cost": 1.72656,
+        "output_cost": 1.98,
         "tags": [
           "tools",
           "reasoning",
@@ -5720,13 +5721,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.085,
         "context_length": 262144,
         "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
         "id": "qwen/qwen3.8-27b",
-        "input_cost": 0.2,
+        "input_cost": 0.42,
         "name": "Qwen: Qwen3.8 27B",
-        "output_cost": 2.5,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -5746,13 +5747,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.007,
+        "cached_input_cost": 0.00686,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash Vision Exp is an experimental vision-enabled version of [DeepSeek V4 Flash 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731) from DeepSeek, adding image understanding while matching the base model on text capabilities including agents,...",
         "id": "deepseek/deepseek-v4-flash-vision-exp",
-        "input_cost": 0.22,
+        "input_cost": 0.2156,
         "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
-        "output_cost": 0.66,
+        "output_cost": 0.6468,
         "tags": [
           "tools",
           "vision",
@@ -5900,13 +5901,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.14352,
+        "cached_input_cost": 0.08,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
-        "input_cost": 0.7728,
+        "input_cost": 0.12,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 2.4288,
+        "output_cost": 4,
         "tags": [
           "tools",
           "reasoning",
@@ -5941,13 +5942,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.018,
+        "cached_input_cost": 0.03,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.09,
+        "input_cost": 0.15,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.3,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -6097,13 +6098,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.3,
+        "cached_input_cost": 0.228,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at complex tool use and long-context reasoning.",
         "id": "moonshotai/kimi-k3:batch",
-        "input_cost": 3,
+        "input_cost": 2.28,
         "name": "MoonshotAI: Kimi K3 (batch)",
-        "output_cost": 15,
+        "output_cost": 11.4,
         "tags": [
           "tools",
           "vision",
@@ -6115,9 +6116,9 @@
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized for efficient inference on a single H100 GPU.",
         "id": "openai/gpt-oss-120b:batch",
-        "input_cost": 0.15,
+        "input_cost": 0.0296,
         "name": "OpenAI: gpt-oss-120b (batch)",
-        "output_cost": 0.6,
+        "output_cost": 0.136,
         "tags": [
           "tools",
           "reasoning",
@@ -6128,9 +6129,9 @@
         "context_length": 131072,
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for low-latency reasoning and agentic workloads.",
         "id": "openai/gpt-oss-20b:batch",
-        "input_cost": 0.05,
+        "input_cost": 0.024,
         "name": "OpenAI: gpt-oss-20b (batch)",
-        "output_cost": 0.2,
+        "output_cost": 0.112,
         "tags": [
           "reasoning",
           "structured_output"
@@ -6193,13 +6194,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.015,
+        "cached_input_cost": 0.012,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while delivering flash-tier cost and latency.",
         "id": "z-ai/glm-5.3-flash:batch",
-        "input_cost": 0.075,
+        "input_cost": 0.06,
         "name": "Z.ai: GLM 5.3 Flash (batch)",
-        "output_cost": 0.25,
+        "output_cost": 0.2,
         "tags": [
           "tools",
           "vision",
@@ -6208,13 +6209,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "Granite 4.2 8B is a dense reasoning model from IBM. It is suited for mathematics, code generation, multilingual dialogue, and agentic workflows that need multi-step reasoning. It supports configurable reasoning effort (full, low, none) with a 128K context window.",
         "id": "ibm-granite/granite-4.2-8b",
-        "input_cost": 0.1,
+        "input_cost": 0.06,
         "name": "IBM: Granite 4.2 8B",
-        "output_cost": 0.15,
+        "output_cost": 0.25,
         "tags": [
           "tools",
           "reasoning",
@@ -6266,13 +6267,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.015,
+        "cached_input_cost": 0.01125,
         "context_length": 1310720,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.075,
+        "input_cost": 0.02625,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.25,
+        "output_cost": 0.9,
         "tags": [
           "tools",
           "vision",
@@ -6526,13 +6527,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.13,
+        "cached_input_cost": 0.1,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
         "id": "z-ai/glm-5.3:batch",
-        "input_cost": 0.7,
+        "input_cost": 0.45,
         "name": "Z.ai: GLM 5.3 (batch)",
-        "output_cost": 2.2,
+        "output_cost": 2,
         "tags": [
           "tools",
           "reasoning",
@@ -6540,13 +6541,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.003,
+        "cached_input_cost": 0.006,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.3,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 0.6,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6555,13 +6556,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.012,
+        "cached_input_cost": 0.0042,
         "context_length": 131072,
         "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
         "id": "inclusionai/ling-3.0-flash-vl",
-        "input_cost": 0.06,
+        "input_cost": 0.021,
         "name": "inclusionAI: Ling 3.0 Flash VL",
-        "output_cost": 0.18,
+        "output_cost": 0.0616,
         "tags": [
           "tools",
           "vision",
@@ -6628,13 +6629,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.02,
+        "cached_input_cost": 0.01,
         "context_length": 1050000,
         "description": "This model always redirects to the latest model in the OpenAI GPT Luna family.",
         "id": "~openai/gpt-luna-latest",
-        "input_cost": 0.2,
+        "input_cost": 0.1,
         "name": "OpenAI GPT Luna Latest",
-        "output_cost": 1.2,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -6643,7 +6644,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.2,
+        "cached_input_cost": 0.1,
         "context_length": 1050000,
         "description": "This model always redirects to the latest model in the OpenAI GPT Sol family.",
         "id": "~openai/gpt-sol-latest",
@@ -6697,13 +6698,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0036,
+        "cached_input_cost": 0.002115,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.12,
+        "input_cost": 0.015,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.48,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6712,13 +6713,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.019184,
+        "cached_input_cost": 0.0042,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
         "id": "~deepseek/deepseek-pro-latest",
-        "input_cost": 0.57552,
+        "input_cost": 0.132,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 1.72656,
+        "output_cost": 0.396,
         "tags": [
           "tools",
           "reasoning",
@@ -6779,6 +6780,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.0375,
         "context_length": 262144,
         "description": "Bonsai 2 27B is a 27B-parameter reasoning model from PrismML derived from Qwen3.8-27B. It supports coding, mathematics, tool calling, and image understanding with a 262K-token context window. Ternary compression shrinks...",
         "id": "prism-ml/ternary-bonsai-2-27b",
@@ -6793,7 +6795,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.075,
+        "cached_input_cost": 0.09,
         "context_length": 1048576,
         "description": "GLM-5.3-FlashX is the high-speed variant of Z.ai's GLM-5.3-Flash, a native multimodal model delivering inference speeds of up to 200 tokens/s. Built on the same hybrid sparse and linear attention architecture...",
         "id": "z-ai/glm-5.3-flashx",
@@ -6806,6 +6808,551 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.0025,
+        "context_length": 262144,
+        "description": "Nex-N2.5-Mini is an agentic model from Nex AGI built to turn goals into working, verified outcomes. Its core strength is agentic coding inside a visual feedback loop: exploring codebases, implementing multi-file changes, and validating results.",
+        "id": "nex-agi/nex-n2.5-mini",
+        "input_cost": 0.025,
+        "name": "Nex AGI: Nex-N2.5-Mini",
+        "output_cost": 0.1,
+        "tags": [
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 262144,
+        "description": "Nex-N2.5-Pro is the flagship agentic model from Nex AGI, built to turn goals into working, verified outcomes. It adds tool calling on top of Nex-N2.5's visual feedback loop for exploring codebases, implementing multi-file changes, and validating results.",
+        "id": "nex-agi/nex-n2.5-pro",
+        "input_cost": 0.075,
+        "name": "Nex AGI: Nex-N2.5-Pro",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 500000,
+        "description": "Grok 4.7 is SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks and verifying its own work.",
+        "id": "x-ai/grok-4.7",
+        "input_cost": 2,
+        "name": "SpaceXAI: Grok 4.7",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0028,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Flash is an open-source Mixture-of-Experts foundation model from Xiaomi with 309B total parameters and 15B activated per token. A hybrid attention mechanism keeps inference efficient across a 1M-token context.",
+        "id": "xiaomi/mimo-v2.6-flash",
+        "input_cost": 0.14,
+        "name": "Xiaomi: MiMo-V2.6-Flash",
+        "output_cost": 0.28,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0036,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Pro is Xiaomi's flagship foundation model. Built at over 1T parameters, it targets the most demanding reasoning, coding, and agentic workloads with a 1M-token context window.",
+        "id": "xiaomi/mimo-v2.6-pro",
+        "input_cost": 0.435,
+        "name": "Xiaomi: MiMo-V2.6-Pro",
+        "output_cost": 0.87,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.036,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Pro-UltraSpeed is the fast speed edition of Xiaomi's flagship MiMo-V2.6-Pro. Built from the same 1T checkpoint, it matches the original in quality while delivering roughly 10x higher throughput.",
+        "id": "xiaomi/mimo-v2.6-pro-ultraspeed",
+        "input_cost": 4.35,
+        "name": "Xiaomi: MiMo-V2.6-Pro-UltraSpeed",
+        "output_cost": 8.7,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.75,
+        "context_length": 262144,
+        "description": "Aion 3.5 is a multi-model roleplaying and storytelling system from AionLabs, built on the GLM family of models. It uses a collaborative generation process in which multiple specialized models each contribute to a response, producing stronger narrative structure and more compelling tension and conflict.",
+        "id": "aion-labs/aion-3.5",
+        "input_cost": 3,
+        "name": "AionLabs: Aion 3.5",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.18,
+        "context_length": 262144,
+        "description": "Aion 3.5 Mini is a multi-model roleplaying and storytelling system from AionLabs, built on the GLM family of models. It is the smaller, lower-cost sibling of Aion 3.5 and uses the same collaborative generation process in which multiple specialized models each contribute to a response, producing stronger narrative structure and more compelling tension and conflict.",
+        "id": "aion-labs/aion-3.5-mini",
+        "input_cost": 0.7,
+        "name": "AionLabs: Aion 3.5 Mini",
+        "output_cost": 1.4,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Opus 5.5 is Anthropic's flagship model for demanding reasoning, coding, and long-horizon agentic work, succeeding Claude Opus 5. It is particularly strong at multi-step changes in large codebases, code review and bug finding, financial and scientific analysis, and reading dense charts, diagrams, and screenshots, and it is more careful than its predecessor about only stating figures and citing sources it can back up.\n\nThe model completes comparable tasks in fewer steps and with fewer tokens than Opus 5, and reports on its work in plainer language, with clear updates on what it did, what it found, and what it needs from the user. Thinking is always adaptive, so effort is the main lever for trading off depth, latency, and cost, and lower effort settings remain effective for latency-sensitive workloads.",
+        "id": "anthropic/claude-opus-5.5",
+        "input_cost": 4,
+        "name": "Anthropic: Claude Opus 5.5",
+        "output_cost": 20,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1000000,
+        "description": "Claude Opus 5.5 via the Batch API at 50% of standard pricing. Anthropic's flagship for demanding reasoning, coding, and long-horizon agentic work.",
+        "id": "anthropic/claude-opus-5.5:batch",
+        "input_cost": 2,
+        "name": "Anthropic: Claude Opus 5.5 (batch)",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 192000,
+        "description": "Command A+ is Cohere's flagship model for enterprise agentic workflows. It accepts text and image inputs with a 192K context window, supports native tool calling with strict tool schemas, structured outputs (JSON object and JSON schema), optional reasoning, and configurable safety modes.",
+        "id": "cohere/command-a-plus",
+        "input_cost": 0.3,
+        "name": "Cohere: Command A+",
+        "output_cost": 1.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.00336,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on output from a 552B-parameter backbone, an asymmetric split that keeps per-token compute low relative to the model's total size. Image understanding is native to the architecture, with visual and text embeddings trained jointly from the start of pre-training rather than added afterward as in the earlier experimental [V4 Flash Vision Exp](https://openrouter.ai/deepseek/deepseek-v4-flash-vision-exp).\n\nIt is suited for coding, terminal, and computer-use agents, along with long-horizon tasks that must run to completion across many steps and long-context analysis. Compressed KV caching cuts cache memory to roughly a quarter of the previous Flash generation, significantly reducing costs on agentic workloads. DeepSeek positions it as the cost-efficient tier of the V4.1 family and reports that it exceeds [V4 Pro](https://openrouter.ai/deepseek/deepseek-v4-pro-0813) on performance, speed, and task completion time.",
+        "id": "deepseek/deepseek-v4.1-flash:batch",
+        "input_cost": 0.112,
+        "name": "DeepSeek: DeepSeek V4.1 Flash (batch)",
+        "output_cost": 0.336,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna is the fast, cost-efficient model in OpenAI's GPT-6 series, positioned below GPT-6 Sol. It is suited for high-volume and latency-sensitive workloads such as chat, classification, and lightweight agentic tasks, and at higher reasoning effort it can take on complex software engineering and computer-use tasks that previously called for a Sol-tier model. It shares the GPT-6 family's gains in factual reliability and its clearer, more concise communication style.",
+        "id": "openai/gpt-6-luna",
+        "input_cost": 0.1,
+        "name": "OpenAI: GPT-6 Luna",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.01,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna Pro is the same underlying model as [GPT-6 Luna](https://openrouter.ai/openai/gpt-6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "openai/gpt-6-luna-pro",
+        "input_cost": 0.1,
+        "name": "OpenAI: GPT-6 Luna Pro",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.005,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna Pro via the Batch API at 50% of standard pricing. Cost-efficient model with pro reasoning mode.",
+        "id": "openai/gpt-6-luna-pro:batch",
+        "input_cost": 0.05,
+        "name": "OpenAI: GPT-6 Luna Pro (batch)",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.005,
+        "context_length": 1050000,
+        "description": "GPT-6 Luna via the Batch API at 50% of standard pricing. OpenAI's fast, cost-efficient model for high-volume, latency-sensitive tasks.",
+        "id": "openai/gpt-6-luna:batch",
+        "input_cost": 0.05,
+        "name": "OpenAI: GPT-6 Luna (batch)",
+        "output_cost": 0.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol is the cost-efficient high-end model in OpenAI's GPT-6 series, positioned below the flagship GPT-6 Astra and above the fast GPT-6 Luna tier. It is suited for demanding professional work, agentic coding, business workflow automation, and computer use, and is particularly strong at long-horizon software engineering tasks in real codebases. It approaches Astra-level factual reliability at a much lower cost and shares Astra's clearer, more concise communication style in technical and coding conversations.",
+        "id": "openai/gpt-6-sol",
+        "input_cost": 2,
+        "name": "OpenAI: GPT-6 Sol",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol Pro is the same underlying model as [GPT-6 Sol](https://openrouter.ai/openai/gpt-6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks.\n\nLearn more in OpenAI's docs: https://developers.openai.com/api/docs/guides/reasoning#reasoning-mode",
+        "id": "openai/gpt-6-sol-pro",
+        "input_cost": 2,
+        "name": "OpenAI: GPT-6 Sol Pro",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol Pro via the Batch API at 50% of standard pricing. High-end model with pro reasoning mode.",
+        "id": "openai/gpt-6-sol-pro:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6 Sol via the Batch API at 50% of standard pricing. OpenAI's cost-efficient high-end model for demanding professional work and agentic coding.",
+        "id": "openai/gpt-6-sol:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.016,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Omni Flash is an omni-modal reasoning model from Alibaba, the first Qwen model built around agentic capabilities with native audio-video understanding. It is suited for audio-video analysis and summarization, video editing and production workflows, audio-video dialogue, coding, knowledge work, and GUI interaction, and it is particularly strong at long-form multimedia tasks that combine speech, sound, and visual context. It also supports two-channel and four-channel spatial audio understanding.",
+        "id": "qwen/qwen3.8-omni-flash",
+        "input_cost": 0.15,
+        "name": "Qwen: Qwen3.8 Omni Flash",
+        "output_cost": 0.47,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.005,
+        "context_length": 524288,
+        "description": "Solar Mini 4 is Upstage's compact, cost-efficient language model, a 35B-parameter mixture-of-experts with 3B active parameters and a 524K context window. It is built for agentic use cases where response speed and cost matter, with fluent Korean alongside strong English and Japanese, and support for long-context workloads.\n\nWhen using BYOK with ZDR enforcement, the Console API key must belong to a ZDR-enabled Upstage organization. Contact Upstage to enable ZDR on your org.",
+        "id": "upstage/solar-mini4",
+        "input_cost": 0.05,
+        "name": "Upstage: Solar Mini 4",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.3,
+        "context_length": 1048576,
+        "description": "Ember-1 is a specialized reasoning model from Fireworks Research, built on [Kimi K3](https://openrouter.ai/moonshotai/kimi-k3). It is designed to make every token go further: it produces shorter reasoning traces, using roughly 40% fewer tokens than the base model while maintaining comparable quality across Fireworks' evaluations. It is suited for coding, knowledge work, and agentic workflows where reasoning cost and latency matter.",
+        "id": "fireworks/ember-1",
+        "input_cost": 3,
+        "name": "Fireworks: Ember-1",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.5,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max Prime is a higher-throughput variant of Qwen3.8 Max from Alibaba's Qwen team, served as a separate SKU at a higher price point. It accepts text, image, and video input and returns text, with a 1M-token context window and reasoning enabled by default. Tool calling, structured outputs, and configurable reasoning effort are supported, matching Qwen3.8 Max.",
+        "id": "qwen/qwen3.8-max-prime",
+        "input_cost": 4,
+        "name": "Qwen: Qwen3.8 Max Prime",
+        "output_cost": 12,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Space Bunny Alpha is an anonymous large model with blazing-fast inference, strong coding capabilities and native multimodal input support. It delivers adjustable reasoning effort, and a 1M-token context window. Space Bunny Alpha is a stealth model, developed and operated by a third-party provider who has chosen to remain anonymous during this preview.",
+        "id": "stealth/space-bunny-alpha",
+        "input_cost": 0,
+        "name": "Space Bunny Alpha",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.56,
+        "context_length": 1000000,
+        "description": "GLM-5.3-Prime is the high-speed variant of Z.ai's GLM-5.3, inheriting its full capabilities while delivering 1.5–2× the output throughput through inference acceleration. It supports text input and output with a 1M-token context window and up to 128K output tokens, and targets coding and agentic workloads, including long-horizon multi-turn agent orchestration and real-time conversation.",
+        "id": "z-ai/glm-5.3-prime",
+        "input_cost": 2.8,
+        "name": "Z.ai: GLM 5.3 Prime",
+        "output_cost": 8.8,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Sonnet 5.5 is Anthropic's Sonnet-class model for well-scoped everyday work, succeeding Claude Sonnet 5 as a direct upgrade. It is especially strong at building features, fixing bugs, and producing production-ready code, and handles agentic and enterprise workflows with a 1M-token context window.",
+        "id": "anthropic/claude-sonnet-5.5",
+        "input_cost": 2,
+        "name": "Anthropic: Claude Sonnet 5.5",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1000000,
+        "description": "Claude Sonnet 5.5 (batch) is Anthropic's Sonnet-class model served through the Batch API at a 50% discount for asynchronous, non-latency-sensitive workloads. Succeeds Claude Sonnet 5 and supports a 1M-token context window.",
+        "id": "anthropic/claude-sonnet-5.5:batch",
+        "input_cost": 1,
+        "name": "Anthropic: Claude Sonnet 5.5 (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, and document-heavy professional work, with a 1.05M-token context window.",
+        "id": "openai/gpt-6.1-sol",
+        "input_cost": 2,
+        "name": "OpenAI: GPT-6.1 Sol",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro is the same underlying model as GPT-6.1 Sol, served with reasoning.mode set to pro for higher-quality responses on complex tasks. Pro mode spends substantially more reasoning tokens, so the effective cost per request is higher.",
+        "id": "openai/gpt-6.1-sol-pro",
+        "input_cost": 2,
+        "name": "OpenAI: GPT-6.1 Sol Pro",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro (batch) serves GPT-6.1 Sol in pro reasoning mode through the Batch API at a 50% discount for asynchronous, non-latency-sensitive workloads.",
+        "id": "openai/gpt-6.1-sol-pro:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol (batch) is OpenAI's GPT-6.1 Sol served through the Batch API at a 50% discount for asynchronous, non-latency-sensitive workloads. Suited for agentic coding, computer use, and document-heavy professional work.",
+        "id": "openai/gpt-6.1-sol:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 36864,
+        "description": "Perceptron Mk1.5 is Perceptron's embodied reasoning model for physical agents. It accepts text, image, video, and audio input and answers with text plus optional structured annotations such as points, boxes, polygons, and tracks.",
+        "id": "perceptron/perceptron-mk1.5",
+        "input_cost": 0.15,
+        "name": "Perceptron: Perceptron Mk1.5",
+        "output_cost": 1.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Jev Router picks the best model and reasoning effort for each request, balancing quality, speed, and cost. It runs on Jev, TypeSafe's first System One model, and adapts as your usage evolves.",
+        "id": "typesafe/jev-router",
+        "input_cost": 0,
+        "name": "TypeSafe: Jev Router",
+        "output_cost": 0,
+        "tags": [
+          "vision"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "Pareto is a multimodal composite model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks. This is a preview of the next Pareto version and may change without notice; use pareto-26.9 for stable behaviour.",
+        "id": "unbiased/pareto-26.10-preview",
+        "input_cost": 0.8,
+        "name": "Pareto 26.10 Preview",
+        "output_cost": 3.2,
+        "tags": [
+          "tools",
+          "vision"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Apodex 1.1 Mini is a reasoning-first model from Apodex, built for complex, long-horizon research and forecasting tasks. It works directly with files, data, code, and tools to produce verifiable results, and is designed for agentic research workflows where answers need to be grounded in evidence.",
+        "id": "apodex/apodex-1.1-mini:free",
+        "input_cost": 0,
+        "name": "Apodex: Apodex 1.1 Mini (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Ling 3.1 Flash is a hybrid reasoning mixture-of-experts model from inclusionAI, with 25B active parameters out of 560B total.",
+        "id": "inclusionai/ling-3.1-flash",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.1 Flash",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Switchyard is an open-source model router that switches between multiple models to optimize the cost of requests. By default it will use OpenRouter market data to select the most popular...",
+        "id": "nvidia/switchyard",
+        "input_cost": 0,
+        "name": "NVIDIA: Switchyard",
+        "output_cost": 0
       }
     ],
     "model_overrides": {

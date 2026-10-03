@@ -1,9 +1,9 @@
 # SP-142 — Chat Mode Lanes: Per-Mode Chat Ownership on the Server
 
-> **Status (2026-10-02):** Superseded by SP-147 — one conversation per
-> project; mode selects tools, not chats. SP-142.1–142.5 shipped, and the
-> server-side mode field remains as metadata, but the two-lane client model
-> (per-mode pins, per-mode fresh chats) is removed by SP-147.
+> **Status (2026-09-26):** Shipped (142.1–142.5). The conversation model
+> (these lanes vs. one conversation per project) is **undecided** — a
+> proposal was made and withdrawn on 2026-10-02 without user sign-off;
+> SP-142 remains the shipped behavior until the owner decides.
 > Motivation: the multi-chat surface (New Chat, chat tabs) shipped with
 > per-chat agents server-side, but chats carry no mode identity — the chat
 > list is one flat list shared by the Code and Design modes, and the

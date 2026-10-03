@@ -99,6 +99,39 @@ func TestCanonicalToConfigEntry_NilPricing(t *testing.T) {
 	}
 }
 
+func TestSanitizePrice_ClampsSentinel(t *testing.T) {
+	cases := []struct{ in, want float64 }{
+		{-1000000, 0}, // OpenRouter "-1" sentinel converted to per-Mtok
+		{-1, 0},
+		{0, 0},
+		{2.5, 2.5},
+	}
+	for _, c := range cases {
+		if got := sanitizePrice(c.in); got != c.want {
+			t.Errorf("sanitizePrice(%v) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+func TestCanonicalToConfigEntry_NegativeSentinelClamped(t *testing.T) {
+	// OpenRouter reports "-1" (=> -1000000 per Mtok) for variable-priced
+	// routers; the discovered price must never leak a negative cost.
+	m := modelcontract.CanonicalModel{
+		ID: "openrouter/auto",
+		Pricing: &modelcontract.Pricing{
+			InputPerMTok:  -1000000,
+			OutputPerMTok: -1000000,
+		},
+	}
+	entry := canonicalToConfigEntry(m)
+	if entry["input_cost"].(float64) != 0 {
+		t.Errorf("input_cost = %v, want 0", entry["input_cost"])
+	}
+	if entry["output_cost"].(float64) != 0 {
+		t.Errorf("output_cost = %v, want 0", entry["output_cost"])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // addModelsToConfig
 // ---------------------------------------------------------------------------
@@ -409,6 +442,31 @@ func TestAddModelsToManifest_NilPricing(t *testing.T) {
 	json.Unmarshal(data, &m)
 	if pm := m["p"]; len(pm.Models) != 1 || pm.Models[0].InputPerMTok != 0 {
 		t.Errorf("expected 0 pricing for nil-pricing model, got %v", pm.Models[0])
+	}
+}
+
+func TestAddModelsToManifest_NegativeSentinelClamped(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+	os.WriteFile(manifestPath, []byte("{}"), 0o644)
+
+	newModels := []modelcontract.CanonicalModel{
+		{ID: "openrouter/auto", Pricing: &modelcontract.Pricing{InputPerMTok: -1000000, OutputPerMTok: -1000000}},
+	}
+	n, err := addModelsToManifest(manifestPath, "openrouter", newModels)
+	if err != nil {
+		t.Fatalf("addModelsToManifest: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 added, got %d", n)
+	}
+
+	data, _ := os.ReadFile(manifestPath)
+	var m map[string]ProviderManifest
+	json.Unmarshal(data, &m)
+	pm := m["openrouter"]
+	if len(pm.Models) != 1 || pm.Models[0].InputPerMTok != 0 || pm.Models[0].OutputPerMTok != 0 {
+		t.Errorf("expected 0/0 pricing for sentinel-priced router, got %v", pm.Models[0])
 	}
 }
 

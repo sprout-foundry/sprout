@@ -122,6 +122,49 @@ func Manifest(starterID string) (*startermanifest.StarterManifest, error) {
 	return manifestFor(starterID)
 }
 
+// FileCount returns the number of project-content files that
+// Instantiate writes for starterID: every regular file of the embedded
+// tree except the top-level descriptor (DescriptorName), which becomes
+// .sprout/starter.json instead of a copied file. The manifest writeManifest
+// produces is not counted — it is not a tree file.
+//
+// The embedded catalogue (List) and the web UI starter list (153.6)
+// report this number, so a caller sees the tree's size without
+// instantiating anything. A tree whose descriptor is missing or invalid
+// is not a starter the catalogue would list, so FileCount refuses it
+// with the same errors as Manifest.
+func FileCount(starterID string) (int, error) {
+	if !validStarterID(starterID) {
+		return 0, fmt.Errorf("%w: %q", ErrInvalidStarterID, starterID)
+	}
+	if _, err := manifestFor(starterID); err != nil {
+		return 0, err
+	}
+	sub, err := fs.Sub(dataFS, dataRoot+"/"+starterID)
+	if err != nil {
+		return 0, fmt.Errorf("starters: open embedded tree %q: %w", starterID, err)
+	}
+	var n int
+	if err := fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == "." {
+			return nil
+		}
+		// Mirror copyTree's skip rule exactly: a regular file that is the
+		// top-level descriptor never lands in the project, so it is not
+		// counted.
+		if d.Type().IsRegular() && p != DescriptorName {
+			n++
+		}
+		return nil
+	}); err != nil {
+		return 0, fmt.Errorf("starters: count files in %q: %w", starterID, err)
+	}
+	return n, nil
+}
+
 // manifestFor loads and validates the descriptor for starterID and checks
 // the embedded-tree/descriptor consistency (directory name must equal the
 // descriptor's starter id, so the catalogue can never point at another

@@ -292,6 +292,24 @@ func MergeConfig(base, override *Config) *Config {
 		result.Training.ExcludePaths = mergeStringSlices(result.Training.ExcludePaths, override.Training.ExcludePaths)
 	}
 
+	// Merge Verification configuration (SP-149 149e/149c). The feature is
+	// off by default; the enable flag carries explicit-key semantics so a
+	// narrower layer can disable a broader layer's enable, and the
+	// repair-attempt limit follows the non-zero-wins convention of the
+	// other numeric caps.
+	if v := override.Verification; v != nil &&
+		(override.overrides("verification.enabled", v.Enabled) || v.RepairAttempts > 0) {
+		if result.Verification == nil {
+			result.Verification = &VerificationConfig{}
+		}
+		if override.overrides("verification.enabled", v.Enabled) {
+			result.Verification.Enabled = v.Enabled
+		}
+		if v.RepairAttempts > 0 {
+			result.Verification.RepairAttempts = v.RepairAttempts
+		}
+	}
+
 	return result
 }
 

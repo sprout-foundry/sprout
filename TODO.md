@@ -170,7 +170,7 @@ the end, without checkboxes.
 
 ## SP-149 — Verified Done (`roadmap/SP-149-verified-done.md`)
 
-- [ ] **149.1** Config: verification enabled flag (off by default in the
+- [x] **149.1** Config: verification enabled flag (off by default in the
       CLI; settable per project, globally, or by an embedding
       environment) and repair-attempt limit N with a small default.
       Tests. Spec: SP-149 §149e, §149c.

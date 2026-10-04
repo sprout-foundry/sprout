@@ -204,6 +204,21 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 		func(ctx context.Context) (string, error) {
 			return a.regenerateInUserLanguage(ctx, qc, finalText, user)
 		})
+
+	// SP-152 §152e (item 152.9): record the judgment in the per-model
+	// language-guard metric — a check always, a mismatch when one was
+	// detected — and log the mismatch with the model ID. This is the
+	// canonical recording point: applyLanguageGuard runs on every
+	// successful turn (buffered, held-stream and streamed-rechecked alike),
+	// so each mismatch is counted exactly once here. Role is per-model only
+	// for now (the role dimension is added in 150.5).
+	modelID := a.GetModel()
+	GlobalLanguageGuardMetrics().Record(modelID, outcome.Mismatched)
+	if outcome.Mismatched {
+		a.Logger().Info("[langguard] final-message mismatch: model=%s user=%s regenerated=%v",
+			modelID, user.Code, outcome.Regenerated)
+	}
+
 	if !outcome.Mismatched {
 		return result
 	}

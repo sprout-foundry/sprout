@@ -43,10 +43,10 @@ import (
 const defaultRunsPerTask = 3
 
 // ModelSpec selects the model (and optionally the provider) one set of
-// benchmark runs uses. SP-154 §154b calls for a configurable model list
-// that defaults to the provider catalog's recommended entries — this item
-// ships the per-model unit that 154.4 feeds; there is no default model
-// list here yet.
+// benchmark runs uses. The suite-level model list (SP-154 §154b, 154.4)
+// is a []ModelSpec: Runner.Models, resolved by Runner.SuiteModels — the
+// default list (the provider catalog's recommended_model entries,
+// models.go) when unset.
 type ModelSpec struct {
 	// Model is the model id to request. Empty → the run's configuration
 	// default for the provider.
@@ -179,6 +179,12 @@ type Runner struct {
 	// WorkDir is the parent directory for the fresh copies. "" →
 	// os.TempDir(). It is created (with parents) if missing.
 	WorkDir string
+	// Models is the suite's model list (SP-154 §154b): the models a
+	// suite run benchmarks against. Empty → the default list (the
+	// provider catalog's recommended_model entries, models.go); set it
+	// to override the default. SuiteModels is the single resolution
+	// point.
+	Models []ModelSpec
 }
 
 // RunTask runs task's request with one model (spec) RunsPerTask times —
@@ -236,6 +242,19 @@ func (r *Runner) RunTask(ctx context.Context, task *Task, spec ModelSpec) ([]Run
 		runs = append(runs, r.runOnce(task, spec, n))
 	}
 	return runs, nil
+}
+
+// SuiteModels returns the suite's model list (SP-154 §154b, 154.4):
+// Models when non-empty, otherwise the default list (the provider
+// catalog's recommended_model entries, models.go). nil receiver → the
+// default list. This is the single resolution point for the model list
+// and the seam the SP-154 report (154.5) iterates: models × tasks, each
+// (model, task) pair through RunTask's 3-run rule (154.2).
+func (r *Runner) SuiteModels() []ModelSpec {
+	if r != nil && len(r.Models) > 0 {
+		return r.Models
+	}
+	return DefaultModelList()
 }
 
 // runOnce executes one run of task with one model and returns its record.

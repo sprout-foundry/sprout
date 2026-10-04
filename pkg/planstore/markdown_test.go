@@ -1,6 +1,7 @@
 package planstore
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,6 +69,59 @@ func TestRenderMarkdownManualKindWithoutCheck(t *testing.T) {
 
 	md := RenderMarkdown(p)
 	assert.Contains(t, md, "- **a1** (s1, manual): (manual: reported, not run)")
+}
+
+func TestRenderMarkdownInteractionSteps(t *testing.T) {
+	p := plancontract.New("Check the login flow", fixedCreated)
+	p.Scope = []plancontract.ScopeItem{{ID: "s1", Title: "Session UI"}}
+	p.Acceptance = []plancontract.Acceptance{{
+		ID:    "a1",
+		Scope: "s1",
+		Check: "type credentials, submit, land on /home",
+		Kind:  plancontract.KindInteraction,
+		Steps: []plancontract.BrowseStep{
+			{Action: "fill", Selector: "#email", Value: "alice@example.com"},
+			{Action: "click", Selector: "button[type=submit]"},
+			{Action: "assert_text", Expect: "Welcome, alice"},
+			// A step carrying every parameter pins the fixed parameter order.
+			{Action: "eval", Selector: "#app", Value: "v", Key: "Enter", Millis: 250, Script: "document.title", Expect: "Login", ScreenshotPath: "shot.png"},
+			// A bare step renders as its action alone.
+			{Action: "reload"},
+		},
+	}}
+	p.OutOfScope = []plancontract.OutOfScope{{Item: "OAuth providers", Reason: "deferred"}}
+
+	md := RenderMarkdown(p)
+
+	// The item line is followed by a numbered step sub-list, in execution
+	// order, with key parameters in a fixed order and only when set.
+	assert.Contains(t, md, "- **a1** (s1, interaction): type credentials, submit, land on /home")
+	assert.Contains(t, md, "  1. fill selector: #email value: alice@example.com")
+	assert.Contains(t, md, "  2. click selector: button[type=submit]")
+	assert.Contains(t, md, "  3. assert_text expect: Welcome, alice")
+	assert.Contains(t, md, "  4. eval selector: #app value: v key: Enter millis: 250 script: document.title expect: Login screenshot_path: shot.png")
+	assert.Contains(t, md, "  5. reload")
+
+	// The steps render under the item, before the next section.
+	require.True(t, strings.Index(md, "  5. reload") < strings.Index(md, "## Out of scope"),
+		"the step sub-list must render before the out-of-scope section")
+	assert.Equal(t, RenderMarkdown(p), RenderMarkdown(p), "rendering must be deterministic for a given plan")
+}
+
+func TestRenderMarkdownNoStepsForNonInteractionKinds(t *testing.T) {
+	p := planstoreTestPlanNoInteraction()
+
+	md := RenderMarkdown(p)
+	assert.NotContains(t, md, "  1. ", "a plan without interaction steps must not render a step sub-list")
+}
+
+// planstoreTestPlanNoInteraction returns a minimal valid plan whose only
+// acceptance item is a build item, so no step sub-list can render.
+func planstoreTestPlanNoInteraction() *plancontract.Plan {
+	p := plancontract.New("Ship it", fixedCreated)
+	p.Scope = []plancontract.ScopeItem{{ID: "s1", Title: "The thing"}}
+	p.Acceptance = []plancontract.Acceptance{{ID: "a1", Scope: "s1", Check: "make build", Kind: plancontract.KindBuild}}
+	return p
 }
 
 func TestRenderMarkdownDeterministic(t *testing.T) {

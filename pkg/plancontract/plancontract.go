@@ -141,6 +141,49 @@ type Step struct {
 	Description string `json:"description"`
 }
 
+// BrowseStep is one scripted browser step of an interaction acceptance item
+// (SP-148 §148d). It mirrors the JSON wire format of
+// webcontent.BrowseStep — the browse tool's step language — field for field
+// (same fields, same JSON tags, same omitempty rules), so a plan's steps can
+// be handed to the browse step parser (parseBrowseSteps in
+// pkg/agent/tool_handlers_browse.go) without conversion: there is one step
+// language for browser automation.
+//
+// plancontract must stay a pure package (it is used by every reader and
+// writer of the plan, including WASM builds) and therefore cannot import
+// pkg/webcontent (which drags in a headless browser). Compatibility is a
+// wire-format contract, not a Go type dependency: plancontract fits
+// webcontent's wire format, never the reverse. A cross-package pin test in
+// pkg/agent (plan_browse_compat_test.go) keeps the two formats together:
+// marshalling a plan's steps and running them through parseBrowseSteps must
+// round-trip field for field. When webcontent.BrowseStep gains a field or a
+// tag changes, this struct and that pin test must be updated in the same
+// change.
+type BrowseStep struct {
+	// Action is the step verb (e.g. "click", "fill", "assert_text"). It is
+	// required and non-empty (mirroring parseBrowseSteps); the action set
+	// itself is validated by the executor at runtime, not by the plan
+	// validator.
+	Action string `json:"action"`
+	// Selector is the CSS selector the step targets, where applicable.
+	Selector string `json:"selector,omitempty"`
+	// Value is the value the step types or fills, where applicable.
+	Value string `json:"value,omitempty"`
+	// Key is the keyboard key for press-style steps, where applicable.
+	Key string `json:"key,omitempty"`
+	// Millis is a wait time in milliseconds for sleep-style steps, where
+	// applicable.
+	Millis int `json:"millis,omitempty"`
+	// Script is a JavaScript snippet for eval-style steps, where applicable.
+	Script string `json:"script,omitempty"`
+	// Expect is the expected value or text for assert-style steps, where
+	// applicable.
+	Expect string `json:"expect,omitempty"`
+	// ScreenshotPath is the file path for a screenshot_selector step's
+	// cropped element screenshot, where applicable.
+	ScreenshotPath string `json:"screenshot_path,omitempty"`
+}
+
 // Acceptance is one check that proves a scope item is done (SP-148 §148a).
 // Kind selects which verifier applies (SP-149); an empty or unknown kind is
 // a validation error.
@@ -151,6 +194,11 @@ type Acceptance struct {
 	// optional for KindManual, which is reported rather than run.
 	Check string `json:"check,omitempty"`
 	Kind  Kind   `json:"kind"`
+	// Steps are the scripted browser steps for KindInteraction items
+	// (SP-148 §148d), in execution order. They are empty for every other
+	// kind; the validator enforces both rules (required non-empty for
+	// interaction, forbidden otherwise).
+	Steps []BrowseStep `json:"steps,omitempty"`
 }
 
 // OutOfScope is an item that was discussed and deliberately left out of the

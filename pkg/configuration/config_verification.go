@@ -15,6 +15,20 @@ type VerificationConfig struct {
 	// before the verification loop stops. Zero means "use the default"
 	// (DefaultVerificationRepairAttempts).
 	RepairAttempts int `json:"repair_attempts,omitempty"`
+
+	// BuildCommand is the explicit build command for the project's
+	// verification run (SP-149 149b). It is the "explicit project
+	// configuration" source: a human sets it in the project layer
+	// (.sprout/workspace.json) or in global config for projects without a
+	// starter manifest (or one that declares no build command). Model
+	// output never populates it — the verification runner ignores
+	// commands the model proposes.
+	BuildCommand string `json:"build_command,omitempty"`
+
+	// TestCommand is the explicit test command for the project's
+	// verification run (SP-149 149b). Same source and semantics as
+	// BuildCommand.
+	TestCommand string `json:"test_command,omitempty"`
 }
 
 // DefaultVerificationRepairAttempts is the small default for the SP-149
@@ -60,4 +74,24 @@ func (c *Config) VerificationRepairAttempts() int {
 		return c.Verification.RepairAttempts
 	}
 	return DefaultVerificationRepairAttempts
+}
+
+// VerificationBuildCommand returns the explicit build command for the
+// SP-149 verification run (149b) after layer merge, or "" when no layer
+// set it. It is the "explicit project configuration" source of commands,
+// set by a human — never by model output.
+func (c *Config) VerificationBuildCommand() string {
+	if c == nil || c.Verification == nil {
+		return ""
+	}
+	return c.Verification.BuildCommand
+}
+
+// VerificationTestCommand returns the explicit test command for the SP-149
+// verification run (149b) after layer merge, or "" when no layer set it.
+func (c *Config) VerificationTestCommand() string {
+	if c == nil || c.Verification == nil {
+		return ""
+	}
+	return c.Verification.TestCommand
 }

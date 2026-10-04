@@ -14,6 +14,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/langguard"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 const (
@@ -262,6 +263,13 @@ type Agent struct {
 	changeTracker         *ChangeTracker
 	preparedTools         sync.RWMutex
 	lastToolNames         []string
+	// lastVerificationResult is the last turn-end verification result
+	// (SP-149 §149c): the hook stores it on every verification run (pass,
+	// fail, or stop-rule) so the final-reply contract (149.6) and the
+	// SP-151 verification event can report from it. Nil when the hook
+	// never ran for this agent (disabled, or the turn changed no code).
+	lastVerificationResultMu sync.Mutex
+	lastVerificationResult   *verify.Result
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.

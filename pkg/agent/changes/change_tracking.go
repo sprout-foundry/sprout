@@ -72,6 +72,12 @@ type ChangeTracker struct {
 	committedChangeCount int
 	// checkpointedChangeCount is len(changes) at the most recent turn-checkpoint capture.
 	checkpointedChangeCount int
+	// turnMark is len(changes) when the current turn window opened
+	// (MarkTurnStart, called from the agent's EnableChangeTracking, which
+	// runs once per turn). TurnChangedPaths reads the window it bounds
+	// without consuming it, so it stays independent of
+	// checkpointedChangeCount.
+	turnMark int
 
 	// shellCache is the long-lived baseline for the shell-mutation diff path.
 	shellCache   map[string]*shellSnapshotEntry
@@ -409,6 +415,45 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 	return changesCopy
 }
 
+// MarkTurnStart records the change count at the moment the current turn
+// window opens. The agent calls it from EnableChangeTracking, which runs
+// once per turn, so the window spans exactly that turn's own changes.
+func (ct *ChangeTracker) MarkTurnStart() {
+	if ct == nil {
+		return
+	}
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	ct.turnMark = len(ct.changes)
+}
+
+// TurnChangedPaths returns the distinct workspace paths of the changes
+// recorded since the current turn window opened (MarkTurnStart), in
+// first-seen order. It is non-destructive: the window is not consumed, so
+// repeated calls and the separate checkpoint capture
+// (CollectFileChangesForCheckpoint) are unaffected. Nil when the tracker
+// is nil or disabled, or when the turn recorded no changes.
+func (ct *ChangeTracker) TurnChangedPaths() []string {
+	if ct == nil || !ct.IsEnabled() {
+		return nil
+	}
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.turnMark >= len(ct.changes) {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var paths []string
+	for _, c := range ct.changes[ct.turnMark:] {
+		if _, ok := seen[c.FilePath]; ok {
+			continue
+		}
+		seen[c.FilePath] = struct{}{}
+		paths = append(paths, c.FilePath)
+	}
+	return paths
+}
+
 // MergeChild appends a subagent's tracked changes into this (parent)
 // tracker so list_changes / recover_file / revert_my_changes see
 // subagent edits too. Each merged entry is tagged with Source.
@@ -455,6 +500,7 @@ func (ct *ChangeTracker) clearLocked() {
 	ct.baseRevisionRecorded = false
 	ct.committedChangeCount = 0
 	ct.checkpointedChangeCount = 0
+	ct.turnMark = 0
 	ct.shellCacheMu.Lock()
 	ct.shellCache = nil
 	ct.shellCacheMu.Unlock()

@@ -156,6 +156,13 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	}()
 
 	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
+	if err == nil {
+		// SP-149 §149c / 149.5: on the success path only, the turn-end
+		// verification hook may continue the turn (a repair round). A
+		// hard error from the first Run flows to handleQueryResult
+		// unchanged.
+		result, err = a.runTurnEndVerification(qc, result)
+	}
 	return a.handleQueryResult(qc, result, err)
 }
 

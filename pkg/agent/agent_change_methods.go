@@ -41,6 +41,12 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 		}
 	}
 
+	// Open the per-turn change window: EnableChangeTracking runs once per
+	// turn (prepareQueryRun), so the mark spans exactly this turn's own
+	// changes. The SP-149 turn-end verification hook gates its run on
+	// this window (Agent.TurnChangedPaths) and never consumes it.
+	a.changeTracker.MarkTurnStart()
+
 	// Apply ChangeTrackingConfig so per-tracker overrides take effect before the prime walk runs.
 	a.applyChangeTrackingConfig()
 
@@ -212,6 +218,18 @@ func (a *Agent) GetChangeCount() int {
 		return a.changeTracker.GetChangeCount()
 	}
 	return 0
+}
+
+// TurnChangedPaths returns the distinct workspace paths this agent's
+// current turn changed (SP-149 §149a: the gate for the turn-end
+// verification run), or nil when change tracking is off or the turn
+// changed no files. The window opens at the turn's EnableChangeTracking
+// (MarkTurnStart) and is read without consuming it.
+func (a *Agent) TurnChangedPaths() []string {
+	if a.changeTracker == nil {
+		return nil
+	}
+	return a.changeTracker.TurnChangedPaths()
 }
 
 // GetChangesSummary returns a summary of tracked changes

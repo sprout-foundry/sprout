@@ -127,7 +127,7 @@ the end, without checkboxes.
 
 ## SP-152 — Outbound Language Guard (`roadmap/SP-152-language-guard.md`)
 
-- [ ] **152.1** New package `pkg/langguard`: prose extraction (strip code
+- [x] **152.1** New package `pkg/langguard`: prose extraction (strip code
       blocks, inline code, URLs, file paths, quoted user text), Unicode
       script pass, minimum-length threshold. Table tests. Spec: SP-152
       §152a, §152d.

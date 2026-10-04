@@ -19,7 +19,7 @@ the end, without checkboxes.
 
 ## SP-148 — Structured Plans (`roadmap/SP-148-structured-plans.md`)
 
-- [ ] **148.1** New package `pkg/plancontract`: Go types for the plan
+- [x] **148.1** New package `pkg/plancontract`: Go types for the plan
       schema (`version`, `revision`, `created`, `updated`, `goal`,
       `scope[]`, `steps[]`, `design`, `starter`, `acceptance[]` with
       `kind` = build | test | page | interaction | manual,

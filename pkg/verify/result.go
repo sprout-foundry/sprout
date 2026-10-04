@@ -60,6 +60,10 @@ type Check struct {
 	// Routes ("" where a capture failed or the route never reached a
 	// browser capture; page checks only).
 	Screenshots []string `json:"screenshots,omitempty"`
+	// Steps are the scripted browser steps an interaction check ran, in
+	// execution order (interaction checks only; empty for every other kind).
+	// They come from the plan's interaction acceptance item (SP-148 §148d).
+	Steps []plancontract.BrowseStep `json:"steps,omitempty"`
 	// Duration is the wall time the check took to execute.
 	Duration time.Duration `json:"duration,omitempty"`
 }
@@ -154,6 +158,23 @@ func (r *Result) Summary() string {
 				part += " [1 route]"
 			} else {
 				part += fmt.Sprintf(" [%d routes]", len(c.Routes))
+			}
+		}
+		// An interaction check that ran reports how many scripted steps it
+		// executed (the confirmed outcome).
+		if c.Kind == plancontract.KindInteraction && !c.Skipped && len(c.Steps) > 0 {
+			if len(c.Steps) == 1 {
+				part += " [1 step]"
+			} else {
+				part += fmt.Sprintf(" [%d steps]", len(c.Steps))
+			}
+		}
+		// A manual check reports how many manual items it lists.
+		if c.Kind == plancontract.KindManual && c.Skipped && len(c.Items) > 0 {
+			if len(c.Items) == 1 {
+				part += " [1 manual item]"
+			} else {
+				part += fmt.Sprintf(" [%d manual items]", len(c.Items))
 			}
 		}
 		if c.Reason != "" {

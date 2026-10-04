@@ -183,7 +183,7 @@ the end, without checkboxes.
       command and port, open each listed route headless, fail on console
       errors, record screenshot references. Test with a fixture app that
       logs a console error. Spec: SP-149 §149a.
-- [ ] **149.4** `interaction` checks: run the plan's scripted browser steps
+- [x] **149.4** `interaction` checks: run the plan's scripted browser steps
       (148.3) and confirm the expected outcome; `manual` items listed,
       never gated. Tests. Spec: SP-149 §149a.
 - [ ] **149.5** Turn-end hook: when enabled, after a turn that changed

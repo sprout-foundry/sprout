@@ -22,7 +22,7 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 				Name:        "todos",
 				Type:        "array",
 				Required:    true,
-				Description: "Array of todo items: [{content, status, activeForm?, priority?, id?}]. `content` is the imperative task description; `activeForm` is the present-continuous phrasing shown in the activity indicator while in_progress (e.g. content \"Implement X\" → activeForm \"Implementing X\"). `priority` is high/medium/low (visual hint only).",
+				Description: "Array of todo items: [{content, status, activeForm?, priority?, id?, scope?}]. `content` is the imperative task description; `activeForm` is the present-continuous phrasing shown in the activity indicator while in_progress (e.g. content \"Implement X\" → activeForm \"Implementing X\"). `priority` is high/medium/low (visual hint only). `scope` is the optional plan scope item ID this todo advances (e.g. \"s1\"); it links the todo to a scope entry in .sprout/plan.json so progress maps back to the plan.",
 				Items: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -31,6 +31,7 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 						"activeForm": map[string]any{"type": "string", "description": "Present-continuous phrasing shown while in_progress"},
 						"priority":   map[string]any{"type": "string", "enum": []any{"high", "medium", "low"}, "description": "Priority (visual hint only)"},
 						"id":         map[string]any{"type": "string", "description": "Optional stable ID for the todo"},
+						"scope":      map[string]any{"type": "string", "description": "Optional plan scope item ID this todo advances (e.g. \"s1\"); links the todo to a scope entry in .sprout/plan.json so progress maps back to the plan"},
 					},
 					"required": []any{"content", "status"},
 				},
@@ -102,6 +103,9 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		}
 		if activeForm, ok := todoMap["activeForm"].(string); ok {
 			todo.ActiveForm = activeForm
+		}
+		if scope, ok := todoMap["scope"].(string); ok {
+			todo.Scope = scope
 		}
 		todos = append(todos, todo)
 	}

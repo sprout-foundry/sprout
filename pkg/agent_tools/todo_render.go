@@ -67,10 +67,16 @@ func RenderTodosForCLI(w io.Writer, todos []TodoItem) {
 		if len(text) > 96 {
 			text = text[:96] + "..."
 		}
+		// Surface the plan scope link (SP-148 §148c) so CLI users can see
+		// which plan scope item a todo advances; empty scope renders nothing.
+		scopeTag := ""
+		if s := strings.TrimSpace(t.Scope); s != "" {
+			scopeTag = " [" + s + "]"
+		}
 		if priorityHint != "" {
-			fmt.Fprintf(w, "  %s %s %s\n", marker, priorityHint, text)
+			_, _ = fmt.Fprintf(w, "  %s %s %s%s\n", marker, priorityHint, text, scopeTag)
 		} else {
-			fmt.Fprintf(w, "  %s %s\n", marker, text)
+			_, _ = fmt.Fprintf(w, "  %s %s%s\n", marker, text, scopeTag)
 		}
 	}
 	fmt.Fprintln(w, bar)

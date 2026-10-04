@@ -190,6 +190,13 @@ func coerceTodoItem(raw interface{}) (tools.TodoItem, error) {
 	// Extract activeForm with fallbacks
 	todo.ActiveForm = extractStringField(todoMap, "activeForm", "active_form")
 
+	// Extract scope (plan scope item ID; SP-148 §148c). It is optional and
+	// free-form: a todo's scope links it to a scope entry in .sprout/plan.json
+	// so progress maps back to the plan and survives across sessions. No
+	// normalization and no required check — an empty scope means the todo is
+	// not linked to any plan scope.
+	todo.Scope = extractStringField(todoMap, "scope", "scopeId", "scope_id", "planScope", "plan_scope")
+
 	return todo, nil
 }
 

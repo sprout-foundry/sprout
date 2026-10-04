@@ -27,10 +27,12 @@ const (
 )
 
 // turnVerification is the per-turn verification state the final-reply
-// contract (SP-149 §149c/§149d, item 149.6) reads in one access: the
-// turn's last verification run, the per-check repair attempts that run
-// consumed, and the configured repair limit N. The turn-end hook stores a
-// fresh state on every verification run (pass, fail, stop-rule);
+// contract (SP-149 §149c/§149d, item 149.6) and the consumers outside
+// pkg/agent (the SP-154 benchmark metrics, 154.3) read in one access:
+// the turn's last verification run, the per-check repair attempts that
+// run consumed, the configured repair limit N, and the number of repair
+// rounds the hook ran for the turn. The turn-end hook stores a fresh
+// state on every verification run (pass, fail, stop-rule);
 // prepareQueryRun resets it at each turn start so a previous turn's
 // result never attaches to a later turn's reply. A nil result means the
 // hook never ran for the turn (verification disabled, no code change, a
@@ -40,6 +42,11 @@ type turnVerification struct {
 	result   *verify.Result
 	attempts map[string]int
 	limit    int
+	// rounds is how many repair rounds the hook has run for the turn
+	// (one report feed = one round): a stored snapshot carries the
+	// rounds completed before its verification run, so a turn that
+	// failed and repaired once stores rounds=1 on its last run.
+	rounds int
 }
 
 // snapshotVerificationAttempts copies the repair loop's per-check counters
@@ -99,6 +106,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 
 	limit := cfg.VerificationRepairAttempts()
 	attempts := make(map[string]int)
+	rounds := 0
 
 	for {
 		// A stop that lands in the window between the turn's answer and a
@@ -114,15 +122,17 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 			return finalResult, nil
 		}
 		// Stored on every run (pass, fail, stop-rule): the result, the
-		// per-check repair attempts consumed so far, and the configured
-		// limit — the state 149.6 attaches to the final reply and SP-151
-		// records. A snapshot of the counters: the loop keeps counting
-		// into its own map across repair rounds, so the stored state
-		// never mutates after it is stored.
+		// per-check repair attempts consumed so far, the configured
+		// limit, and the repair rounds the hook has run — the state
+		// 149.6 attaches to the final reply, SP-151 records, and the
+		// SP-154 benchmark reads (154.3). A snapshot of the counters:
+		// the loop keeps counting into its own map across repair
+		// rounds, so the stored state never mutates after it is stored.
 		a.setTurnVerification(turnVerification{
 			result:   res,
 			attempts: snapshotVerificationAttempts(attempts),
 			limit:    limit,
+			rounds:   rounds,
 		})
 		if !res.Failed() {
 			// Passing, or all-skipped where nothing failed — both stand.
@@ -143,8 +153,12 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 
 		// Continue the turn: the report lands as a user-role message in
 		// the transcript (the same mechanism steer messages use) and the
-		// repair round's answer becomes the final result.
+		// repair round's answer becomes the final result. One report
+		// feed = one repair round: the count grows now, so the next
+		// stored snapshot (after this round's verification run) carries
+		// it.
 		report := buildVerificationReport(res, attempts, limit)
+		rounds++
 		repairResult, repairErr := qc.seedAgent.Run(qc.runCtx, report)
 		if repairErr != nil {
 			return repairResult, repairErr
@@ -279,7 +293,8 @@ func (a *Agent) LastVerificationResult() *verify.Result {
 }
 
 // setTurnVerification stores the per-turn verification state (the hook's
-// per-run store: result + repair attempts + limit, SP-149 §149d).
+// per-run store: result + repair attempts + limit + repair rounds,
+// SP-149 §149d).
 func (a *Agent) setTurnVerification(tv turnVerification) {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
@@ -304,4 +319,19 @@ func (a *Agent) currentTurnVerification() turnVerification {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
 	return a.turnVerification
+}
+
+// lastTurnVerificationSnapshot returns a defensive copy of the stored
+// per-turn verification state for consumers outside pkg/agent: the
+// Attempts map is copied (callers may mutate their copy without touching
+// the agent's stored state). The struct value is returned by value.
+func (a *Agent) lastTurnVerificationSnapshot() turnVerification {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	return turnVerification{
+		result:   a.turnVerification.result,
+		attempts: snapshotVerificationAttempts(a.turnVerification.attempts),
+		limit:    a.turnVerification.limit,
+		rounds:   a.turnVerification.rounds,
+	}
 }

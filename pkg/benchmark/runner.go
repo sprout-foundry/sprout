@@ -80,9 +80,17 @@ type AgentFactory func(runDir string, spec ModelSpec) (*agent.Agent, error)
 // code (the hook's change gate never opened), and a run whose turn or
 // setup ended in an error all record as fail: no passing result, no pass.
 //
-// 154.3 will extend this record with per-task metrics (repair attempts,
-// turns, tokens and cost); only the cheap wall-time anchors
-// (StartedAt/FinishedAt) are here now.
+// The per-task metrics (SP-154 §154b, 154.3) are the fields below the
+// wall-time anchors: the repair data the turn-end hook stored on the
+// agent, the runner's turn count, the run's token and cost totals (the
+// agent's existing conversation cost tracking — the run's agent is
+// fresh, so the conversation total is the run's usage), and the run's
+// share of the process-wide language-guard metric (SP-152 §152e). The
+// spec's "per role via SP-150" is a future qualifier: the per-role split
+// lands with SP-150's usage ledger (150.5) and is not tracked here yet.
+// A setup-error run (Err set before the agent was built) leaves every
+// metric zero; a run whose agent was built but whose turn errored still
+// records its metrics (the turn was issued and may have consumed usage).
 type Run struct {
 	// TaskID is the benchmark task this run executed (Task.ID).
 	TaskID string
@@ -108,6 +116,33 @@ type Run struct {
 	StartedAt time.Time
 	// FinishedAt is when the run finished (the copy is removed).
 	FinishedAt time.Time
+	// Turns is the number of top-level agent turns the runner issued for
+	// this run (1 for the current single-request runner; the field grows
+	// naturally when multi-request tasks land).
+	Turns int
+	// RepairRounds is the number of turn-end verification repair rounds
+	// the hook ran within the turn (0 when verification never ran).
+	RepairRounds int
+	// RepairAttempts is the per-check repair attempts the hook consumed
+	// against the stopping rule, keyed like the hook's per-check counters
+	// (empty when verification never ran).
+	RepairAttempts map[string]int
+	// RepairLimit is the stopping-rule limit that was in effect for the
+	// turn (0 when verification never ran).
+	RepairLimit int
+	// Tokens is the run's total token usage: the agent's conversation
+	// total — the run's agent is fresh, so the conversation total is the
+	// run's usage (existing cost tracking, SP-154 §154b).
+	Tokens int
+	// Cost is the run's total cost (the agent's conversation total cost).
+	Cost float64
+	// LangChecks is how many final messages the SP-152 language guard
+	// judged for the run's model during the run (a delta of the
+	// process-wide per-model metric).
+	LangChecks int64
+	// LangMismatches is how many of those judged messages were a
+	// reliable language mismatch (a delta).
+	LangMismatches int64
 }
 
 // Runner runs a benchmark task's headless runs (SP-154 §154b).
@@ -260,6 +295,17 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	}
 	defer ag.Shutdown()
 
+	// The language-guard delta is a diff of the process-wide per-model
+	// metric (SP-152 §152e): snapshot the run's model's stat before the
+	// turn and diff it after. The guard records under the agent's model
+	// id (an empty model id bucketed under "unknown" by the recorder),
+	// so the lookup mirrors that bucketing to find the guard's entries.
+	langModel := ag.GetModel()
+	if langModel == "" {
+		langModel = "unknown"
+	}
+	langBefore := langGuardStat(agent.GlobalLanguageGuardMetrics().Snapshot(), langModel)
+
 	// The headless turn (the same entry point the non-interactive CLI
 	// uses). The reply is never read for scoring — pass/fail comes only
 	// from the verification result the turn-end hook stored on the agent
@@ -274,6 +320,27 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		run.Err = fmt.Errorf("benchmark: agent turn for task %s run %d: %w", task.ID, runNumber, turnErr)
 		run.Passed = false
 	}
+
+	// Per-task metrics (SP-154 §154b, 154.3), captured after the turn
+	// while the run's agent still owns its conversation totals: the
+	// repair data from the turn-end hook's stored state (nil when the
+	// hook never ran — the fields stay zero), the runner's own count of
+	// the turns it issued, the agent's existing token and cost totals
+	// (fresh agent → the conversation total is the run's usage), and
+	// the run's share of the process-wide language-guard metric.
+	tv := ag.LastTurnVerification()
+	run.Turns = 1
+	run.Tokens = ag.GetTotalTokens()
+	run.Cost = ag.GetTotalCost()
+	if tv != nil {
+		run.RepairRounds = tv.Rounds
+		run.RepairAttempts = tv.Attempts
+		run.RepairLimit = tv.Limit
+	}
+	langAfter := langGuardStat(agent.GlobalLanguageGuardMetrics().Snapshot(), langModel)
+	run.LangChecks = langAfter.Checks - langBefore.Checks
+	run.LangMismatches = langAfter.Mismatches - langBefore.Mismatches
+
 	run.FinishedAt = time.Now()
 	return run
 }
@@ -350,6 +417,19 @@ func (r *Runner) runsPerTask() int {
 		return r.RunsPerTask
 	}
 	return defaultRunsPerTask
+}
+
+// langGuardStat returns one model's language-guard stat from a snapshot
+// (the zero stat when the model has no recorded checks yet). The
+// snapshot is small (one entry per model ever judged, sorted by model
+// id), so a linear scan is the whole job.
+func langGuardStat(snapshot []agent.LanguageGuardModelStat, modelID string) agent.LanguageGuardModelStat {
+	for _, s := range snapshot {
+		if s.ModelID == modelID {
+			return s
+		}
+	}
+	return agent.LanguageGuardModelStat{ModelID: modelID}
 }
 
 // workDir is the parent for the fresh copies: WorkDir where set,

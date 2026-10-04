@@ -218,7 +218,7 @@ the end, without checkboxes.
 - [x] **154.4** Default model list from the provider catalog's
       `recommended_model` entries; configurable override. Test. Spec:
       SP-154 §154b.
-- [ ] **154.5** Reports: markdown + JSON comparing models and starters,
+- [x] **154.5** Reports: markdown + JSON comparing models and starters,
       pass rate per starter per model over 3 runs, failure categories.
       Golden-file test. Not part of `go test ./...` (network and cost).
       Spec: SP-154 §154c.

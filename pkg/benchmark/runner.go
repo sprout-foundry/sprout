@@ -99,6 +99,9 @@ type Run struct {
 	// Model is the requested model (ModelSpec.Model, "" when the run's
 	// configuration default applies).
 	Model string
+	// Provider is the requested provider (ModelSpec.Provider, "" when
+	// the run's configuration default applies).
+	Provider string
 	// RunNumber is the 1-based run number within this task+model.
 	RunNumber int
 	// Passed is the run's acceptance outcome, derived only from Result.
@@ -244,6 +247,44 @@ func (r *Runner) RunTask(ctx context.Context, task *Task, spec ModelSpec) ([]Run
 	return runs, nil
 }
 
+// RunSuite runs the suite (SP-154 §154c): each model in the runner's
+// model list (SuiteModels — the 154.4 override, or the default list)
+// against every task, RunTask per (model, task) pair (RunsPerTask
+// runs each — 154.2's 3-run rule), returning the aggregated runs in
+// suite order: models in list order, tasks in slice order, run
+// number within the pair. It is the on-demand path for the report —
+// real models cost network and money, so tests exercise it only
+// with the Scripted client.
+//
+// Return contract: (runs, nil) when every pair completed; (runs,
+// err) when RunTask's suite-level error fires mid-suite — the runs
+// accumulated so far are returned alongside (a partial report is
+// still buildable), matching RunTask's own partial-result contract.
+// A per-run failure never fires the error path: it rides on Run.Err
+// exactly as in RunTask (record-and-continue).
+func (r *Runner) RunSuite(ctx context.Context, tasks []*Task) ([]Run, error) {
+	if r == nil {
+		return nil, errors.New("benchmark: nil runner")
+	}
+	if tasks == nil {
+		return nil, errors.New("benchmark: task list is required (the suite's tasks)")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var runs []Run
+	for _, model := range r.SuiteModels() {
+		for _, task := range tasks {
+			pair, err := r.RunTask(ctx, task, model)
+			if err != nil {
+				return runs, err
+			}
+			runs = append(runs, pair...)
+		}
+	}
+	return runs, nil
+}
+
 // SuiteModels returns the suite's model list (SP-154 §154b, 154.4):
 // Models when non-empty, otherwise the default list (the provider
 // catalog's recommended_model entries, models.go). nil receiver → the
@@ -266,6 +307,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		TaskID:    task.ID,
 		Starter:   task.Starter,
 		Model:     spec.Model,
+		Provider:  spec.Provider,
 		RunNumber: runNumber,
 		StartedAt: time.Now(),
 	}
@@ -436,36 +478,4 @@ func (r *Runner) runsPerTask() int {
 		return r.RunsPerTask
 	}
 	return defaultRunsPerTask
-}
-
-// langGuardStat returns one model's language-guard stat from a snapshot
-// (the zero stat when the model has no recorded checks yet). The
-// snapshot is small (one entry per model ever judged, sorted by model
-// id), so a linear scan is the whole job.
-func langGuardStat(snapshot []agent.LanguageGuardModelStat, modelID string) agent.LanguageGuardModelStat {
-	for _, s := range snapshot {
-		if s.ModelID == modelID {
-			return s
-		}
-	}
-	return agent.LanguageGuardModelStat{ModelID: modelID}
-}
-
-// workDir is the parent for the fresh copies: WorkDir where set,
-// os.TempDir() otherwise.
-func (r *Runner) workDir() string {
-	if r != nil && r.WorkDir != "" {
-		return r.WorkDir
-	}
-	return os.TempDir()
-}
-
-// runDirPrefix builds the MkdirTemp prefix for one run's fresh copy:
-// deterministic-ish (task id + run number) so a listing of the work dir
-// says which run a directory was. Path separators and spaces in the id
-// (an in-memory task need not be loader-validated) are replaced, never
-// trusted.
-func runDirPrefix(taskID string, runNumber int) string {
-	safe := strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(taskID)
-	return fmt.Sprintf("sp154-%s-r%d-", safe, runNumber)
 }

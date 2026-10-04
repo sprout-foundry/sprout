@@ -229,6 +229,52 @@ func TestCreatePlanningAgent_PlanCreateTodosFlag(t *testing.T) {
 	_ = fmt.Sprintf("prompt length: %d", len(prompt))
 }
 
+func TestCreatePlanningAgent_StructuredFlagUsesStructuredPrompt(t *testing.T) {
+	origModel := planModel
+	origProvider := planProvider
+	origTodos := planCreateTodos
+	origStructured := planStructured
+	defer func() {
+		planModel = origModel
+		planProvider = origProvider
+		planCreateTodos = origTodos
+		planStructured = origStructured
+	}()
+
+	planModel = ""
+	planProvider = ""
+	planCreateTodos = true
+	planStructured = true
+
+	a, err := createPlanningAgent()
+	if err != nil {
+		t.Fatalf("createPlanningAgent() with --structured returned error: %v", err)
+	}
+	if a == nil {
+		t.Fatal("expected non-nil agent")
+	}
+
+	// Structured mode (SP-148 §148b) must install the plan schema section
+	// in the agent's system prompt.
+	prompt := a.GetSystemPrompt()
+	if !strings.Contains(prompt, "Structured Plan Schema") {
+		t.Error("expected the structured planning prompt to carry the plan schema section")
+	}
+	if !strings.Contains(prompt, "Every scope item needs at least one acceptance item") {
+		t.Error("the structured prompt must state the acceptance-coverage rule")
+	}
+
+	// The non-structured path stays on the base prompt: no schema section.
+	planStructured = false
+	b, err := createPlanningAgent()
+	if err != nil {
+		t.Fatalf("createPlanningAgent() without --structured returned error: %v", err)
+	}
+	if got := b.GetSystemPrompt(); strings.Contains(got, "Structured Plan Schema") {
+		t.Error("the non-structured planning prompt must not carry the schema section")
+	}
+}
+
 func TestRunDiag_PrintsProviderDirectory(t *testing.T) {
 	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Custom provider directory:") {

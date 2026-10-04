@@ -327,6 +327,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 				return workflowErr
 			}
+			// SP-149 §149e: a completed non-interactive run whose
+			// verification is enabled and fails exits non-zero. Yielded
+			// runs return above (workflow-loop continuation is SP-153's
+			// decision, not the exit code's).
+			if vErr := verificationRunExitError(chatAgent); vErr != nil {
+				if outputFormatJSON {
+					emitJSONResult(query, directModeStart, vErr, chatAgent)
+				}
+				return vErr
+			}
 			if outputFormatJSON {
 				emitJSONResult(query, directModeStart, nil, chatAgent)
 			}
@@ -350,6 +360,17 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				emitJSONResult(query, directModeStart, err, chatAgent)
 			}
 			return fmt.Errorf("failed to run direct mode: %w", err)
+		}
+		// SP-149 §149e: a completed non-interactive run whose
+		// verification is enabled and fails exits non-zero. The §149d
+		// failure report is already in the final reply shown to the user;
+		// this error adds the exit code (1 via exitCodeFor) and, for
+		// --json, the status:"error" envelope scripts read.
+		if vErr := verificationRunExitError(chatAgent); vErr != nil {
+			if outputFormatJSON {
+				emitJSONResult(query, directModeStart, vErr, chatAgent)
+			}
+			return vErr
 		}
 		if outputFormatJSON {
 			emitJSONResult(query, directModeStart, nil, chatAgent)

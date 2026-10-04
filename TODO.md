@@ -186,7 +186,7 @@ the end, without checkboxes.
 - [x] **149.4** `interaction` checks: run the plan's scripted browser steps
       (148.3) and confirm the expected outcome; `manual` items listed,
       never gated. Tests. Spec: SP-149 §149a.
-- [ ] **149.5** Turn-end hook: when enabled, after a turn that changed
+- [x] **149.5** Turn-end hook: when enabled, after a turn that changed
       application code and before the final reply, run verification;
       a failing gated check is fed back as a structured report and the
       turn continues; stop after N repair attempts on the same check.

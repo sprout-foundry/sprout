@@ -228,6 +228,16 @@ type Config struct {
 	// calls are collapsed/hidden. Defaults to true.
 	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
 
+	// Language is the user's preferred conversation language, used by the
+	// outbound language guard (SP-152 152.3) as a fallback when the user's
+	// recent messages are too short or too mixed to resolve a majority
+	// language. It is an ISO 639-1 code (or the 639-3 code for the few
+	// languages without a 639-1 code), case-insensitive. Empty means no
+	// configured fallback — the guard then treats the user's language as
+	// undetermined and never guesses. Reading it as a langguard.Language is
+	// langguard.ParseLanguage(cfg.Language).
+	Language string `json:"language,omitempty"`
+
 	// Wakeup controls auto-resume behavior for background task completions.
 	Wakeup WakeupConfig `json:"wakeup,omitempty"`
 

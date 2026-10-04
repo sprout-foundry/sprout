@@ -136,7 +136,7 @@ the end, without checkboxes.
       Measure native and WASM binary size before/after and include the
       numbers in the commit notes. Tests across a broad sample of
       languages and scripts. Spec: SP-152 §152d.
-- [ ] **152.3** User-language resolution: majority language over the
+- [x] **152.3** User-language resolution: majority language over the
       user's recent messages; short or mixed input falls back to a
       configured language setting; no fixed language list. Tests. Spec:
       SP-152 §152a.

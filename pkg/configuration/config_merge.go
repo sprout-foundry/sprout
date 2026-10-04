@@ -79,6 +79,11 @@ func MergeConfig(base, override *Config) *Config {
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}
+	// Language is a single-value selector — a non-empty override wins
+	// (SP-152 152.3).
+	if override.Language != "" {
+		result.Language = override.Language
+	}
 	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}

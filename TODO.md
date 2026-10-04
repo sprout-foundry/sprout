@@ -131,7 +131,7 @@ the end, without checkboxes.
       blocks, inline code, URLs, file paths, quoted user text), Unicode
       script pass, minimum-length threshold. Table tests. Spec: SP-152
       §152a, §152d.
-- [ ] **152.2** Same-script pass: add the trigram detector (pure Go,
+- [x] **152.2** Same-script pass: add the trigram detector (pure Go,
       WASM-compatible; `whatlanggo` unless measurement says otherwise).
       Measure native and WASM binary size before/after and include the
       numbers in the commit notes. Tests across a broad sample of

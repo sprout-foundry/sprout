@@ -1,4 +1,10 @@
-import type { QueryCompletedData, QueryProgressData, QueryStartedData, StreamChunkData } from '@sprout/events';
+import type {
+  LanguageGuardReplacementData,
+  QueryCompletedData,
+  QueryProgressData,
+  QueryStartedData,
+  StreamChunkData,
+} from '@sprout/events';
 import type { Message } from '@sprout/ui';
 import type { AppStoreSetState } from '../../contexts/AppStore';
 import { notifyIfHidden } from '../../services/desktopNotify';
@@ -367,4 +373,32 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
 // run's output from here on follows it.
 export const handleSteerDelivered = (ctx: EventHandlerContext): void => {
   ctx.setState((prev) => ({ messages: deliverOldestSteer(prev.messages) }));
+};
+
+// Handle language_guard_replacement (SP-152 §152c, item 152.7): a streamed
+// reply that was RELEASED by the hold-back (its start passed the language
+// check) switched language mid-stream, so it was already streamed to the
+// client and cannot be un-streamed. Replace the already-streamed assistant
+// message's content with the localized notice and keep the full switched
+// content on the message for "view original". The dispatch loop flushes
+// buffered stream chunks before routing, so the last primary assistant
+// message carries the complete streamed reply at this point.
+export const handleLanguageGuardReplacement = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const data = (event.data ?? {}) as LanguageGuardReplacementData;
+  const replacement = typeof data.replacement === 'string' ? data.replacement : '';
+  if (!replacement) return;
+  const original = typeof data.original === 'string' ? data.original : '';
+
+  setState((prev) => {
+    const idx = lastPrimaryAssistantIndex(prev.messages);
+    if (idx < 0) return {};
+    const updated: Message = {
+      ...prev.messages[idx],
+      content: replacement,
+      languageGuardOriginal: original,
+    };
+    return { messages: [...prev.messages.slice(0, idx), updated, ...prev.messages.slice(idx + 1)] };
+  });
+  debugLog('[OK] Language guard: replaced a mid-stream-switched reply with the notice');
 };

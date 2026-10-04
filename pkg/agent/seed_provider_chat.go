@@ -15,6 +15,8 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/langguard"
 )
 
 // maxLiveRequestImages caps the inline image parts a single provider
@@ -466,20 +468,85 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 
 // finalizeStreamHoldback finalizes the streaming hold-back for one streamed
 // response (SP-152 §152c). It releases a stream that never reached the prose
-// threshold (short or code-only — not judged, so it must not be held), and,
-// when the stream was held (a reliable language mismatch), it delivers the
-// localized §152b notice through the hold-back's sink — so the user sees the
-// notice, not the wrong-language stream — and keeps the held content on the
-// response message's Meta (langGuardOriginalMetaKey) for "view original",
-// mirroring the final-message guard (152.5).
+// threshold (short or code-only — not judged, so it must not be held). If the
+// stream was held (a reliable language mismatch at the START), it delivers
+// the localized §152b notice through the hold-back's sink — so the user sees
+// the notice, not the wrong-language stream — and keeps the held content on
+// the response message's Meta (langGuardOriginalMetaKey) for "view original",
+// mirroring the final-message guard (152.5). That held path is the terminal
+// handling for the reply: it is NOT re-checked (a second event for the same
+// reply would be a duplicate).
+//
+// A RELEASED stream (the start passed, or it was below the threshold) was
+// already streamed to the client and cannot be un-streamed. If it switched
+// language mid-stream, the completion re-check (recheckStreamedReply, item
+// 152.7) re-judges the FULL content and, on a reliable mismatch, tells the
+// client to replace the already-streamed message with a server event.
 func (sp *sproutProvider) finalizeStreamHoldback(holdback *StreamHoldback, resp *api.ChatResponse) {
 	holdback.Finish()
-	held := holdback.Held()
-	if held == "" {
+	if held := holdback.Held(); held != "" {
+		// The stream is held (a reliable mismatch at the start): 152.6's
+		// hold-back is the terminal handling — deliver the notice, keep the
+		// held content for "view original". No completion re-check.
+		holdback.DeliverNotice(LanguageMismatchNotice(holdback.User()))
+		if resp != nil && len(resp.Choices) > 0 {
+			resp.Choices[0].Message.SetMeta(langGuardOriginalMetaKey, held)
+		}
 		return
 	}
-	holdback.DeliverNotice(LanguageMismatchNotice(holdback.User()))
+	// Released (or below threshold): the reply reached the client. Re-check
+	// the full content for a mid-stream switch (item 152.7).
+	sp.recheckStreamedReply(holdback, resp)
+}
+
+// recheckStreamedReply re-checks a RELEASED (non-held) streamed reply at
+// completion (SP-152 §152c, item 152.7). The hold-back only judged the START
+// of the stream; a reply whose start was fine but which switched language
+// later is already streamed to the client and cannot be un-streamed. So it is
+// re-judged here on its FULL content: when the full reply is a reliable
+// mismatch (a mid-stream switch), the client is told — via a
+// language_guard_replacement event — to replace the already-streamed message
+// with the localized §152b-style notice (the original is carried for "view
+// original" and kept on the message Meta).
+//
+// No event is published when:
+//   - the full content is not judgable (short or code-only — §152a: not
+//     judged); or
+//   - the full content is not a reliable mismatch (the reply is in the user's
+//     language, or detection is undetermined).
+//
+// The hold-back is only non-nil (and thus only finalized) when it is active
+// for the turn (guard on, non-subagent, determined user language), so the
+// "guard off / undetermined / subagent" cases never reach this function.
+func (sp *sproutProvider) recheckStreamedReply(holdback *StreamHoldback, resp *api.ChatResponse) {
+	full := holdback.Full()
+	if !langguard.Judgable(langguard.ExtractProse(full)) {
+		// Below the prose threshold: §152a says not judged — no re-check.
+		return
+	}
+	if langguard.CheckLanguage(full, holdback.User()) != langguard.VerdictMismatch {
+		// No mid-stream switch: the full reply is the user's language (or
+		// detection is undetermined) — nothing to replace.
+		return
+	}
+	// A reliable mid-stream switch: replace the already-streamed reply with
+	// the localized notice.
+	replacement := LanguageMismatchNotice(holdback.User())
+	sp.agent.publishEvent(
+		events.EventTypeLanguageGuardReplacement,
+		events.LanguageGuardReplacementEvent(
+			sp.agent.GetChatID(),
+			replacement,
+			full,
+			"mid_stream_switch",
+		),
+	)
+	if sp.agent.debug {
+		sp.agent.Logger().Debug("[langguard] streamed reply switched language mid-stream (%s): replacement event published\n", holdback.User())
+	}
+	// Keep the full switched content on the message Meta for "view original"
+	// (mirrors 152.5/152.6's language_guard_original).
 	if resp != nil && len(resp.Choices) > 0 {
-		resp.Choices[0].Message.SetMeta(langGuardOriginalMetaKey, held)
+		resp.Choices[0].Message.SetMeta(langGuardOriginalMetaKey, full)
 	}
 }

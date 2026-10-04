@@ -88,7 +88,8 @@ export type ServerEventType =
   | 'session_terminated'
   | 'session_changed'
   | 'delegate_clarification_requested'
-  | 'delegate_clarification_responded';
+  | 'delegate_clarification_responded'
+  | 'language_guard_replacement';
 
 /**
  * The envelope every event flows through. `data` shape varies per

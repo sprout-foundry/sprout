@@ -271,6 +271,78 @@ func TestStreamHoldbackUserExposesUserLanguage(t *testing.T) {
 	}
 }
 
+// TestStreamHoldbackFullAccumulatesEntireReply pins Full(): the completion
+// re-check (item 152.7) needs the WHOLE streamed reply — including chunks
+// delivered live after the buffer was released — not just the held/buffered
+// prefix. A released hold-back resets its buffer, so Full() must be tracked
+// separately and keep the entire reply.
+func TestStreamHoldbackFullAccumulatesEntireReply(t *testing.T) {
+	// A correct-language (Spanish) stream: buffered prefix is released, then
+	// the remaining chunks stream live. Full() must equal the whole reply.
+	chunks := []string{
+		"Hecho. El paquete está listo para compilar ahora ",
+		"mismo y las pruebas pasan sin errores.",
+	}
+	rec := &sinkRecorder{}
+	hb := NewStreamHoldback(esUser, rec.sink)
+
+	for _, c := range chunks {
+		hb.Write(c)
+	}
+	hb.Finish()
+
+	if got, want := hb.State(), HoldbackLive; got != want {
+		t.Fatalf("State() = %v, want %v (a correct-language stream is released)", got, want)
+	}
+	wantFull := chunks[0] + chunks[1]
+	if got := hb.Full(); got != wantFull {
+		t.Errorf("Full() = %q, want the whole reply %q (released prefix + live chunks)", got, wantFull)
+	}
+	// The live chunk was delivered after the buffer reset, so it is NOT in the
+	// buffer — but it IS in Full().
+	if got := hb.Held(); got != "" {
+		t.Errorf("Held() = %q, want \"\" (a released stream is never held)", got)
+	}
+}
+
+// TestStreamHoldbackFullTracksHeldStream pins that Full() also accumulates a
+// HELD reply (the wrong-language content), so the completion re-check sees the
+// whole reply even when it is held. (The held path is terminal — handled by
+// the 152.6 notice — but Full() must still be correct.)
+func TestStreamHoldbackFullTracksHeldStream(t *testing.T) {
+	rec := &sinkRecorder{}
+	hb := NewStreamHoldback(esUser, rec.sink)
+
+	// A reliably-English start (a mismatch for the Spanish user) holds the
+	// stream; the later chunk is captured.
+	hb.Write("The build succeeded after applying the patch, so the tests ")
+	hb.Write("can run and the release is ready to ship.")
+	hb.Finish()
+
+	if got, want := hb.State(), HoldbackHeld; got != want {
+		t.Fatalf("State() = %v, want %v (a reliable mismatch holds the stream)", got, want)
+	}
+	if got, want := hb.Full(), hbEnglishProse; got != want {
+		t.Errorf("Full() = %q, want the whole held reply %q", got, want)
+	}
+}
+
+// TestStreamHoldbackFullResetsOnRetry pins that Reset (a provider retry)
+// clears Full(), so a discarded attempt's content never leaks into the next
+// attempt's completion re-check.
+func TestStreamHoldbackFullResetsOnRetry(t *testing.T) {
+	hb := NewStreamHoldback(esUser, func(string) {})
+
+	hb.Write("Hecho. El paquete está listo para compilar ahora ")
+	if got := hb.Full(); got == "" {
+		t.Fatalf("before Reset Full() = \"\", want the buffered content")
+	}
+	hb.Reset()
+	if got := hb.Full(); got != "" {
+		t.Errorf("after Reset Full() = %q, want \"\" (the discarded attempt is dropped)", got)
+	}
+}
+
 // TestStreamHoldbackRawLenTracksBufferedContent pins RawLen, which the
 // reasoning-model fallback uses to tell "the hold-back already holds this
 // response's content" (RawLen > 0 — the finalize releases or holds it) from

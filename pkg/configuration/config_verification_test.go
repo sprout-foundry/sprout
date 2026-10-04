@@ -325,3 +325,92 @@ func TestVerificationConfigResolve(t *testing.T) {
 	assert.True(t, set.Enabled)
 	assert.Equal(t, 5, set.RepairAttempts)
 }
+
+// TestConfigVerificationCommandsJSON pins the on-disk contract of the
+// explicit build/test commands (SP-149 §149b): they are serialized under
+// the verification section as build_command/test_command, omitted when
+// empty, and read back.
+func TestConfigVerificationCommandsJSON(t *testing.T) {
+	var in Config
+	require.NoError(t, json.Unmarshal([]byte(
+		`{"verification":{"build_command":"make build","test_command":"make test"}}`), &in))
+	require.NotNil(t, in.Verification)
+	assert.Equal(t, "make build", in.VerificationBuildCommand())
+	assert.Equal(t, "make test", in.VerificationTestCommand())
+
+	out := NewConfig()
+	out.Verification = &VerificationConfig{BuildCommand: "make build"}
+	data, err := json.Marshal(out)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &m))
+	section, ok := m["verification"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "make build", section["build_command"])
+	assert.NotContains(t, section, "test_command", "an unset command must be omitted")
+}
+
+// TestMergeConfig_VerificationCommands pins the merge conventions for the
+// explicit build/test commands (SP-149 §149b): a non-empty command wins
+// (the narrower layer's command beats the broader one), a silent layer
+// keeps the broader command, the two commands merge independently, and
+// naming commands never enables the feature.
+func TestMergeConfig_VerificationCommands(t *testing.T) {
+	// A narrower layer's command beats a broader one.
+	result := MergeConfig(
+		&Config{Verification: &VerificationConfig{BuildCommand: "make build"}},
+		&Config{Verification: &VerificationConfig{BuildCommand: "just build"}})
+	assert.Equal(t, "just build", result.VerificationBuildCommand(), "the narrower command must win")
+
+	// A silent narrower layer keeps the base command.
+	result = MergeConfig(
+		&Config{Verification: &VerificationConfig{TestCommand: "make test"}},
+		&Config{})
+	assert.Equal(t, "make test", result.VerificationTestCommand(),
+		"a silent override must keep the base command")
+
+	// The two commands merge independently.
+	result = MergeConfig(
+		&Config{Verification: &VerificationConfig{BuildCommand: "make build"}},
+		&Config{Verification: &VerificationConfig{TestCommand: "make test"}})
+	assert.Equal(t, "make build", result.VerificationBuildCommand())
+	assert.Equal(t, "make test", result.VerificationTestCommand())
+
+	// A section that names only commands never enables the feature.
+	result = MergeConfig(&Config{}, &Config{Verification: &VerificationConfig{
+		BuildCommand: "make build", TestCommand: "make test"}})
+	assert.False(t, result.VerificationEnabled(), "naming commands alone must not enable verification")
+	assert.Equal(t, "make build", result.VerificationBuildCommand())
+	assert.Equal(t, "make test", result.VerificationTestCommand())
+}
+
+// TestLoadConfigWithLayers_VerificationCommands proves the explicit
+// commands flow through the layer files: the project (workspace) layer's
+// command wins over the global one, a silent project field keeps the
+// global command, and no layer naming the fields resolves to "".
+func TestLoadConfigWithLayers_VerificationCommands(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	globalDir := filepath.Join(home, ".config", "sprout")
+	workspaceDir := filepath.Join(home, "proj", ".sprout")
+	globalPath := filepath.Join(globalDir, ConfigFileName)
+	workspacePath := filepath.Join(workspaceDir, WorkspaceConfigFileName)
+
+	writeFile(t, globalPath, `{"version":"2.1","verification":{"build_command":"go build ./...","test_command":"go test ./..."}}`)
+	writeFile(t, workspacePath, `{"verification":{"build_command":"make build"}}`)
+
+	cfg, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	require.NoError(t, err)
+	assert.Equal(t, "make build", cfg.VerificationBuildCommand(), "the project command must win")
+	assert.Equal(t, "go test ./...", cfg.VerificationTestCommand(),
+		"a silent project field must keep the global command")
+
+	// No layer names the commands: the accessors report "".
+	require.NoError(t, os.Remove(globalPath))
+	require.NoError(t, os.Remove(workspacePath))
+	cfg, err = LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.VerificationBuildCommand())
+	assert.Equal(t, "", cfg.VerificationTestCommand())
+}

@@ -174,7 +174,7 @@ the end, without checkboxes.
       CLI; settable per project, globally, or by an embedding
       environment) and repair-attempt limit N with a small default.
       Tests. Spec: SP-149 §149e, §149c.
-- [ ] **149.2** Check runner for `build` and `test` checks using commands
+- [x] **149.2** Check runner for `build` and `test` checks using commands
       only from the starter manifest (153.2) or explicit project config;
       baseline build+test when no plan exists; structured result type
       (checks, pass/fail, output excerpts). Test: a model-proposed

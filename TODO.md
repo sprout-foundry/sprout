@@ -117,7 +117,7 @@ the end, without checkboxes.
       GitHub repo (no local directory to instantiate into), while a starter
       is a local template and `POST /api/starters/instantiate` writes a
       local path. Chooser defaults to "Blank" (empty project).
-- [ ] **153.8** Upgrade proposals: when a project's manifest names an
+- [x] **153.8** Upgrade proposals: when a project's manifest names an
       older starter version than the embedded one, the agent is told and
       may propose the upgrade using the skill's upgrade note; it never
       applies one silently. Test: version mismatch → proposal notice, no

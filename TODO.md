@@ -27,7 +27,7 @@ the end, without checkboxes.
       valid plan passes; duplicate IDs, an acceptance item without a
       kind, an unknown kind, and a scope item with no acceptance item each
       fail with a clear message. Spec: SP-148 §148a.
-- [ ] **148.2** Plan store: read/write `.sprout/plan.json` through the
+- [x] **148.2** Plan store: read/write `.sprout/plan.json` through the
       validator; every write bumps `revision` and `updated` and
       regenerates `.sprout/plan.md` from the JSON. Tests: round trip,
       revision bump, markdown regenerated on edit, invalid write rejected.

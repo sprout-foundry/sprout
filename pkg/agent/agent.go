@@ -14,7 +14,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/langguard"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
-	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 const (
@@ -263,13 +262,18 @@ type Agent struct {
 	changeTracker         *ChangeTracker
 	preparedTools         sync.RWMutex
 	lastToolNames         []string
-	// lastVerificationResult is the last turn-end verification result
-	// (SP-149 §149c): the hook stores it on every verification run (pass,
-	// fail, or stop-rule) so the final-reply contract (149.6) and the
-	// SP-151 verification event can report from it. Nil when the hook
-	// never ran for this agent (disabled, or the turn changed no code).
-	lastVerificationResultMu sync.Mutex
-	lastVerificationResult   *verify.Result
+	// turnVerification is this agent's per-turn verification state (SP-149
+	// §149c/§149d): the last run's result, the per-check repair attempts
+	// it consumed, and the configured repair limit N — the single access
+	// the final-reply contract (149.6) and the SP-151 verification event
+	// read. The turn-end hook stores a fresh state on every verification
+	// run (pass, fail, or stop-rule); prepareQueryRun resets it at each
+	// turn start so a previous turn's result never attaches to a later
+	// reply. A nil result means the hook never ran for this turn
+	// (verification disabled, no code change, subagent, or a runner setup
+	// error).
+	turnVerificationMu sync.Mutex
+	turnVerification   turnVerification
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.

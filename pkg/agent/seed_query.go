@@ -208,6 +208,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Enable change tracking
 	a.EnableChangeTracking(userQuery)
 
+	// SP-149 §149d / 149.6: reset the per-turn verification state at the
+	// same per-turn point change tracking opens its window: a previous
+	// turn's stored result, repair attempts, and limit must never attach
+	// to this turn's reply — a turn's final reply may only carry that
+	// turn's verification outcome (the turn-end hook stores it at the
+	// turn's end).
+	a.resetTurnVerification()
+
 	// Reset circuit breaker history for a fresh query
 	if a.state.GetCircuitBreaker() != nil {
 		a.state.GetCircuitBreaker().mu.Lock()

@@ -192,7 +192,7 @@ the end, without checkboxes.
       turn continues; stop after N repair attempts on the same check.
       Test: fixture broken build → loop runs → stops at N. Spec: SP-149
       §149c.
-- [ ] **149.6** Final-reply contract: success may be reported only with a
+- [x] **149.6** Final-reply contract: success may be reported only with a
       passing result attached; when the stopping rule fires, the reply
       states what passes, what fails and what was tried. Tests. Spec:
       SP-149 §149c, §149d.

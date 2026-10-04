@@ -1,12 +1,16 @@
 package agent
 
-// Unit tests for the SP-149 §149c report builder and the per-check
-// attempt key (item 149.5). They are pure — no agent, no fixture, no
-// shell — so they run in every build including js/wasm.
+// Unit tests for the SP-149 §149c/§149d verification machinery: the
+// report builder, the per-check attempt key (item 149.5), and the
+// final-reply attachment renderer (item 149.6). They are pure — no
+// agent, no fixture, no shell — so they run in every build including
+// js/wasm.
 
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -239,3 +243,214 @@ func TestVerificationHook_CancelledRunContextReportsInterrupt(t *testing.T) {
 		t.Errorf("result = %q, want the turn's answer (the turn's conversation state keeps it)", res)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// verificationReplyAttachment (SP-149 §149d / 149.6 final-reply contract)
+// ---------------------------------------------------------------------------
+
+// TestVerificationReplyAttachment_NilStateNoOp pins the behavioral
+// baseline: when the turn-end hook never ran for the turn (verification
+// disabled, no code change, subagent, or a runner setup error), the
+// stored state is empty and the attachment renders nothing — the reply is
+// byte-identical to the model's answer.
+func TestVerificationReplyAttachment_NilStateNoOp(t *testing.T) {
+	if got := verificationReplyAttachment(turnVerification{}); got != "" {
+		t.Errorf("attachment for the empty state = %q, want \"\" (the hook never ran for the turn)", got)
+	}
+}
+
+// TestVerificationReplyAttachment_Passing pins the passing shape: success
+// is reported only with a passing result attached — the one-line block
+// carrying the run's summary (SP-149 §149c).
+func TestVerificationReplyAttachment_Passing(t *testing.T) {
+	res := &verify.Result{
+		Baseline: true,
+		Checks: []verify.Check{
+			{Kind: plancontract.KindBuild, Passed: true, Command: "make build"},
+			{Kind: plancontract.KindTest, Skipped: true, Reason: "no test command available"},
+		},
+	}
+	got := verificationReplyAttachment(turnVerification{result: res, limit: 3})
+	want := "Verification: passed — baseline: build: passed (make build); test: skipped — no test command available"
+	if got != want {
+		t.Errorf("attachment = %q, want %q", got, want)
+	}
+}
+
+// TestVerificationReplyAttachment_Failing pins the §149d failure report
+// for the canonical broken-build run: the header carries the configured
+// repair limit N, the Passed section states nothing passed, the Failed
+// line names the check and its reason, and the Tried line states the
+// per-check repair attempts against N.
+func TestVerificationReplyAttachment_Failing(t *testing.T) {
+	got := verificationReplyAttachment(turnVerification{
+		result:   vhFailedBuildResult(),
+		attempts: map[string]int{"build": 2},
+		limit:    2,
+	})
+	want := "Verification: FAILED after the stopping rule (2 repair attempts)\n" +
+		"Passed: none\n" +
+		"Failed: build — command failed\n" +
+		"Tried: build: 2/2 repair attempts"
+	if got != want {
+		t.Errorf("attachment = %q,\nwant %q (§149d: what passes, what fails, what was tried)", got, want)
+	}
+}
+
+// TestVerificationReplyAttachment_FailingMixed pins the sections side by
+// side: a passing check under Passed, each failing check under Failed
+// (keyed like the repair loop's counters, with its own reason), and one
+// Tried line per failing check.
+func TestVerificationReplyAttachment_FailingMixed(t *testing.T) {
+	res := &verify.Result{
+		Checks: []verify.Check{
+			{Kind: plancontract.KindBuild},
+			{Kind: plancontract.KindTest, Passed: true, Command: "make test"},
+			{
+				Kind:   plancontract.KindInteraction,
+				Items:  []string{"i1"},
+				Reason: "expected outcome not observed",
+			},
+		},
+	}
+	got := verificationReplyAttachment(turnVerification{
+		result:   res,
+		attempts: map[string]int{"build": 3, "interaction:i1": 3},
+		limit:    3,
+	})
+	want := "Verification: FAILED after the stopping rule (3 repair attempts)\n" +
+		"Passed: test\n" +
+		"Failed: build — command failed\n" +
+		"Failed: interaction:i1 — expected outcome not observed\n" +
+		"Tried: build: 3/3 repair attempts\n" +
+		"Tried: interaction:i1: 3/3 repair attempts"
+	if got != want {
+		t.Errorf("attachment = %q,\nwant %q", got, want)
+	}
+}
+
+// TestVerificationReplyAttachment_FailingRunLevelError pins the failure
+// that comes from run-level errors alone (a corrupt manifest or plan):
+// there is no failing check to repair, so the report names the run-level
+// error and states that nothing was tried.
+func TestVerificationReplyAttachment_FailingRunLevelError(t *testing.T) {
+	res := &verify.Result{
+		Errors: []string{"starter manifest: invalid JSON"},
+	}
+	got := verificationReplyAttachment(turnVerification{result: res, limit: 3})
+	want := "Verification: FAILED after the stopping rule (3 repair attempts)\n" +
+		"Passed: none\n" +
+		"Failed: run — starter manifest: invalid JSON\n" +
+		"Tried: none (run-level failure; nothing was repaired)"
+	if got != want {
+		t.Errorf("attachment = %q,\nwant %q", got, want)
+	}
+}
+
+// TestVerificationReplyAttachment_AllSkipped pins the all-skipped shape:
+// the run verified nothing, so the attachment states that no passing
+// result exists (success is not corroborated) and lists what could not
+// be verified (SP-149 §149d).
+func TestVerificationReplyAttachment_AllSkipped(t *testing.T) {
+	res := &verify.Result{
+		Baseline: true,
+		Checks: []verify.Check{
+			{Kind: plancontract.KindBuild, Skipped: true, Reason: "no build command available"},
+			{Kind: plancontract.KindTest, Skipped: true, Reason: "no test command available"},
+		},
+	}
+	if res.Passed() || res.Failed() {
+		t.Fatalf("fixture run reports Passed()=%v Failed()=%v, want both false", res.Passed(), res.Failed())
+	}
+	got := verificationReplyAttachment(turnVerification{result: res, limit: 3})
+	want := "Verification: ran, but no checks applied (all skipped) — no passing result\n" +
+		"Skipped: build — no build command available\n" +
+		"Skipped: test — no test command available"
+	if got != want {
+		t.Errorf("attachment = %q,\nwant %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// attachVerificationReply (placement: the stored state renders, nothing
+// else touches the reply)
+// ---------------------------------------------------------------------------
+
+// TestAttachVerificationReply_PlaceAndNoOp pins the agent-level helper:
+// an empty stored state leaves the reply byte-identical; a stored state
+// appends the block after exactly one blank line, and a trailing
+// newline on the model's answer normalizes to the same separator.
+func TestAttachVerificationReply_PlaceAndNoOp(t *testing.T) {
+	ag := NewTestAgent()
+
+	if got := ag.attachVerificationReply("Done."); got != "Done." {
+		t.Errorf("attachVerificationReply = %q, want the untouched reply %q (the hook never ran)", got, "Done.")
+	}
+
+	ag.setTurnVerification(turnVerification{
+		result:   vhFailedBuildResult(),
+		attempts: map[string]int{"build": 2},
+		limit:    2,
+	})
+	const want = "The build is broken.\n\n" +
+		"Verification: FAILED after the stopping rule (2 repair attempts)\n" +
+		"Passed: none\n" +
+		"Failed: build — command failed\n" +
+		"Tried: build: 2/2 repair attempts"
+	if got := ag.attachVerificationReply("The build is broken."); got != want {
+		t.Errorf("attachVerificationReply = %q,\nwant %q", got, want)
+	}
+	if got := ag.attachVerificationReply("The build is broken.\n"); got != want {
+		t.Errorf("attachVerificationReply (trailing newline) = %q,\nwant %q", got, want)
+	}
+}
+
+// TestHandleQueryResult_InterruptPathOmitsVerificationAttachment pins the
+// placement contract: the attachment is appended on the success path
+// only (after the language guard). An interrupted turn — even with a
+// stored failing verification state — reports as an interrupt, and its
+// result never carries the attachment.
+func TestHandleQueryResult_InterruptPathOmitsVerificationAttachment(t *testing.T) {
+	ag := NewTestAgent()
+	ag.setTurnVerification(turnVerification{
+		result:   vhFailedBuildResult(),
+		attempts: map[string]int{"build": 2},
+		limit:    2,
+	})
+
+	seedAgent, err := core.NewAgent(core.Options{Provider: vhNoopProvider{}, Executor: core.NoopExecutor})
+	if err != nil {
+		t.Fatalf("core.NewAgent: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	qc := &queryRunContext{seedAgent: seedAgent, runCtx: ctx, processedQuery: "q"}
+
+	result, err := ag.handleQueryResult(qc, "turn answer", fmt.Errorf("%w", core.ErrInterrupted))
+	if !errors.Is(err, ErrRunInterrupted) {
+		t.Fatalf("handleQueryResult err = %v, want the ErrRunInterrupted classification", err)
+	}
+	if result != "" {
+		t.Errorf("interrupt result = %q, want the empty string (the turn reports as an interrupt)", result)
+	}
+	if strings.Contains(result, "Verification:") {
+		t.Errorf("interrupt result = %q, must not carry the verification attachment", result)
+	}
+}
+
+// vhNoopProvider is the minimal core.Provider for constructing a seed
+// agent in result-handler tests: no chat happens on those paths, so
+// every method is a no-op.
+type vhNoopProvider struct{}
+
+func (vhNoopProvider) Chat(context.Context, *core.ChatRequest) (*core.ChatResponse, error) {
+	return &core.ChatResponse{}, nil
+}
+
+func (vhNoopProvider) ChatStream(context.Context, *core.ChatRequest, core.StreamHandler) error {
+	return nil
+}
+
+func (vhNoopProvider) Info() core.ProviderInfo { return core.ProviderInfo{} }
+
+func (vhNoopProvider) EstimateTokens(*core.ChatRequest) int { return 0 }

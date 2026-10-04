@@ -256,6 +256,16 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// the query-completed event and via state.
 	result = a.applyLanguageGuard(qc, result)
 
+	// SP-149 §149c/§149d (149.6): attach the turn's verification result to
+	// the final reply — AFTER the language guard, so the guard's
+	// language-detection sees only the model's own text, and before the
+	// return, via the stored per-turn state (reset in prepareQueryRun).
+	// The attachment is a no-op when the turn-end hook never ran for the
+	// turn. The error and interrupt paths above never reach this point:
+	// an interrupted turn reports as an interrupt, not a verification
+	// result.
+	result = a.attachVerificationReply(result)
+
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
 	// Commit tracked changes. Subagents are EXEMPT: their writes are

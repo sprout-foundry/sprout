@@ -353,6 +353,21 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + planSummary
 	}
 
+	// SP-153 §153d: when the project's starter manifest names an older
+	// version of its starter than the embedded starter tree, append the
+	// upgrade notice so the agent may propose the upgrade (using the
+	// skill's upgrade note) — but never apply it silently. The hook runs
+	// after the system prompt is set (above), because the notice is a
+	// per-turn append to opts.SystemPrompt, like the plan summary.
+	// starterUpgradeNotice returns "" when there is no manifest, nothing to
+	// propose, or an ambiguous version comparison, so an up-to-date or
+	// starter-less project never changes the context and never fails the
+	// turn. It only reads (manifest + embedded catalogue): the hook itself
+	// never writes a project file.
+	if upgradeNotice := a.starterUpgradeNotice(); upgradeNotice != "" {
+		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + upgradeNotice
+	}
+
 	var seedAgentRef *core.Agent
 
 	// OnIteration callback: sync per-iteration context token estimates back to sprout's state

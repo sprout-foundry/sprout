@@ -86,7 +86,7 @@ the end, without checkboxes.
 
 ## SP-153 — Starters and Stack Skills (`roadmap/SP-153-starters-and-stack-skills.md`)
 
-- [ ] **153.1** `.sprout/starter.json` schema and validator (starter ID and
+- [x] **153.1** `.sprout/starter.json` schema and validator (starter ID and
       version, `build`, `test`, `dev`, `preview` commands, dev port,
       routes, build output directory). Table tests for valid and invalid
       manifests. Spec: SP-153 §153a.

@@ -50,10 +50,16 @@ func (c *Config) GetCommitModel() string {
 }
 
 // GetCommitProvider returns the configured provider for commit message generation.
-// Returns an empty string if no explicit commit provider is set; callers
-// should surface this and offer interactive provider selection.
+// Falls back to the last-used provider when no explicit commit provider is set
+// (the documented default for the CommitProvider field), so the commit model
+// resolves to the last-used provider's model. Returns an empty string only when
+// neither is set; callers should surface this and offer interactive provider
+// selection where a prompt is possible.
 func (c *Config) GetCommitProvider() string {
-	return c.CommitProvider
+	if c.CommitProvider != "" {
+		return c.CommitProvider
+	}
+	return c.LastUsedProvider
 }
 
 // SetCommitProvider sets the provider for commit message generation

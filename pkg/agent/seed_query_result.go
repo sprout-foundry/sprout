@@ -246,6 +246,16 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 	a.journalSeedState(qc.seedAgent.State())
 
+	// SP-152 §152b: language-guard the turn's final assistant message
+	// before anything downstream (the query-completed event, later turns,
+	// the CLI result) sees it. On a mismatch the corrected text — or the
+	// localized notice — replaces the message in state and becomes the
+	// turn's result; the mismatched original is kept on the message for
+	// "view original". The streaming branch below still returns "" to
+	// avoid duplicate display; the corrected text reaches the WebUI via
+	// the query-completed event and via state.
+	result = a.applyLanguageGuard(qc, result)
+
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
 	// Commit tracked changes. Subagents are EXEMPT: their writes are

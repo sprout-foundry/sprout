@@ -107,10 +107,16 @@ the end, without checkboxes.
 - [x] **153.6** Web UI API: `GET /api/starters` (embedded list) and an
       instantiate endpoint behind the existing new-project path. Go tests.
       Spec: SP-153 §153b.
-- [ ] **153.7** Web UI new-project dialog
+- [x] **153.7** Web UI new-project dialog
       (`webui/src/components/layered/NewProjectDialog.tsx`) offers a
       starter choice from 153.6; empty project stays the default. Vitest.
       Spec: SP-153 §153b.
+      Note: the chooser lives in the local new-project flow
+      (`WorkspaceGateModal` → `createWorkspaceNative`), not the hosted
+      `NewProjectDialog` the item names — the hosted dialog creates a
+      GitHub repo (no local directory to instantiate into), while a starter
+      is a local template and `POST /api/starters/instantiate` writes a
+      local path. Chooser defaults to "Blank" (empty project).
 - [ ] **153.8** Upgrade proposals: when a project's manifest names an
       older starter version than the embedded one, the agent is told and
       may propose the upgrade using the skill's upgrade note; it never

@@ -196,7 +196,7 @@ the end, without checkboxes.
       passing result attached; when the stopping rule fires, the reply
       states what passes, what fails and what was tried. Tests. Spec:
       SP-149 §149c, §149d.
-- [ ] **149.7** Non-interactive `sprout agent` runs exit non-zero when
+- [x] **149.7** Non-interactive `sprout agent` runs exit non-zero when
       verification is enabled and fails; disabled verification changes no
       behavior. Tests. Spec: SP-149 §149e.
 

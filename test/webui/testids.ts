@@ -203,6 +203,8 @@ const TESTIDS = {
   "workspace-gate-create-input": "workspace-gate-create-input",
   "workspace-gate-create-cancel": "workspace-gate-create-cancel",
   "workspace-gate-create-submit": "workspace-gate-create-submit",
+  // SP-153 §153b: starter chooser in the studio new-project create form.
+  "workspace-gate-starter-select": "workspace-gate-starter-select",
 
   // Command output
   "command-output-panel": "command-output-panel",

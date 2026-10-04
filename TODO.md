@@ -73,7 +73,7 @@ the end, without checkboxes.
       start of a turn and gets a compact plan summary (goal, scope items
       with status) in context. Test: fixture plan → summary present in the
       turn context; no plan → no change. Spec: SP-148 §148c.
-- [ ] **148.6** Todo items carry an optional plan scope ID
+- [x] **148.6** Todo items carry an optional plan scope ID
       (`pkg/agent/tool_handlers_todo.go`), persisted across sessions.
       Test: scripted run over a fixture plan emits todos with scope IDs.
       Spec: SP-148 §148c.

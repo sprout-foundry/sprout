@@ -1,9 +1,9 @@
 # SP-146 — Design Chats Run Independently and Work From Given Inputs
 
-> **Status (2026-10-02):** Withdrawn — superseded by SP-147 (one
-> conversation per project). §1's scoped write-set gate is moot under one
-> conversation; §2's "work from given inputs" instruction work carries over
-> into the designer instructions.
+> **Status (2026-10-03):** Closed — superseded by SP-147 (one conversation
+> per project, owner decision 2026-10-03). §1's scoped write-set gate is
+> moot under one conversation; §2's "work from given inputs" instruction
+> work carries over into the designer instructions.
 
 ## Problems
 

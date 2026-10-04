@@ -1,10 +1,13 @@
 # SP-147 — One Conversation Per Project; Mode Selects Tools, Not Chats
 
-> **Status (2026-10-02):** Accepted. Supersedes the per-mode chat model of
-> SP-142 §1–2 and closes SP-146 (withdrawn — its parallel-run gate is not
+> **Status (2026-10-03):** Accepted by the owner. Supersedes the per-mode
+> chat model of SP-142 §1–2 and closes SP-146 (its parallel-run gate is not
 > built and its premise, separate design/code chats, is reversed here).
-> SP-142's lane *server* fields (`chatSession.Mode`) remain as metadata; the
-> two-lane client behavior (per-mode pins, per-mode fresh chats) is removed.
+> First implemented 2026-10-02 as part of an audit-fix pass, withdrawn the
+> same day when it became clear the decision had not been made, then
+> re-landed on the owner's explicit approval. SP-142's lane *server* fields
+> (`chatSession.Mode`) remain as metadata; the two-lane client behavior
+> (per-mode pins, per-mode fresh chats) is removed.
 
 ## Decision
 

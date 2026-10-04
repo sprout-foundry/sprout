@@ -49,17 +49,14 @@ func (r *SteerInputReader) handleSteerCompletion() {
 	if r.completionCycle == nil {
 		r.completionCycle = &CompletionCycle{}
 	}
-	line := string(r.buffer)
+	line := r.line
 	newLine, newCursorPos, ok := CycleCompletion(r.completionCycle, line, r.cursorPos, r.completer)
 	if !ok {
 		r.mu.Unlock()
 		return
 	}
-	r.buffer = []byte(newLine)
-	r.cursorPos = newCursorPos
-	if r.cursorPos > len(r.buffer) {
-		r.cursorPos = len(r.buffer)
-	}
+	r.setLineLocked(newLine)
+	r.cursorPos = min(newCursorPos, len(r.line))
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.completionCycle.Advance(newLine)

@@ -1,37 +1,28 @@
 // Model download + on-disk config helpers (split from model.go).
-// EnsureModel fetches a model when missing (with progress + download
-// polling), patchTokenizerConfig normalizes a freshly-downloaded
-// tokenizer, and the dir-level guards (dirSizeBytes, hasModelWeights,
-// validModelConfig) decide whether a model directory is usable. The
-// catalog / RAM-tiering / resolution logic stays in model.go.
+// EnsureModel fetches a model when missing (the HTTPS downloader lives in
+// hf_download.go), patchTokenizerConfig normalizes a freshly-downloaded
+// tokenizer, and the dir-level guards (hasModelWeights, validModelConfig)
+// decide whether a model directory is usable. The catalog / RAM-tiering /
+// resolution logic stays in model.go.
 package localmodel
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sprout-foundry/sinter/llm/catalog"
 )
 
-// EnsureModel downloads a model if it's not already installed.
+// EnsureModel downloads a model from Hugging Face if it's not already
+// installed. progressFn receives aggregate bytes across all selected repo
+// files; total is known once the file listing completes.
 func EnsureModel(ctx context.Context, status ModelStatus, progressFn ProgressCallback) (string, error) {
 	if status.Installed {
 		return status.Dir, nil
-	}
-
-	bin := "hf"
-	if _, err := exec.LookPath("hf"); err != nil {
-		bin = "huggingface-cli"
-	}
-	if _, err := exec.LookPath(bin); err != nil {
-		return "", fmt.Errorf("huggingface CLI not found — install with: pip install -U huggingface_hub")
 	}
 
 	dest := status.Dir
@@ -46,44 +37,8 @@ func EnsureModel(ctx context.Context, status ModelStatus, progressFn ProgressCal
 	if status.HFInclude != "" {
 		localDir = filepath.Dir(dest)
 	}
-	args := []string{"download", status.HFRepo}
-	if status.HFInclude != "" {
-		args = append(args, "--include", status.HFInclude)
-	}
-	args = append(args, "--local-dir", localDir)
-	cmd := exec.CommandContext(ctx, bin, args...)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("pipe stderr: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("pipe stdout: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("start download: %w", err)
-	}
-
-	// Drain stdout/stderr so the subprocess never blocks on a full pipe
-	// buffer — hf download writes nothing to either when piped (see
-	// pollDownloadProgress's doc comment), but the pipes still need a
-	// reader.
-	go io.Copy(io.Discard, stderr)
-	go io.Copy(io.Discard, stdout)
-
-	stopPoll := make(chan struct{})
-	pollDone := make(chan struct{})
-	go func() {
-		defer close(pollDone)
-		pollDownloadProgress(localDir, stopPoll, progressFn)
-	}()
-
-	waitErr := cmd.Wait()
-	close(stopPoll)
-	<-pollDone
-	if waitErr != nil {
-		return "", fmt.Errorf("download failed: %w", waitErr)
+	if err := downloadHFRepo(ctx, status.HFRepo, status.HFInclude, localDir, progressFn); err != nil {
+		return "", fmt.Errorf("download failed: %w", err)
 	}
 
 	patchTokenizerConfig(dest)
@@ -134,50 +89,6 @@ func patchTokenizerConfig(modelDir string) {
 		return
 	}
 	_ = os.WriteFile(tokPath, patched, 0o644)
-}
-
-// pollDownloadProgress reports download progress by periodically measuring
-// how many bytes have landed in dest, until stop is closed.
-//
-// The obvious approach — scan the hf/huggingface-cli subprocess's stdout
-// and stderr for a percentage — doesn't work: confirmed empirically (piped
-// hf download, --format human/json/default all tried) that it writes
-// ZERO bytes to either stream when not connected to a real terminal,
-// regardless of --format. Its progress bars are tqdm-based and gated on
-// isatty(), which a Go exec.Cmd pipe never satisfies. So the total is
-// unknown up front (fn is called with total=0 — callers show bytes
-// downloaded so far rather than a percentage) and progress is inferred
-// from disk instead, which works regardless of the download tool's own
-// TTY detection.
-func pollDownloadProgress(dest string, stop <-chan struct{}, fn ProgressCallback) {
-	if fn == nil {
-		return
-	}
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stop:
-			fn(dirSizeBytes(dest), 0)
-			return
-		case <-ticker.C:
-			fn(dirSizeBytes(dest), 0)
-		}
-	}
-}
-
-func dirSizeBytes(dir string) int64 {
-	var total int64
-	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if info, statErr := d.Info(); statErr == nil {
-			total += info.Size()
-		}
-		return nil
-	})
-	return total
 }
 
 func hasModelWeights(dir string) bool {

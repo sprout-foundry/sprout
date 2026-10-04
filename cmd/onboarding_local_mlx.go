@@ -1,4 +1,4 @@
-//go:build !js && mlx
+//go:build !js && darwin && arm64 && cgo
 
 package cmd
 
@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/sprout-foundry/sinter/mlx"
@@ -14,11 +13,14 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 )
 
+// localAIAvailable reports whether this build can run the local provider.
+// Apple Silicon builds can: the MLX runtime downloads on demand when
+// Homebrew's mlx-c is not installed.
+func localAIAvailable() bool { return true }
+
 // onboardingLocal handles the sprout-local provider onboarding flow.
-// Unlike cloud providers, sprout-local needs:
-//   - Model selection (with hardware recommendation)
-//   - Model download (with progress bar)
-//   - Server lifecycle (start the llm_server binary)
+// Unlike cloud providers, sprout-local needs the MLX runtime and a model
+// download; the model then runs inside sprout itself.
 //
 // Returns the model name on success, or empty string on failure/skip.
 func onboardingLocal() (string, bool) {
@@ -28,13 +30,6 @@ func onboardingLocal() (string, bool) {
 	fmt.Println("Run a language model entirely on your machine — no API key,")
 	fmt.Println("no network needed after download. Requires Apple Silicon.")
 	fmt.Println()
-
-	// Check hardware.
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		console.GlyphWarning.Fprintln(os.Stdout, "Local AI is currently only available on Apple Silicon (M1/M2/M3/M4).")
-		fmt.Println("  Cloud providers work everywhere — try one of those instead.")
-		return "", false
-	}
 
 	ram := mlx.TotalSystemRAM()
 	ramGB := float64(ram) / 1073741824
@@ -93,30 +88,23 @@ func onboardingLocal() (string, bool) {
 
 	selected := models[idx]
 
-	// Download if needed.
+	needsRuntime := !mlx.Available()
+	if needsRuntime {
+		if !installLocalRuntime(ctx) {
+			return "", false
+		}
+	}
+
 	if !selected.Installed {
 		fmt.Println()
 		fmt.Printf("Downloading %s from %s...\n", selected.Name, selected.HFRepo)
 		fmt.Println("This is a one-time download (~2-5 GB depending on model size).")
 		fmt.Println()
 
-		dlCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		dlCtx, cancel := context.WithTimeout(ctx, 60*time.Minute)
 		defer cancel()
 
-		var lastPct int64 = -1
-		modelPath, err := localmodel.EnsureModel(dlCtx, selected, func(downloaded, total int64) {
-			if total > 0 && downloaded != lastPct {
-				pct := downloaded * 100 / total
-				if pct != lastPct {
-					lastPct = pct
-					bar := localProgressBar(int(pct), 40)
-					fmt.Printf("\r  %s %d%%", bar, pct)
-					if pct >= 100 {
-						fmt.Println()
-					}
-				}
-			}
-		})
+		modelPath, err := localmodel.EnsureModel(dlCtx, selected, localProgressPrinter())
 		if err != nil {
 			fmt.Println()
 			console.GlyphWarning.Printf("Download failed: %v", err)
@@ -125,21 +113,6 @@ func onboardingLocal() (string, bool) {
 		selected.Dir = modelPath
 		fmt.Println()
 		console.GlyphSuccess.Printf("Download complete!")
-	}
-
-	// Start the server.
-	fmt.Println()
-	fmt.Println("Starting local AI server...")
-	srvCtx, srvCancel := context.WithTimeout(ctx, 60*time.Second)
-	defer srvCancel()
-
-	_, err = localmodel.EnsureServerWithBackend(srvCtx, localmodel.DefaultPort, selected.Dir, selected.ServerBackend)
-	if err != nil {
-		console.GlyphWarning.Printf("Could not start local server: %v", err)
-		console.GlyphInfo.Printf("You can start it manually: llm_server -model %s", selected.Dir)
-		// Still persist config — the server can be started later
-	} else {
-		console.GlyphSuccess.Printf("Local server running (model: %s)", selected.Name)
 	}
 
 	fmt.Println()
@@ -153,11 +126,49 @@ func onboardingLocal() (string, bool) {
 		return "", false
 	}
 
+	if needsRuntime {
+		fmt.Println()
+		fmt.Println("Restarting Sprout to load the local AI runtime...")
+		if err := localmodel.RestartWithRuntime(); err != nil {
+			console.GlyphWarning.Printf("Could not restart: %v", err)
+			fmt.Println("Run sprout again to start using the local model.")
+			os.Exit(0)
+		}
+	}
+
 	return modelName, true
 }
 
-func ensureLocalServerRunning() error {
-	return nil // in-process provider loads on first request; nothing to pre-start
+// installLocalRuntime downloads the MLX runtime sprout runs local models
+// with, reporting whether it is ready.
+func installLocalRuntime(ctx context.Context) bool {
+	fmt.Println()
+	fmt.Println("Downloading the local AI runtime (one time, about 40 MB)...")
+	rtCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	err := localmodel.InstallRuntime(rtCtx, localProgressPrinter())
+	fmt.Println()
+	if err != nil {
+		console.GlyphWarning.Printf("Could not install the local AI runtime: %v", err)
+		return false
+	}
+	console.GlyphSuccess.Printf("Runtime installed.")
+	return true
+}
+
+func localProgressPrinter() localmodel.ProgressCallback {
+	var lastPct int64 = -1
+	return func(downloaded, total int64) {
+		if total <= 0 {
+			return
+		}
+		pct := downloaded * 100 / total
+		if pct == lastPct {
+			return
+		}
+		lastPct = pct
+		fmt.Printf("\r  %s %d%%", localProgressBar(int(pct), 40), pct)
+	}
 }
 
 func localProgressBar(pct, width int) string {

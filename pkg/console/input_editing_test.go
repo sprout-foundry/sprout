@@ -184,7 +184,7 @@ func TestDeleteRange_Middle(t *testing.T) {
 	// Cursor at 5 is inside [2,8) → clamped to start=2.
 	ir := newEditingIR("hello world", 5)
 
-	ir.deleteRange(2, 8)
+	ir.deleteRange(2, 8, editOther)
 	if ir.line != "herld" {
 		t.Fatalf("line = %q, want %q", ir.line, "herld")
 	}
@@ -197,7 +197,7 @@ func TestDeleteRange_CursorAfterDeletedRegion(t *testing.T) {
 	// deleteRange(0, 5) removes "hello", cursor at 11 shifts back by 5 → 6.
 	ir := newEditingIR("hello world", 11)
 
-	ir.deleteRange(0, 5)
+	ir.deleteRange(0, 5, editOther)
 	if ir.line != " world" {
 		t.Fatalf("line = %q, want %q", ir.line, " world")
 	}
@@ -210,7 +210,7 @@ func TestDeleteRange_NoOp(t *testing.T) {
 	ir := newEditingIR("hello", 3)
 
 	// start == end → no-op.
-	ir.deleteRange(3, 3)
+	ir.deleteRange(3, 3, editOther)
 	if ir.line != "hello" {
 		t.Fatalf("line changed for equal range: got %q", ir.line)
 	}
@@ -219,7 +219,7 @@ func TestDeleteRange_NoOp(t *testing.T) {
 	}
 
 	// start > end → no-op (clamped/no-op guard).
-	ir.deleteRange(5, 2)
+	ir.deleteRange(5, 2, editOther)
 	if ir.line != "hello" {
 		t.Fatalf("line changed for inverted range: got %q", ir.line)
 	}

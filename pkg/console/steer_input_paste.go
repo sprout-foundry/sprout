@@ -28,25 +28,22 @@ func (r *SteerInputReader) endPaste() {
 		return
 	}
 
-	// Check for binary image data
-	if len(paste) > 4 && len(paste) <= MaxPastedImageSize {
-		if ext, mimeType := DetectImageMagic(paste); ext != "" {
-			fmt.Fprintln(os.Stderr)
-			GlyphAction.Fprintf(os.Stderr, "Image paste detected (%s, %d bytes)", mimeType, len(paste))
-			savedPath, err := SavePastedImage(paste, "")
-			if err != nil {
-				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
-			} else {
-				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
-				placeholder := PastedImagePlaceholder(savedPath) + " "
-				r.insertAtCursor([]byte(placeholder))
-				return
-			}
-		}
+	// Raw image bytes (some terminals paste the clipboard image itself).
+	if placeholder := attachPastedImageData(paste); placeholder != "" {
+		r.insertAtCursor([]byte(placeholder))
+		return
 	}
 
 	// Convert to string for text processing
 	content := string(paste)
+
+	// Paths to image files (a dragged-in or Finder-pasted screenshot).
+	if paths, ok := PastedImageFiles(content); ok {
+		if placeholder := attachPastedImageFiles(paths); placeholder != "" {
+			r.insertAtCursor([]byte(placeholder))
+			return
+		}
+	}
 
 	// Smart paste: large text auto-saved as file reference
 	if ShouldSmartSavePaste(content) {

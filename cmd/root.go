@@ -15,6 +15,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
@@ -23,6 +24,7 @@ var isolatedConfig bool
 var debugPprofAddr string
 var whyFlag bool
 var colorBlindFlag bool
+var noColorFlag bool
 var autoDetectedWorkspaceDir string // set when auto-detection finds a git repo
 
 // Training data collection flags (opt-in session recording).
@@ -43,7 +45,11 @@ var rootCmd = &cobra.Command{
   sprout                      start an interactive session (opens the web UI too)
   sprout agent "your intent"  run one task non-interactively and exit`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		console.MakeStdioPollable()
 		routeGoLogForTerminal()
+		if noColorFlag {
+			_ = os.Setenv("NO_COLOR", "1")
+		}
 		// CLI-E: color-blind palette swap. CLI flag wins over env var;
 		// ApplyColorBlindFromEnv only sets true (never false) so the
 		// flag's explicit `false` isn't clobbered by a stale env.
@@ -111,6 +117,10 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to initialize agent: %w", err)
 			}
+			// No agent: setup was skipped, so serve the web UI alone.
+			if chatAgent == nil {
+				return RunAgent(nil, false, args)
+			}
 			// Use enhanced mode
 			return RunAgent(chatAgent, true, args)
 		}
@@ -122,8 +132,10 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
+	localmodel.MaybeReexecWithBundledRuntime()
 	applyCommandGroups(rootCmd)
 	installUsageErrorHooks(rootCmd)
+	registerProviderFlagCompletion(agentCmd, commitCmd, planCmd, reviewStagedCmd, shellCmd)
 	if err := rootCmd.Execute(); err != nil {
 		// Render exactly one clean line (already-reported errors render
 		// nothing — the command showed them while running), then exit with
@@ -262,6 +274,10 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&colorBlindFlag, "color-blind", false, "Swap the success/error/warning palette to a deuteranopia / protanopia-friendly scheme (also honors SPROUT_COLOR_BLIND=1)")
 	rootCmd.PersistentFlags().BoolVar(&trainFlag, "train", false, "Enable session recording for training data collection (OFF by default; also settable via SPROUT_TRAIN_ENABLED=true)")
 	rootCmd.PersistentFlags().StringVar(&trainEndpoint, "train-endpoint", "", "Training data collection endpoint URL (also settable via SPROUT_TRAIN_ENDPOINT)")
+	rootCmd.PersistentFlags().BoolVar(&noColorFlag, "no-color", false, "Disable colored output (same as NO_COLOR=1)")
+	for _, name := range []string{"debug-pprof", "train", "train-endpoint"} {
+		_ = rootCmd.PersistentFlags().MarkHidden(name)
+	}
 
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(exportTrainingCmd)

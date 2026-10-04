@@ -32,6 +32,6 @@ func designStatusFunc(_ js.Value, args []js.Value) interface{} {
 
 func designJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"designStatus": designStatusFunc,
+		"designStatus": js.FuncOf(designStatusFunc),
 	}
 }

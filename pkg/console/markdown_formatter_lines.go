@@ -9,18 +9,19 @@ import (
 
 // formatMarkdownLine formats a single markdown line
 func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
-	// Headers
+	// Headers: weight and color carry the level. Glyph prefixes ("███",
+	// "▪ ▪") read as stray symbols, and "•" collided with list bullets.
 	if strings.HasPrefix(line, "# ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorBrightBlue, strings.Repeat("█", 3), line[2:], ColorReset)
+		return fmt.Sprintf("%s%s%s", ColorBold+ColorUnderline+ColorBrightBlue, line[2:], ColorReset)
 	}
 	if strings.HasPrefix(line, "## ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorCyan, strings.Repeat("▪ ", 2), line[3:], ColorReset)
+		return fmt.Sprintf("%s%s%s", ColorBold+ColorCyan, line[3:], ColorReset)
 	}
 	if strings.HasPrefix(line, "### ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold+ColorBlue, "▸ ", line[4:], ColorReset)
+		return fmt.Sprintf("%s%s%s", ColorBold+ColorBlue, line[4:], ColorReset)
 	}
 	if strings.HasPrefix(line, "#### ") {
-		return fmt.Sprintf("%s%s%s%s", ColorBold, "• ", line[5:], ColorReset)
+		return fmt.Sprintf("%s%s%s", ColorBold, line[5:], ColorReset)
 	}
 
 	// If it starts with "- " or "* " or "+ " with optional leading whitespace

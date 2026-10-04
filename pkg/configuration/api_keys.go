@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -154,7 +155,7 @@ func PromptForAPIKey(provider string) (string, error) {
 
 	// Basic validation
 	if len(apiKey) < 10 {
-		return "", fmt.Errorf("API key seems too short (expected at least 10 characters, got %d)", len(apiKey))
+		return "", fmt.Errorf("%w (expected at least 10 characters, got %d)", ErrAPIKeyTooShort, len(apiKey))
 	}
 
 	// Provider-specific validation patterns
@@ -169,9 +170,12 @@ func PromptForAPIKey(provider string) (string, error) {
 		}
 	}
 
-	console.GlyphSuccess.Fprintln(os.Stdout, fmt.Sprintf("API key accepted (%d characters)", len(apiKey)))
 	return apiKey, nil
 }
+
+// ErrAPIKeyTooShort reports a pasted key too short to be real, usually a
+// partial paste; callers can ask again.
+var ErrAPIKeyTooShort = errors.New("API key seems too short")
 
 // GetProviderDisplayName returns a user-friendly name for the provider.
 // Lookup chain:

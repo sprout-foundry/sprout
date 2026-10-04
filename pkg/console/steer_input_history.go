@@ -22,9 +22,7 @@ func (r *SteerInputReader) recallHistory(delta int) {
 	if r.historyIndex == -1 && delta < 0 {
 		// First Up while at live buffer — snapshot current text so we
 		// can return to it on later Down.
-		snap := make([]byte, len(r.buffer))
-		copy(snap, r.buffer)
-		r.pendingBuffer = snap
+		r.pendingBuffer = []byte(r.line)
 	}
 
 	newIdx := r.historyIndex + delta
@@ -43,18 +41,13 @@ func (r *SteerInputReader) recallHistory(delta int) {
 
 	if newIdx == -1 {
 		// Restore the pending buffer the user was typing.
-		if r.pendingBuffer != nil {
-			r.buffer = append(r.buffer[:0], r.pendingBuffer...)
-		} else {
-			r.buffer = r.buffer[:0]
-		}
+		r.setLineLocked(string(r.pendingBuffer))
 	} else {
 		// history is ordered oldest→newest. UI walks newest-first, so
 		// index `i` maps to history[len-1-i].
 		entry := r.history[len(r.history)-1-newIdx]
-		r.buffer = append(r.buffer[:0], entry...)
+		r.setLineLocked(entry)
 	}
-	r.cursorPos = len(r.buffer)
 	r.historyIndex = newIdx
 	r.resetCompletionCycleLocked()
 	r.mu.Unlock()

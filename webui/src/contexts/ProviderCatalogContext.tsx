@@ -14,7 +14,7 @@ interface ProviderCatalogContextValue {
   currentModel: string;
   refresh: () => void;
   /** Resolve a raw provider id (e.g. `openrouter`) to its display name
-   *  (`OpenRouter (Recommended)`). Returns the id unchanged when the catalog
+   *  (`OpenRouter`). Returns the id unchanged when the catalog
    *  is empty or the id is unknown — keeps the call site safe for the
    *  pre-fetch and offline-disconnected states. */
   getProviderName: (id: string | undefined | null) => string;

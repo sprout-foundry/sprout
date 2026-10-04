@@ -1,6 +1,21 @@
 {
   "updated_at": "2026-09-21T15:55:51Z",
   "source": "refresh_provider_catalog",
+  "onboarding_order": [
+    "deepinfra",
+    "openrouter",
+    "deepseek",
+    "chutes",
+    "minimax",
+    "cerebras",
+    "mistral",
+    "ollama-cloud",
+    "openai",
+    "zai",
+    "zai-coding",
+    "lmstudio",
+    "sprout-local"
+  ],
   "providers": [
     {
       "id": "zai",
@@ -11,7 +26,7 @@
       "signup_url": "https://platform.z.ai/",
       "api_key_label": "Z.AI API Key",
       "api_key_help": "GLM Coding Plan users may need to use dedicated coding API base instead of general API.",
-      "recommended": true,
+      "recommended": false,
       "default_model": "glm-5",
       "recommended_model": "glm-5",
       "recommended_model_why": "Current flagship GLM coding model with strong tool and agent support.",
@@ -255,7 +270,7 @@
       "signup_url": "https://platform.minimax.io/",
       "api_key_label": "MiniMax API Key",
       "api_key_help": "MiniMax supports both standard API access and coding-plan workflows.",
-      "recommended": true,
+      "recommended": false,
       "default_model": "MiniMax-M2.5",
       "recommended_model": "MiniMax-M2.5",
       "recommended_model_why": "Best current default in this provider family for coding-oriented use.",
@@ -836,9 +851,10 @@
       "signup_url": "https://openrouter.ai/keys",
       "api_key_label": "OpenRouter API Key",
       "api_key_help": "Choose a coding-capable model after connecting your key.",
-      "default_model": "qwen/qwen3.5-27b",
-      "recommended_model": "qwen/qwen3.5-27b",
-      "recommended_model_why": "Prefer a coding-focused model over generic defaults.",
+      "recommended": true,
+      "default_model": "deepseek/deepseek-v4.1-flash",
+      "recommended_model": "deepseek/deepseek-v4.1-flash",
+      "recommended_model_why": "Fast, low-cost coding model with strong tool use and a 1M-token context. GLM-5.3-Flash (z-ai/glm-5.3-flash) is an equally good choice.",
       "models": [
         {
           "id": "ai21/jamba-large-1.7",
@@ -7061,9 +7077,9 @@
       "api_key_label": "DeepInfra API Key",
       "api_key_help": "Create a key, then choose a current coding or reasoning model from the provider list.",
       "recommended": true,
-      "default_model": "deepseek-ai/DeepSeek-V4-Flash-0731",
-      "recommended_model": "deepseek-ai/DeepSeek-V4-Flash-0731",
-      "recommended_model_why": "Current DeepSeek coding checkpoint: 1M context, lowest-cost tier, and the strongest tool-calling record in this model family.",
+      "default_model": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "recommended_model": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "recommended_model_why": "Fast, low-cost coding model with strong tool use and a 1M-token context. GLM-5.3-Flash (zai-org/GLM-5.3-Flash) is an equally good choice.",
       "models": [
         {
           "id": "anthropic/claude-fable-5",
@@ -8540,7 +8556,7 @@
       "signup_url": "https://chutes.ai/",
       "api_key_label": "Chutes API Key",
       "api_key_help": "Create a Chutes key, then pick one of available coding-capable models.",
-      "recommended": true,
+      "recommended": false,
       "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
       "recommended_model": "deepseek-ai/DeepSeek-V3.2-TEE",
       "recommended_model_why": "Current coding/reasoning default from checked-in Chutes catalog.",

@@ -47,6 +47,7 @@ function OnboardingDialog({
 
   // Local LLM state: track model download status for sprout-local provider
   const [localLLMModelPresent, setLocalLLMModelPresent] = useState<boolean | null>(null);
+  const [localLLMHint, setLocalLLMHint] = useState('');
   const [downloadingModel, setDownloadingModel] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState('');
 
@@ -63,6 +64,7 @@ function OnboardingDialog({
         const status = await ApiService.getInstance().getLocalLLMStatus();
         if (!cancelled) {
           setLocalLLMModelPresent(status.model_present);
+          setLocalLLMHint(status.hint ?? '');
         }
       } catch {
         if (!cancelled) setLocalLLMModelPresent(false);
@@ -83,6 +85,7 @@ function OnboardingDialog({
         const status = await ApiService.getInstance().getLocalLLMStatus();
         if (status.model_present) {
           setLocalLLMModelPresent(true);
+          setLocalLLMHint(status.hint ?? '');
           setDownloadingModel(false);
           setDownloadMessage('');
         }
@@ -365,9 +368,10 @@ function OnboardingDialog({
                     {downloadMessage && <div className="onboarding-caveat-item">{downloadMessage}</div>}
                   </div>
                 )}
-                {localLLMModelPresent === true && (
+                {localLLMModelPresent === true && !localLLMHint && (
                   <div className="onboarding-caveat-item">✓ Model downloaded and ready</div>
                 )}
+                {localLLMHint && <div className="onboarding-caveat-item">{localLLMHint}</div>}
                 <div className="onboarding-caveat-item">⚠ Slower than cloud (10–20 tok/s vs 50–100+)</div>
                 <div className="onboarding-caveat-item">⚠ Limited context (32K)</div>
                 <div className="onboarding-caveat-item">⚠ Best for simple tasks, edits, and offline work</div>

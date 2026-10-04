@@ -21,8 +21,8 @@
 // the committed fixture task); TODO 154.2 adds the runner: headless
 // non-interactive runs of a task through the existing agent path, one
 // fresh starter copy per run, 3 runs per model by default. Per-task
-// metrics (154.3), the default model list from the provider catalog
-// (154.4), and reports (154.5) are still to come.
+// metrics (154.3) and the default model list from the provider catalog
+// (154.4) have landed; reports (154.5) are still to come.
 //
 // The package's dependencies (pkg/plancontract, and for the runner
 // pkg/agent, pkg/verify, pkg/starters, pkg/planstore, pkg/factory,

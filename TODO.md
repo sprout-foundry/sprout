@@ -215,7 +215,7 @@ the end, without checkboxes.
 - [x] **154.3** Per-task metrics: repair attempts, turns, wall time,
       tokens and cost (existing cost tracking), language-guard
       mismatches. Test. Spec: SP-154 §154b.
-- [ ] **154.4** Default model list from the provider catalog's
+- [x] **154.4** Default model list from the provider catalog's
       `recommended_model` entries; configurable override. Test. Spec:
       SP-154 §154b.
 - [ ] **154.5** Reports: markdown + JSON comparing models and starters,

@@ -41,9 +41,12 @@ func TestRunPlanWithConfigCommands(t *testing.T) {
 	assert.True(t, res.Passed())
 }
 
-// TestRunPlanWithoutBuildOrTestItems pins the 149.2 scope: a plan that
-// declares only other kinds (page, manual) gates nothing yet — no
-// checks, no baseline, nothing executed.
+// TestRunPlanWithoutBuildOrTestItems pins the 149.3 scope: a plan that
+// declares only a page item (plus a manual item) gates a single page
+// check. The manifestFull manifest has no dev command, so the page check
+// is skipped with a reason (honest failure, SP-149 §149d) rather than
+// invented, and the manual item still gates nothing — no manual check is
+// produced.
 func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	root := t.TempDir()
 	writeManifestFile(t, root, manifestFull)
@@ -61,8 +64,14 @@ func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	res, err := r.Run(context.Background(), root)
 	require.NoError(t, err)
 
-	assert.Empty(t, exec.executed, "a plan without build/test items gates nothing in 149.2")
-	assert.Empty(t, res.Checks)
+	assert.Empty(t, exec.executed, "a plan with no build/test items gates no command execution")
+	require.Len(t, res.Checks, 1, "149.3 adds exactly one page check for the plan's page items")
+	assert.Equal(t, plancontract.KindPage, res.Checks[0].Kind)
+	assert.True(t, res.Checks[0].Skipped, "no dev command in the manifest: the page check is skipped, not invented")
+	assert.Contains(t, res.Checks[0].Reason, "dev command")
+	assert.Equal(t, []string{"a1"}, res.Checks[0].Items)
+	// The manual item gates nothing: the single check is the page one, no
+	// manual check exists.
 	assert.False(t, res.Baseline, "a plan exists: no baseline")
 	assert.Equal(t, stored.Revision, res.PlanRevision)
 }

@@ -179,7 +179,7 @@ the end, without checkboxes.
       baseline build+test when no plan exists; structured result type
       (checks, pass/fail, output excerpts). Test: a model-proposed
       command has no effect. Spec: SP-149 §149a, §149b.
-- [ ] **149.3** `page` checks: start the app from the manifest's `dev`
+- [x] **149.3** `page` checks: start the app from the manifest's `dev`
       command and port, open each listed route headless, fail on console
       errors, record screenshot references. Test with a fixture app that
       logs a console error. Spec: SP-149 §149a.

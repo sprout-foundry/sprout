@@ -50,6 +50,7 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 	tools.RecoverFileFunc = set.RecoverFile
 	tools.RevertMyChangesFunc = set.RevertMyChanges
 	tools.MCPRefreshFunc = set.MCPRefresh
+	tools.GenerateCommitMessageFunc = set.GenerateCommitMessage
 }
 
 // buildAgentToolFuncs returns the per-agent dispatch set for agent's
@@ -92,6 +93,12 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		},
 		MCPRefresh: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleMCPRefresh(ctx, agent, args)
+		},
+		// GenerateCommitMessage reuses the sprout commit generator so the
+		// commit tool's auto-message path and the CLI flow share one
+		// prompt + LLM call (see tool_handlers_commit_message.go).
+		GenerateCommitMessage: func(diff []byte, notes string) (string, error) {
+			return handleGenerateCommitMessage(agent, diff, notes)
 		},
 		// ChangeTracker hooks: keep session file-mutation tracking working
 		// now that write/edit execution lives in pkg/agent_tools. Without

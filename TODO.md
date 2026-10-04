@@ -90,7 +90,7 @@ the end, without checkboxes.
       version, `build`, `test`, `dev`, `preview` commands, dev port,
       routes, build output directory). Table tests for valid and invalid
       manifests. Spec: SP-153 §153a.
-- [ ] **153.2** Manifest loader API (`LoadStarterManifest(projectRoot)`)
+- [x] **153.2** Manifest loader API (`LoadStarterManifest(projectRoot)`)
       as the single source of build/test/dev/preview commands; missing
       file → none, never guessed. Tests. Spec: SP-153 §153a.
 - [ ] **153.3** Starter embedding and instantiation: embedded, versioned

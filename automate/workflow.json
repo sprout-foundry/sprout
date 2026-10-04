@@ -19,7 +19,7 @@
         "provider": "zai-coding"
       },
       "orchestrator": {
-        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "model": "qwen3.8-27b",
         "provider": "deepinfra"
       },
       "reviewer": {
@@ -28,8 +28,8 @@
       }
     },
     "max_iterations": 10000,
-    "provider": "deepinfra",
-    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "provider": "ai-worker",
+    "model": "qwen3.8-27b",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md"
   },

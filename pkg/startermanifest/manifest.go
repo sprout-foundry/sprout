@@ -12,11 +12,11 @@
 // command is optional.
 //
 // The package is a pure data + validation contract, mirroring
-// pkg/plancontract: it holds no I/O. Callers read and write the JSON file
-// (the loader lands in the SP-153 manifest loader item); this package
-// defines its shape and enforces its invariants. It is imported by the CLI,
-// by WASM builds, and by the SP-149/SP-155/SP-156 consumers, so it must
-// stay standard-library-only.
+// pkg/plancontract: it holds no I/O. Callers read the JSON file through
+// pkg/starterstore (the SP-153 manifest loader); this package defines its
+// shape and enforces its invariants. It is imported by the CLI, by WASM
+// builds, and by the SP-149/SP-155/SP-156 consumers, so it must stay
+// standard-library-only.
 //
 // JSON field names are part of the on-disk contract and must stay in sync
 // with the spec (roadmap/SP-153-starters-and-stack-skills.md §153a).

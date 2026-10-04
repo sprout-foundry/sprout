@@ -1,0 +1,14 @@
+{
+  "starter": {
+    "id": "fixture",
+    "version": "0.1.0"
+  },
+  "build": "npm run build",
+  "test": "npm test",
+  "dev": "npm run dev",
+  "dev_port": 3000,
+  "routes": [
+    "/"
+  ],
+  "build_output": "dist"
+}

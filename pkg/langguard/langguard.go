@@ -20,12 +20,14 @@
 //	    }
 //	}
 //
-// Deliberately not included here: the same-script trigram detector
-// (SP-152 152.2), user-language resolution (152.3), reply-path wiring and
+// The same-script trigram detector (152.2, language.go) and user-language
+// resolution (152.3, resolve.go) build on this package's prose and script
+// primitives. Deliberately not included here: reply-path wiring and
 // streaming hold-back (152.5–152.7), and mismatch metrics (152.9). They
-// are separate items that layer on top of this package's API; the API is
-// shaped for them (Check takes the user's script as a parameter, String
-// methods exist for logging, and the thresholds are tunable constants).
+// layer on top of this package's API; the API is shaped for them (Check
+// and CheckLanguage take the user's script and language as parameters,
+// ResolveUserLanguage returns the resolved user language, String methods
+// exist for logging, and the thresholds are tunable constants).
 package langguard
 
 import (

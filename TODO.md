@@ -143,7 +143,7 @@ the end, without checkboxes.
 - [x] **152.4** Config: guard on by default everywhere, including the CLI;
       a config setting turns it off. Tests for default and off. Spec:
       SP-152 §152f.
-- [ ] **152.5** Final-message guard: on mismatch the message is not
+- [x] **152.5** Final-message guard: on mismatch the message is not
       displayed; regenerate once with an explicit language instruction;
       a second mismatch shows a templated notice in the user's language
       with "view original". Scripted-model tests. Spec: SP-152 §152b.

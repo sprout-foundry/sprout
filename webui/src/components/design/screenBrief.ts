@@ -529,9 +529,7 @@ export function deriveScreenBrief(input: ScreenBriefInput): ScreenBriefModel {
     const text = input.flowTexts?.[flow.path];
     if (!text) continue; // an unreadable flow is skipped, never a hard error
     const flowName = (flow.name || flow.path.split('/').pop() || '').replace(/\.(mmd|json)$/, '');
-    const base = flow.path.endsWith('.json')
-      ? flowSourceEdgesForBrief(text, stem)
-      : flowEdgesForBrief(text, stem);
+    const base = flow.path.endsWith('.json') ? flowSourceEdgesForBrief(text, stem) : flowEdgesForBrief(text, stem);
     for (const edge of base) {
       const full: ScreenFlowEdge = { ...edge, flow: flow.path, flowName };
       if (edge.direction === 'in' || edge.direction === 'both') flowsIn.push(full);

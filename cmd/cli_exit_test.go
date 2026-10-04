@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -31,7 +32,9 @@ func newExitTestTree() *cobra.Command {
 	one.Flags().Bool("x", false, "")
 	one.Flags().Bool("y", false, "")
 	one.MarkFlagsOneRequired("x", "y")
-	root.AddCommand(leaf, req, one)
+	group := &cobra.Command{Use: "group"}
+	group.AddCommand(&cobra.Command{Use: "show", RunE: func(*cobra.Command, []string) error { return nil }})
+	root.AddCommand(leaf, req, one, group)
 	installUsageErrorHooks(root)
 	return root
 }
@@ -49,6 +52,8 @@ func TestExitCodeForCobraErrors(t *testing.T) {
 		{"mutually exclusive", []string{"leaf", "x", "--a", "--b"}},
 		{"required flag", []string{"req"}},
 		{"one required", []string{"one"}},
+		{"unknown group subcommand", []string{"group", "set", "k", "v"}},
+		{"misspelled group subcommand", []string{"group", "shwo"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -59,6 +64,22 @@ func TestExitCodeForCobraErrors(t *testing.T) {
 			assert.Equal(t, exitUsage, exitCodeFor(err), "error: %v", err)
 		})
 	}
+}
+
+func TestCommandGroupWithoutArgsShowsHelp(t *testing.T) {
+	root := newExitTestTree()
+	root.SetArgs([]string{"group"})
+	root.SetOut(io.Discard)
+	require.NoError(t, root.Execute())
+}
+
+func TestCommandGroupSuggestsSubcommand(t *testing.T) {
+	root := newExitTestTree()
+	root.SetArgs([]string{"group", "shwo"})
+	err := root.Execute()
+	require.Error(t, err)
+	_, sugg := splitCobraSuggestions(err.Error())
+	assert.Equal(t, []string{"show"}, sugg)
 }
 
 func TestExitCodeForRuntimeErrors(t *testing.T) {

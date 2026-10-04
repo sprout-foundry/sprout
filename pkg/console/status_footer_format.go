@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -60,6 +62,47 @@ func cwdSegment(cwd, branch string) string {
 		return cwd
 	}
 	return cwd + " (" + branch + ")"
+}
+
+// fitCwdSegment renders cwdSegment within width columns by dropping leading
+// path components ("…/sprout/worktrees/x (main)"), then the branch, before
+// finally truncating the directory name itself.
+func fitCwdSegment(cwd, branch string, width int) string {
+	if full := cwdSegment(cwd, branch); width <= 0 || displayWidth(full) <= width {
+		return full
+	}
+	parts := strings.Split(cwd, "/")
+	for keep := len(parts) - 1; keep >= 1; keep-- {
+		if s := cwdSegment("…/"+strings.Join(parts[len(parts)-keep:], "/"), branch); displayWidth(s) <= width {
+			return s
+		}
+	}
+	base := parts[len(parts)-1]
+	if branch != "" && displayWidth(base) <= width {
+		return base
+	}
+	return truncateToWidth(base, width, "…")
+}
+
+// branchCacheTTL bounds how stale the footer's branch can be. The footer
+// redraws on every keystroke while the slash dropdown is open; without the
+// cache each redraw would spawn git.
+const branchCacheTTL = 2 * time.Second
+
+var branchCache struct {
+	sync.Mutex
+	dir, branch string
+	at          time.Time
+}
+
+func cachedGitBranchOf(dir string) string {
+	branchCache.Lock()
+	defer branchCache.Unlock()
+	if dir == branchCache.dir && time.Since(branchCache.at) < branchCacheTTL {
+		return branchCache.branch
+	}
+	branchCache.dir, branchCache.branch, branchCache.at = dir, gitBranchOf(dir), time.Now()
+	return branchCache.branch
 }
 
 // gitBranchOf returns the current git branch for the directory, or empty

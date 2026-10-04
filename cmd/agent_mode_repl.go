@@ -63,6 +63,8 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				fmt.Fprintln(os.Stderr)
 				if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
 					console.GlyphPaused.Fprintf(os.Stderr, "auto-resume: background task completed — resuming")
+				} else if inputReader.IsPinned() {
+					cliui.PrintUserMessage(query, true)
 				} else {
 					console.GlyphPaused.Fprintf(os.Stderr, "auto-run queued: %s", query)
 				}
@@ -123,6 +125,13 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 				query = strings.TrimSpace(query)
 				rawQuery = query
+				if query != "" && inputReader.IsPinned() {
+					if strings.HasPrefix(query, "/") || strings.HasPrefix(query, "!") || query == "?" {
+						cliui.PrintCommandEcho(query)
+					} else {
+						cliui.PrintUserMessage(query, false)
+					}
+				}
 			}
 			if query == "" {
 				continue
@@ -197,13 +206,26 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// silently joining whatever ran in the prior turn.
 			resetSpawnTracking()
 
+			// SP-048-1b: Try fast paths BEFORE the assistant header and the
+			// "Thinking" spinner so neither appears for commands that
+			// execute directly without LLM involvement.
+			var fastPathExecuted bool
+			// Try zsh command detection first (fast path)
+			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
+				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
+			} else if executed {
+				fastPathExecuted = true
+			}
+
 			// Role header so the boundary between user input and assistant
 			// reply is visually obvious. Uses a brand-colored bar + dim
 			// "assistant" label — pops out in scrollback without being noisy.
 			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
 			// summary line, which acts as the closing separator.
-			fmt.Println()
-			cliui.PrintAssistantHeader(chatAgent.GetModel())
+			if !fastPathExecuted {
+				fmt.Println()
+				cliui.PrintAssistantHeader(chatAgent.GetModel())
+			}
 
 			// Per-turn assistant renderer: indents prose with "  " as it
 			// streams, and at turn-end optionally re-renders the final
@@ -226,17 +248,6 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 					// CLI still suppresses reasoning entirely.
 					router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
 				}
-			}
-
-			// SP-048-1b: Try fast paths BEFORE starting the "Thinking"
-			// spinner so the user never sees the LLM spinner for commands
-			// that execute directly without LLM involvement.
-			var fastPathExecuted bool
-			// Try zsh command detection first (fast path)
-			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
-				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-			} else if executed {
-				fastPathExecuted = true
 			}
 
 			// Only start the spinner (and the full agent turn) when no fast

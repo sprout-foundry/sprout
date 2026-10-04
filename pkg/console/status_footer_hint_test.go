@@ -78,8 +78,8 @@ func TestStatusFooter_reservedRows_SteerOneRowNoHint(t *testing.T) {
 	}
 	// steerActive=true (1 row), showKeymapHint=false → 3 rows.
 	got := f.reservedRows()
-	if got != 3 {
-		t.Errorf("reservedRows() = %d, want 3 (steer=1, no hint)", got)
+	if got != 4 {
+		t.Errorf("reservedRows() = %d, want 4 (steer=1 + box rule, no hint)", got)
 	}
 }
 
@@ -93,8 +93,8 @@ func TestStatusFooter_reservedRows_SteerOneRowWithHint(t *testing.T) {
 	f.SetShowKeymapHint(true)
 	// steerActive=true (1 row), showKeymapHint=true → 4 rows.
 	got := f.reservedRows()
-	if got != 4 {
-		t.Errorf("reservedRows() = %d, want 4 (steer=1, hint)", got)
+	if got != 5 {
+		t.Errorf("reservedRows() = %d, want 5 (steer=1 + box rule, hint)", got)
 	}
 }
 
@@ -108,8 +108,8 @@ func TestStatusFooter_reservedRows_SteerTwoRowsWithHint(t *testing.T) {
 	f.SetShowKeymapHint(true)
 	// steerActive=true (2 rows), showKeymapHint=true → 5 rows.
 	got := f.reservedRows()
-	if got != 5 {
-		t.Errorf("reservedRows() = %d, want 5 (steer=2, hint)", got)
+	if got != 6 {
+		t.Errorf("reservedRows() = %d, want 6 (steer=2 + box rule, hint)", got)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,26 @@ func (f *StatusFooter) Resize() {
 		return
 	}
 
+	// An idle prompt is cleared where it stands, measured from the cursor
+	// that still sits on it, before anything below moves the cursor. It is
+	// redrawn on the region's last row at the end.
+	cols, rows := f.terminalSize()
+	f.resizeSnapshot.Store(&terminalSizeOverride{cols: cols, rows: rows})
+	defer f.resizeSnapshot.Store(nil)
+
+	idle := activeInputReader
+	picker := activeSelectList
+	switch {
+	case idle != nil && idle.footer == f:
+		idle.clearInlineInputForResizeLocked(cols)
+		picker = nil
+	case picker != nil && picker.isFooterDriven():
+		idle = nil
+		picker.clearForResizeLocked(cols)
+	default:
+		idle, picker = nil, nil
+	}
+
 	// Reset the scroll region, clear stale footer content, then
 	// re-apply the scroll region and redraw.
 	//
@@ -48,6 +69,7 @@ func (f *StatusFooter) Resize() {
 	// rows tall, so the clear starts at its computed top (see the
 	// oldTop/newTop derivation below) — no slack row, so no live
 	// content row is ever erased.
+	overflow := 0
 	if oldRows > 1 {
 		// Reset the scroll region first so we can address the full screen.
 		fmt.Fprint(f.w, "\033[r")
@@ -65,7 +87,7 @@ func (f *StatusFooter) Resize() {
 
 		// Compute wrapped overflow: each padded footer row wraps to
 		// ceil(oldCols/newCols) rows at the new width.
-		overflow := f.computeOverflowRows(oldCols, newCols, reserved)
+		overflow = f.computeOverflowRows(oldCols, newCols, reserved)
 		newTop := newRows - reserved - overflow + 1
 
 		// The stale footer rows sit at OLD-geometry positions (they were
@@ -110,6 +132,44 @@ func (f *StatusFooter) Resize() {
 
 	f.applyScrollRegionLocked()
 	f.drawLocked()
+	if idle != nil {
+		f.closeGrowGapLocked(oldRows, overflow)
+		idle.redrawAnchoredLocked(cols)
+	}
+	if picker != nil {
+		f.closeGrowGapLocked(oldRows, overflow)
+		picker.renderAnchoredLocked(rows-f.reservedRows(), cols)
+	}
+}
+
+// closeGrowGapLocked keeps the conversation against the input box after a
+// resize opened blank rows between them. Two causes, each scrolled away by
+// pulling the region's content down:
+//
+//   - growth: most terminals add the new rows at the bottom and leave the
+//     content in place while the box is redrawn on the new last rows;
+//   - width shrink: the footer's padded rows rewrap onto overflow extra
+//     rows, pushing the content up, and the clear above that erases them
+//     leaves exactly that many blank rows behind.
+//
+// The rows that fall off the bottom are the ones the resize just cleared.
+// Bottom-anchored terminals (Termux) pull content down themselves. Caller
+// must hold outputMu.
+func (f *StatusFooter) closeGrowGapLocked(oldRows, overflow int) {
+	if bottomAnchoredResize() {
+		return
+	}
+	_, rows := f.terminalSize()
+	shift := max(overflow, 0)
+	if oldRows > 1 {
+		shift += max(rows-oldRows, 0)
+	}
+	bottom := rows - f.reservedRows()
+	if shift == 0 || bottom <= shift {
+		return
+	}
+	// Back to the region's last row afterwards: output continues there.
+	_, _ = fmt.Fprintf(f.w, "\033[1;1H%s\033[%d;1H", strings.Repeat("\033M", shift), bottom)
 }
 
 // computeOverflowRows calculates how many extra physical rows the footer's
@@ -239,7 +299,10 @@ func (f *StatusFooter) Stop() {
 		}
 		fmt.Fprintf(f.w, "\033[%d;1H\033[J", topRow)
 	}
-	fmt.Fprint(f.w, "\033[r")
+	// The input box hides the terminal cursor while it is pinned; restore it
+	// here too, since force-quit paths stop the footer without unwinding the
+	// input reader.
+	_, _ = fmt.Fprint(f.w, "\033[r"+ShowCursorSeq())
 	if rows > 1 {
 		topPinned := rows - 1
 		if steerActiveSnap && lastSteerSnap > 0 {

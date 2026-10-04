@@ -34,7 +34,9 @@ func (f *StatusFooter) applySteerRegionOrDefer(wasActive bool, prevRows, newRows
 	if wasActive && newRows < prevRows {
 		f.clearOrphanedSteerRows(prevRows, newRows)
 	}
-	f.applyScrollRegionLocked()
+	// These setters serve the mid-turn steer panel: the spinner or
+	// streaming prose owns a live line, so the cursor must stay on it.
+	f.applyScrollRegionKeepingCursorLocked()
 	f.drawLocked()
 	return true
 }
@@ -63,7 +65,7 @@ func (f *StatusFooter) SetSteerLine(text string) {
 	f.steerCursorRow = -1
 	f.steerCursorCol = 0
 	active := f.active
-	newRows := f.steerRowCount()
+	newRows := f.steerBlockRows()
 	f.mu.Unlock()
 	if !active {
 		return
@@ -99,7 +101,7 @@ func (f *StatusFooter) SetSteerLineWithCursor(text string, cursorByteOffset int)
 	f.steerCursorRow = -1
 	f.steerCursorCol = 0
 	active := f.active
-	newRows := f.steerRowCount()
+	newRows := f.steerBlockRows()
 	f.mu.Unlock()
 	if !active {
 		return
@@ -139,7 +141,7 @@ func (f *StatusFooter) SetSteerLineWrapped(text string, cursorRow, cursorCol int
 	f.steerCursorRow = cursorRow
 	f.steerCursorCol = cursorCol
 	active := f.active
-	newRows := f.steerRowCount()
+	newRows := f.steerBlockRows()
 	f.mu.Unlock()
 	if !active {
 		return
@@ -178,7 +180,7 @@ func (f *StatusFooter) SetSteerLineWrappedLocked(text string, cursorRow, cursorC
 	f.steerCursorRow = cursorRow
 	f.steerCursorCol = cursorCol
 	active := f.active
-	newRows := f.steerRowCount()
+	newRows := f.steerBlockRows()
 	f.mu.Unlock()
 	if !active {
 		return
@@ -198,6 +200,7 @@ func (f *StatusFooter) SetSteerLineWrappedLocked(text string, cursorRow, cursorC
 		}
 		f.mu.Unlock()
 		if !streaming {
+			f.shiftScrollRegionLocked()
 			f.applyScrollRegionLocked()
 		}
 	}
@@ -265,8 +268,8 @@ func (f *StatusFooter) ClearSteerLine() {
 	LockOutput()
 	_, rows := f.terminalSize()
 	if rows > 2 && prevRows > 0 {
-		fmt.Fprint(f.w, "\033[r")
-		fmt.Fprint(f.w, "\0337")
+		// Save before resetting the margins: DECSTBM homes the cursor.
+		_, _ = fmt.Fprint(f.w, "\0337\033[r")
 		// SP-115: hint row pushes steer panel up by hintRows.
 		f.mu.Lock()
 		hintRows := f.lastHintRows
@@ -286,7 +289,7 @@ func (f *StatusFooter) ClearSteerLine() {
 		}
 		fmt.Fprint(f.w, "\0338")
 	}
-	f.applyScrollRegionLocked()
+	f.applyScrollRegionKeepingCursorLocked()
 	f.drawLocked()
 	UnlockOutput()
 }
@@ -334,6 +337,7 @@ func (f *StatusFooter) ClearSteerLineLocked() {
 		}
 		fmt.Fprint(f.w, "\0338")
 	}
+	f.shiftScrollRegionLocked()
 	f.applyScrollRegionLocked()
 	f.drawLocked()
 }

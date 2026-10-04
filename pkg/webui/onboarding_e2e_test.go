@@ -219,8 +219,8 @@ func TestOnboardingE2E_ProviderSelectionFlow(t *testing.T) {
 
 	// The request may succeed or fail depending on whether the provider has a running backend,
 	// but the key thing is that the config should be persisted.
-	assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest}, completeRec.Code,
-		"onboarding complete should return 200 or 400 (connection check may fail)")
+	assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest, http.StatusServiceUnavailable}, completeRec.Code,
+		"onboarding complete should return 200, or 400/503 when the provider has no reachable backend")
 
 	// Step 3: Verify config was persisted
 	cm := getConfigManager(t, ws)

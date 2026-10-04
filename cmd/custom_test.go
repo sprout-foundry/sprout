@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
@@ -648,20 +649,12 @@ func TestNewMCPServerRegistry_HasPlaywrightTemplate(t *testing.T) {
 	}
 }
 
-// SP-048-5d
+// The prompt is the shared composer label; the model is shown in the footer.
 func TestBuildPromptPrefix(t *testing.T) {
-	cases := []struct {
-		model string
-		want  string
-	}{
-		{"", "sprout> "},
-		{"  ", "sprout> "},
-		{"claude-opus-4-7", "claude-opus-4-7 ▸ "},
-		{"  trim-me  ", "trim-me ▸ "},
-	}
-	for _, c := range cases {
-		if got := cliui.BuildPromptPrefix(c.model); got != c.want {
-			t.Errorf("cliui.BuildPromptPrefix(%q) = %q, want %q", c.model, got, c.want)
+	want := console.ComposerPrefix(console.ComposerIdle)
+	for _, model := range []string{"", "claude-opus-4-7"} {
+		if got := cliui.BuildPromptPrefix(model); got != want {
+			t.Errorf("cliui.BuildPromptPrefix(%q) = %q, want %q", model, got, want)
 		}
 	}
 }

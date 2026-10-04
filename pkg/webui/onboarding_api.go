@@ -46,6 +46,9 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 
 	for _, desc := range descriptors {
+		if desc.ID == "sprout-local" && !localmodel.RuntimeSupported() {
+			continue
+		}
 		meta, _ := configuration.GetProviderAuthMetadata(desc.ID)
 		hasCredential := configuration.HasProviderAuth(desc.ID)
 		entry := onboardingProvider{
@@ -61,8 +64,8 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	}
 
 	sort.SliceStable(providers, func(i, j int) bool {
-		leftOrder, leftHasOrder := onboardingProviderOrder[providers[i].ID]
-		rightOrder, rightHasOrder := onboardingProviderOrder[providers[j].ID]
+		leftOrder, leftHasOrder := providercatalog.OnboardingRank(providers[i].ID)
+		rightOrder, rightHasOrder := providercatalog.OnboardingRank(providers[j].ID)
 		switch {
 		case leftHasOrder && rightHasOrder:
 			return leftOrder < rightOrder

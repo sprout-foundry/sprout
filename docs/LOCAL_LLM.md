@@ -1,73 +1,58 @@
 # Local LLM (MLX) — run sprout with a local model
 
 Sprout can run a small language model **entirely on your Mac** via MLX (Apple's
-unified-memory GPU framework) — no API key, no network calls, no cost. The
-local model is served by a small OpenAI-compatible server and used through the
-built-in `sprout-local` provider, so everything else (agent loop, tools,
-subagents, commit messages) works exactly as with a cloud provider.
+unified-memory GPU framework) — no API key, no network calls after setup, no
+cost. The model runs inside sprout through the built-in `sprout-local`
+provider, so everything else (agent loop, tools, subagents, commit messages)
+works exactly as with a cloud provider.
 
 ## Requirements
 
-- Apple Silicon Mac (M1/M2/M3/M4), macOS 12+
-- 8 GB RAM minimum; 16 GB recommended for the balanced 4B model
-- `hf` CLI for model downloads (`pip install -U huggingface_hub`)
-- MLX C libraries, for the local LLM only (`brew install mlx-c` — keg-only;
-  loaded at runtime. Sprout works without them; without them the
-  `sprout-local` provider is simply unavailable.)
+- Apple Silicon Mac (M1 or later)
+- 8 GB RAM minimum; more RAM unlocks larger models
+- Nothing else: the release binary downloads the MLX runtime (about 40 MB)
+  the first time you set up a local model. If Homebrew's `mlx-c` is
+  installed, sprout uses that instead.
 
 ## Quick start
 
+Run `sprout`, choose **Local (Offline)** in the setup wizard, and pick a model (the
+wizard recommends one for your RAM). Sprout downloads the runtime and the
+model, then restarts itself on the local model.
+
+Later, switch to a local model from any session with `/models`; if the
+runtime was missing it is downloaded too, and local models work after you
+restart sprout.
+
+Models and the runtime live in `~/.sprout-local/` (`models/` and
+`mlx-runtime/`). Delete that directory to remove them.
+
+## How the runtime is found
+
+MLX is loaded once when sprout starts, from the first of: `$MLX_C_LIB`, a
+`libmlxc.dylib` next to the sprout binary, Homebrew's `mlx-c`. When none of
+those load and `~/.sprout-local/mlx-runtime` exists, sprout restarts itself
+once with `MLX_C_LIB` pointing there.
+
+The runtime archive is built by `scripts/package-mlx-runtime.sh` during each
+release and verified against the release's `SHA256SUMS` before install.
+
+## Standalone server (contributors)
+
+Building from source, you can also run the model as a separate
+OpenAI-compatible server:
+
 ```bash
-# 1. Download the recommended model for this machine's RAM
-make local-model
-
-# 2. Start the local LLM server (auto-selects the best installed model)
-make local-llm
-
-# 3. In another terminal, use sprout with the local provider
-sprout agent --provider sprout-local "Summarize this repo"
+make local-model   # download the recommended model for this machine
+make local-llm     # serve it on http://127.0.0.1:18081
 ```
-
-`make local-model` inspects your RAM and downloads the right model:
-
-| Machine RAM | Model | Notes |
-|---|---|---|
-| ≥ 30 GB | `Qwen3.5-9B-4bit` | Best quality; ~5.9 GB weights |
-| ≥ 14 GB | `Qwen3.5-4B-4bit` | **Balanced choice for 16 GB machines**; ~2.8 GB weights |
-| any | `Qwen3.5-0.8B-4bit` | Universal fallback; ~0.6 GB weights |
-
-Models land in `~/dev/llm-models/` and the server auto-selects the largest one
-that fits your RAM (skipping any that aren't installed).
-
-## Manual control
-
-```bash
-# Build and run the server with explicit model + port
-go build -tags mlx -o llm_server ./cmd/llm_server
-./llm_server -model ~/dev/llm-models/qwen3.5-4b-4bit -port 18081
-```
-
-The server speaks the OpenAI chat-completions API on `http://127.0.0.1:18081`:
 
 - `POST /v1/chat/completions` — JSON and SSE streaming
-- `GET /v1/models` — model discovery (the provider uses this)
+- `GET /v1/models` — model discovery
 - `GET /health` — status check (`make local-llm-status`)
 
-## Using sprout-local
-
-The `sprout-local` provider is embedded in the sprout binary (no setup). It
-points at `http://127.0.0.1:18081` and auto-discovers the model the server
-loaded, so the same config works whether you're on an 8 GB or 32 GB machine.
-
-```bash
-sprout agent --provider sprout-local "your task here"
-# or make it the default:
-sprout config set provider sprout-local   # if supported
-```
-
-The connection check sends a tiny request on startup; the server caps
-`max_tokens` (default 512) so a connection check can't trigger a long
-generation on a memory-constrained machine.
+The server caps `max_tokens` (default 512) so a connection check can't
+trigger a long generation on a memory-constrained machine.
 
 ## Model catalog
 
@@ -90,15 +75,15 @@ The LLM path applies the SP-134 memory protections:
 - **Cache limit + trim** — pooled buffers return to the OS between requests
 - **max_tokens cap** — no runaway generations on small machines
 
-If a request would exhaust memory, the server returns an HTTP error instead of
-hanging — reduce the model size (e.g. 4B → 0.8B) or raise `-max-tokens`.
+If a request would exhaust memory, it fails with an error instead of
+hanging — reduce the model size (e.g. 4B → 0.8B).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `no model from catalog fits` | Run `make local-model` to download one |
-| `hf not found` | `pip install -U huggingface_hub` |
-| Connection refused on 18081 | `make local-llm-status`; start with `make local-llm` |
-| Generation slow / swap-heavy | Use a smaller model (`-model ~/dev/llm-models/qwen3.5-0.8b-4bit`) |
-| Server returns memory-limit error | Close other apps; use a smaller model |
+| `no model from catalog fits` | Run `/models` and pick a model that fits your RAM |
+| Local AI missing from setup | Needs an Apple Silicon Mac and the macOS arm64 release binary |
+| Runtime download fails | Check network access to github.com, then retry setup |
+| Generation slow / swap-heavy | Use a smaller model (e.g. 4B → 0.8B) |
+| Memory-limit error | Close other apps; use a smaller model |

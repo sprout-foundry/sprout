@@ -58,43 +58,24 @@ func (ir *InputReader) finalizePaste() bool {
 	ir.pasteBuffer.Reset()
 	ir.pasteActive = false
 
-	// Check for binary image paste data (bracketed paste may contain raw image bytes)
-	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
-		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
-			fmt.Fprintln(os.Stderr)
-			GlyphAction.Fprintf(os.Stderr, "Image paste detected (%s, %d bytes)", mimeType, len(rawBytes))
-			savedPath, err := SavePastedImage(rawBytes, "")
-			if err != nil {
-				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
-			} else {
-				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
-				placeholder := PastedImagePlaceholder(savedPath) + " "
-				// Insert placeholder at cursor position
-				before := ir.line[:ir.cursorPos]
-				after := ir.line[ir.cursorPos:]
-				ir.line = before + placeholder + after
-				ir.cursorPos += len(placeholder)
-				ir.shiftPasteSpans(len(before), len(placeholder))
-				ir.addCollapsedPaste(len(before), ir.cursorPos)
-				ir.hasEditedLine = true
-				ir.historyIndex = -1
-				ir.resetCompletionCycle()
-				ir.Refresh()
-				promptWidth := visibleRuneWidth(ir.prompt)
-				lineWidth := len([]rune(ir.line))
-				newLength := promptWidth + lineWidth
-				ir.lastLineLength = newLength
-				cursorPos := promptWidth + ir.cursorPos
-				ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
-				return true
-			}
-		}
+	// Raw image bytes (some terminals paste the clipboard image itself).
+	if placeholder := attachPastedImageData(rawBytes); placeholder != "" {
+		ir.insertAttachment(placeholder)
+		return true
 	}
 
 	// Strip trailing newline that triggered the paste
 	pastedContent = strings.TrimRight(pastedContent, "\n")
 	if pastedContent == "" {
 		return true
+	}
+
+	// Paths to image files (a dragged-in or Finder-pasted screenshot).
+	if paths, ok := PastedImageFiles(pastedContent); ok {
+		if placeholder := attachPastedImageFiles(paths); placeholder != "" {
+			ir.insertAttachment(placeholder)
+			return true
+		}
 	}
 
 	// SP-048-4c: Smart paste — if the paste is large (>100 lines OR >5KB),
@@ -105,24 +86,7 @@ func (ir *InputReader) finalizePaste() bool {
 			fmt.Fprintln(os.Stderr)
 			GlyphAction.Fprintf(os.Stderr, "%d lines · %d bytes saved to %s",
 				lineCount, len(pastedContent), savedPath)
-			placeholder := "@" + savedPath + " "
-			start := ir.cursorPos
-			before := ir.line[:ir.cursorPos]
-			after := ir.line[ir.cursorPos:]
-			ir.line = before + placeholder + after
-			ir.cursorPos += len(placeholder)
-			ir.shiftPasteSpans(start, len(placeholder))
-			ir.addCollapsedPaste(start, ir.cursorPos)
-			ir.hasEditedLine = true
-			ir.historyIndex = -1
-			ir.resetCompletionCycle()
-			ir.Refresh()
-			promptWidth := visibleRuneWidth(ir.prompt)
-			lineWidth := len([]rune(ir.line))
-			newLength := promptWidth + lineWidth
-			ir.lastLineLength = newLength
-			cursorPos := promptWidth + ir.cursorPos
-			ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
+			ir.insertAttachment("@" + savedPath + " ")
 			return true
 		} else {
 			GlyphError.Fprintf(os.Stderr, "smart-paste save failed: %v (falling back to inline insert)", err)
@@ -130,28 +94,15 @@ func (ir *InputReader) finalizePaste() bool {
 		}
 	}
 
-	ir.hasEditedLine = true
-	ir.historyIndex = -1
-	ir.resetCompletionCycle()
-
-	// Insert at cursor position instead of always appending.
+	ir.markEdited()
 	start := ir.cursorPos
-	before := ir.line[:ir.cursorPos]
-	after := ir.line[ir.cursorPos:]
-	ir.line = before + pastedContent + after
-	ir.cursorPos += len(pastedContent)
-	ir.shiftPasteSpans(start, len(pastedContent))
-	ir.addCollapsedPaste(start, start+len(pastedContent))
+	ir.insertText(pastedContent)
+	if shouldCollapsePaste(pastedContent) {
+		ir.addCollapsedPaste(start, start+len(pastedContent))
+	}
 
 	// Show feedback and refresh
 	ir.Refresh()
-
-	promptWidth := visibleRuneWidth(ir.prompt)
-	lineWidth := len([]rune(ir.line))
-	newLength := promptWidth + lineWidth
-	ir.lastLineLength = newLength
-	cursorPos := promptWidth + ir.cursorPos
-	ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
 
 	return true
 }
@@ -164,36 +115,6 @@ func (ir *InputReader) addCollapsedPaste(start, end int) {
 	sort.Slice(ir.collapsedPastes, func(i, j int) bool {
 		return ir.collapsedPastes[i].start < ir.collapsedPastes[j].start
 	})
-}
-
-func (ir *InputReader) shiftPasteSpans(pos, delta int) {
-	if delta == 0 || len(ir.collapsedPastes) == 0 {
-		return
-	}
-	filtered := ir.collapsedPastes[:0]
-	for _, span := range ir.collapsedPastes {
-		if span.end <= pos {
-			filtered = append(filtered, span)
-			continue
-		}
-		if span.start >= pos {
-			span.start += delta
-			span.end += delta
-		} else {
-			// Edits inside a collapsed span are ambiguous; expand it.
-			continue
-		}
-		if span.start < 0 {
-			span.start = 0
-		}
-		if span.end > len(ir.line) {
-			span.end = len(ir.line)
-		}
-		if span.end > span.start {
-			filtered = append(filtered, span)
-		}
-	}
-	ir.collapsedPastes = filtered
 }
 
 func (ir *InputReader) findCollapsedPasteAtCursor() int {
@@ -212,33 +133,20 @@ func (ir *InputReader) expandPasteAtCursor() {
 }
 
 func (ir *InputReader) deleteCollapsedPasteEndingAtCursor() bool {
-	for i, span := range ir.collapsedPastes {
+	for _, span := range ir.collapsedPastes {
 		if span.end == ir.cursorPos {
-			ir.line = ir.line[:span.start] + ir.line[span.end:]
-			ir.cursorPos = span.start
-			ir.hasEditedLine = true
-			ir.historyIndex = -1
-			ir.resetCompletionCycle()
-			removed := span.end - span.start
-			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
-			ir.shiftPasteSpans(span.end, -removed)
-			return true
+			ir.markEdited()
+			return ir.deleteRange(span.start, span.end, editOther)
 		}
 	}
 	return false
 }
 
 func (ir *InputReader) deleteCollapsedPasteStartingAtCursor() bool {
-	for i, span := range ir.collapsedPastes {
+	for _, span := range ir.collapsedPastes {
 		if span.start == ir.cursorPos {
-			ir.line = ir.line[:span.start] + ir.line[span.end:]
-			ir.hasEditedLine = true
-			ir.historyIndex = -1
-			ir.resetCompletionCycle()
-			removed := span.end - span.start
-			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
-			ir.shiftPasteSpans(span.end, -removed)
-			return true
+			ir.markEdited()
+			return ir.deleteRange(span.start, span.end, editOther)
 		}
 	}
 	return false
@@ -263,7 +171,7 @@ func (ir *InputReader) renderLineWithCollapsedPastes() (string, int) {
 			cursorSet = true
 		}
 
-		label := fmt.Sprintf("[pasted %d chars]", utf8.RuneCountInString(ir.line[span.start:span.end]))
+		label := pastePlaceholder(ir.line[span.start:span.end])
 		if !cursorSet && ir.cursorPos > span.start && ir.cursorPos <= span.end {
 			displayCursor = out.Len() + len(label)
 			cursorSet = true
@@ -294,4 +202,40 @@ func runeCountAtByteIndex(s string, byteIndex int) int {
 		return utf8.RuneCountInString(s)
 	}
 	return utf8.RuneCountInString(s[:byteIndex])
+}
+
+// Pastes at least this tall, or longer than collapsePasteMinChars, show as a
+// one-line placeholder; anything smaller (a path, a command, a few lines) is
+// left visible so it can be read and edited before sending.
+const (
+	collapsePasteMinLines = 5
+	collapsePasteMinChars = 400
+)
+
+func shouldCollapsePaste(content string) bool {
+	return strings.Count(content, "\n")+1 >= collapsePasteMinLines ||
+		utf8.RuneCountInString(content) > collapsePasteMinChars
+}
+
+func pastePlaceholder(content string) string {
+	if n := len(ParsePastedImagePlaceholders(content)); n > 0 && strings.HasPrefix(content, pastedImageBracketPrefix) {
+		if n == 1 {
+			return "[image]"
+		}
+		return fmt.Sprintf("[%d images]", n)
+	}
+	if lines := strings.Count(content, "\n") + 1; lines > 1 {
+		return fmt.Sprintf("[pasted %d lines]", lines)
+	}
+	return fmt.Sprintf("[pasted %d chars]", utf8.RuneCountInString(content))
+}
+
+// insertAttachment inserts an attachment placeholder at the cursor as one
+// collapsed unit, so editing treats it as a single token.
+func (ir *InputReader) insertAttachment(placeholder string) {
+	start := ir.cursorPos
+	ir.markEdited()
+	ir.insertText(placeholder)
+	ir.addCollapsedPaste(start, ir.cursorPos)
+	ir.Refresh()
 }

@@ -5,9 +5,11 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -66,8 +68,17 @@ func maybeRunOnboarding() bool {
 	if !needsOnboarding() {
 		return false
 	}
-	return runGuidedOnboarding()
+	if runGuidedOnboarding() {
+		return true
+	}
+	onboardingDeclined = true
+	return false
 }
+
+// onboardingDeclined records that the guided setup ran this process and
+// ended without a provider (skipped or failed), so startup continues in
+// editor-only mode instead of failing.
+var onboardingDeclined bool
 
 // runGuidedOnboarding walks the user through provider → model → API key →
 // persist. Returns true on successful completion, false on skip or failure.
@@ -143,6 +154,7 @@ func runGuidedOnboarding() bool {
 // value is treated as the provider ID so the user can still manually pick
 // (e.g. "openrouter") when the embedded catalog hasn't been loaded yet.
 func selectProviderInteractive() (string, bool) {
+	providercatalog.RefreshFromRemoteWithin(3 * time.Second)
 	catalog := providercatalog.Current()
 
 	var items []console.SelectItem
@@ -152,12 +164,20 @@ func selectProviderInteractive() (string, bool) {
 		// option plus skip. The manual entry item's value is a sentinel we
 		// detect below.
 		items = []console.SelectItem{
-			{Label: "Type provider ID manually", Detail: "e.g. openrouter, zai", Value: "__type__"},
+			{Label: "Type provider ID manually", Detail: "e.g. openrouter, deepinfra", Value: "__type__"},
 			{Label: "Skip (editor-only mode)", Detail: "set up AI later", Value: "skip"},
 		}
 	} else {
-		// Recommended first, then the rest.
-		for _, p := range catalog.Providers {
+		// Recommended first, then the rest. The local provider is listed
+		// only when this build can run it.
+		providers := make([]providercatalog.Provider, 0, len(catalog.Providers))
+		for _, p := range catalog.OnboardingProviders() {
+			if p.ID == "sprout-local" && !localAIAvailable() {
+				continue
+			}
+			providers = append(providers, p)
+		}
+		for _, p := range providers {
 			if p.Recommended {
 				models := ""
 				if p.DefaultModel != "" {
@@ -172,7 +192,7 @@ func selectProviderInteractive() (string, bool) {
 				})
 			}
 		}
-		for _, p := range catalog.Providers {
+		for _, p := range providers {
 			if p.Recommended {
 				continue
 			}
@@ -213,7 +233,7 @@ func selectProviderInteractive() (string, bool) {
 	}
 	// Manual type-in sentinel: fall back to a simple prompt.
 	if value == "__type__" {
-		fmt.Print("Enter provider ID (e.g. openrouter, zai): ")
+		fmt.Print("Enter provider ID (e.g. openrouter, deepinfra): ")
 		reader := bufio.NewReader(os.Stdin)
 		input, err := reader.ReadString('\n')
 		if err != nil {
@@ -249,6 +269,11 @@ func collectAndValidateAPIKey(providerID string, catProvider providercatalog.Pro
 			if strings.Contains(strings.ToLower(err.Error()), "no api key provided") {
 				return false // user typed nothing / aborted
 			}
+			if errors.Is(err, configuration.ErrAPIKeyTooShort) && attempt < maxAPIKeyRetries {
+				fmt.Println()
+				console.GlyphWarning.Printf("%v — paste the whole key (%d/%d attempts).", err, attempt, maxAPIKeyRetries)
+				continue
+			}
 			fmt.Println()
 			console.GlyphWarning.Printf("Could not read input: %v", err)
 			return false
@@ -261,7 +286,7 @@ func collectAndValidateAPIKey(providerID string, catProvider providercatalog.Pro
 		modelCount, valErr := configuration.ValidateAndSaveAPIKey(providerID, key)
 		if valErr != nil {
 			fmt.Println()
-			console.GlyphWarning.Printf("Validation failed: %v", valErr)
+			console.GlyphWarning.Printf("That key didn't work: %v", leafErrorMessage(valErr))
 			if attempt < maxAPIKeyRetries {
 				fmt.Printf("Let's try again (%d/%d attempts).\n", attempt, maxAPIKeyRetries)
 				continue

@@ -2,6 +2,9 @@ package console
 
 import (
 	"strings"
+	"unicode/utf8"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,42 +67,50 @@ func steerRowText(text string, cols int, withCursor bool) string {
 	return steerRowTextWithCursor(text, cols, withCursor, -1)
 }
 
-// steerRowTextWithCursor pads a steer-panel row to the terminal width.
-// When withCursor is true, a visible caret (▏) is inserted. When
-// cursorCol is a valid byte offset within text (0 <= cursorCol <
-// len(text)), the caret is inserted at that column so the user sees
-// where mid-buffer edits will land. When cursorCol < 0 the caret is
-// appended at the end (legacy behavior for SetSteerLine without a
-// cursor). Rows without the caret are truncated/padded silently.
+// steerRowTextWithCursor pads a steer-panel row to the terminal width and,
+// when withCursor is true, marks the caret at byte offset cursorCol (or at
+// the end when cursorCol is out of range). The caret is a block cursor —
+// the character under it in reverse video, a reversed space past the end —
+// so it adds no width: an inserted glyph would push a full-width wrapped
+// row past the edge and cost it its last character. Without color it falls
+// back to inserting ▏.
 func steerRowTextWithCursor(text string, cols int, withCursor bool, cursorCol int) string {
-	const caret = "▏"
 	body := text
-	if withCursor {
-		caretLen := visibleLen(caret)
-		if cursorCol >= 0 && cursorCol < len(body) {
-			// Insert caret at the cursor position.
-			if visibleLen(body)+caretLen >= cols {
-				body = truncWithEllipsis(body, cols-caretLen-1)
-			}
-			// Re-check cursorCol after potential truncation so we
-			// never index past the now-shorter body.
-			if cursorCol > len(body) {
-				cursorCol = len(body)
-			}
-			body = body[:cursorCol] + caret + body[cursorCol:]
-		} else {
-			// Caret at end (legacy / SetSteerLine path).
-			if visibleLen(body)+caretLen >= cols {
-				body = truncWithEllipsis(body, cols-caretLen-1)
-			}
-			body = body + caret
-		}
-	} else if visibleLen(body) >= cols {
+	if visibleLen(body) > cols {
 		body = truncWithEllipsis(body, cols-1)
 	}
-	pad := cols - visibleLen(body)
-	if pad < 0 {
-		pad = 0
+	if withCursor {
+		body = placeCaret(body, cols, cursorCol)
 	}
-	return body + strings.Repeat(" ", pad)
+	return body + strings.Repeat(" ", max(cols-visibleLen(body), 0))
+}
+
+const (
+	caretOn  = "\033[7m"
+	caretOff = "\033[27m"
+	// caretGlyph is the no-color caret, inserted rather than overlaid.
+	caretGlyph = "▏"
+)
+
+func placeCaret(body string, cols, at int) string {
+	if !envutil.ResolveColorPreference(true) {
+		if at < 0 || at > len(body) {
+			at = len(body)
+		}
+		if visibleLen(body)+1 > cols {
+			body = truncWithEllipsis(body, cols-2)
+			at = min(at, len(body))
+		}
+		return body[:at] + caretGlyph + body[at:]
+	}
+	if at >= 0 && at < len(body) {
+		_, size := utf8.DecodeRuneInString(body[at:])
+		return body[:at] + caretOn + body[at:at+size] + caretOff + body[at+size:]
+	}
+	if visibleLen(body) < cols {
+		return body + caretOn + " " + caretOff
+	}
+	_, size := utf8.DecodeLastRuneInString(body)
+	last := len(body) - size
+	return body[:last] + caretOn + body[last:] + caretOff
 }

@@ -413,6 +413,27 @@ jobs:
         path: sprout-darwin-arm64.tar.gz
         if-no-files-found: error
 
+    - name: Package the MLX runtime for local models
+      # Macs without Homebrew download this archive on demand (sprout's local
+      # AI setup), so it is built from the same mlx/mlx-c the binary is
+      # tested against and rewired to load from its own directory.
+      run: |
+        brew list mlx-c >/dev/null 2>&1 || brew install mlx mlx-c
+        ./scripts/package-mlx-runtime.sh sprout-mlx-runtime-darwin-arm64.tar.gz
+        rt=$(mktemp -d)
+        tar -xzf sprout-mlx-runtime-darwin-arm64.tar.gz -C "$rt"
+        MLX_C_LIB="$rt/mlx-runtime/libmlxc.dylib" DYLD_PRINT_LIBRARIES=1 ./sprout-darwin-arm64 version 2>&1 \
+          | grep "mlx-runtime/libmlx.dylib" >/dev/null \
+          || { echo "ERROR: the packaged MLX runtime did not load from its own directory" >&2; exit 1; }
+        rm -rf "$rt"
+
+    - name: Upload MLX runtime
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlx-runtime-darwin-arm64
+        path: sprout-mlx-runtime-darwin-arm64.tar.gz
+        if-no-files-found: error
+
   # Assembles the release from the artifacts produced by `build` (Linux /
   # Windows / Intel-macOS) and `macos-build` (Apple Silicon). Runs the
   # deterministic steps (SHA256SUMS, Homebrew formula stamping) and the
@@ -456,6 +477,7 @@ jobs:
           sprout-windows-amd64.zip \
           sprout-darwin-amd64.tar.gz \
           sprout-darwin-arm64.tar.gz \
+          sprout-mlx-runtime-darwin-arm64.tar.gz \
           > SHA256SUMS
         cat SHA256SUMS
 
@@ -495,6 +517,7 @@ jobs:
           sprout-windows-amd64.zip
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
+          sprout-mlx-runtime-darwin-arm64.tar.gz
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -505,6 +528,7 @@ jobs:
           sprout-windows-amd64.zip
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
+          sprout-mlx-runtime-darwin-arm64.tar.gz
           SHA256SUMS
           sprout.rb
           sprout-webui-cloud.tar.gz

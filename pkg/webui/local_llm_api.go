@@ -20,16 +20,19 @@ import (
 
 // localLLMStatus describes the current state of the local LLM engine.
 type localLLMStatus struct {
-	Available        bool            `json:"available"`     // platform supports the local LLM backend
-	MLXAvailable     bool            `json:"mlx_available"` // MLX C library found at runtime (optional)
-	Hint             string          `json:"hint,omitempty"`
-	Running          bool            `json:"running"`       // server process is alive and healthy
-	ModelPresent     bool            `json:"model_present"` // at least one model is downloaded
-	ModelDir         string          `json:"model_dir"`     // path to model cache
-	Platform         string          `json:"platform"`      // "darwin-arm64", "other"
-	Endpoint         string          `json:"endpoint"`      // http://127.0.0.1:18081
-	RecommendedModel string          `json:"recommended_model"`
-	Models           []localLLMModel `json:"models"`
+	Available    bool `json:"available"`     // platform supports the local LLM backend
+	MLXAvailable bool `json:"mlx_available"` // MLX C library found at runtime (optional)
+	// RuntimeDownloadable: MLX is not loaded but sprout can download its
+	// runtime with the first model; local models work after a restart.
+	RuntimeDownloadable bool            `json:"runtime_downloadable"`
+	Hint                string          `json:"hint,omitempty"`
+	Running             bool            `json:"running"`       // server process is alive and healthy
+	ModelPresent        bool            `json:"model_present"` // at least one model is downloaded
+	ModelDir            string          `json:"model_dir"`     // path to model cache
+	Platform            string          `json:"platform"`      // "darwin-arm64", "other"
+	Endpoint            string          `json:"endpoint"`      // http://127.0.0.1:18081
+	RecommendedModel    string          `json:"recommended_model"`
+	Models              []localLLMModel `json:"models"`
 }
 
 type localLLMModel struct {
@@ -124,17 +127,21 @@ func probeLocalLLMStatus() *localLLMStatus {
 		Endpoint: localLLMEndpoint,
 	}
 
-	// Only Apple Silicon supports MLX inference.
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
-		// MLX is an optional runtime dependency (dlopen'd by sinter): the
-		// rest of sprout works without it, the local LLM backend needs it.
+	// Only Apple Silicon supports MLX inference. MLX is loaded at startup
+	// from Homebrew's mlx-c or sprout's own runtime copy.
+	if localmodel.RuntimeSupported() {
 		status.MLXAvailable = localmodel.MLXAvailable()
-		if !status.MLXAvailable {
-			status.Hint = "The MLX C libraries are not installed. Install with: brew install mlx-c, then restart sprout."
-		}
 		status.Available = status.MLXAvailable
+		status.RuntimeDownloadable = !status.MLXAvailable
+		switch {
+		case status.MLXAvailable:
+		case localmodel.RuntimeInstalled():
+			status.Hint = "Restart sprout to load the local AI runtime."
+		default:
+			status.Hint = "The local AI runtime (about 40 MB) downloads with your first model; restart sprout afterwards."
+		}
 	}
-	if !status.Available {
+	if !status.Available && !status.RuntimeDownloadable {
 		return status
 	}
 
@@ -353,10 +360,19 @@ func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.
 	}
 
 	status := getLocalLLMStatus()
-	if !status.Available {
+	if !status.Available && !status.RuntimeDownloadable {
 		writeJSONErr(w, http.StatusBadRequest, "not_available",
 			localLLMUnavailableMessage(status))
 		return
+	}
+	if status.RuntimeDownloadable && !localmodel.RuntimeInstalled() {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+		err := localmodel.InstallRuntime(ctx, nil)
+		cancel()
+		if err != nil {
+			writeJSONErr(w, http.StatusBadGateway, "runtime_install_failed", err.Error())
+			return
+		}
 	}
 
 	modelID := r.URL.Query().Get("model")
@@ -376,10 +392,14 @@ func (ws *ReactWebServer) handleLocalLLMDownload(w http.ResponseWriter, r *http.
 	localLLMCached = nil
 	localLLMMu.Unlock()
 
+	message := fmt.Sprintf("Downloading %s. Progress appears in the model list.", job.ModelID)
+	if status.RuntimeDownloadable {
+		message += " Restart sprout when it finishes to use it."
+	}
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"status":  job.Status,
 		"model":   job.ModelID,
-		"message": fmt.Sprintf("Downloading %s. Progress appears in the model list.", job.ModelID),
+		"message": message,
 	})
 }
 

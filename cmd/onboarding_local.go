@@ -1,4 +1,4 @@
-//go:build !js && !mlx
+//go:build !js && (!darwin || !arm64 || !cgo)
 
 package cmd
 
@@ -8,6 +8,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
+// localAIAvailable reports whether this build can run the local provider.
+func localAIAvailable() bool { return false }
+
 // onboardingLocal handles the sprout-local provider onboarding flow.
 // On builds without MLX support, this explains that local AI is not available.
 func onboardingLocal() (string, bool) {
@@ -16,8 +19,7 @@ func onboardingLocal() (string, bool) {
 	fmt.Println()
 	console.GlyphWarning.Printf("Local AI is not available in this build.")
 	fmt.Println()
-	fmt.Println("Local AI requires Apple Silicon (M1/M2/M3/M4) with the MLX")
-	fmt.Println("framework installed. On this platform or build, it's not available.")
+	fmt.Println("Local AI requires a Mac with Apple Silicon (M1 or later).")
 	fmt.Println()
 	fmt.Println("You can still use cloud providers — try one of those instead.")
 	return "", false

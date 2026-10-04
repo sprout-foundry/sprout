@@ -336,6 +336,15 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
+	// SP-148 §148c: when a structured plan exists, append a compact plan
+	// summary (goal + scope items with status) so the model works scope item
+	// by scope item. planContextSummary returns "" when there is no plan or
+	// the plan is unreadable/invalid, so an absent plan never changes the
+	// context and never fails the turn.
+	if planSummary := a.planContextSummary(); planSummary != "" {
+		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + planSummary
+	}
+
 	var seedAgentRef *core.Agent
 
 	// OnIteration callback: sync per-iteration context token estimates back to sprout's state

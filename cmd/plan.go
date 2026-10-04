@@ -25,6 +25,7 @@ var (
 	planOutputFile  string
 	planContinue    bool
 	planCreateTodos bool
+	planStructured  bool
 )
 
 func init() {
@@ -33,6 +34,7 @@ func init() {
 	planCmd.Flags().StringVarP(&planOutputFile, "output", "o", "", "Output file for the plan (default: plan.md)")
 	planCmd.Flags().BoolVarP(&planContinue, "continue", "c", false, "Continue from an existing plan file")
 	planCmd.Flags().BoolVarP(&planCreateTodos, "todos", "t", true, "Create todos from plan items during planning")
+	planCmd.Flags().BoolVarP(&planStructured, "structured", "s", false, "Structured plan (SP-148): the agent writes .sprout/plan.json (plus the rendered .sprout/plan.md) through the write_plan tool")
 }
 
 var planCmd = &cobra.Command{
@@ -69,6 +71,9 @@ Examples:
 
   # Use specific model
   sprout plan -p openrouter -m "qwen/qwen3-coder-30b" "Build REST API"
+
+  # Structured plan (SP-148): .sprout/plan.json + rendered .sprout/plan.md
+  sprout plan --structured "Build REST API"
 
 The agent will seamlessly transition from planning to execution upon your approval.`,
 	Args: cobra.MaximumNArgs(1),
@@ -167,7 +172,14 @@ func createPlanningAgent() (*agent.Agent, error) {
 	}
 
 	// Set planning-focused system prompt (now includes execution workflow)
-	planningPrompt, err := agent.GetEmbeddedPlanningPrompt(planCreateTodos)
+	var planningPrompt string
+	if planStructured {
+		// Structured mode (SP-148 §148b): the prompt carries the plan schema
+		// section so the agent writes .sprout/plan.json via write_plan.
+		planningPrompt, err = agent.GetStructuredPlanningPrompt(planCreateTodos)
+	} else {
+		planningPrompt, err = agent.GetEmbeddedPlanningPrompt(planCreateTodos)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load planning prompt: %w", err)
 	}

@@ -212,7 +212,7 @@ the end, without checkboxes.
       starter copy, 3 runs per model; pass/fail comes only from the
       SP-149 result. Test: a scripted model claims success but fails a
       check → recorded as fail. Spec: SP-154 §154a, §154b.
-- [ ] **154.3** Per-task metrics: repair attempts, turns, wall time,
+- [x] **154.3** Per-task metrics: repair attempts, turns, wall time,
       tokens and cost (existing cost tracking), language-guard
       mismatches. Test. Spec: SP-154 §154b.
 - [ ] **154.4** Default model list from the provider catalog's

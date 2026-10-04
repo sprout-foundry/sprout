@@ -165,6 +165,18 @@ func scriptedFactory(t *testing.T, mgr *configuration.Manager, withWrite bool, c
 	}
 }
 
+// assertWallTime pins the run's wall-time anchors (SP-154 §154b): a
+// non-zero start and a finish at or after it.
+func assertWallTime(t *testing.T, run Run) {
+	t.Helper()
+	if run.StartedAt.IsZero() {
+		t.Errorf("StartedAt = zero, want the run's start anchor")
+	}
+	if run.FinishedAt.Before(run.StartedAt) {
+		t.Errorf("FinishedAt = %v, want at or after StartedAt %v", run.FinishedAt, run.StartedAt)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // The pass/fail contract (SP-154 §154a/§154b)
 // ---------------------------------------------------------------------------
@@ -215,10 +227,23 @@ func TestRunner_ClaimsSuccessFailingCheckRecordsFail(t *testing.T) {
 	if len(run.Result.Checks) != 1 || run.Result.Checks[0].Kind != plancontract.KindBuild || run.Result.Checks[0].Passed {
 		t.Errorf("result checks = %+v, want the single failing build check", run.Result.Checks)
 	}
-	if run.StartedAt.IsZero() || run.FinishedAt.Before(run.StartedAt) {
-		t.Errorf("wall-time anchors = started %v finished %v, want a non-zero started and finished >= started",
-			run.StartedAt, run.FinishedAt)
+	// 154.3 per-task metrics: the runner issued one turn; the hook ran
+	// one repair round (the report fed the failing build back once) and
+	// consumed the build check's attempt budget against the harness's
+	// N=1 limit.
+	if run.Turns != 1 {
+		t.Errorf("Turns = %d, want 1 (the runner issued one turn)", run.Turns)
 	}
+	if run.RepairRounds != 1 {
+		t.Errorf("RepairRounds = %d, want 1 (the failing build fed the report back once)", run.RepairRounds)
+	}
+	if len(run.RepairAttempts) != 1 || run.RepairAttempts["build"] != 1 {
+		t.Errorf("RepairAttempts = %v, want {build: 1}", run.RepairAttempts)
+	}
+	if run.RepairLimit != 1 {
+		t.Errorf("RepairLimit = %d, want 1 (the harness's N=1)", run.RepairLimit)
+	}
+	assertWallTime(t, run)
 }
 
 // TestRunner_ClaimsFailurePassingCheckRecordsPass pins the mirror image:
@@ -254,6 +279,21 @@ func TestRunner_ClaimsFailurePassingCheckRecordsPass(t *testing.T) {
 	if run.Err != nil {
 		t.Errorf("Err = %v, want nil (the turn completed cleanly)", run.Err)
 	}
+	// 154.3: a passing run stores the limit (the hook saves it on a
+	// passing run too) and no repair rounds or attempts.
+	if run.Turns != 1 {
+		t.Errorf("Turns = %d, want 1 (the runner issued one turn)", run.Turns)
+	}
+	if run.RepairRounds != 0 {
+		t.Errorf("RepairRounds = %d, want 0 (a passing run needs no repair)", run.RepairRounds)
+	}
+	if len(run.RepairAttempts) != 0 {
+		t.Errorf("RepairAttempts = %v, want empty (no repair round ran)", run.RepairAttempts)
+	}
+	if run.RepairLimit != 1 {
+		t.Errorf("RepairLimit = %d, want 1 (the configured limit, stored on a passing run too)", run.RepairLimit)
+	}
+	assertWallTime(t, run)
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +529,186 @@ func TestRunner_NeverRanVerificationRecordsFail(t *testing.T) {
 	}
 	if run.Passed {
 		t.Error("Passed = true, want false (no passing result, no pass)")
+	}
+	// 154.3: verification never ran (the hook's change gate stayed
+	// closed) → the repair metrics are zero and empty.
+	if run.RepairRounds != 0 || run.RepairLimit != 0 || len(run.RepairAttempts) != 0 {
+		t.Errorf("repair metrics = rounds %d / limit %d / attempts %v, want all zero (the hook never ran)",
+			run.RepairRounds, run.RepairLimit, run.RepairAttempts)
+	}
+	if run.Turns != 1 {
+		t.Errorf("Turns = %d, want 1 (the runner still issued the turn)", run.Turns)
+	}
+	assertWallTime(t, run)
+}
+
+// ---------------------------------------------------------------------------
+// Per-task metrics (SP-154 §154b, 154.3): tokens, cost, language guard
+// ---------------------------------------------------------------------------
+
+// Reliably detectable prose fixtures, mirrored from pkg/agent's
+// language-guard test fixtures (the trigram detector reports them
+// above its reliability bar).
+const (
+	benchLgEnglishProse  = "The build succeeded after applying the patch, so the tests can run and the release is ready to ship."
+	benchLgEnglishProse2 = "All the tests passed after the patch was applied, so the release is now ready to be shipped."
+	benchLgSpanishProse  = "El paquete está listo para compilar ahora mismo y las pruebas pasan sin errores."
+)
+
+// TestRunner_TokensAndCostAreTheConversationTotals pins the token and
+// cost capture (SP-154 §154b's "existing cost tracking"): the run's
+// agent is fresh, so the agent's conversation totals ARE the run's
+// usage. Every scripted response of one passing turn carries an
+// explicit non-zero Usage (resolveUsage would otherwise fall back to
+// its defaults for zero-usage responses), and the run's token total is
+// the scripted sum — the seed loop accumulates each response's
+// TotalTokens into the conversation total (two responses: the
+// write_file tool call, 100 tokens, and the final answer, 200 → 300).
+// Cost is wired from the agent's existing cost total: the scripted
+// client produces no cost (no provider-reported cost, no pricing for
+// the test model), so the assertion pins the wiring to the accessor
+// rather than a constant.
+func TestRunner_TokensAndCostAreTheConversationTotals(t *testing.T) {
+	shAvailable(t)
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+
+	var (
+		built  *agent.Agent
+		client *agent.ScriptedClient
+	)
+	factory := func(runDir string, spec ModelSpec) (*agent.Agent, error) {
+		args := fmt.Sprintf(`{"path":%q,"content":"function bench() { return 1; }"}`,
+			filepath.Join(runDir, "src", "bench.js"))
+		toolResp := agent.NewToolCallResponse("write_file", args)
+		toolResp.Usage = agent.ScriptedTokenUsage{PromptTokens: 80, CompletionTokens: 20, TotalTokens: 100}
+		answerResp := agent.NewStopResponse("Done!")
+		answerResp.Usage = agent.ScriptedTokenUsage{PromptTokens: 150, CompletionTokens: 50, TotalTokens: 200}
+		client = agent.NewScriptedClient(toolResp, answerResp)
+		if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			cfg.ContextMode = configuration.ContextModeFull
+			cfg.SkipPrompt = true
+			cfg.Verification = &configuration.VerificationConfig{Enabled: true, RepairAttempts: 1}
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("harness: configure run config: %w", err)
+		}
+		ag, err := agent.NewAgentWithClient(client, api.TestClientType, mgr)
+		if err != nil {
+			return nil, fmt.Errorf("harness: build scripted agent: %w", err)
+		}
+		ag.SetMaxIterations(10)
+		ag.SetWorkspaceRoot(runDir)
+		built = ag
+		return ag, nil
+	}
+
+	runner := &Runner{
+		ConfigManager: mgr,
+		AgentFactory:  factory,
+		ShapeCopy:     shapeManifest("echo fixture-bench-ok"),
+		RunsPerTask:   1,
+	}
+
+	runs, err := runner.RunTask(context.Background(), benchTask(), ModelSpec{Model: "bench-model"})
+	if err != nil {
+		t.Fatalf("RunTask: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	run := runs[0]
+	if !run.Passed {
+		t.Fatalf("Passed = false, want true (the build command passes): %+v", run)
+	}
+
+	// Exactly the two scripted responses were consumed (the tool call
+	// and the answer — no extra model calls), so the run's token total
+	// is exactly the scripted sum: 100 + 200.
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the tool-call response and the answer)", calls)
+	}
+	if run.Tokens != 300 {
+		t.Errorf("Tokens = %d, want 300 (the scripted sum: 100 for the tool call + 200 for the answer — the fresh agent's conversation total is the run's usage)", run.Tokens)
+	}
+	if run.Tokens != built.GetTotalTokens() {
+		t.Errorf("Tokens = %d, agent GetTotalTokens = %d, want the accessor's value (existing cost tracking)", run.Tokens, built.GetTotalTokens())
+	}
+	// Cost: the scripted client produces no cost (no provider-reported
+	// cost, no pricing for the test model), so the value is 0 and the
+	// assertion pins the wiring to the accessor.
+	if run.Cost != built.GetTotalCost() {
+		t.Errorf("Cost = %v, agent GetTotalCost = %v, want the accessor's value (the existing cost tracking)", run.Cost, built.GetTotalCost())
+	}
+	if run.Cost < 0 {
+		t.Errorf("Cost = %v, want >= 0", run.Cost)
+	}
+	assertWallTime(t, run)
+}
+
+// TestRunner_LanguageGuardMismatchCounted pins the run's share of the
+// process-wide language-guard metric (SP-152 §152e, recorded by the
+// guard's existing Record call site — 154.3 reads the delta, it does
+// not build new meters): a scripted run whose final message is in a
+// different language than the request records one check and one
+// mismatch for the run's model (a fresh recorder is installed so the
+// delta is isolated from other tests), and the matching-language mirror
+// records the check with no mismatch. The scripts carry the
+// regeneration response the guard path consumes (mirroring the 152.5
+// pattern).
+func TestRunner_LanguageGuardMismatchCounted(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+
+	task := benchTask()
+	task.Request = benchLgEnglishProse
+
+	runner := &Runner{
+		ConfigManager: mgr,
+		ShapeCopy:     shapeManifest("echo fixture-bench-ok"),
+		RunsPerTask:   1,
+	}
+
+	// Mismatch: the request is reliably English, the scripted final
+	// message is reliably Spanish; the guard regenerates once (the
+	// script's second response).
+	mismatchMetrics := agent.NewLanguageGuardMetrics()
+	t.Cleanup(agent.SetGlobalLanguageGuardMetricsForTest(mismatchMetrics))
+	runner.AgentFactory = scriptedFactory(t, mgr, false, benchLgSpanishProse, benchLgEnglishProse2)
+	runs, err := runner.RunTask(context.Background(), task, ModelSpec{Model: "bench-model"})
+	if err != nil {
+		t.Fatalf("RunTask (mismatch run): %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	run := runs[0]
+	if run.LangChecks != 1 {
+		t.Errorf("LangChecks = %d, want 1 (one judged final message)", run.LangChecks)
+	}
+	if run.LangMismatches != 1 {
+		t.Errorf("LangMismatches = %d, want 1 (the Spanish final message mismatches the English request)", run.LangMismatches)
+	}
+	assertWallTime(t, run)
+
+	// Mirror: a matching-language run judges (a check) but records no
+	// mismatch. A second fresh recorder isolates this phase's delta.
+	passMetrics := agent.NewLanguageGuardMetrics()
+	t.Cleanup(agent.SetGlobalLanguageGuardMetricsForTest(passMetrics))
+	runner.AgentFactory = scriptedFactory(t, mgr, false, benchLgEnglishProse2)
+	runs, err = runner.RunTask(context.Background(), task, ModelSpec{Model: "bench-model"})
+	if err != nil {
+		t.Fatalf("RunTask (matching run): %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	run = runs[0]
+	if run.LangChecks != 1 {
+		t.Errorf("LangChecks = %d, want 1 (the final message was judged)", run.LangChecks)
+	}
+	if run.LangMismatches != 0 {
+		t.Errorf("LangMismatches = %d, want 0 (the final message is in the request's language)", run.LangMismatches)
 	}
 }
 

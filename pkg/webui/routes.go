@@ -25,6 +25,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerDiagnosticsRoutes(mux)
 	ws.registerFileRoutes(mux)
 	ws.registerDesignRoutes(mux)
+	ws.registerStarterRoutes(mux)
 	ws.registerSettingsRoutes(mux)
 	ws.registerWorkspaceRoutes(mux)
 	ws.registerSyncRoutes(mux)
@@ -148,6 +149,15 @@ func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
 // the agent tools read, so both surfaces share one truth.
 func (ws *ReactWebServer) registerDesignRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/design/status", ws.handleAPIDesignStatus)
+}
+
+// registerStarterRoutes mounts the SP-153 §153b starter surface (TODO
+// 153.6): the embedded starter catalogue and the instantiate endpoint
+// the web UI's new-project flow (153.7) calls to populate a fresh
+// project directory.
+func (ws *ReactWebServer) registerStarterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/starters", ws.handleAPIStartersList)
+	mux.HandleFunc("/api/starters/instantiate", ws.handleAPIStartersInstantiate)
 }
 
 func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {

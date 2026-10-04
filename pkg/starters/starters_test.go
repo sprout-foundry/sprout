@@ -98,6 +98,22 @@ func TestManifestErrors(t *testing.T) {
 	}
 }
 
+// TestFileCount pins the catalogue's tree-size fact: the fixture tree
+// carries three project-content files (README.md, index.html,
+// src/main.js); the descriptor is never a project file, so it is not
+// counted. Error sentinels match Manifest's.
+func TestFileCount(t *testing.T) {
+	n, err := FileCount("fixture")
+	require.NoError(t, err)
+	assert.Equal(t, 3, n, "the fixture tree has 3 project-content files (the descriptor becomes .sprout/starter.json, not a copied file)")
+
+	_, err = FileCount("no-such-starter")
+	assert.ErrorIs(t, err, ErrUnknownStarter)
+
+	_, err = FileCount("../fixture")
+	assert.ErrorIs(t, err, ErrInvalidStarterID)
+}
+
 // TestEmbeddedTreeIntegrity is the discovery test over every embedded
 // tree: each data/ directory must carry a valid descriptor whose starter
 // id matches the directory name, with a non-empty version. A directory

@@ -59,10 +59,11 @@ const WORKSPACE_ID = 'e2e-ws-1';
 const TXN_ID = 'e2e-txn-1';
 
 /** Route globs — exact per-endpoint so app bootstrap traffic is untouched. */
-const LIST_ROUTE = '**/workspace/fly';
-const CREATE_ROUTE = '**/workspace/fly';
-const TXN_OPEN_ROUTE = `**/workspace/fly/${WORKSPACE_ID}/txn`;
-const TXN_ACTION_ROUTE = `**/workspace/fly/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
+const RESOLVE_ROUTE = '**/workspace/txn/resolve*';
+const LIST_ROUTE = RESOLVE_ROUTE; // the resolve endpoint (list replaced in SP-BUILDER-12)
+const CREATE_ROUTE = '**/workspace/txn';
+const TXN_OPEN_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn`;
+const TXN_ACTION_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
 
 /** Dismiss any toast left over from a previous test (serial page reuse). */
 async function dismissToastIfOpen() {
@@ -110,21 +111,22 @@ test.describe('Escalation — Run in cloud container (ETH-2)', () => {
     // Workspace list: one matching workspace so no create is needed.
     await page.route(LIST_ROUTE, async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
-      captured.push({ method: 'GET', pathname: '/workspace/fly', body: null });
+      captured.push({ method: 'GET', pathname: '/workspace/txn/resolve', body: null });
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          workspaces: [
-            { workspace_id: WORKSPACE_ID, repo_url: 'https://github.com/example/repo', status: 'running' },
-          ],
+          workspace_id: WORKSPACE_ID,
+          repo_url: 'https://github.com/example/repo',
+          status: 'running',
+          backend: 'runner',
         }),
       });
     });
 
     await page.route(TXN_OPEN_ROUTE, async (route) => {
       if (route.request().method() !== 'POST') return route.fallback();
-      captured.push({ method: 'POST', pathname: '/workspace/fly/e2e-ws-1/txn', body: route.request().postDataJSON() });
+      captured.push({ method: 'POST', pathname: `/workspace/txn/${WORKSPACE_ID}/txn`, body: route.request().postDataJSON() });
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -212,12 +214,12 @@ test.describe('Escalation — Run in cloud container (ETH-2)', () => {
 
     // Lifecycle order: workspace list → open → push → run → pull → finish.
     const lifecycle = captured.map((c) => `${c.method} ${c.pathname}`).join('\n');
-    expect(lifecycle).toContain(`GET /workspace/fly`);
-    expect(lifecycle).toContain(`POST /workspace/fly/${WORKSPACE_ID}/txn`);
-    expect(lifecycle).toContain(`POST /workspace/fly/${WORKSPACE_ID}/txn/${TXN_ID}/push`);
-    expect(lifecycle).toContain(`POST /workspace/fly/${WORKSPACE_ID}/txn/${TXN_ID}/run`);
-    expect(lifecycle).toContain(`POST /workspace/fly/${WORKSPACE_ID}/txn/${TXN_ID}/pull`);
-    expect(lifecycle).toContain(`POST /workspace/fly/${WORKSPACE_ID}/txn/${TXN_ID}/finish`);
+    expect(lifecycle).toContain(`GET /workspace/txn/resolve`);
+    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn`);
+    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/push`);
+    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/run`);
+    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/pull`);
+    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/finish`);
 
     // The pushed manifest is the pinned delta-manifest shape.
     const push = captured.find((c) => c.pathname.endsWith('/push'));
@@ -254,7 +256,10 @@ test.describe('Escalation — Run in cloud container (ETH-2)', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          workspaces: [{ workspace_id: WORKSPACE_ID, repo_url: 'https://github.com/example/repo', status: 'running' }],
+          workspace_id: WORKSPACE_ID,
+          repo_url: 'https://github.com/example/repo',
+          status: 'running',
+          backend: 'runner',
         }),
       });
     });

@@ -5,11 +5,16 @@
  * there), the work can be executed inside the user's cloud workspace
  * container as a three-phase transaction (see docs/txn-protocol.md):
  *
- *   POST /workspace/fly/{ws}/txn              → open (201) / 409 busy
- *   POST /workspace/fly/{ws}/txn/{id}/push    → apply browser file deltas
- *   POST /workspace/fly/{ws}/txn/{id}/run     → execute the command
- *   POST /workspace/fly/{ws}/txn/{id}/pull    → container deltas back
- *   POST /workspace/fly/{ws}/txn/{id}/finish  → close + stop the machine
+ *   POST /workspace/txn                      → resolve/create the workspace
+ *   POST /workspace/txn/{ws}/txn             → open (201) / 409 busy
+ *   POST /workspace/txn/{ws}/txn/{id}/push   → apply browser file deltas
+ *   POST /workspace/txn/{ws}/txn/{id}/run    → execute the command
+ *   POST /workspace/txn/{ws}/txn/{id}/pull   → container deltas back
+ *   POST /workspace/txn/{ws}/txn/{id}/finish → close
+ *
+ * The workspace may be Fly-hosted or hosted on the user's own runner
+ * (SP-BUILDER-12); the platform routes per workspace backend, so the client
+ * never needs to know which.
  *
  * All calls use RELATIVE paths so the CloudAdapter intercepts them in cloud
  * mode and proxies to the Foundry backend with session credentials (same
@@ -299,43 +304,36 @@ export async function applyPullManifest(manifest: TxnManifest, io: TxnPullIO): P
 
 // ── Workspace resolution ────────────────────────────────────────────────────
 
-function normalizeRepoURL(url: string): string {
-  return url
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\.git$/, '')
-    .toLowerCase();
-}
-
 /**
- * Find the caller's fly workspace for `repoURL`, creating one when none
- * exists. The list response carries `repo_url` per workspace
- * (FlyWorkspaceView), so the match is client-side; a `.git` suffix or
- * trailing slash never breaks it.
+ * Find the caller's workspace for `repoURL` (any backend — the user's own
+ * runner when one is attached, else Fly), creating one when none exists.
+ * Resolution goes through the host-agnostic /workspace/txn surface
+ * (SP-BUILDER-12); the platform picks the host.
  */
 export async function resolveTxnWorkspace(repoURL: string): Promise<{ workspaceId: string; created: boolean }> {
   if (typeof repoURL !== 'string' || repoURL.trim() === '') {
     throw new TypeError('repoURL is required');
   }
-  const wanted = normalizeRepoURL(repoURL);
 
-  const listRes = await fetch('/workspace/fly', { method: 'GET', credentials: 'include' });
+  const listRes = await fetch('/workspace/txn/resolve?repo_url=' + encodeURIComponent(repoURL), {
+    method: 'GET',
+    credentials: 'include',
+  });
   if (listRes.ok) {
-    const body = (await listRes.json()) as { workspaces?: TxnWorkspace[] } | null;
-    const workspaces = Array.isArray(body?.workspaces) ? body.workspaces : [];
-    const match =
-      workspaces.find((ws) => normalizeRepoURL(String(ws.repo_url ?? '')) === wanted && ws.status === 'running') ??
-      workspaces.find((ws) => normalizeRepoURL(String(ws.repo_url ?? '')) === wanted);
-    if (match?.workspace_id) return { workspaceId: match.workspace_id, created: false };
+    const body = (await listRes.json()) as TxnWorkspace | null;
+    if (typeof body?.workspace_id === 'string' && body.workspace_id !== '') {
+      noteWorkspaceBackend(body.workspace_id, typeof body.backend === 'string' ? body.backend : 'fly');
+      return { workspaceId: body.workspace_id, created: false };
+    }
   }
   // A failed list is not fatal — fall through to create, which reports its
   // own (more specific) error.
 
-  const createRes = await fetch('/workspace/fly', {
+  const createRes = await fetch('/workspace/txn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ repo_url: repoURL, mode: 'build' }),
+    body: JSON.stringify({ repo_url: repoURL }),
   });
   if (!createRes.ok) {
     throw await toTxnError(createRes, 'Cloud workspace resolve');
@@ -344,13 +342,33 @@ export async function resolveTxnWorkspace(repoURL: string): Promise<{ workspaceI
   if (typeof created?.workspace_id !== 'string' || created.workspace_id === '') {
     throw new TypeError('Cloud workspace resolve response is missing workspace_id');
   }
+  noteWorkspaceBackend(created.workspace_id, typeof created.backend === 'string' ? created.backend : 'fly');
   return { workspaceId: created.workspace_id, created: true };
+}
+
+// ── Backend-aware txn addressing (SP-BUILDER-12) ────────────────────────────
+//
+// The txn lifecycle lives at /workspace/txn/{ws}/txn/... for every backend —
+// the platform dispatches per workspace (runner-hosted workspaces get the
+// bearer-proxied path, Fly keeps its billing semantics). These helpers only
+// exist so in-flight escalations that resolved a workspace under the old
+// /workspace/fly contract keep working: anything without a recorded backend
+// still addresses /workspace/fly.
+
+const txnBackends = new Map<string, string>();
+
+function noteWorkspaceBackend(workspaceId: string, backend: string): void {
+  txnBackends.set(workspaceId, backend === 'runner' ? 'txn' : 'fly');
+}
+
+function txnBase(workspaceId: string): string {
+  return txnBackends.get(workspaceId) ?? 'fly';
 }
 
 // ── Txn lifecycle ───────────────────────────────────────────────────────────
 
 function txnURL(workspaceId: string, txnId: string, suffix = ''): string {
-  return `/workspace/fly/${encodeURIComponent(workspaceId)}/txn/${encodeURIComponent(txnId)}${suffix}`;
+  return `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn/${encodeURIComponent(txnId)}${suffix}`;
 }
 
 async function postJSON<T>(url: string, action: string, body?: unknown): Promise<T> {
@@ -368,7 +386,7 @@ async function postJSON<T>(url: string, action: string, body?: unknown): Promise
 export async function createTxn(workspaceId: string): Promise<{ txn_id: string; status: string; expires_at?: string }> {
   if (typeof workspaceId !== 'string' || workspaceId === '') throw new TypeError('workspaceId is required');
   const res = await postJSON<{ txn_id?: string; status?: string; expires_at?: string }>(
-    `/workspace/fly/${encodeURIComponent(workspaceId)}/txn`,
+    `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn`,
     'Cloud txn open',
     {},
   );

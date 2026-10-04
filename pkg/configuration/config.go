@@ -215,6 +215,14 @@ type Config struct {
 	// EditApproval controls the per-hunk diff approval gate for agent file writes.
 	EditApproval *EditApprovalConfig `json:"edit_approval,omitempty"`
 
+	// Verification controls the SP-149 verification run ("verified done"):
+	// the turn-end gate that runs the plan's acceptance checks (149a) and
+	// the repair loop (149c). Off by default in the CLI; any config layer —
+	// global, project (workspace), or an embedding environment writing the
+	// same layers — enables it through the same "verification" section
+	// (149e). Nil means off with the default repair-attempt limit.
+	Verification *VerificationConfig `json:"verification,omitempty"`
+
 	// OutputVerbosity controls how much inter-tool-call narration and
 	// streaming detail the UI shows. Valid values: "compact" (hide
 	// interim model messages, show only tool results and final text),

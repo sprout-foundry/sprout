@@ -104,7 +104,7 @@ the end, without checkboxes.
       names a starter, its skill under `pkg/skills/library/<starter>/`
       activates automatically. Test with a fixture skill. Spec: SP-153
       §153c.
-- [ ] **153.6** Web UI API: `GET /api/starters` (embedded list) and an
+- [x] **153.6** Web UI API: `GET /api/starters` (embedded list) and an
       instantiate endpoint behind the existing new-project path. Go tests.
       Spec: SP-153 §153b.
 - [ ] **153.7** Web UI new-project dialog

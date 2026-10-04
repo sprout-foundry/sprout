@@ -31,7 +31,7 @@ the end, without checkboxes.
       Tests (stubbed generator): notes-only produces a conventional subject
       of at most 72 characters; `message` wins over `notes`; generator
       failure commits nothing.
-- [ ] **commit.2** Commit provider fallback: `GetCommitProvider()`
+- [x] **commit.2** Commit provider fallback: `GetCommitProvider()`
       (`pkg/configuration/config_commit_review.go`) returns "" when
       `commit_provider` is unset, contradicting the `CommitProvider` field
       comment in `pkg/configuration/config.go` ("defaults to

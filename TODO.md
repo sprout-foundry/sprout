@@ -77,7 +77,7 @@ the end, without checkboxes.
       (`pkg/agent/tool_handlers_todo.go`), persisted across sessions.
       Test: scripted run over a fixture plan emits todos with scope IDs.
       Spec: SP-148 §148c.
-- [ ] **148.7** Scope write-back: when scope changes during execution, the
+- [x] **148.7** Scope write-back: when scope changes during execution, the
       agent updates the plan through the store (new revision) instead of
       diverging. Test: scripted scope addition → plan revision increments
       and markdown updates. Spec: SP-148 §148c.

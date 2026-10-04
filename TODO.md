@@ -208,7 +208,7 @@ the end, without checkboxes.
       (plain-language request, frozen SP-148 plan, starter reference) and
       loader. Tests with a fixture task on the 153.3 fixture starter.
       Spec: SP-154 §154a.
-- [ ] **154.2** Runner: headless non-interactive run per task in a fresh
+- [x] **154.2** Runner: headless non-interactive run per task in a fresh
       starter copy, 3 runs per model; pass/fail comes only from the
       SP-149 result. Test: a scripted model claims success but fails a
       check → recorded as fail. Spec: SP-154 §154a, §154b.

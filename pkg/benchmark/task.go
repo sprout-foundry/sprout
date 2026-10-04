@@ -14,18 +14,22 @@
 // benchmark runs comparable across models and over time: the request, the
 // plan, and the starter never drift between runs. Pass/fail for a task
 // comes only from the SP-149 verification of the plan's acceptance
-// criteria — never from the model's own report — and that scoring lands
-// with the runner (TODO 154.2).
+// criteria — never from the model's own report — and the runner (runner.go)
+// enforces that contract.
 //
-// This item (TODO 154.1) ships the skeleton only: the format, the loader,
-// validation, and the committed fixture task. There is no runner, no
-// metrics, no model list, and no reports here (154.2–154.5).
+// TODO 154.1 shipped the skeleton (the format, the loader, validation, and
+// the committed fixture task); TODO 154.2 adds the runner: headless
+// non-interactive runs of a task through the existing agent path, one
+// fresh starter copy per run, 3 runs per model by default. Per-task
+// metrics (154.3), the default model list from the provider catalog
+// (154.4), and reports (154.5) are still to come.
 //
-// The package is standard library plus pkg/plancontract — no dependency
-// outside those. The loader's os file access is supported on the js/wasm
-// target (Go implements the os file APIs there, as pkg/planstore and
-// pkg/starterstore rely on), so the whole package — format and loader —
-// builds for js/wasm.
+// The package's dependencies (pkg/plancontract, and for the runner
+// pkg/agent, pkg/verify, pkg/starters, pkg/planstore, pkg/factory,
+// pkg/configuration) are all supported on the js/wasm target, so the
+// whole package builds for js/wasm. The runner's tests drive real shell
+// commands and real (scripted) agent turns and are !js-only, like the
+// SP-149 fixture tests.
 package benchmark
 
 import (

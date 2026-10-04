@@ -17,6 +17,33 @@ the end, without checkboxes.
 
 ---
 
+## Commit message generation (bug fixes)
+
+- [ ] **commit.1** Commit tool: generate a real message when `message` is
+      omitted. Today `pkg/agent_tools/commit_handler.go` commits `notes`
+      verbatim (or the literal "Auto-commit"), while the parameter
+      descriptions promise an auto-generated message. When `message` is
+      empty, generate a Conventional Commit message from the staged diff,
+      with `notes` as context, reusing the `sprout commit` generator
+      (`pkg/agent_commands/commit_flow.go`, `commit_helpers.go`). If
+      generation fails, return an error and commit nothing; never fall back
+      to "Auto-commit". Update both parameter descriptions to match.
+      Tests (stubbed generator): notes-only produces a conventional subject
+      of at most 72 characters; `message` wins over `notes`; generator
+      failure commits nothing.
+- [ ] **commit.2** Commit provider fallback: `GetCommitProvider()`
+      (`pkg/configuration/config_commit_review.go`) returns "" when
+      `commit_provider` is unset, contradicting the `CommitProvider` field
+      comment in `pkg/configuration/config.go` ("defaults to
+      LastUsedProvider"). Under `--skip-prompt` (no interactive selection)
+      `sprout commit` then logs an empty provider and model and falls back to
+      asking for a message, which aborts. Fall back to the last-used provider
+      and its model when unset; keep interactive selection only where a
+      prompt is possible. Tests: unset commit provider resolves to the
+      last-used provider; explicit `commit_provider` still wins;
+      `--skip-prompt` with no provider configured at all returns a clear
+      error instead of an empty-message abort.
+
 ## SP-148 — Structured Plans (`roadmap/SP-148-structured-plans.md`)
 
 - [x] **148.1** New package `pkg/plancontract`: Go types for the plan
@@ -37,7 +64,7 @@ the end, without checkboxes.
       in `pkg/agent/tool_handlers_browse.go`). Validator rejects malformed
       steps. Tests with valid and invalid step fixtures. Spec: SP-148
       §148d.
-- [ ] **148.4** `sprout plan --structured` (`cmd/plan.go`) writes
+- [x] **148.4** `sprout plan --structured` (`cmd/plan.go`) writes
       `.sprout/plan.json` plus the rendered markdown; add a schema section
       to `pkg/agent/prompts/planning_prompt.md` requiring at least one
       acceptance item per scope item. Test with a scripted model response

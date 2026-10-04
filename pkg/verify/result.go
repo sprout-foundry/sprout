@@ -53,6 +53,13 @@ type Check struct {
 	// Excerpt is a bounded excerpt of the check's combined output
 	// (SP-149 §149c evidence).
 	Excerpt string `json:"excerpt,omitempty"`
+	// Routes are the routes a page check attempted, in manifest order
+	// (page checks only; empty for every other kind).
+	Routes []string `json:"routes,omitempty"`
+	// Screenshots are the per-route screenshot file paths, parallel to
+	// Routes ("" where a capture failed or the route never reached a
+	// browser capture; page checks only).
+	Screenshots []string `json:"screenshots,omitempty"`
 	// Duration is the wall time the check took to execute.
 	Duration time.Duration `json:"duration,omitempty"`
 }
@@ -139,6 +146,15 @@ func (r *Result) Summary() string {
 		part := c.Kind.String() + ": " + status
 		if c.Command != "" {
 			part += " (" + c.Command + ")"
+		}
+		// A page check that ran reports how many routes it covered, so the
+		// summary says plainly what was verified (SP-149 §149d).
+		if c.Kind == plancontract.KindPage && !c.Skipped && len(c.Routes) > 0 {
+			if len(c.Routes) == 1 {
+				part += " [1 route]"
+			} else {
+				part += fmt.Sprintf(" [%d routes]", len(c.Routes))
+			}
 		}
 		if c.Reason != "" {
 			part += " — " + c.Reason

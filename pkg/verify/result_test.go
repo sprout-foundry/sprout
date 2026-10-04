@@ -114,3 +114,54 @@ func TestResultAggregates(t *testing.T) {
 	assert.False(t, (func() *Result { return nil })().Passed())
 	assert.False(t, (func() *Result { return nil })().Failed())
 }
+
+// TestResultSummaryPageCheck pins the deterministic rendering of a page check
+// in the final-reply summary (SP-149 §149d): a page check that ran reports
+// its route count, a skipped one its reason, and screenshot references stay
+// off the one-line summary (they are the structured evidence).
+func TestResultSummaryPageCheck(t *testing.T) {
+	passed := &Result{
+		PlanRevision: 2,
+		Checks: []Check{
+			{
+				Kind:        plancontract.KindPage,
+				Items:       []string{"a1"},
+				Command:     "node server.js",
+				Passed:      true,
+				Routes:      []string{"/", "/login"},
+				Screenshots: []string{"a.png", "b.png"},
+			},
+		},
+	}
+	assert.Equal(
+		t,
+		"plan rev 2: page: passed (node server.js) [2 routes]",
+		passed.Summary(),
+	)
+
+	single := &Result{
+		Checks: []Check{{Kind: plancontract.KindPage, Command: "npm run dev", Passed: true, Routes: []string{"/"}}},
+	}
+	assert.Equal(t, "plan rev 0: page: passed (npm run dev) [1 route]", single.Summary())
+
+	skipped := &Result{
+		Checks: []Check{{Kind: plancontract.KindPage, Skipped: true, Reason: "no dev command in the starter manifest"}},
+	}
+	assert.Equal(
+		t,
+		"plan rev 0: page: skipped — no dev command in the starter manifest",
+		skipped.Summary(),
+	)
+
+	failed := &Result{
+		Checks: []Check{{
+			Kind: plancontract.KindPage, Command: "node server.js",
+			Passed: false, Routes: []string{"/"}, Reason: "/: fixture console error",
+		}},
+	}
+	assert.Equal(
+		t,
+		"plan rev 0: page: failed (node server.js) [1 route] — /: fixture console error",
+		failed.Summary(),
+	)
+}

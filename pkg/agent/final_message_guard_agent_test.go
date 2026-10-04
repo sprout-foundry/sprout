@@ -243,3 +243,75 @@ func TestApplyLanguageGuardNilConfig(t *testing.T) {
 		t.Errorf("final assistant message = %q, want the notice %q", last.Content, want)
 	}
 }
+
+// TestLanguageGuardMismatchRecordedPerModel pins the §152e metric (item
+// 152.9): the guard records a check for every judged final message and a
+// mismatch when one is detected, both keyed by the turn's model ID. A
+// mismatch turn records one check and one mismatch; a pass turn records one
+// check and no mismatch.
+func TestLanguageGuardMismatchRecordedPerModel(t *testing.T) {
+	// Mismatch turn: user writes in Spanish, the answer comes back in
+	// English; the guard regenerates into Spanish. A fresh recorder is
+	// installed so the assertions are isolated from other tests.
+	mismatchMetrics := NewLanguageGuardMetrics()
+	cleanupA := SetGlobalLanguageGuardMetricsForTest(mismatchMetrics)
+	agA, _ := newLanguageGuardAgent(t, "", false,
+		NewStopResponse(lgEnglishProse), // the turn's answer: wrong language
+		NewStopResponse(lgSpanishProse), // the regeneration: correct
+	)
+	modelA := metricKeyFor(agA)
+	if _, err := agA.ProcessQuery(lgSpanishProse); err != nil {
+		t.Fatalf("ProcessQuery (mismatch turn): %v", err)
+	}
+	cleanupA()
+
+	mism := modelStat(mismatchMetrics, modelA)
+	if mism.Checks != 1 {
+		t.Errorf("mismatch turn: model %q Checks = %d, want 1", modelA, mism.Checks)
+	}
+	if mism.Mismatches != 1 {
+		t.Errorf("mismatch turn: model %q Mismatches = %d, want 1", modelA, mism.Mismatches)
+	}
+
+	// Pass turn: the answer is already in the user's (Spanish) language, so
+	// the guard judges it but records no mismatch.
+	passMetrics := NewLanguageGuardMetrics()
+	cleanupB := SetGlobalLanguageGuardMetricsForTest(passMetrics)
+	agB, _ := newLanguageGuardAgent(t, "es", false,
+		NewStopResponse(lgSpanishProse),
+	)
+	modelB := metricKeyFor(agB)
+	if _, err := agB.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery (pass turn): %v", err)
+	}
+	cleanupB()
+
+	pass := modelStat(passMetrics, modelB)
+	if pass.Checks != 1 {
+		t.Errorf("pass turn: model %q Checks = %d, want 1", modelB, pass.Checks)
+	}
+	if pass.Mismatches != 0 {
+		t.Errorf("pass turn: model %q Mismatches = %d, want 0", modelB, pass.Mismatches)
+	}
+}
+
+// metricKeyFor maps an agent's model ID to the key the recorder buckets it
+// under (an empty model ID is recorded as "unknown").
+func metricKeyFor(ag *Agent) string {
+	id := ag.GetModel()
+	if id == "" {
+		return "unknown"
+	}
+	return id
+}
+
+// modelStat returns the stat for a model ID from a recorder's snapshot
+// (a zero stat when the model has no recorded checks).
+func modelStat(m *LanguageGuardMetrics, modelID string) LanguageGuardModelStat {
+	for _, s := range m.Snapshot() {
+		if s.ModelID == modelID {
+			return s
+		}
+	}
+	return LanguageGuardModelStat{ModelID: modelID}
+}

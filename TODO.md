@@ -159,9 +159,12 @@ the end, without checkboxes.
       (`cmd/wasm`); WASM build passes and size impact is noted
       (guard adds ≈545 KB / 0.97 % to `sprout.wasm`, 54.7 → 55.2 MB;
       recorded in the spec). Spec: SP-152 §152d.
-- [ ] **152.9** Metrics: log each mismatch with model ID; per-model
-      mismatch rate in diagnostics (role is added in 150.5). Test. Spec:
-      SP-152 §152e.
+- [x] **152.9** Metrics: log each mismatch with model ID; per-model
+      mismatch rate in diagnostics (role is added in 150.5). Test. The
+      guard records a check (and a mismatch) per model in a process-wide
+      `LanguageGuardMetrics` recorder; the per-model mismatch rate is
+      exposed via `Agent.LanguageGuardStats()` / `GlobalLanguageGuardMetrics()`.
+      Spec: SP-152 §152e.
 
 ---
 

@@ -190,15 +190,20 @@ func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}
 	return sb.String(), nil
 }
 
-func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	skillID, err := getStringArg(args, "skill_id")
-	if err != nil {
-		// Try alternative parameter names
-		if skillID, err = getStringArg(args, "skill"); err != nil {
-			return "", agenterrors.NewTool("skills", "skill_id is required", err)
-		}
-	}
-
+// activateSkillByID is the skill-activation core shared by the
+// activate_skill tool (handleActivateSkill) and the turn-start stack-skill
+// auto-activation (SP-153 §153c, autoActivateStarterSkill): load the skill,
+// add its ID to the active-skill set, and fold its instructions into the
+// system prompt.
+//
+// It is idempotent: a skill that is already active gets a short "already
+// active" note and no state is touched, so repeated calls (across turns)
+// never duplicate the skill in the active set or re-fold its content.
+//
+// Errors are returned unwrapped: the tool path wraps them in a
+// user-facing tool error, while best-effort callers (auto-activation)
+// log and continue.
+func (a *Agent) activateSkillByID(skillID string) (string, error) {
 	configManager := a.GetConfigManager()
 	config := configManager.GetConfig()
 
@@ -212,7 +217,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	// Load the skill
 	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
 	if err != nil {
-		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
+		return "", err
 	}
 
 	// Add to active skills
@@ -236,6 +241,22 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	}
 
 	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
+}
+
+func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	skillID, err := getStringArg(args, "skill_id")
+	if err != nil {
+		// Try alternative parameter names
+		if skillID, err = getStringArg(args, "skill"); err != nil {
+			return "", agenterrors.NewTool("skills", "skill_id is required", err)
+		}
+	}
+
+	result, err := a.activateSkillByID(skillID)
+	if err != nil {
+		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
+	}
+	return result, nil
 }
 
 func getStringArg(args map[string]interface{}, name string) (string, error) {

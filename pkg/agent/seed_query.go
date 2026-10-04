@@ -325,6 +325,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 	opts.SubstitutionTargetFraction = 0.50
 
+	// SP-153 §153c: when the project's starter manifest names a starter, its
+	// stack skill auto-activates at turn start — folded into the system
+	// prompt before it is handed to the seed agent (the next block).
+	// Best-effort and idempotent: a missing/invalid manifest, a starter with
+	// no skill, or an already-active skill is a no-op and never fails the
+	// turn.
+	a.autoActivateStarterSkill()
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}

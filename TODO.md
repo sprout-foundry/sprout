@@ -100,7 +100,7 @@ the end, without checkboxes.
 - [x] **153.4** `sprout new --starter <id>` CLI command over 153.3, listing
       available starters on unknown ID. Tests with the fixture starter.
       Spec: SP-153 §153b.
-- [ ] **153.5** Stack skill auto-activation: when `.sprout/starter.json`
+- [x] **153.5** Stack skill auto-activation: when `.sprout/starter.json`
       names a starter, its skill under `pkg/skills/library/<starter>/`
       activates automatically. Test with a fixture skill. Spec: SP-153
       §153c.

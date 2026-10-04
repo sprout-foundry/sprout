@@ -41,12 +41,12 @@ func TestRunPlanWithConfigCommands(t *testing.T) {
 	assert.True(t, res.Passed())
 }
 
-// TestRunPlanWithoutBuildOrTestItems pins the 149.3 scope: a plan that
-// declares only a page item (plus a manual item) gates a single page
-// check. The manifestFull manifest has no dev command, so the page check
-// is skipped with a reason (honest failure, SP-149 §149d) rather than
-// invented, and the manual item still gates nothing — no manual check is
-// produced.
+// TestRunPlanWithoutBuildOrTestItems pins the 149.3/149.4 scope: a plan that
+// declares only a page item (plus a manual item) gates a single page check
+// and a single pre-filled manual check. The manifestFull manifest has no dev
+// command, so the page check is skipped with a reason (honest failure,
+// SP-149 §149d) rather than invented, and the manual item is listed but
+// never gated — it appears as a skipped manual check that gates nothing.
 func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	root := t.TempDir()
 	writeManifestFile(t, root, manifestFull)
@@ -65,13 +65,18 @@ func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, exec.executed, "a plan with no build/test items gates no command execution")
-	require.Len(t, res.Checks, 1, "149.3 adds exactly one page check for the plan's page items")
+	require.Len(t, res.Checks, 2, "149.3 adds one page check and 149.4 adds one manual check")
 	assert.Equal(t, plancontract.KindPage, res.Checks[0].Kind)
 	assert.True(t, res.Checks[0].Skipped, "no dev command in the manifest: the page check is skipped, not invented")
 	assert.Contains(t, res.Checks[0].Reason, "dev command")
 	assert.Equal(t, []string{"a1"}, res.Checks[0].Items)
-	// The manual item gates nothing: the single check is the page one, no
-	// manual check exists.
+	// The manual item is listed but never gated: a single pre-filled
+	// skipped manual check listing its id.
+	assert.Equal(t, plancontract.KindManual, res.Checks[1].Kind)
+	assert.True(t, res.Checks[1].Skipped, "a manual check is pre-filled skipped")
+	assert.Contains(t, res.Checks[1].Reason, "manual")
+	assert.Equal(t, []string{"a2"}, res.Checks[1].Items)
+	assert.False(t, res.Checks[1].Passed, "a manual check never passes on its own")
 	assert.False(t, res.Baseline, "a plan exists: no baseline")
 	assert.Equal(t, stored.Revision, res.PlanRevision)
 }

@@ -165,3 +165,64 @@ func TestResultSummaryPageCheck(t *testing.T) {
 		failed.Summary(),
 	)
 }
+
+// TestResultSummaryInteractionAndManual pins the deterministic rendering of
+// interaction and manual checks in the final-reply summary (SP-149 §149d): a
+// run interaction check reports its step count, and a manual check reports the
+// manual items it lists.
+func TestResultSummaryInteractionAndManual(t *testing.T) {
+	interaction := &Result{
+		PlanRevision: 2,
+		Checks: []Check{
+			{
+				Kind:    plancontract.KindInteraction,
+				Items:   []string{"a1"},
+				Command: "node server.js",
+				Passed:  true,
+				Steps: []plancontract.BrowseStep{
+					{Action: "click", Selector: "#toggle"},
+					{Action: "assert_text", Expect: "Welcome back"},
+				},
+			},
+		},
+	}
+	assert.Equal(
+		t,
+		"plan rev 2: interaction: passed (node server.js) [2 steps]",
+		interaction.Summary(),
+	)
+
+	singleStep := &Result{
+		Checks: []Check{{Kind: plancontract.KindInteraction, Command: "node server.js", Passed: true, Steps: []plancontract.BrowseStep{{Action: "assert_text", Expect: "Fixture"}}}},
+	}
+	assert.Equal(t, "plan rev 0: interaction: passed (node server.js) [1 step]", singleStep.Summary())
+
+	interactionFailed := &Result{
+		Checks: []Check{{
+			Kind: plancontract.KindInteraction, Command: "node server.js",
+			Passed: false, Steps: []plancontract.BrowseStep{{Action: "click", Selector: "#toggle"}, {Action: "assert_text", Expect: "X"}},
+			Reason: `a1: step[1] assert_text: missing expected text "X"`,
+		}},
+	}
+	assert.Equal(
+		t,
+		"plan rev 0: interaction: failed (node server.js) [2 steps] — a1: step[1] assert_text: missing expected text \"X\"",
+		interactionFailed.Summary(),
+	)
+
+	manual := &Result{
+		Checks: []Check{
+			{
+				Kind:    plancontract.KindManual,
+				Items:   []string{"m1", "m2"},
+				Skipped: true,
+				Reason:  "manual: verified by a human, not machine-gated (SP-149 §149a)",
+			},
+		},
+	}
+	assert.Equal(
+		t,
+		"plan rev 0: manual: skipped [2 manual items] — manual: verified by a human, not machine-gated (SP-149 §149a)",
+		manual.Summary(),
+	)
+}

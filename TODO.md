@@ -97,7 +97,7 @@ the end, without checkboxes.
       starter tree layout; instantiate into an empty directory (refuse a
       non-empty one); a minimal test-only fixture starter proves the
       mechanism. Tests. Spec: SP-153 §153b.
-- [ ] **153.4** `sprout new --starter <id>` CLI command over 153.3, listing
+- [x] **153.4** `sprout new --starter <id>` CLI command over 153.3, listing
       available starters on unknown ID. Tests with the fixture starter.
       Spec: SP-153 §153b.
 - [ ] **153.5** Stack skill auto-activation: when `.sprout/starter.json`

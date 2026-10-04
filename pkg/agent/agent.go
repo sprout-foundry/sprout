@@ -11,6 +11,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/langguard"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
 )
@@ -121,6 +122,16 @@ type Agent struct {
 	conversationStartTime time.Time
 	turnTimestamp         time.Time
 	turnTimestampMu       sync.RWMutex
+
+	// Outbound language guard (SP-152 §152c): the resolved user language for
+	// the active turn and whether the streaming hold-back applies to it
+	// (guard enabled, not a subagent, and the language was determined).
+	// Set once per turn in prepareQueryRun (resolveTurnLanguageGuard); read
+	// by the streaming provider path to gate assistant-text delivery.
+	// turnLangMu guards both fields.
+	turnLangMu           sync.RWMutex
+	turnUserLanguage     langguard.Language
+	streamHoldbackActive bool
 
 	// Configuration
 	configManager *configuration.Manager

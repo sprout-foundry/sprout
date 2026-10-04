@@ -155,9 +155,10 @@ the end, without checkboxes.
       mid-stream is checked at completion and replaced (server event +
       web UI handling of the replacement). Go test + vitest. Spec: SP-152
       §152c.
-- [ ] **152.8** WASM: the guard runs in the browser build's outbound path
-      (`cmd/wasm`); WASM build passes and size impact is noted. Spec:
-      SP-152 §152d.
+- [x] **152.8** WASM: the guard runs in the browser build's outbound path
+      (`cmd/wasm`); WASM build passes and size impact is noted
+      (guard adds ≈545 KB / 0.97 % to `sprout.wasm`, 54.7 → 55.2 MB;
+      recorded in the spec). Spec: SP-152 §152d.
 - [ ] **152.9** Metrics: log each mismatch with model ID; per-model
       mismatch rate in diagnostics (role is added in 150.5). Test. Spec:
       SP-152 §152e.

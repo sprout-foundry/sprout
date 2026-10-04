@@ -69,7 +69,7 @@ the end, without checkboxes.
       to `pkg/agent/prompts/planning_prompt.md` requiring at least one
       acceptance item per scope item. Test with a scripted model response
       producing a valid plan file. Spec: SP-148 §148b.
-- [ ] **148.5** When `.sprout/plan.json` exists, the agent reads it at the
+- [x] **148.5** When `.sprout/plan.json` exists, the agent reads it at the
       start of a turn and gets a compact plan summary (goal, scope items
       with status) in context. Test: fixture plan → summary present in the
       turn context; no plan → no change. Spec: SP-148 §148c.

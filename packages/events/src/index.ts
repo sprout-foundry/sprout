@@ -38,6 +38,7 @@ export type {
   TerminalOutputData,
   TerminalPtyExitData,
   ContextManagementDiagnosticData,
+  LanguageGuardReplacementData,
 } from './types';
 export { EventsContextProvider, useEvents } from './context';
 export type { EventsContextProviderProps } from './context';

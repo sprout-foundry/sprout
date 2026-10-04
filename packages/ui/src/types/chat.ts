@@ -66,6 +66,14 @@ export interface Message {
   subagentPersona?: string;
   /** The user stopped this turn before it finished. */
   stopped?: boolean;
+  /**
+   * SP-152 §152c (item 152.7): the full switched-language content of a reply
+   * that was replaced by the language guard's completion re-check (the
+   * "view original" payload). Present on an assistant message whose content
+   * was replaced with the localized notice via a language_guard_replacement
+   * event. Absent for normal messages.
+   */
+  languageGuardOriginal?: string;
 }
 
 export interface ToolExecution {

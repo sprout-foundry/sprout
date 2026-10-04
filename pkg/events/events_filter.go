@@ -458,3 +458,24 @@ func InputRequiredEvent(reason, requestID string) map[string]interface{} {
 	}
 	return payload
 }
+
+// LanguageGuardReplacementEvent creates a language_guard_replacement event
+// payload (SP-152 §152c, item 152.7). It is published when a streamed reply
+// that was RELEASED by the streaming hold-back (its start passed the language
+// check) is re-checked at completion and found to have switched language
+// mid-stream. The reply was already streamed to the client and cannot be
+// un-streamed, so the client is told to replace the already-streamed
+// assistant message: `replacement` is what it shows (the localized §152b-style
+// notice), `original` is the full switched content (for "view original"), and
+// `reason` names the trigger (e.g. "mid_stream_switch").
+func LanguageGuardReplacementEvent(chatID, replacement, original, reason string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"replacement": replacement,
+		"original":    original,
+		"reason":      reason,
+	}
+	if chatID != "" {
+		payload["chat_id"] = chatID
+	}
+	return payload
+}

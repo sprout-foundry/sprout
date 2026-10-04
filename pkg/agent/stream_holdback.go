@@ -10,9 +10,15 @@
 //
 // A reply that never reaches the prose threshold — a short or code-only
 // stream, which §152a says is not judged — is released on Finish: it is
-// never held. Only a judged, reliably-mismatched stream is held. A reply
-// that switches language mid-stream is re-checked at completion (SP-152
-// §152c, item 152.7) — out of scope here.
+// never held. Only a judged, reliably-mismatched stream is held.
+//
+// A reply that switches language mid-stream is re-checked at completion
+// (SP-152 §152c, item 152.7): the hold-back only judges the START of the
+// stream (and releases it once the start passes), so a later switch is
+// already streamed to the client and cannot be un-streamed. The hold-back
+// therefore also accumulates the FULL content of the reply (Full), and the
+// agent re-checks it at completion — replacing the already-streamed message
+// with a server event when it fails.
 //
 // The component is pure and fully unit-testable: it wraps a sink (the
 // client-facing delivery) and exposes Write / Finish / State / Held. The
@@ -62,6 +68,12 @@ type StreamHoldback struct {
 	// buf accumulates the streamed content: the pending buffer while
 	// buffering, and the held (wrong-language) content once held.
 	buf strings.Builder
+	// full accumulates EVERY chunk written for this response, regardless of
+	// state — including chunks delivered live after the buffer is released.
+	// The completion re-check (SP-152 §152c, item 152.7) needs the whole
+	// reply, not just the held/buffered prefix, so it is tracked separately
+	// from buf (which is reset on release).
+	full strings.Builder
 }
 
 // NewStreamHoldback constructs a hold-back that judges a streamed reply
@@ -85,8 +97,13 @@ func NewStreamHoldback(user langguard.Language, sink func(content string)) *Stre
 // language check runs and the hold-back either releases the buffer (pass or
 // undetermined) and goes live, or holds the reply (a reliable mismatch).
 // Live chunks pass straight through; held chunks are captured (not
-// delivered).
+// delivered). Every chunk is also recorded into full (the completion
+// re-check's input, item 152.7).
 func (h *StreamHoldback) Write(chunk string) {
+	// Accumulate the whole reply for the completion re-check BEFORE any
+	// state-specific handling (release resets buf, so it cannot be the
+	// source of the full content).
+	h.full.WriteString(chunk)
 	switch h.state {
 	case HoldbackLive:
 		h.deliver(chunk)
@@ -137,10 +154,11 @@ func (h *StreamHoldback) Finish() {
 }
 
 // Reset returns the hold-back to its initial state for a fresh stream (a
-// provider retry). Any buffered or held content from the discarded attempt
-// is dropped so it never leaks into the next attempt.
+// provider retry). Any buffered, held, or fully-accumulated content from the
+// discarded attempt is dropped so it never leaks into the next attempt.
 func (h *StreamHoldback) Reset() {
 	h.buf.Reset()
+	h.full.Reset()
 	if h.user.Code == "" {
 		h.state = HoldbackLive
 	} else {
@@ -179,6 +197,14 @@ func (h *StreamHoldback) Held() string {
 	}
 	return ""
 }
+
+// Full returns the entire content written for this response — every chunk,
+// including those delivered live after the buffer was released, not just the
+// held/buffered prefix. It is the completion re-check's input (SP-152 §152c,
+// item 152.7): a reply whose start passed the hold-back but which switched
+// language later in the stream is re-judged on its full content. Empty when
+// nothing was written.
+func (h *StreamHoldback) Full() string { return h.full.String() }
 
 // User returns the user language the hold-back judges against.
 func (h *StreamHoldback) User() langguard.Language { return h.user }

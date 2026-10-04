@@ -159,6 +159,15 @@ const (
 	// process count or total RSS exceeds configured thresholds. The payload
 	// carries the current counts, thresholds, and which threshold(s) triggered.
 	EventTypeOOMWatchdogAlert = "oom_watchdog_alert"
+	// EventTypeLanguageGuardReplacement (SP-152 §152c, item 152.7) is
+	// published when a streamed reply that was RELEASED by the streaming
+	// hold-back (its start passed the language check) is re-checked at
+	// completion and found to have switched language mid-stream. The reply
+	// was already streamed to the client and cannot be un-streamed, so the
+	// client is told to REPLACE the already-streamed assistant message. The
+	// payload carries chat_id, the replacement notice, the original (full
+	// switched content, for "view original"), and the reason.
+	EventTypeLanguageGuardReplacement = "language_guard_replacement"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

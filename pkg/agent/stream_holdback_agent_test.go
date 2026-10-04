@@ -13,6 +13,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/langguard"
 )
 
@@ -249,5 +250,190 @@ func TestStreamHoldbackReasoningModelFallbackCorrectLanguageReleased(t *testing.
 	}
 	if !strings.Contains(buffer, hbSpanishProse) {
 		t.Errorf("buffer does not contain the full reply %q; got %q", hbSpanishProse, buffer)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Completion re-check (SP-152 §152c, item 152.7)
+//
+// The hold-back only judges the START of a streamed reply. A reply whose start
+// passes (and is released) but which switches language later in the stream is
+// already streamed to the client and cannot be un-streamed — so it is re-checked
+// at completion on its FULL content and, on a reliable mismatch, the client is
+// told to replace the already-streamed message via a language_guard_replacement
+// event.
+// ---------------------------------------------------------------------------
+
+// Mid-stream-switch fixtures, tuned against the detector (pkg/langguard): the
+// Spanish START is reliably Spanish (conf > 0.8) so the hold-back releases it,
+// but the FULL reply (Spanish start + English body) is reliably English, a
+// mismatch for a Spanish user — exactly the mid-stream switch the completion
+// re-check exists to catch.
+const (
+	midStreamSpanishStart = "Hecho. El paquete está listo para compilar ahora"
+	midStreamEnglishRest  = " The build succeeded after applying the patch, so the tests can run and the release is ready to ship."
+)
+
+var midStreamFullReply = midStreamSpanishStart + midStreamEnglishRest
+
+// wireLanguageGuardEventBus attaches an EventBus to the agent (with a chat_id
+// in the event metadata, so the replacement payload carries it) and returns a
+// subscriber channel for the published events. Publish is synchronous (it waits
+// for every subscriber to have processed the event), so after ProcessQuery
+// returns the published events are already in the channel.
+func wireLanguageGuardEventBus(t *testing.T, ag *Agent) <-chan events.UIEvent {
+	t.Helper()
+	eb := events.NewEventBus()
+	subName := "langguard-completion-sub"
+	sub := eb.Subscribe(subName)
+	t.Cleanup(func() { eb.Unsubscribe(subName) })
+	ag.SetEventBus(eb)
+	ag.SetEventMetadata(map[string]interface{}{"chat_id": "chat-lgt-1"})
+	return sub
+}
+
+// drainEvents reads every event currently in the subscriber channel.
+func drainEvents(sub <-chan events.UIEvent) []events.UIEvent {
+	var evs []events.UIEvent
+	for {
+		select {
+		case ev := <-sub:
+			evs = append(evs, ev)
+		default:
+			return evs
+		}
+	}
+}
+
+// languageGuardReplacementEvents filters the replacement events out of a set.
+func languageGuardReplacementEvents(evs []events.UIEvent) []events.UIEvent {
+	var out []events.UIEvent
+	for _, ev := range evs {
+		if ev.Type == events.EventTypeLanguageGuardReplacement {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
+// TestStreamCompletionRecheckMidStreamSwitchPublishesReplacement drives a full
+// scripted turn: the user writes in Spanish (configured fallback), the reply
+// STARTS in Spanish (so the hold-back releases it and it streams live) and then
+// switches to English. At completion the full reply is a reliable mismatch, so
+// a language_guard_replacement event is published carrying the replacement
+// notice, the original (full switched content), the reason, and the chat_id.
+func TestStreamCompletionRecheckMidStreamSwitchPublishesReplacement(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(midStreamFullReply, []string{midStreamSpanishStart, midStreamEnglishRest}),
+		NewStopResponse(hbSpanishProse), // the 152.5 regeneration (always runs on a mismatch)
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The reply was RELEASED (its start passed), so the switched content reached
+	// the client's streaming buffer — it was already streamed and cannot be
+	// un-streamed.
+	buffer := ag.output.GetStreamingBuffer().String()
+	if !strings.Contains(buffer, midStreamSpanishStart) {
+		t.Errorf("the released (Spanish-start) reply did not reach the client's buffer: %q", buffer)
+	}
+	if !strings.Contains(buffer, "The build succeeded") {
+		t.Errorf("the switched (English) tail did not reach the client's buffer: %q", buffer)
+	}
+
+	repl := languageGuardReplacementEvents(drainEvents(sub))
+	if len(repl) != 1 {
+		t.Fatalf("expected exactly 1 language_guard_replacement event, got %d", len(repl))
+	}
+	data, ok := repl[0].Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("replacement event data is not a map: %T", repl[0].Data)
+	}
+	wantReplacement := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
+	if got := data["replacement"]; got != wantReplacement {
+		t.Errorf("replacement = %v, want the localized notice %q", got, wantReplacement)
+	}
+	if got := data["original"]; got != midStreamFullReply {
+		t.Errorf("original = %v, want the full switched reply %q", got, midStreamFullReply)
+	}
+	if got := data["reason"]; got != "mid_stream_switch" {
+		t.Errorf("reason = %v, want %q", got, "mid_stream_switch")
+	}
+	if got := data["chat_id"]; got != "chat-lgt-1" {
+		t.Errorf("chat_id = %v, want %q", got, "chat-lgt-1")
+	}
+
+	// The full switched content is kept on the message Meta for "view original".
+	last := lastAssistantMessage(t, ag)
+	if original := last.Meta[langGuardOriginalMetaKey]; original != midStreamFullReply {
+		t.Errorf("view-original payload = %q, want the full switched reply %q", original, midStreamFullReply)
+	}
+}
+
+// TestStreamCompletionRecheckCorrectLanguageNoEvent pins the no-switch path:
+// a reply that streams entirely in the user's language is released and, at
+// completion, is NOT a mismatch — so no replacement event is published.
+func TestStreamCompletionRecheckCorrectLanguageNoEvent(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(hbSpanishProse, spanishChunks),
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
+		t.Errorf("a correct-language stream must not publish a replacement event; got %d", len(repl))
+	}
+}
+
+// TestStreamCompletionRecheckHeldStreamNoEvent pins that a HELD stream (a
+// reliable mismatch at the START, handled by the 152.6 notice) is NOT
+// re-checked: the held path is terminal, so no language_guard_replacement event
+// is published (it would be a duplicate of the notice already delivered).
+func TestStreamCompletionRecheckHeldStreamNoEvent(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(hbEnglishProse, englishChunks), // wrong language from the start
+		NewStopResponse(hbSpanishProse),                     // the §152b regeneration
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The held (English) content must never reach the client.
+	if strings.Contains(ag.output.GetStreamingBuffer().String(), hbEnglishProse) {
+		t.Errorf("the held wrong-language stream reached the client's buffer")
+	}
+	// And the held path is terminal: no completion re-check event.
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
+		t.Errorf("a held stream must not publish a replacement event; got %d", len(repl))
+	}
+}
+
+// TestStreamCompletionRecheckShortStreamNoEvent pins that a reply below the
+// prose threshold is not judged (§152a): it is released on Finish and the
+// completion re-check does not run — so no replacement event is published.
+func TestStreamCompletionRecheckShortStreamNoEvent(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse("Hola", []string{"Hola"}),
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
+		t.Errorf("a below-threshold (short) stream must not publish a replacement event; got %d", len(repl))
 	}
 }

@@ -132,6 +132,7 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeAutomateSessionEnded,
 		events.EventTypeAutomateOutputChunk,
 		events.EventTypeAutomateBudgetUpdate,
+		events.EventTypeLanguageGuardReplacement,
 	} {
 		if _, ok := allowedOutboundMessageTypes[eventType]; !ok {
 			// Build the test name from the constant so the failure tells you

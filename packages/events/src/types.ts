@@ -294,6 +294,28 @@ export interface ContextManagementDiagnosticData {
   chat_id?: string;
 }
 
+/**
+ * Payload for a language_guard_replacement event (SP-152 §152c, item 152.7).
+ *
+ * Published when a streamed reply that was RELEASED by the streaming
+ * hold-back (its start passed the language check) is re-checked at completion
+ * and found to have switched language mid-stream. The reply was already
+ * streamed to the client and cannot be un-streamed, so the WebUI replaces the
+ * already-streamed assistant message's content with `replacement` and keeps
+ * `original` (the full switched content) available for "view original".
+ *
+ * Go: pkg/events.events_filter.go::LanguageGuardReplacementEvent
+ */
+export interface LanguageGuardReplacementData {
+  /** The localized §152b-style notice the user should see instead of the reply. */
+  replacement: string;
+  /** The full switched content — the "view original" payload. */
+  original: string;
+  /** What triggered the replacement (e.g. "mid_stream_switch"). */
+  reason: string;
+  chat_id?: string;
+}
+
 export interface WorkspaceChangedData {
   daemon_root?: string;
   workspace_root?: string;
@@ -620,6 +642,12 @@ export type WsEvent =
   | {
       type: "context_management_diagnostic";
       data?: ContextManagementDiagnosticData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "language_guard_replacement";
+      data?: LanguageGuardReplacementData;
       id?: string;
       timestamp?: string;
     }

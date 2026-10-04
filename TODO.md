@@ -151,7 +151,7 @@ the end, without checkboxes.
       reply until enough prose to judge (code excluded), check, then
       release and stream live. Test: a wrong-language stream never
       reaches the client. Spec: SP-152 §152c.
-- [ ] **152.7** Completion re-check: a reply that switches language
+- [x] **152.7** Completion re-check: a reply that switches language
       mid-stream is checked at completion and replaced (server event +
       web UI handling of the replacement). Go test + vitest. Spec: SP-152
       §152c.

@@ -204,7 +204,7 @@ the end, without checkboxes.
 
 ## SP-154 — Agent Task Benchmark (`roadmap/SP-154-agent-benchmark.md`)
 
-- [ ] **154.1** Benchmark harness skeleton: task fixture format
+- [x] **154.1** Benchmark harness skeleton: task fixture format
       (plain-language request, frozen SP-148 plan, starter reference) and
       loader. Tests with a fixture task on the 153.3 fixture starter.
       Spec: SP-154 §154a.

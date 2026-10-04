@@ -32,7 +32,7 @@ the end, without checkboxes.
       regenerates `.sprout/plan.md` from the JSON. Tests: round trip,
       revision bump, markdown regenerated on edit, invalid write rejected.
       Spec: SP-148 §148a, §148b.
-- [ ] **148.3** Interaction acceptance items reuse the browse step format
+- [x] **148.3** Interaction acceptance items reuse the browse step format
       (`webcontent.BrowseStep`; parsing compatible with `parseBrowseSteps`
       in `pkg/agent/tool_handlers_browse.go`). Validator rejects malformed
       steps. Tests with valid and invalid step fixtures. Spec: SP-148

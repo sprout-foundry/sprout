@@ -93,7 +93,7 @@ the end, without checkboxes.
 - [x] **153.2** Manifest loader API (`LoadStarterManifest(projectRoot)`)
       as the single source of build/test/dev/preview commands; missing
       file → none, never guessed. Tests. Spec: SP-153 §153a.
-- [ ] **153.3** Starter embedding and instantiation: embedded, versioned
+- [x] **153.3** Starter embedding and instantiation: embedded, versioned
       starter tree layout; instantiate into an empty directory (refuse a
       non-empty one); a minimal test-only fixture starter proves the
       mechanism. Tests. Spec: SP-153 §153b.

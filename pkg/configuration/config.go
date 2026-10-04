@@ -238,6 +238,14 @@ type Config struct {
 	// langguard.ParseLanguage(cfg.Language).
 	Language string `json:"language,omitempty"`
 
+	// DisableLanguageGuard turns off the outbound language guard (SP-152
+	// 152f), which is on by default everywhere, including the CLI. Any
+	// config layer (global, workspace, session) may set this to true; the
+	// layer merge tracks the key's presence, so an explicit false in a
+	// narrower layer re-enables the guard even over a broader layer's
+	// disable. Default: false (guard enabled). See LanguageGuardEnabled.
+	DisableLanguageGuard bool `json:"disable_language_guard,omitempty"`
+
 	// Wakeup controls auto-resume behavior for background task completions.
 	Wakeup WakeupConfig `json:"wakeup,omitempty"`
 

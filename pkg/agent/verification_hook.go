@@ -26,6 +26,36 @@ const (
 	verificationReportCloseTag = "</verification-report>"
 )
 
+// turnVerification is the per-turn verification state the final-reply
+// contract (SP-149 §149c/§149d, item 149.6) reads in one access: the
+// turn's last verification run, the per-check repair attempts that run
+// consumed, and the configured repair limit N. The turn-end hook stores a
+// fresh state on every verification run (pass, fail, stop-rule);
+// prepareQueryRun resets it at each turn start so a previous turn's
+// result never attaches to a later turn's reply. A nil result means the
+// hook never ran for the turn (verification disabled, no code change, a
+// subagent turn, or a runner setup error) — the reply then stands
+// untouched.
+type turnVerification struct {
+	result   *verify.Result
+	attempts map[string]int
+	limit    int
+}
+
+// snapshotVerificationAttempts copies the repair loop's per-check counters
+// so a stored state never aliases the map the loop keeps mutating across
+// repair rounds: each stored run keeps the counts that run saw.
+func snapshotVerificationAttempts(attempts map[string]int) map[string]int {
+	if len(attempts) == 0 {
+		return nil
+	}
+	snapshot := make(map[string]int, len(attempts))
+	for key, used := range attempts {
+		snapshot[key] = used
+	}
+	return snapshot
+}
+
 // runTurnEndVerification implements the SP-149 §149c gate and repair loop
 // (item 149.5). processQueryWithSeed invokes it on the success path,
 // between the turn's first seedAgent.Run and handleQueryResult:
@@ -83,9 +113,17 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 			a.Logger().Debug("turn-end verification setup error: %v\n", err)
 			return finalResult, nil
 		}
-		// Stored on every run (pass, fail, stop-rule): the result 149.6
-		// attaches to the final reply and SP-151 records.
-		a.setLastVerificationResult(res)
+		// Stored on every run (pass, fail, stop-rule): the result, the
+		// per-check repair attempts consumed so far, and the configured
+		// limit — the state 149.6 attaches to the final reply and SP-151
+		// records. A snapshot of the counters: the loop keeps counting
+		// into its own map across repair rounds, so the stored state
+		// never mutates after it is stored.
+		a.setTurnVerification(turnVerification{
+			result:   res,
+			attempts: snapshotVerificationAttempts(attempts),
+			limit:    limit,
+		})
 		if !res.Failed() {
 			// Passing, or all-skipped where nothing failed — both stand.
 			return finalResult, nil
@@ -228,17 +266,42 @@ func indentVerificationExcerpt(excerpt string) string {
 // LastVerificationResult returns the last turn-end verification result
 // (SP-149 §149c), stored on every verification run (pass, fail, or
 // stop-rule), or nil when the turn-end hook never ran for this agent
-// (verification disabled, the turn changed no code, or a runner setup
-// error). The final-reply contract (149.6) and the SP-151 verification
-// event report from it.
+// (verification disabled, the turn changed no code, a subagent turn, or a
+// runner setup error). The final-reply contract (149.6) and the SP-151
+// verification event report from it.
 func (a *Agent) LastVerificationResult() *verify.Result {
-	a.lastVerificationResultMu.Lock()
-	defer a.lastVerificationResultMu.Unlock()
-	return a.lastVerificationResult
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	if a.turnVerification.result == nil {
+		return nil
+	}
+	return a.turnVerification.result
 }
 
-func (a *Agent) setLastVerificationResult(res *verify.Result) {
-	a.lastVerificationResultMu.Lock()
-	defer a.lastVerificationResultMu.Unlock()
-	a.lastVerificationResult = res
+// setTurnVerification stores the per-turn verification state (the hook's
+// per-run store: result + repair attempts + limit, SP-149 §149d).
+func (a *Agent) setTurnVerification(tv turnVerification) {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	a.turnVerification = tv
+}
+
+// resetTurnVerification clears the per-turn verification state at the
+// turn's start (prepareQueryRun), so a previous turn's stored result,
+// attempts, and limit never attach to this turn's reply: a turn's final
+// reply may only carry that turn's verification outcome.
+func (a *Agent) resetTurnVerification() {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	a.turnVerification = turnVerification{}
+}
+
+// currentTurnVerification returns the stored per-turn verification state
+// (SP-149 §149d): the single access the final-reply contract reads. The
+// struct copy is all that is needed — the hook stores snapshots, so a
+// stored attempts map is never mutated after it is stored.
+func (a *Agent) currentTurnVerification() turnVerification {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	return a.turnVerification
 }

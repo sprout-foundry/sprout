@@ -1,25 +1,34 @@
 //go:build !js
 
-// verification_hook_test.go — the SP-149 §149c / 149.5 acceptance tests:
-// the turn-end verification hook drives a full agent turn (scripted
-// model, real workspace fixture, real shell execution of the manifest's
-// build command) and pins the gate and repair loop:
+// verification_hook_test.go — the SP-149 §149c acceptance tests: the
+// turn-end verification hook drives a full agent turn (scripted model,
+// real workspace fixture, real shell execution of the manifest's build
+// command) and pins the gate, the repair loop, and the final-reply
+// contract (149.6):
 //
 //   - a turn that changed a file runs the project's verification;
 //   - a broken build → the structured report continues the turn, the
 //     loop stops after N repair attempts on the same check (N repair
-//     rounds, a third never happens);
-//   - a passing build needs no repair round;
+//     rounds, a third never happens), and the final reply carries the
+//     §149d failure report (what passes, what fails, what was tried);
+//   - a passing build needs no repair round and the final reply carries
+//     the passing result;
+//   - an all-skipped run verifies nothing, so the reply states that no
+//     passing result exists;
 //   - disabled verification (the default) and a no-change turn are
 //     complete no-ops (no verify run, no extra model call, no stored
-//     result);
+//     result, no attachment — the reply is byte-identical);
+//   - a previous turn's stored verification state never attaches to a
+//     later turn's reply (the per-turn reset);
 //   - a runner setup error never gates the turn; a provider error in a
-//     repair round is propagated to handleQueryResult's classification.
+//     repair round is propagated to handleQueryResult's classification
+//     (and never carries the attachment).
 //
 // The fixture runs the build command through the default executor
 // (sh -c), so every test here skips rather than fails where sh is
-// absent (mirroring shAvailable in pkg/verify). The pure report-builder
-// and attempt-key tests live in verification_hook_unit_test.go.
+// absent (mirroring shAvailable in pkg/verify). The pure report-builder,
+// attempt-key, and attachment-renderer tests live in
+// verification_hook_unit_test.go.
 
 package agent
 
@@ -63,6 +72,21 @@ func vhWriteStarterManifest(t *testing.T, root, buildCommand string) {
 		t.Fatalf("mkdir .sprout: %v", err)
 	}
 	manifest := fmt.Sprintf(`{"starter":{"id":"fixture","version":"1.0.0"},"build":%q}`, buildCommand)
+	if err := os.WriteFile(starterstore.StarterManifestPath(root), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write starter manifest: %v", err)
+	}
+}
+
+// vhWriteBareStarterManifest writes a starter manifest with no commands at
+// all: a baseline verification run skips every check (no trusted command
+// anywhere), so the run verifies nothing and reports no passing result
+// (SP-149 §149d).
+func vhWriteBareStarterManifest(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, ".sprout"), 0o755); err != nil {
+		t.Fatalf("mkdir .sprout: %v", err)
+	}
+	manifest := `{"starter":{"id":"fixture","version":"1.0.0"}}`
 	if err := os.WriteFile(starterstore.StarterManifestPath(root), []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write starter manifest: %v", err)
 	}
@@ -145,8 +169,16 @@ func TestVerificationHook_BrokenBuildLoopRunsAndStopsAtN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
-	if result != repairTwoFinal {
-		t.Errorf("result = %q, want the last repair-round answer %q", result, repairTwoFinal)
+	// 149.6: the stopping rule fired (N=2) — the final reply states
+	// plainly what passes (nothing), what fails (the build), and what
+	// was tried (2/2 repair attempts) (SP-149 §149d). Partial success
+	// is never reported as success.
+	const want = repairTwoFinal + "\n\n" + "Verification: FAILED after the stopping rule (2 repair attempts)\n" +
+		"Passed: none\n" +
+		"Failed: build — command failed\n" +
+		"Tried: build: 2/2 repair attempts"
+	if result != want {
+		t.Errorf("result = %q,\nwant %q (the last repair-round answer with the §149d failure report)", result, want)
 	}
 
 	// Model calls: the turn's tool-call iteration + the turn's answer,
@@ -214,8 +246,14 @@ func TestVerificationHook_PassingBuildNeedsNoRepair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
-	if result != turnAnswer {
-		t.Errorf("result = %q, want the unguarded turn answer %q", result, turnAnswer)
+
+	// 149.6: the final reply carries the passing verification result —
+	// success may be reported only with a passing result attached
+	// (SP-149 §149c). The attachment is the stable block: a blank line,
+	// then the "passed" line with the run's summary.
+	const want = turnAnswer + "\n\n" + "Verification: passed — baseline: build: passed (echo fixture-build-ok); test: skipped — no test command available: set the starter manifest or the project's explicit verification configuration"
+	if result != want {
+		t.Errorf("result = %q,\nwant %q (the turn answer with the passing attachment)", result, want)
 	}
 
 	// No repair round: only the turn's tool-call iteration + answer.
@@ -269,6 +307,9 @@ func TestVerificationHook_DisabledByDefaultIsNoOp(t *testing.T) {
 	if res := ag.LastVerificationResult(); res != nil {
 		t.Errorf("LastVerificationResult = %+v, want nil (the hook never ran)", res)
 	}
+	if tv := ag.currentTurnVerification(); tv.result != nil {
+		t.Errorf("stored verification state = %+v, want empty (verification disabled: no attachment may exist)", tv)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +344,9 @@ func TestVerificationHook_NoFileChangeSkipsVerification(t *testing.T) {
 	}
 	if res := ag.LastVerificationResult(); res != nil {
 		t.Errorf("LastVerificationResult = %+v, want nil (the hook never ran)", res)
+	}
+	if tv := ag.currentTurnVerification(); tv.result != nil {
+		t.Errorf("stored verification state = %+v, want empty (no code change: no attachment may exist)", tv)
 	}
 }
 
@@ -343,6 +387,98 @@ func TestVerificationHook_StopRuleCapsRepairRoundsAtN(t *testing.T) {
 	res := ag.LastVerificationResult()
 	if res == nil || !res.Failed() {
 		t.Fatalf("LastVerificationResult = %+v, want the last failing run", res)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The final-reply contract (149.6)
+// ---------------------------------------------------------------------------
+
+// TestVerificationHook_AllSkippedRunReportsNoPassingResult pins §149d: a
+// run that verified nothing (every check skipped, no trusted command
+// anywhere) is neither a pass nor a failure — the reply states that no
+// passing result exists, and success is never reported without one.
+func TestVerificationHook_AllSkippedRunReportsNoPassingResult(t *testing.T) {
+	vhShAvailable(t)
+	root := t.TempDir()
+	vhWriteBareStarterManifest(t, root)
+
+	const turnAnswer = "I made the change."
+	client := NewScriptedClient(
+		vhWriteToolCall(t, root, "src/app.js"),
+		NewScriptedTextResponse(turnAnswer),
+	)
+	ag := vhAgent(t, client, root, &configuration.VerificationConfig{Enabled: true, RepairAttempts: 2})
+
+	result, err := ag.ProcessQuery("Implement the app entry point.")
+	if err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The run stored itself (it ran, it verified nothing): neither
+	// Passed() nor Failed().
+	res := ag.LastVerificationResult()
+	if res == nil {
+		t.Fatal("LastVerificationResult = nil, want the all-skipped run")
+	}
+	if res.Passed() || res.Failed() {
+		t.Fatalf("all-skipped run reports Passed()=%v Failed()=%v, want both false", res.Passed(), res.Failed())
+	}
+
+	// The reply carries the no-passing-result attachment — not the
+	// passing one — listing what could not be verified (SP-149 §149d).
+	const want = turnAnswer + "\n\n" + "Verification: ran, but no checks applied (all skipped) — no passing result\n" +
+		"Skipped: build — no build command available: set the starter manifest or the project's explicit verification configuration\n" +
+		"Skipped: test — no test command available: set the starter manifest or the project's explicit verification configuration"
+	if result != want {
+		t.Errorf("result = %q,\nwant %q (the no-passing-result attachment)", result, want)
+	}
+}
+
+// TestVerificationReply_PerTurnResetNoStaleAttachment pins the per-turn
+// reset (prepareQueryRun): a previous turn's stored verification state
+// never attaches to a later turn's reply. Turn 1 ends on a failing run
+// (the attachment is present); turn 2 is text-only (no code change, the
+// hook is a no-op) and its reply stands byte-identical to the model's
+// answer.
+func TestVerificationReply_PerTurnResetNoStaleAttachment(t *testing.T) {
+	vhShAvailable(t)
+	root := t.TempDir()
+	vhWriteStarterManifest(t, root, "echo fixture-broken-build; exit 1")
+
+	const (
+		turnOneFinal = "The build still fails; the remaining failure is fixture-broken-build."
+		turnTwo      = "Turn two: nothing to change."
+	)
+	client := NewScriptedClient(
+		vhWriteToolCall(t, root, "src/app.js"),
+		NewScriptedTextResponse("Turn one answer."),
+		NewScriptedTextResponse("Repair one."),
+		NewScriptedTextResponse(turnOneFinal),
+		NewScriptedTextResponse(turnTwo),
+	)
+	ag := vhAgent(t, client, root, &configuration.VerificationConfig{Enabled: true, RepairAttempts: 2})
+
+	first, err := ag.ProcessQuery("Implement the app entry point.")
+	if err != nil {
+		t.Fatalf("turn 1 ProcessQuery: %v", err)
+	}
+	if !strings.Contains(first, "Verification: FAILED after the stopping rule") {
+		t.Fatalf("turn 1 reply = %q, want the failing attachment (the broken build stops at N=2)", first)
+	}
+
+	// Turn 2 changed no file: prepareQueryRun reset the stored state and
+	// the hook's gate (TurnChangedPaths) is empty — turn 1's stored
+	// result must not attach to turn 2's reply.
+	second, err := ag.ProcessQuery("Anything else?")
+	if err != nil {
+		t.Fatalf("turn 2 ProcessQuery: %v", err)
+	}
+	if second != turnTwo {
+		t.Errorf("turn 2 reply = %q, want the untouched text-only answer %q (no stale attachment)", second, turnTwo)
+	}
+	if tv := ag.currentTurnVerification(); tv.result != nil {
+		t.Errorf("stored verification state after turn 2 = %+v, want empty (the hook never ran)", tv)
 	}
 }
 
@@ -431,13 +567,20 @@ func TestVerificationHook_ProviderErrorDuringRepairIsPropagated(t *testing.T) {
 	)
 	ag := vhAgent(t, client, root, &configuration.VerificationConfig{Enabled: true, RepairAttempts: 3})
 
-	_, err := ag.ProcessQuery("Implement the app entry point.")
+	result, err := ag.ProcessQuery("Implement the app entry point.")
 	if err == nil {
 		t.Fatal("ProcessQuery = nil error, want the classified provider error from the repair round")
 	}
 	var ce *core.ClientError
 	if !errors.As(err, &ce) {
 		t.Fatalf("ProcessQuery error = %v, want a classified client error", err)
+	}
+
+	// 149.6: the error path never reaches the attachment — the turn
+	// reports as an error, and the stored failing verification result
+	// must not leak into the reply as a final-result attachment.
+	if strings.Contains(result, "Verification:") {
+		t.Errorf("error-path result = %q, must not carry the verification attachment", result)
 	}
 
 	// One repair round was attempted (its call failed); the turn's two

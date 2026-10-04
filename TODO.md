@@ -19,7 +19,7 @@ the end, without checkboxes.
 
 ## Commit message generation (bug fixes)
 
-- [ ] **commit.1** Commit tool: generate a real message when `message` is
+- [x] **commit.1** Commit tool: generate a real message when `message` is
       omitted. Today `pkg/agent_tools/commit_handler.go` commits `notes`
       verbatim (or the literal "Auto-commit"), while the parameter
       descriptions promise an auto-generated message. When `message` is

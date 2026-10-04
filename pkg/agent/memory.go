@@ -137,7 +137,6 @@ func SaveMemory(name string, content string) error {
 // - Converts to lowercase
 // - Replaces spaces with hyphens
 // - Strips special characters (keeps only alphanumeric, hyphens, underscores)
-// - Ensures .md extension is not part of the name
 func sanitizeMemoryName(name string) string {
 	// Convert to lowercase
 	name = strings.ToLower(name)

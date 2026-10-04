@@ -883,9 +883,8 @@ func TestRepoMapConformance_DefaultDirectory(t *testing.T) {
 }
 
 // list_memories and read_memory conformance tests were removed when the
-// legacy per-operation memory handlers were retired in favor of
-// manage_memory (see pkg/agent/memory_manage.go). The consolidated tool
-// is covered by manage_memory operation tests in pkg/agent.
+// legacy per-operation memory handlers were retired in favor of the
+// consolidated manage_memory tool.
 
 // ---------------------------------------------------------------------------
 // rollback_changes Conformance Tests
@@ -1199,7 +1198,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			err := h.Validate(nil)
 			switch name {
 			case "read_file", "fetch_url", "search_files",
-				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories",
+				"write_file", "write_structured_file", "edit_file", "shell_command",
 				"get_callers", "get_callees", "design_brief":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
@@ -1212,7 +1211,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			err = h.Validate(map[string]any{})
 			switch name {
 			case "read_file", "fetch_url", "search_files",
-				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories",
+				"write_file", "write_structured_file", "edit_file", "shell_command",
 				"get_callers", "get_callees", "design_brief":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
@@ -1595,144 +1594,6 @@ func TestShellCommandHandlerConformance_Validate_ValidCommand(t *testing.T) {
 	require.NoError(t, h.Validate(map[string]any{"command": "echo hello", "background": true}))
 	require.NoError(t, h.Validate(map[string]any{"check_background": "sess1"}))
 	require.NoError(t, h.Validate(map[string]any{"stop_background": "sess1"}))
-}
-
-// ---------------------------------------------------------------------------
-// save_memory Conformance Tests
-// ---------------------------------------------------------------------------
-
-func TestSaveMemoryHandlerConformance_Definition(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	require.Equal(t, "save_memory", h.Name())
-
-	def := h.Definition()
-	require.Equal(t, "save_memory", def.Name)
-	require.NotEmpty(t, def.Description)
-	require.Equal(t, []string{"name", "content"}, def.Required)
-
-	// Check parameter schema
-	paramNames := make(map[string]bool)
-	for _, p := range def.Parameters {
-		paramNames[p.Name] = true
-	}
-	require.True(t, paramNames["name"], "should have 'name' parameter")
-	require.True(t, paramNames["content"], "should have 'content' parameter")
-}
-
-func TestSaveMemoryHandlerConformance_Validate_MissingName(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	err := h.Validate(map[string]any{})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "required")
-}
-
-func TestSaveMemoryHandlerConformance_Validate_EmptyName(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	err := h.Validate(map[string]any{"name": "", "content": "data"})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must not be empty")
-}
-
-func TestSaveMemoryHandlerConformance_Validate_MissingContent(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	err := h.Validate(map[string]any{"name": "my-memory"})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "required")
-}
-
-func TestSaveMemoryHandlerConformance_Validate_EmptyContent(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	err := h.Validate(map[string]any{"name": "my-memory", "content": "  "})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must not be empty")
-}
-
-func TestSaveMemoryHandlerConformance_Validate_Valid(t *testing.T) {
-	t.Parallel()
-	h := &saveMemoryHandler{}
-
-	require.NoError(t, h.Validate(map[string]any{"name": "my-memory", "content": "# Some content"}))
-}
-
-// ---------------------------------------------------------------------------
-// search_memories Conformance Tests
-// ---------------------------------------------------------------------------
-
-func TestSearchMemoriesHandlerConformance_Definition(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	require.Equal(t, "search_memories", h.Name())
-
-	def := h.Definition()
-	require.Equal(t, "search_memories", def.Name)
-	require.NotEmpty(t, def.Description)
-	require.Equal(t, []string{"query"}, def.Required)
-
-	// Check parameter schema
-	paramNames := make(map[string]bool)
-	for _, p := range def.Parameters {
-		paramNames[p.Name] = true
-	}
-	require.True(t, paramNames["query"], "should have 'query' parameter")
-	require.True(t, paramNames["top_k"], "should have 'top_k' parameter")
-	require.True(t, paramNames["threshold"], "should have 'threshold' parameter")
-}
-
-func TestSearchMemoriesHandlerConformance_Validate_MissingQuery(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	err := h.Validate(map[string]any{})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "required")
-}
-
-func TestSearchMemoriesHandlerConformance_Validate_EmptyQuery(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	err := h.Validate(map[string]any{"query": ""})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must not be empty")
-}
-
-func TestSearchMemoriesHandlerConformance_Validate_InvalidTopK(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	err := h.Validate(map[string]any{"query": "test", "top_k": "not a number"})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must be an integer")
-}
-
-func TestSearchMemoriesHandlerConformance_Validate_InvalidThreshold(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	err := h.Validate(map[string]any{"query": "test", "threshold": "not a number"})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must be a number")
-}
-
-func TestSearchMemoriesHandlerConformance_Validate_Valid(t *testing.T) {
-	t.Parallel()
-	h := &searchMemoriesHandler{}
-
-	require.NoError(t, h.Validate(map[string]any{"query": "test"}))
-	require.NoError(t, h.Validate(map[string]any{"query": "test", "top_k": 10}))
-	require.NoError(t, h.Validate(map[string]any{"query": "test", "threshold": 0.5}))
-	require.NoError(t, h.Validate(map[string]any{"query": "test", "top_k": 10, "threshold": 0.5}))
 }
 
 // Note: run_subagent / run_parallel_subagents are intentionally NOT handlers in
@@ -2215,8 +2076,7 @@ func TestActivateSkillHandlerConformance(t *testing.T) {
 
 // TestAddMemoryHandlerConformance and TestDeleteMemoryHandlerConformance
 // were removed when the legacy per-operation memory handlers were retired
-// in favor of manage_memory (see pkg/agent/memory_manage.go). The
-// add/delete operations are covered by manage_memory operation tests.
+// in favor of the consolidated manage_memory tool.
 
 func TestPatchStructuredFileHandlerConformance(t *testing.T) {
 	h := &patchStructuredFileHandler{}

@@ -147,7 +147,7 @@ the end, without checkboxes.
       displayed; regenerate once with an explicit language instruction;
       a second mismatch shows a templated notice in the user's language
       with "view original". Scripted-model tests. Spec: SP-152 §152b.
-- [ ] **152.6** Streaming hold-back: buffer the start of each streamed
+- [x] **152.6** Streaming hold-back: buffer the start of each streamed
       reply until enough prose to judge (code excluded), check, then
       release and stream live. Test: a wrong-language stream never
       reaches the client. Spec: SP-152 §152c.

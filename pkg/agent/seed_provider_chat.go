@@ -171,10 +171,28 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	}
 
 	// Route every chunk through OutputRouter.RouteStreamChunk for both WebUI and CLI.
+	// SP-152 §152c: when the streaming hold-back is active for this turn,
+	// gate assistant-text delivery through it. Reasoning chunks are never
+	// gated. When inactive the assistant-text path below is byte-for-byte
+	// unchanged (no hold-back, no extra behavior).
+	userLang, holdbackActive := sp.agent.turnUserLanguageGuard()
+	var holdback *StreamHoldback
+	if holdbackActive {
+		holdback = NewStreamHoldback(userLang, func(content string) {
+			sp.agent.output.GetStreamingBuffer().WriteString(content)
+			if router := sp.agent.OutputRouter(); router != nil {
+				router.RouteStreamChunk(content, "assistant_text")
+			}
+		})
+	}
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
 		} else {
+			if holdback != nil {
+				holdback.Write(content)
+				return
+			}
 			sp.agent.output.GetStreamingBuffer().WriteString(content)
 		}
 		if router := sp.agent.OutputRouter(); router != nil {
@@ -187,20 +205,45 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		return nil, err
 	}
 
-	// Reasoning-model fallback: some models stream visible prose as reasoning_content.
-	// If the streaming buffer is empty but the response has content, stream it.
+	// Reasoning-model fallback: some models stream visible prose as
+	// reasoning_content and put the visible text only in the final response.
+	// When nothing was delivered as assistant-text but the response has
+	// content, deliver it — through the hold-back when it is active (so a
+	// wrong-language fallback is held like any streamed chunk), directly
+	// otherwise. When the hold-back already holds this response's content (the
+	// stream delivered it), the finalize below releases or holds it, so the
+	// fallback must not re-deliver it.
 	if resp != nil && len(resp.Choices) > 0 {
 		msgContent := resp.Choices[0].Message.Content
 		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {
-			sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
-			if router := sp.agent.OutputRouter(); router != nil {
-				for _, line := range strings.SplitAfter(msgContent, "\n") {
-					if line != "" {
-						router.RouteStreamChunk(line, "assistant_text")
+			switch {
+			case holdback != nil && holdback.RawLen() > 0:
+				// The hold-back already holds this response's content (the
+				// stream delivered it); the finalize below releases or holds
+				// it.
+			case holdback != nil:
+				// The hold-back is active but holds nothing (a reasoning-model
+				// stream); route the content through it so it is
+				// language-gated, then the finalize releases or holds it.
+				holdback.Write(msgContent)
+			default:
+				sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
+				if router := sp.agent.OutputRouter(); router != nil {
+					for _, line := range strings.SplitAfter(msgContent, "\n") {
+						if line != "" {
+							router.RouteStreamChunk(line, "assistant_text")
+						}
 					}
 				}
 			}
 		}
+	}
+
+	// SP-152 §152c: finalize the hold-back for this streamed response —
+	// release a below-threshold stream, and (when held) deliver the §152b
+	// notice instead of the wrong-language stream.
+	if holdback != nil {
+		sp.finalizeStreamHoldback(holdback, resp)
 	}
 
 	return sproutResponseToSeed(resp), nil
@@ -298,11 +341,29 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	}
 
 	// Route through OutputRouter.RouteStreamChunk for both WebUI and seed handler.
+	// SP-152 §152c: when the streaming hold-back is active for this turn, gate
+	// assistant-text delivery through it. Reasoning chunks are never gated.
+	// When inactive the assistant-text path below is byte-for-byte unchanged.
+	userLang, holdbackActive := sp.agent.turnUserLanguageGuard()
+	var holdback *StreamHoldback
+	if holdbackActive {
+		holdback = NewStreamHoldback(userLang, func(content string) {
+			handler.OnContent(content)
+			sp.agent.output.GetStreamingBuffer().WriteString(content)
+			if router := sp.agent.OutputRouter(); router != nil {
+				router.RouteStreamChunk(content, "assistant_text")
+			}
+		})
+	}
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			handler.OnReasoning(content)
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
 		} else {
+			if holdback != nil {
+				holdback.Write(content)
+				return
+			}
 			handler.OnContent(content)
 			sp.agent.output.GetStreamingBuffer().WriteString(content)
 		}
@@ -312,11 +373,17 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	}
 
 	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
-	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback)
+	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback, holdback)
 	sp.fireSteerFlushHook()
 	if err != nil {
 		handler.OnError(err)
 		return err
+	}
+	// SP-152 §152c: finalize the hold-back for this streamed response —
+	// release a below-threshold stream, and (when held) deliver the §152b
+	// notice instead of the wrong-language stream.
+	if holdback != nil {
+		sp.finalizeStreamHoldback(holdback, resp)
 	}
 	// Anchor future EstimateTokens calls to this response's real prompt-token count.
 	sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)
@@ -325,7 +392,10 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 }
 
 // doChatWithRetryStreaming performs a streaming chat request with exponential backoff retry (max 3).
-func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+// holdback (nil when the hold-back is inactive) is reset at the start of each
+// attempt so a failed or wrong-language attempt never leaks into the next; the
+// caller finalizes it (finalizeStreamHoldback) after a successful attempt.
+func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback, holdback *StreamHoldback) (*api.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
 
@@ -338,6 +408,13 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
+		}
+		// SP-152 §152c: each attempt is a separate streamed response — start
+		// its hold-back fresh (discard the previous attempt's buffered/held
+		// content) so a failed or wrong-language attempt never leaks into the
+		// next one.
+		if holdback != nil {
+			holdback.Reset()
 		}
 
 		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
@@ -385,4 +462,24 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 	}
 
 	return nil, lastErr
+}
+
+// finalizeStreamHoldback finalizes the streaming hold-back for one streamed
+// response (SP-152 §152c). It releases a stream that never reached the prose
+// threshold (short or code-only — not judged, so it must not be held), and,
+// when the stream was held (a reliable language mismatch), it delivers the
+// localized §152b notice through the hold-back's sink — so the user sees the
+// notice, not the wrong-language stream — and keeps the held content on the
+// response message's Meta (langGuardOriginalMetaKey) for "view original",
+// mirroring the final-message guard (152.5).
+func (sp *sproutProvider) finalizeStreamHoldback(holdback *StreamHoldback, resp *api.ChatResponse) {
+	holdback.Finish()
+	held := holdback.Held()
+	if held == "" {
+		return
+	}
+	holdback.DeliverNotice(LanguageMismatchNotice(holdback.User()))
+	if resp != nil && len(resp.Choices) > 0 {
+		resp.Choices[0].Message.SetMeta(langGuardOriginalMetaKey, held)
+	}
 }

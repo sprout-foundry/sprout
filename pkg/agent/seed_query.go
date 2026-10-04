@@ -242,6 +242,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
+	// SP-152 §152c: resolve the turn's user language once (recent user
+	// messages + the current query, with the configured fallback) and store
+	// it on the agent so the streaming provider path can gate assistant-text
+	// delivery through the hold-back. Inactive (no hold-back, byte-identical
+	// streaming) for subagents, when the guard is disabled, or when the user
+	// language is undetermined.
+	a.resolveTurnLanguageGuard(processedQuery)
+
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)

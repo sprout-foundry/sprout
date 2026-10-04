@@ -35,6 +35,9 @@ func (e *ValidationError) Error() string {
 //   - every step references a known scope id and has a description;
 //   - every acceptance item has a non-empty id, a known kind, references a
 //     known scope id, and acceptance ids are unique;
+//   - an interaction acceptance item carries a non-empty steps list whose
+//     steps each have a non-empty action, and no other kind carries steps
+//     (SP-148 §148d);
 //   - every scope item is covered by at least one acceptance item
 //     (SP-148 §148b);
 //   - every out_of_scope item names an item and records why it was
@@ -136,6 +139,29 @@ func Validate(plan *Plan) error {
 				add("acceptance[%d] (id %q) has unknown kind %q (valid kinds: %s)",
 					i, a.ID, a.Kind, joinKinds(AllKinds()))
 			}
+		}
+
+		// steps (SP-148 §148d): an interaction item carries a non-empty
+		// list of browse steps, every one of which needs an action; no
+		// other kind may carry steps.
+		//
+		// The action *set* is deliberately not validated here: the executor
+		// (webcontent) is the source of truth for which actions exist, and
+		// plancontract must stay a pure package that does not drift when the
+		// browser gains a new action. Requiring each step's action to be
+		// non-empty mirrors parseBrowseSteps' own contract.
+		if a.Kind == KindInteraction {
+			if len(a.Steps) == 0 {
+				add("acceptance[%d] (id %q) is missing steps (kind \"interaction\" requires a non-empty steps list)", i, a.ID)
+			} else {
+				for si, st := range a.Steps {
+					if strings.TrimSpace(st.Action) == "" {
+						add("acceptance[%d] (id %q) steps[%d].action is required", i, a.ID, si)
+					}
+				}
+			}
+		} else if len(a.Steps) > 0 {
+			add("acceptance[%d] (id %q) has steps (only kind \"interaction\" may carry steps; this item's kind is %q)", i, a.ID, a.Kind)
 		}
 	}
 

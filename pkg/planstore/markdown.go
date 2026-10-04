@@ -65,6 +65,13 @@ func RenderMarkdown(plan *plancontract.Plan) string {
 				check = "(manual: reported, not run)"
 			}
 			fmt.Fprintf(&b, "- **%s** (%s, %s): %s\n", a.ID, a.Scope, a.Kind, check)
+			// Interaction items render their scripted browse steps as a
+			// numbered sub-list in execution order (SP-148 §148d). Steps are
+			// only ever present on interaction items (the validator
+			// enforces it), so this renders exactly when they exist.
+			for i, st := range a.Steps {
+				fmt.Fprintf(&b, "  %d. %s\n", i+1, formatStep(st))
+			}
 		}
 	}
 
@@ -76,6 +83,39 @@ func RenderMarkdown(plan *plancontract.Plan) string {
 	}
 
 	return b.String()
+}
+
+// formatStep renders one browse step deterministically: the action first,
+// then the key parameters in a fixed order (selector, value, key, millis,
+// script, expect, screenshot_path), each only when set. A bare step renders
+// as its action alone.
+func formatStep(st plancontract.BrowseStep) string {
+	var parts []string
+	if st.Selector != "" {
+		parts = append(parts, "selector: "+st.Selector)
+	}
+	if st.Value != "" {
+		parts = append(parts, "value: "+st.Value)
+	}
+	if st.Key != "" {
+		parts = append(parts, "key: "+st.Key)
+	}
+	if st.Millis != 0 {
+		parts = append(parts, fmt.Sprintf("millis: %d", st.Millis))
+	}
+	if st.Script != "" {
+		parts = append(parts, "script: "+st.Script)
+	}
+	if st.Expect != "" {
+		parts = append(parts, "expect: "+st.Expect)
+	}
+	if st.ScreenshotPath != "" {
+		parts = append(parts, "screenshot_path: "+st.ScreenshotPath)
+	}
+	if len(parts) == 0 {
+		return st.Action
+	}
+	return st.Action + " " + strings.Join(parts, " ")
 }
 
 // formatTime renders t as an RFC3339 string, or a placeholder when t is the

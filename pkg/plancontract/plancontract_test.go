@@ -31,7 +31,18 @@ func basePlan() *Plan {
 		{ID: "a1", Scope: "s1", Check: "make build", Kind: KindBuild},
 		{ID: "a2", Scope: "s1", Check: "go test ./pkg/auth/...", Kind: KindTest},
 		{ID: "a3", Scope: "s2", Check: "/login renders", Kind: KindPage},
-		{ID: "a4", Scope: "s2", Check: "type credentials, submit, land on /home", Kind: KindInteraction},
+		{
+			ID:    "a4",
+			Scope: "s2",
+			Check: "type credentials, submit, land on /home",
+			Kind:  KindInteraction,
+			Steps: []BrowseStep{
+				{Action: "fill", Selector: "#email", Value: "alice@example.com"},
+				{Action: "fill", Selector: "#password", Value: "hunter2"},
+				{Action: "click", Selector: "button[type=submit]"},
+				{Action: "assert_text", Expect: "Welcome, alice"},
+			},
+		},
 		{ID: "a5", Scope: "s2", Check: "verify session persists across reload", Kind: KindManual},
 	}
 	p.OutOfScope = []OutOfScope{
@@ -63,7 +74,12 @@ const fixtureValid = `{
     {"id": "a1", "scope": "s1", "check": "make build", "kind": "build"},
     {"id": "a2", "scope": "s1", "check": "go test ./pkg/auth/...", "kind": "test"},
     {"id": "a3", "scope": "s2", "check": "/login renders", "kind": "page"},
-    {"id": "a4", "scope": "s2", "check": "type credentials, submit, land on /home", "kind": "interaction"},
+    {"id": "a4", "scope": "s2", "check": "type credentials, submit, land on /home", "kind": "interaction", "steps": [
+      {"action": "fill", "selector": "#email", "value": "alice@example.com"},
+      {"action": "fill", "selector": "#password", "value": "hunter2"},
+      {"action": "click", "selector": "button[type=submit]"},
+      {"action": "assert_text", "expect": "Welcome, alice"}
+    ]},
     {"id": "a5", "scope": "s2", "check": "verify session persists across reload", "kind": "manual"}
   ],
   "out_of_scope": [
@@ -327,14 +343,17 @@ func TestJSONFieldNamesMatchSpec(t *testing.T) {
 	assert.Equal(t, "Auth API", scopeItems[0].Title)
 
 	var accItems []struct {
-		ID    string `json:"id"`
-		Scope string `json:"scope"`
-		Check string `json:"check"`
-		Kind  Kind   `json:"kind"`
+		ID    string       `json:"id"`
+		Scope string       `json:"scope"`
+		Check string       `json:"check"`
+		Kind  Kind         `json:"kind"`
+		Steps []BrowseStep `json:"steps"`
 	}
 	require.NoError(t, json.Unmarshal(m["acceptance"], &accItems))
 	assert.Equal(t, "a1", accItems[0].ID)
 	assert.Equal(t, KindBuild, accItems[0].Kind)
+	require.Len(t, accItems[3].Steps, 4, "the interaction item a4 must carry its browse steps")
+	assert.Equal(t, "fill", accItems[3].Steps[0].Action)
 
 	var oosItems []struct {
 		Item   string `json:"item"`

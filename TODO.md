@@ -140,7 +140,7 @@ the end, without checkboxes.
       user's recent messages; short or mixed input falls back to a
       configured language setting; no fixed language list. Tests. Spec:
       SP-152 §152a.
-- [ ] **152.4** Config: guard on by default everywhere, including the CLI;
+- [x] **152.4** Config: guard on by default everywhere, including the CLI;
       a config setting turns it off. Tests for default and off. Spec:
       SP-152 §152f.
 - [ ] **152.5** Final-message guard: on mismatch the message is not

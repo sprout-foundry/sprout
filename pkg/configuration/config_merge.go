@@ -84,6 +84,13 @@ func MergeConfig(base, override *Config) *Config {
 	if override.Language != "" {
 		result.Language = override.Language
 	}
+	// The language guard is on by default (SP-152 152f); the opt-out is a
+	// boolean with the same explicit-key semantics as disable_thinking, so
+	// a layer that named disable_language_guard wins with either value —
+	// including false, which re-enables the guard over a broader disable.
+	if override.overrides("disable_language_guard", override.DisableLanguageGuard) {
+		result.DisableLanguageGuard = override.DisableLanguageGuard
+	}
 	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}

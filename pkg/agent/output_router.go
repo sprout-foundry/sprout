@@ -336,7 +336,7 @@ func (r *OutputRouter) RouteToolCompletion(ok bool, duration time.Duration, errM
 	} else {
 		short := errMsg
 		if len(short) > 80 {
-			short = short[:77] + "..."
+			short = truncateStringNoEllipsis(short, 77) + "..."
 		}
 		if short != "" {
 			msg = fmt.Sprintf("✗ %s — %s", dur, short)

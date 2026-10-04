@@ -501,7 +501,6 @@ Thumbs.db
 | Tool | Description |
 |------|-------------|
 | `manage_memory` | Persistent memory system (add/read/list/delete/search operations) |
-| `search_memories` / `save_memory` | Memory search and save |
 | `list_skills` / `activate_skill` | Skill management for loading instruction bundles |
 
 ### Change History

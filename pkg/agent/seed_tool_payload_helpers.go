@@ -66,7 +66,7 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 			// renders as a single scannable line, then truncate.
 			cmd = strings.Join(strings.Fields(cmd), " ")
 			if len(cmd) > 80 {
-				return fmt.Sprintf("%s %s...", toolName, cmd[:77])
+				return fmt.Sprintf("%s %s...", toolName, truncateStringNoEllipsis(cmd, 77))
 			}
 			return fmt.Sprintf("%s %s", toolName, cmd)
 		}
@@ -80,7 +80,7 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 	case "commit":
 		if msg, ok := payload["message"].(string); ok && msg != "" {
 			if len(msg) > 80 {
-				return fmt.Sprintf("%s %s...", toolName, msg[:77])
+				return fmt.Sprintf("%s %s...", toolName, truncateStringNoEllipsis(msg, 77))
 			}
 			return fmt.Sprintf("%s %s", toolName, msg)
 		}
@@ -92,7 +92,7 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 	case "web_search":
 		if query, ok := payload["query"].(string); ok && query != "" {
 			if len(query) > 80 {
-				return fmt.Sprintf("%s %s...", toolName, query[:77])
+				return fmt.Sprintf("%s %s...", toolName, truncateStringNoEllipsis(query, 77))
 			}
 			return fmt.Sprintf("%s %s", toolName, query)
 		}
@@ -100,14 +100,14 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 		if url, ok := payload["url"].(string); ok && url != "" {
 			// Truncate URLs for readability
 			if len(url) > 80 {
-				return fmt.Sprintf("%s %s...", toolName, url[:77])
+				return fmt.Sprintf("%s %s...", toolName, truncateStringNoEllipsis(url, 77))
 			}
 			return fmt.Sprintf("%s %s", toolName, url)
 		}
 	case "run_subagent":
 		if prompt, ok := payload["prompt"].(string); ok && prompt != "" {
 			if len(prompt) > 80 {
-				return fmt.Sprintf("%s [task: %s...]", toolName, prompt[:77])
+				return fmt.Sprintf("%s [task: %s...]", toolName, truncateStringNoEllipsis(prompt, 77))
 			}
 			return fmt.Sprintf("%s [task: %s]", toolName, prompt)
 		}
@@ -119,7 +119,7 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 	case "ask_user":
 		if question, ok := payload["question"].(string); ok && question != "" {
 			if len(question) > 80 {
-				return fmt.Sprintf("%s %s...", toolName, question[:77])
+				return fmt.Sprintf("%s %s...", toolName, truncateStringNoEllipsis(question, 77))
 			}
 			return fmt.Sprintf("%s %s", toolName, question)
 		}
@@ -170,7 +170,7 @@ func buildSecretSource(toolName string, args map[string]interface{}) string {
 	case "shell_command":
 		if cmd, ok := args["command"].(string); ok {
 			if len(cmd) > 80 {
-				return toolName + ": " + cmd[:77] + "..."
+				return toolName + ": " + truncateStringNoEllipsis(cmd, 77) + "..."
 			}
 			return toolName + ": " + cmd
 		}

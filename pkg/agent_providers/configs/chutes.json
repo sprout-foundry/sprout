@@ -52,6 +52,7 @@
     "default_model": "deepseek-ai/DeepSeek-R1-0528",
     "model_info": [
       {
+        "cached_input_cost": 0.00245,
         "context_length": 131072,
         "description": "NVIDIA Nemotron 3 Nano Omni 30B on confidential TEE compute",
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -64,6 +65,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.02989,
         "context_length": 262144,
         "description": "Qwen3 235B A22B Thinking on confidential TEE compute",
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
@@ -76,6 +78,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.0104,
         "context_length": 41984,
         "description": "Qwen3 32B on confidential TEE compute",
         "id": "Qwen/Qwen3-32B-TEE",
@@ -87,6 +90,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.045,
         "context_length": 262144,
         "description": "Qwen3.5 397B A17B on confidential TEE compute",
         "id": "Qwen/Qwen3.5-397B-A17B-TEE",
@@ -100,6 +104,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.03,
         "context_length": 262144,
         "description": "Qwen3.6 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.6-27B-TEE",
@@ -112,6 +117,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 131072,
         "description": "DeepSeek V3.2 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -124,6 +130,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.012,
         "context_length": 131072,
         "description": "Google Gemma 4 31B Turbo on confidential TEE compute",
         "id": "google/gemma-4-31B-turbo-TEE",
@@ -136,6 +143,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
@@ -149,6 +157,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.3,
         "context_length": 1048576,
         "description": "Moonshot Kimi K3 on confidential TEE compute",
         "id": "moonshotai/Kimi-K3-TEE",
@@ -161,6 +170,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.00245,
         "context_length": 131072,
         "description": "Mistral Nemo Instruct 2407 on confidential TEE compute",
         "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
@@ -172,6 +182,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.098,
         "context_length": 207872,
         "description": "Z.AI GLM-5.1 on confidential TEE compute",
         "id": "zai-org/GLM-5.1-TEE",
@@ -184,6 +195,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.125,
         "context_length": 1048576,
         "description": "Z.AI GLM-5.2 on confidential TEE compute",
         "id": "zai-org/GLM-5.2-TEE",
@@ -196,6 +208,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.044,
         "context_length": 1000000,
         "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
@@ -208,6 +221,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.024,
         "context_length": 262144,
         "description": "Qwen3.8 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.8-27B-TEE",

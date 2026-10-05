@@ -150,6 +150,13 @@ describe('cloudEndpointRegistry', () => {
         { path: '/api/stats', method: 'GET' },
         { path: '/api/settings', method: 'GET' },
         { path: '/api/settings', method: 'PUT' },
+        // SP-BUILDER-12: the host-agnostic escalation surface (the live
+        // client) and its legacy Fly prefix both proxy to the platform.
+        { path: '/workspace/txn', method: 'GET' },
+        { path: '/workspace/txn', method: 'POST' },
+        { path: '/workspace/txn/ws-1/txn/t-1/push', method: 'POST' },
+        { path: '/workspace/fly', method: 'GET' },
+        { path: '/workspace/fly/ws-1/txn/t-1/run', method: 'POST' },
       ];
 
       for (const { path, method } of testCases) {

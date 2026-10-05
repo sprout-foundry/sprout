@@ -18,6 +18,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { terminalText } from '../../services/terminalText';
+import { bootStandaloneEscalation } from './standaloneEscalation';
 import type { WasmShell } from '../../services/wasmShell';
 
 const host = document.getElementById('terminal')!;
@@ -180,6 +181,13 @@ async function boot() {
   try {
     const mod = await import('../../services/wasmShell');
     wasm = await mod.initWasmShell({});
+    // VFS bridge + escalation bridge (cloud/embedded scenario) — same deal
+    // as the editor page: best-effort, the terminal works without it.
+    try {
+      bootStandaloneEscalation(wasm);
+    } catch (err) {
+      term.writeln(`\x1b[33mescalation unavailable: ${String(err)}\x1b[0m`);
+    }
   } catch (err) {
     term.writeln(`\x1b[31mwasm init failed: ${String(err)}\x1b[0m`);
   }

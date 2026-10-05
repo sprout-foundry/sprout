@@ -123,11 +123,15 @@ in §3):
 - **Repo import** — `POST /api/repo/import` with `{url}` → clones
   server-side and returns the file tree as JSON, which the bundle writes
   into its browser VFS.
-- **Escalation** — `GET|POST /workspace/fly` and the txn lifecycle under
-  `/workspace/fly/{id}/txn/…` (open/status/push/run/pull/finish): the
-  "Run in cloud container" action. See `docs/txn-protocol.md` for the
-  daemon-side contract these proxy to. A self-host can implement them
-  against any container host it runs.
+- **Escalation** — `GET|POST /workspace/txn` and the txn lifecycle under
+  `/workspace/txn/{workspaceId}/txn/…` (open/status/push/run/pull/finish):
+  the "Run in cloud container" action. `/workspace/txn` is the
+  host-agnostic surface (SP-BUILDER-12): the platform picks the workspace
+  backend (the user's own runner when one is attached, else Fly), so a
+  self-host answers the same routes regardless of where containers run.
+  The legacy `/workspace/fly` prefix still works for in-flight clients
+  that resolved a workspace before the rename. See `docs/txn-protocol.md`
+  for the daemon-side contract these proxy to.
 - **Settings / BYOK** — `GET|POST /api/settings`,
   `GET|POST /api/settings/providers` (+ `/{id}`),
   `GET|POST /api/settings/credentials` (+ `/{id}`), `GET /api/providers`.
@@ -164,8 +168,10 @@ Every request below is sent by the CloudAdapter to the origin serving the bundle
 | `/api/tasks//…` | GET | Get task status/details by id |
 | `/api/terminal/agent-sessions` | GET | List background agent terminal sessions (needs backend) |
 | `/api/terminal/agent-sessions//…` | GET, POST | Agent session actions (output, attach, kill) — needs backend |
-| `/workspace/fly` | GET, POST | List/create Fly workspaces (escalation + txn workspace resolve) |
-| `/workspace/fly//…` | POST, GET | Fly workspace txn lifecycle (open/status/push/run/pull/finish) |
+| `/workspace/fly` | GET, POST | Legacy: list/create Fly workspaces (in-flight sessions only) |
+| `/workspace/fly//…` | POST, GET | Legacy: Fly workspace txn lifecycle (in-flight sessions only) |
+| `/workspace/txn` | GET, POST | Resolve/create the caller workspace for a repo, any backend (runner when attached, else Fly) — the escalation entry point |
+| `/workspace/txn//…` | POST, GET | Backend-agnostic txn lifecycle (open/status/push/run/pull/finish) |
 
 ### Endpoints handled inside the browser (WASM)
 

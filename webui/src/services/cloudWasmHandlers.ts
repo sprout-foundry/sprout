@@ -222,7 +222,8 @@ const stopRequested = new Set<string>();
 function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
   if (isRuntimePath(absPath, root)) return true;
   const prefix = absPath === '/' ? '/' : `${absPath}/`;
-  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`)))) return false;
+  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`))))
+    return false;
   const listing = shell.listDir(absPath);
   return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
 }

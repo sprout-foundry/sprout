@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sprout WASM — embed demo (your product's page)</title>
+  <!--
+    Demo host page for embedding the sprout WASM components in a product
+    webpage. This file plays the role of YOUR site: it iframes the two
+    embeddable pages the webui build ships (terminal.html, editor.html)
+    and talks to them over window.postMessage.
+
+    Serve it the way the guide says (docs/EMBEDDING.md):
+
+        cd webui && npm run build
+        cd .. && ./examples/embed/serve.py --port 8788
+
+    …then open http://localhost:8788/embed-demo.html
+
+    Same-origin vs cross-origin: this demo serves the iframes and the host
+    page from one origin, which is the simplest setup. The postMessage
+    protocol is origin-checked with the exact origin of the embed — change
+    EMBED_ORIGIN below to 'https://ide.yourproduct.com' (or whatever hosts
+    the dist) for the cross-origin case; nothing else changes.
+  -->
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px;
+      font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f6f8fa; color: #1f2328;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 16px; color: #59636e; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .pane {
+      background: #fff; border: 1px solid #d1d9e0; border-radius: 8px;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .pane h2 {
+      font-size: 13px; margin: 0; padding: 8px 12px;
+      border-bottom: 1px solid #d1d9e0; background: #f6f8fa;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .pane h2 .state { font-weight: 400; color: #59636e; }
+    iframe {
+      border: 0; width: 100%; height: 380px; display: block; background: #0d1117;
+    }
+    .bar {
+      padding: 10px 12px; border-top: 1px solid #d1d9e0;
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    button {
+      font: inherit; padding: 6px 12px; border-radius: 6px;
+      border: 1px solid #d1d9e0; background: #f6f8fa; cursor: pointer;
+    }
+    button:hover { background: #eef1f4; }
+    input[type="text"] {
+      font: inherit; padding: 6px 10px; border-radius: 6px;
+      border: 1px solid #d1d9e0; flex: 1; min-width: 160px;
+    }
+    #log {
+      margin: 16px 0 0; padding: 12px; border: 1px solid #d1d9e0;
+      border-radius: 8px; background: #fff;
+      font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      max-height: 180px; overflow: auto; white-space: pre-wrap;
+    }
+    #log .in  { color: #0550ae; }
+    #log .out { color: #116329; }
+    #log .err { color: #cf222e; }
+  </style>
+</head>
+<body>
+  <h1>Sprout WASM embedded in a product page</h1>
+  <p class="sub">
+    This page stands in for your product. The two panels are plain
+    <code>&lt;iframe&gt;</code>s of <code>terminal.html</code> and
+    <code>editor.html</code> from the webui build, driven entirely over
+    <code>window.postMessage</code>.
+  </p>
+
+  <div class="grid">
+    <section class="pane">
+      <h2>Terminal (terminal.html) <span class="state" id="term-state">loading…</span></h2>
+      <iframe id="terminal-frame" src="/terminal.html" title="Sprout terminal"></iframe>
+      <div class="bar">
+        <input type="text" id="term-cmd" placeholder="command to run in the embedded shell (e.g. ls -la)" />
+        <button id="term-run">Run</button>
+        <button id="term-put">Put file</button>
+      </div>
+    </section>
+
+    <section class="pane">
+      <h2>Editor (editor.html) <span class="state" id="edit-state">loading…</span></h2>
+      <iframe id="editor-frame" src="/editor.html" title="Sprout editor"></iframe>
+      <div class="bar">
+        <input type="text" id="edit-path" value="demo/hello.ts" placeholder="path" />
+        <button id="edit-open">Open</button>
+        <button id="edit-save">Save</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="log" aria-live="polite"></div>
+
+  <script>
+    // The origin serving terminal.html / editor.html. Same origin here;
+    // for a cross-origin embed this is exactly the embed's origin.
+    const EMBED_ORIGIN = window.location.origin;
+
+    const termFrame = document.getElementById('terminal-frame');
+    const editFrame = document.getElementById('editor-frame');
+    const logEl = document.getElementById('log');
+    const log = (cls, msg) => {
+      const line = document.createElement('div');
+      line.className = cls;
+      line.textContent = msg;
+      logEl.appendChild(line);
+      logEl.scrollTo(0, logEl.scrollHeight);
+    };
+
+    let termReady = false, editReady = false;
+    const send = (frame, msg) => frame.contentWindow.postMessage({ source: 'sprout-host', ...msg }, EMBED_ORIGIN);
+
+    // ── Receive: the only messages a host should act on are the two
+    //    documented sources, re-checked against the embed origin. ──
+    window.addEventListener('message', (event) => {
+      if (event.origin !== EMBED_ORIGIN) return;           // cross-origin embeds: exact origin check
+      const data = event.data || {};
+      if (data.source === 'sprout-terminal') {
+        if (data.type === 'ready' && !termReady) {
+          termReady = true;
+          document.getElementById('term-state').textContent = 'ready';
+          // Seed a file, then list it — proves FS round-trip.
+          send(termFrame, { type: 'put', path: 'demo/hello.txt', content: 'hello from the host page\n' });
+          send(termFrame, { type: 'run', command: 'cat demo/hello.txt' });
+        } else if (data.type === 'command') {
+          log('in', `[terminal] ran: ${data.command} (exit ${data.exitCode})`);
+        }
+      } else if (data.source === 'sprout-editor') {
+        if (data.type === 'ready' && !editReady) {
+          editReady = true;
+          document.getElementById('edit-state').textContent = 'ready';
+        } else if (data.type === 'save') {
+          log('out', `[editor] save ${data.path} (${(data.content || '').length} bytes) — editor already stored it; POST content to your backend for a durable copy`);
+          // ACK clears the editor's dirty flag (documented protocol).
+          send(editFrame, { type: 'saved', path: data.path });
+        } else if (data.type === 'dirty') {
+          document.getElementById('edit-state').textContent = data.value ? 'dirty' : 'clean';
+        }
+      }
+    });
+
+    // ── Terminal controls ──
+    document.getElementById('term-run').onclick = () => {
+      const input = document.getElementById('term-cmd');
+      if (!input.value.trim()) return;
+      log('out', `[terminal] run: ${input.value}`);
+      send(termFrame, { type: 'run', command: input.value });
+      input.value = '';
+    };
+    document.getElementById('term-cmd').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('term-run').click();
+    });
+    document.getElementById('term-put').onclick = () => {
+      const stamp = new Date().toLocaleTimeString();
+      send(termFrame, { type: 'put', path: 'demo/stamp.txt', content: `host wrote this at ${stamp}\n` });
+      send(termFrame, { type: 'run', command: 'cat demo/stamp.txt' });
+    };
+
+    // ── Editor controls ──
+    document.getElementById('edit-open').onclick = () => {
+      const pathInput = document.getElementById('edit-path');
+      const path = pathInput.value.trim() || 'demo/hello.ts';
+      // A real host would fetch content from its backend; the demo seeds it.
+      send(editFrame, { type: 'open', path, content: `// ${path}\n// opened by the host page at ${new Date().toLocaleTimeString()}\n` });
+    };
+    document.getElementById('edit-save').onclick = () => send(editFrame, { type: 'save' });
+  </script>
+</body>
+</html>

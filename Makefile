@@ -524,6 +524,14 @@ test-webui-vitest:
 	@echo "Running webui vitest tests..."
 	@cd webui && npx vitest run --reporter=verbose
 
+# Regenerate the cloud-backend endpoint tables in docs/CLOUD_BACKEND_CONTRACT.md
+# from webui's cloudEndpointRegistry. --check mode (exit 1 when stale) is the
+# CI gate.
+gen-cloud-endpoints:
+	@npx tsx scripts/gen-cloud-endpoints.mjs
+gen-cloud-endpoints-check:
+	@npx tsx scripts/gen-cloud-endpoints.mjs --check
+
 # Build WASM shell module (sprout.wasm + wasm_exec.js)
 build-wasm: prepare-grammars
 	@echo "Building WASM shell module..."

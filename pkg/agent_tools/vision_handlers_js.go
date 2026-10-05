@@ -4,10 +4,13 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
-// analyzeImageContentHandler — WASM stub.
+// analyzeImageContentHandler — WASM variant. The browser build has no
+// separate vision pipeline, so the image is attached to the tool result for
+// the primary model to look at directly.
 type analyzeImageContentHandler struct{}
 
 func (h *analyzeImageContentHandler) Name() string { return "analyze_image_content" }
@@ -31,7 +34,19 @@ func (h *analyzeImageContentHandler) Validate(args map[string]any) error {
 }
 
 func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	return ToolResult{Output: "vision analysis is not available in WASM mode", IsError: true}, nil
+	imagePath, err := extractString(args, "image_path")
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+	if isHTTPURL(imagePath) {
+		return ToolResult{Output: fmt.Sprintf("%s is a URL; fetch it into the workspace first, then analyze the local file", imagePath), IsError: true}, nil
+	}
+	attachment := buildImageAttachment(ctx, imagePath)
+	if len(attachment.Images) == 0 {
+		return ToolResult{Output: fmt.Sprintf("%s could not be attached: not a readable image within the inline size cap", imagePath), IsError: true}, nil
+	}
+	attachment.Output = fmt.Sprintf("Attached %s inline. Look at the image to answer; if no image reached you, say so rather than guessing.", imagePath)
+	return attachment, nil
 }
 
 func (h *analyzeImageContentHandler) Aliases() []string      { return nil }

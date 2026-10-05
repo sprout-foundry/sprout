@@ -4,9 +4,12 @@
 
 import type { UploadImageResponse } from './types';
 
-export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: string): Promise<void> {
+export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: string, mode?: string): Promise<void> {
   const reqBody: Record<string, string> = { query };
   if (chatId) reqBody.chat_id = chatId;
+  // The mode shapes the agent per request (SP-147 §3): Design mode loads
+  // the design workflow into the agent before this query runs.
+  if (mode) reqBody.mode = mode;
   const response = await fetchFn('/api/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

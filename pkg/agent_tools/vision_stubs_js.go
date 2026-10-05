@@ -13,7 +13,7 @@ func OptimizeImageData(_ string, data []byte) ([]byte, string, error) {
 
 // AnalyzeImage — WASM stub.
 func AnalyzeImage(_ context.Context, _ string, _ string, _ string) (string, error) {
-	return "vision analysis is not available in WASM mode", nil
+	return "The image is attached to this result; look at it directly to judge it.", nil
 }
 
 // ProcessPDFForTextOnly — WASM stub.

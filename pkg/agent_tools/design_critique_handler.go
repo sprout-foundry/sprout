@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -26,11 +24,10 @@ import (
 //     (the same shared helper design_render uses — SP-140-2 §2c),
 //   - image attach + analysis → AnalyzeImage (the SP-137 tool-result path).
 //
-// It depends on the host browser tier (rasterization) and the vision tier
-// (critique), so it is a //go:build !js file with a WASM stub in
-// design_critique_handler_js.go (mirroring design_render_handler.go). The
-// registration is build-tagged and lives in neither the shared AllTools list
-// nor the WASM roster (SP-140 invariant 7).
+// It is a shared tool (SP-158). Rasterization goes through the same browser
+// seam as design_render. The browser build has no separate vision tier, so
+// there the rendered image and rubric ride the tool result and the primary
+// model writes the critique (design_critique_vision_js.go).
 //
 // Scope note (SP-140-4 items 4.1–4.3): this is the tool core — render, attach,
 // structured findings, the derived-artifact cache path with its provenance
@@ -435,13 +432,3 @@ func (h *designCritiqueHandler) Timeout() time.Duration { return designCritiqueT
 func (h *designCritiqueHandler) MaxResultSize() int     { return 0 }
 func (h *designCritiqueHandler) SafeForParallel() bool  { return false }
 func (h *designCritiqueHandler) Interactive() bool      { return false }
-
-// registerDesignCritiqueTools registers the design_critique tool, which needs
-// the host browser tier (rasterization) and the vision tier (critique).
-// Excluded from WASM builds via design_critique_handler_js.go, which returns
-// nil — mirroring registerDesignRenderTools (SP-140 invariant 7, SP-140-4 §4a).
-func registerDesignCritiqueTools() []ToolHandler {
-	return []ToolHandler{
-		&designCritiqueHandler{},
-	}
-}

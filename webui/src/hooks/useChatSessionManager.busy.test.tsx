@@ -84,7 +84,7 @@ describe('send held back by another chat (workspace_busy)', () => {
     // Chat A finishes: the hold lifts and the queued message goes out.
     act(() => h.setBusy(null));
     await waitFor(() => expect(apiDouble.sendQuery).toHaveBeenCalledTimes(2));
-    expect(apiDouble.sendQuery).toHaveBeenLastCalledWith('what codeword?', 'chat-b');
+    expect(apiDouble.sendQuery).toHaveBeenLastCalledWith('what codeword?', 'chat-b', undefined);
     expect(h.queuedMessagesRef.current).toEqual([]);
   });
 

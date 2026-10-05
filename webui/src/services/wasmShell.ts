@@ -40,6 +40,17 @@ export interface WasmReadFileResult {
   error?: string;
 }
 
+export interface WasmReadFileBytesResult {
+  bytes?: Uint8Array;
+  error?: string;
+}
+
+export interface WasmSaveImageResult {
+  path?: string;
+  filename?: string;
+  error?: string;
+}
+
 export interface WasmChangeDirResult {
   cwd: string;
   error?: string;
@@ -72,6 +83,10 @@ export interface WasmShell {
   writeFile(path: string, content: string): string; // error or ""
   /** Read a file's content. */
   readFile(path: string): WasmReadFileResult;
+  /** Read a file byte-exact (images, fonts). */
+  readFileBytes(path: string): WasmReadFileBytesResult;
+  /** Store an uploaded image the way the daemon's /api/upload/image does. */
+  saveImage(bytes: Uint8Array): WasmSaveImageResult;
   /** List directory entries. */
   listDir(path: string): WasmListDirResult;
   /** Delete a file. */
@@ -86,6 +101,8 @@ export interface WasmShell {
     chatId?: string,
     /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
     history?: string,
+    /** Workspace mode the query was sent from; selects the agent's mode skills. */
+    mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear a chat's agent history (every chat's when no id is given). */
   clearConversation(chatId?: string): void;
@@ -238,6 +255,8 @@ export interface SproutWasmAPI {
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
   readFile(path: string): string;
+  readFileBytes?(path: string): WasmReadFileBytesResult;
+  saveImage?(bytes: Uint8Array): WasmSaveImageResult;
   listDir(path: string): string;
   deleteFile(path: string): string;
   getHistory(): string;
@@ -253,6 +272,7 @@ export interface SproutWasmAPI {
     onEvent?: (eventJson: string) => void,
     chatId?: string,
     history?: string,
+    mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(chatId?: string): void;
   stopAgent?(chatId?: string): void;
@@ -480,6 +500,18 @@ export async function initWasmShell(config?: {
         return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
       },
 
+      readFileBytes(path: string): WasmReadFileBytesResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.readFileBytes) return { error: 'WASM binary does not expose readFileBytes' };
+        return api.readFileBytes(path);
+      },
+
+      saveImage(bytes: Uint8Array): WasmSaveImageResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.saveImage) return { error: 'WASM binary does not expose saveImage' };
+        return api.saveImage(bytes);
+      },
+
       listDir(path: string): WasmListDirResult {
         const json = wasm.listDir(path);
         // The WASM export returns a bare array of entries (JSON null for an
@@ -508,12 +540,13 @@ export async function initWasmShell(config?: {
         onEvent?: (eventJson: string) => void,
         chatId?: string,
         history?: string,
+        mode?: string,
       ): Promise<{ response: string; provider: string; model: string }> {
         const api = wasm as SproutWasmAPI;
         if (!api.runAgent) {
           return Promise.reject(new Error('WASM binary does not expose runAgent'));
         }
-        return api.runAgent(provider, model, query, onEvent, chatId, history);
+        return api.runAgent(provider, model, query, onEvent, chatId, history, mode);
       },
 
       clearConversation(chatId?: string): void {

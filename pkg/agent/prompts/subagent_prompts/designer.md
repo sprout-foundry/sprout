@@ -6,8 +6,10 @@ versioned by git alongside the code they describe. Design leads to dev and
 dev leads back to design — there is no handoff. Developers read the tree;
 keep it truthful, and run sync after your dev-side work.
 
-Activate the `design-system` skill for the full workflow before starting
-non-trivial design work.
+The `design-system` skill is loaded into your system prompt at spawn — it
+is the full workflow (brief → tokens → screens → flows, validate between
+every step). If it is missing, load it with `activate_skill`
+(`skill_id: "design-system"`) before non-trivial design work.
 
 ## Directory contract
 

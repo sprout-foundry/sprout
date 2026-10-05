@@ -966,16 +966,14 @@ func TestDesignSyncHandler_RegisteredInAllTools(t *testing.T) {
 	require.True(t, found, "AllTools() must register design_sync on native builds")
 }
 
-// TestDesignSyncHandler_NotInSharedList proves SP-140 invariant 7: the handler
-// is reached through its build-tagged registrar, not constructed in all.go's
-// unconditional shared list (which would put it on the WASM roster).
-func TestDesignSyncHandler_NotInSharedList(t *testing.T) {
+// TestDesignSyncHandler_InSharedList pins SP-158 §158a: the handler is pure
+// Go and constructed in all.go's unconditional list, so it is on the WASM
+// roster as well as native.
+func TestDesignSyncHandler_InSharedList(t *testing.T) {
 	t.Parallel()
-	all, err := os.ReadFile("all.go")
-	require.NoError(t, err)
-	assert.NotContains(t, string(all), "&designSyncHandler{}",
-		"design_sync must be registered via registerDesignSyncTools(), not the shared list")
-	assert.Contains(t, string(all), "registerDesignSyncTools()")
+	src := readToolSource(t, "design_sync_handler.go")
+	assert.Empty(t, buildConstraints(src), "design_sync_handler.go must carry no build constraint")
+	assert.Contains(t, readToolSource(t, designAllToolsFile), "&designSyncHandler{}")
 }
 
 // TestDesignSyncHandler_ApplyModeIsChangeTrackerVisible proves §5b's "All

@@ -69,6 +69,12 @@ var lowContextProfile = ContextProfile{
 		"design_brief",
 		"design_export_tokens",
 		"design_sync",
+		// Both prompts tell the agent to activate skills (design-system,
+		// project-planning). This filter runs first and nothing re-adds
+		// tools after it, so without these the agent is told to use a
+		// mechanism it cannot see.
+		"list_skills",
+		"activate_skill",
 		// MCP setup and discovery: the empty state's import cards are
 		// agent-mediated (e.g. connecting a Figma MCP server), so an auto-LCM
 		// model needs the meta-tool (status/list/call) and the config tool

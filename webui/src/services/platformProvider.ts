@@ -11,6 +11,7 @@
 export const UNREPORTED_CONTEXT_WINDOW = 200_000;
 
 let reported: number | undefined;
+let reportedVision: boolean | undefined;
 
 /**
  * Asks the platform for the managed model's context window (context_length on
@@ -23,9 +24,13 @@ export async function loadManagedContextWindow(apiOrigin: string): Promise<void>
   try {
     const resp = await fetch(`${apiOrigin}/proxy/chat/models`, { credentials: 'include' });
     if (!resp.ok) return;
-    const body = (await resp.json()) as { data?: Array<{ id?: string; context_length?: unknown }> };
-    const window = body.data?.find((m) => m.id === 'managed')?.context_length;
+    const body = (await resp.json()) as {
+      data?: Array<{ id?: string; context_length?: unknown; supports_vision?: unknown }>;
+    };
+    const managed = body.data?.find((m) => m.id === 'managed');
+    const window = managed?.context_length;
     if (typeof window === 'number' && Number.isFinite(window) && window > 0) reported = window;
+    if (typeof managed?.supports_vision === 'boolean') reportedVision = managed.supports_vision;
   } catch {
     // Unknown: the provider config uses UNREPORTED_CONTEXT_WINDOW.
   }
@@ -39,6 +44,7 @@ export function reportedManagedContextWindow(): number | undefined {
 /** Forget the reported window (tests). */
 export function resetManagedContextWindow(): void {
   reported = undefined;
+  reportedVision = undefined;
 }
 
 export function platformProviderConfig(apiOrigin: string, contextWindow: number | undefined) {
@@ -50,6 +56,10 @@ export function platformProviderConfig(apiOrigin: string, contextWindow: number 
     model_name: 'managed',
     context_size: contextWindow ?? UNREPORTED_CONTEXT_WINDOW,
     requires_api_key: false,
+    // Images go to the model unless the platform says it cannot take them.
+    // A model that rejects them anyway is learned on first contact: the
+    // provider strips the images, retries text-only and remembers.
+    supports_vision: reportedVision ?? true,
     // Streams then end with a usage chunk (the platform forwards it only when
     // asked), so the footer's token count isn't stuck at 0.
     include_usage: true,

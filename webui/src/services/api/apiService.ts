@@ -281,8 +281,8 @@ class ApiService {
 
   // ── Chat ───────────────────────────────────────────────────────
 
-  async sendQuery(query: string, chatId?: string): Promise<void> {
-    return chatApi.sendQuery(clientFetch, query, chatId);
+  async sendQuery(query: string, chatId?: string, mode?: string): Promise<void> {
+    return chatApi.sendQuery(clientFetch, query, chatId, mode);
   }
 
   async uploadImage(file: File | Blob): Promise<{ path: string; filename: string }> {

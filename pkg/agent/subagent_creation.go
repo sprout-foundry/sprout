@@ -7,6 +7,8 @@ import (
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
 // defaultSubagentMaxIterations caps the number of LLM iterations a subagent
@@ -141,6 +143,15 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// entry rather than the orchestrator's.
 	if persona := canonicalPersonaID(agent, opts.Persona); persona != "" && agent.GetConfig().GetSubagentType(persona) != nil {
 		agent.state.SetActivePersona(persona)
+
+		// The designer starts with the design workflow in context rather than
+		// discovering how to load it. A missing or disabled skill must not
+		// fail the spawn; the designer still has its tools and prompt.
+		if persona == personas.IDDesigner {
+			if _, err := agent.activateSkillByID(skills.SkillIDDesignSystem); err != nil {
+				agent.Logger().Debug("designer subagent: design-system skill activation failed: %v", err)
+			}
+		}
 	}
 
 	// Enable a lightweight change tracker on the subagent so the returned

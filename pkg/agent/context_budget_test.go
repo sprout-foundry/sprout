@@ -99,6 +99,8 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		"design_brief": true, "design_export_tokens": true, "design_sync": true,
 		// MCP setup/discovery meta-tools.
 		"mcp_tools": true, "mcp_refresh": true,
+		// Skill activation, which both prompts direct the agent to use.
+		"list_skills": true, "activate_skill": true,
 	}
 	if len(tools) != len(expectedTools) {
 		var names []string

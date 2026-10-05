@@ -157,8 +157,7 @@ describe('standaloneEscalation', () => {
       window.history.replaceState(null, '', '/editor.html?repo=https://github.com/acme/widget');
       bootStandaloneEscalation(stubShell());
 
-      const escalate = (globalThis as { __sproutEscalate: { run: (c: string) => Promise<unknown> } })
-        .__sproutEscalate;
+      const escalate = (globalThis as { __sproutEscalate: { run: (c: string) => Promise<unknown> } }).__sproutEscalate;
 
       // The txn network calls will fail in the test env; what we're testing
       // is the consent round-trip, which happens before any fetch. The run
@@ -184,4 +183,3 @@ describe('standaloneEscalation', () => {
     });
   });
 });
-

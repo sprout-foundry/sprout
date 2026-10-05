@@ -102,6 +102,7 @@ function createMockFetch(responseOverrides?: Map<string, Partial<Response>>) {
     return {
       ok: true,
       status: 200,
+      headers: { get: () => 'application/wasm' },
       arrayBuffer: async () => new ArrayBuffer(0),
     } as Response;
   };
@@ -266,6 +267,61 @@ describe('initWasmShell — configurable paths', () => {
 
       expect(getScriptSrc()).toBe('/custom/wasm_exec.js'); // overridden
       expect(capturedFetchUrls).toContain('/wasm/sprout.wasm'); // default
+    });
+  });
+
+  describe('wasm content-type guard', () => {
+    it('rejects an HTML response for the .wasm URL (SPA misroute) with a clear error', async () => {
+      const badUrl = '/wasm/sprout.wasm';
+      (window as unknown as Record<string, unknown>).fetch = createMockFetch(
+        new Map([
+          [
+            badUrl,
+            {
+              ok: true,
+              status: 200,
+              headers: { get: () => 'text/html; charset=utf-8' },
+              arrayBuffer: async () => new ArrayBuffer(0),
+            } as unknown as Response,
+          ],
+        ]),
+      );
+
+      await expect(initWasmShell({ wasmUrl: badUrl })).rejects.toThrow(/text\/html.*application\/wasm/s);
+    });
+
+    it('accepts octet-stream (some static hosts serve .wasm as generic binary)', async () => {
+      (window as unknown as Record<string, unknown>).fetch = createMockFetch(
+        new Map([
+          [
+            '/wasm/sprout.wasm',
+            {
+              ok: true,
+              status: 200,
+              headers: { get: () => 'application/octet-stream' },
+              arrayBuffer: async () => new ArrayBuffer(0),
+            } as unknown as Response,
+          ],
+        ]),
+      );
+      await expect(initWasmShell({})).resolves.toBeTruthy();
+    });
+
+    it('accepts a missing content-type header (opaque responses)', async () => {
+      (window as unknown as Record<string, unknown>).fetch = createMockFetch(
+        new Map([
+          [
+            '/wasm/sprout.wasm',
+            {
+              ok: true,
+              status: 200,
+              headers: { get: () => null },
+              arrayBuffer: async () => new ArrayBuffer(0),
+            } as unknown as Response,
+          ],
+        ]),
+      );
+      await expect(initWasmShell({})).resolves.toBeTruthy();
     });
   });
 

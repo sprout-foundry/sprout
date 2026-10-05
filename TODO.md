@@ -268,7 +268,7 @@ the end, without checkboxes.
 - [x] **151.5** Coalesce milestones only (`pkg/webui/stream_coalesce.go`);
       question, verification and completion events never coalesced.
       Test. Spec: SP-151 §151b.
-- [ ] **151.6** Deterministic template summaries in Go and CLI rendering
+- [x] **151.6** Deterministic template summaries in Go and CLI rendering
       in the status footer (`pkg/cliui/terminal_subscriber_events.go`).
       Tests. Spec: SP-151 §151c.
 - [ ] **151.7** Web UI compact progress strip in the chat rendering the

@@ -1,0 +1,23 @@
+/* ProgressStrip — compact SP-151 progress strip, rendered under the
+   input next to the metrics strip. Design tokens only. */
+
+.progress-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  min-height: 20px;
+  flex-shrink: 0;
+}
+
+.progress-strip-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

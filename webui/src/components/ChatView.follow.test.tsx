@@ -131,12 +131,33 @@ vi.mock('../utils/log', () => ({
 // Import AFTER mocks
 // ---------------------------------------------------------------------------
 
+import { EventsContextProvider } from '../contexts/EventsContext';
 import ChatView from './ChatView';
 import type { Message } from './chat/types';
 
 // ---------------------------------------------------------------------------
 // Test setup
 // ---------------------------------------------------------------------------
+
+/** Mock events transport: ChatView renders ProgressStrip (SP-151), which
+ *  subscribes via useEvents — provide a no-op provider like the app's
+ *  EventsContextProvider does. */
+function createMockEventsProvider() {
+  return {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(),
+    removeEvent: vi.fn(),
+    sendEvent: vi.fn(),
+    isConnected: vi.fn(() => true),
+    onReconnect: vi.fn(),
+    freeze: vi.fn(),
+    resume: vi.fn(),
+    resetAndReconnect: vi.fn(),
+    getQueuedMessageCount: vi.fn(() => 0),
+    flushQueuedMessages: vi.fn(() => 0),
+  };
+}
 
 const message = (id: string, content: string, type: 'user' | 'assistant' = 'user'): Message => ({
   id,
@@ -147,6 +168,7 @@ const message = (id: string, content: string, type: 'user' | 'assistant' = 'user
 
 let container: HTMLDivElement;
 let root: Root;
+let provider: ReturnType<typeof createMockEventsProvider>;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -156,6 +178,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  provider = createMockEventsProvider();
   virtuoso.scrollToIndex.mockClear();
   virtuoso.followOutput = undefined;
   virtuoso.atBottomStateChange = undefined;
@@ -180,15 +203,19 @@ afterEach(() => {
 function renderChat(messages: Message[], overrides: Record<string, unknown> = {}) {
   act(() => {
     root.render(
-      createElement(ChatView, {
-        messages,
-        onSendMessage: vi.fn(),
-        onInputChange: vi.fn(),
-        inputValue: '',
-        isProcessing: false,
-        chatId: undefined,
-        ...overrides,
-      }),
+      createElement(
+        EventsContextProvider,
+        { provider },
+        createElement(ChatView, {
+          messages,
+          onSendMessage: vi.fn(),
+          onInputChange: vi.fn(),
+          inputValue: '',
+          isProcessing: false,
+          chatId: undefined,
+          ...overrides,
+        }),
+      ),
     );
   });
   // Simulate virtuoso's initial position: the mount jumps to the last item
@@ -201,14 +228,18 @@ function renderChat(messages: Message[], overrides: Record<string, unknown> = {}
 function rerenderMessages(messages: Message[]) {
   act(() => {
     root.render(
-      createElement(ChatView, {
-        messages,
-        onSendMessage: vi.fn(),
-        onInputChange: vi.fn(),
-        inputValue: '',
-        isProcessing: false,
-        chatId: undefined,
-      }),
+      createElement(
+        EventsContextProvider,
+        { provider },
+        createElement(ChatView, {
+          messages,
+          onSendMessage: vi.fn(),
+          onInputChange: vi.fn(),
+          inputValue: '',
+          isProcessing: false,
+          chatId: undefined,
+        }),
+      ),
     );
   });
 }

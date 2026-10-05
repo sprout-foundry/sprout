@@ -271,7 +271,7 @@ the end, without checkboxes.
 - [x] **151.6** Deterministic template summaries in Go and CLI rendering
       in the status footer (`pkg/cliui/terminal_subscriber_events.go`).
       Tests. Spec: SP-151 §151c.
-- [ ] **151.7** Web UI compact progress strip in the chat rendering the
+- [x] **151.7** Web UI compact progress strip in the chat rendering the
       summaries. Vitest. Spec: SP-151 §151c.
 - [ ] **151.8** Optional `summarizer`-role summaries built only from event
       fields, template fallback on error; never a success summary without

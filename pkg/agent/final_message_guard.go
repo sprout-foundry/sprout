@@ -242,16 +242,29 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 // languageGuardRecentMessages, newest first) in chronological order for
 // ResolveUserLanguage's majority vote. Timestamp envelopes are stripped:
 // the envelope is a machine stamp, not user writing, and its ASCII would
-// dilute the language signal of short messages.
+// dilute the language signal of short messages. Verification repair
+// reports are skipped the same way: they are machine-injected user-role
+// messages the turn-end hook feeds back to the model, not the user's own
+// writing, so they never count in the user-language vote — left in, two
+// repair rounds could tie or outvote a non-English user's messages and
+// the vote would no longer reflect the user's language.
 func (a *Agent) recentUserMessages(messages []api.Message) []string {
 	var recent []string
 	for i := len(messages) - 1; i >= 0 && len(recent) < languageGuardRecentMessages; i-- {
 		if messages[i].Role != "user" {
 			continue
 		}
-		if text := StripUserMessageTimestamp(messages[i].Content); strings.TrimSpace(text) != "" {
-			recent = append(recent, text)
+		text := StripUserMessageTimestamp(messages[i].Content)
+		if strings.TrimSpace(text) == "" {
+			continue
 		}
+		// A machine-injected verification report: the tag prefix is the
+		// precise marker — a user quoting a report would not start their
+		// message with it.
+		if strings.HasPrefix(text, verificationReportOpenTag) {
+			continue
+		}
+		recent = append(recent, text)
 	}
 	// ResolveUserLanguage's vote is order-independent; return
 	// chronological so the list reads like the conversation.

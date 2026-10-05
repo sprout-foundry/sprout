@@ -227,7 +227,7 @@ the end, without checkboxes.
 
 ## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
 
-- [ ] **150.1** `roles` config section (`planner`, `coder`, `summarizer`,
+- [x] **150.1** `roles` config section (`planner`, `coder`, `summarizer`,
       `reviewer`, `commit`), parsed and merged across global and project
       config; unset roles fall back to the conversation model. Tests.
       Spec: SP-150 §150a.

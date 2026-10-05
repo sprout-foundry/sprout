@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -190,6 +192,52 @@ func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}
 	return sb.String(), nil
 }
 
+// activateSkillByID is the skill-activation core shared by the
+// activate_skill tool and turn-start auto-activation: load the skill, add
+// its ID to the active-skill set, and fold its instructions into the
+// system prompt.
+//
+// Idempotence is decided by the prompt, not the active-skill set: persona
+// switches, model refreshes and per-query prompt overrides rebuild the
+// prompt without clearing that set, and trusting it told the agent a skill
+// was "already active" while none of its instructions were in context. A
+// skill whose fold is present gets a short note; one whose fold was lost is
+// folded again.
+//
+// Errors are returned unwrapped: the tool path wraps them in a user-facing
+// tool error, while best-effort callers (auto-activation) log and continue.
+func (a *Agent) activateSkillByID(skillID string) (string, error) {
+	if strings.TrimSpace(skillID) == "" {
+		return "", errors.New("skill_id is required")
+	}
+	config := a.GetConfigManager().GetConfig()
+	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
+	if err != nil {
+		return "", err
+	}
+
+	if !slices.Contains(a.state.GetActiveSkills(), skillID) {
+		a.state.SetActiveSkills(append(slices.Clone(a.state.GetActiveSkills()), skillID))
+	}
+
+	header := fmt.Sprintf("[Skill Activated: %s (", skillInfo.Name)
+	if strings.Contains(a.systemPrompt, header) {
+		return fmt.Sprintf("Skill '%s' is already active; its instructions are in your system prompt.", skillID), nil
+	}
+
+	sourceLabel := skillInfo.Source
+	if sourceLabel == "" {
+		sourceLabel = "unknown"
+	}
+	skillMessage := fmt.Sprintf("%ssource: %s)]\n\n%s", header, sourceLabel, skillInfo.Content)
+	if strings.TrimSpace(a.systemPrompt) != "" {
+		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
+	} else {
+		a.systemPrompt = skillMessage
+	}
+	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
+}
+
 func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	skillID, err := getStringArg(args, "skill_id")
 	if err != nil {
@@ -199,43 +247,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 		}
 	}
 
-	configManager := a.GetConfigManager()
-	config := configManager.GetConfig()
-
-	// Check if already active
-	for _, id := range a.state.GetActiveSkills() {
-		if id == skillID {
-			return fmt.Sprintf("Skill '%s' is already active.", skillID), nil
-		}
-	}
-
-	// Load the skill
-	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
+	result, err := a.activateSkillByID(skillID)
 	if err != nil {
 		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
 	}
-
-	// Add to active skills
-	currentActive := a.state.GetActiveSkills()
-	newActive := make([]string, len(currentActive)+1)
-	copy(newActive, currentActive)
-	newActive[len(newActive)-1] = skillID
-	a.state.SetActiveSkills(newActive)
-
-	// Fold skill instructions into the active system prompt so they persist across
-	// all subsequent turns without relying on history system-message injection.
-	sourceLabel := skillInfo.Source
-	if sourceLabel == "" {
-		sourceLabel = "unknown"
-	}
-	skillMessage := fmt.Sprintf("[Skill Activated: %s (source: %s)]\n\n%s", skillInfo.Name, sourceLabel, skillInfo.Content)
-	if strings.TrimSpace(a.systemPrompt) != "" {
-		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
-	} else {
-		a.systemPrompt = skillMessage
-	}
-
-	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
+	return result, nil
 }
 
 func getStringArg(args map[string]interface{}, name string) (string, error) {

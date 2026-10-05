@@ -1179,7 +1179,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     return jsonError('Missing request body', 400);
   }
 
-  let parsed: { query?: string; provider?: string; model?: string; chat_id?: string };
+  let parsed: { query?: string; provider?: string; model?: string; chat_id?: string; mode?: string };
   try {
     parsed = JSON.parse(bodyStr);
   } catch {
@@ -1274,6 +1274,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       // Seeds the chat's agent if it has none yet (e.g. after a reload), so
       // the conversation on screen is also the one the agent remembers.
       JSON.stringify(historyForChat(chatId, query)),
+      parsed.mode,
     )
     .then((result) => {
       stopRequested.delete(chatId ?? '');

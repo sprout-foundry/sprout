@@ -61,6 +61,17 @@ export function persistWorkspaceMode(id: WorkspaceModeId): void {
   }
 }
 
+let activeModeId: WorkspaceModeId | null = null;
+
+/**
+ * The mode the shell is showing right now, for code outside the shell's
+ * React tree (the chat send path tags each query with it). Null before the
+ * shell mounts.
+ */
+export function activeWorkspaceModeId(): WorkspaceModeId | null {
+  return activeModeId;
+}
+
 export interface UseWorkspaceModeResult {
   /** The active mode, resolved against what this workspace offers. */
   mode: WorkspaceMode;
@@ -88,6 +99,13 @@ export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeRes
   // the mode list each time.
   const modes = useMemo(() => availableModes({ hasDesignTree }), [hasDesignTree]);
   const mode = useMemo(() => resolveWorkspaceMode(requested, { hasDesignTree }), [requested, hasDesignTree]);
+
+  useEffect(() => {
+    activeModeId = mode.id;
+    return () => {
+      activeModeId = null;
+    };
+  }, [mode.id]);
 
   // Re-persist when availability changes the resolved mode: a workspace that
   // lost its design tree should come back on Code, not keep a stale `design`.

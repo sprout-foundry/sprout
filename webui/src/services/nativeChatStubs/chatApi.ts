@@ -27,7 +27,12 @@ import type { UploadImageResponse } from '../api/types';
  * Track R: chat is provided natively by the shell, so the webui never POSTs
  * /api/query. Resolves void — a safe no-op matching the real signature.
  */
-export async function sendQuery(_fetchFn: typeof fetch, _query: string, _chatId?: string): Promise<void> {
+export async function sendQuery(
+  _fetchFn: typeof fetch,
+  _query: string,
+  _chatId?: string,
+  _mode?: string,
+): Promise<void> {
   // no-op: the native shell owns the agent-turn chat loop; no network here.
 }
 

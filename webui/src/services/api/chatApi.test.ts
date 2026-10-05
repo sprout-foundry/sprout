@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { retractSteer } from './chatApi';
+import { retractSteer, sendQuery } from './chatApi';
 
 describe('chatApi steer retraction', () => {
   let fetchCalls: Array<{ url: string; init: RequestInit }>;
@@ -45,5 +45,26 @@ describe('chatApi steer retraction', () => {
   it('retractSteer throws on HTTP error', async () => {
     const fetchFn = makeFetch(500, { message: 'agent unavailable' });
     await expect(retractSteer(fetchFn as unknown as typeof fetch)).rejects.toThrow('agent unavailable');
+  });
+});
+
+describe('chatApi sendQuery mode', () => {
+  const okFetch = () =>
+    vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, json: async () => ({}) }) as Response);
+
+  it('sends the workspace mode so the server can prepare the agent', async () => {
+    const fetchFn = okFetch();
+    await sendQuery(fetchFn as unknown as typeof fetch, 'make a login screen', 'chat-1', 'design');
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({
+      query: 'make a login screen',
+      chat_id: 'chat-1',
+      mode: 'design',
+    });
+  });
+
+  it('omits mode when none is given', async () => {
+    const fetchFn = okFetch();
+    await sendQuery(fetchFn as unknown as typeof fetch, 'hi');
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({ query: 'hi' });
   });
 });

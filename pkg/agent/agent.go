@@ -315,6 +315,10 @@ type Agent struct {
 	shutdown     atomic.Bool
 	shutdownOnce sync.Once
 
+	// workspaceMode is the host's workspace mode for the current query; its
+	// skills activate at turn start (see workspace_mode_skills.go).
+	workspaceMode atomic.Pointer[string]
+
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 

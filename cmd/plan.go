@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -158,11 +159,8 @@ func createPlanningAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
 
-	if planProvider != "" && planModel != "" {
-		modelWithProvider := fmt.Sprintf("%s:%s", planProvider, planModel)
-		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-	} else if planModel != "" {
-		chatAgent, err = agent.NewAgentWithModel(planModel)
+	if spec := planningAgentSpec(); spec != "" {
+		chatAgent, err = agent.NewAgentWithModel(spec)
 	} else {
 		chatAgent, err = agent.NewAgent()
 	}
@@ -188,6 +186,52 @@ func createPlanningAgent() (*agent.Agent, error) {
 	// maxIterations defaults to 0 (unlimited) — no per-prompt cap
 
 	return chatAgent, nil
+}
+
+// planningAgentSpec returns the "provider:model" (or bare model) specifier
+// the planning agent is created with, or "" to fall back to the
+// conversation's provider and model (SP-150 §150a, item 150.4).
+// Explicit flags always win: -p plus -m wins as "provider:model", -m alone
+// wins as a bare model, and a bare -p keeps today's fall-through to the
+// conversation model (it must not be overridden by the planner role). Only
+// when no flag is set does an explicitly-set planner role select the
+// plan's model.
+func planningAgentSpec() string {
+	switch {
+	case planProvider != "" && planModel != "":
+		return planProvider + ":" + planModel
+	case planModel != "":
+		return planModel
+	case planProvider != "":
+		// Bare -p: the conversation model, exactly as before roles — an
+		// explicit provider flag wins over the configured role.
+		return ""
+	default:
+		return plannerRoleSpec()
+	}
+}
+
+// plannerRoleSpec returns the planner role's resolved "provider:model"
+// specifier (SP-150 §150a, item 150.4) when the roles section sets the
+// planner explicitly, or "" when it does not. ResolveRole applies the field
+// fallbacks (empty provider → last-used provider, empty model → that
+// provider's configured model); providerModelSpec then shapes the pair so a
+// bare provider never reaches the constructors as a model name.
+func plannerRoleSpec() string {
+	mgr, err := configuration.NewManagerSilent()
+	if err != nil {
+		return ""
+	}
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	role := cfg.GetRole(configuration.RolePlanner)
+	if role.Provider == "" && role.Model == "" {
+		return ""
+	}
+	provider, model := cfg.ResolveRole(configuration.RolePlanner)
+	return providerModelSpec(provider, model)
 }
 
 // runSeamlessPlanning runs the seamless planning and execution loop

@@ -238,7 +238,7 @@ the end, without checkboxes.
       internally; context-profile resolution (SP-125) runs on the
       resolved model; the provider-name grep test still passes. Tests.
       Spec: SP-150 §150b.
-- [ ] **150.4** Plan mode uses the `planner` role, the main loop `coder`;
+- [x] **150.4** Plan mode uses the `planner` role, the main loop `coder`;
       `summarizer` is resolvable for SP-151/SP-157. Tests. Spec: SP-150
       §150a.
 - [ ] **150.5** Metering: every model call carries its role; usage ledger

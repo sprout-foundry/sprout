@@ -437,10 +437,27 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		})
 	}
 
+	// SP-150 §150a (item 150.4): the main conversation loop uses the
+	// coder role. Only the explicit roles-section entry gates the
+	// override — legacy aliases (subagent/completion settings) must not
+	// leak into the primary conversation. An explicit model from the
+	// caller (flags, daemon selectors, per-surface specifiers) always
+	// wins, so the override applies only when model is empty. The
+	// resolved pair feeds the canonical resolution below, so the client,
+	// context profile, and recovery paths all see it.
+	coderProvider, coderModel := "", model
+	if model == "" {
+		if cfg := configManager.GetConfig(); cfg != nil {
+			if role := cfg.GetRole(configuration.RoleCoder); role.Provider != "" || role.Model != "" {
+				coderProvider, coderModel = cfg.ResolveRole(configuration.RoleCoder)
+			}
+		}
+	}
+
 	// Non-interactive fast-fail: check provider availability before entering the retry loop.
 	// SSH daemons allow startup even without a provider so the web UI can handle provider setup.
 	if isNonInteractive() && !isRunningUnderTest() && !isSSHDaemon() {
-		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
+		resolvedType, _, resolveErr := configManager.ResolveProviderModel(coderProvider, coderModel)
 		if resolveErr != nil {
 			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, resolveErr, "", "")
 		}
@@ -460,7 +477,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	}
 
 	// The early check ensures the provider resolves before the retry loop. The retry loop's recoverProviderStartup calls serve as defense-in-depth.
-	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
+	clientType, finalModel, err = configManager.ResolveProviderModel(coderProvider, coderModel)
 	if err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr, "Failed to resolve configured provider/model: %v", err)
 		// SSH daemon exception: allow startup even without provider

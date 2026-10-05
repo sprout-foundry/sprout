@@ -505,3 +505,77 @@ func TestBuiltInRoles(t *testing.T) {
 		BuiltInRoles(),
 	)
 }
+
+// TestResolveRole_SummarizerResolvable pins item 150.4 (SP-150 §150a): the
+// summarizer role (progress and change summaries, SP-151/SP-157) must be
+// resolvable through the single resolver — its explicit roles-section entry
+// when set, and the conversation's (provider, model) when unset. It has no
+// legacy alias, like the planner.
+func TestResolveRole_SummarizerResolvable(t *testing.T) {
+	tests := []struct {
+		name         string
+		mutate       func(c *Config)
+		wantProvider string
+		wantModel    string
+	}{
+		{
+			name: "explicit roles entry is returned when set",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleSummarizer: {Provider: "zai", Model: "deepseek-v4"}}
+			},
+			wantProvider: "zai",
+			wantModel:    "deepseek-v4",
+		},
+		{
+			name: "model-only entry keeps the last-used provider",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleSummarizer: {Model: "deepseek-v4"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "deepseek-v4",
+		},
+		{
+			name: "provider-only entry uses that provider's configured model",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleSummarizer: {Provider: "zai"}}
+			},
+			wantProvider: "zai",
+			wantModel:    "GLM-4.6",
+		},
+		{
+			name:         "unset falls back to the conversation",
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+		{
+			// Summarizer has no legacy alias: the coder/commit/reviewer
+			// alias settings must not leak into it.
+			name: "legacy alias settings do not alias the summarizer",
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai"
+				c.SubagentModel = "sub-m"
+				c.CommitProvider = "zai"
+				c.CommitModel = "commit-m"
+				c.ReviewProvider = "zai"
+				c.ReviewModel = "review-m"
+			},
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				LastUsedProvider: "openrouter",
+				ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+			}
+			if tt.mutate != nil {
+				tt.mutate(cfg)
+			}
+			provider, model := cfg.ResolveRole(RoleSummarizer)
+			assert.Equal(t, tt.wantProvider, provider)
+			assert.Equal(t, tt.wantModel, model)
+		})
+	}
+}

@@ -111,6 +111,11 @@ type AgentState struct {
 	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`
 	FreeTokens         int     `json:"free_tokens,omitempty"`
 
+	// Per-role token/cost totals (SP-150 §150c, item 150.5). Persisted so a
+	// restored conversation keeps its per-role attribution and the per-role
+	// totals keep summing to the restored overall totals.
+	RoleUsage []RoleUsage `json:"role_usage,omitempty"`
+
 	// PendingBackgroundNotifications are background-task completion notices
 	// that were queued but not yet delivered to the model. They survive
 	// agent teardown/restore (idle eviction in the daemon re-creates

@@ -57,6 +57,7 @@ func (m *mockStateManager) SetTokenCostTotal(float64)                  {}
 func (m *mockStateManager) SetSubscriptionTokens(int)                  {}
 func (m *mockStateManager) SetFreeTokens(int)                          {}
 func (m *mockStateManager) GetRoleUsage() []RoleUsage                  { return nil }
+func (m *mockStateManager) SetRoleUsage([]RoleUsage)                   {}
 func (m *mockStateManager) GetTotalTokens() int                        { return 0 }
 func (m *mockStateManager) SetTotalTokens(int)                         {}
 func (m *mockStateManager) GetPromptTokens() int                       { return 0 }

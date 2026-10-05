@@ -207,16 +207,14 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 
 	// Track costs from all parallel subagents using the structured
 	// SubagentResult fields. This mirrors the single-subagent path
-	// (extractAndTrackSubagentSummary), which switched away from regex-
-	// scraping SUBAGENT_METRICS: lines out of stdout because nothing
-	// emits that line anymore — the parse branch has been fully removed.
-	// Prompt/completion/cached splits are not exposed by SubagentResult
-	// today, so they're left at zero; TrackMetricsFromResponse treats
-	// them as "unknown split" and still applies the totals correctly.
+	// (extractAndTrackSubagentSummary). Each subagent's usage is rolled up
+	// under the role that drove its model choice, with its real
+	// prompt/completion token split (SP-150 §150c, item 150.5), so the
+	// per-role totals keep summing to the overall totals.
 	for _, r := range results {
 		if r.TokensUsed > 0 || r.Cost > 0 {
-			a.TrackMetricsFromResponse(0, 0, int(r.TokensUsed), r.Cost, 0, 0, 0)
-			a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", r.ID, r.TokensUsed, r.Cost)
+			a.RollupSubagentUsage(r)
+			a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f (role %s)\n", r.ID, r.TokensUsed, r.Cost, r.Role)
 		}
 	}
 

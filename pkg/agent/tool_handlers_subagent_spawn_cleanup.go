@@ -224,13 +224,14 @@ func extractAndTrackSubagentSummary(a *Agent, resultMap map[string]string, resul
 	}
 
 	// Roll the subagent's token/cost into the parent agent's totals from
-	// the structured SubagentResult — no stdout scraping. Prompt /
-	// completion / cached splits are not exposed by SubagentResult today,
-	// so they're left at zero; TrackMetricsFromResponse treats them as
-	// "unknown split" and still applies the totals correctly.
+	// the structured SubagentResult — no stdout scraping. The rollup is
+	// attributed to the role that drove the subagent's model choice, with
+	// the subagent's real prompt/completion token split (SP-150 §150c,
+	// item 150.5), so the per-role totals keep summing to the overall
+	// totals.
 	if result.TokensUsed > 0 || result.Cost > 0 {
-		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0, 0)
-		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
+		a.RollupSubagentUsage(result)
+		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f (role %s)\n", result.TokensUsed, result.Cost, result.Role)
 	}
 }
 

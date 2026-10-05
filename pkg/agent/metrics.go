@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -137,6 +140,38 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	if callback, ok := a.statsUpdateCallback.Load().(func(int, float64)); ok && callback != nil {
 		callback(a.state.GetTotalTokens(), a.state.GetTotalCost())
 	}
+}
+
+// RollupSubagentUsage folds a completed subagent/reviewer's usage into this
+// agent's totals, attributed to the role that drove the subagent's model
+// choice (SP-150 §150c, item 150.5) with the subagent's actual
+// prompt/completion token split. It records a cost entry under the
+// subagent's role (feeding both the per-role bucket and the overall cost
+// totals) and advances the overall prompt/completion/total token counters —
+// exactly as a first-party LLM call would — so the per-role totals keep
+// summing to the overall totals. The subagent's own metrics manager is left
+// untouched; this is the parent-side attribution.
+func (a *Agent) RollupSubagentUsage(r *subagents.SubagentResult) {
+	if a == nil || a.state == nil || r == nil {
+		return
+	}
+	if r.TokensUsed == 0 && r.Cost <= 0 && r.PromptTokens == 0 && r.CompletionTokens == 0 {
+		return
+	}
+	role := r.Role
+	if strings.TrimSpace(role) == "" {
+		role = configuration.RoleCoder
+	}
+	a.state.AddCostEntry(CostEntry{
+		Role:             role,
+		BillingType:      BillingPayPerToken,
+		ChargedCost:      r.Cost,
+		PromptTokens:     r.PromptTokens,
+		CompletionTokens: r.CompletionTokens,
+	})
+	a.state.SetPromptTokens(a.state.GetPromptTokens() + r.PromptTokens)
+	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + r.CompletionTokens)
+	a.state.SetTotalTokens(a.state.GetTotalTokens() + r.TokensUsed)
 }
 
 // GetCompletionTokens returns the total completion tokens used

@@ -70,6 +70,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 		TokenCostTotal:                 a.state.GetTokenCostTotal(),
 		SubscriptionTokens:             a.state.GetSubscriptionTokens(),
 		FreeTokens:                     a.state.GetFreeTokens(),
+		RoleUsage:                      a.GetRoleUsage(),
 		PendingBackgroundNotifications: a.snapshotPendingNotifications(),
 	}
 	return json.Marshal(state)
@@ -107,6 +108,10 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
 	a.state.SetFreeTokens(state.FreeTokens)
+	// Restore the per-role totals (SP-150 §150c, item 150.5) so they keep
+	// summing to the restored overall totals; markUsageBooked below then
+	// marks the restored per-role totals as already booked.
+	a.state.SetRoleUsage(state.RoleUsage)
 	a.markUsageBooked()
 	a.restorePendingNotifications(state.PendingBackgroundNotifications)
 	return nil

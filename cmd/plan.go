@@ -169,6 +169,12 @@ func createPlanningAgent() (*agent.Agent, error) {
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
+	// Stamp the planner role (SP-150 §150c, item 150.5): the planning loop
+	// serves the "planning" purpose, so its metering is attributed to the
+	// planner role even when an explicit -p/-m flag (rather than the
+	// configured planner role) selected the model.
+	chatAgent.SetRole(configuration.RolePlanner)
+
 	// Set planning-focused system prompt (now includes execution workflow)
 	var planningPrompt string
 	if planStructured {

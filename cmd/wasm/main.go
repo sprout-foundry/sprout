@@ -9,6 +9,7 @@ import (
 	"os"
 	"syscall/js"
 
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	"github.com/sprout-foundry/sprout/pkg/wasmshell"
 )
 
@@ -44,6 +45,7 @@ func main() {
 		"deleteFile":          js.FuncOf(deleteFileFunc),
 		"getHistory":          js.FuncOf(getHistoryFunc),
 		"getEnv":              js.FuncOf(getEnvFunc),
+		"getBuildInfo":        js.FuncOf(getBuildInfoFunc),
 	}
 	for name, fn := range configJSFuncs() {
 		apiSurface[name] = fn
@@ -291,5 +293,17 @@ func getHistoryFunc(this js.Value, args []js.Value) interface{} {
 // getEnvFunc returns all environment variables as JSON object.
 func getEnvFunc(this js.Value, args []js.Value) interface{} {
 	data, _ := json.Marshal(wasmshell.ShellEnv.All())
+	return string(data)
+}
+
+// getBuildInfoFunc reports what binary is running: the release version and
+// commit (injected at build time — scripts/build-wasm.sh), so hosts can
+// surface/pin the runtime identity instead of guessing from behavior.
+func getBuildInfoFunc(this js.Value, args []js.Value) interface{} {
+	data, _ := json.Marshal(map[string]string{
+		"version": buildinfo.Version,
+		"commit":  buildinfo.Commit,
+		"date":    buildinfo.Date,
+	})
 	return string(data)
 }

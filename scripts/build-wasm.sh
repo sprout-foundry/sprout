@@ -140,9 +140,17 @@ build_wasm() {
     # by our overrides.
     WASM_TAGS="grammar_blobs_external osusergo"
     LDFLAGS="-s -w"
+    # Version metadata: injected from the git state so the running shell
+    # can report what it is (standalone ready payload, support triage).
+    # Release builds pass WASM_VERSION explicitly; local builds fall back
+    # to git describe with a dev- prefix so an untagged tree stays obvious.
+    WASM_VERSION="${WASM_VERSION:-$(git describe --tags --always 2>/dev/null || echo dev)}"
+    WASM_COMMIT="${WASM_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+    LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Version=$WASM_VERSION'"
+    LDFLAGS="$LDFLAGS -X 'github.com/sprout-foundry/sprout/pkg/buildinfo.Commit=$WASM_COMMIT'"
     if [ "${WASM_KEEP_SYMBOLS:-}" = "1" ]; then
-        LDFLAGS=""
-        echo "    (WASM_KEEP_SYMBOLS=1: skipping symbol strip)"
+        LDFLAGS="${LDFLAGS%% -X*}"
+        echo "    (WASM_KEEP_SYMBOLS=1: skipping symbol strip; version injection kept)"
     fi
     (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -tags "$WASM_TAGS" -ldflags="$LDFLAGS" -o "$target_dir/sprout.wasm" ./cmd/wasm/)
 

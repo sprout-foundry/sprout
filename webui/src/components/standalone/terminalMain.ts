@@ -19,6 +19,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { terminalText } from '../../services/terminalText';
 import { bootStandaloneEscalation } from './standaloneEscalation';
+import { buildReadyPayload as readyPayload } from './standaloneReady';
 import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
@@ -195,7 +196,7 @@ async function boot() {
   }
   prompt();
   term.focus();
-  post('ready');
+  post('ready', readyPayload('terminal', wasm));
 }
 
 boot();

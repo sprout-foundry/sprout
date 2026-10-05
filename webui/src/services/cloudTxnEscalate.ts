@@ -37,6 +37,8 @@ export interface TxnProgress {
   result?: TxnRunResult;
   pulledFiles?: number;
   skippedFiles?: number;
+  /** Files the push manifest carried (0 = the container ran without the browser's edits). */
+  pushedFiles?: number;
 }
 
 const TXN_PHASE_LABELS: Record<string, string> = {
@@ -148,6 +150,8 @@ export interface TxnCommandOutcome {
   result: TxnRunResult;
   pulledFiles: number;
   skippedFiles: number;
+  /** Files the push manifest carried (0 = the container ran without the browser's edits). */
+  pushedFiles: number;
   /** Non-fatal follow-up problem (e.g. the machine-stop call failed). */
   warning?: string;
 }
@@ -179,6 +183,7 @@ export async function runTxnCommand(
     onPhase?.(phase);
     const { inputs, deletes } = await collectTxnPushFiles();
     const manifest = await buildPushManifest(() => inputs, { deletes });
+    const pushedFiles = manifest.files.length;
     await txnPush(workspaceId, txnId, manifest);
 
     phase = 'running';
@@ -203,6 +208,7 @@ export async function runTxnCommand(
       result,
       pulledFiles: applied.applied,
       skippedFiles: applied.skipped.length + pulled.skipped.length,
+      pushedFiles,
       warning,
     };
   } catch (err) {

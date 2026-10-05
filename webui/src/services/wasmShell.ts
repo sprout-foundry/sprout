@@ -101,6 +101,8 @@ export interface WasmShell {
   respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
   /** The §6b design status JSON for the workspace root (GET /api/design/status). */
   designStatus?(): string;
+  /** Build identity of the running binary (version/commit/date). Null on binaries built before the export existed. */
+  getBuildInfo(): { version: string; commit: string; date: string } | null;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -265,6 +267,9 @@ export interface SproutWasmAPI {
   // ── Design health (cmd/wasm/design_funcs.go) ──
   /** The §6b design status JSON for the workspace root. Absent in binaries built before the export existed. */
   designStatus?(root?: string): string;
+  // ── Build identity (cmd/wasm/main.go getBuildInfoFunc) ──
+  /** Version/commit/date of the running binary. Absent in binaries built before the export existed. */
+  getBuildInfo?(): string;
 }
 
 declare global {
@@ -484,6 +489,12 @@ export async function initWasmShell(config?: {
 
       deleteFile(path: string): string {
         return wasm.deleteFile(path);
+      },
+
+      getBuildInfo(): { version: string; commit: string; date: string } | null {
+        if (typeof wasm.getBuildInfo !== 'function') return null;
+        const json = wasm.getBuildInfo();
+        return safeJsonParse<{ version: string; commit: string; date: string } | null>(json, null);
       },
 
       runAgent(

@@ -128,14 +128,19 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		// GET /api/settings/subagent-types for the persona list view. Keeping
 		// it out of the generic settings payload prevents round-trip PUTs
 		// from accidentally writing catalog state back through user config.
-		"default_subagent_persona":       cfg.DefaultSubagentPersona,
-		"disabled_personas":              cfg.DisabledPersonas,
-		"subagent_max_parallel":          cfg.GetSubagentMaxParallel(),
-		"subagent_parallel_enabled":      cfg.GetSubagentParallelEnabled(),
-		"commit_provider":                cfg.CommitProvider,
-		"commit_model":                   cfg.CommitModel,
-		"review_provider":                cfg.ReviewProvider,
-		"review_model":                   cfg.ReviewModel,
+		"default_subagent_persona":  cfg.DefaultSubagentPersona,
+		"disabled_personas":         cfg.DisabledPersonas,
+		"subagent_max_parallel":     cfg.GetSubagentMaxParallel(),
+		"subagent_parallel_enabled": cfg.GetSubagentParallelEnabled(),
+		"commit_provider":           cfg.CommitProvider,
+		"commit_model":              cfg.CommitModel,
+		"review_provider":           cfg.ReviewProvider,
+		"review_model":              cfg.ReviewModel,
+		// SP-150 §150a: per-role model selection. Carries only provider
+		// and model names (no secrets), so it passes through sanitization
+		// as-is. Absent/empty roles fall back to the conversation's
+		// provider/model at resolution time.
+		"roles":                          cfg.Roles,
 		"skills":                         cfg.Skills,
 		"disable_thinking":               cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,

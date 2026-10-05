@@ -373,11 +373,24 @@ export async function initWasmShell(config?: {
       );
     }
 
-    debug(' Step 4: Reading arrayBuffer...');
-    const wasmBuffer = await wasmResponse.arrayBuffer();
-    debug(' ArrayBuffer size:', wasmBuffer.byteLength);
-    debug(' Step 5: WebAssembly.instantiate...');
-    const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+    debug(' Step 4: Instantiating (streaming when possible)...');
+    // Streaming compile overlaps download and compilation — roughly halves
+    // time-to-ready on the 55MB binary. It requires the response to be
+    // application/wasm (browsers enforce the MIME type), so octet-stream
+    // servers and missing headers fall back to the buffered path.
+    let compile: Promise<WebAssembly.WebAssemblyInstantiatedSource>;
+    if (wasmType.includes('application/wasm') && typeof WebAssembly.instantiateStreaming === 'function') {
+      debug(' Step 4a: instantiateStreaming...');
+      compile = WebAssembly.instantiateStreaming(fetch(wasmUrl), go.importObject).catch((streamErr) => {
+        debug(' streaming compile failed, falling back to buffered:', streamErr);
+        return wasmResponse.arrayBuffer().then((buf) => WebAssembly.instantiate(buf, go.importObject));
+      });
+    } else {
+      const wasmBuffer = await wasmResponse.arrayBuffer();
+      debug(' ArrayBuffer size:', wasmBuffer.byteLength);
+      compile = WebAssembly.instantiate(wasmBuffer, go.importObject);
+    }
+    const { instance } = await compile;
     debug(' Step 5: Instantiated');
 
     // 4. Run the Go instance (this blocks until main() hits the channel wait).

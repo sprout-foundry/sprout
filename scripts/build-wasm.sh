@@ -148,6 +148,18 @@ build_wasm() {
 
     echo "    ✓ sprout.wasm"
 
+    # Precompressed variants: the daemon serves these with Content-Encoding
+    # when the client advertises support (handleWasmAssets). 55MB raw →
+    # ~15MB gzip → ~12MB brotli; download time dominates embed startup.
+    if command -v brotli >/dev/null 2>&1; then
+        brotli -q 11 -c "$target_dir/sprout.wasm" > "$target_dir/sprout.wasm.br"
+        echo "    ✓ sprout.wasm.br ($(ls -lh "$target_dir/sprout.wasm.br" | awk '{print $5}'))"
+    else
+        echo "    (brotli CLI not found — skipping .br; gzip variant still produced)"
+    fi
+    gzip -9 -c "$target_dir/sprout.wasm" > "$target_dir/sprout.wasm.gz"
+    echo "    ✓ sprout.wasm.gz ($(ls -lh "$target_dir/sprout.wasm.gz" | awk '{print $5}'))"
+
     WASM_SIZE=$(ls -lh "$target_dir/sprout.wasm" | awk '{print $5}')
     echo "  WASM binary size: $WASM_SIZE"
 

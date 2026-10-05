@@ -98,6 +98,70 @@ func TestHandleWasmAssetsRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestHandleWasmAssetsNegotiatesPrecompressed(t *testing.T) {
+	server := newWebServerForRoutes(t)
+
+	// The precompressed siblings only exist after scripts/build-wasm.sh
+	// ran with compression enabled; skip when this checkout has none.
+	if _, err := readStaticFile("wasm/sprout.wasm.br"); err != nil {
+		t.Skipf("precompressed wasm variants not available (build artifact): %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		acceptEnc string
+		wantEnc   string
+	}{
+		{name: "brotli preferred", acceptEnc: "gzip, deflate, br", wantEnc: "br"},
+		{name: "gzip only", acceptEnc: "gzip, deflate", wantEnc: "gzip"},
+		{name: "identity wins when nothing advertised", acceptEnc: "identity", wantEnc: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/wasm/sprout.wasm", nil)
+			req.Header.Set("Accept-Encoding", tc.acceptEnc)
+			rec := httptest.NewRecorder()
+			server.handleWasmAssets(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rec.Code)
+			}
+			gotEnc := rec.Header().Get("Content-Encoding")
+			if gotEnc != tc.wantEnc {
+				t.Fatalf("Content-Encoding = %q, want %q", gotEnc, tc.wantEnc)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/wasm") {
+				t.Fatalf("inner content type must still be application/wasm, got %q", ct)
+			}
+			if tc.wantEnc != "" {
+				if vary := rec.Header().Get("Vary"); !strings.Contains(vary, "Accept-Encoding") {
+					t.Fatalf("expected Vary: Accept-Encoding on encoded responses, got %q", vary)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleWasmAssetsDoesNotCompressWasmExec(t *testing.T) {
+	server := newWebServerForRoutes(t)
+	wasmFixturesAvailable(t)
+
+	// wasm_exec.js is tiny and compresses poorly as a precomputed artifact;
+	// it is always served raw regardless of Accept-Encoding.
+	req := httptest.NewRequest(http.MethodGet, "/wasm/wasm_exec.js", nil)
+	req.Header.Set("Accept-Encoding", "gzip, br")
+	rec := httptest.NewRecorder()
+	server.handleWasmAssets(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if enc := rec.Header().Get("Content-Encoding"); enc != "" {
+		t.Fatalf("wasm_exec.js must not carry Content-Encoding, got %q", enc)
+	}
+}
+
 func TestHandleStandalonePagesServeComponentShells(t *testing.T) {
 	server := newWebServerForRoutes(t)
 

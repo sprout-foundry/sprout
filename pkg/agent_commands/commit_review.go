@@ -94,15 +94,19 @@ IMPORTANT RULES:
 	return review, nil
 }
 
-// reviewFlowClient resolves the LLM client the commit-review flow uses
-// (SP-150 §150b: the reviewer role, which the review settings alias): the
-// role-resolved provider/model first, then the conversation's last-used
-// provider. Returns nil when nothing is resolvable.
+// reviewFlowClient resolves the LLM client the commit-review flow uses: when
+// the reviewer role is an explicit user selection (HasExplicitRole — a
+// roles.reviewer entry or the legacy review settings), the role-resolved
+// provider/model; otherwise the conversation's provider
+// (configManager.GetProvider). The gate is on HasExplicitRole, not on the
+// resolver's output: ResolveRole always fills an empty provider from the
+// last-used fallback, so a `!= ""` check on it fires in every live session
+// even when the user never configured a reviewer.
 func reviewFlowClient(configManager *configuration.Manager) api.ClientInterface {
 	if configManager == nil {
 		return nil
 	}
-	if cfg := configManager.GetConfig(); cfg != nil {
+	if cfg := configManager.GetConfig(); cfg != nil && cfg.HasExplicitRole(configuration.RoleReviewer) {
 		if reviewProvider, reviewModel := cfg.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" {
 			if cl, ce := factory.CreateProviderClient(api.ClientType(reviewProvider), reviewModel); ce == nil {
 				return cl

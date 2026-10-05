@@ -11,16 +11,19 @@ import (
 // (subagent_model, commit_model, review and completion models) are read as
 // aliases for their roles (SP-150 §150a). The alias mapping:
 //
-//	subagent settings  ⇔ coder role
-//	commit settings    ⇔ commit role
-//	review settings    ⇔ reviewer role
+//	subagent settings   ⇔ coder role
+//	commit settings     ⇔ commit role
+//	review settings     ⇔ reviewer role
 //	completion settings ⇔ coder role (no completion-specific role exists)
 //
 // The binding precedence: in a legacy getter an explicit legacy field always
 // wins and the roles section only fills what the legacy field left unset, so
 // a pre-role config behaves byte-for-byte as before. In the role-read
 // direction (ResolveRole) an explicit roles-section entry wins over the
-// legacy alias. TestRoleAlias_LegacyOnlyNoBreakage pins the no-breakage
+// legacy alias. The coder role's general alias is the subagent settings
+// only: the completion settings are the completion path's own alias (read by
+// GetCompletionProvider/Model) and never enter the general coder
+// resolver. TestRoleAlias_LegacyOnlyNoBreakage pins the no-breakage
 // guarantee end to end.
 
 // TestRoleAlias_Commit covers the commit_model/commit_provider ⇔ commit role
@@ -276,11 +279,28 @@ func TestRoleAlias_Completion(t *testing.T) {
 		assert.Equal(t, "", cfg.GetCompletionProvider())
 		assert.Equal(t, "", cfg.GetCompletionModel())
 	})
+
+	t.Run("subagent_settings_do_not_leak_into_completion", func(t *testing.T) {
+		// The subagent settings (the coder role's general alias) never enter
+		// the completion getters — with no completion settings and no roles
+		// entry both resolve empty, so the completion path falls back to the
+		// main provider (no subagent model leak).
+		cfg := &Config{
+			LastUsedProvider: "zai",
+			ProviderModels:   map[string]string{"zai": "GLM-4.6"},
+			SubagentProvider: "openrouter",
+			SubagentModel:    "sub-m",
+		}
+		assert.Equal(t, "", cfg.GetCompletionProvider())
+		assert.Equal(t, "", cfg.GetCompletionModel())
+	})
 }
 
 // TestRoleSelection_PreferenceOrder pins the role-read direction: an explicit
-// roles-section entry beats the legacy aliases, and among the coder's aliases
-// subagent precedes completion. Planner and summarizer have no legacy alias.
+// roles-section entry beats the legacy aliases field-wise. The coder role
+// aliases only the subagent settings (the completion settings are the
+// completion path's own alias — read by the completion getters, never by the
+// general coder resolver). Planner and summarizer have no legacy alias.
 func TestRoleSelection_PreferenceOrder(t *testing.T) {
 	shared := map[string]string{"zai": "GLM-4.6", "openrouter": "openai/gpt-5"}
 
@@ -294,30 +314,6 @@ func TestRoleSelection_PreferenceOrder(t *testing.T) {
 		provider, model := cfg.ResolveRole(RoleCoder)
 		assert.Equal(t, "openrouter", provider)
 		assert.Equal(t, "sub-m", model)
-	})
-
-	t.Run("coder_reads_completion_when_no_subagent", func(t *testing.T) {
-		cfg := &Config{
-			LastUsedProvider: "zai",
-			ProviderModels:   shared,
-			CompletionModel:  "completion-m",
-		}
-		// No subagent settings, so the coder alias falls through to the
-		// completion settings.
-		provider, model := cfg.ResolveRole(RoleCoder)
-		assert.Equal(t, "zai", provider)
-		assert.Equal(t, "completion-m", model)
-	})
-
-	t.Run("subagent_precedes_completion", func(t *testing.T) {
-		cfg := &Config{
-			LastUsedProvider: "zai",
-			ProviderModels:   shared,
-			SubagentModel:    "sub-m",
-			CompletionModel:  "completion-m",
-		}
-		_, model := cfg.ResolveRole(RoleCoder)
-		assert.Equal(t, "sub-m", model, "subagent is the more general setting")
 	})
 
 	t.Run("explicit_coder_role_beats_both", func(t *testing.T) {

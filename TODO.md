@@ -44,7 +44,7 @@ protects.
       vote (`final_message_guard.go` `recentUserMessages`). Exclude injected
       messages or reuse the language resolved at turn start. Test: a Spanish
       user with two repair rounds is still judged Spanish. Spec: SP-152.
-- [ ] **fix.5** Model roles keep legacy behavior: inline completions resolve
+- [x] **fix.5** Model roles keep legacy behavior: inline completions resolve
       the coder role, which reads `subagent_*` before `completion_*`
       (`api_completion.go`); restore completion-first. The reviewer gate
       `ResolveRole(reviewer) != ""` always fires; gate on an explicit

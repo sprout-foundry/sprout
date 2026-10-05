@@ -57,21 +57,24 @@ func (c *Config) SetRole(name string, rc RoleConfig) {
 
 // roleSelection returns the effective stored selection for a role name
 // (SP-150 §150a, item 150.2 — "read as aliases"): the role's explicit
-// roles-section entry when set, otherwise the legacy setting that aliases
-// the role, expressed as a RoleConfig (zero when neither is set). The
-// alias mapping (a binding decision of item 150.2):
+// roles-section entry field-wise merged with the legacy setting that
+// aliases the role, expressed as a RoleConfig (zero when neither is set).
+// The merge is field-wise, mirroring the legacy getters: each role field
+// wins, and a field the role left unset falls back to the corresponding
+// legacy alias field (never a whole-pair swap, so a provider-only role
+// entry still inherits the legacy model it did not override). The alias
+// mapping (a binding decision of item 150.2):
 //
 //   - coder: the subagent settings (subagent_provider/model — subagents
-//     do the coding work), then the completion settings (inline
-//     completion is code generation and the built-in set has no
-//     completion-specific role). Subagent precedes completion: it is the
-//     more general setting.
+//     do the coding work). The completion settings are the completion
+//     path's own alias (read by GetCompletionProvider/Model, which also
+//     fall back to the coder role); they are not part of the general
+//     coder resolver, so there is no subagent-vs-completion ordering
+//     here.
 //   - commit: the commit settings (commit_provider/commit_model).
 //   - reviewer: the review settings (review_provider/review_model).
 //   - planner, summarizer: no legacy alias; only the roles entry.
 //
-// An explicit roles-section entry (any non-empty field) always wins over
-// the legacy alias, so the roles section stays the authoritative source.
 // This is the role-read direction of the alias — reading a role sees the
 // legacy settings. The legacy-read direction (the getters consulting the
 // roles section) is implemented field-wise inside the getters. A nil
@@ -80,27 +83,48 @@ func (c *Config) roleSelection(name string) RoleConfig {
 	if c == nil {
 		return RoleConfig{}
 	}
-	if entry := c.Roles[name]; entry.Provider != "" || entry.Model != "" {
-		return entry
-	}
+	entry := c.Roles[name]
+	provider := entry.Provider
+	model := entry.Model
 	switch name {
 	case RoleCoder:
-		if c.SubagentProvider != "" || c.SubagentModel != "" {
-			return RoleConfig{Provider: c.SubagentProvider, Model: c.SubagentModel}
+		if provider == "" {
+			provider = c.SubagentProvider
 		}
-		if c.CompletionProvider != "" || c.CompletionModel != "" {
-			return RoleConfig{Provider: c.CompletionProvider, Model: c.CompletionModel}
+		if model == "" {
+			model = c.SubagentModel
 		}
 	case RoleCommit:
-		if c.CommitProvider != "" || c.CommitModel != "" {
-			return RoleConfig{Provider: c.CommitProvider, Model: c.CommitModel}
+		if provider == "" {
+			provider = c.CommitProvider
+		}
+		if model == "" {
+			model = c.CommitModel
 		}
 	case RoleReviewer:
-		if c.ReviewProvider != "" || c.ReviewModel != "" {
-			return RoleConfig{Provider: c.ReviewProvider, Model: c.ReviewModel}
+		if provider == "" {
+			provider = c.ReviewProvider
+		}
+		if model == "" {
+			model = c.ReviewModel
 		}
 	}
-	return RoleConfig{}
+	return RoleConfig{Provider: provider, Model: model}
+}
+
+// HasExplicitRole reports whether the named role has an explicit user
+// selection — a non-empty roles-section entry or a set legacy alias
+// setting — as opposed to the resolver's last-used-provider fallback. An
+// unset role (which ResolveRole fills from the last-used provider)
+// returns false. Callers use it to gate role-specific behavior (the
+// reviewer flow) on an actual user selection rather than on the resolver's
+// fallback, which always yields a non-empty provider in a live session.
+func (c *Config) HasExplicitRole(name string) bool {
+	if c == nil {
+		return false
+	}
+	sel := c.roleSelection(name)
+	return sel.Provider != "" || sel.Model != ""
 }
 
 // ResolveRole resolves a role to a (provider, model) pair with

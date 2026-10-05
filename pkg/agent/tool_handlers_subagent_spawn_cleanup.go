@@ -118,25 +118,26 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 
-		// Reviews share one model setting: an explicit review_provider covers
-		// the reviewer persona too, ahead of the generic subagent settings.
-		// SP-150 §150b: the reviewer persona resolves through the reviewer
-		// role (the review settings alias it; an unset role falls back to
-		// the conversation's last-used provider). Unlike the legacy
-		// GetReviewProvider gate, this fires whenever the reviewer role
-		// resolves a provider — including the last-used fallback — so the
-		// reviewer persona always runs the reviewer role's selection. In a
-		// normal session the last-used provider is the conversation
-		// provider, which is what the parent-inheritance path would have
-		// given anyway.
-		if reviewProvider, reviewModel := config.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" &&
+		// Reviews share one model setting: an explicit review selection
+		// (roles.reviewer or the legacy review settings) covers the
+		// reviewer persona too, ahead of the generic subagent settings.
+		// The gate is on HasExplicitRole, not on the resolver's output —
+		// ResolveRole always fills an empty provider from the last-used
+		// fallback, so a `!= ""` check fired in every live session and
+		// re-attributed the reviewer persona to the reviewer role even
+		// when the user never configured a reviewer. Without an explicit
+		// selection the persona keeps the regular subagent resolution above
+		// (its provider/model and coder-role attribution).
+		if config.HasExplicitRole(configuration.RoleReviewer) &&
 			!personaProviderExplicit && isReviewerPersona(a, persona) {
-			provider = strings.TrimSpace(reviewProvider)
-			if !personaModelExplicit {
-				model = reviewModel
+			if reviewProvider, reviewModel := config.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" {
+				provider = strings.TrimSpace(reviewProvider)
+				if !personaModelExplicit {
+					model = reviewModel
+				}
+				role = configuration.RoleReviewer
+				a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 			}
-			role = configuration.RoleReviewer
-			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 		}
 
 		// Log no-persona spawn resolution for observability. persona is defaulted

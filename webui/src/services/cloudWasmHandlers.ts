@@ -9,6 +9,15 @@ import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
+import {
+  getVfsManifestSnapshot as snapshot,
+  isRuntimePath,
+  joinVfsPath,
+  normalizeVfsPath as normalizePath,
+  RUNTIME_DIRS,
+  trackFileWrite as trackWrite,
+  workspaceRootOf,
+} from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
@@ -191,15 +200,6 @@ export {
   untrackFileWrite,
   workspaceRootOf,
 } from './vfsFiles';
-import {
-  getVfsManifestSnapshot as snapshot,
-  isRuntimePath,
-  joinVfsPath,
-  normalizeVfsPath as normalizePath,
-  RUNTIME_DIRS,
-  trackFileWrite as trackWrite,
-  workspaceRootOf,
-} from './vfsFiles';
 
 function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
   try {
@@ -222,8 +222,9 @@ const stopRequested = new Set<string>();
 function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
   if (isRuntimePath(absPath, root)) return true;
   const prefix = absPath === '/' ? '/' : `${absPath}/`;
-  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`))))
+  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`)))) {
     return false;
+  }
   const listing = shell.listDir(absPath);
   return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
 }

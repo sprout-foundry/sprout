@@ -95,9 +95,10 @@ test.describe("Layered layout", () => {
     await expect(page.getByTestId("editor")).toBeVisible({ timeout: 15_000 });
     const panel = page.getByTestId(TESTIDS["context-panel"]);
     await expect(panel).toBeVisible();
-    await expect(
-      panel.getByTestId("context-panel-tab").first(),
-    ).toHaveAttribute("aria-label", "Conversation");
+    // The context panel shows only the Agent Changes tab (the Conversation
+    // tab was dropped in the repo-scoped storage change).
+    const tab = panel.getByTestId("context-panel-tab").first();
+    await expect(tab).toHaveAttribute("aria-label", "Agent Changes");
 
     await nav.locator(".project-nav-back").first().click();
     await expect(

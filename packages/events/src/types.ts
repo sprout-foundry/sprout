@@ -345,6 +345,12 @@ export interface ProgressMilestoneData {
   files_touched?: number;
   /** Scope item's elapsed wall time in milliseconds. */
   elapsed_ms: number;
+  /**
+   * Present only when the stream coalesced a run of milestone events
+   * (SP-151 §151b); each entry is a flat ProgressMilestoneData. A single
+   * (non-coalesced) milestone event omits this field.
+   */
+  milestones?: ProgressMilestoneData[];
 }
 
 /**

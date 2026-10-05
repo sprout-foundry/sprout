@@ -93,6 +93,34 @@
   cursor: not-allowed;
 }
 
+/* Close affordance (the panel-level collapse action; the pane stays
+   presentational and renders it only when `onClose` is supplied). */
+.preview-pane__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color var(--ease-out, ease) 120ms,
+    color var(--ease-out, ease) 120ms;
+}
+
+.preview-pane__close:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.preview-pane__close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 /* Body */
 .preview-pane__body {
   flex: 1;

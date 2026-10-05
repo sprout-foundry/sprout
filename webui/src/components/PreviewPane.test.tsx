@@ -168,4 +168,25 @@ describe('PreviewPane', () => {
       expect(screen.getByTestId('preview-pane')).toHaveAttribute('aria-label', 'Preview preview');
     });
   });
+
+  describe('close affordance', () => {
+    it('renders a close button when onClose is supplied and fires it', () => {
+      const onClose = vi.fn();
+      render(<PreviewPane status="stopped" onRestart={vi.fn()} onClose={onClose} />);
+
+      fireEvent.click(screen.getByTestId('preview-pane-close'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('preview-pane-close')).toHaveAttribute('aria-label', 'Close Preview');
+    });
+
+    it('uses the custom title in the close label', () => {
+      render(<PreviewPane status="stopped" title="My App" onRestart={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.getByTestId('preview-pane-close')).toHaveAttribute('aria-label', 'Close My App');
+    });
+
+    it('renders no close affordance when onClose is omitted', () => {
+      render(<PreviewPane status="stopped" onRestart={vi.fn()} />);
+      expect(screen.queryByTestId('preview-pane-close')).toBeNull();
+    });
+  });
 });

@@ -14,6 +14,7 @@ export * from './editor';
 export * from './git';
 export * from './misc';
 export * from './onboarding';
+export * from './preview';
 export * from './search';
 export * from './session';
 export * from './settings';

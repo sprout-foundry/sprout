@@ -580,6 +580,10 @@ const TESTIDS = {
   "preview-pane-restart": "preview-pane-restart", // the restart action
   "preview-pane-failed": "preview-pane-failed", // the failure reason surface
   "preview-pane-no-url": "preview-pane-no-url", // running-but-no-URL guard
+  "preview-pane-close": "preview-pane-close", // the close affordance (155.6 panel)
+  // Preview placement (SP-155 §155a, item 155.6: the Code-mode panel)
+  "preview-panel": "preview-panel", // the Code-mode preview panel container
+  "preview-panel-toggle": "preview-panel-toggle", // the HeaderBar toggle button
 } as const;
 
 // Derived set for O(1) coverage lookups

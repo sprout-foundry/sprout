@@ -98,7 +98,17 @@ async function openDesignView(target: Page = page): Promise<void> {
     await switchToDesignMode(target);
   }
 
-  await expect(designView).toBeVisible({ timeout: 30_000 });
+  // The section persists per instance (SP-140-8.5) and the surface opens on
+  // Screens by default; every test here works against the Flows canvas, so
+  // normalize the section deterministically instead of depending on what a
+  // previous test left persisted.
+  const railFlows = target.getByTestId(TESTIDS["design-rail-flows"]);
+  if (await railFlows.isVisible().catch(() => false)) {
+    await railFlows.click();
+  }
+  await expect(designView).toHaveAttribute("data-active-tab", "flows", {
+    timeout: 30_000,
+  });
 }
 
 /** Pick the Design option in the top-left mode switcher. */
@@ -140,11 +150,9 @@ test.describe("SP-140-3 DesignView", () => {
     expect(names).toContain("wireframes");
 
     await openDesignView();
-    await expect(page.getByTestId("design-view")).toHaveAttribute(
-      "data-active-tab",
-      "flows",
-    );
-    // The mode's rail (in the sidebar) lists the surface's sections.
+    // The surface opens on Screens (its primary view — SP-147's contract);
+    // openDesignView has already normalized to Flows for the rest of the
+    // serial run. The mode's rail (in the sidebar) lists the sections.
     await expect(page.getByTestId(TESTIDS["design-rail-flows"])).toBeVisible();
     await expect(
       page.getByTestId(TESTIDS["design-rail-screens"]),

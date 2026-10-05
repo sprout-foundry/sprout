@@ -287,8 +287,7 @@ export function EscalationListener() {
                     ) : null}
                     {txn.pushedFiles === 0 ? (
                       <p className="escalation-toast-task-error" data-testid="escalation-toast-txn-empty-push">
-                        0 files were pushed — the container ran WITHOUT your browser edits (no git state in this
-                        page).
+                        0 files were pushed — the container ran WITHOUT your browser edits (no git state in this page).
                       </p>
                     ) : null}
                     <p className="escalation-toast-task-status" data-testid="escalation-toast-txn-pulled">

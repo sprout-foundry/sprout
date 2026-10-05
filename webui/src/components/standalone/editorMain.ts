@@ -19,6 +19,7 @@
 import { EditorView } from '@codemirror/view';
 import { editorExtensionsFor, languageTitleFor } from './editorLang';
 import { bootStandaloneEscalation } from './standaloneEscalation';
+import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
 const statusPath = document.querySelector<HTMLSpanElement>('#status .path')!;
@@ -37,7 +38,7 @@ function setState(text: string, isDirty = false) {
 }
 
 function post(type: string, payload: Record<string, unknown> = {}) {
-  window.parent?.postMessage({ source: 'sprout-editor', type, ...payload }, '*');
+  window.parent?.postMessage({ source: 'sprout-editor', type, ...payload }, postTargetOrigin());
 }
 
 async function boot() {
@@ -124,6 +125,7 @@ statusPath.textContent = 'scratch.txt · Plain Text';
 buildView('', 'scratch.txt');
 
 window.addEventListener('message', (ev: MessageEvent) => {
+  if (!isFromTrustedParent(ev)) return;
   const data = ev.data;
   if (!data || data.source !== 'sprout-host') return;
   switch (data.type) {

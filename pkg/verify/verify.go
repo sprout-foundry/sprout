@@ -117,7 +117,10 @@ func New() *Runner {
 }
 
 // Run executes the verification checks for the project rooted at root and
-// returns the structured result (SP-149 §149a/§149c).
+// returns the structured result (SP-149 §149a/§149c). It is implemented as
+// a snapshot-then-run: it captures a fresh Snapshot of the manifest and plan
+// (SP-149 §149b) and executes RunSnapshot against it, so a single Run call
+// reads each file exactly once.
 //
 //   - With an active plan, the runner runs one check per acceptance kind it
 //     implements (build and test in 149.2; page in 149.3; interaction in
@@ -144,6 +147,72 @@ func (r *Runner) Run(ctx context.Context, root string) (*Result, error) {
 	if r == nil {
 		return nil, errors.New("verify: nil runner")
 	}
+	return r.RunSnapshot(ctx, root, r.Snapshot(root))
+}
+
+// Snapshot is the frozen input to a turn's verification runs (SP-149
+// §149b): the starter manifest and the active plan captured once, so that
+// every verification run of the turn (every repair round) executes against
+// the same trusted inputs rather than re-reading the files. A model that
+// edits .sprout/starter.json or .sprout/plan.json mid-turn cannot change
+// what "passing" means: the commands, the acceptance set, and the plan's
+// presence are exactly what the turn started with.
+//
+// Snapshot loads the manifest and the plan once and records their load
+// findings the way Run does today (a corrupt manifest or plan is a
+// run-level finding, never swallowed). It freezes:
+//   - the manifest's commands (build, test, dev, port, routes);
+//   - the plan's acceptance (ids, kinds, and the interaction steps); and
+//   - the plan's presence. A plan present at snapshot time gates its checks
+//     for the whole turn even if the plan file is later deleted or
+//     corrupted; a project with no plan at snapshot time runs the baseline
+//     for the whole turn.
+//
+// Snapshot reads nothing else and runs nothing; it is safe to call at the
+// turn's start, before any verification run.
+type Snapshot struct {
+	// Manifest is the starter manifest captured at snapshot time, or nil
+	// when the project has no usable one.
+	Manifest *startermanifest.StarterManifest
+	// ManifestError is the run-level finding a corrupt manifest produces
+	// ("" when the manifest is present or absent).
+	ManifestError string
+	// Plan is the active plan captured at snapshot time, or nil when the
+	// project has no usable plan (absent → baseline; corrupt → baseline
+	// plus PlanError).
+	Plan *plancontract.Plan
+	// PlanError is the run-level finding a corrupt plan produces ("" when
+	// the plan is present or absent).
+	PlanError string
+}
+
+// Snapshot captures the manifest and plan a turn's verification runs will
+// use (see the Snapshot type for what is frozen and why). It takes a
+// snapshot-then-run contract: call it once at the turn's start and pass the
+// result to RunSnapshot for every verification run of the turn.
+func (r *Runner) Snapshot(root string) *Snapshot {
+	snap := &Snapshot{}
+	snap.Manifest, snap.ManifestError = r.manifestLoad(root)
+	snap.Plan, snap.PlanError = r.planLoad(root)
+	return snap
+}
+
+// RunSnapshot executes the verification checks against the frozen inputs a
+// turn captured with Snapshot (SP-149 §149b): the manifest's commands and
+// the plan's acceptance come from the snapshot, never from a re-read of the
+// files on disk. It is the implementation Run delegates to after taking a
+// fresh snapshot; the two behave identically for a snapshot captured
+// immediately before the run.
+//
+// Like Run, it returns a non-nil error only for setup problems (no executor,
+// empty root, nil runner, or a nil snapshot). Run-level findings (a corrupt
+// manifest or plan, an executor failure) are recorded on the result, never
+// swallowed; the snapshot's stored load findings are recorded exactly as Run
+// would have recorded them at load time.
+func (r *Runner) RunSnapshot(ctx context.Context, root string, snap *Snapshot) (*Result, error) {
+	if r == nil {
+		return nil, errors.New("verify: nil runner")
+	}
 	if r.Exec == nil {
 		return nil, errors.New("verify: no executor configured (use New() or set Runner.Exec)")
 	}
@@ -153,11 +222,23 @@ func (r *Runner) Run(ctx context.Context, root string) (*Result, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if snap == nil {
+		return nil, errors.New("verify: snapshot is required (call Snapshot first)")
+	}
 
 	result := &Result{Checks: []Check{}}
 
-	manifest := r.loadManifest(root, result)
-	plan := r.loadPlan(root, result)
+	// The snapshot's load findings stand in for a mid-run load: manifest
+	// first, then plan, then the configuration source (resolveCommands) —
+	// the same order a live load records them.
+	if snap.ManifestError != "" {
+		result.Errors = append(result.Errors, snap.ManifestError)
+	}
+	if snap.PlanError != "" {
+		result.Errors = append(result.Errors, snap.PlanError)
+	}
+	manifest := snap.Manifest
+	plan := snap.Plan
 	cmds := r.resolveCommands(manifest, root, result)
 
 	if plan == nil {
@@ -191,41 +272,42 @@ func (r *Runner) Run(ctx context.Context, root string) (*Result, error) {
 	return result, nil
 }
 
-// loadManifest returns the project's starter manifest, or nil when the
-// project has no usable one (missing → no manifest; corrupt → nil plus a
-// recorded run-level error, so the run proceeds with the configuration
-// source and, for a page check, a skip reason).
-func (r *Runner) loadManifest(root string, result *Result) *startermanifest.StarterManifest {
+// manifestLoad loads the project's starter manifest and returns it with the
+// run-level finding a corrupt manifest produces ("" when the manifest is
+// present or missing). Missing is the normal "no starter" case, not a
+// finding; a corrupt manifest discards its (invalid) commands and records
+// the finding so the run proceeds with the configuration source.
+func (r *Runner) manifestLoad(root string) (*startermanifest.StarterManifest, string) {
 	if r.Manifest == nil {
-		return nil
+		return nil, ""
 	}
 	manifest, err := r.Manifest(root)
 	switch {
 	case err == nil:
-		return manifest
+		return manifest, ""
 	case errors.Is(err, starterstore.ErrNoManifest):
-		return nil
+		return nil, ""
 	default:
-		result.Errors = append(result.Errors, "starter manifest: "+err.Error())
-		return nil
+		return nil, "starter manifest: " + err.Error()
 	}
 }
 
-// loadPlan returns the active plan, or nil when the project has no usable
-// plan (missing → baseline, corrupt → baseline plus a recorded error).
-func (r *Runner) loadPlan(root string, result *Result) *plancontract.Plan {
+// planLoad loads the active plan and returns it with the run-level finding a
+// corrupt plan produces ("" when the plan is present or missing). Missing is
+// the baseline case, not a finding; a corrupt plan discards its (invalid)
+// acceptance and records the finding so the run proceeds as a baseline.
+func (r *Runner) planLoad(root string) (*plancontract.Plan, string) {
 	if r.Plans == nil {
-		return nil
+		return nil, ""
 	}
 	plan, err := r.Plans(root)
 	switch {
 	case err == nil:
-		return plan
+		return plan, ""
 	case errors.Is(err, planstore.ErrNoPlan):
-		return nil
+		return nil, ""
 	default:
-		result.Errors = append(result.Errors, "plan: "+err.Error())
-		return nil
+		return nil, "plan: " + err.Error()
 	}
 }
 
@@ -233,7 +315,7 @@ func (r *Runner) loadPlan(root string, result *Result) *plancontract.Plan {
 // §149b): per kind, the starter manifest's command wins where it is set,
 // the explicit project configuration fills the gap, and nothing else is
 // ever consulted. A manifest that exists but is invalid was already
-// recorded as a run-level error by loadManifest, so its (discarded)
+// recorded as a run-level finding by the manifest load, so its (discarded)
 // commands stand for no configuration source here.
 func (r *Runner) resolveCommands(manifest *startermanifest.StarterManifest, root string, result *Result) Commands {
 	var configCommands Commands

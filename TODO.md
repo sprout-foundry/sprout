@@ -22,7 +22,7 @@ Found in the code review of the automated work. Fix these before new feature
 items, in order. Each fix adds a test that tries to break the rule it
 protects.
 
-- [ ] **fix.1** Verification commands cannot change mid-turn: the runner
+- [x] **fix.1** Verification commands cannot change mid-turn: the runner
       re-reads `.sprout/starter.json` and `.sprout/plan.json` every repair
       round (`pkg/verify/verify.go`), and the model can edit both. Snapshot
       the manifest commands and plan acceptance at turn start, always run the

@@ -110,5 +110,9 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 			return agent.TrackShellCommand(command)
 		},
 		PrepareShellCommand: agent.PrepareShellCommand,
+		// The starter-manifest write guard (SP-149 §149b): the live
+		// write/edit handlers (pkg/agent_tools) invoke this closure so the
+		// agent's per-agent guard is applied to the model's file mutations.
+		GuardStarterManifestWrite: agent.refuseStarterManifestWrite,
 	}
 }

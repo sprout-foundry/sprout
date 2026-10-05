@@ -72,6 +72,14 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// SP-149 §149b: while verification is enabled, refuse a mid-turn write to
+	// the starter manifest (the trusted source for the verification
+	// commands). Applied before any routing, read, or write; a no-op when
+	// verification is disabled or the path is not the manifest.
+	if guardErr := guardStarterManifestWrite(env, path); guardErr != nil {
+		return ToolResult{Output: guardErr.Error(), IsError: true}, guardErr
+	}
+
 	content, err := extractString(args, "content")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err

@@ -24,6 +24,14 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
+	// While verification is enabled, refuse a mid-turn write to the starter
+	// manifest (the trusted source for the verification commands). Covered
+	// before the JSON routing below so both the plain and structured paths
+	// are guarded.
+	if err := a.refuseStarterManifestWrite(path); err != nil {
+		return "", err
+	}
+
 	content, err := getRequiredString(args, "content")
 	if err != nil {
 		return "", agenterrors.Wrap(err, "failed to get content parameter")

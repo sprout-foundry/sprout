@@ -389,9 +389,9 @@ protects.
 - [ ] **155.4** Backend: start or detect the dev server from the starter
       manifest's `dev` command and port (153.2) and expose its URL to the
       pane. Go tests. Spec: SP-155 §155a.
-      A partial implementation exists on branch `wip/local-preview`
-      (commit 86a7a6916): start by applying it with
-      `git cherry-pick --no-commit 86a7a6916`, review it against the spec,
+      A partial implementation exists on branch `wip/local-preview`:
+      start by applying it with
+      `git cherry-pick --no-commit wip/local-preview`, review it against the spec,
       finish and test it, then commit the whole item as one commit.
 - [ ] **155.5** Hosted: the pane embeds the URL from a registered preview
       port (`register_preview_port`) instead of only printing it. Test

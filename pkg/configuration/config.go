@@ -49,6 +49,15 @@ type Config struct {
 	ProviderModels   map[string]string `json:"provider_models"`
 	ProviderPriority []string          `json:"provider_priority"`
 
+	// Roles is the SP-150 §150a role-model section: named roles
+	// (planner, coder, summarizer, reviewer, commit) map to a provider
+	// and model; unset roles fall back to the conversation's
+	// provider/model (ResolveRole). The existing per-setting model
+	// fields (subagent_model, commit_model, review/completion models)
+	// are read as aliases for their roles (item 150.2); they are not
+	// yet the read path (150.2/150.3 rewires the getters).
+	Roles map[string]RoleConfig `json:"roles,omitempty"`
+
 	// Language Server Override Configuration
 	LanguageServers []LanguageServerOverride `json:"language_servers,omitempty"`
 

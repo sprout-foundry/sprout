@@ -113,6 +113,28 @@ func MergeConfig(base, override *Config) *Config {
 			result.RiskProfiles[k] = v
 		}
 	}
+	// Merge Roles (SP-150 §150a) with field-wise precedence. Unlike
+	// RiskProfiles (which replaces a named profile wholesale), a role
+	// named in both layers keeps every field the override left empty
+	// from the base layer — so a project-level roles.commit {model: …}
+	// keeps the global provider. Roles named in only one layer pass
+	// through. There is no unsetting: an override field set to empty
+	// cannot clear a base value, the same semantics as RiskProfiles.
+	if len(override.Roles) > 0 {
+		if result.Roles == nil {
+			result.Roles = make(map[string]RoleConfig, len(override.Roles))
+		}
+		for name, overrideRole := range override.Roles {
+			merged := result.Roles[name] // zero when the base layer lacks the role
+			if overrideRole.Provider != "" {
+				merged.Provider = overrideRole.Provider
+			}
+			if overrideRole.Model != "" {
+				merged.Model = overrideRole.Model
+			}
+			result.Roles[name] = merged
+		}
+	}
 	// ContextMode is a single-value selector — non-empty override wins.
 	if override.ContextMode != "" {
 		result.ContextMode = override.ContextMode

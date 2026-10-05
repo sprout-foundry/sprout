@@ -390,6 +390,26 @@ vi.mock('./chat/ToolTimelineBar', () => ({
 const PLACEHOLDER = 'Chat provided by the native shell';
 const CHAT_MAIN_SELECTOR = '[data-testid="chat-main"]';
 
+/** Mock events transport: the real ChatView renders ProgressStrip
+ *  (SP-151), which subscribes via useEvents — provide a no-op provider
+ *  like the app's EventsContextProvider does. */
+function createMockEventsProvider() {
+  return {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(),
+    removeEvent: vi.fn(),
+    sendEvent: vi.fn(),
+    isConnected: vi.fn(() => true),
+    onReconnect: vi.fn(),
+    freeze: vi.fn(),
+    resume: vi.fn(),
+    resetAndReconnect: vi.fn(),
+    getQueuedMessageCount: vi.fn(() => 0),
+    flushQueuedMessages: vi.fn(() => 0),
+  };
+}
+
 function makeChatViewProps(): Record<string, unknown> {
   return {
     messages: [],
@@ -454,11 +474,20 @@ async function loadChatView(chatFlagOn: boolean): Promise<ChatViewModule['defaul
 describe('ChatView — R-4 render conditions', () => {
   it('flag ON: renders the shell-provided placeholder and NOT chat-main', async () => {
     const ChatView = await loadChatView(true);
+    // Same fresh module graph as the dynamically-imported ChatView (the
+    // resetModules in loadChatView), so the context matches the one its
+    // ProgressStrip reads.
+    const { EventsContextProvider } = await import('../contexts/EventsContext');
+    const provider = createMockEventsProvider();
     const props = makeChatViewProps();
 
     let rendered!: ReturnType<typeof render>;
     await act(async () => {
-      rendered = render(<ChatView {...props} />);
+      rendered = render(
+        <EventsContextProvider provider={provider}>
+          <ChatView {...props} />
+        </EventsContextProvider>,
+      );
     });
     await act(async () => {
       await Promise.resolve();
@@ -472,11 +501,17 @@ describe('ChatView — R-4 render conditions', () => {
 
   it('flag OFF: renders chat-main and NOT the shell-provided placeholder', async () => {
     const ChatView = await loadChatView(false);
+    const { EventsContextProvider } = await import('../contexts/EventsContext');
+    const provider = createMockEventsProvider();
     const props = makeChatViewProps();
 
     let rendered!: ReturnType<typeof render>;
     await act(async () => {
-      rendered = render(<ChatView {...props} />);
+      rendered = render(
+        <EventsContextProvider provider={provider}>
+          <ChatView {...props} />
+        </EventsContextProvider>,
+      );
     });
     await act(async () => {
       await Promise.resolve();

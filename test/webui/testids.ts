@@ -45,6 +45,7 @@ const TESTIDS = {
   "turn-changes-strip": "turn-changes-strip",
   "diff-view": "diff-view",
   "chat-metrics-strip": "chat-metrics-strip",
+  "progress-strip": "progress-strip", // SP-151 §151c (item 151.7) active-run progress strip
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",

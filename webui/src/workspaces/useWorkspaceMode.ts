@@ -15,8 +15,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INSTANCE_PID_STORAGE_KEY, WORKSPACE_MODE_STORAGE_KEY } from '../constants/app';
 import { repoScopedKey } from '../services/repoScope';
 import {
-  DEFAULT_WORKSPACE_MODE,
+  BUILTIN_DEFAULT_WORKSPACE_MODE,
   availableModes,
+  defaultWorkspaceMode,
   resolveWorkspaceMode,
   type WorkspaceMode,
   type WorkspaceModeContext,
@@ -103,4 +104,4 @@ export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeRes
   return { mode, modes, select, canSwitch: modes.length > 1 };
 }
 
-export { DEFAULT_WORKSPACE_MODE };
+export { BUILTIN_DEFAULT_WORKSPACE_MODE, defaultWorkspaceMode };

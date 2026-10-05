@@ -286,7 +286,7 @@ the end, without checkboxes.
       `webui/src/workspaces/registry.ts`; built-in Code and Design
       register through it. Vitest: a test mode appears in the switcher;
       Code/Design unchanged. Spec: SP-155 §155b.
-- [ ] **155.2** Default mode from configuration (built-in default stays
+- [x] **155.2** Default mode from configuration (built-in default stays
       `code`). Vitest. Spec: SP-155 §155b.
 - [ ] **155.3** Preview pane component with starting / running / stopped /
       failed states, restart action, reload on file changes. Vitest.

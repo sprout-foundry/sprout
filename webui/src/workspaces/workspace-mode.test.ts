@@ -13,14 +13,16 @@ import { MonitorPlay } from 'lucide-react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, beforeAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { configuredDefaultWorkspaceMode, overrideDefaultWorkspaceMode } from '../config/workspaceMode';
 import { INSTANCE_PID_STORAGE_KEY } from '../constants/app';
 import CodeShell from './CodeShell';
 import DesignShell from './DesignShell';
 import ModeSwitcher from './ModeSwitcher';
 import {
-  DEFAULT_WORKSPACE_MODE,
+  BUILTIN_DEFAULT_WORKSPACE_MODE,
   WORKSPACE_MODES,
   availableModes,
+  defaultWorkspaceMode,
   registerWorkspaceMode,
   resolveWorkspaceMode,
   type UnregisterWorkspaceMode,
@@ -221,14 +223,15 @@ describe('resolveWorkspaceMode', () => {
   });
 
   it('falls back to the default when the requested mode is not offered', () => {
-    // An unknown mode id degrades to the default experience.
-    expect(resolveWorkspaceMode('ship', withoutDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
+    // An unknown mode id degrades to the default experience. With no
+    // configuration the default is the built-in baseline.
+    expect(resolveWorkspaceMode('ship', withoutDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
   });
 
   it('falls back to the default for an unknown id', () => {
-    expect(resolveWorkspaceMode('ship', withDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
-    expect(resolveWorkspaceMode(null, withDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
-    expect(resolveWorkspaceMode(undefined, withDesign).id).toBe(DEFAULT_WORKSPACE_MODE);
+    expect(resolveWorkspaceMode('ship', withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveWorkspaceMode(undefined, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
   });
 });
 
@@ -278,5 +281,78 @@ describe('useWorkspaceMode contract', () => {
   // since the shell integration is covered by the DesignView/e2e specs.
   it('exports a callable hook', () => {
     expect(typeof useWorkspaceMode).toBe('function');
+  });
+});
+
+describe('config-driven default mode (SP-155 §155b)', () => {
+  const disposers: UnregisterWorkspaceMode[] = [];
+
+  function register(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
+    const dispose = registerWorkspaceMode(definition);
+    disposers.push(dispose);
+    return dispose;
+  }
+
+  function disposeAll(): void {
+    for (const dispose of disposers.splice(0, disposers.length)) dispose();
+  }
+
+  // The config module is a module singleton; reset it to the unconfigured
+  // state (the build-time base, null in the test env) on both edges so no
+  // override leaks into another test.
+  beforeEach(() => {
+    overrideDefaultWorkspaceMode(null);
+  });
+
+  afterEach(() => {
+    overrideDefaultWorkspaceMode(null);
+    disposeAll();
+  });
+
+  it('starts in the built-in code mode when nothing is configured', () => {
+    expect(configuredDefaultWorkspaceMode()).toBeNull();
+    expect(defaultWorkspaceMode(withDesign)).toBe('code');
+    expect(defaultWorkspaceMode(withoutDesign)).toBe('code');
+    // A null or unknown request resolves to the built-in default.
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe('code');
+    expect(resolveWorkspaceMode('unknown-id', withoutDesign).id).toBe('code');
+  });
+
+  it('starts in a configured mode when that mode is available', () => {
+    overrideDefaultWorkspaceMode('design');
+    expect(configuredDefaultWorkspaceMode()).toBe('design');
+    // Design is offered in every workspace, so it is the default either way.
+    expect(defaultWorkspaceMode(withDesign)).toBe('design');
+    expect(defaultWorkspaceMode(withoutDesign)).toBe('design');
+    // A null or unknown request resolves to the configured default.
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe('design');
+    expect(resolveWorkspaceMode('unknown-id', withDesign).id).toBe('design');
+    // …but an explicitly requested available mode still wins.
+    expect(resolveWorkspaceMode('code', withDesign).id).toBe('code');
+  });
+
+  it('falls back to code when the configured default names an unregistered mode', () => {
+    overrideDefaultWorkspaceMode('preview');
+    // 'preview' is not registered, so it is never in availableModes.
+    expect(defaultWorkspaceMode(withDesign)).toBe('code');
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe('code');
+  });
+
+  it('falls back to code when the configured default names an unavailable mode', () => {
+    register({
+      id: 'preview',
+      label: 'Preview',
+      icon: MonitorPlay,
+      hint: 'Live app preview',
+      available: () => false,
+      Shell: () => null,
+    });
+    overrideDefaultWorkspaceMode('preview');
+    // 'preview' is registered but never offered, so it is not the default.
+    expect(defaultWorkspaceMode(withDesign)).toBe('code');
+    expect(defaultWorkspaceMode(withoutDesign)).toBe('code');
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe('code');
+    // The built-ins are still offered unchanged.
+    expect(availableModes(withDesign).map((m) => m.id)).toEqual(['code', 'design']);
   });
 });

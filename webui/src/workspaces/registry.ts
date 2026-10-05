@@ -24,6 +24,7 @@
 
 import { Code2, Palette, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
+import { configuredDefaultWorkspaceMode } from '../config/workspaceMode';
 import CodeShell from './CodeShell';
 import DesignShell from './DesignShell';
 import type { WorkspaceShellProps } from './shell';
@@ -92,8 +93,13 @@ export interface WorkspaceModeRegistration {
 /** Removes the registration created by `registerWorkspaceMode`. */
 export type UnregisterWorkspaceMode = () => void;
 
-/** The mode new sessions start in. */
-export const DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
+/**
+ * The built-in baseline: the mode every workspace offers, and the last resort
+ * when a configured default points at a mode the workspace does not. New
+ * sessions start in the configured default (SP-155 §155b) — see
+ * `defaultWorkspaceMode` — which falls back to this when unset or unusable.
+ */
+export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
 
 /**
  * Mode registry.
@@ -177,10 +183,31 @@ export function availableModes(ctx: WorkspaceModeContext): WorkspaceMode[] {
   return WORKSPACE_MODES.filter((mode) => mode.available(ctx));
 }
 
+/**
+ * The default mode new sessions start in (SP-155 §155b).
+ *
+ * The configured default (`config/workspaceMode.ts`) when it names a mode this
+ * workspace actually offers — a mode that is unregistered, or registered but
+ * unavailable here, degrades to the built-in baseline rather than stranding a
+ * session in a mode with nothing to render. With no configuration, this is the
+ * built-in default.
+ */
+export function defaultWorkspaceMode(ctx: WorkspaceModeContext): WorkspaceModeId {
+  const configured = configuredDefaultWorkspaceMode();
+  if (configured !== null && availableModes(ctx).some((mode) => mode.id === configured)) {
+    return configured;
+  }
+  return BUILTIN_DEFAULT_WORKSPACE_MODE;
+}
+
 /** Look up a mode, falling back to the default when an id is unknown or unavailable. */
 export function resolveWorkspaceMode(id: WorkspaceModeId | null | undefined, ctx: WorkspaceModeContext): WorkspaceMode {
   const modes = availableModes(ctx);
   const match = modes.find((mode) => mode.id === id);
   if (match) return match;
-  return modes.find((mode) => mode.id === DEFAULT_WORKSPACE_MODE) ?? modes[0];
+  // The default is always an available id (an available configured mode, or the
+  // built-in baseline); the trailing `modes[0]` covers a registry where even
+  // the baseline has been removed.
+  const fallback = modes.find((mode) => mode.id === defaultWorkspaceMode(ctx));
+  return fallback ?? modes[0];
 }

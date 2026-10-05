@@ -9,6 +9,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -427,5 +428,43 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	// Publish model info event for UI
 	agent.PublishModel(finalModel)
 
+	return nil
+}
+
+// setRoleModel sets the model for a role (SP-150 §150d, item 150.6):
+// `/model --role <role> <model_id>`. It read-modifies-writes the role's
+// stored selection through the config manager, preserving the role's
+// stored provider — only the model is set; the role's provider is changed
+// through `sprout config set role.<name>.provider`, so stamping the
+// conversation's current provider here would wrongly couple the two
+// selections. Unlike setModel, it does not switch the active conversation
+// model and does not publish a model event.
+func (m *ModelsCommand) setRoleModel(role, modelID string, chatAgent *agent.Agent) error {
+	if strings.TrimSpace(role) == "" || strings.ContainsAny(role, " \t") {
+		return fmt.Errorf("invalid role %q: role must be a non-empty identifier without whitespace", role)
+	}
+	if modelID == "" {
+		return errors.New("usage: /model --role <role> <model_id>")
+	}
+
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return errors.New("configuration manager not available")
+	}
+
+	// Read-modify-write: preserve the role's stored provider and only
+	// set the model. Unknown role names are accepted (the Roles map takes
+	// arbitrary names — the SP-150 open question of user-defined roles).
+	rc := mgr.GetRole(role)
+	rc.Model = modelID
+	if err := mgr.SetRole(role, rc); err != nil {
+		return fmt.Errorf("failed to set model for role %s: %w", role, err)
+	}
+
+	if rc.Provider != "" {
+		m.printf("Role %q model set to: %s (provider: %s)\n", role, modelID, rc.Provider)
+	} else {
+		m.printf("Role %q model set to: %s\n", role, modelID)
+	}
 	return nil
 }

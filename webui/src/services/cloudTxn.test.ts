@@ -278,29 +278,35 @@ describe('applyPullManifest', () => {
 });
 
 describe('resolveTxnWorkspace', () => {
-  it('matches an existing workspace by repo_url, ignoring .git and trailing slash', async () => {
+  it('resolves through the host-agnostic endpoint and records the backend', async () => {
     const fetchMock = routeFetch({
-      'GET /workspace/fly': () =>
-        jsonResponse({
-          workspaces: [
-            { workspace_id: 'ws-other', repo_url: 'https://github.com/acme/other' },
-            { workspace_id: 'ws-mine', repo_url: 'https://github.com/acme/app.git/' },
-          ],
-        }),
+      'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+        jsonResponse({ workspace_id: 'ws-mine', status: 'running', backend: 'runner' }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const resolved = await resolveTxnWorkspace('https://github.com/acme/app');
     expect(resolved).toEqual({ workspaceId: 'ws-mine', created: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The lifecycle path follows the resolved backend (runner → /workspace/txn).
+    const openMock = routeFetch({
+      'POST /workspace/txn/ws-mine/txn': () =>
+        jsonResponse({ txn_id: 'txn-1', status: 'push', workspace_id: 'ws-mine' }, { status: 201 }),
+    });
+    vi.stubGlobal('fetch', openMock);
+    await createTxn('ws-mine');
+    expect(openMock).toHaveBeenCalledTimes(1);
+    expect((openMock.mock.calls[0][0] as string).startsWith('/workspace/txn/')).toBe(true);
   });
 
-  it('creates a build workspace when the list has no match', async () => {
+  it('creates a workspace when resolve finds no match', async () => {
     const fetchMock = routeFetch({
-      'GET /workspace/fly': () => jsonResponse({ workspaces: [] }),
-      'POST /workspace/fly': (body) => {
-        expect(body).toEqual({ repo_url: 'https://github.com/acme/app', mode: 'build' });
-        return jsonResponse({ workspace_id: 'ws-new', status: 'running', repo_url: 'x' }, { status: 201 });
+      'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+        jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
+      'POST /workspace/txn': (body) => {
+        expect(body).toEqual({ repo_url: 'https://github.com/acme/app' });
+        return jsonResponse({ workspace_id: 'ws-new', status: 'pending', backend: 'fly' }, { status: 201 });
       },
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -311,12 +317,13 @@ describe('resolveTxnWorkspace', () => {
     });
   });
 
-  it('falls through to create when the list request fails', async () => {
+  it('falls through to create when resolve fails', async () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/fly': () => jsonResponse({ error: 'boom' }, { status: 500 }),
-        'POST /workspace/fly': () => jsonResponse({ workspace_id: 'ws-new' }, { status: 201 }),
+        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+          jsonResponse({ error: 'boom' }, { status: 500 }),
+        'POST /workspace/txn': () => jsonResponse({ workspace_id: 'ws-new' }, { status: 201 }),
       }),
     );
     expect(await resolveTxnWorkspace('https://github.com/acme/app')).toEqual({
@@ -329,8 +336,9 @@ describe('resolveTxnWorkspace', () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/fly': () => jsonResponse({ workspaces: [] }),
-        'POST /workspace/fly': () => jsonResponse({ error: 'Overage spending cap reached.' }, { status: 402 }),
+        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+          jsonResponse({ error: 'none' }, { status: 404 }),
+        'POST /workspace/txn': () => jsonResponse({ error: 'Overage spending cap reached.' }, { status: 402 }),
       }),
     );
     await expect(resolveTxnWorkspace('https://github.com/acme/app')).rejects.toThrow('Overage spending cap reached.');
